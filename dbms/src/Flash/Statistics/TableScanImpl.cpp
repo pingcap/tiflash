@@ -13,25 +13,35 @@
 // limitations under the License.
 
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
 {
-String TableScanDetail::toJson() const
+String TableScanTimeDetail::toJson() const
 {
     auto max_cost_ms = max_stream_cost_ns < 0 ? 0 : max_stream_cost_ns / 1'000'000.0;
     auto min_cost_ms = min_stream_cost_ns < 0 ? 0 : min_stream_cost_ns / 1'000'000.0;
-    return fmt::format(
-        R"({{"is_local":{},"packets":{},"bytes":{},"max":{},"min":{}}})",
-        is_local,
-        packets,
-        bytes,
-        max_cost_ms,
-        min_cost_ms);
+    return fmt::format(R"("max":{},"min":{})", max_cost_ms, min_cost_ms);
 }
-
+String LocalTableScanDetail::toJson() const
+{
+    return fmt::format(R"({{"is_local":true,"bytes":{},{}}})", bytes, time_detail.toJson());
+}
+String RemoteTableScanDetail::toJson() const
+{
+    return fmt::format(
+        R"({{"type:":{},"packets":{},"bytes":{},"type:":{},"packets":{},"bytes":{},{}}})",
+        inner_zone_conn_profile_info.getTypeString(),
+        inner_zone_conn_profile_info.packets,
+        inner_zone_conn_profile_info.bytes,
+        inter_zone_conn_profile_info.getTypeString(),
+        inter_zone_conn_profile_info.packets,
+        inter_zone_conn_profile_info.bytes,
+        time_detail.toJson());
+}
 void TableScanStatistics::appendExtraJson(FmtBuffer & fmt_buffer) const
 {
     auto scan_ctx_it = dag_context.scan_context_map.find(executor_id);
@@ -48,8 +58,19 @@ void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProf
 {
     for (const auto & connection_profile_info : connection_profile_infos)
     {
-        remote_table_scan_detail.packets += connection_profile_info.packets;
-        remote_table_scan_detail.bytes += connection_profile_info.bytes;
+        if (connection_profile_info.type == ConnectionProfileInfo::InnerZoneRemote)
+        {
+            remote_table_scan_detail.inner_zone_conn_profile_info.packets += connection_profile_info.packets;
+            remote_table_scan_detail.inner_zone_conn_profile_info.bytes += connection_profile_info.bytes;
+        }
+        else
+        {
+            remote_table_scan_detail.inter_zone_conn_profile_info.packets += connection_profile_info.packets;
+            remote_table_scan_detail.inter_zone_conn_profile_info.bytes += connection_profile_info.bytes;
+        }
+        // Stats both send and receive bytes here, because remote execution summaries are not used now
+        base.updateSendConnectionInfo(connection_profile_info);
+        base.updateReceiveConnectionInfo(connection_profile_info);
     }
 }
 
@@ -74,12 +95,12 @@ void TableScanStatistics::collectExtraRuntimeDetail()
                 const auto & prof = local_stream->getProfileInfo();
                 local_table_scan_detail.bytes += prof.bytes;
                 const double this_execution_time = prof.execution_time * 1.0;
-                if (local_table_scan_detail.max_stream_cost_ns < 0.0 // not inited
-                    || local_table_scan_detail.max_stream_cost_ns < this_execution_time)
-                    local_table_scan_detail.max_stream_cost_ns = this_execution_time;
-                if (local_table_scan_detail.min_stream_cost_ns < 0.0 // not inited
-                    || local_table_scan_detail.min_stream_cost_ns > this_execution_time)
-                    local_table_scan_detail.min_stream_cost_ns = this_execution_time;
+                if (local_table_scan_detail.time_detail.max_stream_cost_ns < 0.0 // not inited
+                    || local_table_scan_detail.time_detail.max_stream_cost_ns < this_execution_time)
+                    local_table_scan_detail.time_detail.max_stream_cost_ns = this_execution_time;
+                if (local_table_scan_detail.time_detail.min_stream_cost_ns < 0.0 // not inited
+                    || local_table_scan_detail.time_detail.min_stream_cost_ns > this_execution_time)
+                    local_table_scan_detail.time_detail.min_stream_cost_ns = this_execution_time;
             }
             else
             {
@@ -93,23 +114,23 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             {
                 local_table_scan_detail.bytes += profile_info.operator_info->bytes;
                 const double this_execution_time = profile_info.operator_info->execution_time * 1.0;
-                if (local_table_scan_detail.max_stream_cost_ns < 0.0 // not inited
-                    || local_table_scan_detail.max_stream_cost_ns < this_execution_time)
-                    local_table_scan_detail.max_stream_cost_ns = this_execution_time;
-                if (local_table_scan_detail.min_stream_cost_ns < 0.0 // not inited
-                    || local_table_scan_detail.min_stream_cost_ns > this_execution_time)
-                    local_table_scan_detail.min_stream_cost_ns = this_execution_time;
+                if (local_table_scan_detail.time_detail.max_stream_cost_ns < 0.0 // not inited
+                    || local_table_scan_detail.time_detail.max_stream_cost_ns < this_execution_time)
+                    local_table_scan_detail.time_detail.max_stream_cost_ns = this_execution_time;
+                if (local_table_scan_detail.time_detail.min_stream_cost_ns < 0.0 // not inited
+                    || local_table_scan_detail.time_detail.min_stream_cost_ns > this_execution_time)
+                    local_table_scan_detail.time_detail.min_stream_cost_ns = this_execution_time;
             }
             else
             {
                 updateTableScanDetail(profile_info.connection_profile_infos);
                 const double this_execution_time = profile_info.operator_info->execution_time * 1.0;
-                if (remote_table_scan_detail.max_stream_cost_ns < 0.0 // not inited
-                    || remote_table_scan_detail.max_stream_cost_ns < this_execution_time)
-                    remote_table_scan_detail.max_stream_cost_ns = this_execution_time;
-                if (remote_table_scan_detail.min_stream_cost_ns < 0.0 // not inited
-                    || remote_table_scan_detail.max_stream_cost_ns > this_execution_time)
-                    remote_table_scan_detail.min_stream_cost_ns = this_execution_time;
+                if (remote_table_scan_detail.time_detail.max_stream_cost_ns < 0.0 // not inited
+                    || remote_table_scan_detail.time_detail.max_stream_cost_ns < this_execution_time)
+                    remote_table_scan_detail.time_detail.max_stream_cost_ns = this_execution_time;
+                if (remote_table_scan_detail.time_detail.min_stream_cost_ns < 0.0 // not inited
+                    || remote_table_scan_detail.time_detail.max_stream_cost_ns > this_execution_time)
+                    remote_table_scan_detail.time_detail.min_stream_cost_ns = this_execution_time;
             }
         });
         break;
@@ -118,10 +139,10 @@ void TableScanStatistics::collectExtraRuntimeDetail()
     if (auto it = dag_context.scan_context_map.find(executor_id); it != dag_context.scan_context_map.end())
     {
         it->second->setStreamCost(
-            std::max(local_table_scan_detail.min_stream_cost_ns, 0.0),
-            std::max(local_table_scan_detail.max_stream_cost_ns, 0.0),
-            std::max(remote_table_scan_detail.min_stream_cost_ns, 0.0),
-            std::max(remote_table_scan_detail.max_stream_cost_ns, 0.0));
+            std::max(local_table_scan_detail.time_detail.min_stream_cost_ns, 0.0),
+            std::max(local_table_scan_detail.time_detail.max_stream_cost_ns, 0.0),
+            std::max(remote_table_scan_detail.time_detail.min_stream_cost_ns, 0.0),
+            std::max(remote_table_scan_detail.time_detail.max_stream_cost_ns, 0.0));
     }
 }
 

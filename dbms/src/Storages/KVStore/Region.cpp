@@ -340,11 +340,13 @@ Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_hel
     , keyspace_id(meta.getRange()->getKeyspaceID())
     , mapped_table_id(meta.getRange()->getMappedTableID())
     , proxy_helper(proxy_helper_)
-{}
+{
+    GET_METRIC(tiflash_raft_classes_count, type_region).Increment(1);
+}
 
 Region::~Region()
 {
-    data.reportDealloc(data.cf_data_size);
+    GET_METRIC(tiflash_raft_classes_count, type_region).Decrement();
 }
 
 TableID Region::getMappedTableID() const
