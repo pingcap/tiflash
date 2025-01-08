@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
+#include <Storages/DeltaMerge/VersionChain/HandleColumnView.h>
 
 namespace DB::DM
 {
@@ -109,14 +110,10 @@ private:
     std::optional<RowID> getBaseVersion(HandleView h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded();
-        const auto & handle_col = clipped_handle_packs[clipped_pack_id];
-        const auto * handles = toColumnVectorDataPtr<Int64>(handle_col);
-        RUNTIME_CHECK_MSG(handles != nullptr, "TODO: support common handle");
-        auto itr = std::lower_bound(handles->begin(), handles->end(), h);
-        if (itr != handles->end() && *itr == h)
-        {
-            return itr - handles->begin() + clipped_pack_offsets[clipped_pack_id];
-        }
+        HandleColumnView<Handle> handle_col(*clipped_handle_packs[clipped_pack_id]);
+        auto itr = std::lower_bound(handle_col.begin(), handle_col.end(), h);
+        if (itr != handle_col.end() && *itr == h)
+            return itr - handle_col.begin() + clipped_pack_offsets[clipped_pack_id];
         return {};
     }
 
