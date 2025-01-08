@@ -56,10 +56,7 @@ using MockExchangeWriterChecker = std::function<void(const TrackedMppDataPacketP
 
 struct MockExchangeWriter
 {
-    MockExchangeWriter(
-        MockExchangeWriterChecker checker_,
-        uint16_t part_num_,
-        DAGContext & dag_context)
+    MockExchangeWriter(MockExchangeWriterChecker checker_, uint16_t part_num_, DAGContext & dag_context)
         : checker(checker_)
         , part_num(part_num_)
         , result_field_types(dag_context.result_field_types)
@@ -113,21 +110,21 @@ struct MockExchangeWriter
 
     void broadcastOrPassThroughWriteV0(Blocks & blocks)
     {
-        checker(
-            MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types),
-            0);
+        checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), 0);
     }
 
     void broadcastWrite(Blocks & blocks) { return broadcastOrPassThroughWriteV0(blocks); }
     void passThroughWrite(Blocks & blocks) { return broadcastOrPassThroughWriteV0(blocks); }
-    void broadcastOrPassThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    void broadcastOrPassThroughWrite(
+        Blocks & blocks,
+        MPPDataPacketVersion version,
+        CompressionMethod compression_method)
     {
         if (version == MPPDataPacketV0)
             return broadcastOrPassThroughWriteV0(blocks);
 
         size_t original_size{};
-        auto && packet
-            = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
+        auto && packet = MPPTunnelSetHelper::ToPacket(std::move(blocks), version, compression_method, original_size);
         if (!packet)
             return;
 
@@ -144,9 +141,7 @@ struct MockExchangeWriter
 
     void partitionWrite(Blocks & blocks, uint16_t part_id)
     {
-        checker(
-            MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types),
-            part_id);
+        checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types), part_id);
     }
     void fineGrainedShuffleWrite(
         const Block & header,
