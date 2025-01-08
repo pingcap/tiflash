@@ -35,14 +35,14 @@ struct CHBlockChunkCodecV1 : boost::noncopyable
 
     const Block & header;
     const size_t header_size;
-    MppVersion mpp_version;
+    const MPPDataPacketVersion packet_version;
 
     size_t encoded_rows{};
     size_t original_size{};
     size_t compressed_size{};
 
     void clear();
-    explicit CHBlockChunkCodecV1(const Block & header_, MppVersion mpp_version_);
+    explicit CHBlockChunkCodecV1(const Block & header_, MPPDataPacketVersion packet_version_);
     //
     EncodeRes encode(const MutableColumns & columns, CompressionMethod compression_method);
     EncodeRes encode(std::vector<MutableColumns> && columns, CompressionMethod compression_method);

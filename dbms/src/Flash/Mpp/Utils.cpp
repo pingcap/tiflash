@@ -90,4 +90,16 @@ MppVersion GetMppVersion()
     return NewestMppVersion;
 }
 
+MPPDataPacketVersion GetMPPDataPacketVersion(MppVersion mpp_version)
+{
+    switch (mpp_version)
+    {
+    case MppVersion::MppVersionV0:
+        return MPPDataPacketVersion::MPPDataPacketV0;
+    case MppVersion::MppVersionV3:
+        return MPPDataPacketVersion::MPPDataPacketV2;
+    default:
+        return MPPDataPacketVersion::MPPDataPacketV1;
+    }
+}
 } // namespace DB

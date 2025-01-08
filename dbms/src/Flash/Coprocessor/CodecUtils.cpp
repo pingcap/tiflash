@@ -55,12 +55,12 @@ void checkDataTypeName(const String & identifier, size_t column_index, const Str
         actual);
 }
 
-const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion mpp_version)
+const IDataType & convertDataTypeByPacketVersion(const IDataType & type, MPPDataPacketVersion packet_version)
 {
-    if (mpp_version > MppVersion::MppVersionV2)
+    if (packet_version >= MPPDataPacketVersion::MPPDataPacketV2)
         return type;
 
-    // If mpp_version <= MppVersion::MppVersionV2, use legacy DataTypeString.
+    // If packet_version < MPPDataPacketVersion::MPPDataPacketV2, use legacy DataTypeString.
     static const auto legacy_string_type = DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName);
     static const auto legacy_nullable_string_type
         = DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName);

@@ -42,7 +42,7 @@ static size_t ApproxBlockHeaderBytes(const Block & block)
     return size;
 }
 
-void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows, MppVersion mpp_version)
+void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows, MPPDataPacketVersion packet_version)
 {
     size_t columns = header.columns();
     writeVarUInt(columns, ostr);
@@ -52,7 +52,7 @@ void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows, MppVers
     {
         const ColumnWithTypeAndName & column = header.safeGetByPosition(i);
         writeStringBinary(column.name, ostr);
-        const auto & ser_type = CodecUtils::convertDataTypeByMppVersion(*column.type, mpp_version);
+        const auto & ser_type = CodecUtils::convertDataTypeByPacketVersion(*column.type, packet_version);
         writeStringBinary(ser_type.getName(), ostr);
     }
 }
@@ -304,7 +304,8 @@ struct CHBlockChunkCodecV1Impl
         {
             auto && col_type_name = inner.header.getByPosition(col_index);
             auto && column_ptr = toColumnPtr(std::forward<ColumnsHolder>(columns_holder), col_index);
-            const auto & ser_type = CodecUtils::convertDataTypeByMppVersion(*col_type_name.type, inner.mpp_version);
+            const auto & ser_type
+                = CodecUtils::convertDataTypeByPacketVersion(*col_type_name.type, inner.packet_version);
             CHBlockChunkCodec::WriteColumnData(ser_type, column_ptr, *ostr_ptr, 0, 0);
         }
 
@@ -409,7 +410,7 @@ struct CHBlockChunkCodecV1Impl
         }
 
         // Encode header
-        EncodeHeader(*ostr_ptr, inner.header, rows, inner.mpp_version);
+        EncodeHeader(*ostr_ptr, inner.header, rows, inner.packet_version);
         // Encode column data
         encodeColumn(std::forward<VecColumns>(batch_columns), ostr_ptr);
 
@@ -429,10 +430,10 @@ struct CHBlockChunkCodecV1Impl
     }
 };
 
-CHBlockChunkCodecV1::CHBlockChunkCodecV1(const Block & header_, MppVersion mpp_version_)
+CHBlockChunkCodecV1::CHBlockChunkCodecV1(const Block & header_, MPPDataPacketVersion packet_version_)
     : header(header_)
     , header_size(ApproxBlockHeaderBytes(header))
-    , mpp_version(mpp_version_)
+    , packet_version(packet_version_)
 {}
 
 static void checkSchema(const Block & header, const Block & block)

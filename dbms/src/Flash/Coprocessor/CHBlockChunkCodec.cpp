@@ -27,9 +27,11 @@ namespace DB
 class CHBlockChunkCodecStream : public ChunkCodecStream
 {
 public:
-    explicit CHBlockChunkCodecStream(const std::vector<tipb::FieldType> & field_types, MppVersion mpp_version_)
+    explicit CHBlockChunkCodecStream(
+        const std::vector<tipb::FieldType> & field_types,
+        MPPDataPacketVersion packet_version_)
         : ChunkCodecStream(field_types)
-        , mpp_version(mpp_version_)
+        , packet_version(packet_version_)
     {
         for (const auto & field_type : field_types)
         {
@@ -50,7 +52,7 @@ public:
     void encode(const Block & block, size_t start, size_t end) override;
     std::unique_ptr<WriteBufferFromOwnString> output;
     DataTypes expected_types;
-    const MppVersion mpp_version;
+    const MPPDataPacketVersion packet_version;
 };
 
 CHBlockChunkCodec::CHBlockChunkCodec(const Block & header_)
@@ -158,7 +160,7 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
         const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
 
         writeStringBinary(column.name, *output);
-        const auto & ser_type = CodecUtils::convertDataTypeByMppVersion(*column.type, mpp_version);
+        const auto & ser_type = CodecUtils::convertDataTypeByPacketVersion(*column.type, packet_version);
         writeStringBinary(ser_type.getName(), *output);
 
         if (rows)
@@ -168,9 +170,9 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
 
 std::unique_ptr<ChunkCodecStream> CHBlockChunkCodec::newCodecStream(
     const std::vector<tipb::FieldType> & field_types,
-    MppVersion mpp_version)
+    MPPDataPacketVersion packet_version)
 {
-    return std::make_unique<CHBlockChunkCodecStream>(field_types, mpp_version);
+    return std::make_unique<CHBlockChunkCodecStream>(field_types, packet_version);
 }
 
 Block CHBlockChunkCodec::decodeImpl(ReadBuffer & istr, size_t reserve_size)

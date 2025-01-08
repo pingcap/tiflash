@@ -25,12 +25,11 @@ TrackedMppDataPacketPtr ToPacket(
     std::vector<MutableColumns> && part_columns,
     MPPDataPacketVersion version,
     CompressionMethod method,
-    size_t & original_size,
-    MppVersion mpp_version)
+    size_t & original_size)
 {
     assert(version > MPPDataPacketV0);
 
-    auto && codec = CHBlockChunkCodecV1{header, mpp_version};
+    auto && codec = CHBlockChunkCodecV1{header, version};
 
     auto && res = codec.encode(std::move(part_columns), method);
 
@@ -47,15 +46,14 @@ TrackedMppDataPacketPtr ToPacket(
     Blocks && blocks,
     MPPDataPacketVersion version,
     CompressionMethod method,
-    size_t & original_size,
-    MppVersion mpp_version)
+    size_t & original_size)
 {
     assert(version > MPPDataPacketV0);
 
     if (blocks.empty())
         return nullptr;
     const Block & header = blocks.front().cloneEmpty();
-    auto && codec = CHBlockChunkCodecV1{header, mpp_version};
+    auto && codec = CHBlockChunkCodecV1{header, version};
     auto && res = codec.encode(std::move(blocks), method, false);
     if unlikely (res.empty())
         return nullptr;
@@ -69,10 +67,10 @@ TrackedMppDataPacketPtr ToPacket(
 TrackedMppDataPacketPtr ToPacketV0(
     Blocks & blocks,
     const std::vector<tipb::FieldType> & field_types,
-    MppVersion mpp_version)
+    MPPDataPacketVersion version)
 {
     CHBlockChunkCodec codec;
-    auto codec_stream = codec.newCodecStream(field_types, mpp_version);
+    auto codec_stream = codec.newCodecStream(field_types, version);
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
     for (auto & block : blocks)
     {
@@ -92,12 +90,11 @@ TrackedMppDataPacketPtr ToFineGrainedPacket(
     size_t num_columns,
     MPPDataPacketVersion version,
     CompressionMethod method,
-    size_t & original_size,
-    MppVersion mpp_version)
+    size_t & original_size)
 {
     assert(version > MPPDataPacketV0);
 
-    auto && codec = CHBlockChunkCodecV1{header, mpp_version};
+    auto && codec = CHBlockChunkCodecV1{header, version};
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(version);
 
     for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
@@ -133,10 +130,10 @@ TrackedMppDataPacketPtr ToFineGrainedPacketV0(
     UInt64 fine_grained_shuffle_stream_count,
     size_t num_columns,
     const std::vector<tipb::FieldType> & field_types,
-    MppVersion mpp_version)
+    MPPDataPacketVersion version)
 {
     CHBlockChunkCodec codec;
-    auto codec_stream = codec.newCodecStream(field_types, mpp_version);
+    auto codec_stream = codec.newCodecStream(field_types, version);
     auto tracked_packet = std::make_shared<TrackedMppDataPacket>(MPPDataPacketV0);
     for (uint64_t stream_idx = 0; stream_idx < fine_grained_shuffle_stream_count; ++stream_idx)
     {

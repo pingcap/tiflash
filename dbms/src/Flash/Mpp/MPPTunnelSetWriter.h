@@ -26,7 +26,7 @@ public:
         const MPPTunnelSetPtr & mpp_tunnel_set_,
         const std::vector<tipb::FieldType> & result_field_types_,
         const String & req_id,
-        MppVersion mpp_version_);
+        MPPDataPacketVersion packet_version_);
 
     virtual ~MPPTunnelSetWriterBase() = default;
 
@@ -37,8 +37,8 @@ public:
     void broadcastWrite(Blocks & blocks);
     void passThroughWrite(Blocks & blocks);
     // data codec version > V0
-    void broadcastWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method);
-    void passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method);
+    void broadcastWrite(Blocks & blocks, CompressionMethod compression_method);
+    void passThroughWrite(Blocks & blocks, CompressionMethod compression_method);
     // this is a partition writing.
     // data codec version V0
     void partitionWrite(Blocks & blocks, int16_t partition_id);
@@ -47,7 +47,6 @@ public:
         const Block & header,
         std::vector<MutableColumns> && part_columns,
         int16_t partition_id,
-        MPPDataPacketVersion version,
         CompressionMethod compression_method);
     // this is a fine grained shuffle writing.
     // data codec version V0
@@ -65,7 +64,6 @@ public:
         UInt64 fine_grained_shuffle_stream_count,
         size_t num_columns,
         int16_t partition_id,
-        MPPDataPacketVersion version,
         CompressionMethod compression_method);
 
     uint16_t getPartitionNum() const { return mpp_tunnel_set->getPartitionNum(); }
@@ -80,7 +78,7 @@ protected:
     MPPTunnelSetPtr mpp_tunnel_set;
     std::vector<tipb::FieldType> result_field_types;
     const LoggerPtr log;
-    const MppVersion mpp_version;
+    const MPPDataPacketVersion packet_version;
 };
 
 class SyncMPPTunnelSetWriter : public MPPTunnelSetWriterBase
@@ -90,8 +88,8 @@ public:
         const MPPTunnelSetPtr & mpp_tunnel_set_,
         const std::vector<tipb::FieldType> & result_field_types_,
         const String & req_id,
-        MppVersion mpp_version)
-        : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id, mpp_version)
+        MPPDataPacketVersion packet_version)
+        : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id, packet_version)
     {}
 
     // For sync writer, `waitForWritable` will not be called, so an exception is thrown here.
@@ -110,8 +108,8 @@ public:
         const MPPTunnelSetPtr & mpp_tunnel_set_,
         const std::vector<tipb::FieldType> & result_field_types_,
         const String & req_id,
-        MppVersion mpp_version)
-        : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id, mpp_version)
+        MPPDataPacketVersion packet_version)
+        : MPPTunnelSetWriterBase(mpp_tunnel_set_, result_field_types_, req_id, packet_version)
     {}
 
     WaitResult waitForWritable() const override { return mpp_tunnel_set->waitForWritable(); }

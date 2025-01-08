@@ -46,7 +46,7 @@ public:
 
     virtual std::unique_ptr<ChunkCodecStream> newCodecStream(
         const std::vector<tipb::FieldType> & result_field_types,
-        MppVersion mpp_version)
+        MPPDataPacketVersion packet_version)
         = 0;
 
     virtual ~ChunkCodec() = default;

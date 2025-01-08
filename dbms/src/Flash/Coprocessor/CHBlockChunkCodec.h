@@ -36,7 +36,7 @@ public:
     Block decode(const String &);
     std::unique_ptr<ChunkCodecStream> newCodecStream(
         const std::vector<tipb::FieldType> & field_types,
-        MppVersion mpp_version) override;
+        MPPDataPacketVersion packet_version) override;
 
 private:
     friend class CHBlockChunkDecodeAndSquash;

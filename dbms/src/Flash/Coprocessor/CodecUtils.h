@@ -34,6 +34,6 @@ struct DataTypeWithTypeName
 
 void checkColumnSize(const String & identifier, size_t expected, size_t actual);
 void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual);
-const IDataType & convertDataTypeByMppVersion(const IDataType & type, MppVersion mpp_version);
+const IDataType & convertDataTypeByPacketVersion(const IDataType & type, MPPDataPacketVersion packet_version);
 } // namespace CodecUtils
 } // namespace DB

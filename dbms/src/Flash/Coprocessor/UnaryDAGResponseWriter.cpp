@@ -34,21 +34,22 @@ UnaryDAGResponseWriter::UnaryDAGResponseWriter(
     : DAGResponseWriter(records_per_chunk_, dag_context_)
     , dag_response(dag_response_)
 {
-    auto mpp_version = static_cast<MppVersion>(dag_context.getMPPTaskMeta().mpp_version());
+    const auto packet_version
+        = GetMPPDataPacketVersion(static_cast<MppVersion>(dag_context.getMPPTaskMeta().mpp_version()));
     if (dag_context.encode_type == tipb::EncodeType::TypeDefault)
     {
         chunk_codec_stream
-            = std::make_unique<DefaultChunkCodec>()->newCodecStream(dag_context.result_field_types, mpp_version);
+            = std::make_unique<DefaultChunkCodec>()->newCodecStream(dag_context.result_field_types, packet_version);
     }
     else if (dag_context.encode_type == tipb::EncodeType::TypeChunk)
     {
         chunk_codec_stream
-            = std::make_unique<ArrowChunkCodec>()->newCodecStream(dag_context.result_field_types, mpp_version);
+            = std::make_unique<ArrowChunkCodec>()->newCodecStream(dag_context.result_field_types, packet_version);
     }
     else if (dag_context.encode_type == tipb::EncodeType::TypeCHBlock)
     {
         chunk_codec_stream
-            = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types, mpp_version);
+            = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types, packet_version);
     }
     dag_response->set_encode_type(dag_context.encode_type);
     current_records_num = 0;

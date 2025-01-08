@@ -88,7 +88,7 @@ Block DefaultChunkCodec::decode(const String & data, const DAGSchema & schema)
 
 std::unique_ptr<ChunkCodecStream> DefaultChunkCodec::newCodecStream(
     const std::vector<tipb::FieldType> & field_types,
-    MppVersion)
+    MPPDataPacketVersion)
 {
     return std::make_unique<DefaultChunkCodecStream>(field_types);
 }

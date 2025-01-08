@@ -58,9 +58,10 @@ bool equalSummaries(const ExecutionSummary & left, const ExecutionSummary & righ
 
 struct MockWriter
 {
-    MockWriter(DAGContext & dag_context, PacketQueuePtr queue_)
+    MockWriter(DAGContext & dag_context, PacketQueuePtr queue_, MPPDataPacketVersion packet_version_)
         : result_field_types(dag_context.result_field_types)
         , queue(queue_)
+        , packet_version(packet_version_)
     {}
 
     static ExecutionSummary mockExecutionSummary()
@@ -88,7 +89,7 @@ struct MockWriter
 
     void broadcastOrPassThroughWriteV0(Blocks & blocks)
     {
-        auto && packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, GetMppVersion());
+        auto && packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, GetMPPDataPacketVersion(GetMppVersion()));
         ++total_packets;
         if (!packet)
             return;
@@ -101,19 +102,17 @@ struct MockWriter
     void passThroughWrite(Blocks & blocks) { return broadcastOrPassThroughWriteV0(blocks); }
     void broadcastOrPassThroughWrite(
         Blocks & blocks,
-        MPPDataPacketVersion version,
         CompressionMethod compression_method)
     {
-        if (version == MPPDataPacketV0)
+        if (packet_version == MPPDataPacketV0)
             return broadcastOrPassThroughWriteV0(blocks);
 
         size_t original_size{};
         auto && packet = MPPTunnelSetHelper::ToPacket(
             std::move(blocks),
-            version,
+            packet_version,
             compression_method,
-            original_size,
-            GetMppVersion());
+            original_size);
         ++total_packets;
         if (!packet)
             return;
@@ -121,13 +120,13 @@ struct MockWriter
         total_bytes += packet->packet.ByteSizeLong();
         queue->push(std::move(packet));
     }
-    void broadcastWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    void broadcastWrite(Blocks & blocks, CompressionMethod compression_method)
     {
-        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+        return broadcastOrPassThroughWrite(blocks, compression_method);
     }
-    void passThroughWrite(Blocks & blocks, MPPDataPacketVersion version, CompressionMethod compression_method)
+    void passThroughWrite(Blocks & blocks, CompressionMethod compression_method)
     {
-        return broadcastOrPassThroughWrite(blocks, version, compression_method);
+        return broadcastOrPassThroughWrite(blocks, compression_method);
     }
 
     void write(tipb::SelectResponse & response)
@@ -160,6 +159,7 @@ struct MockWriter
     bool add_summary = false;
     size_t total_packets = 0;
     size_t total_bytes = 0;
+    const MPPDataPacketVersion packet_version;
 };
 
 // NOLINTBEGIN(readability-convert-member-functions-to-static)
@@ -456,7 +456,7 @@ public:
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
-        auto writer = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr);
+        auto writer = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr, GetMPPDataPacketVersion(GetMppVersion()));
         prepareQueue(writer, source_blocks, empty_last_packet);
         queue_ptr->finish();
 
@@ -473,7 +473,7 @@ public:
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
-        auto writer = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr);
+        auto writer = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr, GetMPPDataPacketVersion(GetMppVersion()));
         prepareQueueV2(writer, source_blocks, empty_last_packet);
         queue_ptr->finish();
         auto receiver_stream = makeExchangeReceiverInputStream(queue_ptr, context);

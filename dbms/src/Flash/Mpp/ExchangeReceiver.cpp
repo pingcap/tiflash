@@ -748,6 +748,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         return detail;
     }
     case DB::MPPDataPacketV1:
+    case DB::MPPDataPacketV2:
     {
         for (const auto * chunk : chunks)
         {
