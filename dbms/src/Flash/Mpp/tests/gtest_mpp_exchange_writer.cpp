@@ -56,7 +56,11 @@ using MockExchangeWriterChecker = std::function<void(const TrackedMppDataPacketP
 
 struct MockExchangeWriter
 {
-    MockExchangeWriter(MockExchangeWriterChecker checker_, uint16_t part_num_, DAGContext & dag_context, MPPDataPacketVersion packet_version_)
+    MockExchangeWriter(
+        MockExchangeWriterChecker checker_,
+        uint16_t part_num_,
+        DAGContext & dag_context,
+        MPPDataPacketVersion packet_version_)
         : checker(checker_)
         , part_num(part_num_)
         , result_field_types(dag_context.result_field_types)
@@ -72,12 +76,8 @@ struct MockExchangeWriter
         assert(packet_version > MPPDataPacketV0);
         method = isLocal(part_id) ? CompressionMethod::NONE : method;
         size_t original_size = 0;
-        auto tracked_packet = MPPTunnelSetHelper::ToPacket(
-            header,
-            std::move(part_columns),
-            packet_version,
-            method,
-            original_size);
+        auto tracked_packet
+            = MPPTunnelSetHelper::ToPacket(header, std::move(part_columns), packet_version, method, original_size);
         checker(tracked_packet, part_id);
     }
     void fineGrainedShuffleWrite(
@@ -113,24 +113,21 @@ struct MockExchangeWriter
 
     void broadcastOrPassThroughWriteV0(Blocks & blocks)
     {
-        checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, GetMPPDataPacketVersion(GetMppVersion())), 0);
+        checker(
+            MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, GetMPPDataPacketVersion(GetMppVersion())),
+            0);
     }
 
     void broadcastWrite(Blocks & blocks) { return broadcastOrPassThroughWriteV0(blocks); }
     void passThroughWrite(Blocks & blocks) { return broadcastOrPassThroughWriteV0(blocks); }
-    void broadcastOrPassThroughWrite(
-        Blocks & blocks,
-        CompressionMethod compression_method)
+    void broadcastOrPassThroughWrite(Blocks & blocks, CompressionMethod compression_method)
     {
         if (packet_version == MPPDataPacketV0)
             return broadcastOrPassThroughWriteV0(blocks);
 
         size_t original_size{};
-        auto && packet = MPPTunnelSetHelper::ToPacket(
-            std::move(blocks),
-            packet_version,
-            compression_method,
-            original_size);
+        auto && packet
+            = MPPTunnelSetHelper::ToPacket(std::move(blocks), packet_version, compression_method, original_size);
         if (!packet)
             return;
 
@@ -147,7 +144,9 @@ struct MockExchangeWriter
 
     void partitionWrite(Blocks & blocks, uint16_t part_id)
     {
-        checker(MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, GetMPPDataPacketVersion(GetMppVersion())), part_id);
+        checker(
+            MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, GetMPPDataPacketVersion(GetMppVersion())),
+            part_id);
     }
     void fineGrainedShuffleWrite(
         const Block & header,
@@ -902,8 +901,9 @@ try
             ASSERT_TRUE(res.second);
         };
 
-        const auto mode = packet_version == MPPDataPacketVersion::MPPDataPacketV0 ? tipb::CompressionMode::NONE : tipb::CompressionMode::FAST;
-    
+        const auto mode = packet_version == MPPDataPacketVersion::MPPDataPacketV0 ? tipb::CompressionMode::NONE
+                                                                                  : tipb::CompressionMode::FAST;
+
         // Construct dag_writer.
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr, packet_version);
         auto dag_writer = std::make_shared<FineGrainedShuffleWriter<std::shared_ptr<MockExchangeWriter>>>(
@@ -959,8 +959,9 @@ try
             ASSERT_TRUE(res.second);
         };
 
-        const auto mode = packet_version == MPPDataPacketVersion::MPPDataPacketV0 ? tipb::CompressionMode::NONE : tipb::CompressionMode::FAST;
-    
+        const auto mode = packet_version == MPPDataPacketVersion::MPPDataPacketV0 ? tipb::CompressionMode::NONE
+                                                                                  : tipb::CompressionMode::FAST;
+
         // Construct dag_writer.
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr, packet_version);
         auto dag_writer = std::make_shared<HashPartitionWriter<std::shared_ptr<MockExchangeWriter>>>(

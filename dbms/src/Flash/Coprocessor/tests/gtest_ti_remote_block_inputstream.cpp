@@ -89,7 +89,8 @@ struct MockWriter
 
     void broadcastOrPassThroughWriteV0(Blocks & blocks)
     {
-        auto && packet = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, GetMPPDataPacketVersion(GetMppVersion()));
+        auto && packet
+            = MPPTunnelSetHelper::ToPacketV0(blocks, result_field_types, GetMPPDataPacketVersion(GetMppVersion()));
         ++total_packets;
         if (!packet)
             return;
@@ -100,19 +101,14 @@ struct MockWriter
 
     void broadcastWrite(Blocks & blocks) { return broadcastOrPassThroughWriteV0(blocks); }
     void passThroughWrite(Blocks & blocks) { return broadcastOrPassThroughWriteV0(blocks); }
-    void broadcastOrPassThroughWrite(
-        Blocks & blocks,
-        CompressionMethod compression_method)
+    void broadcastOrPassThroughWrite(Blocks & blocks, CompressionMethod compression_method)
     {
         if (packet_version == MPPDataPacketV0)
             return broadcastOrPassThroughWriteV0(blocks);
 
         size_t original_size{};
-        auto && packet = MPPTunnelSetHelper::ToPacket(
-            std::move(blocks),
-            packet_version,
-            compression_method,
-            original_size);
+        auto && packet
+            = MPPTunnelSetHelper::ToPacket(std::move(blocks), packet_version, compression_method, original_size);
         ++total_packets;
         if (!packet)
             return;
@@ -456,7 +452,8 @@ public:
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
-        auto writer = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr, GetMPPDataPacketVersion(GetMppVersion()));
+        auto writer
+            = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr, GetMPPDataPacketVersion(GetMppVersion()));
         prepareQueue(writer, source_blocks, empty_last_packet);
         queue_ptr->finish();
 
@@ -473,7 +470,8 @@ public:
     {
         PacketQueuePtr queue_ptr = std::make_shared<PacketQueue>(1000);
         std::vector<Block> source_blocks;
-        auto writer = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr, GetMPPDataPacketVersion(GetMppVersion()));
+        auto writer
+            = std::make_shared<MockWriter>(*dag_context_ptr, queue_ptr, GetMPPDataPacketVersion(GetMppVersion()));
         prepareQueueV2(writer, source_blocks, empty_last_packet);
         queue_ptr->finish();
         auto receiver_stream = makeExchangeReceiverInputStream(queue_ptr, context);

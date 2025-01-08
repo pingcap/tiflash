@@ -258,14 +258,17 @@ try
         test_enocde_release_data(std::move(batch_columns), header, total_rows);
     }
     {
-        auto source_str = CHBlockChunkCodecV1{header, GetMPPDataPacketVersion(GetMppVersion())}.encode(blocks.front(), CompressionMethod::NONE);
+        auto source_str = CHBlockChunkCodecV1{header, GetMPPDataPacketVersion(GetMppVersion())}.encode(
+            blocks.front(),
+            CompressionMethod::NONE);
         ASSERT_FALSE(source_str.empty());
         ASSERT_EQ(static_cast<CompressionMethodByte>(source_str[0]), CompressionMethodByte::NONE);
 
         for (const auto method : {CompressionMethod::LZ4, CompressionMethod::ZSTD})
         {
             auto compressed_str_a = CHBlockChunkCodecV1::encode({&source_str[1], source_str.size() - 1}, method);
-            auto compressed_str_b = CHBlockChunkCodecV1{header, GetMPPDataPacketVersion(GetMppVersion())}.encode(blocks.front(), method);
+            auto compressed_str_b
+                = CHBlockChunkCodecV1{header, GetMPPDataPacketVersion(GetMppVersion())}.encode(blocks.front(), method);
 
             ASSERT_EQ(compressed_str_a, compressed_str_b);
         }
@@ -421,7 +424,8 @@ try
 
     auto header = prepareBlockWithString(0, new_string_type_names);
     auto block = prepareBlockWithString(100, new_string_type_names);
-    auto codec_stream = CHBlockChunkCodec{}.newCodecStream(string_field_types, GetMPPDataPacketVersion(MppVersion::MppVersionV2));
+    auto codec_stream
+        = CHBlockChunkCodec{}.newCodecStream(string_field_types, GetMPPDataPacketVersion(MppVersion::MppVersionV2));
     codec_stream->encode(block, 0, block.rows());
     auto str = codec_stream->getString();
 
