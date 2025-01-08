@@ -937,10 +937,9 @@ SegmentPtr SegmentTestBasic::reload(
     storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
     storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, NAMESPACE_ID, *storage_path_pool, "test.t1");
     storage_pool->restore();
-    ColumnDefinesPtr cols = (!pre_define_columns)
-        ? DMTestEnv::getDefaultColumns(
-              is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID)
-        : pre_define_columns;
+    ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(
+                                is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID)
+                                                  : pre_define_columns;
     prepareColumns(cols);
     setColumns(cols);
 
