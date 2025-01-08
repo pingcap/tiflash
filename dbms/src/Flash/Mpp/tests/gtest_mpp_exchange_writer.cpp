@@ -416,7 +416,7 @@ try
         *dag_context_ptr,
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size,
-        MPPDataPacketV0,
+        DB::MPPDataPacketV0,
         tipb::CompressionMode::NONE);
     dag_writer->prepare(block.cloneEmpty());
     dag_writer->write(block);
@@ -481,7 +481,7 @@ try
             *dag_context_ptr,
             fine_grained_shuffle_stream_count,
             fine_grained_shuffle_batch_size,
-            MPPDataPacketV1,
+            DB::MPPDataPacketV1,
             mode);
         dag_writer->prepare(blocks[0].cloneEmpty());
         for (const auto & block : blocks)
@@ -568,7 +568,7 @@ try
         *dag_context_ptr,
         fine_grained_shuffle_stream_count,
         fine_grained_shuffle_batch_size,
-        MPPDataPacketV0,
+        DB::MPPDataPacketV0,
         tipb::CompressionMode::NONE);
     dag_writer->prepare(blocks[0].cloneEmpty());
     for (const auto & block : blocks)
@@ -631,7 +631,7 @@ try
         part_col_collators,
         batch_send_min_limit,
         *dag_context_ptr,
-        MPPDataPacketV0,
+        DB::MPPDataPacketV0,
         tipb::CompressionMode::NONE);
     for (const auto & block : blocks)
         dag_writer->write(block);
@@ -678,7 +678,6 @@ try
         ASSERT_EQ(part_id, 0);
         write_report.emplace_back(packet);
     };
-
     auto mock_writer = std::make_shared<MockExchangeWriter>(checker, 1, *dag_context_ptr);
 
     // 3. Start to write.
@@ -686,7 +685,7 @@ try
         mock_writer,
         batch_send_min_limit,
         *dag_context_ptr,
-        MPPDataPacketV0,
+        MPPDataPacketVersion::MPPDataPacketV0,
         tipb::CompressionMode::NONE,
         tipb::ExchangeType::Broadcast);
 
@@ -740,7 +739,7 @@ try
             mock_writer,
             batch_send_min_limit,
             *dag_context_ptr,
-            MPPDataPacketV1,
+            MPPDataPacketVersion::MPPDataPacketV1,
             mode,
             tipb::ExchangeType::Broadcast);
 
@@ -814,7 +813,7 @@ try
             part_col_collators,
             batch_send_min_limit,
             *dag_context_ptr,
-            MPPDataPacketV1,
+            DB::MPPDataPacketV1,
             mode);
         for (const auto & block : blocks)
             dag_writer->write(block);
@@ -876,9 +875,9 @@ try
     auto selective = generateRandomSelective(block_total_rows, selective_rows);
     block.info.selective = std::make_shared<std::vector<UInt64>>(std::move(selective));
 
-    std::vector<MPPDataPacketVersion> packet_versions{DB::MPPDataPacketV0, DB::MPPDataPacketV1};
+    std::vector<MPPDataPacketVersion> mpp_version_vec{DB::MPPDataPacketV0, DB::MPPDataPacketV1};
 
-    for (const auto packet_version : packet_versions)
+    for (const auto & mpp_version : mpp_version_vec)
     {
         // Construct checker.
         std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_records;
@@ -887,8 +886,9 @@ try
             ASSERT_TRUE(res.second);
         };
 
-        const auto mode = packet_version == MPPDataPacketVersion::MPPDataPacketV0 ? tipb::CompressionMode::NONE
-                                                                                  : tipb::CompressionMode::FAST;
+        auto mode = tipb::CompressionMode::NONE;
+        if (mpp_version == DB::MPPDataPacketV1)
+            mode = tipb::CompressionMode::FAST;
 
         // Construct dag_writer.
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
@@ -899,7 +899,7 @@ try
             *dag_context_ptr,
             fine_grained_shuffle_stream_count,
             fine_grained_shuffle_batch_size,
-            packet_version,
+            mpp_version,
             mode);
 
         // Write selective block.
@@ -910,7 +910,7 @@ try
         // Check block.
         decodeAndCheckBlockForSelectiveBlock(
             /*is_fine_grained_shuffle*/ true,
-            packet_version,
+            mpp_version,
             block,
             part_num,
             selective_rows,
@@ -934,9 +934,9 @@ try
     auto selective = generateRandomSelective(block_total_rows, selective_rows);
     block.info.selective = std::make_shared<std::vector<UInt64>>(std::move(selective));
 
-    std::vector<MPPDataPacketVersion> packet_versions{DB::MPPDataPacketV0, DB::MPPDataPacketV1};
+    std::vector<MPPDataPacketVersion> mpp_version_vec{DB::MPPDataPacketV0, DB::MPPDataPacketV1};
 
-    for (const auto packet_version : packet_versions)
+    for (const auto & mpp_version : mpp_version_vec)
     {
         // Construct checker.
         std::unordered_map<uint16_t, TrackedMppDataPacketPtr> write_records;
@@ -945,8 +945,9 @@ try
             ASSERT_TRUE(res.second);
         };
 
-        const auto mode = packet_version == MPPDataPacketVersion::MPPDataPacketV0 ? tipb::CompressionMode::NONE
-                                                                                  : tipb::CompressionMode::FAST;
+        auto mode = tipb::CompressionMode::NONE;
+        if (mpp_version == DB::MPPDataPacketV1)
+            mode = tipb::CompressionMode::FAST;
 
         // Construct dag_writer.
         auto mock_writer = std::make_shared<MockExchangeWriter>(checker, part_num, *dag_context_ptr);
@@ -956,7 +957,7 @@ try
             part_col_collators,
             /*batch_send_min_limit*/ 1024,
             *dag_context_ptr,
-            packet_version,
+            mpp_version,
             mode);
 
         // Write selective block.
@@ -967,7 +968,7 @@ try
         // Check block.
         decodeAndCheckBlockForSelectiveBlock(
             /*is_fine_grained_shuffle*/ false,
-            packet_version,
+            mpp_version,
             block,
             part_num,
             selective_rows,
