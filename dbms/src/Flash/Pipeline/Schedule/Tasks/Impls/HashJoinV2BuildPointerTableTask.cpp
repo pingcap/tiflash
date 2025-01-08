@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,21 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Events/Impls/HashJoinV2BuildFinalizeEvent.h>
-#include <Flash/Pipeline/Schedule/Tasks/Impls/HashJoinV2BuildFinalizeTask.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/HashJoinV2BuildPointerTableTask.h>
 
 namespace DB
 {
-void HashJoinV2BuildFinalizeEvent::scheduleImpl()
+ExecTaskStatus HashJoinV2BuildPointerTableTask::executeImpl()
 {
-    size_t concurrency = join_ptr->getBuildConcurrency();
-    for (size_t i = 0; i < concurrency; ++i)
-        addTask(std::make_unique<HashJoinV2BuildFinalizeTask>(
-            exec_context,
-            log->identifier(),
-            shared_from_this(),
-            join_ptr,
-            i));
+    if (!join_ptr->buildPointerTable(index))
+        return ExecTaskStatus::RUNNING;
+    return ExecTaskStatus::FINISHED;
 }
 
 } // namespace DB

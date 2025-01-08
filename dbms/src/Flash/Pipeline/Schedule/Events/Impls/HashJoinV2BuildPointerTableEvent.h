@@ -20,10 +20,10 @@
 namespace DB
 {
 
-class HashJoinV2BuildFinalizeEvent : public Event
+class HashJoinV2BuildPointerTableEvent : public Event
 {
 public:
-    HashJoinV2BuildFinalizeEvent(
+    HashJoinV2BuildPointerTableEvent(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const HashJoinPtr & join_ptr_)

@@ -15,10 +15,10 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
-#include <Flash/Pipeline/Schedule/Events/Impls/HashJoinV2BuildFinalizeEvent.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/HashJoinV2BuildPointerTableEvent.h>
 #include <Flash/Planner/Plans/PhysicalJoinV2Build.h>
 #include <Interpreters/Context.h>
-#include <Operators/HashJoinV2BuildSink.h>
+#include <Operators/HashJoinV2BuildRowSink.h>
 
 namespace DB
 {
@@ -34,7 +34,7 @@ void PhysicalJoinV2Build::buildPipelineExecGroupImpl(
     assert(join_ptr);
     group_builder.transform([&](auto & builder) {
         builder.setSinkOp(
-            std::make_unique<HashJoinV2BuildSink>(exec_context, log->identifier(), join_ptr, build_index++));
+            std::make_unique<HashJoinV2BuildRowSink>(exec_context, log->identifier(), join_ptr, build_index++));
     });
     auto & join_execute_info = context.getDAGContext()->getJoinExecuteInfoMap()[execId()];
     join_execute_info.join_build_profile_infos = group_builder.getCurProfileInfos();
@@ -43,7 +43,7 @@ void PhysicalJoinV2Build::buildPipelineExecGroupImpl(
 
 EventPtr PhysicalJoinV2Build::doSinkComplete(PipelineExecutorContext & exec_context)
 {
-    auto finalize_event = std::make_shared<HashJoinV2BuildFinalizeEvent>(exec_context, log->identifier(), join_ptr);
+    auto finalize_event = std::make_shared<HashJoinV2BuildPointerTableEvent>(exec_context, log->identifier(), join_ptr);
     join_ptr.reset();
     return finalize_event;
 }

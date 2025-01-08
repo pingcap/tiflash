@@ -49,17 +49,16 @@ public:
 
     void initProbe(const Block & sample_block, size_t probe_concurrency_ = 1);
 
-    void insertFromBlock(const Block & block, size_t stream_index);
-
-    /// Return true if it is the last build worker.
-    bool finishOneBuild(size_t stream_index);
+    /// Return true if it is the last build row worker.
+    bool finishOneBuildRow(size_t stream_index);
     /// Return true if it is the last probe worker.
     bool finishOneProbe(size_t stream_index);
 
+    void buildRowFromBlock(const Block & block, size_t stream_index);
     bool buildPointerTable(size_t stream_index);
 
-    Block joinBlock(JoinProbeContext & context, size_t stream_index);
-    Block getLastResultBlock(size_t stream_index);
+    Block probeBlock(JoinProbeContext & context, size_t stream_index);
+    Block probeLastResultBlock(size_t stream_index);
 
     void removeUselessColumn(Block & block) const;
     Block removeUselessColumnForOutput(const Block & block) const;

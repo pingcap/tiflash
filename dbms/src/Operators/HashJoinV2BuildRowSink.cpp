@@ -12,33 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Flash/Pipeline/Schedule/Tasks/Impls/EventTask.h>
-#include <Interpreters/JoinV2/HashJoin.h>
+#include <Operators/HashJoinV2BuildRowSink.h>
 
 namespace DB
 {
-
-class HashJoinV2BuildFinalizeTask : public EventTask
+OperatorStatus HashJoinV2BuildRowSink::writeImpl(Block && block)
 {
-public:
-    HashJoinV2BuildFinalizeTask(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        const EventPtr & event_,
-        const HashJoinPtr & join_ptr_,
-        size_t index_)
-        : EventTask(exec_context_, req_id, event_)
-        , join_ptr(join_ptr_)
-        , index(index_)
-    {}
+    if unlikely (!block)
+    {
+        is_finish_status = true;
+        join_ptr->finishOneBuildRow(op_index);
+        return OperatorStatus::FINISHED;
+    }
+    join_ptr->buildRowFromBlock(block, op_index);
+    block.clear();
+    return OperatorStatus::NEED_INPUT;
+}
 
-protected:
-    ExecTaskStatus executeImpl() override;
-
-private:
-    HashJoinPtr join_ptr;
-    size_t index;
-};
 } // namespace DB

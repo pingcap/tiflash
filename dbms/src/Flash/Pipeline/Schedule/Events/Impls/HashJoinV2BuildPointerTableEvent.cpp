@@ -12,15 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Tasks/Impls/HashJoinV2BuildFinalizeTask.h>
+#include <Flash/Pipeline/Schedule/Events/Impls/HashJoinV2BuildPointerTableEvent.h>
+#include <Flash/Pipeline/Schedule/Tasks/Impls/HashJoinV2BuildPointerTableTask.h>
 
 namespace DB
 {
-ExecTaskStatus HashJoinV2BuildFinalizeTask::executeImpl()
+void HashJoinV2BuildPointerTableEvent::scheduleImpl()
 {
-    if (!join_ptr->buildPointerTable(index))
-        return ExecTaskStatus::RUNNING;
-    return ExecTaskStatus::FINISHED;
+    size_t concurrency = join_ptr->getBuildConcurrency();
+    for (size_t i = 0; i < concurrency; ++i)
+        addTask(std::make_unique<HashJoinV2BuildPointerTableTask>(
+            exec_context,
+            log->identifier(),
+            shared_from_this(),
+            join_ptr,
+            i));
 }
 
 } // namespace DB

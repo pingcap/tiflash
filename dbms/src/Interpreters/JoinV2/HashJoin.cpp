@@ -327,62 +327,7 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
     probe_workers_data.resize(probe_concurrency);
 }
 
-void HashJoin::insertFromBlock(const Block & b, size_t stream_index)
-{
-    RUNTIME_ASSERT(stream_index < build_concurrency);
-    RUNTIME_CHECK_MSG(build_initialized, "Logical error: Join build was not initialized");
-
-    if unlikely (b.rows() == 0)
-        return;
-
-    Stopwatch watch;
-
-    Block block = b;
-    size_t rows = block.rows();
-
-    /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
-    /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
-    Columns materialized_columns;
-    ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names_right);
-    /// Some useless columns maybe key columns so they must be removed after extracting key columns.
-    removeUselessColumn(block);
-
-    /// We will insert to the map only keys, where all components are not NULL.
-    ColumnPtr null_map_holder;
-    ConstNullMapPtr null_map{};
-    extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
-    /// Reuse null_map to record the filtered rows, the rows contains NULL or does not
-    /// match the join filter will not insert to the maps
-    recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
-
-    /// Rare case, when joined columns are constant. To avoid code bloat, simply materialize them.
-    block = materializeBlock(block);
-
-    /// In case of LEFT and FULL joins, convert joined columns to Nullable.
-    if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
-    {
-        size_t columns = block.columns();
-        for (size_t i = 0; i < columns; ++i)
-            convertColumnToNullable(block.getByPosition(i));
-    }
-
-    assertBlocksHaveEqualStructure(block, right_sample_block_pruned, "Join Build");
-
-    insertBlockToRowContainers(
-        method,
-        needRecordNotInsertRows(kind),
-        block,
-        rows,
-        key_columns,
-        null_map,
-        row_layout,
-        multi_row_containers,
-        build_workers_data[stream_index]);
-
-    build_workers_data[stream_index].build_time += watch.elapsedMilliseconds();
-}
-
-bool HashJoin::finishOneBuild(size_t stream_index)
+bool HashJoin::finishOneBuildRow(size_t stream_index)
 {
     auto & wd = build_workers_data[stream_index];
     LOG_DEBUG(
@@ -448,6 +393,61 @@ void HashJoin::workAfterBuildFinish()
         pointer_table.enableTaggedPointer());
 }
 
+void HashJoin::buildRowFromBlock(const Block & b, size_t stream_index)
+{
+    RUNTIME_ASSERT(stream_index < build_concurrency);
+    RUNTIME_CHECK_MSG(build_initialized, "Logical error: Join build was not initialized");
+
+    if unlikely (b.rows() == 0)
+        return;
+
+    Stopwatch watch;
+
+    Block block = b;
+    size_t rows = block.rows();
+
+    /// Rare case, when keys are constant. To avoid code bloat, simply materialize them.
+    /// Note: this variable can't be removed because it will take smart pointers' lifecycle to the end of this function.
+    Columns materialized_columns;
+    ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names_right);
+    /// Some useless columns maybe key columns so they must be removed after extracting key columns.
+    removeUselessColumn(block);
+
+    /// We will insert to the map only keys, where all components are not NULL.
+    ColumnPtr null_map_holder;
+    ConstNullMapPtr null_map{};
+    extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
+    /// Reuse null_map to record the filtered rows, the rows contains NULL or does not
+    /// match the join filter will not insert to the maps
+    recordFilteredRows(block, non_equal_conditions.right_filter_column, null_map_holder, null_map);
+
+    /// Rare case, when joined columns are constant. To avoid code bloat, simply materialize them.
+    block = materializeBlock(block);
+
+    /// In case of LEFT and FULL joins, convert joined columns to Nullable.
+    if (isLeftOuterJoin(kind) || kind == ASTTableJoin::Kind::Full)
+    {
+        size_t columns = block.columns();
+        for (size_t i = 0; i < columns; ++i)
+            convertColumnToNullable(block.getByPosition(i));
+    }
+
+    assertBlocksHaveEqualStructure(block, right_sample_block_pruned, "Join Build");
+
+    insertBlockToRowContainers(
+        method,
+        needRecordNotInsertRows(kind),
+        block,
+        rows,
+        key_columns,
+        null_map,
+        row_layout,
+        multi_row_containers,
+        build_workers_data[stream_index]);
+
+    build_workers_data[stream_index].build_time += watch.elapsedMilliseconds();
+}
+
 bool HashJoin::buildPointerTable(size_t stream_index)
 {
     bool is_end;
@@ -489,7 +489,7 @@ bool HashJoin::buildPointerTable(size_t stream_index)
     return is_end;
 }
 
-Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
+Block HashJoin::probeBlock(JoinProbeContext & context, size_t stream_index)
 {
     RUNTIME_ASSERT(stream_index < probe_concurrency);
     RUNTIME_CHECK_MSG(probe_initialized, "Logical error: Join probe was not initialized");
@@ -576,7 +576,7 @@ Block HashJoin::joinBlock(JoinProbeContext & context, size_t stream_index)
     return output_block_after_finalize;
 }
 
-Block HashJoin::getLastResultBlock(size_t stream_index)
+Block HashJoin::probeLastResultBlock(size_t stream_index)
 {
     auto & wd = probe_workers_data[stream_index];
     if (has_other_condition)

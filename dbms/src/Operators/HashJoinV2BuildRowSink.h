@@ -19,10 +19,10 @@
 
 namespace DB
 {
-class HashJoinV2BuildSink : public SinkOp
+class HashJoinV2BuildRowSink : public SinkOp
 {
 public:
-    HashJoinV2BuildSink(
+    HashJoinV2BuildRowSink(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const HashJoinPtr & join_ptr_,
@@ -32,7 +32,7 @@ public:
         , op_index(op_index_)
     {}
 
-    String getName() const override { return "HashJoinV2BuildSink"; }
+    String getName() const override { return "HashJoinV2BuildRowSink"; }
 
 protected:
     OperatorStatus writeImpl(Block && block) override;
