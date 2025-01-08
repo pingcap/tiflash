@@ -74,6 +74,11 @@ public:
             return *this;
         }
 
+        size_t operator-(const Iterator & other) const
+        {
+            return pos - other.pos;
+        }
+
         Iterator & operator++()
         {
             ++pos;
@@ -86,6 +91,7 @@ public:
             return *this;
         }
 
+        // Postfix increment/decrement is not supported
         Iterator & operator++(int) = delete;
         Iterator & operator--(int) = delete;
 
