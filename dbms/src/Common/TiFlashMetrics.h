@@ -861,6 +861,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Gauge,                                                                                                                        \
       F(type_build, {"type", "build"}),                                                                                             \
       F(type_view, {"type", "view"}))                                                                                               \
+    M(tiflash_vector_index_build_count,                                                                                             \
+      "Vector index build count",                                                                                                   \
+      Counter,                                                                                                                      \
+      F(type_stable, {"type", "stable"}),                                                                                           \
+      F(type_delta, {"type", "delta"}))                                                                                             \
     M(tiflash_vector_index_active_instances,                                                                                        \
       "Active Vector index instances",                                                                                              \
       Gauge,                                                                                                                        \
