@@ -16,7 +16,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/VersionChain/buildBitmapFilter.h>
+#include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>

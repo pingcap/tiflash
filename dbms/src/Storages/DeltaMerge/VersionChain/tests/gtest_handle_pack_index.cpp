@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/VersionChain/VersionChain.h>
+#include <Storages/DeltaMerge/VersionChain/HandleColumnView.h>
 #include <gtest/gtest.h>
 
 namespace DB::DM::tests
@@ -20,5 +21,11 @@ namespace DB::DM::tests
 TEST(HandleIndexTest, Basic)
 {
     [[maybe_unused]] VersionChain<Int64> version_chain_int;
+}
+
+TEST(HandleColumnView, Basic)
+{
+    [[maybe_unused]] HandleColumnView<Int64> handle_column_view_int;
+    [[maybe_unused]] HandleColumnView<String> handle_column_view_string;
 }
 } // namespace DB::DM::tests

@@ -16,6 +16,10 @@
 
 namespace DB::DM
 {
+template <typename T>
+class HandleColumnView
+{};
+
 template <>
 class HandleColumnView<Int64>
 {
@@ -52,10 +56,10 @@ public:
 
         std::string_view operator*() const
         {
-            assert(chars_offsets[-1] == 0);
+            assert(offsets[-1] == 0);
             const auto off = offsets[pos];
             const auto size = offsets[pos] - offsets[pos - 1] - 1;
-            return std::string_view(&chars[off], size);
+            return std::string_view(static_cast<const char*>(&chars[off]), size);
         }
 
         Iterator & operator+(size_t n)
