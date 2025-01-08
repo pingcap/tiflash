@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Core/Block.h>
-#include <Flash/Mpp/MppVersion.h>
 #include <TiDB/Schema/TiDB.h>
 #include <tipb/select.pb.h>
+
 namespace DB
 {
 using DAGColumnInfo = std::pair<String, TiDB::ColumnInfo>;

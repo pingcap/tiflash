@@ -41,7 +41,6 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     , writer(writer_)
 {
     rows_in_blocks = 0;
-
     switch (dag_context.encode_type)
     {
     case tipb::EncodeType::TypeDefault:
