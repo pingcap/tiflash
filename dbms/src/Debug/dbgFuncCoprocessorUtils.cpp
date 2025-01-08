@@ -39,7 +39,7 @@ std::unique_ptr<ChunkCodec> getCodec(tipb::EncodeType encode_type)
     case tipb::EncodeType::TypeChunk:
         return std::make_unique<ArrowChunkCodec>();
     case tipb::EncodeType::TypeCHBlock:
-        return std::make_unique<CHBlockChunkCodec>(GetMPPDataPacketVersion(GetMppVersion()));
+        return std::make_unique<CHBlockChunkCodec>();
     default:
         throw Exception("Unsupported encode type", ErrorCodes::BAD_ARGUMENTS);
     }

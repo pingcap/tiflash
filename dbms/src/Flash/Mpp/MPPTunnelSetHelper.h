@@ -25,10 +25,7 @@ enum class CompressionMethod;
 
 namespace DB::MPPTunnelSetHelper
 {
-TrackedMppDataPacketPtr ToPacketV0(
-    Blocks & blocks,
-    const std::vector<tipb::FieldType> & field_types,
-    MPPDataPacketVersion version);
+TrackedMppDataPacketPtr ToPacketV0(Blocks & blocks, const std::vector<tipb::FieldType> & field_types);
 
 TrackedMppDataPacketPtr ToCompressedPacket(
     const TrackedMppDataPacketPtr & uncompressed_source,
@@ -54,8 +51,7 @@ TrackedMppDataPacketPtr ToFineGrainedPacketV0(
     size_t bucket_idx,
     UInt64 fine_grained_shuffle_stream_count,
     size_t num_columns,
-    const std::vector<tipb::FieldType> & field_types,
-    MPPDataPacketVersion version);
+    const std::vector<tipb::FieldType> & field_types);
 
 TrackedMppDataPacketPtr ToFineGrainedPacket(
     const Block & header,

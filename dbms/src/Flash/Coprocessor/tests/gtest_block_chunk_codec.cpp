@@ -425,7 +425,7 @@ try
     auto header = prepareBlockWithString(0, new_string_type_names);
     auto block = prepareBlockWithString(100, new_string_type_names);
     auto codec_stream
-        = CHBlockChunkCodec{GetMPPDataPacketVersion(MppVersion::MppVersionV2)}.newCodecStream(string_field_types);
+        = CHBlockChunkCodec{}.newCodecStream(string_field_types);
     codec_stream->encode(block, 0, block.rows());
     auto str = codec_stream->getString();
 

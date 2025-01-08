@@ -55,12 +55,8 @@ void checkDataTypeName(const String & identifier, size_t column_index, const Str
         actual);
 }
 
-const IDataType & convertDataTypeByPacketVersion(const IDataType & type, MPPDataPacketVersion packet_version)
+const IDataType & convertDataType(const IDataType & type)
 {
-    if (packet_version >= MPPDataPacketVersion::MPPDataPacketV2)
-        return type;
-
-    // If packet_version < MPPDataPacketVersion::MPPDataPacketV2, use legacy DataTypeString.
     static const auto legacy_string_type = DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName);
     static const auto legacy_nullable_string_type
         = DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName);
@@ -72,6 +68,15 @@ const IDataType & convertDataTypeByPacketVersion(const IDataType & type, MPPData
         return *legacy_nullable_string_type;
     else
         return type;
+}
+
+const IDataType & convertDataTypeByPacketVersion(const IDataType & type, MPPDataPacketVersion packet_version)
+{
+    if (packet_version >= MPPDataPacketVersion::MPPDataPacketV2)
+        return type;
+
+    // If packet_version < MPPDataPacketVersion::MPPDataPacketV2, use legacy DataTypeString.
+    return convertDataType(type);
 }
 
 } // namespace DB::CodecUtils

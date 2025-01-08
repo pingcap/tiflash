@@ -195,7 +195,12 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
 
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
-        writer->partitionWrite(dest_block_header, std::move(dest_columns[part_id]), part_id, compression_method);
+        writer->partitionWrite(
+            dest_block_header,
+            std::move(dest_columns[part_id]),
+            part_id,
+            data_codec_version,
+            compression_method);
     }
 
     assert(blocks.empty());

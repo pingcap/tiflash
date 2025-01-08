@@ -126,9 +126,9 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::writeBlocks()
     }
 
     if (exchange_type == tipb::ExchangeType::Broadcast)
-        writer->broadcastWrite(blocks, compression_method);
+        writer->broadcastWrite(blocks, data_codec_version, compression_method);
     else
-        writer->passThroughWrite(blocks, compression_method);
+        writer->passThroughWrite(blocks, data_codec_version, compression_method);
     blocks.clear();
     rows_in_blocks = 0;
 }

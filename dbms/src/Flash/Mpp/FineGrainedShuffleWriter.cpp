@@ -217,6 +217,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffleIm
                 fine_grained_shuffle_stream_count,
                 num_columns,
                 part_id,
+                data_codec_version,
                 compression_method);
         }
         rows_in_blocks = 0;
