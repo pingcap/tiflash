@@ -102,8 +102,7 @@ public:
         }
 
         // 2. encode all blocks
-        auto codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(
-            makeFields());
+        auto codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(makeFields());
         std::vector<String> encode_str_vec(block_num);
         std::vector<int> encode_str_use_compression(block_num, true);
         size_t round_index = 0;
