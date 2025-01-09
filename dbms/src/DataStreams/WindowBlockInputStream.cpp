@@ -325,7 +325,6 @@ void WindowTransformAction::initialAggregateFunction(
 
     workspace.aggregate_function_state.reset(aggregate_function->sizeOfData(), aggregate_function->alignOfData());
     aggregate_function->create(workspace.aggregate_function_state.data());
-    aggregate_function->prepareWindow(workspace.aggregate_function_state.data());
 }
 
 bool WindowBlockInputStream::returnIfCancelledOrKilled()
@@ -1387,6 +1386,7 @@ bool WindowTransformAction::checkIfNeedDecrease()
 
 // TODO ensure and check that if data's destructor will be called and the allocated memory could be released
 // Update the aggregation states after the frame has changed.
+template <bool need_decrease>
 void WindowTransformAction::updateAggregationState()
 {
     if (!has_agg)
@@ -1407,10 +1407,17 @@ void WindowTransformAction::updateAggregationState()
             continue;
 
         RowNumber start = frame_start;
-        if (checkIfNeedDecrease())
+        if constexpr (need_decrease)
         {
-            decreaseAggregationState(ws, prev_frame_start, frame_start);
-            start = prev_frame_end;
+            if (checkIfNeedDecrease())
+            {
+                decreaseAggregationState(ws, prev_frame_start, frame_start);
+                start = prev_frame_end;
+            }
+            else
+            {
+                ws.aggregate_function->reset(ws.aggregate_function_state.data());
+            }
         }
         else
         {
@@ -1487,7 +1494,10 @@ void WindowTransformAction::tryCalculate()
             assert(frame_started);
             assert(frame_ended);
 
-            updateAggregationState();
+            if (window_description.need_decrease)
+                updateAggregationState<true>();
+            else
+                updateAggregationState<false>();
 
             // Write out the results.
             // TODO execute the window function by block instead of row.

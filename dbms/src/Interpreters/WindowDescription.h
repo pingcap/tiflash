@@ -126,9 +126,12 @@ struct WindowDescription
     bool is_begin_aux_col_nullable;
     bool is_end_aux_col_nullable;
 
+    bool need_decrease;
+
     void setWindowFrame(const tipb::WindowFrame & frame_);
 
     void fillArgColumnNumbers();
+    void initNeedDecrease();
 };
 
 } // namespace DB

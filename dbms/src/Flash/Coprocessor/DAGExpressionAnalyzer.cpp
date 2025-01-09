@@ -368,6 +368,7 @@ WindowDescription createAndInitWindowDesc(DAGExpressionAnalyzer * const analyzer
         window_description.setWindowFrame(window.frame());
     }
 
+    window_description.initNeedDecrease();
     return window_description;
 }
 
@@ -943,7 +944,7 @@ void DAGExpressionAnalyzer::appendWindowColumns(
             buildWindowOrAggFuncImpl(
                 expr,
                 actions,
-                getAggFunctionNameForWindow(expr),
+                getAggFunctionNameForWindow(expr, window_description.need_decrease),
                 window_description,
                 source_columns,
                 window_columns,

@@ -227,6 +227,8 @@ private:
 
     // Use decrease interface only when add row number is larger than decrease row number
     bool checkIfNeedDecrease();
+
+    template <bool need_decrease>
     void updateAggregationState();
 
     void reinitializeAggFuncBeforeNextPartition();

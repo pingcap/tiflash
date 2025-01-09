@@ -65,7 +65,7 @@ const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::First, "first_row"},
     {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
     {tipb::ExprType::GroupConcat, "groupArray"},
-    // {tipb::ExprType::Avg, "avg"},
+    {tipb::ExprType::Avg, "avg"},
     //{tipb::ExprType::Agg_BitAnd, ""},
     //{tipb::ExprType::Agg_BitOr, ""},
     //{tipb::ExprType::Agg_BitXor, ""},
@@ -793,15 +793,24 @@ const String & getAggFunctionName(const tipb::Expr & expr)
         expr.has_distinct());
 }
 
-const String & getAggFunctionNameForWindow(const tipb::Expr & expr)
+const String & getAggFunctionNameForWindow(const tipb::Expr & expr, bool need_decrease)
 {
     if (expr.has_distinct())
         throw Exception("Aggregation function in window does not support distinct");
     else
     {
-        auto it = agg_func_map_for_window.find(expr.tp());
-        if (it != agg_func_map_for_window.end())
-            return it->second;
+        if (need_decrease)
+        {
+            auto it = agg_func_map_for_window.find(expr.tp());
+            if (it != agg_func_map_for_window.end())
+                return it->second;
+        }
+        else
+        {
+            auto it = agg_func_map.find(expr.tp());
+            if (it != agg_func_map.end())
+                return it->second;
+        }
     }
 
     throw TiFlashException(
