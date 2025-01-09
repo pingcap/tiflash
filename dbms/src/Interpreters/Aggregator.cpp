@@ -855,20 +855,30 @@ void Aggregator::handleMiniBatchImpl(
     size_t i = agg_process_info.start_row;
     const size_t end = agg_process_info.start_row + rows;
 
-    std::vector<size_t> hashvals(agg_mini_batch);
-    std::vector<typename Method::State::KeyHolderType> key_holders(agg_mini_batch);
+    size_t mini_batch_size = rows;
+    std::vector<size_t> hashvals;
+    std::vector<typename Method::State::KeyHolderType> key_holders;
+    if constexpr (enable_prefetch)
+    {
+        // mini batch will only be used when HashTable is big(a.k.a enable_prefetch is true),
+        // which can reduce cache miss of agg data.
+        mini_batch_size = agg_mini_batch;
+        hashvals.resize(agg_mini_batch);
+        key_holders.resize(agg_mini_batch);
+    }
 
     // i is the begin row index of each mini batch.
     while (i < end)
     {
-        size_t batch_size = agg_mini_batch;
-        if unlikely (i + batch_size > end)
-            batch_size = end - i;
-
         if constexpr (enable_prefetch)
-            prepareBatch(i, end, hashvals, key_holders, aggregates_pool, sort_key_containers, method, state);
+        {
+            if unlikely (i + mini_batch_size > end)
+                mini_batch_size = end - i;
 
-        const auto cur_batch_end = i + batch_size;
+            prepareBatch(i, end, hashvals, key_holders, aggregates_pool, sort_key_containers, method, state);
+        }
+
+        const auto cur_batch_end = i + mini_batch_size;
         // j is the row index of Column.
         // k is the index of hashvals/key_holders.
         for (size_t j = i, k = 0; j < cur_batch_end; ++j, ++k)
@@ -921,6 +931,7 @@ void Aggregator::handleMiniBatchImpl(
                 {
                     if (emplace_result.isInserted())
                     {
+                        // exception-safety - if you can not allocate memory or create states, then destructors will not be called.
                         emplace_result.setMapped(nullptr);
 
                         aggregate_data
@@ -970,7 +981,7 @@ void Aggregator::handleMiniBatchImpl(
             }
         }
 
-        if unlikely (processed_size != batch_size)
+        if unlikely (processed_size != mini_batch_size)
             break;
 
         i = cur_batch_end;
