@@ -101,9 +101,6 @@ public:
         const
         = 0;
 
-    // Some window aggregation functions need to prepare something before execution
-    virtual void prepareWindow(AggregateDataPtr __restrict) const = 0;
-
     // Only used in window aggregation functions
     virtual void reset(AggregateDataPtr __restrict) const = 0;
 
@@ -385,11 +382,6 @@ public:
     void decrease(AggregateDataPtr __restrict, const IColumn **, const size_t, Arena *) const override
     {
         throw Exception("decrease function is not implemented yet");
-    }
-
-    void prepareWindow(AggregateDataPtr __restrict) const override
-    {
-        throw Exception("prepareWindow function is not implemented yet");
     }
 
     void reset(AggregateDataPtr __restrict) const override { throw Exception("reset function is not implemented yet"); }

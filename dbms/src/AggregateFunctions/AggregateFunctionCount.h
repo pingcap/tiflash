@@ -61,8 +61,6 @@ public:
 
     void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
 
-    void prepareWindow(AggregateDataPtr __restrict) const override {}
-
     void addBatchSinglePlace(
         size_t start_offset,
         size_t batch_size,
@@ -191,8 +189,6 @@ public:
 
     void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
 
-    void prepareWindow(AggregateDataPtr __restrict) const override {}
-
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         data(place).count += data(rhs).count;
@@ -265,8 +261,6 @@ public:
     }
 
     void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
-
-    void prepareWindow(AggregateDataPtr __restrict) const override {}
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {

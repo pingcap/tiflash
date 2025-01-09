@@ -32,9 +32,7 @@ namespace DB
 
 struct CommonImpl
 {
-    static void decrease() { throw Exception("Not implemented yet"); }
-    static void reset() { throw Exception("Not implemented yet"); }
-    static void prepareWindow() { throw Exception("Not implemented yet"); }
+    static void decrease(const IColumn &, size_t) { throw Exception(" decrease is not implemented yet"); }
 };
 
 /// For numeric values.
@@ -179,6 +177,8 @@ public:
     {
         return has() && static_cast<const ColumnType &>(column).getData()[row_num] == value;
     }
+
+    void reset() { has_value = false; }
 };
 
 
@@ -421,6 +421,8 @@ public:
         return has()
             && equalTo(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num), getStringRef());
     }
+
+    void reset() { size = -1; }
 };
 
 static_assert(
@@ -581,6 +583,8 @@ public:
     bool isEqualTo(const IColumn & column, size_t row_num) const { return has() && value == column[row_num]; }
 
     bool isEqualTo(const Self & to) const { return has() && to.value == value; }
+
+    void reset() { value = Field(); }
 };
 
 
@@ -760,14 +764,12 @@ public:
         this->data(place).changeIfBetter(*columns[0], row_num, arena);
     }
 
-    void decrease(AggregateDataPtr __restrict place, const IColumn **, size_t, Arena *) const override
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
-        this->data(place).decrease();
+        this->data(place).decrease(*columns[0], row_num);
     }
 
     void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
-
-    void prepareWindow(AggregateDataPtr __restrict place) const override { this->data(place).prepareWindow(); }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {

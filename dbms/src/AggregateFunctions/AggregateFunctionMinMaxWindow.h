@@ -26,6 +26,7 @@
 #include <common/StringRef.h>
 
 #include <cassert>
+#include <set>
 
 namespace DB
 {
@@ -36,15 +37,9 @@ private:
     using Self = SingleValueDataFixedForWindow<T>;
     using ColumnType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
 
-    mutable std::deque<T> * saved_values;
+    mutable std::multiset<T> saved_values;
 
 public:
-    SingleValueDataFixedForWindow()
-        : saved_values(nullptr)
-    {}
-
-    ~SingleValueDataFixedForWindow() { delete saved_values; }
-
     void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
     void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
@@ -52,85 +47,41 @@ public:
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
-        if (saved_values != nullptr)
+        if (!saved_values.empty())
         {
-            if (!saved_values->empty())
-            {
-                auto size = saved_values->size();
-                T tmp = (*saved_values)[0];
-                for (size_t i = 1; i < size; i++)
-                {
-                    if constexpr (is_min)
-                    {
-                        if ((*saved_values)[i] < tmp)
-                            tmp = (*saved_values)[i];
-                    }
-                    else
-                    {
-                        if (tmp < (*saved_values)[i])
-                            tmp = (*saved_values)[i];
-                    }
-                }
-                static_cast<ColumnType &>(to).getData().push_back(tmp);
-            }
+            typename std::multiset<T>::iterator iter;
+            if constexpr (is_min)
+                iter = saved_values.begin();
             else
-            {
-                static_cast<ColumnType &>(to).insertDefault();
-            }
+                iter = --(saved_values.end());
+            static_cast<ColumnType &>(to).getData().push_back(*iter);
         }
         else
         {
-            SingleValueDataFixed<T>::insertResultInto(to);
+            static_cast<ColumnType &>(to).insertDefault();
         }
     }
 
-    void prepareWindow() { saved_values = new std::deque<T>(); }
+    void reset() { saved_values.clear(); }
 
-    void reset()
+    void decrease(const IColumn & column, size_t row_num)
     {
-        this->has_value = false;
-        if (saved_values != nullptr)
-            saved_values->clear();
+        auto value = static_cast<const ColumnType &>(column).getData()[row_num];
+        auto iter = saved_values.find(value);
+        assert(iter != saved_values.end());
+        saved_values.erase(iter);
     }
 
-    void decrease()
-    {
-        assert(saved_values != nullptr);
-        saved_values->pop_front();
-    }
-
-    void changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfLess(const IColumn & column, size_t row_num, Arena *)
     {
         auto to_value = static_cast<const ColumnType &>(column).getData()[row_num];
-        if (saved_values != nullptr)
-            saved_values->push_back(to_value);
-        else
-            SingleValueDataFixed<T>::changeIfLess(column, row_num, arena);
+        saved_values.insert(to_value);
     }
 
-    void changeIfLess(const Self & to, Arena * arena)
-    {
-        if (saved_values != nullptr)
-            saved_values->push_back(to.value);
-        else
-            SingleValueDataFixed<T>::changeIfLess(to, arena);
-    }
-
-    void changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfGreater(const IColumn & column, size_t row_num, Arena *)
     {
         auto to_value = static_cast<const ColumnType &>(column).getData()[row_num];
-        if (saved_values != nullptr)
-            saved_values->push_back(to_value);
-        else
-            SingleValueDataFixed<T>::changeIfGreater(column, row_num, arena);
-    }
-
-    void changeIfGreater(const Self & to, Arena * arena)
-    {
-        if (saved_values != nullptr)
-            saved_values->push_back(to.value);
-        else
-            SingleValueDataFixed<T>::changeIfGreater(to, arena);
+        saved_values.insert(to_value);
     }
 };
 
@@ -140,14 +91,9 @@ private:
     using Self = SingleValueDataStringForWindow;
 
     // TODO use std::string is inefficient
-    mutable std::deque<std::string> * saved_values{};
+    mutable std::multiset<std::string> saved_values;
 
 public:
-    SingleValueDataStringForWindow()
-        : saved_values(nullptr)
-    {}
-    ~SingleValueDataStringForWindow() { delete saved_values; }
-
     void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
     void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
@@ -155,87 +101,42 @@ public:
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
-        if (saved_values != nullptr)
+        if (!saved_values.empty())
         {
-            if (!saved_values->empty())
-            {
-                auto elem_num = saved_values->size();
-                StringRef value((*saved_values)[0].c_str(), (*saved_values)[0].size());
-                for (size_t i = 1; i < elem_num; i++)
-                {
-                    String cmp_value((*saved_values)[i].c_str(), (*saved_values)[i].size());
-                    if constexpr (is_min)
-                    {
-                        if (less(cmp_value, value))
-                            value = (*saved_values)[i];
-                    }
-                    else
-                    {
-                        if (less(value, cmp_value))
-                            value = (*saved_values)[i];
-                    }
-                }
-
-                static_cast<ColumnString &>(to).insertDataWithTerminatingZero(value.data, value.size);
-            }
+            std::set<std::string>::iterator iter;
+            if constexpr (is_min)
+                iter = saved_values.begin();
             else
-            {
-                static_cast<ColumnString &>(to).insertDefault();
-            }
+                iter = --(saved_values.end());
+
+            static_cast<ColumnString &>(to).insertDataWithTerminatingZero(iter->data(), iter->size());
         }
         else
         {
-            SingleValueDataString::insertResultInto(to);
+            static_cast<ColumnString &>(to).insertDefault();
         }
     }
 
-    void prepareWindow() { saved_values = new std::deque<std::string>(); }
+    void reset() { saved_values.clear(); }
 
-    void reset()
+    void decrease(const IColumn & column, size_t row_num)
     {
-        size = -1;
-        if (saved_values != nullptr)
-            saved_values->clear();
+        auto str = static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num);
+        auto iter = saved_values.find(str.toString());
+        assert(iter != saved_values.end());
+        saved_values.erase(iter);
     }
 
-    void decrease()
+    void saveValue(StringRef value) { saved_values.insert(value.toString()); }
+
+    void changeIfLess(const IColumn & column, size_t row_num, Arena *)
     {
-        assert(saved_values != nullptr);
-        saved_values->pop_front();
+        saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
     }
 
-    void saveValue(StringRef value) { saved_values->push_back(value.toString()); }
-
-    void changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfGreater(const IColumn & column, size_t row_num, Arena *)
     {
-        if (saved_values != nullptr)
-            saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
-        else
-            SingleValueDataString::changeIfLess(column, row_num, arena);
-    }
-
-    void changeIfLess(const Self & to, Arena * arena)
-    {
-        if (saved_values != nullptr)
-            saveValue(to.getStringRef());
-        else
-            SingleValueDataString::changeIfLess(to, arena);
-    }
-
-    void changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
-    {
-        if (saved_values != nullptr)
-            saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
-        else
-            SingleValueDataString::changeIfGreater(column, row_num, arena);
-    }
-
-    void changeIfGreater(const Self & to, Arena * arena)
-    {
-        if (saved_values != nullptr)
-            saveValue(to.getStringRef());
-        else
-            SingleValueDataString::changeIfGreater(to, arena);
+        saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
     }
 };
 
@@ -243,14 +144,9 @@ struct SingleValueDataGenericForWindow : public SingleValueDataGeneric
 {
 private:
     using Self = SingleValueDataGenericForWindow;
-    mutable std::deque<Field> * saved_values;
+    mutable std::multiset<Field> saved_values;
 
 public:
-    SingleValueDataGenericForWindow()
-        : saved_values(nullptr)
-    {}
-    ~SingleValueDataGenericForWindow() { delete saved_values; }
-
     void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
     void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
@@ -258,95 +154,44 @@ public:
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
-        if (saved_values != nullptr)
+        if (!saved_values.empty())
         {
-            if (!saved_values->empty())
-            {
-                auto size = saved_values->size();
-                Field tmp = (*saved_values)[0];
-                for (size_t i = 1; i < size; i++)
-                {
-                    if constexpr (is_min)
-                    {
-                        if ((*saved_values)[i] < tmp)
-                            tmp = (*saved_values)[i];
-                    }
-                    else
-                    {
-                        if (tmp < (*saved_values)[i])
-                            tmp = (*saved_values)[i];
-                    }
-                }
-                to.insert(tmp);
-            }
+            std::multiset<Field>::iterator iter;
+            if constexpr (is_min)
+                iter = saved_values.begin();
             else
-            {
-                to.insertDefault();
-            }
+                iter = --(saved_values.end());
+            to.insert(*iter);
         }
         else
         {
-            SingleValueDataGeneric::insertResultInto(to);
+            to.insertDefault();
         }
     }
 
-    void prepareWindow() { saved_values = new std::deque<Field>(); }
+    void reset() { saved_values.clear(); }
 
-    void reset()
+    void decrease(const IColumn & column, size_t row_num)
     {
-        value = Field();
-        if (saved_values != nullptr)
-            saved_values->clear();
+        Field value;
+        column.get(row_num, value);
+        auto iter = saved_values.find(value);
+        assert(iter != saved_values.end());
+        saved_values.erase(iter);
     }
 
-    void decrease()
+    void changeIfLess(const IColumn & column, size_t row_num, Arena *)
     {
-        assert(saved_values != nullptr);
-        saved_values->pop_front();
+        Field value;
+        column.get(row_num, value);
+        saved_values.insert(value);
     }
 
-    void changeIfLess(const IColumn & column, size_t row_num, Arena * arena)
+    void changeIfGreater(const IColumn & column, size_t row_num, Arena *)
     {
-        if (saved_values != nullptr)
-        {
-            Field new_value;
-            column.get(row_num, new_value);
-            saved_values->push_back(new_value);
-        }
-        else
-        {
-            SingleValueDataGeneric::changeIfLess(column, row_num, arena);
-        }
-    }
-
-    void changeIfLess(const Self & to, Arena * arena)
-    {
-        if (saved_values != nullptr)
-            saved_values->push_back(to.value);
-        else
-            SingleValueDataGeneric::changeIfLess(to, arena);
-    }
-
-    void changeIfGreater(const IColumn & column, size_t row_num, Arena * arena)
-    {
-        if (saved_values != nullptr)
-        {
-            Field new_value;
-            column.get(row_num, new_value);
-            saved_values->push_back(new_value);
-        }
-        else
-        {
-            SingleValueDataGeneric::changeIfGreater(column, row_num, arena);
-        }
-    }
-
-    void changeIfGreater(const Self & to, Arena * arena)
-    {
-        if (saved_values != nullptr)
-            saved_values->push_back(to.value);
-        else
-            SingleValueDataGeneric::changeIfGreater(to, arena);
+        Field value;
+        column.get(row_num, value);
+        saved_values.insert(value);
     }
 };
 
@@ -359,7 +204,7 @@ struct AggregateFunctionMinDataForWindow : Data
     {
         return this->changeIfLess(column, row_num, arena);
     }
-    void changeIfBetter(const Self & to, Arena * arena) { return this->changeIfLess(to, arena); }
+    void changeIfBetter(const Self &, Arena *) { throw Exception("Not implemented yet"); }
 
     void insertResultInto(IColumn & to) const { Data::insertMinResultInto(to); }
 
@@ -378,7 +223,7 @@ struct AggregateFunctionMaxDataForWindow : Data
         return this->changeIfGreater(column, row_num, arena);
     }
 
-    void changeIfBetter(const Self & to, Arena * arena) { return this->changeIfGreater(to, arena); }
+    void changeIfBetter(const Self &, Arena *) { throw Exception("Not implemented yet"); }
 
     static const char * name() { return "max_for_window"; }
 };

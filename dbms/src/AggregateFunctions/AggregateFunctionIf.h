@@ -85,8 +85,6 @@ public:
 
     void reset(AggregateDataPtr __restrict place) const override { nested_func->reset(place); }
 
-    void prepareWindow(AggregateDataPtr __restrict place) const override { nested_func->prepareWindow(place); }
-
     void addBatch(
         size_t start_offset,
         size_t batch_size,
