@@ -270,7 +270,8 @@ void Set::createFromAST(const DataTypes & types, ASTPtr node, const Context & co
 std::vector<const tipb::Expr *> Set::createFromDAGExpr(
     const DataTypes & types,
     const tipb::Expr & expr,
-    bool fill_set_elements)
+    bool fill_set_elements,
+    const TimezoneInfo & timezone_info)
 {
     /// Will form a block with values from the set.
 
@@ -303,7 +304,20 @@ std::vector<const tipb::Expr *> Set::createFromDAGExpr(
             continue;
         }
         Field value = decodeLiteral(child);
-        DataTypePtr type = types[0];
+
+        if (child.field_type().tp() == TiDB::TypeTimestamp && !timezone_info.is_utc_timezone)
+        {
+            static const auto & time_zone_utc = DateLUT::instance("UTC");
+            UInt64 from_time = value.get<UInt64>();
+            UInt64 result_time = from_time;
+            if (timezone_info.is_name_based)
+                convertTimeZone(from_time, result_time, time_zone_utc, *timezone_info.timezone);
+            else if (timezone_info.timezone_offset != 0)
+                convertTimeZoneByOffset(from_time, result_time, true, timezone_info.timezone_offset);
+            value = Field(result_time);
+        }
+
+        const auto & type = types[0];
         value = convertFieldToType(value, *type);
 
         if (!value.isNull())
