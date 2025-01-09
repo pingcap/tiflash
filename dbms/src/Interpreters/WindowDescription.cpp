@@ -81,21 +81,15 @@ void WindowDescription::fillArgColumnNumbers()
     }
 }
 
-// todo test this function
-void WindowDescription::initNeedDecrease()
+void WindowDescription::initNeedDecrease(bool has_agg)
 {
-    bool has_agg = false;
     need_decrease = false;
-    for (const auto & desc : window_functions_descriptions)
-    {
-        if (desc.aggregate_function)
-        {
-            has_agg = true;
-            break;
-        }
-    }
 
     if (!has_agg)
+        return;
+
+    if (frame.begin_type == WindowFrame::BoundaryType::Unbounded
+        && frame.end_type == WindowFrame::BoundaryType::Unbounded)
         return;
 
     if (frame.begin_type == WindowFrame::BoundaryType::Unbounded)

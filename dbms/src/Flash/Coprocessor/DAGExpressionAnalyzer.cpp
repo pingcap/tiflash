@@ -368,7 +368,16 @@ WindowDescription createAndInitWindowDesc(DAGExpressionAnalyzer * const analyzer
         window_description.setWindowFrame(window.frame());
     }
 
-    window_description.initNeedDecrease();
+    bool has_agg = false;
+    for (const tipb::Expr & expr : window.func_desc())
+    {
+        if (isWindowFunctionExpr(expr))
+            continue;
+        has_agg = true;
+        break;
+    }
+
+    window_description.initNeedDecrease(has_agg);
     return window_description;
 }
 

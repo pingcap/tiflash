@@ -14,10 +14,12 @@
 
 #include <Common/Decimal.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/WindowDescription.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+#include <gtest/gtest.h>
 
 #include <optional>
 
@@ -323,4 +325,187 @@ try
     executeTest(TestCase(MaxForWindow(value_col), start_offset, end_offset, res, {}, true, true));
 }
 CATCH
+
+// todo add tests for above tests to test `initNeedDecrease` such as unbounded
+// todo end unbounded
+
+TEST_F(WindowAggFuncTest, initNeedDecrease)
+try
+{
+    WindowDescription desc;
+    desc.frame = WindowFrame();
+    desc.initNeedDecrease(true);
+    ASSERT_FALSE(desc.need_decrease);
+
+    std::vector<WindowFrame::FrameType> frame_types;
+    for (auto type : frame_types)
+    {
+        desc.frame = WindowFrame(
+            type,
+            WindowFrame::BoundaryType::Unbounded,
+            0,
+            true,
+            WindowFrame::BoundaryType::Offset,
+            1,
+            false);
+        desc.initNeedDecrease(true);
+        ASSERT_FALSE(desc.need_decrease);
+
+        desc.frame = WindowFrame(
+            type,
+            WindowFrame::BoundaryType::Offset,
+            0,
+            true,
+            WindowFrame::BoundaryType::Unbounded,
+            0,
+            false);
+        desc.initNeedDecrease(true);
+        ASSERT_TRUE(desc.need_decrease);
+
+        desc.frame = WindowFrame(
+            type,
+            WindowFrame::BoundaryType::Unbounded,
+            0,
+            true,
+            WindowFrame::BoundaryType::Unbounded,
+            0,
+            false);
+        desc.initNeedDecrease(true);
+        ASSERT_FALSE(desc.need_decrease);
+    }
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Ranges,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        true,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        true);
+    desc.initNeedDecrease(true);
+    ASSERT_TRUE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Ranges,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        false,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_TRUE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Ranges,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        true,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_TRUE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        true,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_FALSE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        true,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        true);
+    desc.initNeedDecrease(true);
+    ASSERT_FALSE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        false,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_FALSE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Offset,
+        3,
+        true,
+        WindowFrame::BoundaryType::Offset,
+        3,
+        true);
+    desc.initNeedDecrease(true);
+    ASSERT_FALSE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Offset,
+        3,
+        false,
+        WindowFrame::BoundaryType::Offset,
+        3,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_FALSE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Offset,
+        3,
+        true,
+        WindowFrame::BoundaryType::Offset,
+        3,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_TRUE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Offset,
+        2,
+        true,
+        WindowFrame::BoundaryType::Offset,
+        1,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_TRUE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        true,
+        WindowFrame::BoundaryType::Offset,
+        1,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_TRUE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Offset,
+        1,
+        true,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_TRUE(desc.need_decrease);
+}
+CATCH
+
 } // namespace DB::tests
