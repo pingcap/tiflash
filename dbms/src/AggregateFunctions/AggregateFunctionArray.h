@@ -68,18 +68,6 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        addOrDecrease<true>(place, columns, row_num, arena);
-    }
-
-    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
-        const override
-    {
-        addOrDecrease<false>(place, columns, row_num, arena);
-    }
-
-    template <bool is_add>
-    void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
-    {
         const IColumn * nested[num_arguments];
 
         for (size_t i = 0; i < num_arguments; ++i)
@@ -104,13 +92,9 @@ public:
         }
 
         for (size_t i = begin; i < end; ++i)
-            if constexpr (is_add)
-                nested_func->add(place, nested, i, arena);
-            else
-                nested_func->decrease(place, nested, i, arena);
+            nested_func->add(place, nested, i, arena);
     }
 
-    void reset(AggregateDataPtr __restrict place) const override { nested_func->reset(place); }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
