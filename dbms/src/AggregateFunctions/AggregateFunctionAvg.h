@@ -73,8 +73,6 @@ public:
             return std::make_shared<DataTypeFloat64>();
     }
 
-    void prepareWindow(AggregateDataPtr __restrict) const override {}
-
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         if constexpr (IsDecimal<T>)

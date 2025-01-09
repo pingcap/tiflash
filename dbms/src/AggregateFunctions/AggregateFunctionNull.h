@@ -582,12 +582,6 @@ public:
         this->nested_function->reset(this->nestedPlace(place));
     }
 
-    void prepareWindow(AggregateDataPtr __restrict place) const override
-    {
-        this->nested_function->prepareWindow(this->nestedPlace(place));
-        reset(place);
-    }
-
 private:
     inline void resetFlag(AggregateDataPtr __restrict place) const noexcept { this->initFlag(place); }
 

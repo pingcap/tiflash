@@ -373,8 +373,6 @@ public:
 
     void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
 
-    void prepareWindow(AggregateDataPtr __restrict) const override {}
-
     /// Vectorized version when there is no GROUP BY keys.
     void addBatchSinglePlace(
         size_t start_offset,

@@ -212,17 +212,6 @@ public:
         }
     }
 
-    void prepareWindow(AggregateDataPtr __restrict place) const override
-    {
-        AggregateFunctionForEachData & state = ensureAggregateData(place, 0, nullptr);
-        char * nested_state = state.array_of_aggregate_datas;
-        for (size_t i = 0; i < state.dynamic_array_size; i++)
-        {
-            nested_func->prepareWindow(nested_state);
-            nested_state += nested_size_of_data;
-        }
-    }
-
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         const AggregateFunctionForEachData & rhs_state = data(rhs);
