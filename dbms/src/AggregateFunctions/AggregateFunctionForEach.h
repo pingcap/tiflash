@@ -76,7 +76,7 @@ private:
         if (old_size < new_size)
         {
             if unlikely (arena == nullptr)
-                throw Exception("Get nullptr in ensureAggregateData");
+                throw Exception("Get null arena ptr in ensureAggregateData");
 
             state.array_of_aggregate_datas = arena->realloc(
                 state.array_of_aggregate_datas,
@@ -153,18 +153,6 @@ public:
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
-        addOrDecrease<true>(place, columns, row_num, arena);
-    }
-
-    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
-        const override
-    {
-        addOrDecrease<false>(place, columns, row_num, arena);
-    }
-
-    template <bool is_add>
-    void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
-    {
         const IColumn * nested[num_arguments];
 
         for (size_t i = 0; i < num_arguments; ++i)
@@ -193,21 +181,7 @@ public:
         char * nested_state = state.array_of_aggregate_datas;
         for (size_t i = begin; i < end; ++i)
         {
-            if constexpr (is_add)
-                nested_func->add(nested_state, nested, i, arena);
-            else
-                nested_func->decrease(nested_state, nested, i, arena);
-            nested_state += nested_size_of_data;
-        }
-    }
-
-    void reset(AggregateDataPtr __restrict place) const override
-    {
-        AggregateFunctionForEachData & state = ensureAggregateData(place, 0, nullptr);
-        char * nested_state = state.array_of_aggregate_datas;
-        for (size_t i = 0; i < state.dynamic_array_size; i++)
-        {
-            nested_func->reset(nested_state);
+            nested_func->add(nested_state, nested, i, arena);
             nested_state += nested_size_of_data;
         }
     }
