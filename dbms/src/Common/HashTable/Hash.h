@@ -73,7 +73,8 @@ inline DB::UInt32 intHashCRC32(DB::UInt64 x)
     return __crc32cd(-1U, x);
 #else
     /// On other platforms we do not have CRC32. NOTE This can be confusing.
-    return intHash64(x);
+    UInt64 h = intHash64(x);
+    return static_cast<DB::UInt32>(h ^ (h >> 32));
 #endif
 }
 
@@ -85,7 +86,8 @@ inline DB::UInt32 intHashCRC32(DB::UInt64 x, DB::UInt32 updated_value)
     return __crc32cd(updated_value, x);
 #else
     /// On other platforms we do not have CRC32. NOTE This can be confusing.
-    return intHash64(x) ^ updated_value;
+    UInt64 h = intHash64(x);
+    return static_cast<DB::UInt32>(h ^ (h >> 32)) ^ updated_value;
 #endif
 }
 
