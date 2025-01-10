@@ -39,11 +39,6 @@ private:
 
     mutable std::multiset<T> saved_values;
 
-public:
-    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
-
-    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
-
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
@@ -61,6 +56,11 @@ public:
             static_cast<ColumnType &>(to).insertDefault();
         }
     }
+
+public:
+    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
+
+    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
 
     void reset() { saved_values.clear(); }
 
@@ -95,11 +95,6 @@ private:
 
     void saveValue(StringRef value) { saved_values.insert(value.toString()); }
 
-public:
-    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
-
-    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
-
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
@@ -118,6 +113,11 @@ public:
             static_cast<ColumnString &>(to).insertDefault();
         }
     }
+
+public:
+    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
+
+    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
 
     void reset() { saved_values.clear(); }
 
