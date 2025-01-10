@@ -70,10 +70,10 @@ inline ColumnDefinesPtr getTagColumnDefinesPtr()
 template <HandleRefType HandleRef>
 bool inRowKeyRange(const RowKeyRange & range, HandleRef handle)
 {
-    if constexpr (std::is_same_v<Handle, Int64>)
+    if constexpr (std::is_same_v<HandleRef, Int64>)
         return range.start.int_value <= handle && handle < range.end.int_value;
     else
-        static_assert(false, "TODO: support common handle");
+        return *(range.start.value) <= handle && handle < *(range.end.value);
 }
 
 RSResults getRSResultsByRanges(const DMContext & dm_context, const DMFilePtr & dmfile, const RowKeyRanges & ranges);

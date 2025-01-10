@@ -43,7 +43,7 @@ T getMaxValue(const MinMaxIndex & minmax_index, size_t i)
     if constexpr (std::is_same_v<T, Int64>)
         return minmax_index.getIntMinMax(i).second;
     else if constexpr (std::is_same_v<T, String>)
-        return minmax_index.getStringMinMax(i).second;
+        return minmax_index.getStringMinMax(i).second.toString();
     else if constexpr (std::is_same_v<T, UInt64>)
         return minmax_index.getUInt64MinMax(i).second;
     else
@@ -107,6 +107,9 @@ template std::vector<UInt64> loadPackMaxValue<UInt64>(
     const Context & global_context,
     const DMFile & dmfile,
     const ColId col_id);
-//template std::vector<String> loadPackMaxValue<String>(const Context & global_context, const DMFile & dmfile, const ColId col_id);
+template std::vector<String> loadPackMaxValue<String>(
+    const Context & global_context,
+    const DMFile & dmfile,
+    const ColId col_id);
 
 } // namespace DB::DM
