@@ -72,8 +72,11 @@ private:
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
         const DMContext & dm_context,
         Handle h);
-    void calculateReadPacks(const std::span<const Handle> handles);
+    template <typename Iterator>
+    void calculateReadPacks(Iterator begin, Iterator end);
     void cleanHandleColumn();
+
+    static std::pair<Handle, Handle> convertRowKeyRange(const RowKeyRange & range);
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
