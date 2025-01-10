@@ -183,7 +183,7 @@ protected:
 
         verifyBitmapFilter(SEG_ID);
     }
-    
+
     auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
     {
         DMFilePackFilterResults results;
