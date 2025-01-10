@@ -25,14 +25,21 @@ namespace DB::DM::tests
 TEST(HandleIndexTest, Basic)
 {
     [[maybe_unused]] VersionChain<Int64> version_chain_int;
-    //[[maybe_unused]] VersionChain<String> version_chain_str;
+    [[maybe_unused]] VersionChain<String> version_chain_str;
 }
 
 TEST(ColumnView, Basic)
 {
     auto str_col = ColumnGenerator::instance().generate({1024, "String", RANDOM}).column;
+
+    //auto str_col = makeColumn<String>(MutSup::getExtraHandleColumnStringType(), {"0000", "11", "222", "33333"});
     ColumnView<String> str_cv(*str_col);
     for (auto s_itr = str_cv.begin(); s_itr != str_cv.end(); ++s_itr)
-        ASSERT_EQ(*s_itr, str_col->getDataAt(s_itr - str_cv.begin()));
+    {
+        ASSERT_EQ(*s_itr, str_col->getDataAt(s_itr - str_cv.begin()).toStringView());
+    }
+    //fmt::println("=======================");
+    //auto itr = std::lower_bound(str_cv.begin(), str_cv.end(), "hello");
+    //std::ignore = itr;
 }
 } // namespace DB::DM::tests
