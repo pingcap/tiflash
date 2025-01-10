@@ -218,7 +218,7 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
     return pos;
 }
 
-void ColumnArray::countSerializeByteSizeUnique(
+void ColumnArray::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
     const TiDB::TiDBCollatorPtr & collator) const
 {
@@ -230,7 +230,7 @@ void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) con
     countSerializeByteSizeImpl<false>(byte_size, nullptr);
 }
 
-template <bool ensure_unique>
+template <bool for_compare>
 void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
     const
 {
@@ -251,13 +251,13 @@ void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size,
     for (size_t i = 0; i < size; ++i)
         byte_size[i] += sizeof(UInt32);
 
-    if constexpr (ensure_unique)
-        getData().countSerializeByteSizeUniqueForColumnArray(byte_size, getOffsets(), collator);
+    if constexpr (for_compare)
+        getData().countSerializeByteSizeForCmpColumnArray(byte_size, getOffsets(), collator);
     else
         getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets());
 }
 
-void ColumnArray::serializeToPosUnique(
+void ColumnArray::serializeToPosForCmp(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -279,7 +279,7 @@ void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, siz
         serializeToPosImpl<false, false>(pos, start, length, nullptr, nullptr);
 }
 
-template <bool has_null, bool ensure_unique>
+template <bool has_null, bool for_compare>
 void ColumnArray::serializeToPosImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -303,8 +303,8 @@ void ColumnArray::serializeToPosImpl(
         pos[i] += sizeof(UInt32);
     }
 
-    if constexpr (ensure_unique)
-        getData().serializeToPosUniqueForColumnArray(
+    if constexpr (for_compare)
+        getData().serializeToPosForCmpColumnArray(
             pos,
             start,
             length,
@@ -316,22 +316,22 @@ void ColumnArray::serializeToPosImpl(
         getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
 }
 
-void ColumnArray::deserializeAndInsertFromPosUnique(
-    PaddedPODArray<const char *> & pos,
+void ColumnArray::deserializeForCmpAndInsertFromPos(
+    PaddedPODArray<char *> & pos,
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
 {
     deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer, collator);
 }
 
-void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer)
+void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
 {
     deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer, nullptr);
 }
 
-template <bool ensure_unique>
+template <bool for_compare>
 void ColumnArray::deserializeAndInsertFromPosImpl(
-    PaddedPODArray<const char *> & pos,
+    PaddedPODArray<char *> & pos,
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
 {
@@ -348,8 +348,8 @@ void ColumnArray::deserializeAndInsertFromPosImpl(
         pos[i] += sizeof(UInt32);
     }
 
-    if constexpr (ensure_unique)
-        getData().deserializeAndInsertFromPosUniqueForColumnArray(pos, offsets, use_nt_align_buffer, collator);
+    if constexpr (for_compare)
+        getData().deserializeForCmpAndInsertFromPosColumnArray(pos, offsets, use_nt_align_buffer, collator);
     else
         getData().deserializeAndInsertFromPosForColumnArray(pos, offsets, use_nt_align_buffer);
 }

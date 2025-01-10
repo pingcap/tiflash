@@ -44,10 +44,10 @@ private:
 
     ColumnArray(const ColumnArray &) = default;
 
-    template <bool ensure_unique>
+    template <bool for_compare>
     void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const;
 
-    template <bool has_null, bool ensure_unique>
+    template <bool has_null, bool for_compare>
     void serializeToPosImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
@@ -55,9 +55,9 @@ private:
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const;
 
-    template <bool ensure_unique>
+    template <bool for_compare>
     void deserializeAndInsertFromPosImpl(
-        PaddedPODArray<const char *> & pos,
+        PaddedPODArray<char *> & pos,
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr & collator);
 
@@ -99,17 +99,17 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSizeUnique(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
         const override;
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
-    void countSerializeByteSizeUniqueForColumnArray(
+    void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const IColumn::Offsets & /* array_offsets */,
         const TiDB::TiDBCollatorPtr & /* collator */) const override
     {
         throw Exception(
-            "Method countSerializeByteSizeUniqueForColumnArray is not supported for " + getName(),
+            "Method countSerializeByteSizeForCmpColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
     void countSerializeByteSizeForColumnArray(
@@ -121,7 +121,7 @@ public:
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void serializeToPosUnique(
+    void serializeToPosForCmp(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -130,7 +130,7 @@ public:
         String * sort_key_container) const override;
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
-    void serializeToPosUniqueForColumnArray(
+    void serializeToPosForCmpColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
@@ -140,7 +140,7 @@ public:
         String * /* sort_key_container */) const override
     {
         throw Exception(
-            "Method serializeToPosUniqueForColumnArray is not supported for " + getName(),
+            "Method serializeToPosForCmpColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
     void serializeToPosForColumnArray(
@@ -155,24 +155,24 @@ public:
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void deserializeAndInsertFromPosUnique(
-        PaddedPODArray<const char *> & pos,
+    void deserializeForCmpAndInsertFromPos(
+        PaddedPODArray<char *> & pos,
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr & collator) override;
-    void deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
 
-    void deserializeAndInsertFromPosUniqueForColumnArray(
-        PaddedPODArray<const char *> & /* pos */,
+    void deserializeForCmpAndInsertFromPosColumnArray(
+        PaddedPODArray<char *> & /* pos */,
         const IColumn::Offsets & /* array_offsets */,
         bool /* use_nt_align_buffer */,
         const TiDB::TiDBCollatorPtr & /* collator */) override
     {
         throw Exception(
-            "Method deserializeAndInsertFromPosUniqueForColumnArray is not supported for " + getName(),
+            "Method deserializeForCmpAndInsertFromPosColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
     void deserializeAndInsertFromPosForColumnArray(
-        PaddedPODArray<const char *> & /* pos */,
+        PaddedPODArray<char *> & /* pos */,
         const IColumn::Offsets & /* array_offsets */,
         bool /* use_nt_align_buffer */) override
     {

@@ -481,7 +481,7 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
-void ColumnString::countSerializeByteSizeUnique(
+void ColumnString::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
     const TiDB::TiDBCollatorPtr & collator) const
 {
@@ -535,7 +535,7 @@ void ColumnString::countSerializeByteSizeImpl(
     }
 }
 
-void ColumnString::countSerializeByteSizeUniqueForColumnArray(
+void ColumnString::countSerializeByteSizeForCmpColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
     const TiDB::TiDBCollatorPtr & collator) const
@@ -605,7 +605,7 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     }
 }
 
-void ColumnString::serializeToPosUnique(
+void ColumnString::serializeToPosForCmp(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -660,7 +660,7 @@ void ColumnString::serializeToPosImpl(
     if constexpr (has_collator)
         RUNTIME_CHECK(collator && sort_key_container);
 
-    /// countSerializeByteSizeUnique has already checked that the size of one element is not greater than UINT32_MAX
+    /// countSerializeByteSizeForCmp has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -684,7 +684,7 @@ void ColumnString::serializeToPosImpl(
     }
 }
 
-void ColumnString::serializeToPosUniqueForColumnArray(
+void ColumnString::serializeToPosForCmpColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
@@ -780,7 +780,7 @@ void ColumnString::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
-    /// countSerializeByteSizeUniqueForColumnArray has already checked that the size of one element is not greater than UINT32_MAX
+    /// countSerializeByteSizeForCmpColumnArray has already checked that the size of one element is not greater than UINT32_MAX
     if constexpr (has_collator)
     {
         RUNTIME_CHECK(collator && sort_key_container);
@@ -829,8 +829,8 @@ void ColumnString::serializeToPosForColumnArrayImpl(
     }
 }
 
-void ColumnString::deserializeAndInsertFromPosUnique(
-    PaddedPODArray<const char *> & pos,
+void ColumnString::deserializeForCmpAndInsertFromPos(
+    PaddedPODArray<char *> & pos,
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
 {
@@ -840,14 +840,14 @@ void ColumnString::deserializeAndInsertFromPosUnique(
         deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
 }
 
-void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer)
+void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
 {
     deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
 }
 
 template <bool add_terminating_zero>
 void ColumnString::deserializeAndInsertFromPosImpl(
-    PaddedPODArray<const char *> & pos,
+    PaddedPODArray<char *> & pos,
     bool use_nt_align_buffer [[maybe_unused]])
 {
     size_t prev_size = offsets.size();
@@ -894,7 +894,7 @@ void ColumnString::deserializeAndInsertFromPosImpl(
                     tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
                     pos[i] += sizeof(UInt32);
 
-                    const auto * p = pos[i];
+                    auto * p = pos[i];
                     while (true)
                     {
                         UInt8 remain = FULL_VECTOR_SIZE_AVX2 - char_buffer_size;
@@ -968,8 +968,8 @@ void ColumnString::deserializeAndInsertFromPosImpl(
     }
 }
 
-void ColumnString::deserializeAndInsertFromPosUniqueForColumnArray(
-    PaddedPODArray<const char *> & pos,
+void ColumnString::deserializeForCmpAndInsertFromPosColumnArray(
+    PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
@@ -981,7 +981,7 @@ void ColumnString::deserializeAndInsertFromPosUniqueForColumnArray(
 }
 
 void ColumnString::deserializeAndInsertFromPosForColumnArray(
-    PaddedPODArray<const char *> & pos,
+    PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer)
 {
@@ -990,7 +990,7 @@ void ColumnString::deserializeAndInsertFromPosForColumnArray(
 
 template <bool add_terminating_zero>
 void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
-    PaddedPODArray<const char *> & pos,
+    PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer [[maybe_unused]])
 {

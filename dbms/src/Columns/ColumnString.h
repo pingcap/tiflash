@@ -132,11 +132,11 @@ private:
         String * sort_key_container) const;
 
     template <bool add_terminating_zero>
-    void deserializeAndInsertFromPosImpl(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer);
+    void deserializeAndInsertFromPosImpl(PaddedPODArray<char *> & pos, bool use_nt_align_buffer);
 
     template <bool add_terminating_zero>
     void deserializeAndInsertFromPosForColumnArrayImpl(
-        PaddedPODArray<const char *> & pos,
+        PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer);
 
@@ -283,11 +283,11 @@ public:
         return pos + string_size;
     }
 
-    void countSerializeByteSizeUnique(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
         const override;
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
-    void countSerializeByteSizeUniqueForColumnArray(
+    void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr & collator) const override;
@@ -295,7 +295,7 @@ public:
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
-    void serializeToPosUnique(
+    void serializeToPosForCmp(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -304,7 +304,7 @@ public:
         String * sort_key_container) const override;
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
-    void serializeToPosUniqueForColumnArray(
+    void serializeToPosForCmpColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -319,19 +319,19 @@ public:
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
 
-    void deserializeAndInsertFromPosUnique(
-        PaddedPODArray<const char *> & pos,
+    void deserializeForCmpAndInsertFromPos(
+        PaddedPODArray<char *> & pos,
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr & collator) override;
-    void deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
 
-    void deserializeAndInsertFromPosUniqueForColumnArray(
-        PaddedPODArray<const char *> & pos,
+    void deserializeForCmpAndInsertFromPosColumnArray(
+        PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr & collator) override;
     void deserializeAndInsertFromPosForColumnArray(
-        PaddedPODArray<const char *> & pos,
+        PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override;
 

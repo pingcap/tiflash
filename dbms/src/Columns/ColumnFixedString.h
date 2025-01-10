@@ -115,26 +115,26 @@ public:
 
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSizeUnique(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
         const override
     {
         // collator->sortKey() will change the string length, which may exceeds n.
         RUNTIME_CHECK_MSG(
             !collator,
-            "{} doesn't support countSerializeByteSizeUnique when collator is not null",
+            "{} doesn't support countSerializeByteSizeForCmp when collator is not null",
             getName());
         countSerializeByteSize(byte_size);
     }
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
-    void countSerializeByteSizeUniqueForColumnArray(
+    void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr & collator) const override
     {
         RUNTIME_CHECK_MSG(
             !collator,
-            "{} doesn't support countSerializeByteSizeUniqueForColumnArray when collator is not null",
+            "{} doesn't support countSerializeByteSizeForCmpColumnArray when collator is not null",
             getName());
         countSerializeByteSizeForColumnArray(byte_size, array_offsets);
     }
@@ -142,7 +142,7 @@ public:
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
-    void serializeToPosUnique(
+    void serializeToPosForCmp(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -150,12 +150,12 @@ public:
         const TiDB::TiDBCollatorPtr & collator,
         String *) const override
     {
-        RUNTIME_CHECK_MSG(!collator, "{} doesn't support serializeToPosUnique when collator is not null", getName());
+        RUNTIME_CHECK_MSG(!collator, "{} doesn't support serializeToPosForCmp when collator is not null", getName());
         serializeToPos(pos, start, length, has_null);
     }
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
-    void serializeToPosUniqueForColumnArray(
+    void serializeToPosForCmpColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
@@ -166,7 +166,7 @@ public:
     {
         RUNTIME_CHECK_MSG(
             !collator,
-            "{} doesn't support serializeToPosUniqueForColumnArray when collator is not null",
+            "{} doesn't support serializeToPosForCmpColumnArray when collator is not null",
             getName());
         serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
     }
@@ -177,33 +177,33 @@ public:
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
 
-    void deserializeAndInsertFromPosUnique(
-        PaddedPODArray<const char *> & pos,
+    void deserializeForCmpAndInsertFromPos(
+        PaddedPODArray<char *> & pos,
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr & collator) override
     {
         RUNTIME_CHECK_MSG(
             !collator,
-            "{} doesn't support deserializeAndInsertFromPosUnique when collator is not null",
+            "{} doesn't support deserializeForCmpAndInsertFromPos when collator is not null",
             getName());
         deserializeAndInsertFromPos(pos, use_nt_align_buffer);
     }
-    void deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
 
-    void deserializeAndInsertFromPosUniqueForColumnArray(
-        PaddedPODArray<const char *> & pos,
+    void deserializeForCmpAndInsertFromPosColumnArray(
+        PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer,
         const TiDB::TiDBCollatorPtr & collator) override
     {
         RUNTIME_CHECK_MSG(
             !collator,
-            "{} doesn't support deserializeAndInsertFromPosUniqueForColumnArray when collator is not null",
+            "{} doesn't support deserializeForCmpAndInsertFromPosColumnArray when collator is not null",
             getName());
         deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
     }
     void deserializeAndInsertFromPosForColumnArray(
-        PaddedPODArray<const char *> & pos,
+        PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override;
 

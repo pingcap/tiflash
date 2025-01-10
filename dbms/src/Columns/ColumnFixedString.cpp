@@ -231,7 +231,7 @@ void ColumnFixedString::serializeToPosForColumnArrayImpl(
 }
 
 /// TODO: optimize by using align_buffer
-void ColumnFixedString::deserializeAndInsertFromPos(PaddedPODArray<const char *> & pos, bool /* use_nt_align_buffer */)
+void ColumnFixedString::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool /* use_nt_align_buffer */)
 {
     size_t size = pos.size();
     size_t old_char_size = chars.size();
@@ -245,7 +245,7 @@ void ColumnFixedString::deserializeAndInsertFromPos(PaddedPODArray<const char *>
 }
 
 void ColumnFixedString::deserializeAndInsertFromPosForColumnArray(
-    PaddedPODArray<const char *> & pos,
+    PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool /* use_nt_align_buffer */)
 {

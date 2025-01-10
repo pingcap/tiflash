@@ -140,13 +140,13 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 }
 
 template <typename T>
-template <bool ensure_unique>
+template <bool for_compare>
 void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
     size_t size = byte_size.size();
-    if constexpr (ensure_unique && is_Decimal256)
+    if constexpr (for_compare && is_Decimal256)
     {
         for (size_t i = 0; i < size; ++i)
         {
@@ -162,7 +162,7 @@ void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_
 
 // TODO add unit test
 template <typename T>
-template <bool ensure_unique>
+template <bool for_compare>
 void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
@@ -173,7 +173,7 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
         byte_size.size(),
         array_offsets.size());
 
-    if constexpr (ensure_unique && is_Decimal256)
+    if constexpr (for_compare && is_Decimal256)
     {
         size_t size = array_offsets.size();
         for (size_t i = 0; i < size; ++i)
@@ -194,7 +194,7 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
 }
 
 template <typename T>
-template <bool has_null, bool ensure_unique>
+template <bool has_null, bool for_compare>
 void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
@@ -208,7 +208,7 @@ void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t s
                 continue;
         }
 
-        if constexpr (ensure_unique && is_Decimal256)
+        if constexpr (for_compare && is_Decimal256)
         {
             pos[i] = serializeDecimal256Helper(pos[i], data[start + i]);
         }
@@ -221,7 +221,7 @@ void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t s
 }
 
 template <typename T>
-template <bool has_null, bool ensure_unique>
+template <bool has_null, bool for_compare>
 void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -250,7 +250,7 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
         }
 
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
-        if constexpr (ensure_unique && is_Decimal256)
+        if constexpr (for_compare && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
                 pos[i] = serializeDecimal256Helper(pos[i], data[array_offsets[start + i - 1] + j]);
@@ -275,9 +275,9 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
 }
 
 template <typename T>
-template <bool ensure_unique>
+template <bool for_compare>
 void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
-    PaddedPODArray<const char *> & pos,
+    PaddedPODArray<char *> & pos,
     bool use_nt_align_buffer [[maybe_unused]])
 {
     size_t prev_size = data.size();
@@ -285,7 +285,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
 
     // is_complex_decimal256 is true means Decimal256 is serialized by [bool, limb_count, n * limb].
     // NT optimization is not implemented for simplicity.
-    static const bool is_complex_decimal256 = (ensure_unique && is_Decimal256);
+    static const bool is_complex_decimal256 = (for_compare && is_Decimal256);
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if (use_nt_align_buffer)
@@ -370,7 +370,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
     if constexpr (is_complex_decimal256)
     {
         for (size_t i = 0; i < size; ++i)
-            pos[i] = deserializeDecimal256Helper(data[prev_size + i], pos[i]);
+            pos[i] = const_cast<char *>(deserializeDecimal256Helper(data[prev_size + i], pos[i]));
     }
     else
     {
@@ -383,9 +383,9 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
 }
 
 template <typename T>
-template <bool ensure_unique>
+template <bool for_compare>
 void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArrayImpl(
-    PaddedPODArray<const char *> & pos,
+    PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer [[maybe_unused]])
 {
@@ -410,10 +410,11 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArrayImpl(
     for (size_t i = 0; i < size; ++i)
     {
         size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        if constexpr (ensure_unique && is_Decimal256)
+        if constexpr (for_compare && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
-                pos[i] = deserializeDecimal256Helper(data[array_offsets[start_point + i - 1] + j], pos[i]);
+                pos[i] = const_cast<char *>(
+                    deserializeDecimal256Helper(data[array_offsets[start_point + i - 1] + j], pos[i]));
         }
         else
         {

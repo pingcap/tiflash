@@ -173,7 +173,7 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
 
 template <typename T>
 void ColumnVector<T>::deserializeAndInsertFromPos(
-    PaddedPODArray<const char *> & pos,
+    PaddedPODArray<char *> & pos,
     bool use_nt_align_buffer [[maybe_unused]])
 {
     size_t prev_size = data.size();
@@ -268,7 +268,7 @@ void ColumnVector<T>::deserializeAndInsertFromPos(
 
 template <typename T>
 void ColumnVector<T>::deserializeAndInsertFromPosForColumnArray(
-    PaddedPODArray<const char *> & pos,
+    PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer [[maybe_unused]])
 {
