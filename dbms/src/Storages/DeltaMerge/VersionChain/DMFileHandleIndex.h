@@ -20,8 +20,9 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-#include <Storages/DeltaMerge/VersionChain/HandleColumnView.h>
+#include <Storages/DeltaMerge/VersionChain/ColumnView.h>
 #include <Storages/MutableSupport.h>
+
 namespace DB::DM
 {
 
@@ -109,7 +110,7 @@ private:
     std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleView h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded(dm_context);
-        HandleColumnView<Handle> handle_col(*clipped_handle_packs[clipped_pack_id]);
+        ColumnView<Handle> handle_col(*clipped_handle_packs[clipped_pack_id]);
         auto itr = std::lower_bound(handle_col.begin(), handle_col.end(), h);
         if (itr != handle_col.end() && *itr == h)
             return itr - handle_col.begin() + clipped_pack_offsets[clipped_pack_id];
