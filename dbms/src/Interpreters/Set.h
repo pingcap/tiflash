@@ -73,7 +73,8 @@ public:
     std::vector<const tipb::Expr *> createFromDAGExpr(
         const DataTypes & types,
         const tipb::Expr & expr,
-        bool fill_set_elements);
+        bool fill_set_elements,
+        const TimezoneInfo &);
 
     /** Create a Set from stream.
       * Call setHeader, then call insertFromBlock for each block.
