@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/VersionChain/VersionChain.h>
-#include <Storages/DeltaMerge/VersionChain/HandleColumnView.h>
+#include <Storages/DeltaMerge/VersionChain/ColumnView.h>
+#include <TestUtils/ColumnGenerator.h>
 #include <gtest/gtest.h>
 #include <TestUtils/FunctionTestUtils.h>
 
@@ -26,12 +27,11 @@ TEST(HandleIndexTest, Basic)
     [[maybe_unused]] VersionChain<Int64> version_chain_int;
 }
 
-TEST(HandleColumnView, Basic)
+TEST(ColumnView, Basic)
 {
-    auto int_col = makeColumn<Int64>(MutSup::getExtraHandleColumnIntType(), {1, 2, 3, 4, 5, 6, 7, 8});
-    [[maybe_unused]] HandleColumnView<Int64> handle_column_view_int(*int_col);
-
-    auto str_col = makeColumn<String>(MutSup::getExtraHandleColumnStringType(), {"1", "2", "3", "4", "5", "6", "7", "8"});
-    [[maybe_unused]] HandleColumnView<String> handle_column_view_string(*str_col);
+    auto str_col = ColumnGenerator::instance().generate({1024, "String", RANDOM}).column;
+    ColumnView<String> str_cv(*str_col);
+    for (auto s_itr = str_cv.begin(); s_itr != str_cv.end(); ++s_itr)
+        ASSERT_EQ(*s_itr, str_col->getDataAt(s_itr - str_cv.begin()));
 }
 } // namespace DB::DM::tests

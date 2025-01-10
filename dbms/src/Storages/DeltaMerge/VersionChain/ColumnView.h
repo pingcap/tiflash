@@ -14,18 +14,21 @@
 
 #pragma once
 
+#include <common/StringRef.h>
+
 namespace DB::DM
 {
 template <typename T>
-class HandleColumnView
+class ColumnView
 {
+    static_assert(false, "Only support Int64 and String");
 };
 
 template <>
-class HandleColumnView<Int64>
+class ColumnView<Int64>
 {
 public:
-    HandleColumnView(const IColumn & col)
+    ColumnView(const IColumn & col)
         : data(toColumnVectorData<Int64>(col))
     {}
 
@@ -38,10 +41,10 @@ private:
 };
 
 template <>
-class HandleColumnView<String>
+class ColumnView<String>
 {
 public:
-    HandleColumnView(const IColumn & col)
+    ColumnView(const IColumn & col)
         : offsets(typeid_cast<const ColumnString &>(col).getOffsets())
         , chars(typeid_cast<const ColumnString &>(col).getChars())
     {}
@@ -55,12 +58,12 @@ public:
             , pos(pos)
         {}
 
-        std::string_view operator*() const
+        StringRef operator*() const
         {
             assert(offsets[-1] == 0);
-            const auto off = offsets[pos];
+            const auto off = offsets[pos - 1];
             const auto size = offsets[pos] - offsets[pos - 1] - 1;
-            return std::string_view(reinterpret_cast<const char *>(&chars[off]), size);
+            return StringRef(reinterpret_cast<const char *>(&chars[off]), size);
         }
 
         Iterator & operator+(size_t n)
