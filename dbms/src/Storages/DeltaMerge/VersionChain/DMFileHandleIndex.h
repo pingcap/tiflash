@@ -21,7 +21,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/VersionChain/HandleColumnView.h>
-
+#include <Storages/MutableSupport.h>
 namespace DB::DM
 {
 
@@ -30,16 +30,15 @@ class DMFileHandleIndex
 {
 public:
     DMFileHandleIndex(
-        const Context & global_context_,
+        const DMContext & dm_context_,
         const DMFilePtr & dmfile_,
         const RowID start_row_id_,
         std::optional<RowKeyRange> rowkey_range_)
-        : global_context(global_context_)
-        , dmfile(dmfile_)
+        : dmfile(dmfile_)
         , start_row_id(start_row_id_)
         , rowkey_range(std::move(rowkey_range_))
-        , clipped_pack_range(getPackRange())
-        , clipped_pack_index(loadPackIndex())
+        , clipped_pack_range(getPackRange(dm_context_))
+        , clipped_pack_index(loadPackIndex(dm_context_))
         , clipped_pack_offsets(loadPackOffsets())
         , clipped_handle_packs(clipped_pack_range.count())
         , clipped_need_read_packs(std::vector<UInt8>(clipped_pack_range.count(), 1)) // read all packs by default
@@ -55,12 +54,12 @@ public:
     }
 
     template <Int64OrStringView HandleView>
-    std::optional<RowID> getBaseVersion(HandleView h)
+    std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleView h)
     {
         auto clipped_pack_id = getClippedPackId(h);
         if (!clipped_pack_id)
             return {};
-        auto row_id = getBaseVersion(h, *clipped_pack_id);
+        auto row_id = getBaseVersion(dm_context, h, *clipped_pack_id);
         if (!row_id)
             return {};
         return start_row_id + *row_id;
@@ -107,9 +106,9 @@ private:
     }
 
     template <Int64OrStringView HandleView>
-    std::optional<RowID> getBaseVersion(HandleView h, UInt32 clipped_pack_id)
+    std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleView h, UInt32 clipped_pack_id)
     {
-        loadHandleIfNotLoaded();
+        loadHandleIfNotLoaded(dm_context);
         HandleColumnView<Handle> handle_col(*clipped_handle_packs[clipped_pack_id]);
         auto itr = std::lower_bound(handle_col.begin(), handle_col.end(), h);
         if (itr != handle_col.end() && *itr == h)
@@ -117,9 +116,9 @@ private:
         return {};
     }
 
-    std::vector<Handle> loadPackIndex()
+    std::vector<Handle> loadPackIndex(const DMContext & dm_context)
     {
-        auto max_values = loadPackMaxValue<Handle>(global_context, *dmfile, EXTRA_HANDLE_COLUMN_ID);
+        auto max_values = loadPackMaxValue<Handle>(dm_context.global_context, *dmfile, MutSup::extra_handle_id);
         return std::vector<Handle>(
             max_values.begin() + clipped_pack_range.start_pack_id,
             max_values.begin() + clipped_pack_range.end_pack_id);
@@ -139,7 +138,7 @@ private:
 
     static bool isCommonHandle() { return std::is_same_v<Handle, String>; }
 
-    void loadHandleIfNotLoaded()
+    void loadHandleIfNotLoaded(const DMContext & dm_context)
     {
         if (likely(!clipped_need_read_packs))
             return;
@@ -152,19 +151,13 @@ private:
                 read_pack_ids->insert(i + clipped_pack_range.start_pack_id);
         }
 
-        auto scan_context = std::make_shared<ScanContext>();
         auto pack_filter = DMFilePackFilter::loadFrom(
+            dm_context,
             dmfile,
-            global_context.getMinMaxIndexCache(),
             true, //set_cache_if_miss
             {}, // rowkey_ranges, empty means all
             nullptr, // RSOperatorPtr
-            read_pack_ids,
-            global_context.getFileProvider(),
-            global_context.getReadLimiter(),
-            scan_context,
-            __FILE__,
-            ReadTag::MVCC);
+            read_pack_ids);
 
         DMFileReader reader(
             dmfile,
@@ -175,17 +168,17 @@ private:
             /*is_fast_scan*/ false,
             /*max_data_version*/ std::numeric_limits<UInt64>::max(),
             std::move(pack_filter),
-            global_context.getMarkCache(),
+            dm_context.global_context.getMarkCache(),
             /*enable_column_cache*/ false,
             /*column_cache*/ nullptr,
-            global_context.getSettingsRef().max_read_buffer_size,
-            global_context.getFileProvider(),
-            global_context.getReadLimiter(),
+            dm_context.global_context.getSettingsRef().max_read_buffer_size,
+            dm_context.global_context.getFileProvider(),
+            dm_context.global_context.getReadLimiter(),
             DEFAULT_MERGE_BLOCK_SIZE,
             /*read_one_pack_every_time*/ true,
-            "DMFileHandleIndex",
+            dm_context.tracing_id,
             /*max_sharing_column_bytes_for_all*/ false,
-            scan_context,
+            dm_context.scan_context,
             ReadTag::MVCC);
 
 
@@ -206,23 +199,17 @@ private:
         UInt32 count() const { return end_pack_id - start_pack_id; }
     };
 
-    PackRange getPackRange()
+    PackRange getPackRange(const DMContext & dm_context)
     {
         if (!rowkey_range)
             return PackRange{.start_pack_id = 0, .end_pack_id = static_cast<UInt32>(dmfile->getPacks())};
 
-        const auto [handle_res, start_pack_id] = getClippedRSResultsByRanges(
-            global_context,
-            std::make_shared<ScanContext>(),
-            "DMFileHandleIndex",
-            dmfile,
-            rowkey_range);
+        const auto [handle_res, start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, rowkey_range);
         return PackRange{
             .start_pack_id = start_pack_id,
             .end_pack_id = start_pack_id + static_cast<UInt32>(handle_res.size())};
     }
 
-    const Context & global_context;
     const DMFilePtr dmfile;
     const RowID start_row_id;
     const std::optional<const RowKeyRange> rowkey_range; // Range of ColumnFileBig or nullopt for Stable DMFile

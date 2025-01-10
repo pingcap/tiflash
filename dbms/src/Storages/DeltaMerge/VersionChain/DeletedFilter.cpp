@@ -28,7 +28,7 @@ UInt32 buildDeletedFilterBlock(
     const IColumnFileDataProviderPtr & data_provider,
     const ColumnFile & cf,
     const UInt32 start_row_id,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
     auto cf_reader = cf.getReader(dm_context, data_provider, getTagColumnDefinesPtr(), ReadTag::MVCC);
@@ -48,13 +48,9 @@ UInt32 buildDeletedFilterDMFile(
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range,
     const ssize_t start_row_id,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
-    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(
-        dm_context.global_context,
-        dm_context.scan_context,
-        dm_context.tracing_id,
-        dmfile, segment_range);
+    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
     if (valid_handle_res.empty())
         return 0;
 
@@ -110,7 +106,7 @@ UInt32 buildDeletedFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const ssize_t start_row_id,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     return buildDeletedFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), start_row_id, filter);
 }
@@ -118,14 +114,14 @@ UInt32 buildDeletedFilterColumnFileBig(
 UInt32 buildDeletedFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
     return buildDeletedFilterDMFile(dm_context, dmfiles[0], std::nullopt, 0, filter);
 }
 
-void buildDeletedFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, std::vector<UInt8> & filter)
+void buildDeletedFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, IColumn::Filter & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);

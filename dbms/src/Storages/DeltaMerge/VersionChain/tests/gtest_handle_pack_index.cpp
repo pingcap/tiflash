@@ -15,6 +15,9 @@
 #include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/DeltaMerge/VersionChain/HandleColumnView.h>
 #include <gtest/gtest.h>
+#include <TestUtils/FunctionTestUtils.h>
+
+using namespace DB::tests;
 
 namespace DB::DM::tests
 {
@@ -25,7 +28,10 @@ TEST(HandleIndexTest, Basic)
 
 TEST(HandleColumnView, Basic)
 {
-    [[maybe_unused]] HandleColumnView<Int64> handle_column_view_int;
-    [[maybe_unused]] HandleColumnView<String> handle_column_view_string;
+    auto int_col = makeColumn<Int64>(MutSup::getExtraHandleColumnIntType(), {1, 2, 3, 4, 5, 6, 7, 8});
+    [[maybe_unused]] HandleColumnView<Int64> handle_column_view_int(*int_col);
+
+    auto str_col = makeColumn<String>(MutSup::getExtraHandleColumnStringType(), {"1", "2", "3", "4", "5", "6", "7", "8"});
+    [[maybe_unused]] HandleColumnView<String> handle_column_view_string(*str_col);
 }
 } // namespace DB::DM::tests

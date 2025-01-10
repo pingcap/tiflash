@@ -3087,7 +3087,13 @@ BitmapFilterPtr Segment::buildBitmapFilter(
 
     if (use_version_chain)
     {
-        return buildBitmapFilter<Int64>(dm_context, *segment_snap, read_ranges, filter, start_ts, version_chain);
+        return buildBitmapFilter<Int64>(
+            dm_context,
+            *segment_snap,
+            read_ranges,
+            pack_filter_results,
+            start_ts,
+            version_chain);
     }
 
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))

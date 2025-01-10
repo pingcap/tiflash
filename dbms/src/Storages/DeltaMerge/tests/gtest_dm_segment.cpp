@@ -133,6 +133,18 @@ protected:
 
     DMContext & dmContext() { return *dm_context; }
 
+    auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
+    {
+        DMFilePackFilterResults results;
+        results.reserve(snap->stable->getDMFiles().size());
+        for (const auto & file : snap->stable->getDMFiles())
+        {
+            auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
+            results.push_back(pack_filter);
+        }
+        return results;
+    }
+
 protected:
     /// all these var lives as ref in dm_context
     GlobalPageIdAllocatorPtr page_id_allocator;
@@ -1151,11 +1163,12 @@ try
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
         auto read_ranges = {RowKeyRange::newAll(false, 1)};
         auto real_ranges = segment->shrinkRowKeyRanges(read_ranges);
+
         auto bitmap_filter1 = segment->buildBitmapFilter( //
             dmContext(),
             segment_snap,
             real_ranges,
-            EMPTY_RS_OPERATOR,
+            loadPackFilterResults(segment_snap, real_ranges),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             !use_version_chain);
@@ -1163,7 +1176,7 @@ try
             dmContext(),
             segment_snap,
             real_ranges,
-            EMPTY_RS_OPERATOR,
+            loadPackFilterResults(segment_snap, real_ranges),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             use_version_chain);

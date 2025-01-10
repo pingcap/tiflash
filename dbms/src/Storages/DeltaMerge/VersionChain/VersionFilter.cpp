@@ -30,7 +30,7 @@ namespace DB::DM
     const std::vector<RowID> & base_ver_snap,
     const UInt32 stable_rows,
     const UInt32 start_row_id,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
     auto cf_reader = cf.getReader(dm_context, data_provider, getVersionColumnDefinesPtr(), ReadTag::MVCC);
@@ -78,17 +78,13 @@ namespace DB::DM
     const std::optional<RowKeyRange> & segment_range,
     const UInt64 read_ts,
     const ssize_t start_row_id,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
-    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(
-        dm_context.global_context,
-        dm_context.scan_context,
-        dm_context.tracing_id,
-        dmfile, segment_range);
+    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
     if (valid_handle_res.empty())
         return 0;
 
-    const auto max_versions = loadPackMaxValue<UInt64>(dm_context.global_context, *dmfile, VERSION_COLUMN_ID);
+    const auto max_versions = loadPackMaxValue<UInt64>(dm_context.global_context, *dmfile, MutSup::version_col_id);
 
     auto read_packs = std::make_shared<IdSet>();
     UInt32 need_read_rows = 0;
@@ -130,11 +126,12 @@ namespace DB::DM
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
         read_rows += block.rows();
-        const auto * handles_ptr = toColumnVectorDataPtr<Int64>(block.getByName(EXTRA_HANDLE_COLUMN_NAME).column);
+        const auto * handles_ptr
+            = toColumnVectorDataPtr<Int64>(block.getByName(MutSup::extra_handle_column_name).column);
         RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
         const auto & handles = *handles_ptr;
         const auto & versions
-            = *toColumnVectorDataPtr<UInt64>(block.getByName(VERSION_COLUMN_NAME).column); // Must success.
+            = *toColumnVectorDataPtr<UInt64>(block.getByName(MutSup::version_column_name).column); // Must success.
 
         const auto itr = read_pack_to_start_row_ids.find(pack_id);
         RUNTIME_CHECK(itr != read_pack_to_start_row_ids.end(), read_pack_to_start_row_ids, pack_id);
@@ -197,7 +194,7 @@ namespace DB::DM
     const ColumnFileBig & cf_big,
     const UInt64 read_ts,
     const ssize_t start_row_id,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     return buildVersionFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), read_ts, start_row_id, filter);
 }
@@ -206,7 +203,7 @@ namespace DB::DM
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
     const UInt64 read_ts,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
@@ -218,7 +215,7 @@ void buildVersionFilter(
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);

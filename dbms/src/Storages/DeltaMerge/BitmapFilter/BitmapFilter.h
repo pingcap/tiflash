@@ -45,7 +45,7 @@ public:
     size_t count() const;
     inline size_t size() const { return filter.size(); }
 
-    std::vector<UInt8> & getFilter() { return filter; }
+    IColumn::Filter & getFilter() { return filter; }
 
     friend class BitmapFilterView;
 
