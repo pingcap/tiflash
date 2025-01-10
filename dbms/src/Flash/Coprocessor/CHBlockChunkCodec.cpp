@@ -244,7 +244,8 @@ Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
 Block CHBlockChunkCodec::decode(const String & str, const Block & header)
 {
     ReadBufferFromString read_buffer(str);
-    return CHBlockChunkCodec(header).decodeImpl(read_buffer);
+    // Codec may return legacy string type (named 'String'), respect to local string type (named 'StringV2')
+    return header.cloneWithColumns(CHBlockChunkCodec(header).decodeImpl(read_buffer).getColumns());
 }
 
 Block CHBlockChunkCodec::decode(const String & str)
