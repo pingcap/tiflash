@@ -18,9 +18,8 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
-#include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/VersionChain/ColumnView.h>
+#include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/MutableSupport.h>
 
 namespace DB::DM
@@ -54,8 +53,8 @@ public:
             clipped_pack_range.count());
     }
 
-    template <Int64OrStringView HandleView>
-    std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleView h)
+    template <Int64OrStringRef HandleRef>
+    std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRef h)
     {
         auto clipped_pack_id = getClippedPackId(h);
         if (!clipped_pack_id)
@@ -81,7 +80,7 @@ public:
 
             // Read too many packs, read all by default
             if (calc_read_count * 4 >= clipped_pack_range.count())
-                return;
+                return; // return, instead of break, because `clipped_need_read_packs` is read all by default.
         }
         clipped_need_read_packs->swap(calc_read_packs);
     }
@@ -94,8 +93,8 @@ public:
     }
 
 private:
-    template <Int64OrStringView HandleView>
-    std::optional<UInt32> getClippedPackId(HandleView h)
+    template <Int64OrStringRef HandleRef>
+    std::optional<UInt32> getClippedPackId(HandleRef h)
     {
         if (unlikely(rowkey_range && !inRowKeyRange(*rowkey_range, h)))
             return {};
@@ -106,8 +105,8 @@ private:
         return itr - clipped_pack_index.begin();
     }
 
-    template <Int64OrStringView HandleView>
-    std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleView h, UInt32 clipped_pack_id)
+    template <Int64OrStringRef HandleRef>
+    std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRef h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded(dm_context);
         ColumnView<Handle> handle_col(*clipped_handle_packs[clipped_pack_id]);
