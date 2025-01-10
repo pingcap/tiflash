@@ -191,6 +191,7 @@ std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRang
     const DMContext & dm_context,
     Handle h)
 {
+    // From from new to old
     for (auto itr = dmfile_or_delete_range_list->rbegin(); itr != dmfile_or_delete_range_list->rend(); ++itr)
     {
         auto & dmfile_or_delete_range = *itr;
