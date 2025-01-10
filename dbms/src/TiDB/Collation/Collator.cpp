@@ -206,7 +206,9 @@ public:
 
     size_t maxBytesForOneChar() const override
     {
-        // BinCollator only trim right space.
+        // BinCollator only trims trailing spaces,
+        // so it does not increase the space required after decoding.
+        // Hence, it returns 1 here.
         return 1;
     }
 
