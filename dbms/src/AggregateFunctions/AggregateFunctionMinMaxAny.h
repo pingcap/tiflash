@@ -32,7 +32,7 @@ namespace DB
 
 struct CommonImpl
 {
-    static void decrease(const IColumn &, size_t) { throw Exception(" decrease is not implemented yet"); }
+    static void decrease(const IColumn &, size_t) { throw Exception("decrease is not implemented yet"); }
 };
 
 /// For numeric values.

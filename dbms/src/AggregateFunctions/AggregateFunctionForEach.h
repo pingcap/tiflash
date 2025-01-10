@@ -75,8 +75,7 @@ private:
         size_t old_size = state.dynamic_array_size;
         if (old_size < new_size)
         {
-            if unlikely (arena == nullptr)
-                throw Exception("Get null arena ptr in ensureAggregateData");
+            RUNTIME_CHECK_MSG(arena, "got null arena ptr in ensureAggregateData");
 
             state.array_of_aggregate_datas = arena->realloc(
                 state.array_of_aggregate_datas,

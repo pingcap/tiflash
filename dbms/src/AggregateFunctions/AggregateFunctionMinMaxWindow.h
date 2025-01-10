@@ -53,7 +53,7 @@ public:
             if constexpr (is_min)
                 iter = saved_values.begin();
             else
-                iter = --(saved_values.end());
+                iter = std::prev(saved_values.end());
             static_cast<ColumnType &>(to).getData().push_back(*iter);
         }
         else
@@ -93,6 +93,8 @@ private:
     // TODO use std::string is inefficient
     mutable std::multiset<std::string> saved_values;
 
+    void saveValue(StringRef value) { saved_values.insert(value.toString()); }
+
 public:
     void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
@@ -107,7 +109,7 @@ public:
             if constexpr (is_min)
                 iter = saved_values.begin();
             else
-                iter = --(saved_values.end());
+                iter = std::prev(saved_values.end());
 
             static_cast<ColumnString &>(to).insertDataWithTerminatingZero(iter->data(), iter->size());
         }
@@ -127,8 +129,6 @@ public:
         saved_values.erase(iter);
     }
 
-    void saveValue(StringRef value) { saved_values.insert(value.toString()); }
-
     void changeIfLess(const IColumn & column, size_t row_num, Arena *)
     {
         saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
@@ -146,11 +146,6 @@ private:
     using Self = SingleValueDataGenericForWindow;
     mutable std::multiset<Field> saved_values;
 
-public:
-    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
-
-    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
-
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
@@ -160,7 +155,7 @@ public:
             if constexpr (is_min)
                 iter = saved_values.begin();
             else
-                iter = --(saved_values.end());
+                iter = std::prev(saved_values.end());
             to.insert(*iter);
         }
         else
@@ -168,6 +163,11 @@ public:
             to.insertDefault();
         }
     }
+
+public:
+    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
+
+    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
 
     void reset() { saved_values.clear(); }
 
