@@ -37,7 +37,7 @@ public:
         : base_versions(std::make_shared<std::vector<RowID>>())
     {}
 
-    // Deep copy, a benchmark helper.
+    // Deep copy, only use for micro-benchmark or unit-tests.
     VersionChain(const VersionChain & other)
         : replayed_rows_and_deletes(other.replayed_rows_and_deletes)
         , base_versions(std::make_shared<std::vector<RowID>>(*(other.base_versions)))
