@@ -238,20 +238,23 @@ void CHBlockChunkCodec::readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTy
 Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
 {
     ReadBufferFromString read_buffer(str);
-    return CHBlockChunkCodec(schema).decodeImpl(read_buffer);
+    auto block = CHBlockChunkCodec(schema).decodeImpl(read_buffer);
+    return header ? header.cloneWithColumns(block.getColumns()) : block;
 }
 
 Block CHBlockChunkCodec::decode(const String & str, const Block & header)
 {
     ReadBufferFromString read_buffer(str);
     // Codec may return legacy string type (named 'String'), respect to local string type (named 'StringV2')
-    return header.cloneWithColumns(CHBlockChunkCodec(header).decodeImpl(read_buffer).getColumns());
+    auto block = CHBlockChunkCodec(header).decodeImpl(read_buffer);
+    return header ? header.cloneWithColumns(block.getColumns()) : block;
 }
 
 Block CHBlockChunkCodec::decode(const String & str)
 {
     ReadBufferFromString read_buffer(str);
-    return decodeImpl(read_buffer);
+    auto block = decodeImpl(read_buffer);
+    return header ? header.cloneWithColumns(block.getColumns()) : block;
 }
 
 } // namespace DB
