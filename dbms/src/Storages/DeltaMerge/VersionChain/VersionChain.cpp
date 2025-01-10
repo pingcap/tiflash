@@ -25,7 +25,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot)
 {
-    // Check Stable
+    // Check Stable: stable always has one DMFile.
     if (dmfile_or_delete_range_list.empty())
     {
         const auto & dmfiles = snapshot.stable->getDMFiles();
