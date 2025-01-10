@@ -57,8 +57,6 @@ public:
         using iterator_category = std::random_access_iterator_tag;
         using value_type = std::string_view;
         using difference_type = std::ptrdiff_t;
-        //using pointer = std::string_view*;
-        //using reference = std::string_view&;
 
         Iterator(const IColumn::Offsets & offsets, const ColumnString::Chars_t & chars, size_t pos)
             : offsets(&offsets)
@@ -92,11 +90,6 @@ public:
             return *this;
         }
 
-        // Postfix increment/decrement is not supported
-        //Iterator & operator++(int) = delete;
-        //Iterator & operator--(int) = delete;
-
-        // Postfix increment (optional)
         Iterator operator++(int)
         {
             Iterator tmp = *this;
@@ -104,7 +97,6 @@ public:
             return tmp;
         }
 
-        // Postfix decrement (optional)
         Iterator operator--(int)
         {
             Iterator tmp = *this;
@@ -112,14 +104,12 @@ public:
             return tmp;
         }
 
-        // Compound addition
         Iterator & operator+=(difference_type n)
         {
             pos += n;
             return *this;
         }
 
-        // Compound subtraction
         Iterator & operator-=(difference_type n)
         {
             pos -= n;
@@ -131,7 +121,7 @@ public:
         bool operator<(const Iterator & other) const { return pos < other.pos; }
 
     private:
-        const IColumn::Offsets * offsets;
+        const IColumn::Offsets * offsets; // Using pointer for operator=
         const ColumnString::Chars_t * chars;
         size_t pos = 0;
     };
