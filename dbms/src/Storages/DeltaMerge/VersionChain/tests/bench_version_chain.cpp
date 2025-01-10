@@ -56,6 +56,19 @@ enum class BenchType
     VersionChain = 2,
 };
 
+
+auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
+{
+    DMFilePackFilterResults results;
+    results.reserve(snap->stable->getDMFiles().size());
+    for (const auto & file : snap->stable->getDMFiles())
+    {
+        auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
+        results.push_back(pack_filter);
+    }
+    return results;
+}
+
 void initContext(bool is_common_handle, BenchType type)
 {
     if (context)
@@ -89,7 +102,7 @@ void initContext(bool is_common_handle, BenchType type)
         /*min_version_*/ 0,
         NullspaceID,
         /*physical_table_id*/ 100,
-        /*pk_col_id*/ MutableSupport::extra_handle_id,
+        /*pk_col_id*/ MutSup::extra_handle_id,
         is_common_handle,
         1, // rowkey_column_size
         context->getSettingsRef());
@@ -159,8 +172,14 @@ void writeDelta(Segment & seg, UInt32 delta_rows)
         const auto n = std::min(delta_rows - i, 2048U);
         const auto v = random_sequences.get(n);
         block.insert(createColumn<Int64>(v, MutSup::extra_handle_column_name, MutSup::extra_handle_id));
-        block.insert(createColumn<UInt64>(std::vector<UInt64>(n, version++), VERSION_COLUMN_NAME, MutSup::version_col_id));
-        block.insert(createColumn<UInt8>(std::vector<UInt64>(n, /*deleted*/ 0), TAG_COLUMN_NAME, MutSup::delmark_col_id));
+        block.insert(createColumn<UInt64>(
+            std::vector<UInt64>(n, version++),
+            MutSup::version_column_name,
+            MutSup::version_col_id));
+        block.insert(createColumn<UInt8>(
+            std::vector<UInt64>(n, /*deleted*/ 0),
+            MutSup::delmark_column_name,
+            MutSup::delmark_col_id));
         seg.write(*dm_context, block, false);
     }
 }
@@ -322,6 +341,7 @@ try
 {
     const auto [type, is_common_handle, delta_rows] = std::make_tuple(std::move(args)...);
     initialize(type, is_common_handle, delta_rows);
+    auto rs_results = loadPackFilterResults(segment_snapshot, {segment->getRowKeyRange()});
 
     if (type == BenchType::DeltaIndex)
     {
@@ -337,7 +357,7 @@ try
                 *dm_context,
                 segment_snapshot,
                 {segment->getRowKeyRange()},
-                nullptr,
+                rs_results,
                 std::numeric_limits<UInt64>::max(),
                 DEFAULT_BLOCK_SIZE,
                 false);
@@ -355,7 +375,7 @@ try
                 *dm_context,
                 *segment_snapshot,
                 {segment->getRowKeyRange()},
-                nullptr,
+                rs_results,
                 std::numeric_limits<UInt64>::max(),
                 version_chain);
             benchmark::DoNotOptimize(bitmap_filter);
@@ -383,12 +403,12 @@ try
     buildVersionChain(*segment_snapshot, version_chain);
     RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
 
-
+    auto rs_results = loadPackFilterResults(segment_snapshot, {segment->getRowKeyRange()});
     auto bitmap_filter1 = segment->buildBitmapFilter(
         *dm_context,
         segment_snapshot,
         {segment->getRowKeyRange()},
-        nullptr,
+        rs_results,
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE,
         false);
@@ -396,7 +416,7 @@ try
         *dm_context,
         *segment_snapshot,
         {segment->getRowKeyRange()},
-        nullptr,
+        rs_results,
         std::numeric_limits<UInt64>::max(),
         version_chain);
 
