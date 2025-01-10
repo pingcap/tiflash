@@ -14,10 +14,11 @@
 
 #pragma once
 
-#include <span>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/VersionChain/DMFileHandleIndex.h>
+
+#include <span>
 
 namespace DB::DM
 {
@@ -69,7 +70,9 @@ private:
         const UInt32 stable_rows);
     [[nodiscard]] UInt32 replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range);
 
-    [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(Handle h);
+    [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
+        const DMContext & dm_context,
+        Handle h);
     void calculateReadPacks(const std::span<const Handle> handles);
     void cleanHandleColumn();
 

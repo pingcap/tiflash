@@ -19,30 +19,20 @@
 
 namespace DB::DM
 {
-RSResults getRSResultsByRanges(
-    const Context & global_context,
-    const ScanContextPtr & scan_context,
-    const String & tracing_id,
-    const DMFilePtr & dmfile,
-    const RowKeyRanges & ranges)
+RSResults getRSResultsByRanges(const DMContext & dm_context, const DMFilePtr & dmfile, const RowKeyRanges & ranges)
 {
     if (ranges.empty())
         return RSResults(dmfile->getPacks(), RSResult::All);
 
     auto pack_filter = DMFilePackFilter::loadFrom(
+        dm_context,
         dmfile,
-        global_context.getMinMaxIndexCache(),
-        true,
+        /*set cache*/ true,
         ranges,
         EMPTY_RS_OPERATOR,
-        {},
-        global_context.getFileProvider(),
-        global_context.getReadLimiter(),
-        scan_context,
-        tracing_id,
-        ReadTag::MVCC);
+        /*read_packs*/ {});
 
-    return pack_filter.getHandleRes();
+    return pack_filter->getHandleRes();
 }
 
 namespace
@@ -72,21 +62,14 @@ std::pair<RSResults, UInt32> clipRSResults(const RSResults & rs_results)
 } // namespace
 
 std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
-    const Context & global_context,
-    const ScanContextPtr & scan_context,
-    const String & tracing_id,
+    const DMContext & dm_context,
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range)
 {
     if (!segment_range)
         return std::make_pair(RSResults(dmfile->getPacks(), RSResult::All), 0);
 
-    const auto handle_res = getRSResultsByRanges(
-        global_context,
-        scan_context,
-        tracing_id,
-        dmfile,
-        {*segment_range});
+    const auto handle_res = getRSResultsByRanges(dm_context, dmfile, {*segment_range});
 
     return clipRSResults(handle_res);
 }

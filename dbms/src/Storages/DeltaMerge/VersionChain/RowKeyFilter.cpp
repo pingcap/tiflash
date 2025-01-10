@@ -32,7 +32,7 @@ UInt32 buildRowKeyFilterVector(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     for (UInt32 i = 0; i < handles.size(); ++i)
     {
@@ -56,7 +56,7 @@ UInt32 buildRowKeyFilterBlock(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
 
@@ -81,13 +81,9 @@ UInt32 buildRowKeyFilterDMFile(
     const RowKeyRanges & read_ranges,
     const RSResults * stable_pack_res,
     const UInt32 start_row_id,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
-    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(
-        dm_context.global_context,
-        dm_context.scan_context,
-        dm_context.tracing_id,
-        dmfile, segment_range);
+    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
     if (valid_handle_res.empty())
         return 0;
 
@@ -103,23 +99,13 @@ UInt32 buildRowKeyFilterDMFile(
                 valid_handle_res[i] = RSResult::None;
     }
 
-    const auto read_ranges_handle_res = getRSResultsByRanges(
-        dm_context.global_context,
-        dm_context.scan_context,
-        dm_context.tracing_id,
-        dmfile,
-        read_ranges);
+    const auto read_ranges_handle_res = getRSResultsByRanges(dm_context, dmfile, read_ranges);
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
         valid_handle_res[i] = valid_handle_res[i] && read_ranges_handle_res[valid_start_pack_id + i];
 
     if (!delete_ranges.empty())
     {
-        const auto delete_ranges_handle_res = getRSResultsByRanges(
-            dm_context.global_context,
-            dm_context.scan_context,
-            dm_context.tracing_id,
-            dmfile,
-            delete_ranges);
+        const auto delete_ranges_handle_res = getRSResultsByRanges(dm_context, dmfile, delete_ranges);
         for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
             valid_handle_res[i] = valid_handle_res[i] && !delete_ranges_handle_res[valid_start_pack_id + i];
     }
@@ -180,7 +166,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     if (cf_big.getRows() == 0)
         return 0;
@@ -202,7 +188,7 @@ UInt32 buildRowKeyFilterStable(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const RSResults & stable_pack_res,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
@@ -232,7 +218,7 @@ void buildRowKeyFilter(
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const RSResults & stable_pack_res,
-    std::vector<UInt8> & filter)
+    IColumn::Filter & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -300,7 +286,7 @@ template void buildRowKeyFilter<Int64>(
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const RSResults & stable_pack_res,
-    std::vector<UInt8> & filter);
+    IColumn::Filter & filter);
 
 // TODO: String
 } // namespace DB::DM

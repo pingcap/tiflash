@@ -31,7 +31,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
         const auto & dmfiles = snapshot.stable->getDMFiles();
         RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
         dmfile_or_delete_range_list->push_back(
-            DMFileHandleIndex<Handle>{dm_context.global_context, dmfiles[0], /*start_row_id*/ 0, std::nullopt});
+            DMFileHandleIndex<Handle>{dm_context, dmfiles[0], /*start_row_id*/ 0, std::nullopt});
     }
 
     const auto & stable = *(snapshot.stable);
@@ -143,7 +143,7 @@ UInt32 VersionChain<Handle>::replayBlock(
             base_versions->push_back(itr->second);
             continue;
         }
-        if (auto row_id = findBaseVersionFromDMFileOrDeleteRangeList(h); row_id)
+        if (auto row_id = findBaseVersionFromDMFileOrDeleteRangeList(dm_context, h); row_id)
         {
             base_versions->push_back(*row_id);
             continue;
@@ -166,7 +166,7 @@ UInt32 VersionChain<Handle>::replayColumnFileBig(
     base_versions->insert(base_versions->end(), rows, NotExistRowID);
 
     dmfile_or_delete_range_list->push_back(
-        DMFileHandleIndex<Handle>{dm_context.global_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
+        DMFileHandleIndex<Handle>{dm_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
     return rows;
 }
 
@@ -187,14 +187,16 @@ UInt32 VersionChain<Handle>::replayDeleteRange(const ColumnFileDeleteRange & cf_
 }
 
 template <Int64OrString Handle>
-std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRangeList(Handle h)
+std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRangeList(
+    const DMContext & dm_context,
+    Handle h)
 {
     for (auto itr = dmfile_or_delete_range_list->rbegin(); itr != dmfile_or_delete_range_list->rend(); ++itr)
     {
         auto & dmfile_or_delete_range = *itr;
         if (auto * dmfile_index = std::get_if<DMFileHandleIndex<Handle>>(&dmfile_or_delete_range); dmfile_index)
         {
-            if (auto row_id = dmfile_index->getBaseVersion(h); row_id)
+            if (auto row_id = dmfile_index->getBaseVersion(dm_context, h); row_id)
                 return row_id;
         }
         else if (auto * delete_range = std::get_if<RowKeyRange>(&dmfile_or_delete_range); delete_range)
