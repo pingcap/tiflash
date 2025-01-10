@@ -70,7 +70,15 @@ public:
     /**
       * Create a Set from DAG Expr, used when processing DAG Request
       */
+<<<<<<< HEAD
     std::vector<const tipb::Expr *> createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bool fill_set_elements);
+=======
+    std::vector<const tipb::Expr *> createFromDAGExpr(
+        const DataTypes & types,
+        const tipb::Expr & expr,
+        bool fill_set_elements,
+        const TimezoneInfo &);
+>>>>>>> 265b329f29 (Fix the incompatible behavior when handling `IN(Timestamp | MysqlTime * )` expressions with timezone (#9779))
 
     /** Create a Set from stream.
       * Call setHeader, then call insertFromBlock for each block.
