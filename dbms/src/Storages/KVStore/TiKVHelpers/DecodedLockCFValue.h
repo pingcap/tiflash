@@ -52,6 +52,7 @@ struct DecodedLockCFValue : boost::noncopyable
     void withInner(std::function<void(const Inner &)> && f) const;
     /// Return LockInfoPtr if the `query` could be blocked by this lock. Otherwise return nullptr.
     LockInfoPtr getLockInfoPtr(const RegionLockReadQuery & query) const;
+    size_t getSize() const;
 
     std::shared_ptr<const TiKVKey> key;
     std::shared_ptr<const TiKVValue> val;

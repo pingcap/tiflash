@@ -56,21 +56,21 @@ RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue 
     {
     case ColumnFamilyType::Write:
     {
-        auto delta = write_cf.insert(std::move(key), std::move(value), mode);
+        auto delta = write_cf.insert(std::move(key), std::move(value), mode).payload;
         cf_data_size += delta;
         reportAlloc(delta);
         return delta;
     }
     case ColumnFamilyType::Default:
     {
-        auto delta = default_cf.insert(std::move(key), std::move(value), mode);
+        auto delta = default_cf.insert(std::move(key), std::move(value), mode).payload;
         cf_data_size += delta;
         reportAlloc(delta);
         return delta;
     }
     case ColumnFamilyType::Lock:
     {
-        auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
+        auto delta = lock_cf.insert(std::move(key), std::move(value), mode).payload;
         cf_data_size += delta;
         if likely (delta >= 0)
         {

@@ -55,7 +55,7 @@ template <>
 RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     UNUSED(mode);
-    RegionDataRes added_size = calcTiKVKeyValueSize(key, value);
+    RegionDataRes::Type payload_size = calcTiKVKeyValueSize(key, value);
     Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
     const auto & decoded = std::get<2>(kv_pair.second);
     bool is_large_txn = decoded->isLargeTxn();
@@ -64,7 +64,7 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
         if (iter != data.end())
         {
             // Could be a perssimistic lock is overwritten, or a old generation large txn lock is overwritten.
-            added_size -= calcTiKVKeyValueSize(iter->second);
+            payload_size -= calcTiKVKeyValueSize(iter->second);
             data.erase(iter);
 
             // In most cases, an optimistic lock replace a pessimistic lock.
@@ -77,7 +77,7 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
     }
     // According to the process of pessimistic lock, just overwrite.
     data.emplace(std::move(kv_pair.first), std::move(kv_pair.second));
-    return added_size;
+    return {payload_size, decoded->getSize()};
 }
 
 template <typename Trait>
@@ -124,7 +124,8 @@ RegionDataRes RegionCFDataBase<Trait>::insert(std::pair<Key, Value> && kv_pair, 
         }
     }
 
-    return calcTiKVKeyValueSize(it->second);
+    // No decoded data in write & default cf currently.
+    return {calcTiKVKeyValueSize(it->second), 0};
 }
 
 template <typename Trait>
@@ -161,7 +162,7 @@ bool RegionCFDataBase<RegionWriteCFDataTrait>::shouldIgnoreRemove(const RegionCF
 }
 
 template <typename Trait>
-size_t RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
+std::pair<size_t, size_t> RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
 {
     auto & map = data;
 
@@ -182,12 +183,12 @@ size_t RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
             }
         }
         map.erase(it);
-        return size;
+        return {size, std::get<2>(value)->getSize()};
     }
     else if (!quiet)
         throw Exception("Key not found", ErrorCodes::LOGICAL_ERROR);
 
-    return 0;
+    return {0, 0};
 }
 
 template <typename Trait>

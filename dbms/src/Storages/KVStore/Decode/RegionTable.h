@@ -78,11 +78,15 @@ public:
             , range_in_table(range_in_table_)
         {}
 
+        void updateRegionCacheBytes(size_t);
+
         RegionID region_id;
         std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
         bool pause_flush = false;
-        Int64 cache_bytes = 0;
         Timepoint last_flush_time = Clock::now();
+        
+    private:
+        Int64 cache_bytes = 0;
     };
 
     using InternalRegions = std::unordered_map<RegionID, InternalRegion>;

@@ -77,12 +77,11 @@ RegionDataRes Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue 
             {
                 // We can't assert the key exists in write_cf here,
                 // since it may be already written into DeltaTree.
-                return 0;
+                return {0, 0};
             }
         }
     }
-    auto ans = data.insert(type, std::move(key), std::move(value), mode);
-    return ans;
+    return data.insert(type, std::move(key), std::move(value), mode);
 }
 
 void Region::remove(const std::string & cf, const TiKVKey & key)

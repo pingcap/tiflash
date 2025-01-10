@@ -25,7 +25,11 @@ namespace DB
 
 struct TiKVRangeKey;
 using RegionRange = RegionRangeKeys::RegionRange;
-using RegionDataRes = int64_t;
+struct RegionDataRes {
+    using Type = int64;
+    Type payload;
+    Type decoded;
+}
 
 enum class DupCheck
 {
@@ -53,7 +57,7 @@ struct RegionCFDataBase
 
     static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
 
-    size_t remove(const Key & key, bool quiet = false);
+    std::pair<size_t, size_t> remove(const Key & key, bool quiet = false);
 
     static bool cmp(const Map & a, const Map & b);
 
@@ -75,7 +79,6 @@ struct RegionCFDataBase
     const Data & getData() const;
 
     Data & getDataMut();
-
 private:
     static bool shouldIgnoreRemove(const Value & value);
     RegionDataRes insert(std::pair<Key, Value> && kv_pair, DupCheck mode = DupCheck::Deny);

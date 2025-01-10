@@ -46,6 +46,10 @@ namespace FailPoints
 extern const char force_set_num_regions_for_table[];
 } // namespace FailPoints
 
+void RegionTable::updateRegionCacheBytes(size_t cache_bytes_) {
+    cache_bytes = cache_bytes_;
+}
+
 RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id, const TableID table_id)
 {
     auto ks_table_id = KeyspaceTableID{keyspace_id, table_id};
@@ -156,7 +160,7 @@ void RegionTable::updateRegion(const Region & region)
 {
     std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
-    internal_region.cache_bytes = region.dataSize();
+    internal_region.updateRegionCacheBytes(region.dataSize());
 }
 
 namespace
@@ -308,7 +312,7 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtr & regi
 
     func_update_region([&](InternalRegion & internal_region) -> bool {
         internal_region.pause_flush = false;
-        internal_region.cache_bytes = region->dataSize();
+        internal_region.updateRegionCacheBytes(region->dataSize());
 
         internal_region.last_flush_time = Clock::now();
         return true;
@@ -380,7 +384,7 @@ void RegionTable::shrinkRegionRange(const Region & region)
     std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
     internal_region.range_in_table = region.getRange()->rawKeys();
-    internal_region.cache_bytes = region.dataSize();
+    internal_region.updateRegionCacheBytes(region.dataSize());
 }
 
 void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys)
