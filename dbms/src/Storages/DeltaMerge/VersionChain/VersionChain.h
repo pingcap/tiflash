@@ -29,7 +29,7 @@ class ColumnFile;
 class ColumnFileBig;
 class ColumnFileDeleteRange;
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 class VersionChain
 {
 public:
