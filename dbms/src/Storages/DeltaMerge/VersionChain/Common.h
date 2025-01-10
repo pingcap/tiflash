@@ -34,7 +34,7 @@ template <typename T>
 concept Int64OrString = std::same_as<T, Int64> || std::same_as<T, String>;
 
 template <typename T>
-concept Int64OrStringView = std::same_as<T, Int64> || std::same_as<T, std::string_view>;
+concept Int64OrStringRef = std::same_as<T, Int64> || std::same_as<T, StringRef>;
 
 template <Int64OrString Handle>
 ColumnDefine getHandleColumnDefine()
@@ -67,8 +67,8 @@ inline ColumnDefinesPtr getTagColumnDefinesPtr()
     return cds_ptr;
 }
 
-template <Int64OrStringView HandleView>
-bool inRowKeyRange(const RowKeyRange & range, HandleView handle)
+template <Int64OrStringRef HandleRef>
+bool inRowKeyRange(const RowKeyRange & range, HandleRef handle)
 {
     if constexpr (std::is_same_v<Handle, Int64>)
         return range.start.int_value <= handle && handle < range.end.int_value;
