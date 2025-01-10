@@ -14,8 +14,10 @@
 
 #pragma once
 
-#include <common/StringRef.h>
-
+//#include <common/StringRef.h>
+#include <Columns/IColumn.h>
+#include <Columns/ColumnString.h>
+#include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 namespace DB::DM
 {
 template <typename T>
@@ -58,12 +60,12 @@ public:
             , pos(pos)
         {}
 
-        StringRef operator*() const
+        std::string_view operator*() const
         {
             assert(offsets[-1] == 0);
             const auto off = offsets[pos - 1];
             const auto size = offsets[pos] - offsets[pos - 1] - 1;
-            return StringRef(reinterpret_cast<const char *>(&chars[off]), size);
+            return std::string_view(reinterpret_cast<const char *>(&chars[off]), size);
         }
 
         Iterator & operator+(size_t n)

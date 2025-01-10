@@ -20,7 +20,7 @@
 namespace DB::DM
 {
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot)
@@ -114,7 +114,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
     return base_versions;
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 UInt32 VersionChain<Handle>::replayBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
@@ -163,7 +163,7 @@ UInt32 VersionChain<Handle>::replayBlock(
     return column.size() - offset;
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 UInt32 VersionChain<Handle>::replayColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
@@ -178,7 +178,7 @@ UInt32 VersionChain<Handle>::replayColumnFileBig(
     return rows;
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 UInt32 VersionChain<Handle>::replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range)
 {
     auto [start, end] = convertRowKeyRange(cf_delete_range.getDeleteRange());
@@ -192,7 +192,7 @@ UInt32 VersionChain<Handle>::replayDeleteRange(const ColumnFileDeleteRange & cf_
     return cf_delete_range.getDeletes();
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRangeList(
     const DMContext & dm_context,
     Handle h)
@@ -215,7 +215,7 @@ std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRang
     return {};
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 template <typename Iterator>
 void VersionChain<Handle>::calculateReadPacks(Iterator begin, Iterator end)
 {
@@ -224,7 +224,7 @@ void VersionChain<Handle>::calculateReadPacks(Iterator begin, Iterator end)
     dmfile_index.calculateReadPacks(begin, end);
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 void VersionChain<Handle>::cleanHandleColumn()
 {
     for (auto & dmfile_or_delete_range : dmfile_or_delete_range_list)
@@ -234,7 +234,7 @@ void VersionChain<Handle>::cleanHandleColumn()
     }
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 std::pair<Handle, Handle> VersionChain<Handle>::convertRowKeyRange(const RowKeyRange & range)
 {
     if constexpr (std::is_same_v<Handle, Int64>)

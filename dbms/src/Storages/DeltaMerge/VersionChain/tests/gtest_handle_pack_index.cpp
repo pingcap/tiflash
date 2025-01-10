@@ -25,6 +25,7 @@ namespace DB::DM::tests
 TEST(HandleIndexTest, Basic)
 {
     [[maybe_unused]] VersionChain<Int64> version_chain_int;
+    //[[maybe_unused]] VersionChain<String> version_chain_str;
 }
 
 TEST(ColumnView, Basic)

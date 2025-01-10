@@ -26,7 +26,7 @@ namespace
 {
 
 // TODO: shrinking read_range by segment_range
-template <Int64OrString Handle>
+template <HandleType Handle>
 UInt32 buildRowKeyFilterVector(
     const PaddedPODArray<Handle> & handles,
     const RowKeyRanges & delete_ranges,
@@ -48,7 +48,7 @@ UInt32 buildRowKeyFilterVector(
     return handles.size();
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 UInt32 buildRowKeyFilterBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
@@ -72,7 +72,7 @@ UInt32 buildRowKeyFilterBlock(
     return buildRowKeyFilterVector<Handle>(handles, delete_ranges, read_ranges, start_row_id, filter);
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 UInt32 buildRowKeyFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
@@ -159,7 +159,7 @@ UInt32 buildRowKeyFilterDMFile(
     return rows;
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 UInt32 buildRowKeyFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
@@ -181,7 +181,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
         filter);
 }
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 UInt32 buildRowKeyFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
@@ -212,7 +212,7 @@ void buildRowKeyFilterDeleteRange(const ColumnFileDeleteRange & cf_delete_range,
 }
 } // namespace
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 void buildRowKeyFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,

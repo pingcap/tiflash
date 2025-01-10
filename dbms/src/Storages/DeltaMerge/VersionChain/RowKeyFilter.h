@@ -23,7 +23,7 @@ struct SegmentSnapshot;
 struct RowKeyRange;
 using RowKeyRanges = std::vector<RowKeyRange>;
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 void buildRowKeyFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,

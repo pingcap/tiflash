@@ -25,7 +25,7 @@
 namespace DB::DM
 {
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 class DMFileHandleIndex
 {
 public:
@@ -53,7 +53,7 @@ public:
             clipped_pack_range.count());
     }
 
-    template <Int64OrStringRef HandleRef>
+    template <HandleRefType HandleRef>
     std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRef h)
     {
         auto clipped_pack_id = getClippedPackId(h);
@@ -94,7 +94,7 @@ public:
     }
 
 private:
-    template <Int64OrStringRef HandleRef>
+    template <HandleRefType HandleRef>
     std::optional<UInt32> getClippedPackId(HandleRef h)
     {
         if (unlikely(rowkey_range && !inRowKeyRange(*rowkey_range, h)))
@@ -106,7 +106,7 @@ private:
         return itr - clipped_pack_index.begin();
     }
 
-    template <Int64OrStringRef HandleRef>
+    template <HandleRefType HandleRef>
     std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRef h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded(dm_context);
