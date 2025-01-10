@@ -1030,7 +1030,7 @@ try
 
     // Test write multi blocks with overlap
     {
-        UInt64 tso1 = 3;   // ts of the same key should incre...
+        UInt64 tso1 = 3; // ts of the same key should incre...
         UInt64 tso2 = 100;
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso1);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso1);
