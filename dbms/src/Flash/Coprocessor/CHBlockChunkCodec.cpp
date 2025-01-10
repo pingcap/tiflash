@@ -239,7 +239,7 @@ Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
 {
     ReadBufferFromString read_buffer(str);
     auto block = CHBlockChunkCodec(schema).decodeImpl(read_buffer);
-    return header ? header.cloneWithColumns(block.getColumns()) : block;
+    return header ? header.cloneWithColumns(block.getColumns()) : std::move(block);
 }
 
 Block CHBlockChunkCodec::decode(const String & str, const Block & header)
@@ -247,14 +247,14 @@ Block CHBlockChunkCodec::decode(const String & str, const Block & header)
     ReadBufferFromString read_buffer(str);
     // Codec may return legacy string type (named 'String'), respect to local string type (named 'StringV2')
     auto block = CHBlockChunkCodec(header).decodeImpl(read_buffer);
-    return header ? header.cloneWithColumns(block.getColumns()) : block;
+    return header ? header.cloneWithColumns(block.getColumns()) : std::move(block);
 }
 
 Block CHBlockChunkCodec::decode(const String & str)
 {
     ReadBufferFromString read_buffer(str);
     auto block = decodeImpl(read_buffer);
-    return header ? header.cloneWithColumns(block.getColumns()) : block;
+    return header ? header.cloneWithColumns(block.getColumns()) : std::move(block);
 }
 
 } // namespace DB
