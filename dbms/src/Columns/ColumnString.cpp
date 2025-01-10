@@ -589,8 +589,8 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         const auto max_bytes_one_char = collator->maxBytesForOneChar();
         for (size_t i = 0; i < size; ++i)
         {
-            assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= 1);
             const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
+            assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
             byte_size[i] += sizeof(UInt32) * (ele_count)
                 // For each sub element, minus 1 because of terminating zero.
                 + max_bytes_one_char * (offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) - ele_count);
