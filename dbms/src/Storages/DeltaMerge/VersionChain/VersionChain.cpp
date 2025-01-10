@@ -136,15 +136,15 @@ UInt32 VersionChain<Handle>::replayBlock(
     const auto & column = *(block.begin()->column);
     RUNTIME_CHECK(column.size() > offset, column.size(), offset);
 
-    const auto handles_col = ColumnView<Handle>(*(block.begin()->column));
-
-    const std::span<const Handle> handles{handle_col->data() + offset, handle_col->size() - offset};
+    const auto handle_col = ColumnView<Handle>(*(block.begin()->column));
+    auto itr = handle_col.begin() + offset;
 
     if (calculate_read_packs)
-        calculateReadPacks(handles);
+        calculateReadPacks(itr, handle_col.end());
 
-    for (auto h : handles)
+    for (; itr != handle_col.end(); ++itr)
     {
+        const auto h = *itr;
         const RowID curr_row_id = base_versions->size() + stable_rows;
         if (auto itr = new_handle_to_row_ids.find(h); itr != new_handle_to_row_ids.end())
         {
@@ -160,7 +160,7 @@ UInt32 VersionChain<Handle>::replayBlock(
         new_handle_to_row_ids.insert(std::make_pair(h, curr_row_id));
         base_versions->push_back(NotExistRowID);
     }
-    return handles.size();
+    return column.size() - offset;
 }
 
 template <Int64OrString Handle>
@@ -181,13 +181,11 @@ UInt32 VersionChain<Handle>::replayColumnFileBig(
 template <Int64OrString Handle>
 UInt32 VersionChain<Handle>::replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range)
 {
-    auto [start, end] = convertRowKeyRange<Handle>(cf_delete_range.getDeleteRange());
+    auto [start, end] = convertRowKeyRange(cf_delete_range.getDeleteRange());
     auto itr = new_handle_to_row_ids.lower_bound(start);
     const auto end_itr = new_handle_to_row_ids.lower_bound(end);
-    std::vector<Handle> erased_handles;
     while (itr != end_itr)
     {
-        erased_handles.push_back(itr->first);
         itr = new_handle_to_row_ids.erase(itr);
     }
     dmfile_or_delete_range_list.push_back(cf_delete_range.getDeleteRange());
@@ -218,11 +216,12 @@ std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRang
 }
 
 template <Int64OrString Handle>
-void VersionChain<Handle>::calculateReadPacks(const std::span<const Handle> handles)
+template <typename Iterator>
+void VersionChain<Handle>::calculateReadPacks(Iterator begin, Iterator end)
 {
     assert(dmfile_or_delete_range_list.size() == 1);
     auto & dmfile_index = std::get<DMFileHandleIndex<Handle>>(dmfile_or_delete_range_list.front());
-    dmfile_index.calculateReadPacks(handles);
+    dmfile_index.calculateReadPacks(begin, end);
 }
 
 template <Int64OrString Handle>
@@ -233,6 +232,15 @@ void VersionChain<Handle>::cleanHandleColumn()
         if (auto * dmfile_index = std::get_if<DMFileHandleIndex<Handle>>(&dmfile_or_delete_range); dmfile_index)
             dmfile_index->cleanHandleColumn();
     }
+}
+
+template <Int64OrString Handle>
+std::pair<Handle, Handle> VersionChain<Handle>::convertRowKeyRange(const RowKeyRange & range)
+{
+    if constexpr (std::is_same_v<Handle, Int64>)
+        return {range.start.int_value, range.end.int_value};
+    else
+        return {*(range.start.value), *(range.end.value)};
 }
 
 template class VersionChain<Int64>;

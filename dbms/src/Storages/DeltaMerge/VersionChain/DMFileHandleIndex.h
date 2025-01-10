@@ -65,13 +65,14 @@ public:
         return start_row_id + *row_id;
     }
 
-    void calculateReadPacks(const std::span<const Handle> handles)
+    template <typename Iterator>
+    void calculateReadPacks(Iterator begin, Iterator end)
     {
         std::vector<UInt8> calc_read_packs(clipped_pack_range.count(), 0);
         UInt32 calc_read_count = 0;
-        for (const Handle & h : handles)
+        for (auto itr = begin; itr != end; ++itr)
         {
-            auto clipped_pack_id = getClippedPackId(h);
+            auto clipped_pack_id = getClippedPackId(*itr);
             if (!clipped_pack_id || calc_read_packs[*clipped_pack_id])
                 continue;
 

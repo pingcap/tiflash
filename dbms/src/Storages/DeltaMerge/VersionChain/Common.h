@@ -76,15 +76,6 @@ bool inRowKeyRange(const RowKeyRange & range, HandleRef handle)
         static_assert(false, "TODO: support common handle");
 }
 
-template <Int64OrString Handle>
-std::pair<Handle, Handle> convertRowKeyRange(const RowKeyRange & range)
-{
-    if constexpr (std::is_same_v<Handle, Int64>)
-        return {range.start.int_value, range.end.int_value};
-    else
-        static_assert(false, "TODO: support common handle");
-}
-
 RSResults getRSResultsByRanges(const DMContext & dm_context, const DMFilePtr & dmfile, const RowKeyRanges & ranges);
 
 std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
