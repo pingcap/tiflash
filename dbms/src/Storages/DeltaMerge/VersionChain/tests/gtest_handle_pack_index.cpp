@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/DeltaMerge/VersionChain/ColumnView.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <TestUtils/ColumnGenerator.h>
-#include <gtest/gtest.h>
 #include <TestUtils/FunctionTestUtils.h>
+#include <gtest/gtest.h>
 
 using namespace DB::tests;
 
