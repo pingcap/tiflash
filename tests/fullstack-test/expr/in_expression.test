@@ -242,27 +242,27 @@ mysql> drop table test.t;
 
 mysql> drop table if exists test.tidb_58370;
 mysql> CREATE TABLE test.tidb_58370 ( c1 int(16) NOT NULL, c2 varchar(255) NOT NULL, c3 timestamp NOT NULL, PRIMARY KEY ( c1, c2, c3));
-mysql> SET time_zone = "+8:00"; INSERT INTO test.tidb_58370 ( c1, c2, c3) VALUES (212, 'Cindy', '2021-10-29 00:00:00'), (1104, 'George', '2022-07-27 00:00:00');
+mysql> SET time_zone = '+8:00'; INSERT INTO test.tidb_58370 ( c1, c2, c3) VALUES (212, 'Cindy', '2021-10-29 00:00:00'), (1104, 'George', '2022-07-27 00:00:00');
 mysql> ALTER TABLE test.tidb_58370 SET TIFLASH REPLICA 1; 
 
 func> wait_table test tidb_58370
 
 mysql> analyze table test.tidb_58370;
-mysql> SET time_zone = "+8:00"; set session tidb_isolation_read_engines='tiflash'; SELECT MAX(test.tidb_58370. c1) AS r1, MIN(test.tidb_58370. c2) AS r2 FROM test.tidb_58370 WHERE test.tidb_58370. c3 IN ('2021-10-29', '2004-05-14') GROUP BY test.tidb_58370. c3 HAVING test.tidb_58370. c3 <= '9999-1-1';
+mysql> SET time_zone = '+8:00'; set session tidb_isolation_read_engines='tiflash'; SELECT MAX(test.tidb_58370. c1) AS r1, MIN(test.tidb_58370. c2) AS r2 FROM test.tidb_58370 WHERE test.tidb_58370. c3 IN ('2021-10-29', '2004-05-14') GROUP BY test.tidb_58370. c3 HAVING test.tidb_58370. c3 <= '9999-1-1';
 +------+-------+
 | r1   | r2    |
 +------+-------+
 |  212 | Cindy |
 +------+-------+
 
-mysql> SET time_zone = "Asia/Shanghai"; set session tidb_isolation_read_engines='tiflash'; SELECT MAX(test.tidb_58370. c1) AS r1, MIN(test.tidb_58370. c2) AS r2 FROM test.tidb_58370 WHERE test.tidb_58370. c3 IN ('2021-10-29', '2004-05-14') GROUP BY test.tidb_58370. c3 HAVING test.tidb_58370. c3 <= '9999-1-1';
+mysql> SET time_zone = 'Asia/Shanghai'; set session tidb_isolation_read_engines='tiflash'; SELECT MAX(test.tidb_58370. c1) AS r1, MIN(test.tidb_58370. c2) AS r2 FROM test.tidb_58370 WHERE test.tidb_58370. c3 IN ('2021-10-29', '2004-05-14') GROUP BY test.tidb_58370. c3 HAVING test.tidb_58370. c3 <= '9999-1-1';
 +------+-------+
 | r1   | r2    |
 +------+-------+
 |  212 | Cindy |
 +------+-------+
 
-mysql> SET time_zone = "UTC"; set session tidb_isolation_read_engines='tiflash'; SELECT MAX(test.tidb_58370. c1) AS r1, MIN(test.tidb_58370. c2) AS r2 FROM test.tidb_58370 WHERE test.tidb_58370. c3 IN ('2021-10-28 16:0:0', '2004-05-13 16:0:0') GROUP BY test.tidb_58370. c3 HAVING test.tidb_58370. c3 <= '9999-1-1';
+mysql> SET time_zone = 'UTC'; set session tidb_isolation_read_engines='tiflash'; SELECT MAX(test.tidb_58370. c1) AS r1, MIN(test.tidb_58370. c2) AS r2 FROM test.tidb_58370 WHERE test.tidb_58370. c3 IN ('2021-10-28 16:0:0', '2004-05-13 16:0:0') GROUP BY test.tidb_58370. c3 HAVING test.tidb_58370. c3 <= '9999-1-1';
 +------+-------+
 | r1   | r2    |
 +------+-------+
