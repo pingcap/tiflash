@@ -31,12 +31,12 @@ static constexpr RowID NotExistRowID = std::numeric_limits<RowID>::max();
 static constexpr RowID UnknownRowID = NotExistRowID - 1;
 
 template <typename T>
-concept Int64OrString = std::same_as<T, Int64> || std::same_as<T, String>;
+concept HandleType = std::same_as<T, Int64> || std::same_as<T, String>;
 
 template <typename T>
-concept Int64OrStringRef = std::same_as<T, Int64> || std::same_as<T, StringRef>;
+concept HandleRefType = std::same_as<T, Int64> || std::same_as<T, std::string_view>;
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 ColumnDefine getHandleColumnDefine()
 {
     if constexpr (std::is_same_v<Handle, Int64>)
@@ -48,7 +48,7 @@ ColumnDefine getHandleColumnDefine()
 }
 
 // For ColumnFileReader
-template <Int64OrString Handle>
+template <HandleType Handle>
 ColumnDefinesPtr getHandleColumnDefinesPtr()
 {
     static auto cds_ptr = std::make_shared<ColumnDefines>(1, getHandleColumnDefine<Handle>());
@@ -67,7 +67,7 @@ inline ColumnDefinesPtr getTagColumnDefinesPtr()
     return cds_ptr;
 }
 
-template <Int64OrStringRef HandleRef>
+template <HandleRefType HandleRef>
 bool inRowKeyRange(const RowKeyRange & range, HandleRef handle)
 {
     if constexpr (std::is_same_v<Handle, Int64>)

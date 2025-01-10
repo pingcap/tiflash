@@ -27,7 +27,7 @@ using RowKeyRanges = std::vector<RowKeyRange>;
 class BitmapFilter;
 using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
 
-template <Int64OrString Handle>
+template <HandleType Handle>
 BitmapFilterPtr buildBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,

@@ -23,7 +23,7 @@
 
 namespace DB::DM
 {
-template <Int64OrString Handle>
+template <HandleType Handle>
 BitmapFilterPtr buildBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
