@@ -37,6 +37,10 @@ void ExecutionSummary::merge(const ExecutionSummary & other)
     num_produced_rows += other.num_produced_rows;
     num_iterations += other.num_iterations;
     concurrency += other.concurrency;
+    inner_zone_send_bytes += other.inner_zone_send_bytes;
+    inner_zone_receive_bytes += other.inner_zone_receive_bytes;
+    inter_zone_send_bytes += other.inter_zone_send_bytes;
+    inter_zone_receive_bytes += other.inter_zone_receive_bytes;
     ru_consumption = mergeRUConsumption(ru_consumption, other.ru_consumption);
     scan_context->merge(*other.scan_context);
 }
@@ -53,6 +57,10 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
     num_produced_rows += other.num_produced_rows();
     num_iterations += other.num_iterations();
     concurrency += other.concurrency();
+    inner_zone_send_bytes += other.tiflash_network_summary().inner_zone_send_bytes();
+    inner_zone_receive_bytes += other.tiflash_network_summary().inner_zone_receive_bytes();
+    inter_zone_send_bytes += other.tiflash_network_summary().inter_zone_send_bytes();
+    inter_zone_receive_bytes += other.tiflash_network_summary().inter_zone_send_bytes();
     ru_consumption = mergeRUConsumption(ru_consumption, parseRUConsumption(other));
     scan_context->merge(other.tiflash_scan_context());
 }
@@ -66,6 +74,10 @@ void ExecutionSummary::fill(const BaseRuntimeStatistics & other)
     num_produced_rows = other.rows;
     num_iterations = other.blocks;
     concurrency = other.concurrency;
+    inner_zone_send_bytes = other.inner_zone_send_bytes;
+    inner_zone_receive_bytes = other.inner_zone_receive_bytes;
+    inter_zone_send_bytes = other.inter_zone_send_bytes;
+    inter_zone_receive_bytes = other.inter_zone_receive_bytes;
 }
 
 void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
@@ -77,6 +89,10 @@ void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
     num_produced_rows = other.num_produced_rows();
     num_iterations = other.num_iterations();
     concurrency = other.concurrency();
+    inner_zone_send_bytes = other.tiflash_network_summary().inner_zone_send_bytes();
+    inner_zone_receive_bytes = other.tiflash_network_summary().inner_zone_receive_bytes();
+    inter_zone_send_bytes = other.tiflash_network_summary().inter_zone_send_bytes();
+    inter_zone_receive_bytes = other.tiflash_network_summary().inter_zone_send_bytes();
     ru_consumption = parseRUConsumption(other);
     scan_context->deserialize(other.tiflash_scan_context());
 }

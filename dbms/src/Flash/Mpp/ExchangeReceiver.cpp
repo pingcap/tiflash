@@ -383,6 +383,12 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 }
 
 template <typename RPCContext>
+const ConnectionProfileInfo::ConnTypeVec & ExchangeReceiverBase<RPCContext>::getConnTypeVec() const
+{
+    return rpc_context->getConnTypeVec();
+}
+
+template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::handleConnectionAfterException()
 {
     std::lock_guard lock(mu);

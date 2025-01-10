@@ -123,8 +123,11 @@ try
         RegionPtr region = tests::makeRegion(702, start, end, proxy_helper.get());
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+        // 702 is not registed, so we persist as 1.
         tryPersistRegion(kvs, 1);
-        reloadKVSFromDisk();
+        root_of_kvstore_mem_trackers->reset();
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
+        reloadKVSFromDisk(false);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);

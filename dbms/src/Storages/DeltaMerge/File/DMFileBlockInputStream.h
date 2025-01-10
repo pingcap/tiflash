@@ -85,24 +85,9 @@ public:
     // - current file provider from this context
     explicit DMFileBlockInputStreamBuilder(const Context & context);
 
-    // Build the final stream ptr.
+    // Build the final stream ptr. LocalIndex will take effect.
     // Empty `rowkey_ranges` means not filter by rowkey
-    // Should not use the builder again after `build` is called.
-    DMFileBlockInputStreamPtr build(
-        const DMFilePtr & dmfile,
-        const ColumnDefines & read_columns,
-        const RowKeyRanges & rowkey_ranges,
-        const ScanContextPtr & scan_context);
-
-    // Build the final stream ptr. The return value could be DMFileBlockInputStreamPtr or DMFileWithVectorIndexBlockInputStream.
-    // Empty `rowkey_ranges` means not filter by rowkey
-    // Should not use the builder again after `build` is called.
-    // In the following conditions DMFileWithVectorIndexBlockInputStream will be returned:
-    // 1. BitmapFilter is provided
-    // 2. ANNQueryInfo is available in the RSFilter
-    // 3. The vector column mentioned by ANNQueryInfo is in the read_columns
-    // 4. The vector column mentioned by ANNQueryInfo exists vector index file
-    SkippableBlockInputStreamPtr tryBuildWithVectorIndex(
+    SkippableBlockInputStreamPtr build(
         const DMFilePtr & dmfile,
         const ColumnDefines & read_columns,
         const RowKeyRanges & rowkey_ranges,
@@ -198,6 +183,14 @@ public:
     }
 
 private:
+    DMFileBlockInputStreamPtr buildNoLocalIndex(
+        const DMFilePtr & dmfile,
+        const ColumnDefines & read_columns,
+        const RowKeyRanges & rowkey_ranges,
+        const ScanContextPtr & scan_context);
+
+
+private:
     // These methods are called by the ctor
 
     DMFileBlockInputStreamBuilder & setFromSettings(const Settings & settings);
@@ -260,7 +253,7 @@ private:
  * @param cols The columns to read. Empty means read all columns.
  * @return A shared pointer of an input stream
  */
-DMFileBlockInputStreamPtr createSimpleBlockInputStream(
+SkippableBlockInputStreamPtr createSimpleBlockInputStream(
     const DB::Context & context,
     const DMFilePtr & file,
     ColumnDefines cols = {});

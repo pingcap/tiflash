@@ -576,6 +576,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_tikv_server_issue, {{"type", "tikv_server_issue"}}),                                                                   \
       F(type_tikv_lock, {{"type", "tikv_lock"}}),                                                                                   \
       F(type_other, {{"type", "other"}}))                                                                                           \
+    M(tiflash_raft_classes_count,                                                                                                   \
+      "Raft classes counter",                                                                                                       \
+      Gauge,                                                                                                                        \
+      F(type_region, {{"type", "region"}}),                                                                                         \
+      F(type_fully_decoded_lockcf, {{"type", "fully_decoded_lockcf"}}))                                                             \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \
@@ -856,6 +861,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Gauge,                                                                                                                        \
       F(type_build, {"type", "build"}),                                                                                             \
       F(type_view, {"type", "view"}))                                                                                               \
+    M(tiflash_vector_index_build_count,                                                                                             \
+      "Vector index build count",                                                                                                   \
+      Counter,                                                                                                                      \
+      F(type_stable, {"type", "stable"}),                                                                                           \
+      F(type_delta, {"type", "delta"}))                                                                                             \
     M(tiflash_vector_index_active_instances,                                                                                        \
       "Active Vector index instances",                                                                                              \
       Gauge,                                                                                                                        \

@@ -32,7 +32,10 @@ public:
         : SourceOp(exec_context_, req_id)
         , exchange_receiver(exchange_receiver_)
         , stream_id(stream_id_)
-        , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, exchange_receiver->getSourceNum()))
+        , io_profile_info(IOProfileInfo::createForRemote(
+              profile_info_ptr,
+              exchange_receiver->getSourceNum(),
+              exchange_receiver->getConnTypeVec()))
     {
         exchange_receiver->verifyStreamId(stream_id);
         setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(exchange_receiver->getOutputSchema()))));

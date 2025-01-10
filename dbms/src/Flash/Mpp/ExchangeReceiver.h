@@ -19,6 +19,7 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/AsyncRequestHandler.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 
 #include <memory>
 #include <mutex>
@@ -142,6 +143,7 @@ public:
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
 
     void verifyStreamId(size_t stream_id) const;
+    const ConnectionProfileInfo::ConnTypeVec & getConnTypeVec() const;
 
 private:
     std::shared_ptr<MemoryTracker> mem_tracker;
@@ -199,9 +201,7 @@ private:
 
     std::shared_ptr<RPCContext> rpc_context;
 
-    const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;
-    const ::mpp::TaskMeta task_meta;
     const bool enable_fine_grained_shuffle_flag;
     const size_t output_stream_count;
     const size_t max_buffer_size;

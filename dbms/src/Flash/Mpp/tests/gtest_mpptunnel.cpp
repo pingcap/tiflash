@@ -255,19 +255,19 @@ protected:
 public:
     MPPTunnelPtr constructRemoteSyncTunnel()
     {
-        auto tunnel = std::make_shared<MPPTunnel>(String("0000_0001"), timeout, 2, false, false, String("0"));
+        auto tunnel = std::make_shared<MPPTunnel>(String("0000_0001"), timeout, 2, false, false, true, String("0"));
         return tunnel;
     }
 
     MPPTunnelPtr constructRemoteAsyncTunnel()
     {
-        auto tunnel = std::make_shared<MPPTunnel>(String("0000_0001"), timeout, 2, false, true, String("0"));
+        auto tunnel = std::make_shared<MPPTunnel>(String("0000_0001"), timeout, 2, false, true, true, String("0"));
         return tunnel;
     }
 
     MPPTunnelPtr constructLocalTunnel()
     {
-        auto tunnel = std::make_shared<MPPTunnel>(String("0000_0001"), timeout, 2, true, false, String("0"));
+        auto tunnel = std::make_shared<MPPTunnel>(String("0000_0001"), timeout, 2, true, false, true, String("0"));
         return tunnel;
     }
 
