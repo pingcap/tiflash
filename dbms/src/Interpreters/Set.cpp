@@ -311,7 +311,6 @@ std::vector<const tipb::Expr *> Set::createFromDAGExpr(
             UInt64 from_time = value.get<UInt64>();
             UInt64 result_time = from_time;
 
-            // It looks weird that converting from UTC to dag timezone can work as expected.
             if (timezone_info.is_name_based)
                 convertTimeZone(from_time, result_time, time_zone_utc, *timezone_info.timezone);
             else if (timezone_info.timezone_offset != 0)
