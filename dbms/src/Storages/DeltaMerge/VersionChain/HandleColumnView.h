@@ -18,7 +18,8 @@ namespace DB::DM
 {
 template <typename T>
 class HandleColumnView
-{};
+{
+};
 
 template <>
 class HandleColumnView<Int64>
@@ -59,7 +60,7 @@ public:
             assert(offsets[-1] == 0);
             const auto off = offsets[pos];
             const auto size = offsets[pos] - offsets[pos - 1] - 1;
-            return std::string_view(static_cast<const char*>(&chars[off]), size);
+            return std::string_view(reinterpret_cast<const char *>(&chars[off]), size);
         }
 
         Iterator & operator+(size_t n)
@@ -74,10 +75,7 @@ public:
             return *this;
         }
 
-        size_t operator-(const Iterator & other) const
-        {
-            return pos - other.pos;
-        }
+        size_t operator-(const Iterator & other) const { return pos - other.pos; }
 
         Iterator & operator++()
         {

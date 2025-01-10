@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-
 namespace DB::DM
 {
 struct DMContext;
@@ -25,5 +25,5 @@ void buildVersionFilter(
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
-    std::vector<UInt8> & filter);
+    IColumn::Filter & filter);
 } // namespace DB::DM

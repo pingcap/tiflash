@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-
 namespace DB::DM
 {
 struct DMContext;
@@ -29,5 +29,5 @@ void buildRowKeyFilter(
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const RSResults & stable_pack_res,
-    std::vector<UInt8> & filter);
+    IColumn::Filter & filter);
 } // namespace DB::DM
