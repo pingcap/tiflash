@@ -31,7 +31,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
         const auto & dmfiles = snapshot.stable->getDMFiles();
         RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
         dmfile_or_delete_range_list.push_back(
-            DMFileHandleIndex<Handle>{dm_context, dmfiles[0], /*start_row_id*/ 0, std::nullopt});
+            DMFileHandleIndex<Handle>{dm_context, dmfiles[0], /*start_row_id*/ 0, /*rowkey_range*/ std::nullopt});
     }
 
     const auto & stable = *(snapshot.stable);
@@ -46,6 +46,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
         return base_versions;
     }
 
+    // Copy for write
     base_versions = std::make_shared<std::vector<RowID>>(*base_versions);
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();
@@ -59,10 +60,10 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
             break;
         skipped_rows_and_deletes += skip_n;
     }
-
-    // `pos` points to the first ColumnFile that has data not been replayed
+    // `pos` points to the first ColumnFile that has records not been replayed.
+    // `offset` points to the first records that has not been replayed in `pos`.
     auto offset = replayed_rows_and_deletes - skipped_rows_and_deletes;
-    // Only ColumnFileInMemory or ColumnFileTiny can be half replayed
+    // Only ColumnFileInMemory or ColumnFileTiny can be half replayed.
     RUNTIME_CHECK(offset == 0 || (*pos)->isInMemoryFile() || (*pos)->isTinyFile(), offset, (*pos)->toString());
 
     const bool calculate_read_packs = (cfs.end() - pos == 1) && ((*pos)->isInMemoryFile() || (*pos)->isTinyFile())
@@ -126,10 +127,17 @@ UInt32 VersionChain<Handle>::replayBlock(
 
     auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<Handle>(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
-    RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
-    const auto * handle_col = toColumnVectorDataPtr<Int64>(block.begin()->column);
-    RUNTIME_CHECK_MSG(handle_col != nullptr, "TODO: support common handle");
-    RUNTIME_CHECK(handle_col->size() > offset, handle_col->size(), offset);
+    RUNTIME_CHECK_MSG(
+        cf.getRows() == block.rows(),
+        "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
+        cf.toString(),
+        block.rows());
+
+    const auto & column = *(block.begin()->column);
+    RUNTIME_CHECK(column.size() > offset, column.size(), offset);
+
+    const auto handles_col = ColumnView<Handle>(*(block.begin()->column));
+
     const std::span<const Handle> handles{handle_col->data() + offset, handle_col->size() - offset};
 
     if (calculate_read_packs)
