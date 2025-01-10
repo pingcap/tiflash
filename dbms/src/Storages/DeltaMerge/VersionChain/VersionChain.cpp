@@ -26,11 +26,11 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
     const SegmentSnapshot & snapshot)
 {
     // Check Stable
-    if (dmfile_or_delete_range_list->empty())
+    if (dmfile_or_delete_range_list.empty())
     {
         const auto & dmfiles = snapshot.stable->getDMFiles();
         RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-        dmfile_or_delete_range_list->push_back(
+        dmfile_or_delete_range_list.push_back(
             DMFileHandleIndex<Handle>{dm_context, dmfiles[0], /*start_row_id*/ 0, std::nullopt});
     }
 
@@ -66,7 +66,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
     RUNTIME_CHECK(offset == 0 || (*pos)->isInMemoryFile() || (*pos)->isTinyFile(), offset, (*pos)->toString());
 
     const bool calculate_read_packs = (cfs.end() - pos == 1) && ((*pos)->isInMemoryFile() || (*pos)->isTinyFile())
-        && dmfile_or_delete_range_list->size() == 1;
+        && dmfile_or_delete_range_list.size() == 1;
     const auto initial_replayed_rows_and_deletes = replayed_rows_and_deletes;
     SCOPE_EXIT({ cleanHandleColumn(); });
     for (; pos != cfs.end(); ++pos)
@@ -138,7 +138,7 @@ UInt32 VersionChain<Handle>::replayBlock(
     for (auto h : handles)
     {
         const RowID curr_row_id = base_versions->size() + stable_rows;
-        if (auto itr = new_handle_to_row_ids->find(h); itr != new_handle_to_row_ids->end())
+        if (auto itr = new_handle_to_row_ids.find(h); itr != new_handle_to_row_ids.end())
         {
             base_versions->push_back(itr->second);
             continue;
@@ -149,7 +149,7 @@ UInt32 VersionChain<Handle>::replayBlock(
             continue;
         }
 
-        new_handle_to_row_ids->insert(std::make_pair(h, curr_row_id));
+        new_handle_to_row_ids.insert(std::make_pair(h, curr_row_id));
         base_versions->push_back(NotExistRowID);
     }
     return handles.size();
@@ -165,7 +165,7 @@ UInt32 VersionChain<Handle>::replayColumnFileBig(
     const UInt32 start_row_id = base_versions->size() + stable_rows;
     base_versions->insert(base_versions->end(), rows, NotExistRowID);
 
-    dmfile_or_delete_range_list->push_back(
+    dmfile_or_delete_range_list.push_back(
         DMFileHandleIndex<Handle>{dm_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
     return rows;
 }
@@ -174,15 +174,15 @@ template <Int64OrString Handle>
 UInt32 VersionChain<Handle>::replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range)
 {
     auto [start, end] = convertRowKeyRange<Handle>(cf_delete_range.getDeleteRange());
-    auto itr = new_handle_to_row_ids->lower_bound(start);
-    const auto end_itr = new_handle_to_row_ids->lower_bound(end);
+    auto itr = new_handle_to_row_ids.lower_bound(start);
+    const auto end_itr = new_handle_to_row_ids.lower_bound(end);
     std::vector<Handle> erased_handles;
     while (itr != end_itr)
     {
         erased_handles.push_back(itr->first);
-        itr = new_handle_to_row_ids->erase(itr);
+        itr = new_handle_to_row_ids.erase(itr);
     }
-    dmfile_or_delete_range_list->push_back(cf_delete_range.getDeleteRange());
+    dmfile_or_delete_range_list.push_back(cf_delete_range.getDeleteRange());
     return cf_delete_range.getDeletes();
 }
 
@@ -192,7 +192,7 @@ std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRang
     Handle h)
 {
     // From from new to old
-    for (auto itr = dmfile_or_delete_range_list->rbegin(); itr != dmfile_or_delete_range_list->rend(); ++itr)
+    for (auto itr = dmfile_or_delete_range_list.rbegin(); itr != dmfile_or_delete_range_list.rend(); ++itr)
     {
         auto & dmfile_or_delete_range = *itr;
         if (auto * dmfile_index = std::get_if<DMFileHandleIndex<Handle>>(&dmfile_or_delete_range); dmfile_index)
@@ -212,15 +212,15 @@ std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRang
 template <Int64OrString Handle>
 void VersionChain<Handle>::calculateReadPacks(const std::span<const Handle> handles)
 {
-    assert(dmfile_or_delete_range_list->size() == 1);
-    auto & dmfile_index = std::get<DMFileHandleIndex<Handle>>(dmfile_or_delete_range_list->front());
+    assert(dmfile_or_delete_range_list.size() == 1);
+    auto & dmfile_index = std::get<DMFileHandleIndex<Handle>>(dmfile_or_delete_range_list.front());
     dmfile_index.calculateReadPacks(handles);
 }
 
 template <Int64OrString Handle>
 void VersionChain<Handle>::cleanHandleColumn()
 {
-    for (auto & dmfile_or_delete_range : *dmfile_or_delete_range_list)
+    for (auto & dmfile_or_delete_range : dmfile_or_delete_range_list)
     {
         if (auto * dmfile_index = std::get_if<DMFileHandleIndex<Handle>>(&dmfile_or_delete_range); dmfile_index)
             dmfile_index->cleanHandleColumn();
