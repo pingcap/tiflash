@@ -69,9 +69,10 @@ private:
         const UInt32 stable_rows);
     [[nodiscard]] UInt32 replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range);
 
+    template <HandleRefType HandleRef>
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
         const DMContext & dm_context,
-        Handle h);
+        HandleRef h);
     template <typename Iterator>
     void calculateReadPacks(Iterator begin, Iterator end);
     void cleanHandleColumn();
@@ -81,7 +82,7 @@ private:
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
     std::shared_ptr<std::vector<RowID>> base_versions; // base_versions->size() == delta.getRows()
-    std::map<Handle, RowID> new_handle_to_row_ids;
+    std::map<Handle, RowID, std::less<>> new_handle_to_row_ids;
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<Handle>>;
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
 };

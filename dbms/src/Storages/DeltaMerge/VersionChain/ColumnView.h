@@ -15,8 +15,8 @@
 #pragma once
 
 //#include <common/StringRef.h>
-#include <Columns/IColumn.h>
 #include <Columns/ColumnString.h>
+#include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 namespace DB::DM
 {
@@ -54,33 +54,31 @@ public:
     class Iterator
     {
     public:
+        using iterator_category = std::random_access_iterator_tag;
+        using value_type = std::string_view;
+        using difference_type = std::ptrdiff_t;
+        //using pointer = std::string_view*;
+        //using reference = std::string_view&;
+
         Iterator(const IColumn::Offsets & offsets, const ColumnString::Chars_t & chars, size_t pos)
-            : offsets(offsets)
-            , chars(chars)
+            : offsets(&offsets)
+            , chars(&chars)
             , pos(pos)
         {}
 
-        std::string_view operator*() const
+        value_type operator*() const
         {
-            assert(offsets[-1] == 0);
-            const auto off = offsets[pos - 1];
-            const auto size = offsets[pos] - offsets[pos - 1] - 1;
-            return std::string_view(reinterpret_cast<const char *>(&chars[off]), size);
+            assert((*offsets)[-1] == 0);
+            const auto off = (*offsets)[pos - 1];
+            const auto size = (*offsets)[pos] - (*offsets)[pos - 1] - 1;
+            return std::string_view(reinterpret_cast<const char *>(chars->data() + off), size);
         }
 
-        Iterator & operator+(size_t n)
-        {
-            pos += n;
-            return *this;
-        }
+        Iterator operator+(difference_type n) { return Iterator{*offsets, *chars, pos + n}; }
 
-        Iterator & operator-(size_t n)
-        {
-            pos -= n;
-            return *this;
-        }
+        Iterator operator-(difference_type n) { return Iterator{*offsets, *chars, pos - n}; }
 
-        size_t operator-(const Iterator & other) const { return pos - other.pos; }
+        difference_type operator-(const Iterator & other) const { return pos - other.pos; }
 
         Iterator & operator++()
         {
@@ -95,14 +93,46 @@ public:
         }
 
         // Postfix increment/decrement is not supported
-        Iterator & operator++(int) = delete;
-        Iterator & operator--(int) = delete;
+        //Iterator & operator++(int) = delete;
+        //Iterator & operator--(int) = delete;
+
+        // Postfix increment (optional)
+        Iterator operator++(int)
+        {
+            Iterator tmp = *this;
+            ++pos;
+            return tmp;
+        }
+
+        // Postfix decrement (optional)
+        Iterator operator--(int)
+        {
+            Iterator tmp = *this;
+            --pos;
+            return tmp;
+        }
+
+        // Compound addition
+        Iterator & operator+=(difference_type n)
+        {
+            pos += n;
+            return *this;
+        }
+
+        // Compound subtraction
+        Iterator & operator-=(difference_type n)
+        {
+            pos -= n;
+            return *this;
+        }
 
         bool operator!=(const Iterator & other) const { return pos != other.pos; }
+        bool operator==(const Iterator & other) const { return pos == other.pos; }
+        bool operator<(const Iterator & other) const { return pos < other.pos; }
 
     private:
-        const IColumn::Offsets & offsets;
-        const ColumnString::Chars_t & chars;
+        const IColumn::Offsets * offsets;
+        const ColumnString::Chars_t * chars;
         size_t pos = 0;
     };
 

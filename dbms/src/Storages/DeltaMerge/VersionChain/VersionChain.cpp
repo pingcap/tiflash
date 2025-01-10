@@ -193,9 +193,10 @@ UInt32 VersionChain<Handle>::replayDeleteRange(const ColumnFileDeleteRange & cf_
 }
 
 template <HandleType Handle>
+template <HandleRefType HandleRef>
 std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRangeList(
     const DMContext & dm_context,
-    Handle h)
+    HandleRef h)
 {
     // From from new to old
     for (auto itr = dmfile_or_delete_range_list.rbegin(); itr != dmfile_or_delete_range_list.rend(); ++itr)
@@ -244,6 +245,6 @@ std::pair<Handle, Handle> VersionChain<Handle>::convertRowKeyRange(const RowKeyR
 }
 
 template class VersionChain<Int64>;
-//template class VersionChain<String>;
+template class VersionChain<String>;
 
 } // namespace DB::DM
