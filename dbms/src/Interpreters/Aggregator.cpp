@@ -887,7 +887,7 @@ void Aggregator::handleMiniBatchImpl(
             const size_t index_relative_to_start_row = j - agg_process_info.start_row;
             if constexpr (enable_prefetch)
             {
-                if unlikely (k + agg_prefetch_step < hashvals.size())
+                if likely (k + agg_prefetch_step < hashvals.size())
                     method.data.prefetch(hashvals[k + agg_prefetch_step]);
 
                 emplace_result_holder
