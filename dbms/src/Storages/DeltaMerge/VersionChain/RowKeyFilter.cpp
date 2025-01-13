@@ -58,10 +58,8 @@ UInt32 buildRowKeyFilterBlock(
     IColumn::Filter & filter)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
-
-    const auto rows = cf.getRows();
-    if (unlikely(rows == 0))
-        return 0;
+    const UInt32 rows = cf.getRows();
+    assert(rows > 0);
 
     auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<Handle>(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
