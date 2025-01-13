@@ -38,6 +38,8 @@ public:
     {
         return RSResults(pack_count, RSResult::Some);
     }
+
+    ColumnRangePtr buildSets(const LocalIndexInfosSnapshot &) override { return UnsupportedColumnRange::create(); }
 };
 
 } // namespace DB::DM
