@@ -16,6 +16,7 @@
 
 #include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
+
 namespace DB::DM
 {
 struct DMContext;
