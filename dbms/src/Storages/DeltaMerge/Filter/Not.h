@@ -34,6 +34,12 @@ public:
         std::transform(results.begin(), results.end(), results.begin(), [](const auto result) { return !result; });
         return results;
     }
+
+    ColumnValueSetPtr buildSets(const LocalIndexInfosSnapshot & index_info) override
+    {
+        auto sets = children[0]->buildSets(index_info);
+        return sets->invert();
+    }
 };
 
 } // namespace DB::DM

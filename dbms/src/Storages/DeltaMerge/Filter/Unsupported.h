@@ -38,6 +38,11 @@ public:
     {
         return RSResults(pack_count, RSResult::Some);
     }
+
+    ColumnValueSetPtr buildSets(const LocalIndexInfosSnapshot &) override
+    {
+        return UnsupportedColumnValueSet::create();
+    }
 };
 
 } // namespace DB::DM
