@@ -107,9 +107,9 @@ private:
         }
     }
 
-    template <bool has_collator>
+    template <bool has_collator, bool count_code_points>
     void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const;
-    template <bool has_collator>
+    template <bool has_collator, bool count_code_points>
     void countSerializeByteSizeForColumnArrayImpl(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,

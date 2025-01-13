@@ -487,17 +487,24 @@ void ColumnString::countSerializeByteSizeForCmp(
     const TiDB::TiDBCollatorPtr & collator) const
 {
     if likely (collator != nullptr)
-        countSerializeByteSizeImpl<true>(byte_size, collator);
+    {
+        if (collator->maxBytesForOneChar() > 1)
+            countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/true>(byte_size, collator);
+        else
+            countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/false>(byte_size, collator);
+    }
     else
-        countSerializeByteSizeImpl<false>(byte_size, nullptr);
+    {
+        countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, nullptr);
+    }
 }
 
 void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeImpl<false>(byte_size, nullptr);
+    countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, nullptr);
 }
 
-template <bool has_collator>
+template <bool has_collator, bool count_code_points>
 void ColumnString::countSerializeByteSizeImpl(
     PaddedPODArray<size_t> & byte_size,
     const TiDB::TiDBCollatorPtr & collator) const
@@ -523,9 +530,18 @@ void ColumnString::countSerializeByteSizeImpl(
         const size_t max_bytes_one_char = collator->maxBytesForOneChar();
         for (size_t i = 0; i < size; ++i)
         {
-            assert(sizeAt(i) >= 1);
+            assert(sizeAt(i) > 0);
             // Minus 1 because of terminating zero.
-            byte_size[i] += sizeof(UInt32) + (sizeAt(i) - 1) * max_bytes_one_char;
+            if constexpr (count_code_points)
+            {
+                const auto num_char = UTF8::countCodePoints(&chars[offsetAt(i)], sizeAt(i) - 1);
+                byte_size[i] += sizeof(UInt32) + num_char * max_bytes_one_char;
+            }
+            else
+            {
+                assert(max_bytes_one_char == 1);
+                byte_size[i] += sizeof(UInt32) + (sizeAt(i) - 1);
+            }
         }
     }
     else
@@ -542,19 +558,26 @@ void ColumnString::countSerializeByteSizeForCmpColumnArray(
     const TiDB::TiDBCollatorPtr & collator) const
 {
     if likely (collator != nullptr)
-        countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets, collator);
+    {
+        if (collator->maxBytesForOneChar() > 1)
+            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/true>(byte_size, array_offsets, collator);
+        else
+            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/false>(byte_size, array_offsets, collator);
+    }
     else
-        countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
+    {
+        countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, array_offsets, nullptr);
+    }
 }
 
 void ColumnString::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
-    countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
+    countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, array_offsets, nullptr);
 }
 
-template <bool has_collator>
+template <bool has_collator, bool count_code_points>
 void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
@@ -590,11 +613,27 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         const auto max_bytes_one_char = collator->maxBytesForOneChar();
         for (size_t i = 0; i < size; ++i)
         {
-            const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
-            assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
-            byte_size[i] += sizeof(UInt32) * (ele_count)
-                // For each sub element, minus 1 because of terminating zero.
-                + max_bytes_one_char * (offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) - ele_count);
+            if constexpr (count_code_points)
+            {
+                size_t cur_row_bytes = 0;
+                for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+                {
+                    assert(sizeAt(j) > 0);
+                    const auto num_char = UTF8::countCodePoints(&chars[offsetAt(j)], sizeAt(j) - 1);
+                    cur_row_bytes += num_char * max_bytes_one_char;
+                }
+
+                const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
+                byte_size[i] += sizeof(UInt32) * ele_count + cur_row_bytes;
+            }
+            else
+            {
+                const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
+                assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
+                byte_size[i] += sizeof(UInt32) * (ele_count)
+                    // For each sub element, minus 1 because of terminating zero.
+                    + max_bytes_one_char * (offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) - ele_count);
+            }
         }
     }
     else
@@ -695,8 +734,9 @@ void ColumnString::serializeToPosImpl(
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
-    /// countSerializeByteSizeForCmp has already checked that the size of one element is not greater than UINT32_MAX
+    /// To avoid virtual function call of sortKey().
     const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
+    /// countSerializeByteSizeForCmp has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
