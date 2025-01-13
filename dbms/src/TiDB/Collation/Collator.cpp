@@ -36,7 +36,6 @@ ALWAYS_INLINE std::string_view rtrim(const char * s, size_t length)
     return DB::RightTrim(v);
 }
 
-using Rune = int32_t;
 using StringType = std::vector<Rune>;
 constexpr uint8_t b2_mask = 0x1F;
 constexpr uint8_t b3_mask = 0x0F;
@@ -71,65 +70,63 @@ inline Rune decodeUtf8Char(const char * s, size_t & offset)
 }
 
 template <typename Collator>
-class Pattern : public ITiDBCollator::IPattern
+void Pattern<Collator>::compile(const std::string & pattern, char escape)
 {
-public:
-    void compile(const std::string & pattern, char escape) override
+    chars.clear();
+    match_types.clear();
+
+    chars.reserve(pattern.length() * sizeof(typename Collator::CharType));
+    match_types.reserve(pattern.length() * sizeof(typename Pattern::MatchType));
+
+    size_t offset = 0;
+    while (offset < pattern.length())
     {
-        chars.clear();
-        match_types.clear();
-
-        chars.reserve(pattern.length() * sizeof(typename Collator::CharType));
-        match_types.reserve(pattern.length() * sizeof(typename Pattern::MatchType));
-
-        size_t offset = 0;
-        while (offset < pattern.length())
+        MatchType tp;
+        auto c = Collator::decodeChar(pattern.data(), offset);
+        if (c == escape)
         {
-            MatchType tp;
-            auto c = Collator::decodeChar(pattern.data(), offset);
-            if (c == escape)
+            tp = MatchType::Match;
+            if (offset < pattern.length())
             {
-                tp = MatchType::Match;
-                if (offset < pattern.length())
-                {
-                    // use next char to match
-                    c = Collator::decodeChar(pattern.data(), offset);
-                }
-                else
-                {
-                    // use `escape` to match
-                }
-            }
-            else if (c == '_')
-            {
-                tp = MatchType::One;
-            }
-            else if (c == '%')
-            {
-                tp = MatchType::Any;
+                // use next char to match
+                c = Collator::decodeChar(pattern.data(), offset);
             }
             else
             {
-                tp = MatchType::Match;
+                // use `escape` to match
             }
-            chars.push_back(c);
-            match_types.push_back(tp);
         }
-    }
-
-    bool match(const char * s, size_t length) const override
-    {
-        size_t s_offset = 0, next_s_offset = 0, tmp_s_offset = 0;
-        size_t p_idx = 0, next_p_idx = 0;
-        while (p_idx < chars.size() || s_offset < length)
+        else if (c == '_')
         {
-            if (p_idx < chars.size())
+            tp = MatchType::One;
+        }
+        else if (c == '%')
+        {
+            tp = MatchType::Any;
+        }
+        else
+        {
+            tp = MatchType::Match;
+        }
+        chars.push_back(c);
+        match_types.push_back(tp);
+    }
+}
+
+template <typename Collator>
+bool Pattern<Collator>::match(const char * s, size_t length) const
+{
+    size_t s_offset = 0, next_s_offset = 0, tmp_s_offset = 0;
+    size_t p_idx = 0, next_p_idx = 0;
+    while (p_idx < chars.size() || s_offset < length)
+    {
+        if (p_idx < chars.size())
+        {
+            switch (match_types[p_idx])
             {
-                switch (match_types[p_idx])
-                {
                 case Match:
                     if (s_offset < length
-                        && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
+                            && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
                     {
                         p_idx++;
                         s_offset = tmp_s_offset;
@@ -149,214 +146,99 @@ public:
                     Collator::decodeChar(s, next_s_offset = s_offset);
                     p_idx++;
                     continue;
-                }
             }
-            if (0 < next_s_offset && next_s_offset <= length)
-            {
-                p_idx = next_p_idx;
-                s_offset = next_s_offset;
-                continue;
-            }
-            return false;
         }
-        return true;
-    }
-
-private:
-    std::vector<typename Collator::CharType> chars;
-
-    enum MatchType
-    {
-        Match,
-        One,
-        Any,
-    };
-    std::vector<MatchType> match_types;
-};
-
-template <typename T, bool padding = false>
-class BinCollator final : public ITiDBCollator
-{
-public:
-    explicit BinCollator(int32_t id)
-        : ITiDBCollator(id)
-    {}
-
-    int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
-    {
-        return DB::BinCollatorCompare<padding>(s1, length1, s2, length2);
-    }
-
-    StringRef sortKey(const char * s, size_t length, std::string &) const override
-    {
-        return DB::BinCollatorSortKey<padding>(s, length);
-    }
-
-    StringRef sortKeyNoTrim(const char * s, size_t length, std::string &) const override
-    {
-        return convertForBinCollator<false>(s, length, nullptr);
-    }
-
-    StringRef convert(const char * s, size_t length, std::string &, std::vector<size_t> * lens) const override
-    {
-        return convertForBinCollator<true>(s, length, lens);
-    }
-
-    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
-
-    size_t maxBytesForOneChar() const override
-    {
-        // BinCollator only trims trailing spaces,
-        // so it does not increase the space required after decoding.
-        // Hence, it returns 1 here.
-        return 1;
-    }
-
-private:
-    const std::string name = padding ? "BinaryPadding" : "Binary";
-
-private:
-    using WeightType = T;
-    using CharType = T;
-
-    static inline CharType decodeChar(const char * s, size_t & offset)
-    {
-        if constexpr (std::is_same_v<T, char>)
+        if (0 < next_s_offset && next_s_offset <= length)
         {
-            return s[offset++];
+            p_idx = next_p_idx;
+            s_offset = next_s_offset;
+            continue;
         }
-        else
-        {
-            return decodeUtf8Char(s, offset);
-        }
+        return false;
     }
+    return true;
+}
 
-    static inline WeightType weight(CharType c) { return c; }
+template <typename T, bool padding>
+inline std::unique_ptr<ITiDBCollator::IPattern> BinCollator<T, padding>::pattern() const
+{ return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
 
-    static inline bool regexEq(CharType a, CharType b) { return weight(a) == weight(b); }
-
-    friend class Pattern<BinCollator>;
-};
-
-namespace GeneralCI
+template <typename T, bool padding>
+inline typename BinCollator<T, padding>::CharType
+BinCollator<T, padding>::decodeChar(const char * s, size_t & offset)
 {
-using WeightType = uint16_t;
-extern const std::array<WeightType, 256 * 256> weight_lut;
-} // namespace GeneralCI
+    if constexpr (std::is_same_v<T, char>)
+    {
+        return s[offset++];
+    }
+    else
+    {
+        return decodeUtf8Char(s, offset);
+    }
+}
 
-class GeneralCICollator final : public ITiDBCollator
+int GeneralCICollator::compare(const char * s1, size_t length1, const char * s2, size_t length2) const
 {
-public:
-    explicit GeneralCICollator(int32_t id)
-        : ITiDBCollator(id)
-    {}
+    auto v1 = rtrim(s1, length1);
+    auto v2 = rtrim(s2, length2);
 
-    int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
+    size_t offset1 = 0, offset2 = 0;
+    while (offset1 < v1.length() && offset2 < v2.length())
     {
-        auto v1 = rtrim(s1, length1);
-        auto v2 = rtrim(s2, length2);
-
-        size_t offset1 = 0, offset2 = 0;
-        while (offset1 < v1.length() && offset2 < v2.length())
-        {
-            auto c1 = decodeChar(s1, offset1);
-            auto c2 = decodeChar(s2, offset2);
-            auto sk1 = weight(c1);
-            auto sk2 = weight(c2);
-            auto cmp = sk1 - sk2;
-            if (cmp != 0)
-                return DB::signum(cmp);
-        }
-
-        return (offset1 < v1.length()) - (offset2 < v2.length());
+        auto c1 = decodeChar(s1, offset1);
+        auto c2 = decodeChar(s2, offset2);
+        auto sk1 = weight(c1);
+        auto sk2 = weight(c2);
+        auto cmp = sk1 - sk2;
+        if (cmp != 0)
+            return DB::signum(cmp);
     }
 
-    StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const override
+    return (offset1 < v1.length()) - (offset2 < v2.length());
+}
+
+template <bool need_len, bool need_trim>
+StringRef GeneralCICollator::convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
+{
+    std::string_view v;
+
+    if constexpr (need_trim)
+        v = rtrim(s, length);
+    else
+        v = std::string_view(s, length);
+
+    const auto max_bytes_one_char = maxBytesForOneChar();
+    if (length * max_bytes_one_char > container.size())
+        container.resize(length * max_bytes_one_char);
+    size_t offset = 0;
+    size_t total_size = 0;
+    size_t v_length = v.length();
+
+    if constexpr (need_len)
     {
-        return convertImpl<true, false>(s, length, container, lens);
+        if (lens->capacity() < v_length)
+            lens->reserve(v_length);
+        lens->resize(0);
     }
 
-    StringRef sortKey(const char * s, size_t length, std::string & container) const override
+    while (offset < v_length)
     {
-        return convertImpl<false, true>(s, length, container, nullptr);
-    }
-
-    StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const override
-    {
-        return convertImpl<false, false>(s, length, container, nullptr);
-    }
-
-    template <bool need_len, bool need_trim>
-    StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
-    {
-        std::string_view v;
-
-        if constexpr (need_trim)
-            v = rtrim(s, length);
-        else
-            v = std::string_view(s, length);
-
-        const auto max_bytes_one_char = maxBytesForOneChar();
-        if (length * max_bytes_one_char > container.size())
-            container.resize(length * max_bytes_one_char);
-        size_t offset = 0;
-        size_t total_size = 0;
-        size_t v_length = v.length();
+        auto c = decodeChar(s, offset);
+        auto sk = weight(c);
+        container[total_size++] = static_cast<char>(sk >> 8);
+        container[total_size++] = static_cast<char>(sk);
 
         if constexpr (need_len)
-        {
-            if (lens->capacity() < v_length)
-                lens->reserve(v_length);
-            lens->resize(0);
-        }
-
-        while (offset < v_length)
-        {
-            auto c = decodeChar(s, offset);
-            auto sk = weight(c);
-            container[total_size++] = static_cast<char>(sk >> 8);
-            container[total_size++] = static_cast<char>(sk);
-
-            if constexpr (need_len)
-                lens->push_back(2);
-        }
-
-        return StringRef(container.data(), total_size);
+            lens->push_back(2);
     }
 
-    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
+    return StringRef(container.data(), total_size);
+}
 
-    size_t maxBytesForOneChar() const override { return sizeof(WeightType); }
-
-private:
-    const std::string name = "GeneralCI";
-
-private:
-    using WeightType = GeneralCI::WeightType;
-    using CharType = Rune;
-
-    static inline CharType decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
-
-    static inline WeightType weight(CharType c)
-    {
-        if (c > 0xFFFF)
-            return 0xFFFD;
-        return GeneralCI::weight_lut[c & 0xFFFF];
-        //return !!(c >> 16) * 0xFFFD + (1 - !!(c >> 16)) * GeneralCI::weight_lut_0400[c & 0xFFFF];
-    }
-
-    static inline bool regexEq(CharType a, CharType b) { return weight(a) == weight(b); }
-
-    friend class Pattern<GeneralCICollator>;
-};
+inline GeneralCICollator::CharType GeneralCICollator::decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
 
 namespace UnicodeCI
 {
-using long_weight = struct
-{
-    uint64_t first;
-    uint64_t second;
-};
 extern const std::array<uint64_t, 256 * 256 + 1> weight_lut_0400;
 extern const std::array<uint64_t, 0x2CEA1> weight_lut_0900;
 const uint64_t long_weight_rune = 0xFFFD;
@@ -420,402 +302,345 @@ const std::array<long_weight, 28> weight_lut_long_0900
 } // namespace UnicodeCI
 
 template <typename T, bool padding>
-class UCACICollator final : public ITiDBCollator
+int UCACICollator<T, padding>::compare(const char * s1, size_t length1, const char * s2, size_t length2) const
 {
-public:
-    explicit UCACICollator(int32_t id)
-        : ITiDBCollator(id)
-    {}
+    std::string_view v1 = preprocess(s1, length1), v2 = preprocess(s2, length2);
 
-    int compare(const char * s1, size_t length1, const char * s2, size_t length2) const override
+    size_t offset1 = 0, offset2 = 0;
+    size_t v1_length = v1.length(), v2_length = v2.length();
+
+    // since the longest weight of character in unicode ci has 128bit, we divide it to 2 uint64.
+    // The xx_first stand for the first 64bit, and the xx_second stand for the second 64bit.
+    // If xx_first == 0, there is always has xx_second == 0
+    uint64_t s1_first = 0, s1_second = 0;
+    uint64_t s2_first = 0, s2_second = 0;
+
+    while (true)
     {
-        std::string_view v1 = preprocess(s1, length1), v2 = preprocess(s2, length2);
+        weight(s1_first, s1_second, offset1, v1_length, s1);
+        weight(s2_first, s2_second, offset2, v2_length, s2);
 
-        size_t offset1 = 0, offset2 = 0;
-        size_t v1_length = v1.length(), v2_length = v2.length();
-
-        // since the longest weight of character in unicode ci has 128bit, we divide it to 2 uint64.
-        // The xx_first stand for the first 64bit, and the xx_second stand for the second 64bit.
-        // If xx_first == 0, there is always has xx_second == 0
-        uint64_t s1_first = 0, s1_second = 0;
-        uint64_t s2_first = 0, s2_second = 0;
-
-        while (true)
+        if (s1_first == 0 || s2_first == 0)
         {
-            weight(s1_first, s1_second, offset1, v1_length, s1);
-            weight(s2_first, s2_second, offset2, v2_length, s2);
-
-            if (s1_first == 0 || s2_first == 0)
+            if (s1_first < s2_first)
             {
-                if (s1_first < s2_first)
-                {
-                    return -1;
-                }
-                if (s1_first > s2_first)
-                {
-                    return 1;
-                }
-                return 0;
+                return -1;
             }
-
-            if (s1_first == s2_first)
+            if (s1_first > s2_first)
             {
-                s1_first = 0;
-                s2_first = 0;
-                continue;
+                return 1;
             }
-
-            while (s1_first != 0 && s2_first != 0)
-            {
-                if (((s1_first ^ s2_first) & 0xFFFF) == 0)
-                {
-                    s1_first >>= 16;
-                    s2_first >>= 16;
-                }
-                else
-                {
-                    return DB::signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
-                }
-            }
-        }
-    }
-
-    StringRef convert(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const override
-    {
-        return convertImpl<true, false>(s, length, container, lens);
-    }
-
-    StringRef sortKey(const char * s, size_t length, std::string & container) const override
-    {
-        return convertImpl<false, true>(s, length, container, nullptr);
-    }
-
-    StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const override
-    {
-        return convertImpl<false, false>(s, length, container, nullptr);
-    }
-
-    template <bool need_len, bool need_trim>
-    StringRef convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
-    {
-        std::string_view v;
-
-        if constexpr (need_trim)
-            v = preprocess(s, length);
-        else
-            v = std::string_view(s, length);
-
-        const auto max_bytes_one_char = maxBytesForOneChar();
-        if (length * max_bytes_one_char > container.size())
-            container.resize(length * max_bytes_one_char);
-        size_t offset = 0;
-        size_t total_size = 0;
-        size_t v_length = v.length();
-
-        uint64_t first = 0, second = 0;
-
-        if constexpr (need_len)
-        {
-            if (lens->capacity() < v_length)
-                lens->reserve(v_length);
-            lens->resize(0);
+            return 0;
         }
 
-        while (offset < v_length)
+        if (s1_first == s2_first)
         {
-            weight(first, second, offset, v_length, s);
-
-            if constexpr (need_len)
-                lens->push_back(total_size);
-
-            writeResult(first, container, total_size);
-            writeResult(second, container, total_size);
-
-            if constexpr (need_len)
-            {
-                size_t end_idx = lens->size() - 1;
-                (*lens)[end_idx] = total_size - (*lens)[end_idx];
-            }
+            s1_first = 0;
+            s2_first = 0;
+            continue;
         }
 
-        return StringRef(container.data(), total_size);
-    }
-
-    std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<UCACICollator>>(); }
-
-    size_t maxBytesForOneChar() const override
-    {
-        // Every char have 8 uint16 at most.
-        return 8 * sizeof(uint16_t);
-    }
-
-private:
-    const std::string name = "UnicodeCI";
-
-private:
-    using CharType = Rune;
-
-    static inline CharType decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
-
-    static inline void writeResult(uint64_t & w, std::string & container, size_t & total_size)
-    {
-        while (w != 0)
+        while (s1_first != 0 && s2_first != 0)
         {
-            container[total_size++] = static_cast<char>(w >> 8);
-            container[total_size++] = static_cast<char>(w);
-            w >>= 16;
-        }
-    }
-
-    static inline bool regexEq(CharType a, CharType b) { return T::regexEq(a, b); }
-
-    static inline void weight(uint64_t & first, uint64_t & second, size_t & offset, size_t length, const char * s)
-    {
-        if (first == 0)
-        {
-            if (second == 0)
+            if (((s1_first ^ s2_first) & 0xFFFF) == 0)
             {
-                while (offset < length)
-                {
-                    auto r = decodeChar(s, offset);
-                    if (!T::weight(first, second, r))
-                    {
-                        continue;
-                    }
-                    break;
-                }
+                s1_first >>= 16;
+                s2_first >>= 16;
             }
             else
             {
-                first = second;
-                second = 0;
+                return DB::signum(static_cast<int>(s1_first & 0xFFFF) - static_cast<int>(s2_first & 0xFFFF));
             }
         }
     }
+}
 
-    static inline std::string_view preprocess(const char * s, size_t length)
-    {
-        if constexpr (padding)
-        {
-            return rtrim(s, length);
-        }
-
-        return std::string_view(s, length);
-    }
-
-    friend class Pattern<UCACICollator>;
-};
-
-class Unicode0400
+template <typename T, bool padding>
+template <bool need_len, bool need_trim>
+StringRef UCACICollator<T, padding>::convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
 {
-public:
-    static inline bool regexEq(Rune a, Rune b)
+    std::string_view v;
+
+    if constexpr (need_trim)
+        v = preprocess(s, length);
+    else
+        v = std::string_view(s, length);
+
+    const auto max_bytes_one_char = maxBytesForOneChar();
+    if (length * max_bytes_one_char > container.size())
+        container.resize(length * max_bytes_one_char);
+    size_t offset = 0;
+    size_t total_size = 0;
+    size_t v_length = v.length();
+
+    uint64_t first = 0, second = 0;
+
+    if constexpr (need_len)
     {
-        if (a > 0xFFFF || b > 0xFFFF)
-        {
-            return a == b;
-        }
-
-        auto a_weight = UnicodeCI::weight_lut_0400[a];
-        auto b_weight = UnicodeCI::weight_lut_0400[b];
-
-        if (a_weight != b_weight)
-        {
-            return false;
-        }
-
-        if (a_weight == UnicodeCI::long_weight_rune)
-        {
-            return a == b;
-        }
-
-        return true;
+        if (lens->capacity() < v_length)
+            lens->reserve(v_length);
+        lens->resize(0);
     }
 
-    static inline bool weight(uint64_t & first, uint64_t & second, Rune r)
+    while (offset < v_length)
     {
-        if (r > 0xFFFF)
+        weight(first, second, offset, v_length, s);
+
+        if constexpr (need_len)
+            lens->push_back(total_size);
+
+        writeResult(first, container, total_size);
+        writeResult(second, container, total_size);
+
+        if constexpr (need_len)
         {
-            first = 0xFFFD;
-            return true;
+            size_t end_idx = lens->size() - 1;
+            (*lens)[end_idx] = total_size - (*lens)[end_idx];
         }
-        auto w = UnicodeCI::weight_lut_0400[r];
-        // skip 0 weight char
-        if (w == 0)
+    }
+
+    return StringRef(container.data(), total_size);
+}
+
+template <typename T, bool padding>
+inline typename UCACICollator<T, padding>::CharType UCACICollator<T, padding>::decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
+
+template <typename T, bool padding>
+inline void UCACICollator<T, padding>::weight(uint64_t & first, uint64_t & second, size_t & offset, size_t length, const char * s)
+{
+    if (first == 0)
+    {
+        if (second == 0)
         {
-            return false;
-        }
-        if (w == UnicodeCI::long_weight_rune)
-        {
-            auto long_weight = weightLutLongMap(r);
-            first = long_weight.first;
-            second = long_weight.second;
+            while (offset < length)
+            {
+                auto r = decodeChar(s, offset);
+                if (!T::weight(first, second, r))
+                {
+                    continue;
+                }
+                break;
+            }
         }
         else
         {
-            first = w;
-        }
-        return true;
-    }
-
-private:
-    static inline const UnicodeCI::long_weight & weightLutLongMap(Rune r)
-    {
-        switch (r)
-        {
-        case 0x321D:
-            return UnicodeCI::weight_lut_long_0400[0];
-        case 0x321E:
-            return UnicodeCI::weight_lut_long_0400[1];
-        case 0x327C:
-            return UnicodeCI::weight_lut_long_0400[2];
-        case 0x3307:
-            return UnicodeCI::weight_lut_long_0400[3];
-        case 0x3315:
-            return UnicodeCI::weight_lut_long_0400[4];
-        case 0x3316:
-            return UnicodeCI::weight_lut_long_0400[5];
-        case 0x3317:
-            return UnicodeCI::weight_lut_long_0400[6];
-        case 0x3319:
-            return UnicodeCI::weight_lut_long_0400[7];
-        case 0x331A:
-            return UnicodeCI::weight_lut_long_0400[8];
-        case 0x3320:
-            return UnicodeCI::weight_lut_long_0400[9];
-        case 0x332B:
-            return UnicodeCI::weight_lut_long_0400[10];
-        case 0x332E:
-            return UnicodeCI::weight_lut_long_0400[11];
-        case 0x3332:
-            return UnicodeCI::weight_lut_long_0400[12];
-        case 0x3334:
-            return UnicodeCI::weight_lut_long_0400[13];
-        case 0x3336:
-            return UnicodeCI::weight_lut_long_0400[14];
-        case 0x3347:
-            return UnicodeCI::weight_lut_long_0400[15];
-        case 0x334A:
-            return UnicodeCI::weight_lut_long_0400[16];
-        case 0x3356:
-            return UnicodeCI::weight_lut_long_0400[17];
-        case 0x337F:
-            return UnicodeCI::weight_lut_long_0400[18];
-        case 0x33AE:
-            return UnicodeCI::weight_lut_long_0400[19];
-        case 0x33AF:
-            return UnicodeCI::weight_lut_long_0400[20];
-        case 0xFDFB:
-            return UnicodeCI::weight_lut_long_0400[21];
-        default:
-            return UnicodeCI::weight_lut_long_0400[22];
+            first = second;
+            second = 0;
         }
     }
-};
+}
 
-class Unicode0900
+template <typename T, bool padding>
+inline std::string_view UCACICollator<T, padding>::preprocess(const char * s, size_t length)
 {
-public:
-    static inline bool regexEq(Rune a, Rune b)
+    if constexpr (padding)
     {
-        uint64_t a_first = 0, a_second = 0, b_first = 0, b_second = 0;
-        weight(a_first, a_second, a);
-        weight(b_first, b_second, b);
-
-        return a_first == b_first && a_second == b_second;
+        return rtrim(s, length);
     }
 
-    static inline bool weight(uint64_t & first, uint64_t & second, Rune r)
-    {
-        if (r > 0x2CEA1)
-        {
-            first = (r >> 15) + 0xFBC0 + (((r & 0x7FFF) | 0x8000) << 16);
-            return true;
-        }
+    return std::string_view(s, length);
+}
 
-        auto w = UnicodeCI::weight_lut_0900[r];
-        // skip 0 weight char
-        if (w == 0)
-        {
-            return false;
-        }
-        if (w == UnicodeCI::long_weight_rune)
-        {
-            auto long_weight = weightLutLongMap(r);
-            first = long_weight.first;
-            second = long_weight.second;
-        }
-        else
-        {
-            first = w;
-        }
+inline bool Unicode0400::regexEq(Rune a, Rune b)
+{
+    if (a > 0xFFFF || b > 0xFFFF)
+    {
+        return a == b;
+    }
+
+    auto a_weight = UnicodeCI::weight_lut_0400[a];
+    auto b_weight = UnicodeCI::weight_lut_0400[b];
+
+    if (a_weight != b_weight)
+    {
+        return false;
+    }
+
+    if (a_weight == UnicodeCI::long_weight_rune)
+    {
+        return a == b;
+    }
+
+    return true;
+}
+
+inline bool Unicode0400::weight(uint64_t & first, uint64_t & second, Rune r)
+{
+    if (r > 0xFFFF)
+    {
+        first = 0xFFFD;
+        return true;
+    }
+    auto w = UnicodeCI::weight_lut_0400[r];
+    // skip 0 weight char
+    if (w == 0)
+    {
+        return false;
+    }
+    if (w == UnicodeCI::long_weight_rune)
+    {
+        auto long_weight = weightLutLongMap(r);
+        first = long_weight.first;
+        second = long_weight.second;
+    }
+    else
+    {
+        first = w;
+    }
+    return true;
+}
+
+inline const UnicodeCI::long_weight & Unicode0400::weightLutLongMap(Rune r)
+{
+    switch (r)
+    {
+    case 0x321D:
+        return UnicodeCI::weight_lut_long_0400[0];
+    case 0x321E:
+        return UnicodeCI::weight_lut_long_0400[1];
+    case 0x327C:
+        return UnicodeCI::weight_lut_long_0400[2];
+    case 0x3307:
+        return UnicodeCI::weight_lut_long_0400[3];
+    case 0x3315:
+        return UnicodeCI::weight_lut_long_0400[4];
+    case 0x3316:
+        return UnicodeCI::weight_lut_long_0400[5];
+    case 0x3317:
+        return UnicodeCI::weight_lut_long_0400[6];
+    case 0x3319:
+        return UnicodeCI::weight_lut_long_0400[7];
+    case 0x331A:
+        return UnicodeCI::weight_lut_long_0400[8];
+    case 0x3320:
+        return UnicodeCI::weight_lut_long_0400[9];
+    case 0x332B:
+        return UnicodeCI::weight_lut_long_0400[10];
+    case 0x332E:
+        return UnicodeCI::weight_lut_long_0400[11];
+    case 0x3332:
+        return UnicodeCI::weight_lut_long_0400[12];
+    case 0x3334:
+        return UnicodeCI::weight_lut_long_0400[13];
+    case 0x3336:
+        return UnicodeCI::weight_lut_long_0400[14];
+    case 0x3347:
+        return UnicodeCI::weight_lut_long_0400[15];
+    case 0x334A:
+        return UnicodeCI::weight_lut_long_0400[16];
+    case 0x3356:
+        return UnicodeCI::weight_lut_long_0400[17];
+    case 0x337F:
+        return UnicodeCI::weight_lut_long_0400[18];
+    case 0x33AE:
+        return UnicodeCI::weight_lut_long_0400[19];
+    case 0x33AF:
+        return UnicodeCI::weight_lut_long_0400[20];
+    case 0xFDFB:
+        return UnicodeCI::weight_lut_long_0400[21];
+    default:
+        return UnicodeCI::weight_lut_long_0400[22];
+    }
+}
+
+inline bool Unicode0900::regexEq(Rune a, Rune b)
+{
+    uint64_t a_first = 0, a_second = 0, b_first = 0, b_second = 0;
+    weight(a_first, a_second, a);
+    weight(b_first, b_second, b);
+
+    return a_first == b_first && a_second == b_second;
+}
+
+inline bool Unicode0900::weight(uint64_t & first, uint64_t & second, Rune r)
+{
+    if (r > 0x2CEA1)
+    {
+        first = (r >> 15) + 0xFBC0 + (((r & 0x7FFF) | 0x8000) << 16);
         return true;
     }
 
-private:
-    static inline const UnicodeCI::long_weight & weightLutLongMap(Rune r)
+    auto w = UnicodeCI::weight_lut_0900[r];
+    // skip 0 weight char
+    if (w == 0)
     {
-        switch (r)
-        {
-        case 0x321D:
-            return UnicodeCI::weight_lut_long_0900[0];
-        case 0x321E:
-            return UnicodeCI::weight_lut_long_0900[1];
-        case 0x327C:
-            return UnicodeCI::weight_lut_long_0900[2];
-        case 0x3307:
-            return UnicodeCI::weight_lut_long_0900[3];
-        case 0x3315:
-            return UnicodeCI::weight_lut_long_0900[4];
-        case 0x3316:
-            return UnicodeCI::weight_lut_long_0900[5];
-        case 0x3317:
-            return UnicodeCI::weight_lut_long_0900[6];
-        case 0x3319:
-            return UnicodeCI::weight_lut_long_0900[7];
-        case 0x331A:
-            return UnicodeCI::weight_lut_long_0900[8];
-        case 0x3320:
-            return UnicodeCI::weight_lut_long_0900[9];
-        case 0x332B:
-            return UnicodeCI::weight_lut_long_0900[10];
-        case 0x332E:
-            return UnicodeCI::weight_lut_long_0900[11];
-        case 0x3332:
-            return UnicodeCI::weight_lut_long_0900[12];
-        case 0x3334:
-            return UnicodeCI::weight_lut_long_0900[13];
-        case 0x3336:
-            return UnicodeCI::weight_lut_long_0900[14];
-        case 0x3347:
-            return UnicodeCI::weight_lut_long_0900[15];
-        case 0x334A:
-            return UnicodeCI::weight_lut_long_0900[16];
-        case 0x3356:
-            return UnicodeCI::weight_lut_long_0900[17];
-        case 0x337F:
-            return UnicodeCI::weight_lut_long_0900[18];
-        case 0x33AE:
-            return UnicodeCI::weight_lut_long_0900[19];
-        case 0x33AF:
-            return UnicodeCI::weight_lut_long_0900[20];
-        case 0xFDFA:
-            return UnicodeCI::weight_lut_long_0900[21];
-        case 0xFDFB:
-            return UnicodeCI::weight_lut_long_0900[22];
-        case 0xFFFD:
-            return UnicodeCI::weight_lut_long_0900[23];
-        case 0x1F19C:
-            return UnicodeCI::weight_lut_long_0900[24];
-        case 0x1F1A8:
-            return UnicodeCI::weight_lut_long_0900[25];
-        case 0x1F1A9:
-            return UnicodeCI::weight_lut_long_0900[26];
-        default:
-            return UnicodeCI::weight_lut_long_0400[27];
-        }
+        return false;
     }
-};
+    if (w == UnicodeCI::long_weight_rune)
+    {
+        auto long_weight = weightLutLongMap(r);
+        first = long_weight.first;
+        second = long_weight.second;
+    }
+    else
+    {
+        first = w;
+    }
+    return true;
+}
+
+inline const UnicodeCI::long_weight & Unicode0900::weightLutLongMap(Rune r)
+{
+    switch (r)
+    {
+    case 0x321D:
+        return UnicodeCI::weight_lut_long_0900[0];
+    case 0x321E:
+        return UnicodeCI::weight_lut_long_0900[1];
+    case 0x327C:
+        return UnicodeCI::weight_lut_long_0900[2];
+    case 0x3307:
+        return UnicodeCI::weight_lut_long_0900[3];
+    case 0x3315:
+        return UnicodeCI::weight_lut_long_0900[4];
+    case 0x3316:
+        return UnicodeCI::weight_lut_long_0900[5];
+    case 0x3317:
+        return UnicodeCI::weight_lut_long_0900[6];
+    case 0x3319:
+        return UnicodeCI::weight_lut_long_0900[7];
+    case 0x331A:
+        return UnicodeCI::weight_lut_long_0900[8];
+    case 0x3320:
+        return UnicodeCI::weight_lut_long_0900[9];
+    case 0x332B:
+        return UnicodeCI::weight_lut_long_0900[10];
+    case 0x332E:
+        return UnicodeCI::weight_lut_long_0900[11];
+    case 0x3332:
+        return UnicodeCI::weight_lut_long_0900[12];
+    case 0x3334:
+        return UnicodeCI::weight_lut_long_0900[13];
+    case 0x3336:
+        return UnicodeCI::weight_lut_long_0900[14];
+    case 0x3347:
+        return UnicodeCI::weight_lut_long_0900[15];
+    case 0x334A:
+        return UnicodeCI::weight_lut_long_0900[16];
+    case 0x3356:
+        return UnicodeCI::weight_lut_long_0900[17];
+    case 0x337F:
+        return UnicodeCI::weight_lut_long_0900[18];
+    case 0x33AE:
+        return UnicodeCI::weight_lut_long_0900[19];
+    case 0x33AF:
+        return UnicodeCI::weight_lut_long_0900[20];
+    case 0xFDFA:
+        return UnicodeCI::weight_lut_long_0900[21];
+    case 0xFDFB:
+        return UnicodeCI::weight_lut_long_0900[22];
+    case 0xFFFD:
+        return UnicodeCI::weight_lut_long_0900[23];
+    case 0x1F19C:
+        return UnicodeCI::weight_lut_long_0900[24];
+    case 0x1F1A8:
+        return UnicodeCI::weight_lut_long_0900[25];
+    case 0x1F1A9:
+        return UnicodeCI::weight_lut_long_0900[26];
+    default:
+        return UnicodeCI::weight_lut_long_0400[27];
+    }
+}
 
 struct TiDBCollatorTypeIDMap
 {
@@ -847,9 +672,6 @@ ITiDBCollator::ITiDBCollator(int32_t collator_id_)
     , collator_type(tidb_collator_type_id_map[collator_id_])
 {}
 
-using UTF8MB4_BIN_TYPE = BinCollator<Rune, true>;
-using UTF8MB4_0900_BIN_TYPE = BinCollator<Rune, false>;
-
 struct TiDBCollatorPtrMap
 {
     // static constexpr auto MAX_TYPE_CNT = static_cast<uint32_t>(ITiDBCollator::CollatorType::MAX_);
@@ -861,17 +683,11 @@ struct TiDBCollatorPtrMap
 
     TiDBCollatorPtrMap()
     {
-        static const auto c_utf8_general_ci = GeneralCICollator(ITiDBCollator::UTF8_GENERAL_CI);
-        static const auto c_utf8mb4_general_ci = GeneralCICollator(ITiDBCollator::UTF8MB4_GENERAL_CI);
-        static const auto c_utf8_unicode_ci = UCACICollator<Unicode0400, true>(ITiDBCollator::UTF8_UNICODE_CI);
-        static const auto c_utf8mb4_unicode_ci = UCACICollator<Unicode0400, true>(ITiDBCollator::UTF8MB4_UNICODE_CI);
-        static const auto c_utf8mb4_0900_ai_ci = UCACICollator<Unicode0900, false>(ITiDBCollator::UTF8MB4_0900_AI_CI);
-        static const auto c_utf8mb4_0900_bin = UTF8MB4_0900_BIN_TYPE(ITiDBCollator::UTF8MB4_0900_BIN);
-        static const auto c_utf8mb4_bin = UTF8MB4_BIN_TYPE(ITiDBCollator::UTF8MB4_BIN);
-        static const auto c_latin1_bin = BinCollator<char, true>(ITiDBCollator::LATIN1_BIN);
-        static const auto c_binary = BinCollator<char, false>(ITiDBCollator::BINARY);
-        static const auto c_ascii_bin = BinCollator<char, true>(ITiDBCollator::ASCII_BIN);
-        static const auto c_utf8_bin = UTF8MB4_BIN_TYPE(ITiDBCollator::UTF8_BIN);
+#define M(VAR_NAME, REAL_TYPE, COLLATOR_ENUM) \
+        static const auto VAR_NAME = REAL_TYPE(ITiDBCollator::COLLATOR_ENUM);
+
+        APPLY_FOR_COLLATOR_TYPES(M)
+#undef M
 
 #ifdef M
         static_assert(false, "`M` is defined");

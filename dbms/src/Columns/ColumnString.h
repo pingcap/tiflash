@@ -116,6 +116,13 @@ private:
         const TiDB::TiDBCollatorPtr & collator) const;
 
     template <bool has_null, bool has_collator>
+    void serializeToPosImplType(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const TiDB::TiDBCollatorPtr & collator,
+        String * sort_key_container) const;
+    template <bool has_null, bool has_collator, typename DerivedCollatorType>
     void serializeToPosImpl(
         PaddedPODArray<char *> & pos,
         size_t start,

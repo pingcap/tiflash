@@ -616,38 +616,64 @@ void ColumnString::serializeToPosForCmp(
     if (has_null)
     {
         if likely (collator != nullptr)
-            serializeToPosImpl</*has_null=*/true, /*has_collator=*/true>(
+            serializeToPosImplType</*has_null=*/true, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
                 collator,
                 sort_key_container);
         else
-            serializeToPosImpl</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+            serializeToPosImplType</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
     }
     else
     {
         if likely (collator != nullptr)
-            serializeToPosImpl</*has_null=*/false, /*has_collator=*/true>(
+            serializeToPosImplType</*has_null=*/false, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
                 collator,
                 sort_key_container);
         else
-            serializeToPosImpl</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+            serializeToPosImplType</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
     }
 }
 
 void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+        serializeToPosImplType</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
     else
-        serializeToPosImpl</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+        serializeToPosImplType</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
 }
 
 template <bool has_null, bool has_collator>
+void ColumnString::serializeToPosImplType(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container) const
+{
+#define M(VAR_NAME, REAL_TYPE, COLLATOR_ENUM) \
+    case (COLLATOR_ENUM): \
+    { \
+        serializeToPosImpl<has_null, has_collator, REAL_TYPE>(pos, start, length, collator, sort_key_container); \
+        break; \
+    }
+
+    switch (collator->getCollatorType())
+    {
+        APPLY_FOR_COLLATOR_TYPES(M)
+        default:
+        {
+            throw Exception(fmt::format("unexpected collator: {}", collator->getCollatorId()));
+        }
+    };
+#undef M
+}
+
+template <bool has_null, bool has_collator, typename DerivedCollatorType>
 void ColumnString::serializeToPosImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -661,6 +687,7 @@ void ColumnString::serializeToPosImpl(
         RUNTIME_CHECK(collator && sort_key_container);
 
     /// countSerializeByteSizeForCmp has already checked that the size of one element is not greater than UINT32_MAX
+    auto * derived_collator = static_cast<const DerivedCollatorType *>(collator);
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -673,7 +700,7 @@ void ColumnString::serializeToPosImpl(
         const void * src = &chars[offsetAt(start + i)];
         if constexpr (has_collator)
         {
-            auto sort_key = collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
+            auto sort_key = derived_collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
             str_size = sort_key.size;
             src = sort_key.data;
         }
