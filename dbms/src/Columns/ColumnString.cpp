@@ -711,7 +711,7 @@ void ColumnString::serializeToPosImplType(
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
-#define M(VAR_NAME, REAL_TYPE, COLLATOR_ID)                                                                      \
+#define M(VAR_PREFIX, COLLATOR_NAME, REAL_TYPE, COLLATOR_ID)                                                     \
     case (COLLATOR_ID):                                                                                          \
     {                                                                                                            \
         serializeToPosImpl<has_null, has_collator, REAL_TYPE>(pos, start, length, collator, sort_key_container); \

@@ -705,34 +705,24 @@ struct TiDBCollatorPtrMap
 
     TiDBCollatorPtrMap()
     {
-#define M(VAR_NAME, REAL_TYPE, COLLATOR_ID) static const auto VAR_NAME = REAL_TYPE(COLLATOR_ID);
-
-        APPLY_FOR_COLLATOR_TYPES_WITH_VARS(tmp_var, M)
+#define M(VAR_PREFIX, COLLATOR_NAME, REAL_TYPE, COLLATOR_ID) \
+    static const auto VAR_PREFIX##_##COLLATOR_NAME = REAL_TYPE(COLLATOR_ID);
+        APPLY_FOR_COLLATOR_TYPES(M)
 #undef M
 
 #ifdef M
         static_assert(false, "`M` is defined");
 #endif
-#define M(name)                                               \
+#define M(VAR_PREFIX, COLLATOR_NAME, REAL_TYPE, COLLATOR_ID)  \
     do                                                        \
     {                                                         \
-        auto & collator = (tmp_var_##name);                   \
+        auto & collator = VAR_PREFIX##_##COLLATOR_NAME;       \
         id_map[collator.getCollatorId()] = &collator;         \
         addr_to_type[&collator] = collator.getCollatorType(); \
-        name_map[#name] = &collator;                          \
-    } while (false)
+        name_map[#COLLATOR_NAME] = &collator;                 \
+    } while (false);
 
-        M(utf8_general_ci);
-        M(utf8mb4_general_ci);
-        M(utf8_unicode_ci);
-        M(utf8mb4_unicode_ci);
-        M(utf8mb4_0900_ai_ci);
-        M(utf8mb4_0900_bin);
-        M(utf8mb4_bin);
-        M(latin1_bin);
-        M(binary);
-        M(ascii_bin);
-        M(utf8_bin);
+        APPLY_FOR_COLLATOR_TYPES(M)
 #undef M
     }
 };
