@@ -290,5 +290,10 @@ template void buildRowKeyFilter<Int64>(
     const RSResults & stable_pack_res,
     IColumn::Filter & filter);
 
-// TODO: String
+template void buildRowKeyFilter<String>(
+    const DMContext & dm_context,
+    const SegmentSnapshot & snapshot,
+    const RowKeyRanges & read_ranges,
+    const RSResults & stable_pack_res,
+    IColumn::Filter & filter);
 } // namespace DB::DM
