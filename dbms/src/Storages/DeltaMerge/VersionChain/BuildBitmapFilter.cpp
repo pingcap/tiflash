@@ -45,7 +45,7 @@ BitmapFilterPtr buildBitmapFilter(
     const auto stable_pack_res = pack_filter_results.front()->getPackRes();
 
     buildRowKeyFilter<Handle>(dm_context, snapshot, read_ranges, stable_pack_res, filter);
-    buildVersionFilter(dm_context, snapshot, *base_ver_snap, read_ts, filter);
+    buildVersionFilter<Handle>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
     buildDeletedFilter(dm_context, snapshot, filter);
 
     bitmap_filter->runOptimize();

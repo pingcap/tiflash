@@ -35,43 +35,46 @@ namespace DB::DM
     assert(cf.isInMemoryFile() || cf.isTinyFile());
     auto cf_reader = cf.getReader(dm_context, data_provider, getVersionColumnDefinesPtr(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
+    RUNTIME_CHECK_MSG(
+        cf.getRows() == block.rows(),
+        "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
+        cf.toString(),
+        block.rows());
     if (!block)
         return 0;
-    RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
-    const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column); // Must success.
 
+    const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column); // Must success
     // Traverse data from new to old
     for (ssize_t i = versions.size() - 1; i >= 0; --i)
     {
         const UInt32 row_id = start_row_id + i;
-
+        // Already filtered ou, maybe by RowKeyFilter
         if (!filter[row_id])
             continue;
 
-        // invisible
+        // Invisible
         if (versions[i] > read_ts)
         {
             filter[row_id] = 0;
             continue;
         }
 
-        // visible
-
+        // Visible
         const auto base_row_id = base_ver_snap[row_id - stable_rows];
-        // Newer version has been chosen.
+        // Newer version has been chosen
         if (base_row_id != NotExistRowID && !filter[base_row_id])
         {
             filter[row_id] = 0;
             continue;
         }
-        // Choose this version
+        // Choose this version. If has based version, filter it out.
         if (base_row_id != NotExistRowID)
             filter[base_row_id] = 0;
     }
     return versions.size();
 }
 
-
+template <HandleType Handle>
 [[nodiscard]] UInt32 buildVersionFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
@@ -86,34 +89,34 @@ namespace DB::DM
 
     const auto max_versions = loadPackMaxValue<UInt64>(dm_context.global_context, *dmfile, MutSup::version_col_id);
 
-    auto read_packs = std::make_shared<IdSet>();
+    auto need_read_packs = std::make_shared<IdSet>();
     UInt32 need_read_rows = 0;
-    std::unordered_map<UInt32, UInt32> read_pack_to_start_row_ids;
+    std::unordered_map<UInt32, UInt32> need_read_pack_to_start_row_ids;
 
     const auto & pack_stats = dmfile->getPackStats();
-    UInt32 rows = 0;
+    UInt32 processed_rows = 0;
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
     {
         const UInt32 pack_id = valid_start_pack_id + i;
-        const UInt32 pack_start_row_id = start_row_id + rows;
+        const UInt32 pack_start_row_id = start_row_id + processed_rows;
         const auto & stat = pack_stats[pack_id];
         if (stat.not_clean || max_versions[pack_id] > read_ts)
         {
-            read_packs->insert(pack_id);
-            read_pack_to_start_row_ids.emplace(pack_id, pack_start_row_id);
+            need_read_packs->insert(pack_id);
+            need_read_pack_to_start_row_ids.emplace(pack_id, pack_start_row_id);
             need_read_rows += stat.rows;
         }
-        rows += stat.rows;
+        processed_rows += stat.rows;
     }
 
     if (need_read_rows == 0)
-        return rows;
+        return processed_rows;
 
     // If all packs need to read is clean, we can just read version column.
     // However, the benefits in general scenarios may not be significant.
-
+    // For simplicity, read handle column and version column directly.
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
-    builder.onlyReadOnePackEveryTime().setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
+    builder.onlyReadOnePackEveryTime().setReadPacks(need_read_packs).setReadTag(ReadTag::MVCC);
     auto stream = builder.build(
         dmfile,
         {getHandleColumnDefine<Handle>(), getVersionColumnDefine()},
@@ -121,52 +124,43 @@ namespace DB::DM
         dm_context.scan_context);
 
     UInt32 read_rows = 0;
-    for (auto pack_id : *read_packs)
+    for (auto pack_id : *need_read_packs)
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
         read_rows += block.rows();
-        const auto * handles_ptr
-            = toColumnVectorDataPtr<Int64>(block.getByName(MutSup::extra_handle_column_name).column);
-        RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
-        const auto & handles = *handles_ptr;
-        const auto & versions
-            = *toColumnVectorDataPtr<UInt64>(block.getByName(MutSup::version_column_name).column); // Must success.
-
-        const auto itr = read_pack_to_start_row_ids.find(pack_id);
-        RUNTIME_CHECK(itr != read_pack_to_start_row_ids.end(), read_pack_to_start_row_ids, pack_id);
+        const auto handles = ColumnView<Handle>(*(block.getByPosition(0).column));
+        const auto & versions = *toColumnVectorDataPtr<UInt64>(block.getByPosition(1).column); // Must success.
+        const auto itr = need_read_pack_to_start_row_ids.find(pack_id);
+        RUNTIME_CHECK(itr != need_read_pack_to_start_row_ids.end(), need_read_pack_to_start_row_ids, pack_id);
         const UInt32 pack_start_row_id = itr->second;
 
         // Filter invisible versions
         if (max_versions[pack_id] > read_ts)
         {
             for (UInt32 i = 0; i < block.rows(); ++i)
-            {
-                // TODO: benchmark
-                // filter[pack_start_row_id + i] = versions[i] <= read_ts;
-                if unlikely (versions[i] > read_ts)
-                    filter[pack_start_row_id + i] = 0;
-            }
+                filter[pack_start_row_id + i] = versions[i] <= read_ts;
         }
 
         // Filter multiple versions
         if (pack_stats[pack_id].not_clean)
         {
-            // [handle_itr, handle_end) is a pack.
             auto handle_itr = handles.begin();
-            const auto handle_end = handle_itr + pack_stats[pack_id].rows;
+            auto handle_end = handles.end();
             for (;;)
             {
+                // Search for the first two consecutive equal elements
                 auto itr = std::adjacent_find(handle_itr, handle_end);
                 if (itr == handle_end)
                     break;
 
                 // Let `handle_itr` point to next different handle.
-                handle_itr = std::find_if(itr, handle_end, [h = *itr](Int64 a) { return h != a; });
+                handle_itr = std::find_if(itr, handle_end, [h = *itr](auto a) { return h != a; });
                 // [itr, handle_itr) are the same handle of different verions.
-                auto count = std::distance(itr, handle_itr);
+                auto count = handle_itr - itr;
+                RUNTIME_CHECK(count >= 2, count);
 
-                const UInt32 base_row_id = pack_start_row_id + std::distance(handles.begin(), itr);
+                const UInt32 base_row_id = itr - handles.begin() + pack_start_row_id;
                 if (!filter[base_row_id])
                 {
                     std::fill_n(filter.begin() + base_row_id + 1, count - 1, 0);
@@ -174,6 +168,9 @@ namespace DB::DM
                 }
                 else
                 {
+                    // Find the newest but not filtered out version.
+                    // If it is invisiable to `read_ts`, it already filtered out before.
+                    // So we just get the last not filtered out version here.
                     for (UInt32 i = 1; i < count; ++i)
                     {
                         if (filter[base_row_id + i])
@@ -186,9 +183,10 @@ namespace DB::DM
         }
     }
     RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
-    return rows;
+    return processed_rows;
 }
 
+template <HandleType Handle>
 [[nodiscard]] UInt32 buildVersionFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
@@ -196,9 +194,16 @@ namespace DB::DM
     const ssize_t start_row_id,
     IColumn::Filter & filter)
 {
-    return buildVersionFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), read_ts, start_row_id, filter);
+    return buildVersionFilterDMFile<Handle>(
+        dm_context,
+        cf_big.getFile(),
+        cf_big.getRange(),
+        read_ts,
+        start_row_id,
+        filter);
 }
 
+template <HandleType Handle>
 [[nodiscard]] UInt32 buildVersionFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
@@ -207,9 +212,10 @@ namespace DB::DM
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-    return buildVersionFilterDMFile(dm_context, dmfiles[0], std::nullopt, read_ts, 0, filter);
+    return buildVersionFilterDMFile<Handle>(dm_context, dmfiles[0], std::nullopt, read_ts, 0, filter);
 }
 
+template <HandleType Handle>
 void buildVersionFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
@@ -229,12 +235,11 @@ void buildVersionFilter(
     const auto & data_provider = delta.getDataProvider();
 
     UInt32 read_rows = 0;
-
-    // Traverse data from new to old
+    // Read versions from new to old
     for (auto itr = cfs.rbegin(); itr != cfs.rend(); ++itr)
     {
         const auto & cf = *itr;
-        if (cf->isDeleteRange())
+        if (cf->isDeleteRange()) // Delete range is handled by RowKeyFilter.
             continue;
 
         const UInt32 cf_rows = cf->getRows();
@@ -260,14 +265,28 @@ void buildVersionFilter(
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            const auto n = buildVersionFilterColumnFileBig(dm_context, *cf_big, read_ts, start_row_id, filter);
+            const auto n = buildVersionFilterColumnFileBig<Handle>(dm_context, *cf_big, read_ts, start_row_id, filter);
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
     }
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
-    const auto n = buildVersionFilterStable(dm_context, stable, read_ts, filter);
+    const auto n = buildVersionFilterStable<Handle>(dm_context, stable, read_ts, filter);
     RUNTIME_CHECK(n == stable_rows, n, stable_rows);
 }
+
+template void buildVersionFilter<Int64>(
+    const DMContext & dm_context,
+    const SegmentSnapshot & snapshot,
+    const std::vector<RowID> & base_ver_snap,
+    const UInt64 read_ts,
+    IColumn::Filter & filter);
+
+template void buildVersionFilter<String>(
+    const DMContext & dm_context,
+    const SegmentSnapshot & snapshot,
+    const std::vector<RowID> & base_ver_snap,
+    const UInt64 read_ts,
+    IColumn::Filter & filter);
 } // namespace DB::DM
