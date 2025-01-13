@@ -58,5 +58,5 @@ template BitmapFilterPtr buildBitmapFilter<Int64>(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    VersionChain<HandleType> & version_chain);
+    VersionChain<Int64> & version_chain);
 } // namespace DB::DM
