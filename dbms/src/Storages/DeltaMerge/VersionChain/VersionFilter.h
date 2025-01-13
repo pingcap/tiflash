@@ -16,10 +16,13 @@
 
 #include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
+
 namespace DB::DM
 {
 struct DMContext;
 struct SegmentSnapshot;
+
+template <HandleType Handle>
 void buildVersionFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
