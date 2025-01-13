@@ -16,8 +16,8 @@
 #include <Columns/filterColumn.h>
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
-#include <TiDB/Collation/CollatorUtils.h>
 #include <TiDB/Collation/Collator.h>
+#include <TiDB/Collation/CollatorUtils.h>
 #include <common/memcpy.h>
 #include <fmt/core.h>
 
@@ -560,13 +560,22 @@ void ColumnString::countSerializeByteSizeForCmpColumnArray(
     if likely (collator != nullptr)
     {
         if (collator->maxBytesForOneChar() > 1)
-            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/true>(byte_size, array_offsets, collator);
+            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/true>(
+                byte_size,
+                array_offsets,
+                collator);
         else
-            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/false>(byte_size, array_offsets, collator);
+            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/false>(
+                byte_size,
+                array_offsets,
+                collator);
     }
     else
     {
-        countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, array_offsets, nullptr);
+        countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(
+            byte_size,
+            array_offsets,
+            nullptr);
     }
 }
 
@@ -574,7 +583,10 @@ void ColumnString::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
-    countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, array_offsets, nullptr);
+    countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(
+        byte_size,
+        array_offsets,
+        nullptr);
 }
 
 template <bool has_collator, bool count_code_points>
@@ -699,12 +711,12 @@ void ColumnString::serializeToPosImplType(
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
-#define M(VAR_NAME, REAL_TYPE, COLLATOR_ID) \
-        case (COLLATOR_ID): \
-        { \
-            serializeToPosImpl<has_null, has_collator, REAL_TYPE>(pos, start, length, collator, sort_key_container); \
-            break; \
-        }
+#define M(VAR_NAME, REAL_TYPE, COLLATOR_ID)                                                                      \
+    case (COLLATOR_ID):                                                                                          \
+    {                                                                                                            \
+        serializeToPosImpl<has_null, has_collator, REAL_TYPE>(pos, start, length, collator, sort_key_container); \
+        break;                                                                                                   \
+    }
 
         switch (collator->getCollatorId())
         {
@@ -719,7 +731,12 @@ void ColumnString::serializeToPosImplType(
     }
     else
     {
-        serializeToPosImpl<has_null, has_collator, TiDB::ITiDBCollator>(pos, start, length, collator, sort_key_container);
+        serializeToPosImpl<has_null, has_collator, TiDB::ITiDBCollator>(
+            pos,
+            start,
+            length,
+            collator,
+            sort_key_container);
     }
 }
 
@@ -749,7 +766,8 @@ void ColumnString::serializeToPosImpl(
         const void * src = &chars[offsetAt(start + i)];
         if constexpr (has_collator)
         {
-            auto sort_key = derived_collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
+            auto sort_key
+                = derived_collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
             str_size = sort_key.size;
             src = sort_key.data;
         }

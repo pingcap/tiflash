@@ -124,28 +124,28 @@ bool Pattern<Collator>::match(const char * s, size_t length) const
         {
             switch (match_types[p_idx])
             {
-                case Match:
-                    if (s_offset < length
-                            && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
-                    {
-                        p_idx++;
-                        s_offset = tmp_s_offset;
-                        continue;
-                    }
-                    break;
-                case One:
-                    if (s_offset < length)
-                    {
-                        p_idx++;
-                        Collator::decodeChar(s, s_offset);
-                        continue;
-                    }
-                    break;
-                case Any:
-                    next_p_idx = p_idx;
-                    Collator::decodeChar(s, next_s_offset = s_offset);
+            case Match:
+                if (s_offset < length
+                    && Collator::regexEq(Collator::decodeChar(s, tmp_s_offset = s_offset), chars[p_idx]))
+                {
                     p_idx++;
+                    s_offset = tmp_s_offset;
                     continue;
+                }
+                break;
+            case One:
+                if (s_offset < length)
+                {
+                    p_idx++;
+                    Collator::decodeChar(s, s_offset);
+                    continue;
+                }
+                break;
+            case Any:
+                next_p_idx = p_idx;
+                Collator::decodeChar(s, next_s_offset = s_offset);
+                p_idx++;
+                continue;
             }
         }
         if (0 < next_s_offset && next_s_offset <= length)
@@ -161,11 +161,12 @@ bool Pattern<Collator>::match(const char * s, size_t length) const
 
 template <typename T, bool padding>
 inline std::unique_ptr<ITiDBCollator::IPattern> BinCollator<T, padding>::pattern() const
-{ return std::make_unique<Pattern<BinCollator<T, padding>>>(); }
+{
+    return std::make_unique<Pattern<BinCollator<T, padding>>>();
+}
 
 template <typename T, bool padding>
-inline typename BinCollator<T, padding>::CharType
-BinCollator<T, padding>::decodeChar(const char * s, size_t & offset)
+inline typename BinCollator<T, padding>::CharType BinCollator<T, padding>::decodeChar(const char * s, size_t & offset)
 {
     if constexpr (std::is_same_v<T, char>)
     {
@@ -198,7 +199,11 @@ int GeneralCICollator::compare(const char * s1, size_t length1, const char * s2,
 }
 
 template <bool need_len, bool need_trim>
-StringRef GeneralCICollator::convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
+StringRef GeneralCICollator::convertImpl(
+    const char * s,
+    size_t length,
+    std::string & container,
+    std::vector<size_t> * lens) const
 {
     std::string_view v;
 
@@ -235,7 +240,10 @@ StringRef GeneralCICollator::convertImpl(const char * s, size_t length, std::str
     return StringRef(container.data(), total_size);
 }
 
-inline GeneralCICollator::CharType GeneralCICollator::decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
+inline GeneralCICollator::CharType GeneralCICollator::decodeChar(const char * s, size_t & offset)
+{
+    return decodeUtf8Char(s, offset);
+}
 
 namespace UnicodeCI
 {
@@ -357,7 +365,11 @@ int UCACICollator<T, padding>::compare(const char * s1, size_t length1, const ch
 
 template <typename T, bool padding>
 template <bool need_len, bool need_trim>
-StringRef UCACICollator<T, padding>::convertImpl(const char * s, size_t length, std::string & container, std::vector<size_t> * lens) const
+StringRef UCACICollator<T, padding>::convertImpl(
+    const char * s,
+    size_t length,
+    std::string & container,
+    std::vector<size_t> * lens) const
 {
     std::string_view v;
 
@@ -403,10 +415,20 @@ StringRef UCACICollator<T, padding>::convertImpl(const char * s, size_t length, 
 }
 
 template <typename T, bool padding>
-inline typename UCACICollator<T, padding>::CharType UCACICollator<T, padding>::decodeChar(const char * s, size_t & offset) { return decodeUtf8Char(s, offset); }
+inline typename UCACICollator<T, padding>::CharType UCACICollator<T, padding>::decodeChar(
+    const char * s,
+    size_t & offset)
+{
+    return decodeUtf8Char(s, offset);
+}
 
 template <typename T, bool padding>
-inline void UCACICollator<T, padding>::weight(uint64_t & first, uint64_t & second, size_t & offset, size_t length, const char * s)
+inline void UCACICollator<T, padding>::weight(
+    uint64_t & first,
+    uint64_t & second,
+    size_t & offset,
+    size_t length,
+    const char * s)
 {
     if (first == 0)
     {
@@ -683,8 +705,7 @@ struct TiDBCollatorPtrMap
 
     TiDBCollatorPtrMap()
     {
-#define M(VAR_NAME, REAL_TYPE, COLLATOR_ID) \
-        static const auto VAR_NAME = REAL_TYPE(COLLATOR_ID);
+#define M(VAR_NAME, REAL_TYPE, COLLATOR_ID) static const auto VAR_NAME = REAL_TYPE(COLLATOR_ID);
 
         APPLY_FOR_COLLATOR_TYPES_WITH_VARS(tmp_var, M)
 #undef M
@@ -695,7 +716,7 @@ struct TiDBCollatorPtrMap
 #define M(name)                                               \
     do                                                        \
     {                                                         \
-        auto & collator = (tmp_var_##name);          \
+        auto & collator = (tmp_var_##name);                   \
         id_map[collator.getCollatorId()] = &collator;         \
         addr_to_type[&collator] = collator.getCollatorType(); \
         name_map[#name] = &collator;                          \

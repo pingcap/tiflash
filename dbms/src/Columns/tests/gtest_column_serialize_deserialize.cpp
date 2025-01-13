@@ -728,13 +728,7 @@ try
     auto col_string = createColumn<String>({"hangzhou", "杭州", "你好世界", "欧元€", "abc里拉₤", "12法郎₣", ""}).column;
     testCountSerializeByteSize(
         col_string,
-        {4 + 8,
-         4 + 6,
-         4 + 12,
-         4 + 9,
-         4 + 12,
-         4 + 11,
-         4 + 0},
+        {4 + 8, 4 + 6, 4 + 12, 4 + 9, 4 + 12, 4 + 11, 4 + 0},
         true,
         collator_utf8_bin);
     testCountSerializeByteSize(

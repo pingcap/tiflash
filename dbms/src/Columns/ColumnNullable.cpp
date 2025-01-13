@@ -373,10 +373,8 @@ void ColumnNullable::deserializeForCmpAndInsertFromPosColumnArray(
     bool use_nt_align_buffer,
     const TiDB::TiDBCollatorPtr & collator)
 {
-    getNullMapColumn()
-        .deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
-    getNestedColumn()
-        .deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
+    getNullMapColumn().deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
+    getNestedColumn().deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
 }
 void ColumnNullable::deserializeAndInsertFromPosForColumnArray(
     PaddedPODArray<char *> & pos,

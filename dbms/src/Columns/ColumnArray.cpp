@@ -304,14 +304,8 @@ void ColumnArray::serializeToPosImpl(
     }
 
     if constexpr (for_compare)
-        getData().serializeToPosForCmpColumnArray(
-            pos,
-            start,
-            length,
-            has_null,
-            getOffsets(),
-            collator,
-            sort_key_container);
+        getData()
+            .serializeToPosForCmpColumnArray(pos, start, length, has_null, getOffsets(), collator, sort_key_container);
     else
         getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
 }
