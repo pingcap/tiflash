@@ -213,6 +213,33 @@ try
         expected -= 2; // Short value prefix and length
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
     }
+    {
+        // insert & snapshot
+        root_of_kvstore_mem_trackers->reset();
+        proxy_instance->debugAddRegions(
+            kvs,
+            ctx.getTMTContext(),
+            {800},
+            {{{RecordKVFormat::genKey(table_id, 1100), RecordKVFormat::genKey(table_id, 2120000)}}});
+        auto str_key2 = RecordKVFormat::genKey(table_id, 1120, 111);
+        auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
+
+        auto str_key3 = RecordKVFormat::genKey(table_id, 1180, 111);
+        auto [str_val_write3, str_val_default3] = proxy_instance->generateTiKVKeyValue(111, 999);
+        RegionPtr region = tests::makeRegion(800, start, end, proxy_helper.get());
+        
+        region->insert("default", TiKVKey::copyFrom(str_key3), TiKVValue::copyFrom(str_val_default3));
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key3.dataSize() + str_val_default3.size());
+
+        MockSSTReader::getMockSSTData().clear();
+        MockSSTGenerator default_cf{800, table_id, ColumnFamilyType::Default};
+        default_cf.insert(80, str_val_default2);
+        default_cf.finish_file();
+        default_cf.freeze();
+        kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
+        proxy_instance->snapshot(kvs, ctx.getTMTContext(), 800, {default_cf}, 0, 0, std::nullopt);
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key2.dataSize() + str_val_default2.size());
+    }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
 }
 CATCH
