@@ -17,6 +17,7 @@
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <TiDB/Collation/CollatorUtils.h>
+#include <TiDB/Collation/Collator.h>
 #include <common/memcpy.h>
 #include <fmt/core.h>
 
@@ -655,25 +656,35 @@ void ColumnString::serializeToPosImplType(
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
-#define M(VAR_NAME, REAL_TYPE, COLLATOR_ENUM) \
-    case (COLLATOR_ENUM): \
-    { \
-        serializeToPosImpl<has_null, has_collator, REAL_TYPE>(pos, start, length, collator, sort_key_container); \
-        break; \
-    }
-
-    switch (collator->getCollatorType())
+    if constexpr (has_collator)
     {
-        APPLY_FOR_COLLATOR_TYPES(M)
+        RUNTIME_CHECK(collator && sort_key_container);
+
+#define M(VAR_NAME, REAL_TYPE, COLLATOR_ID) \
+        case (COLLATOR_ID): \
+        { \
+            serializeToPosImpl<has_null, has_collator, REAL_TYPE>(pos, start, length, collator, sort_key_container); \
+            break; \
+        }
+
+        switch (collator->getCollatorId())
+        {
+            APPLY_FOR_COLLATOR_TYPES(M)
         default:
         {
             throw Exception(fmt::format("unexpected collator: {}", collator->getCollatorId()));
+            break;
         }
-    };
+        };
 #undef M
+    }
+    else
+    {
+        serializeToPosImpl<has_null, has_collator, TiDB::ITiDBCollator>(pos, start, length, collator, sort_key_container);
+    }
 }
 
-template <bool has_null, bool has_collator, typename DerivedCollatorType>
+template <bool has_null, bool has_collator, typename DerivedCollator>
 void ColumnString::serializeToPosImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -683,11 +694,9 @@ void ColumnString::serializeToPosImpl(
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
-    if constexpr (has_collator)
-        RUNTIME_CHECK(collator && sort_key_container);
 
     /// countSerializeByteSizeForCmp has already checked that the size of one element is not greater than UINT32_MAX
-    auto * derived_collator = static_cast<const DerivedCollatorType *>(collator);
+    const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)

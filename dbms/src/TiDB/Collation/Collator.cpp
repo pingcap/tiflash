@@ -683,10 +683,10 @@ struct TiDBCollatorPtrMap
 
     TiDBCollatorPtrMap()
     {
-#define M(VAR_NAME, REAL_TYPE, COLLATOR_ENUM) \
-        static const auto VAR_NAME = REAL_TYPE(ITiDBCollator::COLLATOR_ENUM);
+#define M(VAR_NAME, REAL_TYPE, COLLATOR_ID) \
+        static const auto VAR_NAME = REAL_TYPE(COLLATOR_ID);
 
-        APPLY_FOR_COLLATOR_TYPES(M)
+        APPLY_FOR_COLLATOR_TYPES_WITH_VARS(tmp_var, M)
 #undef M
 
 #ifdef M
@@ -695,7 +695,7 @@ struct TiDBCollatorPtrMap
 #define M(name)                                               \
     do                                                        \
     {                                                         \
-        auto & collator = (c_##name);                         \
+        auto & collator = (tmp_var_##name);          \
         id_map[collator.getCollatorId()] = &collator;         \
         addr_to_type[&collator] = collator.getCollatorType(); \
         name_map[#name] = &collator;                          \

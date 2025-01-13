@@ -405,33 +405,19 @@ using UCACI_0400_PADDING = UCACICollator<Unicode0400, true>;
 using UCACI_0900_NON_PADDING = UCACICollator<Unicode0900, false>;
 using BIN_COLLATOR_PADDING = BinCollator<char, true>;
 using BIN_COLLATOR_NON_PADDING = BinCollator<char, false>;
-
-#define APPLY_FOR_COLLATOR_TYPES(M) \
-    M(c_utf8_general_ci, GeneralCICollator, UTF8_GENERAL_CI); \
-    M(c_utf8mb4_general_ci, GeneralCICollator, UTF8MB4_GENERAL_CI); \
-    M(c_utf8_unicode_ci, UCACI_0400_PADDING, UTF8_UNICODE_CI); \
-    M(c_utf8mb4_unicode_ci, UCACI_0400_PADDING, UTF8MB4_UNICODE_CI); \
-    M(c_utf8mb4_0900_ai_ci, UCACI_0900_NON_PADDING, UTF8MB4_0900_AI_CI); \
-    M(c_utf8mb4_0900_bin, UTF8MB4_0900_BIN_TYPE, UTF8MB4_0900_BIN); \
-    M(c_utf8mb4_bin, UTF8MB4_BIN_TYPE, UTF8MB4_BIN); \
-    M(c_latin1_bin, BIN_COLLATOR_PADDING, LATIN1_BIN); \
-    M(c_binary, BIN_COLLATOR_NON_PADDING, BINARY); \
-    M(c_ascii_bin, BIN_COLLATOR_PADDING, ASCII_BIN); \
-    M(c_utf8_bin, UTF8MB4_BIN_TYPE, UTF8_BIN);
-
-using CollatorTypeEnum = ITiDBCollator::CollatorType;
-template <CollatorTypeEnum>
-struct TiDBCollatorTypeDispatcher
-{
-    using type = void;
-};
-#define M(VAR_NAME, REAL_TYPE, COLLATOR_ENUM) \
-    template <> \
-    struct TiDBCollatorTypeDispatcher<ITiDBCollator::CollatorType::COLLATOR_ENUM> \
-    { \
-        using type = REAL_TYPE; \
-    }
-#undef M
-#undef APPLY_FOR_COLLATOR_TYPES
 } // namespace TiDB
 
+#define APPLY_FOR_COLLATOR_TYPES_WITH_VARS(VAR_PREFIX, M) \
+    M(VAR_PREFIX##_utf8_general_ci, TiDB::GeneralCICollator, TiDB::ITiDBCollator::UTF8_GENERAL_CI) \
+    M(VAR_PREFIX##_utf8mb4_general_ci, TiDB::GeneralCICollator, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI) \
+    M(VAR_PREFIX##_utf8_unicode_ci, TiDB::UCACI_0400_PADDING, TiDB::ITiDBCollator::UTF8_UNICODE_CI) \
+    M(VAR_PREFIX##_utf8mb4_unicode_ci, TiDB::UCACI_0400_PADDING, TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI) \
+    M(VAR_PREFIX##_utf8mb4_0900_ai_ci, TiDB::UCACI_0900_NON_PADDING, TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI) \
+    M(VAR_PREFIX##_utf8mb4_0900_bin, TiDB::UTF8MB4_0900_BIN_TYPE, TiDB::ITiDBCollator::UTF8MB4_0900_BIN) \
+    M(VAR_PREFIX##_utf8mb4_bin, TiDB::UTF8MB4_BIN_TYPE, TiDB::ITiDBCollator::UTF8MB4_BIN) \
+    M(VAR_PREFIX##_latin1_bin, TiDB::BIN_COLLATOR_PADDING, TiDB::ITiDBCollator::LATIN1_BIN) \
+    M(VAR_PREFIX##_binary, TiDB::BIN_COLLATOR_NON_PADDING, TiDB::ITiDBCollator::BINARY) \
+    M(VAR_PREFIX##_ascii_bin, TiDB::BIN_COLLATOR_PADDING, TiDB::ITiDBCollator::ASCII_BIN) \
+    M(VAR_PREFIX##_utf8_bin, TiDB::UTF8MB4_BIN_TYPE, TiDB::ITiDBCollator::UTF8_BIN)
+
+#define APPLY_FOR_COLLATOR_TYPES(M) APPLY_FOR_COLLATOR_TYPES_WITH_VARS(tmp, M)
