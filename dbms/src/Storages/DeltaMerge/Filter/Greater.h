@@ -33,6 +33,19 @@ public:
     {
         return minMaxCheckCmp<RoughCheck::CheckGreater>(start_pack, pack_count, param, attr, value);
     }
+
+    ColumnValueSetPtr buildSets(const LocalIndexInfosSnapshot & index_info) override
+    {
+        if (auto set = IntegerSet::createGreaterRangeSet(attr.type->getTypeId(), value, /*not_included=*/true); set)
+        {
+            auto iter = std::find_if(index_info->begin(), index_info->end(), [&](const auto & info) {
+                return info.column_id == attr.col_id && info.type == IndexType::Inverted;
+            });
+            if (iter != index_info->end())
+                return SingleColumnValueSet::create(iter->column_id, iter->index_id, set);
+        }
+        return UnsupportedColumnValueSet::create();
+    }
 };
 
 } // namespace DB::DM

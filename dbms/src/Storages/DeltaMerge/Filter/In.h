@@ -47,7 +47,7 @@ public:
             ",");
         buf.append("]}");
         return buf.toString();
-    };
+    }
 
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
@@ -58,6 +58,19 @@ public:
         auto rs_index = getRSIndex(param, attr);
         return rs_index ? rs_index->minmax->checkIn(start_pack, pack_count, values, rs_index->type)
                         : RSResults(pack_count, RSResult::Some);
+    }
+
+    ColumnValueSetPtr buildSets(const LocalIndexInfosSnapshot & index_info) override
+    {
+        if (auto set = IntegerSet::createValueSet(attr.type->getTypeId(), values); set)
+        {
+            auto iter = std::find_if(index_info->begin(), index_info->end(), [&](const auto & info) {
+                return info.column_id == attr.col_id && info.type == IndexType::Inverted;
+            });
+            if (iter != index_info->end())
+                return SingleColumnValueSet::create(iter->column_id, iter->index_id, set);
+        }
+        return UnsupportedColumnValueSet::create();
     }
 };
 

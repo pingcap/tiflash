@@ -43,6 +43,15 @@ public:
         }
         return res;
     }
+
+    ColumnValueSetPtr buildSets(const LocalIndexInfosSnapshot & index_info) override
+    {
+        ColumnValueSets children_sets;
+        children_sets.reserve(children.size());
+        for (const auto & child : children)
+            children_sets.push_back(child->buildSets(index_info));
+        return OrColumnValueSet::create(children_sets);
+    }
 };
 
 } // namespace DB::DM

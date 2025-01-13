@@ -39,6 +39,13 @@ public:
     // filter[start, satrt+limit) & f -> f
     void rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 
+    void set(std::span<const UInt32> row_ids, const FilterPtr & f);
+
+    // f = f | other
+    void merge(const BitmapFilter & other);
+    // f = f & other
+    void intersect(const BitmapFilter & other);
+
     void runOptimize();
 
     String toDebugString() const;
@@ -48,8 +55,6 @@ public:
     friend class BitmapFilterView;
 
 private:
-    void set(std::span<const UInt32> row_ids, const FilterPtr & f);
-
     IColumn::Filter filter;
     bool all_match;
 };
