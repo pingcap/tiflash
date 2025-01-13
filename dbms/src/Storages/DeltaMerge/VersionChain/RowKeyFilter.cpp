@@ -28,24 +28,25 @@ namespace
 // TODO: shrinking read_range by segment_range
 template <HandleType Handle>
 UInt32 buildRowKeyFilterVector(
-    const PaddedPODArray<Handle> & handles,
+    const ColumnView<Handle> & handles,
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
     IColumn::Filter & filter)
 {
-    for (UInt32 i = 0; i < handles.size(); ++i)
+    for (auto itr = handles.begin(); itr != handles.end(); ++itr)
     {
-        auto in_range = [h = handles[i]](const RowKeyRange & range) {
+        auto in_range = [h = *itr](const RowKeyRange & range) {
             return inRowKeyRange(range, h);
         };
+        // IN delete_ranges or NOT IN read_ranges
         if (std::any_of(delete_ranges.begin(), delete_ranges.end(), in_range)
             || std::none_of(read_ranges.begin(), read_ranges.end(), in_range))
         {
-            filter[start_row_id + i] = 0;
+            filter[itr - handles.begin() + start_row_id] = 0;
         }
     }
-    return handles.size();
+    return handles.end() - handles.begin();
 }
 
 template <HandleType Handle>
@@ -60,15 +61,19 @@ UInt32 buildRowKeyFilterBlock(
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
 
-    if (cf.getRows() == 0)
+    const auto rows = cf.getRows();
+    if (unlikely(rows == 0))
         return 0;
 
     auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<Handle>(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
-    RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: MUST read all rows in one block!", cf.toString());
-    const auto * handles_ptr = toColumnVectorDataPtr<Int64>(block.begin()->column);
-    RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
-    const auto & handles = *handles_ptr;
+    RUNTIME_CHECK_MSG(
+        rows == block.rows(),
+        "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
+        cf.toString(),
+        block.rows());
+
+    const auto handles = ColumnView<Handle>(*(block.begin()->column));
     return buildRowKeyFilterVector<Handle>(handles, delete_ranges, read_ranges, start_row_id, filter);
 }
 
@@ -84,21 +89,20 @@ UInt32 buildRowKeyFilterDMFile(
     IColumn::Filter & filter)
 {
     auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
-    if (valid_handle_res.empty())
+    if (unlikely(valid_handle_res.empty()))
         return 0;
 
     if (stable_pack_res)
     {
+        // Only use the None result of stable_pack_res
         const auto & s_pack_res = *stable_pack_res;
-        RUNTIME_CHECK(
-            stable_pack_res->size() == valid_handle_res.size(),
-            stable_pack_res->size(),
-            valid_handle_res.size());
+        RUNTIME_CHECK(s_pack_res.size() == valid_handle_res.size(), s_pack_res.size(), valid_handle_res.size());
         for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
             if (!s_pack_res[i].isUse())
                 valid_handle_res[i] = RSResult::None;
     }
 
+    // Seems stable_pack_res is the result of read_ranges and ...
     const auto read_ranges_handle_res = getRSResultsByRanges(dm_context, dmfile, read_ranges);
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
         valid_handle_res[i] = valid_handle_res[i] && read_ranges_handle_res[valid_start_pack_id + i];
@@ -110,53 +114,52 @@ UInt32 buildRowKeyFilterDMFile(
             valid_handle_res[i] = valid_handle_res[i] && !delete_ranges_handle_res[valid_start_pack_id + i];
     }
 
-    auto read_packs = std::make_shared<IdSet>();
+    auto need_read_packs = std::make_shared<IdSet>();
     UInt32 need_read_rows = 0;
-    std::unordered_map<UInt32, UInt32> read_pack_to_start_row_ids;
+    std::unordered_map<UInt32, UInt32> need_read_pack_to_start_row_ids;
 
     const auto & pack_stats = dmfile->getPackStats();
-    UInt32 rows = 0;
+    UInt32 processed_rows = 0;
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
     {
         const auto pack_id = valid_start_pack_id + i;
         if (!valid_handle_res[i].isUse())
         {
-            std::fill_n(filter.begin() + start_row_id + rows, pack_stats[pack_id].rows, false);
+            std::fill_n(filter.begin() + start_row_id + processed_rows, pack_stats[pack_id].rows, false);
         }
         else if (!valid_handle_res[i].allMatch())
         {
-            read_packs->insert(pack_id);
-            read_pack_to_start_row_ids.emplace(pack_id, start_row_id + rows);
+            need_read_packs->insert(pack_id);
+            need_read_pack_to_start_row_ids.emplace(pack_id, start_row_id + processed_rows);
             need_read_rows += pack_stats[pack_id].rows;
         }
-        rows += pack_stats[pack_id].rows;
+        processed_rows += pack_stats[pack_id].rows;
     }
 
     if (need_read_rows == 0)
-        return rows;
+        return processed_rows;
 
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
-    builder.onlyReadOnePackEveryTime().setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
-    auto stream = builder.build(dmfile, {getHandleColumnDefine<Handle>()}, {}, dm_context.scan_context);
+    builder.onlyReadOnePackEveryTime().setReadPacks(need_read_packs).setReadTag(ReadTag::MVCC);
+    auto stream
+        = builder.build(dmfile, {getHandleColumnDefine<Handle>()}, /*rowkey_ranges*/ {}, dm_context.scan_context);
     UInt32 read_rows = 0;
-    for (auto pack_id : *read_packs)
+    for (auto pack_id : *need_read_packs)
     {
         auto block = stream->read();
-        const auto * handles_ptr = toColumnVectorDataPtr<Int64>(block.begin()->column);
-        RUNTIME_CHECK_MSG(handles_ptr != nullptr, "TODO: support common handle");
-        const auto & handles = *handles_ptr;
-
-        const auto itr = read_pack_to_start_row_ids.find(pack_id);
-        RUNTIME_CHECK(itr != read_pack_to_start_row_ids.end(), read_pack_to_start_row_ids, pack_id);
+        RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
+        const auto handles = ColumnView<Handle>(*(block.begin()->column));
+        const auto itr = need_read_pack_to_start_row_ids.find(pack_id);
+        RUNTIME_CHECK(itr != need_read_pack_to_start_row_ids.end(), need_read_pack_to_start_row_ids, pack_id);
         read_rows += buildRowKeyFilterVector(
             handles,
             delete_ranges,
             read_ranges,
-            itr->second, // start_row_id
+            /*start_row_id*/ itr->second,
             filter);
     }
     RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
-    return rows;
+    return processed_rows;
 }
 
 template <HandleType Handle>
@@ -206,10 +209,6 @@ UInt32 buildRowKeyFilterStable(
         filter);
 }
 
-void buildRowKeyFilterDeleteRange(const ColumnFileDeleteRange & cf_delete_range, RowKeyRanges & delete_ranges)
-{
-    delete_ranges.push_back(cf_delete_range.getDeleteRange());
-}
 } // namespace
 
 template <HandleType Handle>
@@ -231,13 +230,13 @@ void buildRowKeyFilter(
     const auto & data_provider = delta.getDataProvider();
     RowKeyRanges delete_ranges;
     UInt32 read_rows = 0;
-    // Read from new cfs to old cfs to handle delete range
+    // Read ColumnFiles from new to old for handling delete ranges
     for (auto itr = cfs.rbegin(); itr != cfs.rend(); ++itr)
     {
         const auto & cf = *itr;
         if (const auto * cf_delete_range = cf->tryToDeleteRange(); cf_delete_range)
         {
-            buildRowKeyFilterDeleteRange(*cf_delete_range, delete_ranges);
+            delete_ranges.push_back(cf_delete_range->getDeleteRange());
             continue;
         }
 
