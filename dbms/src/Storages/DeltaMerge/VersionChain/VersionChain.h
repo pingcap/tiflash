@@ -29,7 +29,7 @@ class ColumnFile;
 class ColumnFileBig;
 class ColumnFileDeleteRange;
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 class VersionChain
 {
 public:
@@ -77,13 +77,13 @@ private:
     void calculateReadPacks(Iterator begin, Iterator end);
     void cleanHandleColumn();
 
-    static std::pair<Handle, Handle> convertRowKeyRange(const RowKeyRange & range);
+    static std::pair<HandleType, HandleType> convertRowKeyRange(const RowKeyRange & range);
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
     std::shared_ptr<std::vector<RowID>> base_versions; // base_versions->size() == delta.getRows()
-    std::map<Handle, RowID, std::less<>> new_handle_to_row_ids;
-    using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<Handle>>;
+    std::map<HandleType, RowID, std::less<>> new_handle_to_row_ids;
+    using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
 };
 } // namespace DB::DM

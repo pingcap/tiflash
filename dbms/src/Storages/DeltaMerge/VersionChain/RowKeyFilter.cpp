@@ -24,9 +24,9 @@ namespace DB::DM
 {
 namespace
 {
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 UInt32 buildRowKeyFilterVector(
-    const ColumnView<Handle> & handles,
+    const ColumnView<HandleType> & handles,
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
@@ -47,7 +47,7 @@ UInt32 buildRowKeyFilterVector(
     return handles.end() - handles.begin();
 }
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 UInt32 buildRowKeyFilterBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
@@ -61,7 +61,7 @@ UInt32 buildRowKeyFilterBlock(
     const UInt32 rows = cf.getRows();
     assert(rows > 0);
 
-    auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<Handle>(), ReadTag::MVCC);
+    auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<HandleType>(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
     RUNTIME_CHECK_MSG(
         rows == block.rows(),
@@ -69,11 +69,11 @@ UInt32 buildRowKeyFilterBlock(
         cf.toString(),
         block.rows());
 
-    const auto handles = ColumnView<Handle>(*(block.begin()->column));
-    return buildRowKeyFilterVector<Handle>(handles, delete_ranges, read_ranges, start_row_id, filter);
+    const auto handles = ColumnView<HandleType>(*(block.begin()->column));
+    return buildRowKeyFilterVector<HandleType>(handles, delete_ranges, read_ranges, start_row_id, filter);
 }
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 UInt32 buildRowKeyFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
@@ -143,13 +143,13 @@ UInt32 buildRowKeyFilterDMFile(
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     builder.onlyReadOnePackEveryTime().setReadPacks(need_read_packs).setReadTag(ReadTag::MVCC);
     auto stream
-        = builder.build(dmfile, {getHandleColumnDefine<Handle>()}, /*rowkey_ranges*/ {}, dm_context.scan_context);
+        = builder.build(dmfile, {getHandleColumnDefine<HandleType>()}, /*rowkey_ranges*/ {}, dm_context.scan_context);
     UInt32 read_rows = 0;
     for (auto pack_id : *need_read_packs)
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
-        const auto handles = ColumnView<Handle>(*(block.begin()->column));
+        const auto handles = ColumnView<HandleType>(*(block.begin()->column));
         const auto itr = need_read_pack_to_start_row_ids.find(pack_id);
         RUNTIME_CHECK(itr != need_read_pack_to_start_row_ids.end(), need_read_pack_to_start_row_ids, pack_id);
         read_rows += buildRowKeyFilterVector(
@@ -163,7 +163,7 @@ UInt32 buildRowKeyFilterDMFile(
     return processed_rows;
 }
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 UInt32 buildRowKeyFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
@@ -174,7 +174,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
 {
     if (cf_big.getRows() == 0)
         return 0;
-    return buildRowKeyFilterDMFile<Handle>(
+    return buildRowKeyFilterDMFile<HandleType>(
         dm_context,
         cf_big.getFile(),
         cf_big.getRange(),
@@ -185,7 +185,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
         filter);
 }
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 UInt32 buildRowKeyFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
@@ -199,7 +199,7 @@ UInt32 buildRowKeyFilterStable(
     const auto & dmfile = dmfiles[0];
     if (unlikely(dmfile->getPacks() == 0))
         return 0;
-    return buildRowKeyFilterDMFile<Handle>(
+    return buildRowKeyFilterDMFile<HandleType>(
         dm_context,
         dmfile,
         /*segment_range*/ std::nullopt,
@@ -212,7 +212,7 @@ UInt32 buildRowKeyFilterStable(
 
 } // namespace
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 void buildRowKeyFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
@@ -249,7 +249,7 @@ void buildRowKeyFilter(
         // TODO: add min-max value in tiny file to optimize rowkey filter.
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            const auto n = buildRowKeyFilterBlock<Handle>(
+            const auto n = buildRowKeyFilterBlock<HandleType>(
                 dm_context,
                 data_provider,
                 *cf,
@@ -262,7 +262,7 @@ void buildRowKeyFilter(
         }
         else if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            const auto n = buildRowKeyFilterColumnFileBig<Handle>(
+            const auto n = buildRowKeyFilterColumnFileBig<HandleType>(
                 dm_context,
                 *cf_big,
                 delete_ranges,
@@ -277,7 +277,7 @@ void buildRowKeyFilter(
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
 
     const auto n
-        = buildRowKeyFilterStable<Handle>(dm_context, stable, delete_ranges, read_ranges, stable_pack_res, filter);
+        = buildRowKeyFilterStable<HandleType>(dm_context, stable, delete_ranges, read_ranges, stable_pack_res, filter);
     RUNTIME_CHECK(n == stable_rows, n, stable_rows);
 }
 
