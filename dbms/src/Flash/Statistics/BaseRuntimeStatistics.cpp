@@ -52,10 +52,10 @@ void BaseRuntimeStatistics::updateReceiveConnectionInfo(const ConnectionProfileI
     case DB::ConnectionProfileInfo::Local:
         break;
     case ConnectionProfileInfo::InnerZoneRemote:
-        inner_zone_receive_bytes += bytes;
+        inner_zone_receive_bytes += conn_profile_info.bytes;
         break;
     case DB::ConnectionProfileInfo::InterZoneRemote:
-        inter_zone_receive_bytes += bytes;
+        inter_zone_receive_bytes += conn_profile_info.bytes;
         break;
     default:
         throw TiFlashException(
@@ -71,10 +71,10 @@ void BaseRuntimeStatistics::updateSendConnectionInfo(const ConnectionProfileInfo
     case DB::ConnectionProfileInfo::Local:
         break;
     case ConnectionProfileInfo::InnerZoneRemote:
-        inner_zone_send_bytes += bytes;
+        inner_zone_send_bytes += conn_profile_info.bytes;
         break;
     case DB::ConnectionProfileInfo::InterZoneRemote:
-        inter_zone_send_bytes += bytes;
+        inter_zone_send_bytes += conn_profile_info.bytes;
         break;
     default:
         throw TiFlashException(
