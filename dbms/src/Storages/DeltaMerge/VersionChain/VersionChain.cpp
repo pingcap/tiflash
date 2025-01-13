@@ -20,8 +20,8 @@
 namespace DB::DM
 {
 
-template <HandleType Handle>
-std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
+template <ExtraHandleType HandleType>
+std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapshot(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot)
 {
@@ -31,7 +31,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
         const auto & dmfiles = snapshot.stable->getDMFiles();
         RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
         dmfile_or_delete_range_list.push_back(
-            DMFileHandleIndex<Handle>{dm_context, dmfiles[0], /*start_row_id*/ 0, /*rowkey_range*/ std::nullopt});
+            DMFileHandleIndex<HandleType>{dm_context, dmfiles[0], /*start_row_id*/ 0, /*rowkey_range*/ std::nullopt});
     }
 
     const auto & stable = *(snapshot.stable);
@@ -114,8 +114,8 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<Handle>::replaySnapshot(
     return base_versions;
 }
 
-template <HandleType Handle>
-UInt32 VersionChain<Handle>::replayBlock(
+template <ExtraHandleType HandleType>
+UInt32 VersionChain<HandleType>::replayBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
     const ColumnFile & cf,
@@ -125,7 +125,7 @@ UInt32 VersionChain<Handle>::replayBlock(
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
 
-    auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<Handle>(), ReadTag::MVCC);
+    auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<HandleType>(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
     RUNTIME_CHECK_MSG(
         cf.getRows() == block.rows(),
@@ -136,7 +136,7 @@ UInt32 VersionChain<Handle>::replayBlock(
     const auto & column = *(block.begin()->column);
     RUNTIME_CHECK(column.size() > offset, column.size(), offset);
 
-    const auto handle_col = ColumnView<Handle>(*(block.begin()->column));
+    const auto handle_col = ColumnView<HandleType>(*(block.begin()->column));
     auto itr = handle_col.begin() + offset;
 
     if (calculate_read_packs)
@@ -163,8 +163,8 @@ UInt32 VersionChain<Handle>::replayBlock(
     return column.size() - offset;
 }
 
-template <HandleType Handle>
-UInt32 VersionChain<Handle>::replayColumnFileBig(
+template <ExtraHandleType HandleType>
+UInt32 VersionChain<HandleType>::replayColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const UInt32 stable_rows)
@@ -174,12 +174,12 @@ UInt32 VersionChain<Handle>::replayColumnFileBig(
     base_versions->insert(base_versions->end(), rows, NotExistRowID);
 
     dmfile_or_delete_range_list.push_back(
-        DMFileHandleIndex<Handle>{dm_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
+        DMFileHandleIndex<HandleType>{dm_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
     return rows;
 }
 
-template <HandleType Handle>
-UInt32 VersionChain<Handle>::replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range)
+template <ExtraHandleType HandleType>
+UInt32 VersionChain<HandleType>::replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range)
 {
     auto [start, end] = convertRowKeyRange(cf_delete_range.getDeleteRange());
     auto itr = new_handle_to_row_ids.lower_bound(start);
@@ -192,9 +192,9 @@ UInt32 VersionChain<Handle>::replayDeleteRange(const ColumnFileDeleteRange & cf_
     return cf_delete_range.getDeletes();
 }
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 template <HandleRefType HandleRef>
-std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRangeList(
+std::optional<RowID> VersionChain<HandleType>::findBaseVersionFromDMFileOrDeleteRangeList(
     const DMContext & dm_context,
     HandleRef h)
 {
@@ -202,7 +202,7 @@ std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRang
     for (auto itr = dmfile_or_delete_range_list.rbegin(); itr != dmfile_or_delete_range_list.rend(); ++itr)
     {
         auto & dmfile_or_delete_range = *itr;
-        if (auto * dmfile_index = std::get_if<DMFileHandleIndex<Handle>>(&dmfile_or_delete_range); dmfile_index)
+        if (auto * dmfile_index = std::get_if<DMFileHandleIndex<HandleType>>(&dmfile_or_delete_range); dmfile_index)
         {
             if (auto row_id = dmfile_index->getBaseVersion(dm_context, h); row_id)
                 return row_id;
@@ -216,29 +216,29 @@ std::optional<RowID> VersionChain<Handle>::findBaseVersionFromDMFileOrDeleteRang
     return {};
 }
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 template <typename Iterator>
-void VersionChain<Handle>::calculateReadPacks(Iterator begin, Iterator end)
+void VersionChain<HandleType>::calculateReadPacks(Iterator begin, Iterator end)
 {
     assert(dmfile_or_delete_range_list.size() == 1);
-    auto & dmfile_index = std::get<DMFileHandleIndex<Handle>>(dmfile_or_delete_range_list.front());
+    auto & dmfile_index = std::get<DMFileHandleIndex<HandleType>>(dmfile_or_delete_range_list.front());
     dmfile_index.calculateReadPacks(begin, end);
 }
 
-template <HandleType Handle>
-void VersionChain<Handle>::cleanHandleColumn()
+template <ExtraHandleType HandleType>
+void VersionChain<HandleType>::cleanHandleColumn()
 {
     for (auto & dmfile_or_delete_range : dmfile_or_delete_range_list)
     {
-        if (auto * dmfile_index = std::get_if<DMFileHandleIndex<Handle>>(&dmfile_or_delete_range); dmfile_index)
+        if (auto * dmfile_index = std::get_if<DMFileHandleIndex<HandleType>>(&dmfile_or_delete_range); dmfile_index)
             dmfile_index->cleanHandleColumn();
     }
 }
 
-template <HandleType Handle>
-std::pair<Handle, Handle> VersionChain<Handle>::convertRowKeyRange(const RowKeyRange & range)
+template <ExtraHandleType HandleType>
+std::pair<HandleType, HandleType> VersionChain<HandleType>::convertRowKeyRange(const RowKeyRange & range)
 {
-    if constexpr (std::is_same_v<Handle, Int64>)
+    if constexpr (std::is_same_v<HandleType, Int64>)
         return {range.start.int_value, range.end.int_value};
     else
         return {*(range.start.value), *(range.end.value)};

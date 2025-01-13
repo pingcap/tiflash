@@ -31,27 +31,27 @@ static constexpr RowID NotExistRowID = std::numeric_limits<RowID>::max();
 static constexpr RowID UnknownRowID = NotExistRowID - 1;
 
 template <typename T>
-concept HandleType = std::same_as<T, Int64> || std::same_as<T, String>;
+concept ExtraHandleType = std::same_as<T, Int64> || std::same_as<T, String>;
 
 template <typename T>
 concept HandleRefType = std::same_as<T, Int64> || std::same_as<T, std::string_view>;
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 ColumnDefine getHandleColumnDefine()
 {
-    if constexpr (std::is_same_v<Handle, Int64>)
+    if constexpr (std::is_same_v<HandleType, Int64>)
         return getExtraIntHandleColumnDefine();
-    else if constexpr (std::is_same_v<Handle, String>)
+    else if constexpr (std::is_same_v<HandleType, String>)
         return getExtraStringHandleColumnDefine();
     else
         static_assert(false, "Not support type");
 }
 
 // For ColumnFileReader
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 ColumnDefinesPtr getHandleColumnDefinesPtr()
 {
-    static auto cds_ptr = std::make_shared<ColumnDefines>(1, getHandleColumnDefine<Handle>());
+    static auto cds_ptr = std::make_shared<ColumnDefines>(1, getHandleColumnDefine<HandleType>());
     return cds_ptr;
 }
 

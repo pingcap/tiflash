@@ -22,7 +22,7 @@ namespace DB::DM
 struct DMContext;
 struct SegmentSnapshot;
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 void buildVersionFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,

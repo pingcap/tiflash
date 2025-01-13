@@ -74,7 +74,7 @@ namespace DB::DM
     return versions.size();
 }
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 [[nodiscard]] UInt32 buildVersionFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
@@ -119,7 +119,7 @@ template <HandleType Handle>
     builder.onlyReadOnePackEveryTime().setReadPacks(need_read_packs).setReadTag(ReadTag::MVCC);
     auto stream = builder.build(
         dmfile,
-        {getHandleColumnDefine<Handle>(), getVersionColumnDefine()},
+        {getHandleColumnDefine<HandleType>(), getVersionColumnDefine()},
         {},
         dm_context.scan_context);
 
@@ -129,7 +129,7 @@ template <HandleType Handle>
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
         read_rows += block.rows();
-        const auto handles = ColumnView<Handle>(*(block.getByPosition(0).column));
+        const auto handles = ColumnView<HandleType>(*(block.getByPosition(0).column));
         const auto & versions = *toColumnVectorDataPtr<UInt64>(block.getByPosition(1).column); // Must success.
         const auto itr = need_read_pack_to_start_row_ids.find(pack_id);
         RUNTIME_CHECK(itr != need_read_pack_to_start_row_ids.end(), need_read_pack_to_start_row_ids, pack_id);
@@ -186,7 +186,7 @@ template <HandleType Handle>
     return processed_rows;
 }
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 [[nodiscard]] UInt32 buildVersionFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
@@ -194,7 +194,7 @@ template <HandleType Handle>
     const ssize_t start_row_id,
     IColumn::Filter & filter)
 {
-    return buildVersionFilterDMFile<Handle>(
+    return buildVersionFilterDMFile<HandleType>(
         dm_context,
         cf_big.getFile(),
         cf_big.getRange(),
@@ -203,7 +203,7 @@ template <HandleType Handle>
         filter);
 }
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 [[nodiscard]] UInt32 buildVersionFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
@@ -212,10 +212,10 @@ template <HandleType Handle>
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-    return buildVersionFilterDMFile<Handle>(dm_context, dmfiles[0], std::nullopt, read_ts, 0, filter);
+    return buildVersionFilterDMFile<HandleType>(dm_context, dmfiles[0], std::nullopt, read_ts, 0, filter);
 }
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 void buildVersionFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
@@ -265,14 +265,15 @@ void buildVersionFilter(
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            const auto n = buildVersionFilterColumnFileBig<Handle>(dm_context, *cf_big, read_ts, start_row_id, filter);
+            const auto n
+                = buildVersionFilterColumnFileBig<HandleType>(dm_context, *cf_big, read_ts, start_row_id, filter);
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
     }
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
-    const auto n = buildVersionFilterStable<Handle>(dm_context, stable, read_ts, filter);
+    const auto n = buildVersionFilterStable<HandleType>(dm_context, stable, read_ts, filter);
     RUNTIME_CHECK(n == stable_rows, n, stable_rows);
 }
 
