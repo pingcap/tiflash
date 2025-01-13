@@ -24,8 +24,6 @@ namespace DB::DM
 {
 namespace
 {
-
-// TODO: shrinking read_range by segment_range
 template <HandleType Handle>
 UInt32 buildRowKeyFilterVector(
     const ColumnView<Handle> & handles,
@@ -94,19 +92,24 @@ UInt32 buildRowKeyFilterDMFile(
 
     if (stable_pack_res)
     {
-        // Only use the None result of stable_pack_res
         const auto & s_pack_res = *stable_pack_res;
         RUNTIME_CHECK(s_pack_res.size() == valid_handle_res.size(), s_pack_res.size(), valid_handle_res.size());
+        // stable_pack_res is the result of `read_ranges` && `rs_filter`.
+        // If the result of a pack filtered by read_ranges is All, but filtered by `filter` is Some, its result
+        // is Some in stable_pack_res.
+        // Result of `rs_filter` is no help here, because we just want to filter out rowkey here.
+        // So only use the None results of stable_pack_res
         for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
             if (!s_pack_res[i].isUse())
                 valid_handle_res[i] = RSResult::None;
     }
 
-    // Seems stable_pack_res is the result of read_ranges and ...
+    // RSResult of read_ranges.
     const auto read_ranges_handle_res = getRSResultsByRanges(dm_context, dmfile, read_ranges);
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
         valid_handle_res[i] = valid_handle_res[i] && read_ranges_handle_res[valid_start_pack_id + i];
 
+    // RSResult of delete_ranges.
     if (!delete_ranges.empty())
     {
         const auto delete_ranges_handle_res = getRSResultsByRanges(dm_context, dmfile, delete_ranges);
@@ -179,7 +182,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
         cf_big.getRange(),
         delete_ranges,
         Segment::shrinkRowKeyRanges(cf_big.getRange(), read_ranges),
-        nullptr, // stable_pack_res
+        /*stable_pack_res*/ nullptr,
         start_row_id,
         filter);
 }
@@ -196,16 +199,16 @@ UInt32 buildRowKeyFilterStable(
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
     const auto & dmfile = dmfiles[0];
-    if (dmfile->getPacks() == 0)
+    if (unlikely(dmfile->getPacks() == 0))
         return 0;
     return buildRowKeyFilterDMFile<Handle>(
         dm_context,
         dmfile,
-        std::nullopt, // segment_range
+        /*segment_range*/ std::nullopt,
         delete_ranges,
         read_ranges,
         &stable_pack_res,
-        0, // start_row_id
+        /*start_row_id*/ 0,
         filter);
 }
 
