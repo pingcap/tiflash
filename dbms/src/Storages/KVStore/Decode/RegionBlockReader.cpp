@@ -201,17 +201,17 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
     while (raw_delmark_col == nullptr || version_col_resolver.needBuild()
            || extra_handle_column_pos == invalid_column_pos)
     {
-        if (column_ids_iter->first == DelMarkColumnID)
+        if (column_ids_iter->first == MutSup::delmark_col_id)
         {
             raw_delmark_col
                 = static_cast<ColumnUInt8 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get()));
         }
-        else if (column_ids_iter->first == VersionColumnID)
+        else if (column_ids_iter->first == MutSup::version_col_id)
         {
             version_col_resolver.build(
                 static_cast<ColumnUInt64 *>(const_cast<IColumn *>(block.getByPosition(next_column_pos).column.get())));
         }
-        else if (column_ids_iter->first == TiDBPkColumnID)
+        else if (column_ids_iter->first == MutSup::extra_handle_id)
         {
             extra_handle_column_pos = next_column_pos;
         }
@@ -299,12 +299,12 @@ bool RegionBlockReader::readImpl(Block & block, const ReadList & data_list, bool
                 if constexpr (pk_type == TMTPKType::INT64)
                     static_cast<ColumnInt64 *>(raw_pk_column)->getData().push_back(handle_value);
                 else if constexpr (pk_type == TMTPKType::UINT64)
-                    static_cast<ColumnUInt64 *>(raw_pk_column)->getData().push_back(UInt64(handle_value));
+                    static_cast<ColumnUInt64 *>(raw_pk_column)->getData().push_back(static_cast<UInt64>(handle_value));
                 else
                 {
                     // The pk_type must be Int32/UInt32 or more narrow type
                     // so cannot tell its' exact type here, just use `insert(Field)`
-                    raw_pk_column->insert(Field(handle_value));
+                    raw_pk_column->insert(Field{handle_value});
                     if (unlikely(raw_pk_column->getInt(index) != handle_value))
                     {
                         if (!force_decode)

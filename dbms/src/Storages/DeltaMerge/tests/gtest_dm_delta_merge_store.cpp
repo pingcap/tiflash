@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <Common/MyTime.h>
 #include <Common/SyncPoint/SyncPoint.h>
+#include <Core/Defines.h>
 #include <DataTypes/DataTypeMyDateTime.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -61,11 +62,13 @@ extern const char segment_merge_after_ingest_packs[];
 extern const char force_set_segment_physical_split[];
 extern const char force_set_page_file_write_errno[];
 extern const char proactive_flush_force_set_type[];
+extern const char force_ingest_via_delta[];
+extern const char force_ingest_via_replace[];
 } // namespace DB::FailPoints
 
 namespace DB::tests
 {
-DM::PushDownFilterPtr generatePushDownFilter(
+DM::PushDownExecutorPtr generatePushDownExecutor(
     Context & ctx,
     const String & table_info_json,
     const String & query,
@@ -90,9 +93,9 @@ try
     {
         // check handle column of store
         const auto & h = store->getHandle();
-        ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
-        ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
-        ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_INT_TYPE));
+        ASSERT_EQ(h.name, MutSup::extra_handle_column_name);
+        ASSERT_EQ(h.id, MutSup::extra_handle_id);
+        ASSERT_TRUE(h.type->equals(*MutSup::getExtraHandleColumnIntType()));
     }
     {
         // check column structure of store
@@ -358,7 +361,7 @@ try
             store->getRowKeyColumnSize());
         block1 = DeltaMergeStore::addExtraColumnIfNeed(*db_context, store->getHandle(), std::move(block1));
         ASSERT_EQ(block1.rows(), nrows);
-        ASSERT_TRUE(block1.has(EXTRA_HANDLE_COLUMN_NAME));
+        ASSERT_TRUE(block1.has(MutSup::extra_handle_column_name));
         ASSERT_NO_THROW({ block1.checkNumberOfRows(); });
 
         // Make a block that is overlapped with `block1` and it should be squashed by `PKSquashingBlockInputStream`
@@ -375,14 +378,14 @@ try
             store->getRowKeyColumnSize());
         block2 = DeltaMergeStore::addExtraColumnIfNeed(*db_context, store->getHandle(), std::move(block2));
         ASSERT_EQ(block2.rows(), nrows_2);
-        ASSERT_TRUE(block2.has(EXTRA_HANDLE_COLUMN_NAME));
+        ASSERT_TRUE(block2.has(MutSup::extra_handle_column_name));
         ASSERT_NO_THROW({ block2.checkNumberOfRows(); });
 
 
         BlockInputStreamPtr stream = std::make_shared<BlocksListBlockInputStream>(BlocksList{block1, block2});
         stream = std::make_shared<PKSquashingBlockInputStream<false>>(
             stream,
-            EXTRA_HANDLE_COLUMN_ID,
+            MutSup::extra_handle_id,
             store->isCommonHandle());
         ASSERT_INPUTSTREAM_NROWS(stream, nrows + nrows_2);
 
@@ -453,11 +456,6 @@ try
     }
 
     {
-        // TODO read data from more than one block
-        // TODO read data from mutli streams
-        // TODO read partial columns from store
-        // TODO read data of max_version
-
         // read all columns from store
         const auto & columns = store->getTableColumns();
         BlockInputStreamPtr in = store->read(
@@ -496,6 +494,99 @@ try
                 createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
                 createColumn<String>(createNumberStrings(0, num_rows_write)),
                 createColumn<Int8>(createSignedNumbers(0, num_rows_write)),
+            }));
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreRWTest, ReadAfterLogicalSplit)
+try
+{
+    if (mode != TestMode::Current_DiskOnly)
+        return;
+
+    auto table_column_defines = DMTestEnv::getDefaultColumns();
+
+    const size_t num_rows_write = 3 * 8192;
+    {
+        // write to store
+        Blocks blocks{
+            DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write / 3, false),
+            DMTestEnv::prepareSimpleWriteBlock(num_rows_write / 3, num_rows_write * 2 / 3, false),
+            DMTestEnv::prepareSimpleWriteBlock(num_rows_write * 2 / 3, num_rows_write, false),
+        };
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        auto [range, file_ids] = genDMFileByBlocks(*dm_context, blocks);
+        FailPointHelper::enableFailPoint(FailPoints::force_ingest_via_delta);
+        store->ingestFiles(dm_context, range, file_ids, false);
+        store->mergeDeltaAll(*db_context);
+    }
+
+    {
+        LOG_INFO(Logger::get(), "read columns from store");
+        // read all columns from store
+        const auto & columns = store->getTableColumns();
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            columns,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ DEFAULT_BLOCK_SIZE)[0];
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({
+                DMTestEnv::pk_name,
+            }),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+            }));
+    }
+
+    {
+        LOG_INFO(Logger::get(), "logical split on store");
+        SegmentPtr seg;
+        std::tie(std::ignore, seg) = *store->segments.begin();
+        auto [left, right] = store->segmentSplit(
+            *dm_context,
+            seg,
+            DeltaMergeStore::SegmentSplitReason::ForegroundWrite,
+            std::nullopt,
+            DeltaMergeStore::SegmentSplitMode::Logical);
+        ASSERT_NE(left, nullptr);
+        ASSERT_NE(right, nullptr);
+        LOG_INFO(Logger::get(), "read columns from store after logical split");
+    }
+    {
+        // Read after logical split. Note that use unordered read to test
+        BlockInputStreamPtr in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            store->getTableColumns(),
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 102400)[0];
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({
+                DMTestEnv::pk_name,
+            }),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
             }));
     }
 }
@@ -562,7 +653,7 @@ try
         /* is_fast_scan= */ false,
         /* expected_block_size= */ 1024,
         /* read_segments */ {},
-        /* extra_table_id_index */ InvalidColumnID,
+        /* extra_table_id_index */ MutSup::invalid_col_id,
         /* scan_context */ scan_context)[0];
     in->readPrefix();
     while (in->read()) {};
@@ -582,7 +673,7 @@ try
         {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
         /* num_streams= */ 1,
         /* start_ts= */ std::numeric_limits<UInt64>::max(),
-        std::make_shared<PushDownFilter>(filter),
+        std::make_shared<PushDownExecutor>(filter),
         std::vector<RuntimeFilterPtr>{},
         0,
         TRACING_NAME,
@@ -590,7 +681,7 @@ try
         /* is_fast_scan= */ false,
         /* expected_block_size= */ 1024,
         /* read_segments */ {},
-        /* extra_table_id_index */ InvalidColumnID,
+        /* extra_table_id_index */ MutSup::invalid_col_id,
         /* scan_context */ scan_context)[0];
 
     in->readPrefix();
@@ -1307,7 +1398,7 @@ try
         BlockInputStreamPtr in = ins[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
-            Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
+            Strings({DMTestEnv::pk_name, MutSup::version_column_name}),
             createColumns({
                 createColumn<Int64>(createNumbers<Int64>(0, 32)),
                 createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
@@ -1336,7 +1427,7 @@ try
         BlockInputStreamPtr in = ins[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
-            Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
+            Strings({DMTestEnv::pk_name, MutSup::version_column_name}),
             createColumns({
                 createColumn<Int64>(createNumbers<Int64>(0, 32)),
                 createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
@@ -1472,7 +1563,7 @@ try
         BlockInputStreamPtr in = ins[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
-            Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
+            Strings({DMTestEnv::pk_name, MutSup::version_column_name}),
             createColumns({
                 createColumn<Int64>(createNumbers<Int64>(0, 32)),
                 createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
@@ -1501,7 +1592,7 @@ try
         BlockInputStreamPtr in = ins[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
-            Strings({DMTestEnv::pk_name, VERSION_COLUMN_NAME}),
+            Strings({DMTestEnv::pk_name, MutSup::version_column_name}),
             createColumns({
                 createColumn<Int64>(createNumbers<Int64>(0, 32)),
                 createColumn<UInt64>(std::vector<UInt64>(32, tso1)),
@@ -1578,7 +1669,8 @@ try
             {
                 break;
             }
-            const auto & handle = *toColumnVectorDataPtr<Int64>(block.getByName(EXTRA_HANDLE_COLUMN_NAME).column);
+            const auto & handle
+                = *toColumnVectorDataPtr<Int64>(block.getByName(MutSup::extra_handle_column_name).column);
             const auto & value = *toColumnVectorDataPtr<UInt64>(block.getByName(value_col_name).column);
             for (size_t i = 0; i < block.rows(); i++)
             {
@@ -2748,9 +2840,9 @@ try
     {
         // check handle column of store
         const auto & h = store->getHandle();
-        ASSERT_EQ(h.name, EXTRA_HANDLE_COLUMN_NAME);
-        ASSERT_EQ(h.id, EXTRA_HANDLE_COLUMN_ID);
-        ASSERT_TRUE(h.type->equals(*EXTRA_HANDLE_COLUMN_STRING_TYPE));
+        ASSERT_EQ(h.name, MutSup::extra_handle_column_name);
+        ASSERT_EQ(h.id, MutSup::extra_handle_id);
+        ASSERT_TRUE(h.type->equals(*MutSup::getExtraHandleColumnStringType()));
     }
     {
         // check column structure of store
@@ -2778,7 +2870,7 @@ Block createBlock(const ColumnDefine & cd, size_t begin, size_t end)
 
 } // namespace
 
-TEST_F(DeltaMergeStoreTest, ReadLegacyStringData_CFTiny)
+TEST_F(DeltaMergeStoreTest, ReadLegacyStringDataCFTiny)
 try
 {
     // Write legacy string data to CFTiny.
@@ -2843,7 +2935,7 @@ try
 }
 CATCH
 
-TEST_F(DeltaMergeStoreTest, ReadLegacyStringData_DMFile)
+TEST_F(DeltaMergeStoreTest, ReadLegacyStringDataDMFile)
 try
 {
     // Write legacy string data to DMFile.
@@ -2946,9 +3038,9 @@ try
                 num_rows_write,
                 false,
                 2,
-                EXTRA_HANDLE_COLUMN_NAME,
-                EXTRA_HANDLE_COLUMN_ID,
-                EXTRA_HANDLE_COLUMN_STRING_TYPE,
+                MutSup::extra_handle_column_name,
+                MutSup::extra_handle_id,
+                MutSup::getExtraHandleColumnStringType(),
                 true,
                 rowkey_column_size);
             // Add a column of col2:String for test
@@ -3052,9 +3144,9 @@ try
             1 * num_write_rows,
             false,
             2,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            MutSup::extra_handle_column_name,
+            MutSup::extra_handle_id,
+            MutSup::getExtraHandleColumnStringType(),
             true,
             rowkey_column_size);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(
@@ -3062,9 +3154,9 @@ try
             2 * num_write_rows,
             false,
             2,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            MutSup::extra_handle_column_name,
+            MutSup::extra_handle_id,
+            MutSup::getExtraHandleColumnStringType(),
             true,
             rowkey_column_size);
         Block block3 = DMTestEnv::prepareSimpleWriteBlock(
@@ -3072,9 +3164,9 @@ try
             3 * num_write_rows,
             false,
             2,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            MutSup::extra_handle_column_name,
+            MutSup::extra_handle_id,
+            MutSup::getExtraHandleColumnStringType(),
             true,
             rowkey_column_size);
         store->write(*db_context, db_context->getSettingsRef(), block1);
@@ -3129,9 +3221,9 @@ try
             1 * num_write_rows,
             false,
             tso1,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            MutSup::extra_handle_column_name,
+            MutSup::extra_handle_id,
+            MutSup::getExtraHandleColumnStringType(),
             true,
             rowkey_column_size);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(
@@ -3139,9 +3231,9 @@ try
             2 * num_write_rows,
             false,
             tso1,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            MutSup::extra_handle_column_name,
+            MutSup::extra_handle_id,
+            MutSup::getExtraHandleColumnStringType(),
             true,
             rowkey_column_size);
         Block block3 = DMTestEnv::prepareSimpleWriteBlock(
@@ -3149,9 +3241,9 @@ try
             num_write_rows / 2 + num_write_rows,
             false,
             tso2,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            MutSup::extra_handle_column_name,
+            MutSup::extra_handle_id,
+            MutSup::getExtraHandleColumnStringType(),
             true,
             rowkey_column_size);
         store->write(*db_context, db_context->getSettingsRef(), block1);
@@ -3251,9 +3343,9 @@ try
             128,
             false,
             2,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_STRING_TYPE,
+            MutSup::extra_handle_column_name,
+            MutSup::extra_handle_id,
+            MutSup::getExtraHandleColumnStringType(),
             true,
             rowkey_column_size);
         store->write(*db_context, db_context->getSettingsRef(), block);
@@ -3857,8 +3949,8 @@ try
                 false,
                 std::numeric_limits<UInt64>::max(), // max version to make sure it's the latest
                 pk_name,
-                EXTRA_HANDLE_COLUMN_ID,
-                EXTRA_HANDLE_COLUMN_INT_TYPE,
+                MutSup::extra_handle_id,
+                MutSup::getExtraHandleColumnIntType(),
                 false,
                 1,
                 true,
@@ -3879,7 +3971,8 @@ try
         ColumnDefines real_columns;
         for (const auto & col : columns)
         {
-            if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != TAG_COLUMN_NAME && col.name != VERSION_COLUMN_NAME)
+            if (col.name != MutSup::extra_handle_column_name && col.name != MutSup::delmark_column_name
+                && col.name != MutSup::version_column_name)
             {
                 real_columns.emplace_back(col);
             }
@@ -4108,7 +4201,7 @@ try
         return block;
     };
 
-    auto check = [&](PushDownFilterPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+    auto check = [&](PushDownExecutorPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4153,7 +4246,7 @@ try
 })json";
 
     auto create_filter = [&](Int64 value) {
-        auto filter = generatePushDownFilter(
+        auto filter = generatePushDownExecutor(
             *db_context,
             table_info_json,
             fmt::format("select * from default.t_111 where col_time >= {}", value));
@@ -4172,7 +4265,14 @@ try
         return filter;
     };
 
-    DB::registerFunctions();
+    try
+    {
+        DB::registerFunctions();
+    }
+    catch (DB::Exception &)
+    {
+        // Maybe another test has already registered, ignore exception here.
+    }
 
     constexpr Int64 num_rows = 128;
     auto filter_all = create_filter(0);
@@ -4230,7 +4330,7 @@ try
         return block;
     };
 
-    auto check = [&](PushDownFilterPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+    auto check = [&](PushDownExecutorPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4276,7 +4376,7 @@ try
 })json";
 
     auto create_filter = [&](Int64 value) {
-        auto filter = generatePushDownFilter(
+        auto filter = generatePushDownExecutor(
             *db_context,
             table_info_json,
             fmt::format("select * from default.t_111 where col_time >= {}", value));
@@ -4295,7 +4395,14 @@ try
         return filter;
     };
 
-    DB::registerFunctions();
+    try
+    {
+        DB::registerFunctions();
+    }
+    catch (DB::Exception &)
+    {
+        // Maybe another test has already registered, ignore exception here.
+    }
 
     constexpr Int64 num_rows = 128;
     auto filter_all = create_filter(0);

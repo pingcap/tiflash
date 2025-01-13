@@ -13,8 +13,9 @@
 // limitations under the License.
 
 #pragma once
-
 #include <DataTypes/IDataType.h>
+
+#include <span>
 
 namespace DB
 {
@@ -92,11 +93,15 @@ public:
     };
 
     inline static const String LegacyName{"String"}; // For compatibility of size-prefix format.
+    inline static const String NullableLegacyName{"Nullable(String)"};
     inline static const String NameV2{"StringV2"}; // The separate size and chars format.
+    inline static const String NullableNameV2{"Nullable(StringV2)"};
 
     // Both getDefaultName and getNullableDefaultName are unit-tests helpers.
     static String getDefaultName();
     static String getNullableDefaultName();
+
+    static std::span<const std::pair<String, DataTypePtr>> getTiDBPkColumnStringNameAndTypes();
 
     explicit DataTypeString(SerdesFormat serdes_fmt_ = SerdesFormat::None);
 

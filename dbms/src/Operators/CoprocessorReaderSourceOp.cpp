@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Operators/CoprocessorReaderSourceOp.h>
 
@@ -24,7 +25,10 @@ CoprocessorReaderSourceOp::CoprocessorReaderSourceOp(
     CoprocessorReaderPtr coprocessor_reader_)
     : SourceOp(exec_context_, req_id)
     , coprocessor_reader(coprocessor_reader_)
-    , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, coprocessor_reader->getSourceNum()))
+    , io_profile_info(IOProfileInfo::createForRemote(
+          profile_info_ptr,
+          coprocessor_reader->getSourceNum(),
+          CoprocessorReader::conn_type_vec))
 {
     assert(coprocessor_reader);
     setHeader(Block(getColumnWithTypeAndName(toNamesAndTypes(coprocessor_reader->getOutputSchema()))));
@@ -90,9 +94,13 @@ OperatorStatus CoprocessorReaderSourceOp::readImpl(Block & block)
             }
 
             const auto & decode_detail = result.decode_detail;
-            auto & connection_profile_info = io_profile_info->connection_profile_infos[0];
-            connection_profile_info.packets += decode_detail.packets;
-            connection_profile_info.bytes += decode_detail.packet_bytes;
+            auto conn_profile_info_index = CoprocessorReader::inner_zone_index;
+            if (!result.same_zone_flag)
+            {
+                conn_profile_info_index = CoprocessorReader::inter_zone_index;
+            }
+            io_profile_info->connection_profile_infos[conn_profile_info_index].packets += decode_detail.packets;
+            io_profile_info->connection_profile_infos[conn_profile_info_index].bytes += decode_detail.packet_bytes;
 
             total_rows += decode_detail.rows;
             LOG_TRACE(

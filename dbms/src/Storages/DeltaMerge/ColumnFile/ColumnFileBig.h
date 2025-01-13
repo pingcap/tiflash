@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFilePersisted.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
+#include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 namespace DB::DM
 {
@@ -132,7 +133,7 @@ private:
 
     bool pk_ver_only;
 
-    DMFileBlockInputStreamPtr file_stream;
+    SkippableBlockInputStreamPtr file_stream;
 
     // The data members for reading only pk and version columns.
     // we cache them to minimize the cost.
@@ -175,14 +176,14 @@ public:
     {
         if (col_defs_->size() == 1)
         {
-            if ((*col_defs)[0].id == EXTRA_HANDLE_COLUMN_ID)
+            if ((*col_defs)[0].id == MutSup::extra_handle_id)
             {
                 pk_ver_only = true;
             }
         }
         else if (col_defs_->size() == 2)
         {
-            if ((*col_defs)[0].id == EXTRA_HANDLE_COLUMN_ID && (*col_defs)[1].id == VERSION_COLUMN_ID)
+            if ((*col_defs)[0].id == MutSup::extra_handle_id && (*col_defs)[1].id == MutSup::version_col_id)
             {
                 pk_ver_only = true;
             }

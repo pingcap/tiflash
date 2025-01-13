@@ -18,24 +18,38 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/SelectQueryInfo.h>
 #include <TiDB/Decode/TypeMapping.h>
 
 namespace DB::DM
 {
-PushDownFilterPtr PushDownFilter::build(
+PushDownExecutorPtr PushDownExecutor::build(
     const RSOperatorPtr & rs_operator,
+    const ANNQueryInfoPtr & ann_query_info,
     const TiDB::ColumnInfos & table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
     const ColumnDefines & columns_to_read,
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
+    // check if the ann_query_info is valid
+    auto valid_ann_query_info = ann_query_info;
+    if (ann_query_info)
+    {
+        bool is_valid_ann_query = ann_query_info->top_k() != std::numeric_limits<UInt32>::max();
+        bool is_matching_ann_query = std::any_of(
+            columns_to_read.begin(),
+            columns_to_read.end(),
+            [cid = ann_query_info->column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
+        if (!is_valid_ann_query || !is_matching_ann_query)
+            valid_ann_query_info = nullptr;
+    }
+
     if (pushed_down_filters.empty())
     {
         LOG_DEBUG(tracing_logger, "Push down filter is empty");
-        return std::make_shared<PushDownFilter>(rs_operator);
+        return std::make_shared<PushDownExecutor>(rs_operator, valid_ann_query_info);
     }
     std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
     for (const auto & column : columns_to_read)
@@ -73,9 +87,11 @@ PushDownFilterPtr PushDownFilter::build(
             source_columns_of_analyzer.emplace_back(col_name, data_type);
             continue;
         }
-        if (cid == EXTRA_TABLE_ID_COLUMN_ID)
+        if (cid == MutSup::extra_table_id_col_id)
         {
-            source_columns_of_analyzer.emplace_back(EXTRA_TABLE_ID_COLUMN_NAME, EXTRA_TABLE_ID_COLUMN_TYPE);
+            source_columns_of_analyzer.emplace_back(
+                MutSup::extra_table_id_column_name,
+                MutSup::getExtraTableIdColumnType());
             continue;
         }
         RUNTIME_CHECK_MSG(columns_to_read_map.contains(cid), "ColumnID({}) not found in columns_to_read_map", cid);
@@ -120,7 +136,7 @@ PushDownFilterPtr PushDownFilter::build(
     }
 
     // build filter expression actions
-    auto [before_where, filter_column_name, project_after_where] = analyzer->buildPushDownFilter(pushed_down_filters);
+    auto [before_where, filter_column_name, project_after_where] = analyzer->buildPushDownExecutor(pushed_down_filters);
     LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
 
     // record current column defines
@@ -132,7 +148,7 @@ PushDownFilterPtr PushDownFilter::build(
         for (size_t i = 0; i < table_scan_column_info.size(); ++i)
         {
             if (table_scan_column_info[i].hasGeneratedColumnFlag()
-                || table_scan_column_info[i].id == EXTRA_TABLE_ID_COLUMN_ID)
+                || table_scan_column_info[i].id == MutSup::extra_table_id_col_id)
                 continue;
             auto col = columns_to_read_map.at(table_scan_column_info[i].id);
             RUNTIME_CHECK_MSG(
@@ -145,8 +161,9 @@ PushDownFilterPtr PushDownFilter::build(
         }
     }
 
-    return std::make_shared<PushDownFilter>(
+    return std::make_shared<PushDownExecutor>(
         rs_operator,
+        valid_ann_query_info,
         before_where,
         project_after_where,
         filter_columns,
@@ -155,7 +172,7 @@ PushDownFilterPtr PushDownFilter::build(
         columns_after_cast);
 }
 
-PushDownFilterPtr PushDownFilter::build(
+PushDownExecutorPtr PushDownExecutor::build(
     const SelectQueryInfo & query_info,
     const ColumnDefines & columns_to_read,
     const ColumnDefines & table_column_defines,
@@ -174,6 +191,10 @@ PushDownFilterPtr PushDownFilter::build(
         table_column_defines,
         context.getSettingsRef().dt_enable_rough_set_filter,
         tracing_logger);
+    // build ann_query_info
+    ANNQueryInfoPtr ann_query_info = nullptr;
+    if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)
+        ann_query_info = std::make_shared<tipb::ANNQueryInfo>(dag_query->ann_query_info);
     // build push down filter
     const auto & pushed_down_filters = dag_query->pushed_down_filters;
     if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan) && !dag_query->filters.empty())
@@ -182,16 +203,18 @@ PushDownFilterPtr PushDownFilter::build(
             pushed_down_filters.begin(),
             pushed_down_filters.end()};
         merged_filters.MergeFrom(dag_query->filters);
-        return PushDownFilter::build(
+        return PushDownExecutor::build(
             rs_operator,
+            ann_query_info,
             columns_to_read_info,
             merged_filters,
             columns_to_read,
             context,
             tracing_logger);
     }
-    return PushDownFilter::build(
+    return PushDownExecutor::build(
         rs_operator,
+        ann_query_info,
         columns_to_read_info,
         pushed_down_filters,
         columns_to_read,

@@ -1061,11 +1061,11 @@ std::tuple<NamesAndTypes, Strings> parseColumnsFromTableInfo(const TiDB::TableIn
     {
         // Make primary key as a column, and make the handle column as the primary key.
         if (table_info.is_common_handle)
-            columns.emplace_back(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeString>());
+            columns.emplace_back(MutSup::extra_handle_column_name, std::make_shared<DataTypeString>());
         else
-            columns.emplace_back(MutableSupport::tidb_pk_column_name, std::make_shared<DataTypeInt64>());
+            columns.emplace_back(MutSup::extra_handle_column_name, std::make_shared<DataTypeInt64>());
         primary_keys.clear();
-        primary_keys.emplace_back(MutableSupport::tidb_pk_column_name);
+        primary_keys.emplace_back(MutSup::extra_handle_column_name);
     }
 
     return std::make_tuple(std::move(columns), std::move(primary_keys));

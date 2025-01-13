@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/typeid_cast.h>
 #include <IO/FileProvider/FileProvider.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
@@ -219,7 +220,7 @@ size_t DMFile::colIndexSize(ColId id) const
         }
         else
         {
-            throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Index of {} not exist", id);
+            throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Index is not exist, col_id={}", id);
         }
     }
     else

@@ -66,14 +66,23 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
 }
 
 template <class ExchangeWriterPtr>
-bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doFlush()
+WriteResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 {
+    has_pending_flush = false;
     if (rows_in_blocks > 0)
     {
-        writeBlocks();
-        return true;
+        auto wait_res = waitForWritable();
+        if (wait_res == WaitResult::Ready)
+        {
+            writeBlocks();
+            return WriteResult::Done;
+        }
+        // set has_pending_flush to true since current flush is not done
+        has_pending_flush = true;
+        return wait_res == WaitResult::WaitForPolling ? WriteResult::NeedWaitForPolling
+                                                      : WriteResult::NeedWaitForNotify;
     }
-    return false;
+    return WriteResult::Done;
 }
 
 template <class ExchangeWriterPtr>
@@ -83,14 +92,9 @@ WaitResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::waitForWritable() co
 }
 
 template <class ExchangeWriterPtr>
-void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::notifyNextPipelineWriter()
+WriteResult BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
 {
-    writer->notifyNextPipelineWriter();
-}
-
-template <class ExchangeWriterPtr>
-bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doWrite(const Block & block)
-{
+    assert(has_pending_flush == false);
     RUNTIME_CHECK(!block.info.selective);
     RUNTIME_CHECK_MSG(
         block.columns() == dag_context.result_field_types.size(),
@@ -104,10 +108,9 @@ bool BroadcastOrPassThroughWriter<ExchangeWriterPtr>::doWrite(const Block & bloc
 
     if (static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit)
     {
-        writeBlocks();
-        return true;
+        return flush();
     }
-    return false;
+    return WriteResult::Done;
 }
 
 template <class ExchangeWriterPtr>
