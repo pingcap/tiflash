@@ -326,9 +326,6 @@ try
 }
 CATCH
 
-// todo add tests for above tests to test `initNeedDecrease` such as unbounded
-// todo end unbounded
-
 TEST_F(WindowAggFuncTest, initNeedDecrease)
 try
 {
