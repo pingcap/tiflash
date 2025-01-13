@@ -25,7 +25,7 @@
 namespace DB::DM
 {
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 class DMFileHandleIndex
 {
 public:
@@ -110,17 +110,17 @@ private:
     std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRef h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded(dm_context);
-        ColumnView<Handle> handle_col(*clipped_handle_packs[clipped_pack_id]);
+        ColumnView<HandleType> handle_col(*clipped_handle_packs[clipped_pack_id]);
         auto itr = std::lower_bound(handle_col.begin(), handle_col.end(), h);
         if (itr != handle_col.end() && *itr == h)
             return itr - handle_col.begin() + clipped_pack_offsets[clipped_pack_id];
         return {};
     }
 
-    std::vector<Handle> loadPackIndex(const DMContext & dm_context)
+    std::vector<HandleType> loadPackIndex(const DMContext & dm_context)
     {
-        auto max_values = loadPackMaxValue<Handle>(dm_context.global_context, *dmfile, MutSup::extra_handle_id);
-        return std::vector<Handle>(
+        auto max_values = loadPackMaxValue<HandleType>(dm_context.global_context, *dmfile, MutSup::extra_handle_id);
+        return std::vector<HandleType>(
             max_values.begin() + clipped_pack_range.start_pack_id,
             max_values.begin() + clipped_pack_range.end_pack_id);
     }
@@ -137,7 +137,7 @@ private:
         return pack_offsets;
     }
 
-    static bool isCommonHandle() { return std::is_same_v<Handle, String>; }
+    static bool isCommonHandle() { return std::is_same_v<HandleType, String>; }
 
     void loadHandleIfNotLoaded(const DMContext & dm_context)
     {
@@ -162,7 +162,7 @@ private:
 
         DMFileReader reader(
             dmfile,
-            {getHandleColumnDefine<Handle>()},
+            {getHandleColumnDefine<HandleType>()},
             isCommonHandle(),
             /*enable_handle_clean_read*/ false,
             /*enable_del_clean_read*/ false,
@@ -217,7 +217,7 @@ private:
 
     // Clipped by rowkey_range
     const PackRange clipped_pack_range;
-    const std::vector<Handle> clipped_pack_index; // max value of each pack
+    const std::vector<HandleType> clipped_pack_index; // max value of each pack
     const std::vector<UInt32> clipped_pack_offsets; // offset of each pack
     std::vector<ColumnPtr> clipped_handle_packs; // handle column of each pack
     std::optional<std::vector<UInt8>> clipped_need_read_packs;

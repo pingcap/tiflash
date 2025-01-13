@@ -27,12 +27,12 @@ using RowKeyRanges = std::vector<RowKeyRange>;
 class BitmapFilter;
 using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
 
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 BitmapFilterPtr buildBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    VersionChain<Handle> & version_chain);
+    VersionChain<HandleType> & version_chain);
 } // namespace DB::DM

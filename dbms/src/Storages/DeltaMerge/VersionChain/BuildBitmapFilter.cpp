@@ -23,14 +23,14 @@
 
 namespace DB::DM
 {
-template <HandleType Handle>
+template <ExtraHandleType HandleType>
 BitmapFilterPtr buildBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    VersionChain<Handle> & version_chain)
+    VersionChain<HandleType> & version_chain)
 {
     const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
     const auto & delta = *(snapshot.delta);
@@ -44,8 +44,8 @@ BitmapFilterPtr buildBitmapFilter(
     RUNTIME_CHECK(pack_filter_results.size() == 1, pack_filter_results.size());
     const auto stable_pack_res = pack_filter_results.front()->getPackRes();
 
-    buildRowKeyFilter<Handle>(dm_context, snapshot, read_ranges, stable_pack_res, filter);
-    buildVersionFilter<Handle>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
+    buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, stable_pack_res, filter);
+    buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
     buildDeletedFilter(dm_context, snapshot, filter);
 
     bitmap_filter->runOptimize();
@@ -58,5 +58,5 @@ template BitmapFilterPtr buildBitmapFilter<Int64>(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    VersionChain<Handle> & version_chain);
+    VersionChain<HandleType> & version_chain);
 } // namespace DB::DM
