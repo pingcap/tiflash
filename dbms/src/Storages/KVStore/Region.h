@@ -80,7 +80,7 @@ public:
         bool hasNext();
         RegionDataReadInfo next();
 
-        DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) { return region->getLockInfo(query); }
+        RegionData::LockInfoPtr getLockInfo(const RegionLockReadQuery & query) { return region->getLockInfo(query); }
 
         size_t writeMapSize() const { return write_map_size; }
 
@@ -111,11 +111,15 @@ public:
                 lock = std::unique_lock<std::shared_mutex>(region_->mutex);
         }
 
-        void remove(const RegionWriteCFData::Key & key)
+        bool remove(const RegionWriteCFData::Key & key)
         {
             auto & write_cf_data = region->data.writeCF().getDataMut();
             if (auto it = write_cf_data.find(key); it != write_cf_data.end())
+            {
                 region->removeDataByWriteIt(it);
+                return true;
+            }
+            return false;
         }
 
     private:
@@ -150,6 +154,7 @@ public: // Stats
 
     RegionMeta & mutMeta() { return meta; }
     const RegionMeta & getMeta() const { return meta; }
+    const RegionData & getData() const { return data; }
 
     bool isPendingRemove() const;
     void setPendingRemove();
@@ -284,7 +289,7 @@ private:
         bool hard_error);
     RegionData::WriteCFIter removeDataByWriteIt(const RegionData::WriteCFIter & write_it);
 
-    DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
+    RegionData::LockInfoPtr getLockInfo(const RegionLockReadQuery & query) const;
 
     RegionPtr splitInto(RegionMeta && meta);
     void setPeerState(raft_serverpb::PeerState state);

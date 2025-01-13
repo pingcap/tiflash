@@ -1031,7 +1031,7 @@ String DAGExpressionAnalyzer::buildFilterColumn(
     return filter_column_name;
 }
 
-std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGExpressionAnalyzer::buildPushDownFilter(
+std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> DAGExpressionAnalyzer::buildPushDownExecutor(
     const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
     bool null_as_false)
 {
@@ -1833,7 +1833,8 @@ void DAGExpressionAnalyzer::makeExplicitSet(
         SizeLimits(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode),
         TiDB::TiDBCollators{getCollatorFromExpr(expr)});
 
-    auto remaining_exprs = set->createFromDAGExpr(set_element_types, expr, create_ordered_set);
+    auto remaining_exprs
+        = set->createFromDAGExpr(set_element_types, expr, create_ordered_set, context.getTimezoneInfo());
     prepared_sets[&expr] = std::make_shared<DAGSet>(std::move(set), std::move(remaining_exprs));
 }
 

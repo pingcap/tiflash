@@ -173,7 +173,7 @@ OperatorStatus SinkOp::prepare()
     profile_info.anchor();
     auto op_status = prepareImpl();
 #ifndef NDEBUG
-    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT});
+    assertOperatorStatus(op_status, {OperatorStatus::NEED_INPUT, OperatorStatus::FINISHED});
 #endif
     profile_info.update();
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_operator_run_failpoint);

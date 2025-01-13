@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/MyTime.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <Storages/DeltaMerge/workload/Utils.h>
 #include <fmt/chrono.h>
 #include <fmt/ranges.h>

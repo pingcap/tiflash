@@ -50,8 +50,8 @@ void trimStackTrace(String & message)
 }
 
 // Latest mpp-version supported by TiFlash
-static MppVersion NewestMppVersion = MppVersion(MppVersion::MppVersionMAX - 1);
-static MppVersion MinMppVersion = MppVersion::MppVersionV0;
+static constexpr MppVersion NewestMppVersion = static_cast<MppVersion>(MppVersion::MppVersionMAX - 1);
+static constexpr MppVersion MinMppVersion = MppVersion::MppVersionV0;
 
 // Use ReportStatus interface to report status
 bool ReportStatusToCoordinator(int64_t mpp_version, const std::string & coordinator_address)
@@ -85,9 +85,23 @@ std::string GenMppVersionErrorMessage(int64_t mpp_version)
 }
 
 // Get latest mpp-version supported by TiFlash
-int64_t GetMppVersion()
+MppVersion GetMppVersion()
 {
-    return (NewestMppVersion);
+    return NewestMppVersion;
 }
 
+MPPDataPacketVersion GetMPPDataPacketVersion(MppVersion mpp_version)
+{
+    switch (mpp_version)
+    {
+    case MppVersion::MppVersionV0:
+        return MPPDataPacketVersion::MPPDataPacketV0;
+    case MppVersion::MppVersionV1:
+    case MppVersion::MppVersionV2:
+        return MPPDataPacketVersion::MPPDataPacketV1;
+    case MppVersion::MppVersionV3:
+    default:
+        return MPPDataPacketVersion::MPPDataPacketV2;
+    }
+}
 } // namespace DB

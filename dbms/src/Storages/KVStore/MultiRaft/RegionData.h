@@ -36,6 +36,7 @@ class RegionData
 public:
     using WriteCFIter = RegionWriteCFData::Map::iterator;
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
+    using LockInfoPtr = std::unique_ptr<kvrpcpb::LockInfo>;
 
     static void reportAlloc(size_t delta);
     static void reportDealloc(size_t delta);
@@ -53,7 +54,7 @@ public:
         UInt64 applied,
         bool hard_error);
 
-    DecodedLockCFValuePtr getLockInfo(const RegionLockReadQuery & query) const;
+    LockInfoPtr getLockInfo(const RegionLockReadQuery & query) const;
 
     std::shared_ptr<const TiKVValue> getLockByKey(const TiKVKey & key) const;
 
@@ -80,10 +81,12 @@ public:
     const RegionLockCFData & lockCF() const;
 
     RegionData() = default;
+    ~RegionData();
 
     RegionData(RegionData && data);
     RegionData & operator=(RegionData &&);
 
+    String summary() const;
     struct OrphanKeysInfo
     {
         // Protected by region task lock.
@@ -127,7 +130,7 @@ private:
     RegionLockCFData lock_cf;
     OrphanKeysInfo orphan_keys_info;
 
-    // Size of data cf & write cf, without lock cf.
+    // Size of data cf & write cf, with lock cf.
     std::atomic<size_t> cf_data_size = 0;
 };
 

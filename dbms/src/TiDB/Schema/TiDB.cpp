@@ -1183,12 +1183,12 @@ ColumnID TableInfo::getColumnID(const String & name) const
         }
     }
 
-    if (name == DB::MutableSupport::tidb_pk_column_name)
-        return DB::TiDBPkColumnID;
-    else if (name == DB::MutableSupport::version_column_name)
-        return DB::VersionColumnID;
-    else if (name == DB::MutableSupport::delmark_column_name)
-        return DB::DelMarkColumnID;
+    if (name == DB::MutSup::extra_handle_column_name)
+        return DB::MutSup::extra_handle_id;
+    else if (name == DB::MutSup::version_column_name)
+        return DB::MutSup::version_col_id;
+    else if (name == DB::MutSup::delmark_column_name)
+        return DB::MutSup::delmark_col_id;
 
     DB::Strings available_columns;
     for (const auto & c : columns)

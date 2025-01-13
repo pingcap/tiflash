@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/FmtUtils.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/types.h>
 
 namespace DB
@@ -32,8 +33,14 @@ struct BaseRuntimeStatistics
     UInt64 minTSO_wait_time_ns = 0;
     UInt64 queue_wait_time_ns = 0;
     UInt64 pipeline_breaker_wait_time_ns = 0;
+    UInt64 inner_zone_send_bytes = 0;
+    UInt64 inner_zone_receive_bytes = 0;
+    UInt64 inter_zone_send_bytes = 0;
+    UInt64 inter_zone_receive_bytes = 0;
 
     void append(const BlockStreamProfileInfo &);
     void append(const OperatorProfileInfo &);
+    void updateSendConnectionInfo(const ConnectionProfileInfo & conn_profile_info);
+    void updateReceiveConnectionInfo(const ConnectionProfileInfo & conn_profile_info);
 };
 } // namespace DB

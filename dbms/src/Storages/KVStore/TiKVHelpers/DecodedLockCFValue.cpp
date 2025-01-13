@@ -23,9 +23,12 @@ namespace RecordKVFormat
 {
 
 // https://github.com/tikv/tikv/blob/master/components/txn_types/src/lock.rs
-inline void decodeLockCfValue(DecodedLockCFValue & res)
+[[nodiscard]] std::unique_ptr<DecodedLockCFValue::Inner> DecodedLockCFValue::decodeLockCfValue(
+    const DecodedLockCFValue & decoded)
 {
-    const TiKVValue & value = *res.val;
+    auto inner = std::make_unique<DecodedLockCFValue::Inner>();
+    auto & res = *inner;
+    const TiKVValue & value = *decoded.val;
     const char * data = value.data();
     size_t len = value.dataSize();
 
@@ -146,16 +149,62 @@ inline void decodeLockCfValue(DecodedLockCFValue & res)
     }
     if (len != 0)
         throw Exception("invalid lock value " + value.toDebugString(), ErrorCodes::LOGICAL_ERROR);
+    return inner;
 }
 
 DecodedLockCFValue::DecodedLockCFValue(std::shared_ptr<const TiKVKey> key_, std::shared_ptr<const TiKVValue> val_)
     : key(std::move(key_))
     , val(std::move(val_))
 {
-    decodeLockCfValue(*this);
+    auto parsed = decodeLockCfValue(*this);
+    if (parsed->lock_type == kvrpcpb::Op::PessimisticLock)
+    {
+        GET_METRIC(tiflash_raft_process_keys, type_pessimistic_lock_put).Increment(1);
+    }
+    if (parsed->generation == 0)
+    {
+        // It is not a large txn, we cache the parsed lock.
+        GET_METRIC(tiflash_raft_classes_count, type_fully_decoded_lockcf).Increment(1);
+        inner = std::move(parsed);
+    }
+}
+
+DecodedLockCFValue::~DecodedLockCFValue()
+{
+    if (inner != nullptr)
+        GET_METRIC(tiflash_raft_classes_count, type_fully_decoded_lockcf).Decrement(1);
+}
+
+void DecodedLockCFValue::withInner(std::function<void(const DecodedLockCFValue::Inner &)> && f) const
+{
+    if likely (inner != nullptr)
+    {
+        f(*inner);
+        return;
+    }
+    std::unique_ptr<DecodedLockCFValue::Inner> in = decodeLockCfValue(*this);
+    f(*in);
 }
 
 void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const
+{
+    withInner([&](const Inner & in) { in.intoLockInfo(key, res); });
+}
+
+std::unique_ptr<kvrpcpb::LockInfo> DecodedLockCFValue::intoLockInfo() const
+{
+    auto res = std::make_unique<kvrpcpb::LockInfo>();
+    intoLockInfo(*res);
+    return res;
+}
+
+bool DecodedLockCFValue::isLargeTxn() const
+{
+    // Because we do not cache the parsed result for large txn.
+    return inner == nullptr;
+}
+
+void DecodedLockCFValue::Inner::intoLockInfo(const std::shared_ptr<const TiKVKey> & key, kvrpcpb::LockInfo & res) const
 {
     res.set_lock_type(lock_type);
     res.set_primary_lock(primary_lock.data(), primary_lock.size());
@@ -167,7 +216,6 @@ void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const
     res.set_use_async_commit(use_async_commit);
     res.set_key(decodeTiKVKey(*key));
     res.set_is_txn_file(is_txn_file);
-
     if (use_async_commit)
     {
         const auto * data = secondaries.data();
@@ -180,16 +228,33 @@ void DecodedLockCFValue::intoLockInfo(kvrpcpb::LockInfo & res) const
     }
 }
 
-std::unique_ptr<kvrpcpb::LockInfo> DecodedLockCFValue::intoLockInfo() const
+void DecodedLockCFValue::Inner::getLockInfoPtr(
+    const RegionLockReadQuery & query,
+    const std::shared_ptr<const TiKVKey> & key,
+    LockInfoPtr & res) const
 {
-    auto res = std::make_unique<kvrpcpb::LockInfo>();
-    intoLockInfo(*res);
-    return res;
+    res = nullptr;
+    if (lock_version > query.read_tso || lock_type == kvrpcpb::Op::Lock || lock_type == kvrpcpb::Op::PessimisticLock)
+        return;
+    if (min_commit_ts > query.read_tso)
+        return;
+    if (query.bypass_lock_ts)
+    {
+        if (query.bypass_lock_ts->count(lock_version))
+        {
+            GET_METRIC(tiflash_raft_read_index_events_count, type_bypass_lock).Increment();
+            return;
+        }
+    }
+    res = std::make_unique<kvrpcpb::LockInfo>();
+    intoLockInfo(key, *res);
 }
 
-bool DecodedLockCFValue::isLargeTxn() const
+LockInfoPtr DecodedLockCFValue::getLockInfoPtr(const RegionLockReadQuery & query) const
 {
-    return generation > 0;
+    LockInfoPtr res = nullptr;
+    withInner([&](const Inner & in) { in.getLockInfoPtr(query, key, res); });
+    return res;
 }
 
 } // namespace RecordKVFormat

@@ -15,25 +15,18 @@
 #pragma once
 
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
+#include <Flash/Mpp/MppVersion.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
 #include <IO/Compression/CompressionMethod.h>
 
 namespace DB
 {
-size_t ApproxBlockHeaderBytes(const Block & block);
 using CompressedCHBlockChunkReadBuffer = CompressedReadBuffer<false>;
 using CompressedCHBlockChunkWriteBuffer = CompressedWriteBuffer<false>;
-void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows);
-void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size = 0);
+void DecodeColumns(ReadBuffer & istr, Block & res, size_t rows_to_read, size_t reserve_size);
 Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & rows);
 CompressionMethod ToInternalCompressionMethod(tipb::CompressionMode compression_mode);
-extern void WriteColumnData(
-    const IDataType & type,
-    const ColumnPtr & column,
-    WriteBuffer & ostr,
-    size_t offset,
-    size_t limit);
 
 struct CHBlockChunkCodecV1 : boost::noncopyable
 {
@@ -42,13 +35,14 @@ struct CHBlockChunkCodecV1 : boost::noncopyable
 
     const Block & header;
     const size_t header_size;
+    const MPPDataPacketVersion packet_version;
 
     size_t encoded_rows{};
     size_t original_size{};
     size_t compressed_size{};
 
     void clear();
-    explicit CHBlockChunkCodecV1(const Block & header_);
+    CHBlockChunkCodecV1(const Block & header_, MPPDataPacketVersion packet_version_);
     //
     EncodeRes encode(const MutableColumns & columns, CompressionMethod compression_method);
     EncodeRes encode(std::vector<MutableColumns> && columns, CompressionMethod compression_method);
@@ -61,6 +55,7 @@ struct CHBlockChunkCodecV1 : boost::noncopyable
     EncodeRes encode(std::vector<Block> && blocks, CompressionMethod compression_method, bool check_schema = true);
     //
     static EncodeRes encode(std::string_view str, CompressionMethod compression_method);
+    // `decode` is only used for test
     static Block decode(const Block & header, std::string_view str);
 };
 

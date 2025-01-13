@@ -83,7 +83,12 @@ size_t getExtraInfoSize(const Block & block)
     return size;
 }
 
-void WriteColumnData(const IDataType & type, const ColumnPtr & column, WriteBuffer & ostr, size_t offset, size_t limit)
+void CHBlockChunkCodec::WriteColumnData(
+    const IDataType & type,
+    const ColumnPtr & column,
+    WriteBuffer & ostr,
+    size_t offset,
+    size_t limit)
 {
     /** If there are columns-constants - then we materialize them.
       * (Since the data type does not know how to serialize / deserialize constants.)
@@ -151,10 +156,12 @@ void CHBlockChunkCodecStream::encode(const Block & block, size_t start, size_t e
         const ColumnWithTypeAndName & column = block.safeGetByPosition(i);
 
         writeStringBinary(column.name, *output);
-        writeStringBinary(column.type->getName(), *output);
+        // Always convert StringV2 to String, because CHBlockChunkCodec will only be used in legacy MppVersions.
+        const auto & ser_type = CodecUtils::convertDataType(*column.type);
+        writeStringBinary(ser_type.getName(), *output);
 
         if (rows)
-            WriteColumnData(*column.type, column.column, *output, 0, 0);
+            CHBlockChunkCodec::WriteColumnData(ser_type, column.column, *output, 0, 0);
     }
 }
 
@@ -223,34 +230,31 @@ void CHBlockChunkCodec::readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTy
     /// Type
     String type_name;
     readBinary(type_name, istr);
-    const DataTypeFactory & data_type_factory = DataTypeFactory::instance();
     if (header)
-    {
         CodecUtils::checkDataTypeName("CHBlockChunkCodec", i, header_datatypes[i].name, type_name);
-        column.type = header_datatypes[i].type;
-    }
-    else
-    {
-        column.type = data_type_factory.get(type_name);
-    }
+    column.type = DataTypeFactory::instance().getOrSet(type_name); // Respect the type name from encoder
 }
 
 Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)
 {
     ReadBufferFromString read_buffer(str);
-    return CHBlockChunkCodec(schema).decodeImpl(read_buffer);
+    auto block = CHBlockChunkCodec(schema).decodeImpl(read_buffer);
+    return header ? header.cloneWithColumns(block.getColumns()) : std::move(block);
 }
 
 Block CHBlockChunkCodec::decode(const String & str, const Block & header)
 {
     ReadBufferFromString read_buffer(str);
-    return CHBlockChunkCodec(header).decodeImpl(read_buffer);
+    // Codec may return legacy string type (named 'String'), respect to local string type (named 'StringV2')
+    auto block = CHBlockChunkCodec(header).decodeImpl(read_buffer);
+    return header ? header.cloneWithColumns(block.getColumns()) : std::move(block);
 }
 
 Block CHBlockChunkCodec::decode(const String & str)
 {
     ReadBufferFromString read_buffer(str);
-    return decodeImpl(read_buffer);
+    auto block = decodeImpl(read_buffer);
+    return header ? header.cloneWithColumns(block.getColumns()) : std::move(block);
 }
 
 } // namespace DB

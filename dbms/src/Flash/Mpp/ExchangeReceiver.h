@@ -19,11 +19,10 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Mpp/AsyncRequestHandler.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 
-#include <future>
 #include <memory>
 #include <mutex>
-#include <thread>
 
 namespace DB
 {
@@ -36,8 +35,8 @@ struct ExchangeReceiverResult
     size_t call_index;
     String req_info;
     bool meet_error;
-    String error_msg;
     bool eof;
+    String error_msg;
     DecodeDetail decode_detail;
 
     ExchangeReceiverResult()
@@ -74,8 +73,8 @@ private:
         , call_index(call_index_)
         , req_info(req_info_)
         , meet_error(meet_error_)
-        , error_msg(error_msg_)
         , eof(eof_)
+        , error_msg(error_msg_)
     {}
 };
 
@@ -144,6 +143,7 @@ public:
     std::atomic<Int64> * getDataSizeInQueue() { return &data_size_in_queue; }
 
     void verifyStreamId(size_t stream_id) const;
+    const ConnectionProfileInfo::ConnTypeVec & getConnTypeVec() const;
 
 private:
     std::shared_ptr<MemoryTracker> mem_tracker;
@@ -201,9 +201,7 @@ private:
 
     std::shared_ptr<RPCContext> rpc_context;
 
-    const tipb::ExchangeReceiver pb_exchange_receiver;
     const size_t source_num;
-    const ::mpp::TaskMeta task_meta;
     const bool enable_fine_grained_shuffle_flag;
     const size_t output_stream_count;
     const size_t max_buffer_size;

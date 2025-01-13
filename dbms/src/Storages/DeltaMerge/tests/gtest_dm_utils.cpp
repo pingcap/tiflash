@@ -62,9 +62,9 @@ TEST(RowKeyFilterTest, FilterSortedBlockCommonHandle)
         num_rows_write,
         false,
         2,
-        EXTRA_HANDLE_COLUMN_NAME,
-        EXTRA_HANDLE_COLUMN_ID,
-        EXTRA_HANDLE_COLUMN_STRING_TYPE,
+        MutSup::extra_handle_column_name,
+        MutSup::extra_handle_id,
+        MutSup::getExtraHandleColumnStringType(),
         true,
         1);
     auto filtered_block = RowKeyFilter::filterSorted(ranges, std::move(block), 0);
@@ -84,9 +84,9 @@ TEST(RowKeyFilterTest, FilterUnsortedBlockCommonHandle)
         num_rows_write,
         false,
         2,
-        EXTRA_HANDLE_COLUMN_NAME,
-        EXTRA_HANDLE_COLUMN_ID,
-        EXTRA_HANDLE_COLUMN_STRING_TYPE,
+        MutSup::extra_handle_column_name,
+        MutSup::extra_handle_id,
+        MutSup::getExtraHandleColumnStringType(),
         true,
         1);
     auto filtered_block = RowKeyFilter::filterUnsorted(ranges, std::move(block), 0);

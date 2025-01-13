@@ -34,7 +34,7 @@ public:
         const DM::SegmentReadTaskPoolPtr & task_pool_,
         DM::AfterSegmentRead after_segment_read_,
         const DM::ColumnDefines & columns_to_read_,
-        const DM::PushDownFilterPtr & filter_,
+        const DM::PushDownExecutorPtr & executor_,
         UInt64 start_ts_,
         size_t expected_block_size_,
         DM::ReadMode read_mode_,
@@ -56,7 +56,7 @@ private:
     DM::SegmentReadTaskPoolPtr task_pool;
     DM::AfterSegmentRead after_segment_read;
     DM::ColumnDefines columns_to_read;
-    DM::PushDownFilterPtr filter;
+    DM::PushDownExecutorPtr executor;
     const UInt64 start_ts;
     const size_t expected_block_size;
     const DM::ReadMode read_mode;

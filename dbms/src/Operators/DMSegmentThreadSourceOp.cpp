@@ -30,7 +30,7 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     const DM::SegmentReadTaskPoolPtr & task_pool_,
     DM::AfterSegmentRead after_segment_read_,
     const DM::ColumnDefines & columns_to_read_,
-    const DM::PushDownFilterPtr & filter_,
+    const DM::PushDownExecutorPtr & executor_,
     UInt64 start_ts_,
     size_t expected_block_size_,
     DM::ReadMode read_mode_,
@@ -40,7 +40,7 @@ DMSegmentThreadSourceOp::DMSegmentThreadSourceOp(
     , task_pool(task_pool_)
     , after_segment_read(after_segment_read_)
     , columns_to_read(columns_to_read_)
-    , filter(filter_)
+    , executor(executor_)
     , start_ts(start_ts_)
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
@@ -100,7 +100,7 @@ OperatorStatus DMSegmentThreadSourceOp::executeIOImpl()
             columns_to_read,
             task->read_snapshot,
             task->ranges,
-            filter,
+            executor,
             start_ts,
             block_size);
         LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());
