@@ -211,6 +211,13 @@ void JointThreadInfoJeallocMap::stopThreadAllocInfo()
     }
 }
 
+void JointThreadInfoJeallocMap::debugClear()
+{
+    std::unique_lock l(memory_allocation_mut);
+    proxy_map.clear();
+    storage_map.clear();
+}
+
 std::tuple<uint64_t *, uint64_t *> JointThreadInfoJeallocMap::getPtrs()
 {
     return getAllocDeallocPtr();

@@ -61,6 +61,7 @@ public:
     void splitInto(const RegionRange & range, RegionData & new_region_data);
     void mergeFrom(const RegionData & ori_region_data);
 
+    // Payload size in RegionData, show how much data flows in/out of the Region.
     size_t dataSize() const;
 
     void assignRegionData(RegionData && new_region_data);

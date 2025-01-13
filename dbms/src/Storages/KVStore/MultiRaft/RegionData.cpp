@@ -56,37 +56,42 @@ RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue 
     {
     case ColumnFamilyType::Write:
     {
-        auto delta = write_cf.insert(std::move(key), std::move(value), mode).payload;
-        cf_data_size += delta;
-        reportAlloc(delta);
+        auto delta = write_cf.insert(std::move(key), std::move(value), mode);
+        cf_data_size += delta.payload;
+        decoded_data_size += delta.decoded;
+        reportAlloc(delta.payload);
         return delta;
     }
     case ColumnFamilyType::Default:
     {
-        auto delta = default_cf.insert(std::move(key), std::move(value), mode).payload;
-        cf_data_size += delta;
-        reportAlloc(delta);
+        auto delta = default_cf.insert(std::move(key), std::move(value), mode);
+        cf_data_size += delta.payload;
+        decoded_data_size += delta.decoded;
+        reportAlloc(delta.payload);
         return delta;
     }
     case ColumnFamilyType::Lock:
     {
-        auto delta = lock_cf.insert(std::move(key), std::move(value), mode).payload;
-        cf_data_size += delta;
-        if likely (delta >= 0)
+        auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
+        cf_data_size += delta.payload;
+        decoded_data_size += delta.decoded;
+        // By inserting a lock, a old lock of the same key could be replaced, for example, perssi -> opti.
+        if likely (delta.payload >= 0)
         {
-            reportAlloc(delta);
+            reportAlloc(delta.payload);
         }
         else
         {
-            reportDealloc(-delta);
+            reportDealloc(-delta.payload);
         }
-        return 0;
+        return delta;
     }
     }
 }
 
 void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
 {
+    RegionDataRes delta;
     switch (cf)
     {
     case ColumnFamilyType::Write:
@@ -95,10 +100,8 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
         auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
         // removed by gc, may not exist.
-        auto delta = write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
-        cf_data_size -= delta;
-        reportDealloc(delta);
-        return;
+        delta = write_cf.remove(RegionWriteCFData::Key{pk, ts}, true);
+        break;
     }
     case ColumnFamilyType::Default:
     {
@@ -106,20 +109,18 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
         auto pk = RecordKVFormat::getRawTiDBPK(raw_key);
         Timestamp ts = RecordKVFormat::getTs(key);
         // removed by gc, may not exist.
-        auto delta = default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
-        cf_data_size -= delta;
-        reportDealloc(delta);
-        return;
+        delta = default_cf.remove(RegionDefaultCFData::Key{pk, ts}, true);
+        break;
     }
     case ColumnFamilyType::Lock:
     {
-        auto delta
-            = lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
-        cf_data_size -= delta;
-        reportDealloc(delta);
-        return;
+        delta = lock_cf.remove(RegionLockCFDataTrait::Key{nullptr, std::string_view(key.data(), key.dataSize())}, true);
+        break;
     }
     }
+    cf_data_size += delta.payload;
+    decoded_data_size += delta.decoded;
+    reportDealloc(-delta.payload);
 }
 
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & write_it)
@@ -137,16 +138,18 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
 
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
         {
-            auto delta = RegionDefaultCFData::calcTiKVKeyValueSize(data_it->second);
-            cf_data_size -= delta;
+            auto delta = -RegionDefaultCFData::calcTotalKVSize(data_it->second);
+            cf_data_size += delta.payload;
+            decoded_data_size += delta.decoded;
             map.erase(data_it);
-            reportDealloc(delta);
+            reportDealloc(-delta.payload);
         }
     }
 
-    auto delta = RegionWriteCFData::calcTiKVKeyValueSize(write_it->second);
-    cf_data_size -= delta;
-    reportDealloc(delta);
+    auto delta = -RegionWriteCFData::calcTotalKVSize(write_it->second);
+    cf_data_size += delta.payload;
+    decoded_data_size += delta.decoded;
+    reportDealloc(-delta.payload);
 
     return write_cf.getDataMut().erase(write_it);
 }
@@ -258,23 +261,27 @@ std::shared_ptr<const TiKVValue> RegionData::getLockByKey(const TiKVKey & key) c
 
 void RegionData::splitInto(const RegionRange & range, RegionData & new_region_data)
 {
-    size_t size_changed = 0;
-    size_changed += default_cf.splitInto(range, new_region_data.default_cf);
-    size_changed += write_cf.splitInto(range, new_region_data.write_cf);
+    RegionDataRes size_changed;
+    size_changed.add(default_cf.splitInto(range, new_region_data.default_cf));
+    size_changed.add(write_cf.splitInto(range, new_region_data.write_cf));
     // reportAlloc: Remember to track memory here if we have a region-wise metrics later.
-    size_changed += lock_cf.splitInto(range, new_region_data.lock_cf);
-    cf_data_size -= size_changed;
-    new_region_data.cf_data_size += size_changed;
+    size_changed.add(lock_cf.splitInto(range, new_region_data.lock_cf));
+    cf_data_size += size_changed.payload;
+    decoded_data_size += size_changed.decoded;
+    new_region_data.cf_data_size -= size_changed.payload;
+    new_region_data.decoded_data_size -= size_changed.decoded;
 }
 
 void RegionData::mergeFrom(const RegionData & ori_region_data)
 {
-    size_t size_changed = 0;
-    size_changed += default_cf.mergeFrom(ori_region_data.default_cf);
-    size_changed += write_cf.mergeFrom(ori_region_data.write_cf);
+    RegionDataRes size_changed;
+    size_changed.add(default_cf.mergeFrom(ori_region_data.default_cf));
+    size_changed.add(write_cf.mergeFrom(ori_region_data.write_cf));
     // reportAlloc: Remember to track memory here if we have a region-wise metrics later.
-    size_changed += lock_cf.mergeFrom(ori_region_data.lock_cf);
-    cf_data_size += size_changed;
+    size_changed.add(lock_cf.mergeFrom(ori_region_data.lock_cf));
+    // `mergeFrom` won't delete from source region.
+    cf_data_size += size_changed.payload;
+    decoded_data_size += size_changed.decoded;
 }
 
 size_t RegionData::dataSize() const
@@ -290,6 +297,7 @@ void RegionData::assignRegionData(RegionData && new_region_data)
     orphan_keys_info = std::move(new_region_data.orphan_keys_info);
 
     cf_data_size = new_region_data.cf_data_size.load();
+    decoded_data_size = new_region_data.decoded_data_size.load();
 }
 
 size_t RegionData::serialize(WriteBuffer & buf) const
@@ -305,19 +313,22 @@ size_t RegionData::serialize(WriteBuffer & buf) const
 
 void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
 {
-    size_t total_size = 0;
-    total_size += RegionDefaultCFData::deserialize(buf, region_data.default_cf);
-    total_size += RegionWriteCFData::deserialize(buf, region_data.write_cf);
-    total_size += RegionLockCFData::deserialize(buf, region_data.lock_cf);
+    RegionDataRes size_changed;
 
-    region_data.cf_data_size = total_size;
-    reportAlloc(total_size);
+    size_changed.add(RegionDefaultCFData::deserialize(buf, region_data.default_cf));
+    size_changed.add(RegionWriteCFData::deserialize(buf, region_data.write_cf));
+    size_changed.add(RegionLockCFData::deserialize(buf, region_data.lock_cf));
+
+    region_data.cf_data_size = size_changed.payload;
+    region_data.decoded_data_size = size_changed.decoded;
+    reportAlloc(size_changed.payload);
 }
 
 RegionWriteCFData & RegionData::writeCF()
 {
     return write_cf;
 }
+
 RegionDefaultCFData & RegionData::defaultCF()
 {
     return default_cf;
@@ -327,10 +338,12 @@ const RegionWriteCFData & RegionData::writeCF() const
 {
     return write_cf;
 }
+
 const RegionDefaultCFData & RegionData::defaultCF() const
 {
     return default_cf;
 }
+
 const RegionLockCFData & RegionData::lockCF() const
 {
     return lock_cf;
@@ -363,6 +376,7 @@ RegionData & RegionData::operator=(RegionData && rhs)
     lock_cf = std::move(rhs.lock_cf);
     reportDelta(cf_data_size, rhs.cf_data_size.load());
     cf_data_size = rhs.cf_data_size.load();
+    decoded_data_size = rhs.decoded_data_size.load();
     return *this;
 }
 

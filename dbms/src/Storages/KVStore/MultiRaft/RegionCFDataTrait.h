@@ -22,16 +22,6 @@
 namespace DB
 {
 
-struct CFKeyHasher
-{
-    size_t operator()(const std::pair<HandleID, Timestamp> & k) const noexcept
-    {
-        const static Timestamp mask = std::numeric_limits<Timestamp>::max() << 40 >> 40;
-        size_t res = k.first << 24 | (k.second & mask);
-        return res;
-    }
-};
-
 struct RegionWriteCFDataTrait
 {
     using DecodedWriteCFValue = RecordKVFormat::InnerDecodedWriteCFValue;

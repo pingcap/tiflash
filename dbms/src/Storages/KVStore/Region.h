@@ -163,6 +163,7 @@ public: // Stats
     bool isMerging() const;
     void setStateApplying();
 
+    // Payload size in RegionData, show how much data flows in/out of the Region.
     size_t dataSize() const;
     size_t writeCFCount() const;
     std::string dataInfo() const;

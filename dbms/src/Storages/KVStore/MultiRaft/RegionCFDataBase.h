@@ -26,10 +26,28 @@ namespace DB
 struct TiKVRangeKey;
 using RegionRange = RegionRangeKeys::RegionRange;
 struct RegionDataRes {
-    using Type = int64;
+    using Type = Int64;
     Type payload;
     Type decoded;
-}
+
+    template <typename T1, typename T2>
+    RegionDataRes(T1 payload_, T2 decoded_) : payload(payload_), decoded(decoded_) {}
+    RegionDataRes() : payload(0), decoded(0) {}
+
+    RegionDataRes operator-() const {
+        return {-payload, -decoded};
+    }
+
+    void add(const RegionDataRes & other) {
+        payload += other.payload;
+        decoded += other.decoded;
+    }
+
+    void sub(const RegionDataRes & other) {
+        payload -= other.payload;
+        decoded -= other.decoded;
+    }
+};
 
 enum class DupCheck
 {
@@ -54,10 +72,13 @@ struct RegionCFDataBase
     RegionDataRes insert(TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
 
     static size_t calcTiKVKeyValueSize(const Value & value);
-
     static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
+    static RegionDataRes calcTotalKVSize(const Value & value);
 
-    std::pair<size_t, size_t> remove(const Key & key, bool quiet = false);
+    size_t calcDecodedKeyValueSize(const Value & value);
+    size_t calcDecodedKeyValueSize(const TiKVKey & key, const TiKVValue & value);
+
+    RegionDataRes remove(const Key & key, bool quiet = false);
 
     static bool cmp(const Map & a, const Map & b);
 
@@ -69,19 +90,17 @@ struct RegionCFDataBase
     RegionCFDataBase(RegionCFDataBase && region);
     RegionCFDataBase & operator=(RegionCFDataBase && region);
 
-    size_t splitInto(const RegionRange & range, RegionCFDataBase & new_region_data);
-    size_t mergeFrom(const RegionCFDataBase & ori_region_data);
+    RegionDataRes splitInto(const RegionRange & range, RegionCFDataBase & new_region_data);
+    RegionDataRes mergeFrom(const RegionCFDataBase & ori_region_data);
 
     size_t serialize(WriteBuffer & buf) const;
-
-    static size_t deserialize(ReadBuffer & buf, RegionCFDataBase & new_region_data);
+    static RegionDataRes deserialize(ReadBuffer & buf, RegionCFDataBase & new_region_data);
 
     const Data & getData() const;
 
     Data & getDataMut();
 private:
     static bool shouldIgnoreRemove(const Value & value);
-    RegionDataRes insert(std::pair<Key, Value> && kv_pair, DupCheck mode = DupCheck::Deny);
 
 private:
     Data data;

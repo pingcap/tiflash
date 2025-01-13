@@ -204,7 +204,7 @@ bool DecodedLockCFValue::isLargeTxn() const
     return inner == nullptr;
 }
 
-bool DecodedLockCFValue::getSize() const
+size_t DecodedLockCFValue::getSize() const
 {
     return sizeof(DecodedLockCFValue) + (isLargeTxn() ? sizeof(DecodedLockCFValue::Inner) : 0);
 }

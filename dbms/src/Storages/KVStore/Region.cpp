@@ -77,7 +77,7 @@ RegionDataRes Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue 
             {
                 // We can't assert the key exists in write_cf here,
                 // since it may be already written into DeltaTree.
-                return {0, 0};
+                return RegionDataRes{0, 0};
             }
         }
     }
@@ -122,6 +122,7 @@ RegionPtr Region::splitInto(RegionMeta && meta)
     RegionPtr new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
 
     const auto range = new_region->getRange();
+
     data.splitInto(range->comparableKeys(), new_region->data);
 
     return new_region;
