@@ -31,14 +31,21 @@ UInt32 buildDeletedFilterBlock(
     IColumn::Filter & filter)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
+    const auto rows = cf.getRows();
+    if (rows == 0)
+        return 0;
+
     auto cf_reader = cf.getReader(dm_context, data_provider, getTagColumnDefinesPtr(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
-    RUNTIME_CHECK_MSG(!cf_reader->readNextBlock(), "{}: read all rows in one block is required!", cf.toString());
+    RUNTIME_CHECK_MSG(
+        rows == block.rows(),
+        "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
+        cf.toString(),
+        block.rows());
     const auto & deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column); // Must success.
     for (UInt32 i = 0; i < deleteds.size(); ++i)
     {
-        if (deleteds[i])
-            filter[start_row_id + i] = 0;
+        filter[start_row_id + i] = !deleteds[i];
     }
     return deleteds.size();
 }
@@ -54,52 +61,50 @@ UInt32 buildDeletedFilterDMFile(
     if (valid_handle_res.empty())
         return 0;
 
-    auto read_packs = std::make_shared<IdSet>();
+    auto need_read_packs = std::make_shared<IdSet>();
     UInt32 need_read_rows = 0;
-    std::unordered_map<UInt32, UInt32> read_pack_to_start_row_ids;
+    std::unordered_map<UInt32, UInt32> need_read_pack_to_start_row_ids;
 
     const auto & pack_stats = dmfile->getPackStats();
     const auto & pack_properties = dmfile->getPackProperties();
-    UInt32 rows = 0;
+    UInt32 processed_rows = 0;
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
     {
         const UInt32 pack_id = valid_start_pack_id + i;
-        const UInt32 pack_start_row_id = start_row_id + rows;
+        const UInt32 pack_start_row_id = start_row_id + processed_rows;
         if (pack_properties.property(pack_id).deleted_rows() > 0)
         {
-            read_packs->insert(pack_id);
-            read_pack_to_start_row_ids.emplace(pack_id, pack_start_row_id);
+            need_read_packs->insert(pack_id);
+            need_read_pack_to_start_row_ids.emplace(pack_id, pack_start_row_id);
             need_read_rows += pack_stats[pack_id].rows;
         }
-        rows += pack_stats[pack_id].rows;
+        processed_rows += pack_stats[pack_id].rows;
     }
 
     if (need_read_rows == 0)
-        return rows;
+        return processed_rows;
 
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
-    builder.onlyReadOnePackEveryTime().setReadPacks(read_packs).setReadTag(ReadTag::MVCC);
+    builder.onlyReadOnePackEveryTime().setReadPacks(need_read_packs).setReadTag(ReadTag::MVCC);
     auto stream = builder.build(dmfile, {getTagColumnDefine()}, {}, dm_context.scan_context);
     UInt32 read_rows = 0;
-    for (auto pack_id : *read_packs)
+    for (auto pack_id : *need_read_packs)
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
         const auto & deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column); // Must success
 
-        const auto itr = read_pack_to_start_row_ids.find(pack_id);
-        RUNTIME_CHECK(itr != read_pack_to_start_row_ids.end(), read_pack_to_start_row_ids, pack_id);
+        const auto itr = need_read_pack_to_start_row_ids.find(pack_id);
+        RUNTIME_CHECK(itr != need_read_pack_to_start_row_ids.end(), need_read_pack_to_start_row_ids, pack_id);
         const UInt32 pack_start_row_id = itr->second;
-
         for (UInt32 i = 0; i < deleteds.size(); ++i)
         {
-            if (deleteds[i])
-                filter[pack_start_row_id + i] = 0;
+            filter[pack_start_row_id + i] = !deleteds[i];
         }
         read_rows += pack_stats[pack_id].rows;
     }
     RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
-    return rows;
+    return processed_rows;
 }
 
 UInt32 buildDeletedFilterColumnFileBig(
@@ -128,16 +133,15 @@ void buildDeletedFilter(const DMContext & dm_context, const SegmentSnapshot & sn
     const UInt32 delta_rows = delta.getRows();
     const UInt32 stable_rows = stable.getDMFilesRows();
     const UInt32 total_rows = delta_rows + stable_rows;
-    RUNTIME_CHECK(filter.size() == total_rows, filter.size(), total_rows);
+    const auto cfs = delta.getColumnFiles();
+    const auto & data_provider = delta.getDataProvider();
+    assert(filter.size() == total_rows);
 
     auto read_rows = buildDeletedFilterStable(dm_context, stable, filter);
     RUNTIME_CHECK(stable_rows == read_rows, stable_rows, read_rows);
 
-    const auto cfs = delta.getColumnFiles();
-    const auto & data_provider = delta.getDataProvider();
-    for (auto itr = cfs.begin(); itr != cfs.end(); ++itr)
+    for (const auto & cf : cfs)
     {
-        const auto & cf = *itr;
         if (cf->isDeleteRange())
             continue;
 

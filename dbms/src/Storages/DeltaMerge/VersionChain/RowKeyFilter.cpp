@@ -226,9 +226,9 @@ void buildRowKeyFilter(
     const UInt32 stable_rows = stable.getDMFilesRows();
     const UInt32 total_rows = delta_rows + stable_rows;
     RUNTIME_CHECK(filter.size() == total_rows, filter.size(), total_rows);
-
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();
+
     RowKeyRanges delete_ranges;
     UInt32 read_rows = 0;
     // Read ColumnFiles from new to old for handling delete ranges

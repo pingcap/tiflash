@@ -35,4 +35,5 @@ BitmapFilterPtr buildBitmapFilter(
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
     VersionChain<HandleType> & version_chain);
+
 } // namespace DB::DM

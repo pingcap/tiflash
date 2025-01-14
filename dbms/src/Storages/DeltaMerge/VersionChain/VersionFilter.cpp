@@ -229,11 +229,10 @@ void buildVersionFilter(
     const UInt32 stable_rows = stable.getDMFilesRows();
     const UInt32 total_rows = delta_rows + stable_rows;
     RUNTIME_CHECK(filter.size() == total_rows, filter.size(), total_rows);
-
-    // Delta MVCC
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();
 
+    // Delta MVCC
     UInt32 read_rows = 0;
     // Read versions from new to old
     for (auto itr = cfs.rbegin(); itr != cfs.rend(); ++itr)
