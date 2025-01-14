@@ -86,6 +86,7 @@ try
     auto str_lock_value
         = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
     MockRaftStoreProxy::FailCond cond;
+    const auto decoded_lock_size = sizeof(DecodedLockCFValue) + sizeof(DecodedLockCFValue::Inner);
     proxy_instance->debugAddRegions(
         kvs,
         ctx.getTMTContext(),
@@ -119,7 +120,7 @@ try
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
         ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
-        ASSERT_EQ(kvr1->dataSize() + sizeof(DecodedLockCFValue) + sizeof(DecodedLockCFValue::Inner), kvr1->getData().totalSize());
+        ASSERT_EQ(kvr1->dataSize() + decoded_lock_size, kvr1->getData().totalSize());
     }
     {
         // lock with largetxn
@@ -150,7 +151,7 @@ try
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
         ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
-        ASSERT_EQ(kvr1->dataSize() + sizeof(DecodedLockCFValue) + sizeof(DecodedLockCFValue::Inner), kvr1->getData().totalSize());
+        ASSERT_EQ(kvr1->dataSize() + decoded_lock_size, kvr1->getData().totalSize());
     }
     {
         // insert & remove
@@ -161,6 +162,7 @@ try
         region->remove("default", TiKVKey::copyFrom(str_key));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(region->dataSize(), region->getData().totalSize());
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
@@ -170,21 +172,27 @@ try
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(region->dataSize(), region->getData().totalSize());
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
         // reload
+        proxy_instance->debugAddRegions(
+            kvs,
+            ctx.getTMTContext(),
+            {702},
+            {{RecordKVFormat::genKey(table_id, 7020), RecordKVFormat::genKey(table_id, 7030)}});
         root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(702, start, end, proxy_helper.get());
+        RegionPtr region = kvs.getRegion(702);
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-        // 702 is not registed, so we persist as 1.
-        tryPersistRegion(kvs, 1);
+        tryPersistRegion(kvs, 702);
         root_of_kvstore_mem_trackers->reset();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
         reloadKVSFromDisk(false);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(region->dataSize(), region->getData().totalSize());
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
@@ -200,6 +208,7 @@ try
         RemoveRegionCommitCache(region, *data_list_read);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(region->dataSize(), region->getData().totalSize());
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
@@ -222,9 +231,13 @@ try
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
         ASSERT_EQ(region->dataSize(), str_key.dataSize() + str_val_default.size());
         ASSERT_EQ(new_region->dataSize(), str_key2.dataSize() + str_val_default2.size());
+        ASSERT_EQ(region->dataSize(), region->getData().totalSize());
+        ASSERT_EQ(new_region->dataSize(), new_region->getData().totalSize());
         region->mergeDataFrom(*new_region);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
         ASSERT_EQ(region->dataSize(), expected);
+        ASSERT_EQ(region->dataSize(), region->getData().totalSize());
+        ASSERT_EQ(new_region->dataSize(), new_region->getData().totalSize());
     }
     {
         // split & merge with lock
@@ -249,10 +262,13 @@ try
                 initialApplyState()));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
         ASSERT_EQ(region->dataSize(), str_key.dataSize() + str_lock_value.size());
+        ASSERT_EQ(region->getData().totalSize(), region->dataSize() + decoded_lock_size);
         ASSERT_EQ(new_region->dataSize(), str_key2.dataSize() + str_lock_value2.size());
+        ASSERT_EQ(new_region->getData().totalSize(), new_region->dataSize() + decoded_lock_size);
         region->mergeDataFrom(*new_region);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
         ASSERT_EQ(region->dataSize(), expected);
+        ASSERT_EQ(region->getData().totalSize(), region->dataSize() + 2 * decoded_lock_size);
 
         // replace a lock
         region->insert("lock", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_lock_value2));
@@ -262,6 +278,8 @@ try
         expected -= short_value.size();
         expected -= 2; // Short value prefix and length
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
+        ASSERT_EQ(region->dataSize(), expected);
+        ASSERT_EQ(region->getData().totalSize(), region->dataSize() + 2 * decoded_lock_size);
     }
     {
         // insert & snapshot

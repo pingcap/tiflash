@@ -97,17 +97,16 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
 template <>
 RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck)
 {
-    RegionDataRes::Type payload_size = calcTiKVKeyValueSize(key, value);
+    RegionDataRes delta;
     Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
     const auto & decoded = std::get<2>(kv_pair.second);
-    auto decoded_size = decoded->getSize();
     bool is_large_txn = decoded->isLargeTxn();
     {
         auto iter = data.find(kv_pair.first);
         if (iter != data.end())
         {
             // Could be a perssimistic lock is overwritten, or a old generation large txn lock is overwritten.
-            payload_size -= calcTiKVKeyValueSize(iter->second);
+            delta.sub(calcTotalKVSize(iter->second));
             data.erase(iter);
 
             // In most cases, an optimistic lock replace a pessimistic lock.
@@ -119,8 +118,10 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
         }
     }
     // According to the process of pessimistic lock, just overwrite.
-    data.emplace(std::move(kv_pair.first), std::move(kv_pair.second));
-    return {payload_size, decoded_size};
+    if (const auto & [it, ok] = data.emplace(std::move(kv_pair.first), std::move(kv_pair.second)); ok) {
+        delta.add(calcTotalKVSize(it->second));
+    }
+    return delta;
 }
 
 template <typename Trait>
