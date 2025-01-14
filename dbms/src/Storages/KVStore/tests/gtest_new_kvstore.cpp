@@ -302,6 +302,7 @@ try
         region->insert("default", TiKVKey::copyFrom(str_key3), TiKVValue::copyFrom(str_val_default3));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key3.dataSize() + str_val_default3.size());
         ASSERT_EQ(region->dataSize(), str_key3.dataSize() + str_val_default3.size());
+        ASSERT_EQ(region->getData().totalSize(), region->dataSize());
 
         MockSSTReader::getMockSSTData().clear();
         MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
@@ -311,6 +312,7 @@ try
         kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
         proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 0, 0, std::nullopt);
         ASSERT_EQ(region->dataSize(), str_key2.dataSize() + str_val_default2.size());
+        ASSERT_EQ(region->getData().totalSize(), region->dataSize());
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key2.dataSize() + str_val_default2.size());
     }
     {
@@ -331,8 +333,10 @@ try
             root_of_kvstore_mem_trackers->get(),
             str_key.dataSize() + str_val_default.size() + str_key2.dataSize() + str_val_default2.size());
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(region->getData().totalSize(), region->dataSize());
         // `region2` is not allowed to access after move, however, we assert here in order to make sure the logic.
         ASSERT_EQ(region2->dataSize(), 0);
+        ASSERT_EQ(region2->getData().totalSize(), region2->dataSize());
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
 }

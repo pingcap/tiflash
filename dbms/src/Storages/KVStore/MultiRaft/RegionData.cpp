@@ -50,6 +50,20 @@ void RegionData::reportDelta(size_t prev, size_t current)
     }
 }
 
+void RegionData::recordMemChange(const RegionDataRes & delta)
+{
+    cf_data_size += delta.payload;
+    decoded_data_size += delta.decoded;
+    if (delta.payload > 0)
+    {
+        root_of_kvstore_mem_trackers->alloc(delta.payload, false);
+    }
+    else if (delta.payload < 0)
+    {
+        root_of_kvstore_mem_trackers->free(-delta.payload);
+    }
+}
+
 RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     switch (cf)
@@ -57,40 +71,20 @@ RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue 
     case ColumnFamilyType::Write:
     {
         auto delta = write_cf.insert(std::move(key), std::move(value), mode);
-        cf_data_size += delta.payload;
-        decoded_data_size += delta.decoded;
-        reportAlloc(delta.payload);
+        recordMemChange(delta);
         return delta;
     }
     case ColumnFamilyType::Default:
     {
         auto delta = default_cf.insert(std::move(key), std::move(value), mode);
-        cf_data_size += delta.payload;
-        decoded_data_size += delta.decoded;
-        reportAlloc(delta.payload);
+        recordMemChange(delta);
         return delta;
     }
     case ColumnFamilyType::Lock:
     {
         auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
-        LOG_INFO(
-            DB::Logger::get(),
-            "!!!!! cf_data_size {}+{} decoded_data_size {}+{}",
-            cf_data_size,
-            delta.payload,
-            decoded_data_size,
-            delta.decoded);
-        cf_data_size += delta.payload;
-        decoded_data_size += delta.decoded;
         // By inserting a lock, a old lock of the same key could be replaced, for example, perssi -> opti.
-        if likely (delta.payload >= 0)
-        {
-            reportAlloc(delta.payload);
-        }
-        else
-        {
-            reportDealloc(-delta.payload);
-        }
+        recordMemChange(delta);
         return delta;
     }
     }
@@ -125,9 +119,7 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
         break;
     }
     }
-    cf_data_size += delta.payload;
-    decoded_data_size += delta.decoded;
-    reportDealloc(-delta.payload);
+    recordMemChange(delta);
 }
 
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & write_it)

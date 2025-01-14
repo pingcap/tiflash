@@ -41,12 +41,12 @@ public:
     static void reportAlloc(size_t delta);
     static void reportDealloc(size_t delta);
     static void reportDelta(size_t prev, size_t current);
+    void recordMemChange(const RegionDataRes & delta);
 
     RegionDataRes insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void remove(ColumnFamilyType cf, const TiKVKey & key);
 
     WriteCFIter removeDataByWriteIt(const WriteCFIter & write_it);
-
     std::optional<RegionDataReadInfo> readDataByWriteIt(
         const ConstWriteCFIter & write_it,
         bool need_value,
@@ -55,7 +55,6 @@ public:
         bool hard_error);
 
     LockInfoPtr getLockInfo(const RegionLockReadQuery & query) const;
-
     std::shared_ptr<const TiKVValue> getLockByKey(const TiKVKey & key) const;
 
     void splitInto(const RegionRange & range, RegionData & new_region_data);
@@ -66,14 +65,10 @@ public:
     // `dataSize()` plus the decoded data cached.
     size_t totalSize() const;
 
-    void assignRegionData(RegionData && new_region_data);
-
     size_t serialize(WriteBuffer & buf) const;
-
     static void deserialize(ReadBuffer & buf, RegionData & region_data);
 
     friend bool operator==(const RegionData & r1, const RegionData & r2) { return r1.isEqual(r2); }
-
     bool isEqual(const RegionData & r2) const;
 
     RegionWriteCFData & writeCF();
@@ -88,6 +83,7 @@ public:
 
     RegionData(RegionData && data);
     RegionData & operator=(RegionData &&);
+    void assignRegionData(RegionData && new_region_data);
 
     String summary() const;
     struct OrphanKeysInfo
