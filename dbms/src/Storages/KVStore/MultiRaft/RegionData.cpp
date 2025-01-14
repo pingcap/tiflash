@@ -50,7 +50,7 @@ void RegionData::reportDelta(size_t prev, size_t current)
     }
 }
 
-void RegionData::recordMemChange(const RegionDataRes & delta)
+void RegionData::recordMemChange(const RegionDataMemDiff & delta)
 {
     cf_data_size += delta.payload;
     decoded_data_size += delta.decoded;
@@ -64,7 +64,7 @@ void RegionData::recordMemChange(const RegionDataRes & delta)
     }
 }
 
-RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataMemDiff RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     switch (cf)
     {
@@ -92,7 +92,7 @@ RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue 
 
 void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
 {
-    RegionDataRes delta;
+    RegionDataMemDiff delta;
     switch (cf)
     {
     case ColumnFamilyType::Write:
@@ -260,7 +260,7 @@ std::shared_ptr<const TiKVValue> RegionData::getLockByKey(const TiKVKey & key) c
 
 void RegionData::splitInto(const RegionRange & range, RegionData & new_region_data)
 {
-    RegionDataRes size_changed;
+    RegionDataMemDiff size_changed;
     size_changed.add(default_cf.splitInto(range, new_region_data.default_cf));
     size_changed.add(write_cf.splitInto(range, new_region_data.write_cf));
     // reportAlloc: Remember to track memory here if we have a region-wise metrics later.
@@ -273,7 +273,7 @@ void RegionData::splitInto(const RegionRange & range, RegionData & new_region_da
 
 void RegionData::mergeFrom(const RegionData & ori_region_data)
 {
-    RegionDataRes size_changed;
+    RegionDataMemDiff size_changed;
     size_changed.add(default_cf.mergeFrom(ori_region_data.default_cf));
     size_changed.add(write_cf.mergeFrom(ori_region_data.write_cf));
     // reportAlloc: Remember to track memory here if we have a region-wise metrics later.
@@ -330,7 +330,7 @@ size_t RegionData::serialize(WriteBuffer & buf) const
 
 void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
 {
-    RegionDataRes size_changed;
+    RegionDataMemDiff size_changed;
 
     size_changed.add(RegionDefaultCFData::deserialize(buf, region_data.default_cf));
     size_changed.add(RegionWriteCFData::deserialize(buf, region_data.write_cf));

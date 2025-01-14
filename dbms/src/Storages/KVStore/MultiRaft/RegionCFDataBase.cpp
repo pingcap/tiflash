@@ -41,7 +41,7 @@ const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataMemDiff RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto kv_pair_ptr = Trait::genKVPair(std::move(key), std::move(raw_key), std::move(value));
@@ -95,9 +95,9 @@ RegionDataRes RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && value
 }
 
 template <>
-RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck)
+RegionDataMemDiff RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck)
 {
-    RegionDataRes delta;
+    RegionDataMemDiff delta;
     Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
     const auto & decoded = std::get<2>(kv_pair.second);
     bool is_large_txn = decoded->isLargeTxn();
@@ -132,7 +132,7 @@ size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const Value & value)
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::calcTotalKVSize(const Value & value)
+RegionDataMemDiff RegionCFDataBase<Trait>::calcTotalKVSize(const Value & value)
 {
     if constexpr (std::is_same<Trait, RegionLockCFDataTrait>::value)
     {
@@ -165,7 +165,7 @@ bool RegionCFDataBase<Trait>::shouldIgnoreRemove(const RegionCFDataBase::Value &
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
+RegionDataMemDiff RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
 {
     auto & map = data;
 
@@ -257,9 +257,9 @@ std::string getTraitName()
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::mergeFrom(const RegionCFDataBase & ori_region_data)
+RegionDataMemDiff RegionCFDataBase<Trait>::mergeFrom(const RegionCFDataBase & ori_region_data)
 {
-    RegionDataRes res;
+    RegionDataMemDiff res;
 
     const auto & ori_map = ori_region_data.data;
     auto & tar_map = data;
@@ -283,10 +283,10 @@ RegionDataRes RegionCFDataBase<Trait>::mergeFrom(const RegionCFDataBase & ori_re
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::splitInto(const RegionRange & range, RegionCFDataBase & new_region_data)
+RegionDataMemDiff RegionCFDataBase<Trait>::splitInto(const RegionRange & range, RegionCFDataBase & new_region_data)
 {
     const auto & [start_key, end_key] = range;
-    RegionDataRes res;
+    RegionDataMemDiff res;
 
     {
         auto & ori_map = data;
@@ -327,7 +327,7 @@ size_t RegionCFDataBase<Trait>::serialize(WriteBuffer & buf) const
 }
 
 template <typename Trait>
-RegionDataRes RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase & new_region_data)
+RegionDataMemDiff RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase & new_region_data)
 {
     auto size = readBinary2<size_t>(buf);
     size_t cf_data_size = 0;

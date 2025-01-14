@@ -67,7 +67,7 @@ void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, D
     doInsert(type, std::move(key), std::move(value), mode);
 }
 
-RegionDataRes Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataMemDiff Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     if unlikely (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
@@ -77,7 +77,7 @@ RegionDataRes Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue 
             {
                 // We can't assert the key exists in write_cf here,
                 // since it may be already written into DeltaTree.
-                return RegionDataRes{0, 0};
+                return RegionDataMemDiff{0, 0};
             }
         }
     }
