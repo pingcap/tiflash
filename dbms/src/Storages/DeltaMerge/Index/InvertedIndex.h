@@ -125,7 +125,6 @@ template <typename T>
 class InvertedIndexMemoryViewer : public InvertedIndexViewer
 {
 public:
-    using Key = InvertedIndexViewer::Key;
     using RowID = InvertedIndexViewer::RowID;
 
 private:
@@ -146,7 +145,7 @@ public:
     std::vector<RowID> searchRange(const Key & begin, const Key & end) const override;
 
 private:
-    std::map<Key, std::vector<RowID>> index; // set by load
+    std::map<T, std::vector<RowID>> index; // set by load
 };
 
 /// Views a InvertedIndex file by reading it from disk.
@@ -155,7 +154,6 @@ template <typename T>
 class InvertedIndexFileViewer : public InvertedIndexViewer
 {
 public:
-    using Key = InvertedIndexViewer::Key;
     using RowID = InvertedIndexViewer::RowID;
 
 private:

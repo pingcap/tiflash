@@ -90,7 +90,7 @@ BitmapFilterPtr AndColumnValueSet::check(
     for (const auto & child : children)
     {
         auto child_result = child->check(search, size);
-        if (!result)
+        if (!result || !child_result)
             result = child_result;
         else
             result->intersect(*child_result);
@@ -169,7 +169,7 @@ BitmapFilterPtr OrColumnValueSet::check(
     for (const auto & child : children)
     {
         auto child_result = child->check(search, size);
-        if (!result)
+        if (!result || !child_result)
             result = child_result;
         else
             result->merge(*child_result);
