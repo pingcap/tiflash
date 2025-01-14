@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Columns/IColumn.h>
-#include <common/types.h>
 
 namespace DB::DM
 {
