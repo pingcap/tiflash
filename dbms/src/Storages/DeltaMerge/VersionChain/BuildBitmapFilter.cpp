@@ -59,4 +59,12 @@ template BitmapFilterPtr buildBitmapFilter<Int64>(
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
     VersionChain<Int64> & version_chain);
+
+template BitmapFilterPtr buildBitmapFilter<String>(
+    const DMContext & dm_context,
+    const SegmentSnapshot & snapshot,
+    const RowKeyRanges & read_ranges,
+    const DMFilePackFilterResults & pack_filter_results,
+    const UInt64 read_ts,
+    VersionChain<String> & version_chain);
 } // namespace DB::DM
