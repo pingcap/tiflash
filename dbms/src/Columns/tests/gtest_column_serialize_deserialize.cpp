@@ -44,9 +44,7 @@ public:
             column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
-        {
             ASSERT_EQ(byte_size[i], i + result_byte_size[i]);
-        }
     }
 
     static void testCountSerializeByteSizeForColumnArray(

@@ -539,7 +539,6 @@ void ColumnString::countSerializeByteSizeImpl(
             }
             else
             {
-                assert(max_bytes_one_char == 1);
                 byte_size[i] += sizeof(UInt32) + (sizeAt(i) - 1);
             }
         }
@@ -625,6 +624,8 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         const auto max_bytes_one_char = collator->maxBytesForOneChar();
         for (size_t i = 0; i < size; ++i)
         {
+            const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
+            assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
             if constexpr (count_code_points)
             {
                 size_t cur_row_bytes = 0;
@@ -635,16 +636,13 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
                     cur_row_bytes += num_char * max_bytes_one_char;
                 }
 
-                const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
                 byte_size[i] += sizeof(UInt32) * ele_count + cur_row_bytes;
             }
             else
             {
-                const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
-                assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
                 byte_size[i] += sizeof(UInt32) * (ele_count)
                     // For each sub element, minus 1 because of terminating zero.
-                    + max_bytes_one_char * (offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) - ele_count);
+                    + (offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) - ele_count);
             }
         }
     }
@@ -724,7 +722,6 @@ void ColumnString::serializeToPosImplType(
         default:
         {
             throw Exception(fmt::format("unexpected collator: {}", collator->getCollatorId()));
-            break;
         }
         };
 #undef M
@@ -853,6 +850,54 @@ void ColumnString::serializeToPosForColumnArray(
 }
 
 template <bool has_null, bool has_collator>
+void ColumnString::serializeToPosForColumnArrayImplType(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const IColumn::Offsets & array_offsets,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container) const
+{
+    if constexpr (has_collator)
+    {
+        RUNTIME_CHECK(collator && sort_key_container);
+
+#define M(VAR_PREFIX, COLLATOR_NAME, REAL_TYPE, COLLATOR_ID)                 \
+    case (COLLATOR_ID):                                                      \
+    {                                                                        \
+        serializeToPosForColumnArrayImpl<has_null, has_collator, REAL_TYPE>( \
+            pos,                                                             \
+            start,                                                           \
+            length,                                                          \
+            array_offsets,                                                   \
+            collator,                                                        \
+            sort_key_container);                                             \
+        break;                                                               \
+    }
+
+        switch (collator->getCollatorId())
+        {
+            APPLY_FOR_COLLATOR_TYPES(M)
+        default:
+        {
+            throw Exception(fmt::format("unexpected collator: {}", collator->getCollatorId()));
+        }
+        };
+#undef M
+    }
+    else
+    {
+        serializeToPosForColumnArrayImpl<has_null, has_collator, TiDB::ITiDBCollator>(
+            pos,
+            start,
+            length,
+            array_offsets,
+            collator,
+            sort_key_container);
+    }
+}
+
+template <bool has_null, bool has_collator, typename DerivedCollator>
 void ColumnString::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -877,7 +922,8 @@ void ColumnString::serializeToPosForColumnArrayImpl(
     /// countSerializeByteSizeForCmpColumnArray has already checked that the size of one element is not greater than UINT32_MAX
     if constexpr (has_collator)
     {
-        RUNTIME_CHECK(collator && sort_key_container);
+        /// To avoid virtual function call of sortKey().
+        const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
         for (size_t i = 0; i < length; ++i)
         {
             if constexpr (has_null)
@@ -890,7 +936,7 @@ void ColumnString::serializeToPosForColumnArrayImpl(
                 UInt32 str_size = sizeAt(j);
                 const void * src = &chars[offsetAt(j)];
                 auto sort_key
-                    = collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
+                    = derived_collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
                 str_size = sort_key.size;
                 src = sort_key.data;
 

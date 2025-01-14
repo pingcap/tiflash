@@ -129,7 +129,16 @@ private:
         size_t length,
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const;
+
     template <bool has_null, bool has_collator>
+    void serializeToPosForColumnArrayImplType(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr & collator,
+        String * sort_key_container) const;
+    template <bool has_null, bool has_collator, typename DerivedCollator>
     void serializeToPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
