@@ -191,16 +191,16 @@ public:
         if (nested_function->getReturnType()->canBeInsideNullable())
         {
             if (has_nullable_types)
-                return std::make_shared<AggregateFunctionNullUnaryForWindow<true, true>>(nested_function);
+                return std::make_shared<AggregateFunctionNullUnaryForWindow<true>>(nested_function);
             else
-                return std::make_shared<AggregateFunctionNullUnaryForWindow<true, false>>(nested_function);
+                return std::make_shared<AggregateFunctionNullUnaryForWindow<false>>(nested_function);
         }
         else
         {
             if (has_nullable_types)
-                return std::make_shared<AggregateFunctionNullUnaryForWindow<false, true>>(nested_function);
+                return std::make_shared<AggregateFunctionNullUnaryForWindow<true>>(nested_function);
             else
-                return std::make_shared<AggregateFunctionNullUnaryForWindow<false, false>>(nested_function);
+                return std::make_shared<AggregateFunctionNullUnaryForWindow<false>>(nested_function);
         }
     }
 };

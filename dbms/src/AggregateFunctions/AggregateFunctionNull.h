@@ -514,18 +514,42 @@ private:
     std::array<char, MAX_ARGS> is_nullable; /// Plain array is better than std::vector due to one indirection less.
 };
 
-template <bool result_is_nullable, bool input_is_nullable>
-class AggregateFunctionNullUnaryForWindow final
-    : public AggregateFunctionNullBase<
-          result_is_nullable,
-          AggregateFunctionNullUnaryForWindow<result_is_nullable, input_is_nullable>>
+template <bool input_is_nullable>
+class AggregateFunctionNullUnaryForWindow
+    : public IAggregateFunctionHelper<AggregateFunctionNullUnaryForWindow<input_is_nullable>>
 {
+protected:
+    AggregateFunctionPtr nested_function;
+    size_t prefix_size;
+
+    AggregateDataPtr nestedPlace(AggregateDataPtr __restrict place) const noexcept { return place + prefix_size; }
+
+    ConstAggregateDataPtr nestedPlace(ConstAggregateDataPtr __restrict place) const noexcept
+    {
+        return place + prefix_size;
+    }
+
 public:
-    explicit AggregateFunctionNullUnaryForWindow(AggregateFunctionPtr nested_function)
-        : AggregateFunctionNullBase<
-            result_is_nullable,
-            AggregateFunctionNullUnaryForWindow<result_is_nullable, input_is_nullable>>(nested_function, true)
-    {}
+    explicit AggregateFunctionNullUnaryForWindow(AggregateFunctionPtr nested_function_)
+        : nested_function(nested_function_)
+    {
+        prefix_size = nested_function->alignOfData();
+        if (prefix_size < sizeof(Int64))
+        {
+            auto tmp = prefix_size;
+            prefix_size += sizeof(Int64);
+            if ((prefix_size % tmp) != 0)
+                prefix_size += tmp - (prefix_size % tmp);
+            assert((prefix_size % tmp) == 0);
+            assert(prefix_size >= (tmp + sizeof(Int64)));
+        }
+    }
+
+    String getName() const override
+    {
+        /// This is just a wrapper. The function for Nullable arguments is named the same as the nested function itself.
+        return nested_function->getName();
+    }
 
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const override
     {
@@ -545,14 +569,11 @@ public:
         if constexpr (is_add)
         {
             this->addCounter(place);
-            this->setFlag(place);
             this->nested_function->add(this->nestedPlace(place), columns, row_num, arena);
         }
         else
         {
             this->decreaseCounter(place);
-            if (this->getCounter(place) == 0)
-                this->resetFlag(place);
             this->nested_function->decrease(this->nestedPlace(place), columns, row_num, arena);
         }
     }
@@ -577,36 +598,87 @@ public:
 
     void reset(AggregateDataPtr __restrict place) const override
     {
-        this->resetFlag(place);
         this->resetCounter(place);
         this->nested_function->reset(this->nestedPlace(place));
     }
 
-private:
-    inline void resetFlag(AggregateDataPtr __restrict place) const noexcept { this->initFlag(place); }
+    void setCollators(TiDB::TiDBCollators & collators) override { nested_function->setCollators(collators); }
 
+    DataTypePtr getReturnType() const override { return makeNullable(nested_function->getReturnType()); }
+
+    void create(AggregateDataPtr __restrict place) const override
+    {
+        resetCounter(place);
+        nested_function->create(nestedPlace(place));
+    }
+
+    void destroy(AggregateDataPtr __restrict place) const noexcept override
+    {
+        nested_function->destroy(nestedPlace(place));
+    }
+
+    void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const override
+    {
+        auto & to_concrete = static_cast<ColumnNullable &>(to);
+        if (getCounter(place) > 0)
+        {
+            nested_function->insertResultInto(nestedPlace(place), to_concrete.getNestedColumn(), arena);
+            to_concrete.getNullMapData().push_back(0);
+        }
+        else
+        {
+            to_concrete.insertDefault();
+        }
+    }
+
+    bool hasTrivialDestructor() const override { return nested_function->hasTrivialDestructor(); }
+
+    size_t sizeOfData() const override { return prefix_size + nested_function->sizeOfData(); }
+
+    size_t alignOfData() const override { return nested_function->alignOfData(); }
+
+    bool allocatesMemoryInArena() const override { return nested_function->allocatesMemoryInArena(); }
+
+    bool isState() const override { return nested_function->isState(); }
+
+    const char * getHeaderFilePath() const override { return __FILE__; }
+
+    void merge(AggregateDataPtr __restrict, ConstAggregateDataPtr, Arena *) const override
+    {
+        throw Exception("Not implemented yet");
+    }
+    void serialize(ConstAggregateDataPtr __restrict, WriteBuffer &) const override
+    {
+        throw Exception("Not implemented yet");
+    }
+    void deserialize(AggregateDataPtr __restrict, ReadBuffer &, Arena *) const override
+    {
+        throw Exception("Not implemented yet");
+    }
+
+private:
     inline void addCounter(AggregateDataPtr __restrict place) const noexcept
     {
-        auto * counter = reinterpret_cast<Int64 *>(place + 1);
+        auto * counter = reinterpret_cast<Int64 *>(place);
         ++(*counter);
     }
 
     inline void decreaseCounter(AggregateDataPtr __restrict place) const noexcept
     {
-        auto * counter = reinterpret_cast<Int64 *>(place + 1);
+        auto * counter = reinterpret_cast<Int64 *>(place);
         --(*counter);
         assert((*counter) >= 0);
     }
 
-    inline Int64 getCounter(AggregateDataPtr __restrict place) const noexcept
+    inline Int64 getCounter(ConstAggregateDataPtr __restrict place) const noexcept
     {
-        auto * counter = reinterpret_cast<Int64 *>(place + 1);
+        const auto * counter = reinterpret_cast<const Int64 *>(place);
         return *counter;
     }
 
     inline void resetCounter(AggregateDataPtr __restrict place) const noexcept
     {
-        auto * counter = reinterpret_cast<Int64 *>(place + 1);
+        auto * counter = reinterpret_cast<Int64 *>(place);
         (*counter) = 0;
     }
 };
