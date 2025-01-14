@@ -66,7 +66,6 @@ struct RegionCFDataBase
     using Status = bool;
 
     static const TiKVKey & getTiKVKey(const Value & val);
-
     static const TiKVValue & getTiKVValue(const Value & val);
 
     RegionDataRes insert(TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);

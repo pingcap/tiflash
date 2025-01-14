@@ -28,6 +28,7 @@
 #include <Storages/RegionQueryInfo.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+#include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
 #include <limits>
@@ -35,6 +36,7 @@
 extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
 namespace DB::tests
 {
+using namespace DB::RecordKVFormat;
 
 TEST_F(RegionKVStoreTest, RegionStruct)
 try
@@ -87,11 +89,13 @@ try
     proxy_instance->debugAddRegions(
         kvs,
         ctx.getTMTContext(),
-        {1, 2},
+        {1, 2, 3},
         {{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10)},
-         {RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)}});
+         {RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)},
+         {RecordKVFormat::genKey(table_id, 21), RecordKVFormat::genKey(table_id, 30)}});
 
     {
+        // default
         auto region_id = 1;
         auto kvr1 = kvs.getRegion(region_id);
         auto [index, term]
@@ -101,6 +105,52 @@ try
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
         ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(kvr1->dataSize(), kvr1->getData().totalSize());
+    }
+    {
+        // lock
+        root_of_kvstore_mem_trackers->reset();
+        auto region_id = 2;
+        auto kvr1 = kvs.getRegion(region_id);
+        auto [index, term]
+            = proxy_instance
+                  ->rawWrite(region_id, {str_key}, {str_lock_value}, {WriteCmdType::Put}, {ColumnFamilyType::Lock});
+        UNUSED(term);
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
+        ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(kvr1->dataSize() + sizeof(DecodedLockCFValue) + sizeof(DecodedLockCFValue::Inner), kvr1->getData().totalSize());
+    }
+    {
+        // lock with largetxn
+        root_of_kvstore_mem_trackers->reset();
+        auto region_id = 3;
+        auto kvr1 = kvs.getRegion(region_id);
+        ASSERT_NE(kvr1, nullptr);
+        std::string shor_value = "value";
+        auto lock_for_update_ts = 7777, txn_size = 1;
+        const std::vector<std::string> & async_commit = {"s1", "s2"};
+        const std::vector<uint64_t> & rollback = {3, 4};
+        auto lock_value2 = DB::RegionBench::encodeFullLockCfValue(
+            Region::DelFlag,
+            "primary key",
+            421321,
+            std::numeric_limits<UInt64>::max(),
+            &shor_value,
+            66666,
+            lock_for_update_ts,
+            txn_size,
+            async_commit,
+            rollback,
+            1111);
+        auto [index, term]
+            = proxy_instance
+                  ->rawWrite(region_id, {str_key}, {str_lock_value}, {WriteCmdType::Put}, {ColumnFamilyType::Lock});
+        UNUSED(term);
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
+        ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(kvr1->dataSize() + sizeof(DecodedLockCFValue) + sizeof(DecodedLockCFValue::Inner), kvr1->getData().totalSize());
     }
     {
         // insert & remove
@@ -215,30 +265,54 @@ try
     }
     {
         // insert & snapshot
+        UInt64 region_id = 1100;
         root_of_kvstore_mem_trackers->reset();
         proxy_instance->debugAddRegions(
             kvs,
             ctx.getTMTContext(),
-            {800},
-            {{{RecordKVFormat::genKey(table_id, 1100), RecordKVFormat::genKey(table_id, 2120000)}}});
+            {region_id},
+            {{{RecordKVFormat::genKey(table_id, 1100), RecordKVFormat::genKey(table_id, 1200)}}});
+
+        RegionPtr region = kvs.getRegion(region_id);
+        ASSERT_NE(region, nullptr);
         auto str_key2 = RecordKVFormat::genKey(table_id, 1120, 111);
         auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
 
         auto str_key3 = RecordKVFormat::genKey(table_id, 1180, 111);
         auto [str_val_write3, str_val_default3] = proxy_instance->generateTiKVKeyValue(111, 999);
-        RegionPtr region = tests::makeRegion(800, start, end, proxy_helper.get());
         
         region->insert("default", TiKVKey::copyFrom(str_key3), TiKVValue::copyFrom(str_val_default3));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key3.dataSize() + str_val_default3.size());
+        ASSERT_EQ(region->dataSize(), str_key3.dataSize() + str_val_default3.size());
 
         MockSSTReader::getMockSSTData().clear();
-        MockSSTGenerator default_cf{800, table_id, ColumnFamilyType::Default};
-        default_cf.insert(80, str_val_default2);
+        MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
+        default_cf.insert(1180, str_val_default2);
         default_cf.finish_file();
         default_cf.freeze();
         kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
-        proxy_instance->snapshot(kvs, ctx.getTMTContext(), 800, {default_cf}, 0, 0, std::nullopt);
+        proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 0, 0, std::nullopt);
+        ASSERT_EQ(region->dataSize(), str_key2.dataSize() + str_val_default2.size());
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key2.dataSize() + str_val_default2.size());
+    }
+    {
+        // assign
+        root_of_kvstore_mem_trackers->reset();
+        RegionPtr region = tests::makeRegion(1200, start, end, proxy_helper.get());
+        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+
+        auto str_key2 = RecordKVFormat::genKey(table_id, 80, 111);
+        auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
+        RegionPtr region2 = tests::makeRegion(1201, start, end, proxy_helper.get());
+        region2->insert("default", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
+        region2->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+
+        region->assignRegion(std::move(*region2));
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size() + str_key2.dataSize() + str_val_default2.size());
+        ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
+        // `region2` is not allowed to access after move, however, we assert here in order to make sure the logic.
+        ASSERT_EQ(region2->dataSize(), 0);
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
 }

@@ -73,6 +73,7 @@ RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue 
     case ColumnFamilyType::Lock:
     {
         auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
+        LOG_INFO(DB::Logger::get(), "!!!!! cf_data_size {}+{} decoded_data_size {}+{}", cf_data_size, delta.payload, decoded_data_size, delta.decoded);
         cf_data_size += delta.payload;
         decoded_data_size += delta.decoded;
         // By inserting a lock, a old lock of the same key could be replaced, for example, perssi -> opti.
@@ -289,8 +290,16 @@ size_t RegionData::dataSize() const
     return cf_data_size;
 }
 
+size_t RegionData::totalSize() const {
+    return cf_data_size + decoded_data_size;
+}
+
 void RegionData::assignRegionData(RegionData && new_region_data)
 {
+    reportDealloc(cf_data_size);
+    cf_data_size = 0;
+    decoded_data_size = 0;
+
     default_cf = std::move(new_region_data.default_cf);
     write_cf = std::move(new_region_data.write_cf);
     lock_cf = std::move(new_region_data.lock_cf);
@@ -298,6 +307,14 @@ void RegionData::assignRegionData(RegionData && new_region_data)
 
     cf_data_size = new_region_data.cf_data_size.load();
     decoded_data_size = new_region_data.decoded_data_size.load();
+    new_region_data.cf_data_size = 0;
+    new_region_data.decoded_data_size = 0;
+}
+
+
+RegionData & RegionData::operator=(RegionData && r) {
+    assignRegionData(std::move(r));
+    return *this;
 }
 
 size_t RegionData::serialize(WriteBuffer & buf) const
@@ -360,24 +377,14 @@ RegionData::RegionData(RegionData && data)
     , default_cf(std::move(data.default_cf))
     , lock_cf(std::move(data.lock_cf))
     , cf_data_size(data.cf_data_size.load())
+    , decoded_data_size(data.decoded_data_size.load())
 {}
-
 
 RegionData::~RegionData()
 {
     reportDealloc(cf_data_size);
     cf_data_size = 0;
-}
-
-RegionData & RegionData::operator=(RegionData && rhs)
-{
-    write_cf = std::move(rhs.write_cf);
-    default_cf = std::move(rhs.default_cf);
-    lock_cf = std::move(rhs.lock_cf);
-    reportDelta(cf_data_size, rhs.cf_data_size.load());
-    cf_data_size = rhs.cf_data_size.load();
-    decoded_data_size = rhs.decoded_data_size.load();
-    return *this;
+    decoded_data_size = 0;
 }
 
 String RegionData::summary() const

@@ -206,7 +206,7 @@ bool DecodedLockCFValue::isLargeTxn() const
 
 size_t DecodedLockCFValue::getSize() const
 {
-    return sizeof(DecodedLockCFValue) + (isLargeTxn() ? sizeof(DecodedLockCFValue::Inner) : 0);
+    return sizeof(DecodedLockCFValue) + (isLargeTxn() ? 0 : sizeof(DecodedLockCFValue::Inner));
 }
 
 void DecodedLockCFValue::Inner::intoLockInfo(const std::shared_ptr<const TiKVKey> & key, kvrpcpb::LockInfo & res) const
