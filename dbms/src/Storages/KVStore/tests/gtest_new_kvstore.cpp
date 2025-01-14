@@ -18,6 +18,7 @@
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/Page/V3/PageDefines.h>
@@ -28,7 +29,6 @@
 #include <Storages/RegionQueryInfo.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
-#include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
 #include <limits>
@@ -298,7 +298,7 @@ try
 
         auto str_key3 = RecordKVFormat::genKey(table_id, 1180, 111);
         auto [str_val_write3, str_val_default3] = proxy_instance->generateTiKVKeyValue(111, 999);
-        
+
         region->insert("default", TiKVKey::copyFrom(str_key3), TiKVValue::copyFrom(str_val_default3));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key3.dataSize() + str_val_default3.size());
         ASSERT_EQ(region->dataSize(), str_key3.dataSize() + str_val_default3.size());
@@ -327,7 +327,9 @@ try
         region2->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
 
         region->assignRegion(std::move(*region2));
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size() + str_key2.dataSize() + str_val_default2.size());
+        ASSERT_EQ(
+            root_of_kvstore_mem_trackers->get(),
+            str_key.dataSize() + str_val_default.size() + str_key2.dataSize() + str_val_default2.size());
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         // `region2` is not allowed to access after move, however, we assert here in order to make sure the logic.
         ASSERT_EQ(region2->dataSize(), 0);

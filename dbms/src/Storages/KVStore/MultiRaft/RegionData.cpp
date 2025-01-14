@@ -73,7 +73,13 @@ RegionDataRes RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue 
     case ColumnFamilyType::Lock:
     {
         auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
-        LOG_INFO(DB::Logger::get(), "!!!!! cf_data_size {}+{} decoded_data_size {}+{}", cf_data_size, delta.payload, decoded_data_size, delta.decoded);
+        LOG_INFO(
+            DB::Logger::get(),
+            "!!!!! cf_data_size {}+{} decoded_data_size {}+{}",
+            cf_data_size,
+            delta.payload,
+            decoded_data_size,
+            delta.decoded);
         cf_data_size += delta.payload;
         decoded_data_size += delta.decoded;
         // By inserting a lock, a old lock of the same key could be replaced, for example, perssi -> opti.
@@ -290,7 +296,8 @@ size_t RegionData::dataSize() const
     return cf_data_size;
 }
 
-size_t RegionData::totalSize() const {
+size_t RegionData::totalSize() const
+{
     return cf_data_size + decoded_data_size;
 }
 
@@ -312,7 +319,8 @@ void RegionData::assignRegionData(RegionData && new_region_data)
 }
 
 
-RegionData & RegionData::operator=(RegionData && r) {
+RegionData & RegionData::operator=(RegionData && r)
+{
     assignRegionData(std::move(r));
     return *this;
 }

@@ -118,7 +118,8 @@ RegionDataRes RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, Ti
         }
     }
     // According to the process of pessimistic lock, just overwrite.
-    if (const auto & [it, ok] = data.emplace(std::move(kv_pair.first), std::move(kv_pair.second)); ok) {
+    if (const auto & [it, ok] = data.emplace(std::move(kv_pair.first), std::move(kv_pair.second)); ok)
+    {
         delta.add(calcTotalKVSize(it->second));
     }
     return delta;

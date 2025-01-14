@@ -46,7 +46,8 @@ namespace FailPoints
 extern const char force_set_num_regions_for_table[];
 } // namespace FailPoints
 
-void RegionTable::InternalRegion::updateRegionCacheBytes(size_t cache_bytes_) {
+void RegionTable::InternalRegion::updateRegionCacheBytes(size_t cache_bytes_)
+{
     cache_bytes = cache_bytes_;
 }
 

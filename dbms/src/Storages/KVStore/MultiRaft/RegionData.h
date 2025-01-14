@@ -65,7 +65,7 @@ public:
     size_t dataSize() const;
     // `dataSize()` plus the decoded data cached.
     size_t totalSize() const;
-    
+
     void assignRegionData(RegionData && new_region_data);
 
     size_t serialize(WriteBuffer & buf) const;

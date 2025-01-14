@@ -84,7 +84,7 @@ public:
         std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
         bool pause_flush = false;
         Timepoint last_flush_time = Clock::now();
-        
+
     private:
         Int64 cache_bytes = 0;
     };

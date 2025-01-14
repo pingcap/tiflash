@@ -25,25 +25,32 @@ namespace DB
 
 struct TiKVRangeKey;
 using RegionRange = RegionRangeKeys::RegionRange;
-struct RegionDataRes {
+struct RegionDataRes
+{
     using Type = Int64;
     Type payload;
     Type decoded;
 
     template <typename T1, typename T2>
-    RegionDataRes(T1 payload_, T2 decoded_) : payload(payload_), decoded(decoded_) {}
-    RegionDataRes() : payload(0), decoded(0) {}
+    RegionDataRes(T1 payload_, T2 decoded_)
+        : payload(payload_)
+        , decoded(decoded_)
+    {}
+    RegionDataRes()
+        : payload(0)
+        , decoded(0)
+    {}
 
-    RegionDataRes operator-() const {
-        return {-payload, -decoded};
-    }
+    RegionDataRes operator-() const { return {-payload, -decoded}; }
 
-    void add(const RegionDataRes & other) {
+    void add(const RegionDataRes & other)
+    {
         payload += other.payload;
         decoded += other.decoded;
     }
 
-    void sub(const RegionDataRes & other) {
+    void sub(const RegionDataRes & other)
+    {
         payload -= other.payload;
         decoded -= other.decoded;
     }
@@ -98,6 +105,7 @@ struct RegionCFDataBase
     const Data & getData() const;
 
     Data & getDataMut();
+
 private:
     static bool shouldIgnoreRemove(const Value & value);
 

@@ -173,15 +173,17 @@ TEST(TiKVKeyValueTest, PortedTests)
 
         ASSERT_TRUE(
             d.insert(
-                RecordKVFormat::genKey(1, 2, 3),
-                RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value", true)).payload
+                 RecordKVFormat::genKey(1, 2, 3),
+                 RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value", true))
+                .payload
             == 0);
         ASSERT_TRUE(d.getSize() == 1);
 
         ASSERT_TRUE(
             d.insert(
-                RecordKVFormat::genKey(1, 2, 3),
-                RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value")).payload
+                 RecordKVFormat::genKey(1, 2, 3),
+                 RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value"))
+                .payload
             == 0);
         ASSERT_TRUE(d.getSize() == 1);
 
