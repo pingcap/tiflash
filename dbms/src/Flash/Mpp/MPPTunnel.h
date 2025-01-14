@@ -564,7 +564,7 @@ private:
     {
         std::lock_guard lock(mu);
         // TODO(hyb): Figure out which type of packets are equal or smaller than 2 bytes
-        // Currently doesn't record these packets, because in receiver side, it seems unnoticable, 
+        // Currently doesn't record these packets, because in receiver side, it seems unnoticable,
         // so to ensure the total_recorded_send_bytes == total_recorded_received_bytes, just ignore these packets now.
         if likely (pushed_data_size > 2)
         {
