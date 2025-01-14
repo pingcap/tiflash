@@ -563,8 +563,14 @@ private:
     void updateConnProfileInfo(size_t pushed_data_size)
     {
         std::lock_guard lock(mu);
-        connection_profile_info.bytes += pushed_data_size;
-        connection_profile_info.packets += 1;
+        // TODO(hyb): Figure out which type of packets are equal or smaller than 2 bytes
+        // Currently doesn't record these packets, because in receiver side, it seems unnoticable, 
+        // so to ensure the total_recorded_send_bytes == total_recorded_received_bytes, just ignore these packets now.
+        if likely (pushed_data_size > 2)
+        {
+            connection_profile_info.bytes += pushed_data_size;
+            connection_profile_info.packets += 1;
+        }
     }
 
 private:

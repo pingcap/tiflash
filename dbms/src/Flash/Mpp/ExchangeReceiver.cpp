@@ -733,8 +733,11 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         return detail;
     const auto & packet = recv_msg->getPacket();
 
-    // Record total packet size even if fine grained shuffle is enabled.
-    detail.packet_bytes = packet.ByteSizeLong();
+    // Record total packet size when fine grained shuffle is disabled or only records in the first stream.
+    if (getFineGrainedShuffleStreamCount() == 0 || stream_id == 0)
+    {
+        detail.packet_bytes = packet.ByteSizeLong();
+    }
 
     switch (auto version = packet.version(); version)
     {
