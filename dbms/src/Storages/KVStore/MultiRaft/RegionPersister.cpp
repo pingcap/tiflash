@@ -403,7 +403,7 @@ RegionMap RegionPersister::restore(
         {
             LOG_WARNING(
                 log,
-                "Region skip restore because keyspace in blacklist, region_id={} keyspace={}",
+                "Region skip restore because keyspace in blocklist, region_id={} keyspace={}",
                 region->id(),
                 region->getKeyspaceID());
             return;

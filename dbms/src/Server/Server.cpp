@@ -581,7 +581,7 @@ void loadBlockList(
     auto blacklist_file_path = config.getString("blacklist_file", "");
     if (blacklist_file_path.length() == 0)
     {
-        LOG_INFO(log, "blacklist file not enabled, ignore it.");
+        LOG_INFO(log, "blocklist file not enabled, ignore it.");
     }
     else
     {
@@ -621,13 +621,13 @@ void loadBlockList(
 
             LOG_INFO(
                 log,
-                "Load blacklist file done, total {} keyspaces and {} regions in blacklist.",
+                "Load blocklist file done, total {} keyspaces and {} regions in blacklist.",
                 keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
                 region_arr.isNull() ? 0 : region_arr->size());
         }
         else
         {
-            LOG_INFO(log, "blacklist file not exists or non-readble, ignore it.");
+            LOG_INFO(log, "blocklist file not exists or non-readble, ignore it.");
         }
     }
 #endif

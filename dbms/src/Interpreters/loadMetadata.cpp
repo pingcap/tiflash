@@ -122,11 +122,11 @@ void loadMetadata(Context & context)
             continue;
 
 #if SERVERLESS_PROXY == 1
-        // Ignore database owned by keyspace in blacklist
+        // Ignore database owned by keyspace in blocklist
         auto keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(db_name);
         if (context.isKeyspaceInBlocklist(keyspace_id))
         {
-            LOG_WARNING(log, "database {} ignored because keyspace in blacklist, keyspace={}", db_name, keyspace_id);
+            LOG_WARNING(log, "database {} ignored because keyspace in blocklist, keyspace={}", db_name, keyspace_id);
             continue;
         }
 #endif
