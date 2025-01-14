@@ -14,6 +14,8 @@
 
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
+#include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeString.h>
 #include <Flash/Coprocessor/CodecUtils.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 
@@ -37,14 +39,44 @@ void checkColumnSize(const String & identifier, size_t expected, size_t actual)
 
 void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual)
 {
-    if (unlikely(expected != actual))
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "{} schema mismatch at column {}, expected {}, actual {}",
-            identifier,
-            column_index,
-            expected,
-            actual);
+    if (likely(expected == actual))
+        return;
+    if (expected == DataTypeString::NameV2 && actual == DataTypeString::LegacyName)
+        return;
+    if (expected == DataTypeString::NullableNameV2 && actual == DataTypeString::NullableLegacyName)
+        return;
+
+    throw Exception(
+        ErrorCodes::LOGICAL_ERROR,
+        "{} schema mismatch at column {}, expected {}, actual {}",
+        identifier,
+        column_index,
+        expected,
+        actual);
+}
+
+const IDataType & convertDataType(const IDataType & type)
+{
+    static const auto legacy_string_type = DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName);
+    static const auto legacy_nullable_string_type
+        = DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName);
+
+    auto name = type.getName();
+    if (name == DataTypeString::NameV2)
+        return *legacy_string_type;
+    else if (name == DataTypeString::NullableNameV2)
+        return *legacy_nullable_string_type;
+    else
+        return type;
+}
+
+const IDataType & convertDataTypeByPacketVersion(const IDataType & type, MPPDataPacketVersion packet_version)
+{
+    if (packet_version >= MPPDataPacketVersion::MPPDataPacketV2)
+        return type;
+
+    // If packet_version < MPPDataPacketVersion::MPPDataPacketV2, use legacy DataTypeString.
+    return convertDataType(type);
 }
 
 } // namespace DB::CodecUtils

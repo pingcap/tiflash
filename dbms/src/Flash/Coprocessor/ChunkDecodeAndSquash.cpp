@@ -26,6 +26,15 @@ CHBlockChunkDecodeAndSquash::CHBlockChunkDecodeAndSquash(const Block & header, s
 
 std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1(std::string_view sv)
 {
+    auto block = doDecodeAndSquashV1(sv);
+    // Codec may return legacy string type (named 'String'), respect to local string type (named 'StringV2')
+    if (block)
+        return codec.header.cloneWithColumns(block->getColumns());
+    return block;
+}
+
+std::optional<Block> CHBlockChunkDecodeAndSquash::doDecodeAndSquashV1(std::string_view sv)
+{
     if unlikely (sv.empty())
     {
         std::optional<Block> res;
@@ -77,6 +86,15 @@ std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquashV1Impl(ReadBuff
 }
 
 std::optional<Block> CHBlockChunkDecodeAndSquash::decodeAndSquash(const String & str)
+{
+    auto block = doDecodeAndSquash(str);
+    // Codec may return legacy string type (named 'String'), respect to local string type (named 'StringV2')
+    if (block)
+        return codec.header.cloneWithColumns(block->getColumns());
+    return block;
+}
+
+std::optional<Block> CHBlockChunkDecodeAndSquash::doDecodeAndSquash(const String & str)
 {
     std::optional<Block> res;
     ReadBufferFromString istr(str);
