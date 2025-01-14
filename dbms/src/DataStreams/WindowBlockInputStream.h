@@ -44,8 +44,10 @@ public:
     bool arePeers(const RowNumber & peer_group_last_row, const RowNumber & current_row) const;
 
     void advanceFrameStart();
-    void advanceFrameEndCurrentRow();
     void advanceFrameEnd();
+    void advanceFrameStartCurrentRow();
+    void advanceFrameEndCurrentRow();
+    void advanceRangeFrameEndCurrentRowShortcut();
 
     void writeOutCurrentRow();
 
