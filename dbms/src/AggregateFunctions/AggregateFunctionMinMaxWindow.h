@@ -31,7 +31,7 @@
 namespace DB
 {
 template <typename T>
-struct SingleValueDataFixedForWindow : public SingleValueDataFixed<T>
+struct SingleValueDataFixedForWindow
 {
 private:
     using Self = SingleValueDataFixedForWindow<T>;
@@ -83,33 +83,59 @@ public:
         auto to_value = static_cast<const ColumnType &>(column).getData()[row_num];
         saved_values.insert(to_value);
     }
+
+    static void setCollators(const TiDB::TiDBCollators &) {}
+    static void write(WriteBuffer &, const IDataType &) { throw Exception("Not implemented yet"); }
+    static void read(ReadBuffer &, const IDataType &, Arena *) { throw Exception("Not implemented yet"); }
 };
 
-struct SingleValueDataStringForWindow : public SingleValueDataString
+struct SingleValueDataStringForWindow
 {
 private:
     using Self = SingleValueDataStringForWindow;
 
-    // TODO use std::string is inefficient
-    mutable std::multiset<std::string> saved_values;
+    struct StringWithCollator
+    {
+        StringWithCollator(const StringRef & value_, TiDB::TiDBCollatorPtr collator_)
+            : value(value_.toString())
+            , collator(collator_)
+        {}
 
-public:
-    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
+        // TODO use std::string is inefficient
+        std::string value;
+        TiDB::TiDBCollatorPtr collator;
+    };
 
-    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
+    struct Less
+    {
+        constexpr bool operator()(const StringWithCollator & left, const StringWithCollator & right) const
+        {
+            if unlikely (left.collator == nullptr)
+                return left.value < right.value;
+            return left.collator
+                ->compareFastPath(left.value.data(), left.value.size(), right.value.data(), right.value.size());
+        }
+    };
+
+    using multiset = std::multiset<StringWithCollator, Less>;
+
+    mutable multiset saved_values;
+    TiDB::TiDBCollatorPtr collator{};
+
+    void saveValue(StringRef value) { saved_values.insert(StringWithCollator(value, collator)); }
 
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
         if (!saved_values.empty())
         {
-            std::set<std::string>::iterator iter;
+            multiset::iterator iter;
             if constexpr (is_min)
                 iter = saved_values.begin();
             else
                 iter = --(saved_values.end());
 
-            static_cast<ColumnString &>(to).insertDataWithTerminatingZero(iter->data(), iter->size());
+            static_cast<ColumnString &>(to).insertDataWithTerminatingZero(iter->value.data(), iter->value.size());
         }
         else
         {
@@ -122,12 +148,10 @@ public:
     void decrease(const IColumn & column, size_t row_num)
     {
         auto str = static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num);
-        auto iter = saved_values.find(str.toString());
+        auto iter = saved_values.find(StringWithCollator(str, collator));
         assert(iter != saved_values.end());
         saved_values.erase(iter);
     }
-
-    void saveValue(StringRef value) { saved_values.insert(value.toString()); }
 
     void changeIfLess(const IColumn & column, size_t row_num, Arena *)
     {
@@ -140,9 +164,16 @@ public:
     }
 
     static bool allocatesMemoryInArena() { return true; }
+
+    void setCollators(const TiDB::TiDBCollators & collators_)
+    {
+        collator = !collators_.empty() ? collators_[0] : nullptr;
+    }
+    static void write(WriteBuffer &, const IDataType &) { throw Exception("Not implemented yet"); }
+    static void read(ReadBuffer &, const IDataType &, Arena *) { throw Exception("Not implemented yet"); }
 };
 
-struct SingleValueDataGenericForWindow : public SingleValueDataGeneric
+struct SingleValueDataGenericForWindow
 {
 private:
     using Self = SingleValueDataGenericForWindow;
@@ -195,6 +226,10 @@ public:
         column.get(row_num, value);
         saved_values.insert(value);
     }
+
+    static void setCollators(const TiDB::TiDBCollators &) {}
+    static void write(WriteBuffer &, const IDataType &) { throw Exception("Not implemented yet"); }
+    static void read(ReadBuffer &, const IDataType &, Arena *) { throw Exception("Not implemented yet"); }
 };
 
 template <typename Data>

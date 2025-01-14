@@ -66,7 +66,7 @@ private:
     AggregateFunctionForEachData & ensureAggregateData(
         AggregateDataPtr __restrict place,
         size_t new_size,
-        Arena * arena) const
+        Arena & arena) const
     {
         AggregateFunctionForEachData & state = data(place);
 
@@ -75,10 +75,7 @@ private:
         size_t old_size = state.dynamic_array_size;
         if (old_size < new_size)
         {
-            if unlikely (arena == nullptr)
-                throw Exception("Get null arena ptr in ensureAggregateData");
-
-            state.array_of_aggregate_datas = arena->realloc(
+            state.array_of_aggregate_datas = arena.realloc(
                 state.array_of_aggregate_datas,
                 old_size * nested_size_of_data,
                 new_size * nested_size_of_data);
@@ -176,7 +173,7 @@ public:
                     ErrorCodes::SIZES_OF_ARRAYS_DOESNT_MATCH);
         }
 
-        AggregateFunctionForEachData & state = ensureAggregateData(place, end - begin, arena);
+        AggregateFunctionForEachData & state = ensureAggregateData(place, end - begin, *arena);
 
         char * nested_state = state.array_of_aggregate_datas;
         for (size_t i = begin; i < end; ++i)
@@ -189,7 +186,7 @@ public:
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
         const AggregateFunctionForEachData & rhs_state = data(rhs);
-        AggregateFunctionForEachData & state = ensureAggregateData(place, rhs_state.dynamic_array_size, arena);
+        AggregateFunctionForEachData & state = ensureAggregateData(place, rhs_state.dynamic_array_size, *arena);
 
         const char * rhs_nested_state = rhs_state.array_of_aggregate_datas;
         char * nested_state = state.array_of_aggregate_datas;
@@ -223,7 +220,7 @@ public:
         size_t new_size = 0;
         readBinary(new_size, buf);
 
-        ensureAggregateData(place, new_size, arena);
+        ensureAggregateData(place, new_size, *arena);
 
         char * nested_state = state.array_of_aggregate_datas;
         for (size_t i = 0; i < new_size; ++i)
