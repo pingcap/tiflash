@@ -642,6 +642,10 @@ FileType FileCache::getFileType(const String & fname)
     {
         return FileType::VectorIndex;
     }
+    else if (ext == ".invert")
+    {
+        return FileType::InvertedIndex;
+    }
     else if (ext == ".meta")
     {
         // Example: v1.meta

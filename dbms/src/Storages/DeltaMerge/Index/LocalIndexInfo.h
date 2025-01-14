@@ -61,22 +61,13 @@ struct LocalIndexInfo
         , column_id(column_id_)
         , def_inverted_index(def)
     {}
-
-    dtpb::IndexFileKind getKindAsDtpb() const
-    {
-        switch (kind)
-        {
-        case TiDB::ColumnarIndexKind::Vector:
-            return dtpb::IndexFileKind::VECTOR_INDEX;
-        case TiDB::ColumnarIndexKind::Inverted:
-            return dtpb::IndexFileKind::INVERTED_INDEX;
-        default:
-            RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(kind));
-        }
-    }
 };
 
-void saveIndexFilePros(const LocalIndexInfo & index_info, dtpb::IndexFilePropsV2 * pb_idx, size_t uncompressed_size);
+void saveIndexFilePros(
+    const LocalIndexInfo & index_info,
+    dtpb::IndexFilePropsV2 * pb_idx,
+    size_t file_size,
+    size_t uncompressed_size);
 
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
 

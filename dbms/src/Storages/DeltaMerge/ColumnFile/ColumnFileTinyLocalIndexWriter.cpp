@@ -184,7 +184,6 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
             CompressedWriteBuffer compressed(write_buf);
             index.builder_index->saveToBuffer(compressed);
             compressed.next();
-            write_buf.next();
             auto file_size = write_buf.count();
             auto uncompressed = compressed.getUncompressedBytes();
             auto buf = write_buf.tryGetReadBuffer();
@@ -193,10 +192,7 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
             auto idx_info = dtpb::ColumnFileIndexInfo{};
             idx_info.set_index_page_id(index_page_id);
             auto * idx_props = idx_info.mutable_index_props();
-            idx_props->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
-            idx_props->set_index_id(index.info.index_id);
-            idx_props->set_file_size(file_size);
-            saveIndexFilePros(index.info, idx_props, uncompressed);
+            saveIndexFilePros(index.info, idx_props, file_size, uncompressed);
             index_infos->emplace_back(std::move(idx_info));
         }
     }

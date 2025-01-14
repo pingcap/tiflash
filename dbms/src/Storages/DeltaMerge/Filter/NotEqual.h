@@ -43,7 +43,7 @@ public:
         if (less && greater)
         {
             auto iter = std::find_if(index_info->begin(), index_info->end(), [&](const auto & info) {
-                return info.column_id == attr.col_id && info.type == IndexType::Inverted;
+                return info.column_id == attr.col_id && info.kind == TiDB::ColumnarIndexKind::Inverted;
             });
             if (iter != index_info->end())
                 return SingleColumnValueSet::create(iter->column_id, iter->index_id, less->unionWith(greater));

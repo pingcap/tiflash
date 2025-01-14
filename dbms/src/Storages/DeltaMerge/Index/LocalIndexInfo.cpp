@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 #include <fiu.h>
 
@@ -82,12 +83,19 @@ ColumnID getVectorIndxColumnID(
     return EmptyColumnID;
 }
 
-void saveIndexFilePros(const LocalIndexInfo & index_info, dtpb::IndexFilePropsV2 * pb_idx, size_t uncompressed_size)
+void saveIndexFilePros(
+    const LocalIndexInfo & index_info,
+    dtpb::IndexFilePropsV2 * pb_idx,
+    size_t file_size,
+    size_t uncompressed_size)
 {
+    pb_idx->set_index_id(index_info.index_id);
+    pb_idx->set_file_size(file_size);
     switch (index_info.kind)
     {
     case TiDB::ColumnarIndexKind::Vector:
     {
+        pb_idx->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
         auto * pb_vec_idx = pb_idx->mutable_vector_index();
         pb_vec_idx->set_format_version(0);
         pb_vec_idx->set_dimensions(index_info.def_vector_index->dimension);
@@ -96,6 +104,7 @@ void saveIndexFilePros(const LocalIndexInfo & index_info, dtpb::IndexFilePropsV2
     }
     case TiDB::ColumnarIndexKind::Inverted:
     {
+        pb_idx->set_kind(dtpb::IndexFileKind::INVERTED_INDEX);
         auto * pb_inv_idx = pb_idx->mutable_inverted_index();
         pb_inv_idx->set_uncompressed_size(uncompressed_size);
         break;
@@ -108,7 +117,28 @@ void saveIndexFilePros(const LocalIndexInfo & index_info, dtpb::IndexFilePropsV2
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger)
 {
     // The same as generate local index infos with no existing_indexes
-    return generateLocalIndexInfos(nullptr, table_info, logger).new_local_index_infos;
+    auto new_index_infos = generateLocalIndexInfos(nullptr, table_info, logger).new_local_index_infos;
+    if (!new_index_infos)
+        new_index_infos = std::make_shared<LocalIndexInfos>();
+    // FIXME: remove this
+    static IndexID index_id = 0;
+    for (const auto & col : table_info.columns)
+    {
+        auto type = getDataTypeByColumnInfo(col);
+        if (type->isValueRepresentedByInteger())
+        {
+            bool is_unsigned
+                = (col.tp == 7 /* MyDateTime */ || col.tp == 10 /* MyDate */
+                   || col.tp == 12 /* MyDateTime */);
+            is_unsigned = is_unsigned || col.hasUnsignedFlag();
+            auto definition = std::make_shared<TiDB::InvertedIndexDefinition>(TiDB::InvertedIndexDefinition{
+                .is_signed = !is_unsigned,
+                .type_size = static_cast<UInt8>(type->getSizeOfValueInMemory()),
+            });
+            new_index_infos->emplace_back(++index_id, col.id, definition);
+        }
+    }
+    return new_index_infos;
 }
 
 namespace

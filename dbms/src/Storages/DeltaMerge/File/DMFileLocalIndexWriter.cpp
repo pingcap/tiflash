@@ -250,10 +250,7 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
 
             auto index_file = Poco::File(index.index_file_path);
             RUNTIME_CHECK(index_file.exists());
-            pb_idx->set_kind(index.info.getKindAsDtpb());
-            pb_idx->set_index_id(index.info.index_id);
-            pb_idx->set_file_size(index_file.getSize());
-            saveIndexFilePros(index.info, pb_idx, index_file.getSize());
+            saveIndexFilePros(index.info, pb_idx, index_file.getSize(), index_file.getSize());
 
             total_built_index_bytes += pb_idx->file_size();
             new_indexes.emplace_back(std::move(pb_dmfile_idx));
