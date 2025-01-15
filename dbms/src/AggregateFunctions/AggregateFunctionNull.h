@@ -90,23 +90,13 @@ protected:
     }
 
 public:
-    explicit AggregateFunctionNullBase(AggregateFunctionPtr nested_function_, bool need_counter = false)
+    explicit AggregateFunctionNullBase(AggregateFunctionPtr nested_function_)
         : nested_function{nested_function_}
     {
         if (result_is_nullable)
             prefix_size = nested_function->alignOfData();
         else
             prefix_size = 0;
-
-        if (result_is_nullable && need_counter)
-        {
-            auto tmp = prefix_size;
-            prefix_size += sizeof(Int64);
-            if ((prefix_size % tmp) != 0)
-                prefix_size += tmp - (prefix_size % tmp);
-            assert((prefix_size % tmp) == 0);
-            assert(prefix_size >= (tmp + sizeof(Int64)));
-        }
     }
 
     String getName() const override
@@ -514,6 +504,40 @@ private:
     std::array<char, MAX_ARGS> is_nullable; /// Plain array is better than std::vector due to one indirection less.
 };
 
+// Make the prefix_size >= sizeof(UInt64) and could fit the align size
+inline size_t enlarge_prefix_size(size_t prefix_size) noexcept
+{
+    assert(prefix_size != 0);
+
+    // align_size is equal to prefix_size at the beginning
+    auto align_size = prefix_size;
+
+    switch (prefix_size)
+    {
+    case 1:
+        prefix_size = sizeof(UInt64);
+        break;
+    case 3:
+        prefix_size = 9;
+        break;
+    case 5:
+        prefix_size = 10;
+        break;
+    case 6:
+        prefix_size = 12;
+        break;
+    case 7:
+        prefix_size = 14;
+        break;
+    case 2:
+    case 4:
+        prefix_size = sizeof(UInt64);
+    }
+
+    assert(prefix_size >= sizeof(UInt64) && (prefix_size % align_size == 0));
+    return prefix_size;
+}
+
 template <bool input_is_nullable>
 class AggregateFunctionNullUnaryForWindow
     : public IAggregateFunctionHelper<AggregateFunctionNullUnaryForWindow<input_is_nullable>>
@@ -532,18 +556,8 @@ protected:
 public:
     explicit AggregateFunctionNullUnaryForWindow(AggregateFunctionPtr nested_function_)
         : nested_function(nested_function_)
-    {
-        prefix_size = nested_function->alignOfData();
-        if (prefix_size < sizeof(Int64))
-        {
-            auto tmp = prefix_size;
-            prefix_size += sizeof(Int64);
-            if ((prefix_size % tmp) != 0)
-                prefix_size += tmp - (prefix_size % tmp);
-            assert((prefix_size % tmp) == 0);
-            assert(prefix_size >= (tmp + sizeof(Int64)));
-        }
-    }
+        , prefix_size(enlarge_prefix_size(nested_function->alignOfData()))
+    {}
 
     String getName() const override
     {

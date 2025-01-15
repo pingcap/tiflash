@@ -14,6 +14,7 @@
 
 
 #include <AggregateFunctions/AggregateFunctionMinMaxAny.h>
+#include <AggregateFunctions/AggregateFunctionNull.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnNullable.h>
 #include <Columns/ColumnsNumber.h>
@@ -29,8 +30,11 @@
 #include <TestUtils/AggregationTestUtils.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <gtest/gtest.h>
 
 #include <random>
+
+#include "AggregateFunctions/AggregateFunctionNull.h"
 
 namespace DB
 {
@@ -679,6 +683,13 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
     }
 }
 
+void checkPrefixSize(size_t prefix_size)
+{
+    prefix_size = enlarge_prefix_size(prefix_size);
+    ASSERT_TRUE(prefix_size % 1 == 0);
+    ASSERT_TRUE(prefix_size >= 8);
+}
+
 TEST_F(ExecutorWindowAgg, Sum)
 try
 {
@@ -901,6 +912,28 @@ try
         executeWindowAggTest<MinOrMaxMocker<true>, true>(string_nullable_case);
         executeWindowAggTest<MinOrMaxMocker<true>, true>(duration_nullable_case);
     }
+}
+CATCH
+
+TEST_F(ExecutorWindowAgg, EnlargePrefixSize)
+try
+{
+    checkPrefixSize(1);
+    checkPrefixSize(2);
+    checkPrefixSize(3);
+    checkPrefixSize(4);
+    checkPrefixSize(5);
+    checkPrefixSize(6);
+    checkPrefixSize(7);
+    checkPrefixSize(8);
+    checkPrefixSize(9);
+    checkPrefixSize(10);
+    checkPrefixSize(11);
+    checkPrefixSize(12);
+    checkPrefixSize(13);
+    checkPrefixSize(14);
+    checkPrefixSize(15);
+    checkPrefixSize(16);
 }
 CATCH
 
