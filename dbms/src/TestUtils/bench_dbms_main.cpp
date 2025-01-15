@@ -20,9 +20,9 @@
 int main(int argc, char * argv[])
 {
     benchmark::Initialize(&argc, argv);
-    DB::tests::TiFlashTestEnv::setupLogger();
-    // Each time TiFlashTestEnv::getContext() is called, some log will print, it's annoying.
-    Poco::Logger::root().setLevel("error");
+
+    const bool enable_colors = isatty(STDERR_FILENO) && isatty(STDOUT_FILENO);
+    DB::tests::TiFlashTestEnv::setupLogger("error", std::cerr, enable_colors);
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
     if (::benchmark::ReportUnrecognizedArguments(argc, argv))
         return 1;

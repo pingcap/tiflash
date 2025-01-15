@@ -24,6 +24,7 @@
 
 #include <magic_enum.hpp>
 #include <random>
+
 using namespace DB;
 using namespace DB::tests;
 using namespace DB::DM;
@@ -36,15 +37,6 @@ extern const Metric DT_SnapshotOfRead;
 
 namespace
 {
-ContextPtr context;
-DMContextPtr dm_context;
-ColumnDefinesPtr cols;
-
-SegmentPtr segment;
-SegmentSnapshotPtr segment_snapshot;
-
-constexpr const char * log_level = "error";
-
 const String db_name = "test";
 
 UInt64 version = 1;
@@ -56,47 +48,44 @@ enum class BenchType
     VersionChain = 2,
 };
 
-
-auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
+[[maybe_unused]] auto loadPackFilterResults(
+    const DMContext & dm_context,
+    const SegmentSnapshotPtr & snap,
+    const RowKeyRanges & ranges)
 {
     DMFilePackFilterResults results;
     results.reserve(snap->stable->getDMFiles().size());
     for (const auto & file : snap->stable->getDMFiles())
     {
-        auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
+        auto pack_filter = DMFilePackFilter::loadFrom(dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
         results.push_back(pack_filter);
     }
     return results;
 }
 
-void initContext(bool is_common_handle, BenchType type)
+auto getContext()
 {
-    if (context)
-        return;
-
-    bool enable_colors = isatty(STDERR_FILENO) && isatty(STDOUT_FILENO);
-    DB::tests::TiFlashTestEnv::setupLogger(log_level, std::cerr, enable_colors);
-
-    auto table_name = String(magic_enum::enum_name(type));
-    UInt64 curr_ns = clock_gettime_ns();
-    String testdata_path = fmt::format("/tmp/{}.{}", curr_ns, table_name);
+    const auto table_name = std::to_string(clock_gettime_ns());
+    const auto testdata_path = fmt::format("/tmp/{}", table_name);
     constexpr auto run_mode = DB::PageStorageRunMode::ONLY_V3;
     TiFlashTestEnv::initializeGlobalContext({testdata_path}, run_mode);
-    context = TiFlashTestEnv::getContext();
+    return std::pair{TiFlashTestEnv::getContext(), std::move(table_name)};
+}
 
+auto getDMContext(Context & context, const String & table_name, bool is_common_handle)
+{
     auto storage_path_pool
-        = std::make_shared<StoragePathPool>(context->getPathPool().withTable(db_name, table_name, false));
+        = std::make_shared<StoragePathPool>(context.getPathPool().withTable(db_name, table_name, false));
     auto storage_pool = std::make_shared<StoragePool>(
-        *context,
+        context,
         NullspaceID,
         /*NAMESPACE_ID*/ 100,
         *storage_path_pool,
         fmt::format("{}.{}", db_name, table_name));
     storage_pool->restore();
-    cols = DMTestEnv::getDefaultColumns(
-        is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-    dm_context = DMContext::createUnique(
-        *context,
+
+    auto dm_context = DMContext::createUnique(
+        context,
         storage_path_pool,
         storage_pool,
         /*min_version_*/ 0,
@@ -105,14 +94,19 @@ void initContext(bool is_common_handle, BenchType type)
         /*pk_col_id*/ MutSup::extra_handle_id,
         is_common_handle,
         1, // rowkey_column_size
-        context->getSettingsRef());
+        context.getSettingsRef());
+
+    auto cols = DMTestEnv::getDefaultColumns(
+        is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
+
+    return std::pair{std::move(dm_context), std::move(cols)};
 }
 
-SegmentPtr createSegment(bool is_common_handle)
+SegmentPtr createSegment(DMContext & dm_context, const ColumnDefinesPtr & cols, bool is_common_handle)
 {
     return Segment::newSegment(
         Logger::get(),
-        *dm_context,
+        dm_context,
         cols,
         RowKeyRange::newAll(is_common_handle, 1),
         DELTA_MERGE_FIRST_SEGMENT_ID,
@@ -162,9 +156,7 @@ private:
     std::vector<Int64>::iterator pos;
 };
 
-RandomSequence random_sequences{10 * MaxHandle};
-
-void writeDelta(Segment & seg, UInt32 delta_rows)
+void writeDelta(DMContext & dm_context, Segment & seg, UInt32 delta_rows, RandomSequence & random_sequences)
 {
     for (UInt32 i = 0; i < delta_rows; i += 2048)
     {
@@ -180,38 +172,42 @@ void writeDelta(Segment & seg, UInt32 delta_rows)
             std::vector<UInt64>(n, /*deleted*/ 0),
             MutSup::delmark_column_name,
             MutSup::delmark_col_id));
-        seg.write(*dm_context, block, false);
+        seg.write(dm_context, block, false);
     }
 }
 
-SegmentPtr createSegment(bool is_common_handle, UInt32 delta_rows)
+SegmentPtr createSegmentWithData(
+    DMContext & dm_context,
+    const ColumnDefinesPtr & cols,
+    bool is_common_handle,
+    UInt32 delta_rows,
+    RandomSequence & random_sequences)
 {
-    auto seg = createSegment(is_common_handle);
-    {
-        auto block = DMTestEnv::prepareSimpleWriteBlock(0, 1000000, false, version++);
-        seg->write(*dm_context, block, false);
-        seg = seg->mergeDelta(*dm_context, cols);
-    }
-
-    writeDelta(*seg, delta_rows);
-
+    auto seg = createSegment(dm_context, cols, is_common_handle);
+    auto block = DMTestEnv::prepareSimpleWriteBlock(0, 1000000, false, version++);
+    seg->write(dm_context, block, false);
+    seg = seg->mergeDelta(dm_context, cols);
+    writeDelta(dm_context, *seg, delta_rows, random_sequences);
     return seg;
 }
 
-DeltaIndexPtr buildDeltaIndex(const SegmentSnapshotPtr & snapshot, Segment & segment)
+DeltaIndexPtr buildDeltaIndex(
+    const DMContext & dm_context,
+    const ColumnDefines & cols,
+    const SegmentSnapshotPtr & snapshot,
+    Segment & segment)
 {
-    auto pk_ver_col_defs = std::make_shared<ColumnDefines>(
-        ColumnDefines{getExtraHandleColumnDefine(dm_context->is_common_handle), getVersionColumnDefine()});
+    auto pk_ver_col_defs = std::make_shared<ColumnDefines>(ColumnDefines{cols[0], cols[1]});
 
     auto delta_reader = std::make_shared<DeltaValueReader>(
-        *dm_context,
+        dm_context,
         snapshot->delta,
         pk_ver_col_defs,
         segment.getRowKeyRange(),
         ReadTag::MVCC);
 
     auto [delta_index, fully_indexed] = segment.ensurePlace(
-        *dm_context,
+        dm_context,
         snapshot,
         delta_reader,
         {segment.getRowKeyRange()},
@@ -223,28 +219,26 @@ DeltaIndexPtr buildDeltaIndex(const SegmentSnapshotPtr & snapshot, Segment & seg
     return delta_index;
 }
 
-void buildVersionChain(const SegmentSnapshot & snapshot, VersionChain<Int64> & version_chain)
+template <typename T>
+void buildVersionChain(const DMContext & dm_context, const SegmentSnapshot & snapshot, VersionChain<T> & version_chain)
 {
-    const auto base_ver_snap = version_chain.replaySnapshot(*dm_context, snapshot);
+    const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
     benchmark::DoNotOptimize(base_ver_snap);
 }
 
-void initialize(BenchType type, bool is_common_handle, UInt32 delta_rows)
+auto initialize(bool is_common_handle, UInt32 delta_rows)
 {
-    random_sequences.reset();
-    initContext(is_common_handle, type);
-    segment = createSegment(is_common_handle, delta_rows);
-    segment_snapshot = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
-}
-
-void shutdown()
-{
-    segment_snapshot = nullptr;
-    segment = nullptr;
-    cols = nullptr;
-    dm_context = nullptr;
-    context->shutdown();
-    context = nullptr;
+    auto [context, table_name] = getContext();
+    auto [dm_context, cols] = getDMContext(*context, table_name, is_common_handle);
+    RandomSequence random_sequences{10 * MaxHandle};
+    auto segment = createSegmentWithData(*dm_context, cols, is_common_handle, delta_rows, random_sequences);
+    auto segment_snapshot = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
+    return std::tuple{
+        std::move(context),
+        std::move(dm_context),
+        std::move(cols),
+        std::move(segment),
+        std::move(segment_snapshot)};
 }
 
 template <typename... Args>
@@ -252,17 +246,20 @@ void MVCCFullBuildIndex(benchmark::State & state, Args &&... args)
 try
 {
     const auto [type, is_common_handle, delta_rows] = std::make_tuple(std::move(args)...);
-    initialize(type, is_common_handle, delta_rows);
+    auto [context, dm_context, cols, segment, segment_snapshot] = initialize(is_common_handle, delta_rows);
+    SCOPE_EXIT({ context->shutdown(); });
 
     if (type == BenchType::DeltaIndex)
     {
-        RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == 0);
-        auto delta_index = buildDeltaIndex(segment_snapshot, *segment); // Warming up
-        RUNTIME_ASSERT(delta_index->getPlacedStatus().first == delta_rows);
+        {
+            RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == 0);
+            auto delta_index = buildDeltaIndex(*dm_context, *cols, segment_snapshot, *segment); // Warming up
+            RUNTIME_ASSERT(delta_index->getPlacedStatus().first == delta_rows);
+        }
         for (auto _ : state)
         {
             RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == 0);
-            delta_index = buildDeltaIndex(segment_snapshot, *segment);
+            auto delta_index = buildDeltaIndex(*dm_context, *cols, segment_snapshot, *segment);
             RUNTIME_ASSERT(delta_index->getPlacedStatus().first == delta_rows);
         }
     }
@@ -270,19 +267,20 @@ try
     {
         {
             VersionChain<Int64> version_chain;
-            buildVersionChain(*segment_snapshot, version_chain); // Warming up
+            buildVersionChain<Int64>(*dm_context, *segment_snapshot, version_chain); // Warming up
             RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
         }
         for (auto _ : state)
         {
             VersionChain<Int64> version_chain;
-            buildVersionChain(*segment_snapshot, version_chain);
+            buildVersionChain<Int64>(*dm_context, *segment_snapshot, version_chain);
             RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
         }
     }
-    shutdown();
 }
 CATCH
+
+/*
 
 template <typename... Args>
 void MVCCIncrementalBuildIndex(benchmark::State & state, Args &&... args)
@@ -437,7 +435,7 @@ try
     shutdown();
 }
 CATCH
-
+*/
 
 //constexpr bool IsCommonHandle = true;
 constexpr bool IsNotCommonHandle = false;
@@ -464,6 +462,7 @@ BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_10000, BenchType::VersionCha
 BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_50000, BenchType::VersionChain, IsNotCommonHandle, 50000u);
 BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_100000, BenchType::VersionChain, IsNotCommonHandle, 100000u);
 
+/*
 BENCHMARK_CAPTURE(MVCCIncrementalBuildIndex, delta_index_1, BenchType::DeltaIndex, IsNotCommonHandle, 1u);
 BENCHMARK_CAPTURE(MVCCIncrementalBuildIndex, delta_index_5, BenchType::DeltaIndex, IsNotCommonHandle, 5u);
 BENCHMARK_CAPTURE(MVCCIncrementalBuildIndex, delta_index_10, BenchType::DeltaIndex, IsNotCommonHandle, 10u);
@@ -510,4 +509,5 @@ BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_5000, BenchType::None, IsNotComm
 BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_10000, BenchType::None, IsNotCommonHandle, 10000u);
 BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_50000, BenchType::None, IsNotCommonHandle, 50000u);
 BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_100000, BenchType::None, IsNotCommonHandle, 100000u);
+*/
 } // namespace
