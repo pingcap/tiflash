@@ -45,7 +45,7 @@ UInt32 buildDeletedFilterBlock(
     const auto & deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column); // Must success.
     for (UInt32 i = 0; i < deleteds.size(); ++i)
     {
-        filter[start_row_id + i] = !deleteds[i];
+        filter[start_row_id + i] = filter[start_row_id + i] && !deleteds[i];
     }
     return deleteds.size();
 }
@@ -99,7 +99,7 @@ UInt32 buildDeletedFilterDMFile(
         const UInt32 pack_start_row_id = itr->second;
         for (UInt32 i = 0; i < deleteds.size(); ++i)
         {
-            filter[pack_start_row_id + i] = !deleteds[i];
+            filter[pack_start_row_id + i] = filter[pack_start_row_id + i] && !deleteds[i];
         }
         read_rows += pack_stats[pack_id].rows;
     }

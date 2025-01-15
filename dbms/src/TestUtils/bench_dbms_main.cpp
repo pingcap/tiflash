@@ -20,13 +20,11 @@
 int main(int argc, char * argv[])
 {
     benchmark::Initialize(&argc, argv);
-
-    const bool enable_colors = isatty(STDERR_FILENO) && isatty(STDOUT_FILENO);
-    DB::tests::TiFlashTestEnv::setupLogger("error", std::cerr, enable_colors);
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
     if (::benchmark::ReportUnrecognizedArguments(argc, argv))
         return 1;
     DB::LocalAdmissionController::global_instance = std::make_unique<DB::MockLocalAdmissionController>();
+    DB::tests::TiFlashTestEnv::setupLogger("error");
     ::benchmark::RunSpecifiedBenchmarks();
     DB::tests::TiFlashTestEnv::shutdown();
     ::benchmark::Shutdown();

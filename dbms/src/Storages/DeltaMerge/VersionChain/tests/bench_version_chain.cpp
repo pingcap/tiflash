@@ -48,7 +48,18 @@ enum class BenchType
     VersionChain = 2,
 };
 
-[[maybe_unused]] auto loadPackFilterResults(
+enum class WriteLoad
+{
+    RandomUpdate = 1,
+    AppendOnly = 2,
+    RandomInsert = 3,
+};
+
+// constexpr bool IsCommonHandle = true;
+constexpr bool IsNotCommonHandle = false;
+
+
+auto loadPackFilterResults(
     const DMContext & dm_context,
     const SegmentSnapshotPtr & snap,
     const RowKeyRanges & ranges)
@@ -156,14 +167,27 @@ private:
     std::vector<Int64>::iterator pos;
 };
 
-void writeDelta(DMContext & dm_context, Segment & seg, UInt32 delta_rows, RandomSequence & random_sequences)
+Strings toMockCommonHandles(const std::vector<Int64> & v)
+{
+    Strings handles;
+    for (Int64 i : v)
+        handles.push_back(genMockCommonHandle(i, 1));
+    return handles;
+}
+
+std::vector<Int64> delta;
+void writeDelta(DMContext & dm_context, bool is_common_handle, Segment & seg, UInt32 delta_rows, RandomSequence & random_sequences)
 {
     for (UInt32 i = 0; i < delta_rows; i += 2048)
     {
         Block block;
         const auto n = std::min(delta_rows - i, 2048U);
         const auto v = random_sequences.get(n);
-        block.insert(createColumn<Int64>(v, MutSup::extra_handle_column_name, MutSup::extra_handle_id));
+        delta = v;
+        if (is_common_handle)
+            block.insert(createColumn<String>(toMockCommonHandles(v), MutSup::extra_handle_column_name, MutSup::extra_handle_id));
+        else
+            block.insert(createColumn<Int64>(v, MutSup::extra_handle_column_name, MutSup::extra_handle_id));
         block.insert(createColumn<UInt64>(
             std::vector<UInt64>(n, version++),
             MutSup::version_column_name,
@@ -184,10 +208,18 @@ SegmentPtr createSegmentWithData(
     RandomSequence & random_sequences)
 {
     auto seg = createSegment(dm_context, cols, is_common_handle);
-    auto block = DMTestEnv::prepareSimpleWriteBlock(0, 1000000, false, version++);
+    auto block = DMTestEnv::prepareSimpleWriteBlock(
+        0,
+        1000000,
+        false,
+        version++,
+        MutSup::extra_handle_column_name,
+        MutSup::extra_handle_id,
+        is_common_handle ? MutSup::getExtraHandleColumnStringType() : MutSup::getExtraHandleColumnIntType(),
+        is_common_handle);
     seg->write(dm_context, block, false);
     seg = seg->mergeDelta(dm_context, cols);
-    writeDelta(dm_context, *seg, delta_rows, random_sequences);
+    writeDelta(dm_context, is_common_handle, *seg, delta_rows, random_sequences);
     return seg;
 }
 
@@ -245,7 +277,7 @@ template <typename... Args>
 void MVCCFullBuildIndex(benchmark::State & state, Args &&... args)
 try
 {
-    const auto [type, is_common_handle, delta_rows] = std::make_tuple(std::move(args)...);
+    const auto [type, write_load, is_common_handle, delta_rows] = std::make_tuple(std::move(args)...);
     auto [context, dm_context, cols, segment, segment_snapshot] = initialize(is_common_handle, delta_rows);
     SCOPE_EXIT({ context->shutdown(); });
 
@@ -382,26 +414,28 @@ try
     shutdown();
 }
 CATCH
-
+*/
 // TODO: move verify to unit-tests.
 template <typename... Args>
 void MVCCBuildBitmapVerify(benchmark::State & state, Args &&... args)
 try
 {
     const auto [type, is_common_handle, delta_rows] = std::make_tuple(std::move(args)...);
-    initialize(type, is_common_handle, delta_rows);
-
+    auto [context, dm_context, cols, segment, segment_snapshot] = initialize(is_common_handle, delta_rows);
+    SCOPE_EXIT({ context->shutdown(); });
+    
     RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == 0);
-    auto delta_index = buildDeltaIndex(segment_snapshot, *segment);
+    auto delta_index = 
+    buildDeltaIndex(*dm_context, *cols, segment_snapshot, *segment);
     RUNTIME_ASSERT(delta_index->getPlacedStatus().first == delta_rows);
     segment_snapshot->delta->getSharedDeltaIndex()->updateIfAdvanced(*delta_index);
     RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == delta_rows);
 
     VersionChain<Int64> version_chain;
-    buildVersionChain(*segment_snapshot, version_chain);
+    buildVersionChain<Int64>(*dm_context, *segment_snapshot, version_chain);
     RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
 
-    auto rs_results = loadPackFilterResults(segment_snapshot, {segment->getRowKeyRange()});
+    auto rs_results = loadPackFilterResults(*dm_context, segment_snapshot, {segment->getRowKeyRange()});
     auto bitmap_filter1 = segment->buildBitmapFilter(
         *dm_context,
         segment_snapshot,
@@ -431,37 +465,305 @@ try
     }
 
     for (auto _ : state) {}
-
-    shutdown();
 }
 CATCH
+
+BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_1, BenchType::None, IsNotCommonHandle, 1u);
+BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_5, BenchType::None, IsNotCommonHandle, 5u);
+BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_10, BenchType::None, IsNotCommonHandle, 10u);
+BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_100, BenchType::None, IsNotCommonHandle, 100u);
+BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_500, BenchType::None, IsNotCommonHandle, 500u);
+BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_1k, BenchType::None, IsNotCommonHandle, 1000u);
+BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_5k, BenchType::None, IsNotCommonHandle, 5000u);
+BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_10k, BenchType::None, IsNotCommonHandle, 10000u);
+BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_50k, BenchType::None, IsNotCommonHandle, 50000u);
+BENCHMARK_CAPTURE(MVCCBuildBitmapVerify, verify_100k, BenchType::None, IsNotCommonHandle, 100000u);
+
+/*
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_1,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    1u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_5,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    5u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_10,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    10u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_100,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    100u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_500,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    500u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_1k,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    1000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_5k,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    5000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_10k,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    10000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_50k,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    50000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_100k,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    100000u);
+
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_1,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    1u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_5,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    5u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_10,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    10u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_100,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    100u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_500,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    500u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_1k,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    1000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_5k,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    5000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_10k,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    10000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_50k,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    50000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_100k,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsNotCommonHandle,
+    100000u);
 */
+/*
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_update_common_handle_1,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    1u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_update_common_handle_5,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    5u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_update_common_handle_10,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    10u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_update_common_handle_100,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    100u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_update_common_handle_500,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    500u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_update_common_handle_1k,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    1000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_update_common_handle_5k,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    5000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_update_common_handle_10k,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    10000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_update_common_handle_50k,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    50000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    delta_idx_update_common_handle_100k,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    100000u);
 
-//constexpr bool IsCommonHandle = true;
-constexpr bool IsNotCommonHandle = false;
-
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, delta_index_1, BenchType::DeltaIndex, IsNotCommonHandle, 1u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, delta_index_5, BenchType::DeltaIndex, IsNotCommonHandle, 5u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, delta_index_10, BenchType::DeltaIndex, IsNotCommonHandle, 10u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, delta_index_100, BenchType::DeltaIndex, IsNotCommonHandle, 100u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, delta_index_500, BenchType::DeltaIndex, IsNotCommonHandle, 500u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, delta_index_1000, BenchType::DeltaIndex, IsNotCommonHandle, 1000u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, delta_index_5000, BenchType::DeltaIndex, IsNotCommonHandle, 5000u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, delta_index_10000, BenchType::DeltaIndex, IsNotCommonHandle, 10000u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, delta_index_50000, BenchType::DeltaIndex, IsNotCommonHandle, 50000u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, delta_index_100000, BenchType::DeltaIndex, IsNotCommonHandle, 100000u);
-
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_1, BenchType::VersionChain, IsNotCommonHandle, 1u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_5, BenchType::VersionChain, IsNotCommonHandle, 5u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_10, BenchType::VersionChain, IsNotCommonHandle, 10u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_100, BenchType::VersionChain, IsNotCommonHandle, 100u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_500, BenchType::VersionChain, IsNotCommonHandle, 500u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_1000, BenchType::VersionChain, IsNotCommonHandle, 1000u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_5000, BenchType::VersionChain, IsNotCommonHandle, 5000u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_10000, BenchType::VersionChain, IsNotCommonHandle, 10000u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_50000, BenchType::VersionChain, IsNotCommonHandle, 50000u);
-BENCHMARK_CAPTURE(MVCCFullBuildIndex, version_chain_100000, BenchType::VersionChain, IsNotCommonHandle, 100000u);
-
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_update_common_handle_1,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    1u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_update_common_handle_5,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    5u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_update_common_handle_10,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    10u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_update_common_handle_100,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    100u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_update_common_handle_500,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    500u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_update_common_handle_1k,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    1000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_update_common_handle_5k,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    5000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_update_common_handle_10k,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    10000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_update_common_handle_50k,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    50000u);
+BENCHMARK_CAPTURE(
+    MVCCFullBuildIndex,
+    ver_chain_update_common_handle_100k,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle,
+    100000u);*/
 /*
 BENCHMARK_CAPTURE(MVCCIncrementalBuildIndex, delta_index_1, BenchType::DeltaIndex, IsNotCommonHandle, 1u);
 BENCHMARK_CAPTURE(MVCCIncrementalBuildIndex, delta_index_5, BenchType::DeltaIndex, IsNotCommonHandle, 5u);

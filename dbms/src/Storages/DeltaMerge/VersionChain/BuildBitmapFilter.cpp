@@ -33,6 +33,7 @@ BitmapFilterPtr buildBitmapFilter(
     VersionChain<HandleType> & version_chain)
 {
     const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
+    //fmt::println("base_ver_snap={}", *base_ver_snap);
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
     const UInt32 delta_rows = delta.getRows();
@@ -44,6 +45,7 @@ BitmapFilterPtr buildBitmapFilter(
     RUNTIME_CHECK(pack_filter_results.size() == 1, pack_filter_results.size());
     const auto stable_pack_res = pack_filter_results.front()->getPackRes();
 
+    //fmt::println("stable_rows={}, delta_rows={}, stable_pack_res={}", stable_rows, delta_rows, stable_pack_res);
     buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, stable_pack_res, filter);
     buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
     buildDeletedFilter(dm_context, snapshot, filter);
