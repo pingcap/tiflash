@@ -99,7 +99,6 @@ private:
             , collator(collator_)
         {}
 
-        // TODO use StringRef is inefficient
         StringRef value;
         TiDB::TiDBCollatorPtr collator;
     };
