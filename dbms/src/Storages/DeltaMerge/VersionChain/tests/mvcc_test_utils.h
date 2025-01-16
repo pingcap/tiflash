@@ -267,7 +267,8 @@ auto initialize(bool is_common_handle, UInt32 delta_rows)
         std::move(dm_context),
         std::move(cols),
         std::move(segment),
-        std::move(segment_snapshot)};
+        std::move(segment_snapshot),
+        std::move(random_sequences)};
 }
 
 } // namespace DB::DM::tests::MVCC

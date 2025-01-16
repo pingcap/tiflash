@@ -29,7 +29,8 @@ void randomMVCCBitmapVerify(UInt32 delta_rows)
 try
 {
     constexpr bool is_common_handle = std::is_same_v<HandleType, String>;
-    auto [context, dm_context, cols, segment, segment_snapshot] = initialize(is_common_handle, delta_rows);
+    auto [context, dm_context, cols, segment, segment_snapshot, random_sequences]
+        = initialize(is_common_handle, delta_rows);
     SCOPE_EXIT({ context->shutdown(); });
 
     ASSERT_EQ(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first, 0);
