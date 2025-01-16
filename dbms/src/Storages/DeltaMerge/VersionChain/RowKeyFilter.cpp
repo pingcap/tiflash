@@ -80,7 +80,7 @@ UInt32 buildRowKeyFilterDMFile(
     const std::optional<RowKeyRange> & segment_range,
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
-    const RSResults * stable_pack_res,
+    const DMFilePackFilterResultPtr & stable_filter_res,
     const UInt32 start_row_id,
     IColumn::Filter & filter)
 {
@@ -88,22 +88,19 @@ UInt32 buildRowKeyFilterDMFile(
     if (unlikely(valid_handle_res.empty()))
         return 0;
 
-    if (stable_pack_res)
+    // Filter out these packs that don't need to read.
+    if (stable_filter_res)
     {
-        const auto & s_pack_res = *stable_pack_res;
-        RUNTIME_CHECK(s_pack_res.size() == valid_handle_res.size(), s_pack_res.size(), valid_handle_res.size());
-        // stable_pack_res is the result of `read_ranges` && `rs_filter`.
-        // If the result of a pack filtered by read_ranges is All, but filtered by `filter` is Some, its result
-        // is Some in stable_pack_res.
-        // Result of `rs_filter` is no help here, because we just want to filter out rowkey here.
-        // So only use the None results of stable_pack_res
+        RUNTIME_CHECK(valid_start_pack_id == 0, valid_start_pack_id);
+        const auto & pack_res = stable_filter_res->getPackRes();
+        RUNTIME_CHECK(pack_res.size() == valid_handle_res.size(), pack_res.size(), valid_handle_res.size());
         for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
-            if (!s_pack_res[i].isUse())
+            if (!pack_res[i].isUse())
                 valid_handle_res[i] = RSResult::None;
     }
 
     // RSResult of read_ranges.
-    const auto read_ranges_handle_res = getRSResultsByRanges(dm_context, dmfile, read_ranges);
+    const auto & read_ranges_handle_res = stable_filter_res ? stable_filter_res->getHandleRes() : getRSResultsByRanges(dm_context, dmfile, read_ranges);
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
         valid_handle_res[i] = valid_handle_res[i] && read_ranges_handle_res[valid_start_pack_id + i];
 
@@ -180,7 +177,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
         cf_big.getRange(),
         delete_ranges,
         Segment::shrinkRowKeyRanges(cf_big.getRange(), read_ranges),
-        /*stable_pack_res*/ nullptr,
+        /*stable_filter_res*/ nullptr,
         start_row_id,
         filter);
 }
@@ -191,7 +188,7 @@ UInt32 buildRowKeyFilterStable(
     const StableValueSpace::Snapshot & stable,
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
-    const RSResults & stable_pack_res,
+    const DMFilePackFilterResultPtr & stable_filter_res,
     IColumn::Filter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
@@ -205,7 +202,7 @@ UInt32 buildRowKeyFilterStable(
         /*segment_range*/ std::nullopt,
         delete_ranges,
         read_ranges,
-        &stable_pack_res,
+        stable_filter_res,
         /*start_row_id*/ 0,
         filter);
 }
@@ -217,7 +214,7 @@ void buildRowKeyFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
-    const RSResults & stable_pack_res,
+    const DMFilePackFilterResultPtr & stable_filter_res,
     IColumn::Filter & filter)
 {
     const auto & delta = *(snapshot.delta);
@@ -277,7 +274,7 @@ void buildRowKeyFilter(
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
 
     const auto n
-        = buildRowKeyFilterStable<HandleType>(dm_context, stable, delete_ranges, read_ranges, stable_pack_res, filter);
+        = buildRowKeyFilterStable<HandleType>(dm_context, stable, delete_ranges, read_ranges, stable_filter_res, filter);
     RUNTIME_CHECK(n == stable_rows, n, stable_rows);
 }
 
@@ -285,13 +282,13 @@ template void buildRowKeyFilter<Int64>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
-    const RSResults & stable_pack_res,
+    const DMFilePackFilterResultPtr & filter_res,
     IColumn::Filter & filter);
 
 template void buildRowKeyFilter<String>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
-    const RSResults & stable_pack_res,
+    const DMFilePackFilterResultPtr & filter_res,
     IColumn::Filter & filter);
 } // namespace DB::DM

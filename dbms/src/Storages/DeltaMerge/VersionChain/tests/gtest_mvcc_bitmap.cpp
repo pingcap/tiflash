@@ -85,16 +85,4 @@ TEST(TestVersionChain, randomMVCCBitmapVerify_CommonHandle)
     for (UInt32 delta_rows = 1; delta_rows <= max_delta_rows; delta_rows *= 8)
         randomMVCCBitmapVerify<String>(delta_rows);
 }
-
-TEST(TestVersionChain, loadPackFilterResults)
-{
-    constexpr bool is_common_handle = false;
-    auto [context, dm_context, cols, segment, segment_snapshot, random_sequences]
-        = initialize(is_common_handle, 100);
-    SCOPE_EXIT({ context->shutdown(); });
-    auto rs_results = loadPackFilterResults(*dm_context, segment_snapshot, {segment->getRowKeyRange()});
-
-    fmt::println("PackRes: {}", rs_results[0]->getPackRes());
-    fmt::println("HandleRes: {}", rs_results[0]->getHandleRes());
-}
 } // namespace DB::DM::tests
