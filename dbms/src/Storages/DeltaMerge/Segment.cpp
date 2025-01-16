@@ -3083,8 +3083,6 @@ BitmapFilterPtr Segment::buildBitmapFilter(
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
-    RUNTIME_CHECK(!is_common_handle);
-
     if (use_version_chain)
     {
         return buildBitmapFilter<Int64>(
