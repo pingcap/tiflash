@@ -29,7 +29,7 @@ struct DecodeDetail
     // This will be the row number of all blocks of the original packet if it's not fine grained shuffle.
     Int64 rows = 0;
 
-    // Total byte size of the origin packet, even for fine grained shuffle.
+    // Total byte size of the origin packet. When fine grained shuffle is enabled, only records once.
     Int64 packet_bytes = 0;
 };
 } // namespace DB
