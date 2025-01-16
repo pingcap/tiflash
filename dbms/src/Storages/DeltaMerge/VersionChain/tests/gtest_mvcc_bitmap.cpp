@@ -41,7 +41,7 @@ try
 
 
     VersionChain<HandleType> version_chain;
-    buildVersionChain<HandleType>(*dm_context, *segment_snapshot, version_chain);
+    buildVersionChain(*dm_context, *segment_snapshot, version_chain);
     ASSERT_EQ(version_chain.getReplayedRows(), delta_rows);
 
     auto rs_results = loadPackFilterResults(*dm_context, segment_snapshot, {segment->getRowKeyRange()});
@@ -72,51 +72,29 @@ try
 }
 CATCH
 
+static constexpr UInt32 max_delta_rows = 8 << 13;
+
 TEST(TestVersionChain, randomMVCCBitmapVerify)
 {
-    std::vector<UInt32> delta_rows{
-        1,
-        10,
-        50,
-        100,
-        500,
-        1000,
-        5000,
-        10000,
-        20000,
-        30000,
-        40000,
-        50000,
-        60000,
-        70000,
-        80000,
-        90000,
-        100000};
-    for (auto rows : delta_rows)
-        randomMVCCBitmapVerify<Int64>(rows);
+    for (UInt32 delta_rows = 1; delta_rows <= max_delta_rows; delta_rows *= 8)
+        randomMVCCBitmapVerify<Int64>(delta_rows);
 }
 
 TEST(TestVersionChain, randomMVCCBitmapVerify_CommonHandle)
 {
-    std::vector<UInt32> delta_rows{
-        1,
-        10,
-        50,
-        100,
-        500,
-        1000,
-        5000,
-        10000,
-        20000,
-        30000,
-        40000,
-        50000,
-        60000,
-        70000,
-        80000,
-        90000,
-        100000};
-    for (auto rows : delta_rows)
-        randomMVCCBitmapVerify<String>(rows);
+    for (UInt32 delta_rows = 1; delta_rows <= max_delta_rows; delta_rows *= 8)
+        randomMVCCBitmapVerify<String>(delta_rows);
+}
+
+TEST(TestVersionChain, loadPackFilterResults)
+{
+    constexpr bool is_common_handle = false;
+    auto [context, dm_context, cols, segment, segment_snapshot, random_sequences]
+        = initialize(is_common_handle, 100);
+    SCOPE_EXIT({ context->shutdown(); });
+    auto rs_results = loadPackFilterResults(*dm_context, segment_snapshot, {segment->getRowKeyRange()});
+
+    fmt::println("PackRes: {}", rs_results[0]->getPackRes());
+    fmt::println("HandleRes: {}", rs_results[0]->getHandleRes());
 }
 } // namespace DB::DM::tests

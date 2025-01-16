@@ -64,13 +64,13 @@ try
     {
         {
             VersionChain<Int64> version_chain;
-            buildVersionChain<Int64>(*dm_context, *segment_snapshot, version_chain); // Warming up
+            buildVersionChain(*dm_context, *segment_snapshot, version_chain); // Warming up
             RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
         }
         for (auto _ : state)
         {
             VersionChain<Int64> version_chain;
-            buildVersionChain<Int64>(*dm_context, *segment_snapshot, version_chain);
+            buildVersionChain(*dm_context, *segment_snapshot, version_chain);
             RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
         }
     }
