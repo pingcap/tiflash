@@ -3085,7 +3085,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
     if (use_version_chain)
     {
-        return buildBitmapFilter<Int64>(
+        return ::DB::DM::buildBitmapFilter(
             dm_context,
             *segment_snap,
             read_ranges,
