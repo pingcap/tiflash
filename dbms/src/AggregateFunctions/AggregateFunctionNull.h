@@ -42,6 +42,7 @@ extern const int LOGICAL_ERROR;
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 } // namespace ErrorCodes
 
+static constexpr UInt64 prefix_size_look_up_table[7] = {sizeof(UInt64), sizeof(UInt64), 9, sizeof(UInt64), 10, 12, 14};
 
 /// This class implements a wrapper around an aggregate function. Despite its name,
 /// this is an adapter. It is used to handle aggregate functions that are called with
@@ -505,34 +506,16 @@ private:
 };
 
 // Make the prefix_size >= sizeof(UInt64) and could fit the align size
-inline size_t enlarge_prefix_size(size_t prefix_size) noexcept
+inline size_t enlargePrefixSize(size_t prefix_size) noexcept
 {
     assert(prefix_size != 0);
+    static_assert((sizeof(prefix_size_look_up_table) / sizeof(UInt64)) == 7);
 
     // align_size is equal to prefix_size at the beginning
     auto align_size = prefix_size;
 
-    switch (prefix_size)
-    {
-    case 1:
-        prefix_size = sizeof(UInt64);
-        break;
-    case 3:
-        prefix_size = 9;
-        break;
-    case 5:
-        prefix_size = 10;
-        break;
-    case 6:
-        prefix_size = 12;
-        break;
-    case 7:
-        prefix_size = 14;
-        break;
-    case 2:
-    case 4:
-        prefix_size = sizeof(UInt64);
-    }
+    if (prefix_size < 8)
+        prefix_size = prefix_size_look_up_table[prefix_size - 1];
 
     assert(prefix_size >= sizeof(UInt64) && (prefix_size % align_size == 0));
     return prefix_size;
@@ -556,7 +539,7 @@ protected:
 public:
     explicit AggregateFunctionNullUnaryForWindow(AggregateFunctionPtr nested_function_)
         : nested_function(nested_function_)
-        , prefix_size(enlarge_prefix_size(nested_function->alignOfData()))
+        , prefix_size(enlargePrefixSize(nested_function->alignOfData()))
     {}
 
     String getName() const override

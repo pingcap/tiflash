@@ -119,7 +119,7 @@ private:
     mutable multiset saved_values;
     TiDB::TiDBCollatorPtr collator{};
 
-    void saveValue(StringRef value) { saved_values.insert(StringWithCollator(value, collator)); }
+    void saveValue(const StringRef & value) { saved_values.insert(StringWithCollator(value, collator)); }
 
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const

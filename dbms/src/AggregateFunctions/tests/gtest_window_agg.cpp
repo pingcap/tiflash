@@ -685,7 +685,7 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
 
 void checkPrefixSize(size_t prefix_size)
 {
-    prefix_size = enlarge_prefix_size(prefix_size);
+    prefix_size = enlargePrefixSize(prefix_size);
     ASSERT_TRUE(prefix_size % 1 == 0);
     ASSERT_TRUE(prefix_size >= 8);
 }

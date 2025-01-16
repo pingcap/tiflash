@@ -36,7 +36,6 @@ private:
 public:
     AlignedBuffer() = default;
     AlignedBuffer(size_t size, size_t alignment);
-    AlignedBuffer(AlignedBuffer && old) noexcept { std::swap(buf, old.buf); }
     ~AlignedBuffer();
 
     void reset(size_t size, size_t alignment);
