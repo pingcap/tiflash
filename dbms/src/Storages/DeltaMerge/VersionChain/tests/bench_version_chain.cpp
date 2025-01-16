@@ -128,19 +128,23 @@ try
     }
 }
 CATCH
-/*
+
 template <typename... Args>
 void MVCCBuildBitmap(benchmark::State & state, Args &&... args)
 try
 {
-    const auto [type, is_common_handle, delta_rows] = std::make_tuple(std::move(args)...);
-    initialize(type, is_common_handle, delta_rows);
-    auto rs_results = loadPackFilterResults(segment_snapshot, {segment->getRowKeyRange()});
+    const auto [type, write_load, is_common_handle] = std::make_tuple(std::move(args)...);
+    const UInt32 delta_rows = state.range(0);
+    auto [context, dm_context, cols, segment, segment_snapshot, random_sequences]
+        = initialize(is_common_handle, delta_rows);
+    SCOPE_EXIT({ context->shutdown(); });
+
+    auto rs_results = loadPackFilterResults(*dm_context, segment_snapshot, {segment->getRowKeyRange()});
 
     if (type == BenchType::DeltaIndex)
     {
         RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == 0);
-        auto delta_index = buildDeltaIndex(segment_snapshot, *segment);
+        auto delta_index = buildDeltaIndex(*dm_context, *cols, segment_snapshot, *segment);
         RUNTIME_ASSERT(delta_index->getPlacedStatus().first == delta_rows);
         segment_snapshot->delta->getSharedDeltaIndex()->updateIfAdvanced(*delta_index);
         RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == delta_rows);
@@ -161,7 +165,7 @@ try
     else if (type == BenchType::VersionChain)
     {
         VersionChain<Int64> version_chain;
-        buildVersionChain(*segment_snapshot, version_chain);
+        buildVersionChain(*dm_context, *segment_snapshot, version_chain);
         RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
         for (auto _ : state)
         {
@@ -175,10 +179,8 @@ try
             benchmark::DoNotOptimize(bitmap_filter);
         }
     }
-    shutdown();
 }
 CATCH
-*/
 
 // [ 1, 8, 64, 512, 4k, 8k, 64k ]
 BENCHMARK_CAPTURE(MVCCFullPlace, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsNotCommonHandle)
@@ -190,27 +192,9 @@ BENCHMARK_CAPTURE(MVCCIncrementalPlace, Index, BenchType::DeltaIndex, WriteLoad:
     ->Range(1, 8 << 13);
 BENCHMARK_CAPTURE(MVCCIncrementalPlace, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsNotCommonHandle)
     ->Range(1, 8 << 13);
-/*
-BENCHMARK_CAPTURE(MVCCBuildBitmap, delta_index_1, BenchType::DeltaIndex, IsNotCommonHandle, 1u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, delta_index_5, BenchType::DeltaIndex, IsNotCommonHandle, 5u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, delta_index_10, BenchType::DeltaIndex, IsNotCommonHandle, 10u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, delta_index_100, BenchType::DeltaIndex, IsNotCommonHandle, 100u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, delta_index_500, BenchType::DeltaIndex, IsNotCommonHandle, 500u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, delta_index_1000, BenchType::DeltaIndex, IsNotCommonHandle, 1000u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, delta_index_5000, BenchType::DeltaIndex, IsNotCommonHandle, 5000u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, delta_index_10000, BenchType::DeltaIndex, IsNotCommonHandle, 10000u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, delta_index_50000, BenchType::DeltaIndex, IsNotCommonHandle, 50000u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, delta_index_100000, BenchType::DeltaIndex, IsNotCommonHandle, 100000u);
 
-BENCHMARK_CAPTURE(MVCCBuildBitmap, version_chain_1, BenchType::VersionChain, IsNotCommonHandle, 1u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, version_chain_5, BenchType::VersionChain, IsNotCommonHandle, 5u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, version_chain_10, BenchType::VersionChain, IsNotCommonHandle, 10u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, version_chain_100, BenchType::VersionChain, IsNotCommonHandle, 100u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, version_chain_500, BenchType::VersionChain, IsNotCommonHandle, 500u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, version_chain_1000, BenchType::VersionChain, IsNotCommonHandle, 1000u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, version_chain_5000, BenchType::VersionChain, IsNotCommonHandle, 5000u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, version_chain_10000, BenchType::VersionChain, IsNotCommonHandle, 10000u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, version_chain_50000, BenchType::VersionChain, IsNotCommonHandle, 50000u);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, version_chain_100000, BenchType::VersionChain, IsNotCommonHandle, 100000u);
-*/
+BENCHMARK_CAPTURE(MVCCBuildBitmap, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsNotCommonHandle)
+    ->Range(1, 8 << 13);
+BENCHMARK_CAPTURE(MVCCBuildBitmap, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsNotCommonHandle)
+    ->Range(1, 8 << 13);
 } // namespace
