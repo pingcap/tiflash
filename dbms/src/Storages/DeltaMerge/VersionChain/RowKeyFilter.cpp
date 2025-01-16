@@ -100,7 +100,8 @@ UInt32 buildRowKeyFilterDMFile(
     }
 
     // RSResult of read_ranges.
-    const auto & read_ranges_handle_res = stable_filter_res ? stable_filter_res->getHandleRes() : getRSResultsByRanges(dm_context, dmfile, read_ranges);
+    const auto & read_ranges_handle_res
+        = stable_filter_res ? stable_filter_res->getHandleRes() : getRSResultsByRanges(dm_context, dmfile, read_ranges);
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
         valid_handle_res[i] = valid_handle_res[i] && read_ranges_handle_res[valid_start_pack_id + i];
 
@@ -273,8 +274,13 @@ void buildRowKeyFilter(
     }
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
 
-    const auto n
-        = buildRowKeyFilterStable<HandleType>(dm_context, stable, delete_ranges, read_ranges, stable_filter_res, filter);
+    const auto n = buildRowKeyFilterStable<HandleType>(
+        dm_context,
+        stable,
+        delete_ranges,
+        read_ranges,
+        stable_filter_res,
+        filter);
     RUNTIME_CHECK(n == stable_rows, n, stable_rows);
 }
 
