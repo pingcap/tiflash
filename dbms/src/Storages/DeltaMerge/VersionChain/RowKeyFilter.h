@@ -29,6 +29,6 @@ void buildRowKeyFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
-    const RSResults & stable_pack_res,
+    const DMFilePackFilterResultPtr & stable_filter_res,
     IColumn::Filter & filter);
 } // namespace DB::DM
