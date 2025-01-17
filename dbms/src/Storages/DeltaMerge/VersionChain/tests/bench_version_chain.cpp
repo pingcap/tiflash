@@ -183,18 +183,23 @@ try
 CATCH
 
 // [ 1, 8, 64, 512, 4k, 8k, 64k ]
-BENCHMARK_CAPTURE(MVCCFullPlace, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsNotCommonHandle)
+BENCHMARK_CAPTURE(MVCCFullPlace, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, NotCommonHandle)
     ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(MVCCFullPlace, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsNotCommonHandle)
-    ->Range(1, 8 << 13);
-
-BENCHMARK_CAPTURE(MVCCIncrementalPlace, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsNotCommonHandle)
-    ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(MVCCIncrementalPlace, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsNotCommonHandle)
+BENCHMARK_CAPTURE(MVCCFullPlace, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, NotCommonHandle)
     ->Range(1, 8 << 13);
 
-BENCHMARK_CAPTURE(MVCCBuildBitmap, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsNotCommonHandle)
+BENCHMARK_CAPTURE(MVCCIncrementalPlace, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, NotCommonHandle)
     ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsNotCommonHandle)
+BENCHMARK_CAPTURE(MVCCIncrementalPlace, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, NotCommonHandle)
+    ->Range(1, 8 << 13);
+
+BENCHMARK_CAPTURE(MVCCBuildBitmap, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, NotCommonHandle)
+    ->Range(1, 8 << 13);
+BENCHMARK_CAPTURE(MVCCBuildBitmap, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, NotCommonHandle)
+    ->Range(1, 8 << 13);
+
+BENCHMARK_CAPTURE(MVCCFullPlace, IndexCommonHandle, BenchType::DeltaIndex, WriteLoad::RandomUpdate, CommonHandle)
+    ->Range(1, 8 << 13);
+BENCHMARK_CAPTURE(MVCCFullPlace, ChainCommonHandle, BenchType::VersionChain, WriteLoad::RandomUpdate, CommonHandle)
     ->Range(1, 8 << 13);
 } // namespace
