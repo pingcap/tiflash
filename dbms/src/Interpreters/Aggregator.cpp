@@ -776,7 +776,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 
     /// Optimization for special case when there are no aggregate functions.
     if (params.aggregates_size == 0)
-        return handleOneBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/false>(
+        return handleOneBatch<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/false>(
             method,
             state,
             agg_process_info,
@@ -822,7 +822,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     }
 
     /// Generic case.
-    return handleOneBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/true>(
+    return handleOneBatch<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/true>(
         method,
         state,
         agg_process_info,
@@ -830,7 +830,7 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 }
 
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, bool compute_agg_data, typename Method>
-void Aggregator::handleOneBatchImpl(
+void Aggregator::handleOneBatch(
     Method & method,
     typename Method::State & state,
     AggProcessInfo & agg_process_info,
@@ -848,6 +848,7 @@ void Aggregator::handleOneBatchImpl(
     std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplace_result_holder;
 
     std::unique_ptr<AggregateDataPtr[]> places{};
+    // It's ok to use fake address, because no one use agg data if there is no agg func.
     auto * place = reinterpret_cast<AggregateDataPtr>(0x1);
     if constexpr (compute_agg_data)
         places = std::unique_ptr<AggregateDataPtr[]>(new AggregateDataPtr[rows]);
@@ -1851,7 +1852,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     key_columns_vec_index = 0;
     while (data_index < rows)
     {
-        if (data_index + agg_prefetch_step < rows)
+        if likely (data_index + agg_prefetch_step < rows)
             __builtin_prefetch(places[data_index + agg_prefetch_step]);
 
         insertAggregatesIntoColumns(places[data_index], final_aggregate_columns_vec[key_columns_vec_index], arena);
