@@ -17,10 +17,8 @@
 #include <Debug/MockExecutor/FuncSigMap.h>
 #include <Debug/MockExecutor/WindowBinder.h>
 #include <Parsers/ASTFunction.h>
+#include <TiDB/Schema/TiDBTypes.h>
 #include <tipb/expression.pb.h>
-
-#include "TiDB/Schema/TiDBTypes.h"
-
 
 namespace DB::mock
 {

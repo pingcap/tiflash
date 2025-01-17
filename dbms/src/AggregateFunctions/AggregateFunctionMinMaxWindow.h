@@ -162,8 +162,6 @@ public:
         saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
     }
 
-    static bool allocatesMemoryInArena() { return true; }
-
     void setCollators(const TiDB::TiDBCollators & collators_)
     {
         collator = !collators_.empty() ? collators_[0] : nullptr;

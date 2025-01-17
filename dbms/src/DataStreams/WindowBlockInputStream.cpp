@@ -1369,7 +1369,6 @@ void WindowTransformAction::appendBlock(Block & current_block)
     window_block.input_columns = current_block.getColumns();
 }
 
-// TODO test this function with ut
 bool WindowTransformAction::checkIfNeedDecrease()
 {
     if (first_processed)
@@ -1384,7 +1383,6 @@ bool WindowTransformAction::checkIfNeedDecrease()
     return add_row_num > decrease_row_num;
 }
 
-// TODO ensure and check that if data's destructor will be called and the allocated memory could be released
 // Update the aggregation states after the frame has changed.
 template <bool need_decrease>
 void WindowTransformAction::updateAggregationState()
@@ -1464,7 +1462,6 @@ void WindowTransformAction::tryCalculate()
             }
             peer_group_last = current_row;
 
-            RowNumber tmp = frame_start;
             // Advance the frame start.
             advanceFrameStart();
 
@@ -1477,7 +1474,6 @@ void WindowTransformAction::tryCalculate()
             }
 
             // Advance the frame end.
-            tmp = frame_end;
             advanceFrameEnd();
 
             if (!frame_ended)

@@ -16,7 +16,6 @@
 
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <Columns/ColumnsNumber.h>
-#include <Common/Exception.h>
 #include <Common/PODArray.h>
 #include <Common/typeid_cast.h>
 #include <DataTypes/DataTypeDateTime.h>

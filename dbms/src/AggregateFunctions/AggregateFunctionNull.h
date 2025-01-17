@@ -91,23 +91,13 @@ protected:
     }
 
 public:
-    explicit AggregateFunctionNullBase(AggregateFunctionPtr nested_function_, bool need_counter = false)
+    explicit AggregateFunctionNullBase(AggregateFunctionPtr nested_function_)
         : nested_function{nested_function_}
     {
         if (result_is_nullable)
             prefix_size = nested_function->alignOfData();
         else
             prefix_size = 0;
-
-        if (result_is_nullable && need_counter)
-        {
-            auto tmp = prefix_size;
-            prefix_size += sizeof(Int64);
-            if ((prefix_size % tmp) != 0)
-                prefix_size += tmp - (prefix_size % tmp);
-            assert((prefix_size % tmp) == 0);
-            assert(prefix_size >= (tmp + sizeof(Int64)));
-        }
     }
 
     String getName() const override
