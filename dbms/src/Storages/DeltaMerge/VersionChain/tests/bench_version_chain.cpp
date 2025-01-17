@@ -62,17 +62,23 @@ try
     }
     else if (type == BenchType::VersionChain)
     {
-        {
-            VersionChain<Int64> version_chain;
-            buildVersionChain(*dm_context, *segment_snapshot, version_chain); // Warming up
-            RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
-        }
-        for (auto _ : state)
-        {
-            VersionChain<Int64> version_chain;
-            buildVersionChain(*dm_context, *segment_snapshot, version_chain);
-            RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
-        }
+        auto bench_impl = [&](auto handle_type) {
+            {
+                VersionChain<decltype(handle_type)> version_chain;
+                buildVersionChain(*dm_context, *segment_snapshot, version_chain); // Warming up
+                RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
+            }
+            for (auto _ : state)
+            {
+                VersionChain<decltype(handle_type)> version_chain;
+                buildVersionChain(*dm_context, *segment_snapshot, version_chain);
+                RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
+            }
+        };
+        if (is_common_handle)
+            bench_impl(String{});
+        else
+            bench_impl(Int64{});
     }
 }
 CATCH
@@ -112,19 +118,25 @@ try
     }
     else if (type == BenchType::VersionChain)
     {
-        VersionChain<Int64> base_version_chain;
-        buildVersionChain(*dm_context, *segment_snapshot, base_version_chain);
-        RUNTIME_ASSERT(base_version_chain.getReplayedRows() == prepared_delta_rows);
-        writeDelta(*dm_context, is_common_handle, *segment, incremental_delta_rows, random_sequences);
-        segment_snapshot = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
-        RUNTIME_ASSERT(segment_snapshot->delta->getRows() == prepared_delta_rows + incremental_delta_rows);
-        for (auto _ : state)
-        {
-            auto version_chain = base_version_chain;
-            RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows);
-            buildVersionChain(*dm_context, *segment_snapshot, version_chain);
-            RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows + incremental_delta_rows);
-        }
+        auto bench_impl = [&](auto handle_type) {
+            VersionChain<decltype(handle_type)> base_version_chain;
+            buildVersionChain(*dm_context, *segment_snapshot, base_version_chain);
+            RUNTIME_ASSERT(base_version_chain.getReplayedRows() == prepared_delta_rows);
+            writeDelta(*dm_context, is_common_handle, *segment, incremental_delta_rows, random_sequences);
+            segment_snapshot = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
+            RUNTIME_ASSERT(segment_snapshot->delta->getRows() == prepared_delta_rows + incremental_delta_rows);
+            for (auto _ : state)
+            {
+                auto version_chain = base_version_chain;
+                RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows);
+                buildVersionChain(*dm_context, *segment_snapshot, version_chain);
+                RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows + incremental_delta_rows);
+            }
+        };
+        if (is_common_handle)
+            bench_impl(String{});
+        else
+            bench_impl(Int64{});
     }
 }
 CATCH
@@ -164,20 +176,26 @@ try
     }
     else if (type == BenchType::VersionChain)
     {
-        VersionChain<Int64> version_chain;
-        buildVersionChain(*dm_context, *segment_snapshot, version_chain);
-        RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
-        for (auto _ : state)
-        {
-            auto bitmap_filter = buildBitmapFilter<Int64>(
-                *dm_context,
-                *segment_snapshot,
-                {segment->getRowKeyRange()},
-                rs_results,
-                std::numeric_limits<UInt64>::max(),
-                version_chain);
-            benchmark::DoNotOptimize(bitmap_filter);
-        }
+        auto bench_impl = [&](auto handle_type) {
+            VersionChain<decltype(handle_type)> version_chain;
+            buildVersionChain(*dm_context, *segment_snapshot, version_chain);
+            RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
+            for (auto _ : state)
+            {
+                auto bitmap_filter = buildBitmapFilter<decltype(handle_type)>(
+                    *dm_context,
+                    *segment_snapshot,
+                    {segment->getRowKeyRange()},
+                    rs_results,
+                    std::numeric_limits<UInt64>::max(),
+                    version_chain);
+                benchmark::DoNotOptimize(bitmap_filter);
+            }
+        };
+        if (is_common_handle)
+            bench_impl(String{});
+        else
+            bench_impl(Int64{});
     }
 }
 CATCH
@@ -198,8 +216,18 @@ BENCHMARK_CAPTURE(MVCCBuildBitmap, Index, BenchType::DeltaIndex, WriteLoad::Rand
 BENCHMARK_CAPTURE(MVCCBuildBitmap, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, NotCommonHandle)
     ->Range(1, 8 << 13);
 
-BENCHMARK_CAPTURE(MVCCFullPlace, IndexCommonHandle, BenchType::DeltaIndex, WriteLoad::RandomUpdate, CommonHandle)
+BENCHMARK_CAPTURE(MVCCFullPlace, CommonHandleIndex, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsCommonHandle)
     ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(MVCCFullPlace, ChainCommonHandle, BenchType::VersionChain, WriteLoad::RandomUpdate, CommonHandle)
+BENCHMARK_CAPTURE(MVCCFullPlace, CommonHandleChain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsCommonHandle)
+    ->Range(1, 8 << 13);
+
+BENCHMARK_CAPTURE(MVCCIncrementalPlace, CommonHandleIndex, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsCommonHandle)
+    ->Range(1, 8 << 13);
+BENCHMARK_CAPTURE(MVCCIncrementalPlace, CommonHandleChain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsCommonHandle)
+    ->Range(1, 8 << 13);
+
+BENCHMARK_CAPTURE(MVCCBuildBitmap, CommonHandleIndex, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsCommonHandle)
+    ->Range(1, 8 << 13);
+BENCHMARK_CAPTURE(MVCCBuildBitmap, CommonHandleChain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsCommonHandle)
     ->Range(1, 8 << 13);
 } // namespace

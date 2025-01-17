@@ -50,7 +50,7 @@ enum class WriteLoad
     RandomInsert = 3,
 };
 
-constexpr bool CommonHandle = true;
+constexpr bool IsCommonHandle = true;
 constexpr bool NotCommonHandle = false;
 
 
