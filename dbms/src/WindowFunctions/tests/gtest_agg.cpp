@@ -136,7 +136,6 @@ void WindowAggFuncTest::executeTest(const TestCase & test)
 }
 
 
-// TODO decide if we need decrease at compile time
 // TODO test duplicate order by values in range frame in ft
 TEST_F(WindowAggFuncTest, Sum)
 try
