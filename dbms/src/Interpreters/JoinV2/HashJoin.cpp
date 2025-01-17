@@ -341,7 +341,7 @@ bool HashJoin::finishOneBuildRow(size_t stream_index)
         wd.all_size);
     if (active_build_worker.fetch_sub(1) == 1)
     {
-        workAfterBuildFinish();
+        workAfterBuildRowFinish();
         return true;
     }
     return false;
@@ -363,7 +363,7 @@ bool HashJoin::finishOneProbe(size_t stream_index)
     return active_probe_worker.fetch_sub(1) == 1;
 }
 
-void HashJoin::workAfterBuildFinish()
+void HashJoin::workAfterBuildRowFinish()
 {
     size_t all_build_row_count = 0;
     for (size_t i = 0; i < build_concurrency; ++i)
@@ -545,6 +545,8 @@ Block HashJoin::probeBlock(JoinProbeContext & context, size_t stream_index)
         added_columns,
         wd.result_block.rows());
     wd.probe_hash_table_time += watch.elapsedFromLastTime();
+    if (context.isCurrentProbeFinished())
+        wd.probe_handle_rows += context.rows;
 
     for (size_t i = 0; i < right_columns; ++i)
         wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);

@@ -76,7 +76,7 @@ public:
 private:
     void initRowLayoutAndHashJoinMethod();
 
-    void workAfterBuildFinish();
+    void workAfterBuildRowFinish();
 
     Block handleOtherConditions(size_t stream_index);
 
