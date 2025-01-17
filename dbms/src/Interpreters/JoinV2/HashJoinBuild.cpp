@@ -37,7 +37,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     using HashValueType = typename KeyGetter::HashValueType;
     static_assert(sizeof(HashValueType) <= sizeof(decltype(wd.hashes)::value_type));
 
-    KeyGetterType & key_getter = *static_cast<KeyGetterType *>(wd.key_getter.get());
+    auto & key_getter = *static_cast<KeyGetterType *>(wd.key_getter.get());
     key_getter.reset(key_columns, row_layout.raw_required_key_column_indexes.size());
 
     wd.row_sizes.clear();

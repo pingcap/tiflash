@@ -225,11 +225,11 @@ private:
     void ALWAYS_INLINE insertRowToBatch(KeyGetterType & key_getter, RowPtr row_ptr, const KeyType & key) const
     {
         wd.insert_batch.push_back(row_ptr + key_getter.getRequiredKeyOffset(key));
-        FlushBatchIfNecessary<false>();
+        flushBatchIfNecessary<false>();
     }
 
     template <bool force>
-    void ALWAYS_INLINE FlushBatchIfNecessary() const
+    void ALWAYS_INLINE flushBatchIfNecessary() const
     {
         if constexpr (!force)
         {
@@ -262,7 +262,7 @@ private:
         wd.insert_batch.clear();
     }
 
-    void ALWAYS_INLINE FillNullMap(size_t size) const
+    void ALWAYS_INLINE fillNullMap(size_t size) const
     {
         if constexpr (has_null_map)
         {
@@ -355,8 +355,8 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
             break;
         }
     }
-    FlushBatchIfNecessary<true>();
-    FillNullMap(current_offset - added_rows);
+    flushBatchIfNecessary<true>();
+    fillNullMap(current_offset - added_rows);
 
     context.start_row_idx = idx;
     context.current_probe_row_ptr = ptr;
@@ -486,8 +486,8 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
         ++k;
     }
 
-    FlushBatchIfNecessary<true>();
-    FillNullMap(current_offset - added_rows);
+    flushBatchIfNecessary<true>();
+    fillNullMap(current_offset - added_rows);
 
     context.start_row_idx = idx;
     context.prefetch_active_states = active_states;
