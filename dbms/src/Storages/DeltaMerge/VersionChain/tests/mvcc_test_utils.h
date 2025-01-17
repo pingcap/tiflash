@@ -32,9 +32,11 @@ extern const Metric DT_SnapshotOfRead;
 
 namespace DB::DM::tests::MVCC
 {
-const String db_name = "test";
+inline const String db_name = "test";
+inline UInt64 version = 1;
 
-UInt64 version = 1;
+inline constexpr bool IsCommonHandle = true;
+inline constexpr bool NotCommonHandle = false;
 
 enum class BenchType
 {
@@ -50,11 +52,10 @@ enum class WriteLoad
     RandomInsert = 3,
 };
 
-constexpr bool IsCommonHandle = true;
-constexpr bool NotCommonHandle = false;
-
-
-auto loadPackFilterResults(const DMContext & dm_context, const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
+inline auto loadPackFilterResults(
+    const DMContext & dm_context,
+    const SegmentSnapshotPtr & snap,
+    const RowKeyRanges & ranges)
 {
     DMFilePackFilterResults results;
     results.reserve(snap->stable->getDMFiles().size());
@@ -66,7 +67,7 @@ auto loadPackFilterResults(const DMContext & dm_context, const SegmentSnapshotPt
     return results;
 }
 
-auto getContext()
+inline auto getContext()
 {
     const auto table_name = std::to_string(clock_gettime_ns());
     const auto testdata_path = fmt::format("/tmp/{}", table_name);
@@ -75,7 +76,7 @@ auto getContext()
     return std::pair{TiFlashTestEnv::getContext(), std::move(table_name)};
 }
 
-auto getDMContext(Context & context, const String & table_name, bool is_common_handle)
+inline auto getDMContext(Context & context, const String & table_name, bool is_common_handle)
 {
     auto storage_path_pool
         = std::make_shared<StoragePathPool>(context.getPathPool().withTable(db_name, table_name, false));
@@ -105,7 +106,7 @@ auto getDMContext(Context & context, const String & table_name, bool is_common_h
     return std::pair{std::move(dm_context), std::move(cols)};
 }
 
-SegmentPtr createSegment(DMContext & dm_context, const ColumnDefinesPtr & cols, bool is_common_handle)
+inline SegmentPtr createSegment(DMContext & dm_context, const ColumnDefinesPtr & cols, bool is_common_handle)
 {
     return Segment::newSegment(
         Logger::get(),
@@ -116,31 +117,43 @@ SegmentPtr createSegment(DMContext & dm_context, const ColumnDefinesPtr & cols, 
         0);
 }
 
-constexpr Int64 MaxHandle = 1000000;
-
-class RandomSequence
+class WriteSequence
 {
 public:
-    RandomSequence(UInt32 n)
-        : v(randomInt64s(n))
-        , pos(v.begin())
+    virtual ~WriteSequence() = default;
+    virtual std::vector<Int64> getStable() = 0;
+    virtual std::vector<Int64> getDelta(UInt32 n) = 0;
+};
+
+class RandomUpdateSequence : public WriteSequence
+{
+public:
+    RandomUpdateSequence()
+        : max_handle(1000000)
+        , rnd_v(randomInt64s(max_handle))
+        , pos(rnd_v.begin())
     {}
 
-    std::vector<Int64> get(UInt32 n)
+    std::vector<Int64> getStable() override
+    {
+        std::vector<Int64> v(max_handle);
+        std::iota(v.begin(), v.end(), 0);
+        return v;
+    }
+
+    std::vector<Int64> getDelta(UInt32 n) override
     {
         std::vector<Int64> res;
         while (res.size() < n)
         {
-            auto copied = std::min(std::distance(pos, v.end()), static_cast<ssize_t>(n - res.size()));
+            auto copied = std::min(std::distance(pos, rnd_v.end()), static_cast<ssize_t>(n - res.size()));
             res.insert(res.end(), pos, pos + copied);
             std::advance(pos, copied);
-            if (pos == v.end())
-                reset();
+            if (pos == rnd_v.end())
+                pos = rnd_v.begin();
         }
         return res;
     }
-
-    void reset() { pos = v.begin(); }
 
 private:
     std::vector<Int64> randomInt64s(UInt32 n)
@@ -150,16 +163,29 @@ private:
         std::vector<Int64> v(n);
         for (UInt32 i = 0; i < n; ++i)
         {
-            v[i] = g() % MaxHandle;
+            v[i] = g() % max_handle;
         }
         return v;
     }
 
-    std::vector<Int64> v;
-    std::vector<Int64>::iterator pos;
+    const UInt32 max_handle;
+    const std::vector<Int64> rnd_v;
+    std::vector<Int64>::const_iterator pos;
 };
 
-Strings toMockCommonHandles(const std::vector<Int64> & v)
+std::unique_ptr<WriteSequence> createWriteSequence(WriteLoad write_load)
+{
+    switch (write_load)
+    {
+    case WriteLoad::RandomUpdate:
+        return std::make_unique<RandomUpdateSequence>();
+    case WriteLoad::AppendOnly:
+    case WriteLoad::RandomInsert:
+        return nullptr;
+    }
+}
+
+inline Strings toMockCommonHandles(const std::vector<Int64> & v)
 {
     Strings handles;
     for (Int64 i : v)
@@ -167,61 +193,58 @@ Strings toMockCommonHandles(const std::vector<Int64> & v)
     return handles;
 }
 
-void writeDelta(
+template <ExtraHandleType HandleType>
+Block createBlock(std::vector<HandleType> handles)
+{
+    Block block;
+    block.insert(createColumn<HandleType>(handles, MutSup::extra_handle_column_name, MutSup::extra_handle_id));
+
+    static UInt64 version = 1;
+    block.insert(createColumn<UInt64>(
+        std::vector<UInt64>(block.rows(), version++),
+        MutSup::version_column_name,
+        MutSup::version_col_id));
+
+    block.insert(createColumn<UInt8>(
+        std::vector<UInt64>(block.rows(), /*deleted*/ 0),
+        MutSup::delmark_column_name,
+        MutSup::delmark_col_id));
+    return block;
+}
+
+inline void writeDelta(
     DMContext & dm_context,
     bool is_common_handle,
     Segment & seg,
     UInt32 delta_rows,
-    RandomSequence & random_sequences)
+    WriteSequence & write_seq)
 {
     for (UInt32 i = 0; i < delta_rows; i += 2048)
     {
-        Block block;
         const auto n = std::min(delta_rows - i, 2048U);
-        const auto v = random_sequences.get(n);
-        if (is_common_handle)
-            block.insert(createColumn<String>(
-                toMockCommonHandles(v),
-                MutSup::extra_handle_column_name,
-                MutSup::extra_handle_id));
-        else
-            block.insert(createColumn<Int64>(v, MutSup::extra_handle_column_name, MutSup::extra_handle_id));
-        block.insert(createColumn<UInt64>(
-            std::vector<UInt64>(n, version++),
-            MutSup::version_column_name,
-            MutSup::version_col_id));
-        block.insert(createColumn<UInt8>(
-            std::vector<UInt64>(n, /*deleted*/ 0),
-            MutSup::delmark_column_name,
-            MutSup::delmark_col_id));
+        const auto v = write_seq.getDelta(n);
+        auto block = is_common_handle ? createBlock(toMockCommonHandles(v)) : createBlock(std::move(v));
         seg.write(dm_context, block, false);
     }
 }
 
-SegmentPtr createSegmentWithData(
+inline SegmentPtr createSegmentWithData(
     DMContext & dm_context,
     const ColumnDefinesPtr & cols,
     bool is_common_handle,
     UInt32 delta_rows,
-    RandomSequence & random_sequences)
+    WriteSequence & write_seq)
 {
     auto seg = createSegment(dm_context, cols, is_common_handle);
-    auto block = DMTestEnv::prepareSimpleWriteBlock(
-        0,
-        1000000,
-        false,
-        version++,
-        MutSup::extra_handle_column_name,
-        MutSup::extra_handle_id,
-        is_common_handle ? MutSup::getExtraHandleColumnStringType() : MutSup::getExtraHandleColumnIntType(),
-        is_common_handle);
+    auto v = write_seq.getStable();
+    auto block = is_common_handle ? createBlock(toMockCommonHandles(v)) : createBlock(std::move(v));
     seg->write(dm_context, block, false);
     seg = seg->mergeDelta(dm_context, cols);
-    writeDelta(dm_context, is_common_handle, *seg, delta_rows, random_sequences);
+    writeDelta(dm_context, is_common_handle, *seg, delta_rows, write_seq);
     return seg;
 }
 
-DeltaIndexPtr buildDeltaIndex(
+inline DeltaIndexPtr buildDeltaIndex(
     const DMContext & dm_context,
     const ColumnDefines & cols,
     const SegmentSnapshotPtr & snapshot,
@@ -255,12 +278,12 @@ auto buildVersionChain(const DMContext & dm_context, const SegmentSnapshot & sna
     return version_chain.replaySnapshot(dm_context, snapshot);
 }
 
-auto initialize(bool is_common_handle, UInt32 delta_rows)
+inline auto initialize(WriteLoad write_load, bool is_common_handle, UInt32 delta_rows)
 {
     auto [context, table_name] = getContext();
     auto [dm_context, cols] = getDMContext(*context, table_name, is_common_handle);
-    RandomSequence random_sequences{10 * MaxHandle};
-    auto segment = createSegmentWithData(*dm_context, cols, is_common_handle, delta_rows, random_sequences);
+    auto write_seq = createWriteSequence(write_load);
+    auto segment = createSegmentWithData(*dm_context, cols, is_common_handle, delta_rows, *write_seq);
     auto segment_snapshot = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
     return std::tuple{
         std::move(context),
@@ -268,7 +291,7 @@ auto initialize(bool is_common_handle, UInt32 delta_rows)
         std::move(cols),
         std::move(segment),
         std::move(segment_snapshot),
-        std::move(random_sequences)};
+        std::move(write_seq)};
 }
 
 } // namespace DB::DM::tests::MVCC
