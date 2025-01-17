@@ -469,7 +469,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
         }
 
         const auto & key = key_getter.getJoinKeyWithBuffer(idx);
-        size_t hash = static_cast<HashValueType>(Hash()(key));
+        auto hash = static_cast<HashValueType>(Hash()(key));
         size_t bucket = pointer_table.getBucketNum(hash);
         state->pointer_ptr = pointer_table.getPointerTable() + bucket;
         PREFETCH_READ(state->pointer_ptr);
