@@ -97,7 +97,8 @@ public:
             : table_id(table_id_)
             , size(0)
         {}
-        void updateTableCacheBytes(UInt64 diff) { size.fetch_add(diff); }
+        void sizeDiff(Int64 diff) { size.fetch_add(diff); }
+        Int64 getSize() const { return size; }
         TableID table_id;
         InternalRegions regions;
 
@@ -158,7 +159,8 @@ public:
         const LoggerPtr & log);
 
     void clear();
-    bool hasTable(KeyspaceID keyspace_id, TableID table_id);
+    bool debugHasTable(KeyspaceID keyspace_id, TableID table_id);
+    Table & debugGetOrCreateTable(KeyspaceID keyspace_id, TableID table_id);
 
 public:
     // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
@@ -187,9 +189,11 @@ public:
 private:
     friend class MockTiDB;
     friend class StorageDeltaMerge;
+    friend class RegionKVStoreTest_MemoryTracker;
 
-    Table & getOrCreateTable(KeyspaceID keyspace_id, TableID table_id);
+
     void removeTable(KeyspaceID keyspace_id, TableID table_id);
+    Table & getOrCreateTable(KeyspaceID keyspace_id, TableID table_id);
     InternalRegion & getOrInsertRegion(const Region & region);
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const Region & region);
     InternalRegion & insertRegion(Table & table, const Region & region);
@@ -205,7 +209,9 @@ private:
 
     Context * const context;
 
+    // For regions and tables.
     mutable std::mutex mutex;
+    // For `safe_ts_map`
     mutable std::shared_mutex rw_lock;
 
     LoggerPtr log;

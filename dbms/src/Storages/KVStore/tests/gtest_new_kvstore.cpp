@@ -87,18 +87,15 @@ try
         = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
     MockRaftStoreProxy::FailCond cond;
     const auto decoded_lock_size = sizeof(DecodedLockCFValue) + sizeof(DecodedLockCFValue::Inner);
-    proxy_instance->debugAddRegions(
-        kvs,
-        ctx.getTMTContext(),
-        {1, 2, 3},
-        {{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10)},
-         {RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)},
-         {RecordKVFormat::genKey(table_id, 21), RecordKVFormat::genKey(table_id, 30)}});
 
     auto & region_table = ctx.getTMTContext().getRegionTable();
-    ASSERT_TRUE(region_table.hasTable(NullspaceID, table_id));
     {
         // default
+        proxy_instance->debugAddRegions(
+            kvs,
+            ctx.getTMTContext(),
+            {1},
+            {{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10)}});
         auto region_id = 1;
         auto kvr1 = kvs.getRegion(region_id);
         auto [index, term]
@@ -109,10 +106,20 @@ try
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
         ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(kvr1->dataSize(), kvr1->getData().totalSize());
+        ASSERT_TRUE(region_table.debugHasTable(NullspaceID, table_id));
+        auto & table1 = region_table.debugGetOrCreateTable(NullspaceID, table_id);
+        LOG_INFO(log, "!!!!!! dataSize {}", kvr1->dataSize());
+        ASSERT_EQ(kvr1->totalSize(), table1.getSize());
     }
     {
-        // lock
         root_of_kvstore_mem_trackers->reset();
+        // lock
+        proxy_instance->debugAddRegions(
+            kvs,
+            ctx.getTMTContext(),
+            {2},
+            {{RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)}});
+
         auto region_id = 2;
         auto kvr1 = kvs.getRegion(region_id);
         auto [index, term]
@@ -125,8 +132,14 @@ try
         ASSERT_EQ(kvr1->dataSize() + decoded_lock_size, kvr1->getData().totalSize());
     }
     {
-        // lock with largetxn
         root_of_kvstore_mem_trackers->reset();
+        // lock with largetxn
+        proxy_instance->debugAddRegions(
+            kvs,
+            ctx.getTMTContext(),
+            {3},
+            {{RecordKVFormat::genKey(table_id, 21), RecordKVFormat::genKey(table_id, 30)}});
+
         auto region_id = 3;
         auto kvr1 = kvs.getRegion(region_id);
         ASSERT_NE(kvr1, nullptr);

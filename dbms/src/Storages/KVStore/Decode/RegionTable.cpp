@@ -48,6 +48,7 @@ extern const char force_set_num_regions_for_table[];
 
 int64_t RegionTable::InternalRegion::updateRegionCacheBytes(size_t cache_bytes_)
 {
+    LOG_INFO(DB::Logger::get(), "!!!!!! updateRegionCacheBytes cache_bytes {} cache_bytes_ {}", cache_bytes, cache_bytes_);
     auto diff = static_cast<int64_t>(cache_bytes_) - static_cast<int64_t>(cache_bytes);
     cache_bytes = cache_bytes_;
     return diff;
@@ -66,8 +67,15 @@ RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id,
     return it->second;
 }
 
-bool RegionTable::hasTable(KeyspaceID keyspace_id, TableID table_id)
+RegionTable::Table & RegionTable::debugGetOrCreateTable(const KeyspaceID keyspace_id, const TableID table_id)
 {
+    std::lock_guard lock(mutex);
+    return getOrCreateTable(keyspace_id, table_id);
+}
+
+bool RegionTable::debugHasTable(KeyspaceID keyspace_id, TableID table_id)
+{
+    std::lock_guard lock(mutex);
     auto ks_table_id = KeyspaceTableID{keyspace_id, table_id};
     auto it = tables.find(ks_table_id);
     if (it == tables.end())
@@ -104,7 +112,8 @@ RegionTable::InternalRegion & RegionTable::insertRegion(
     // Insert region mapping.
     regions[region.id()] = KeyspaceTableID{keyspace_id, table.table_id};
 
-    table.updateTableCacheBytes(it->second.updateRegionCacheBytes(region.totalSize()));
+    LOG_INFO(DB::Logger::get(), "!!!!!! updateTableCacheBytes insert diff {}", region.totalSize());
+    table.sizeDiff(it->second.updateRegionCacheBytes(region.totalSize()));
 
     return it->second;
 }
@@ -113,6 +122,7 @@ RegionTable::InternalRegion & RegionTable::doGetInternalRegion(KeyspaceTableID k
 {
     return tables.find(ks_table_id)->second.regions.find(region_id)->second;
 }
+
 
 RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const Region & region)
 {
@@ -131,7 +141,9 @@ void RegionTable::updateTableCacheBytes(const Region & region, int64_t diff)
     auto keyspace_id = region.getKeyspaceID();
     auto table_id = region.getMappedTableID();
     auto & table = getOrCreateTable(keyspace_id, table_id);
-    table.updateTableCacheBytes(diff);
+
+    LOG_INFO(DB::Logger::get(), "!!!!!! updateTableCacheBytes diff {}", diff);
+    table.sizeDiff(diff);
 }
 
 RegionTable::RegionTable(Context & context_)
