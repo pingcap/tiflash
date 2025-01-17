@@ -185,6 +185,12 @@ size_t Region::dataSize() const
     return data.dataSize();
 }
 
+size_t Region::totalSize() const
+{
+    return data.totalSize() + sizeof(RegionMeta);
+}
+
+
 size_t Region::writeCFCount() const
 {
     std::shared_lock<std::shared_mutex> lock(mutex);

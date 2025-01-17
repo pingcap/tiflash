@@ -78,11 +78,11 @@ public:
             , range_in_table(range_in_table_)
         {}
 
-        void updateRegionCacheBytes(size_t);
+        int64_t updateRegionCacheBytes(size_t);
 
         RegionID region_id;
         std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
-        bool pause_flush = false;
+        bool pause_flush = false; // TODO Can we remove this?
         Timepoint last_flush_time = Clock::now();
 
     private:
@@ -95,10 +95,17 @@ public:
     {
         explicit Table(const TableID table_id_)
             : table_id(table_id_)
+            , size(0)
         {}
+        void updateTableCacheBytes(UInt64 diff) { size.fetch_add(diff); }
         TableID table_id;
         InternalRegions regions;
+
+    private:
+        std::atomic_int64_t size;
     };
+
+    void updateTableCacheBytes(const Region &, int64_t);
 
     explicit RegionTable(Context & context_);
     void restore();
@@ -109,7 +116,7 @@ public:
     void shrinkRegionRange(const Region & region);
 
     /// extend range for possible InternalRegion or add one.
-    void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
+    void extendRegionRange(const Region & region, const RegionRangeKeys & region_range_keys);
 
     void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 
@@ -151,6 +158,7 @@ public:
         const LoggerPtr & log);
 
     void clear();
+    bool hasTable(KeyspaceID keyspace_id, TableID table_id);
 
 public:
     // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
@@ -183,7 +191,7 @@ private:
     Table & getOrCreateTable(KeyspaceID keyspace_id, TableID table_id);
     void removeTable(KeyspaceID keyspace_id, TableID table_id);
     InternalRegion & getOrInsertRegion(const Region & region);
-    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
+    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const Region & region);
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
 

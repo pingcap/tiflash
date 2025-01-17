@@ -95,6 +95,8 @@ try
          {RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)},
          {RecordKVFormat::genKey(table_id, 21), RecordKVFormat::genKey(table_id, 30)}});
 
+    auto & region_table = ctx.getTMTContext().getRegionTable();
+    ASSERT_TRUE(region_table.hasTable(NullspaceID, table_id));
     {
         // default
         auto region_id = 1;

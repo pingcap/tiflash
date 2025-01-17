@@ -46,9 +46,11 @@ namespace FailPoints
 extern const char force_set_num_regions_for_table[];
 } // namespace FailPoints
 
-void RegionTable::InternalRegion::updateRegionCacheBytes(size_t cache_bytes_)
+int64_t RegionTable::InternalRegion::updateRegionCacheBytes(size_t cache_bytes_)
 {
+    auto diff = static_cast<int64_t>(cache_bytes_) - static_cast<int64_t>(cache_bytes);
     cache_bytes = cache_bytes_;
+    return diff;
 }
 
 RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id, const TableID table_id)
@@ -64,31 +66,45 @@ RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id,
     return it->second;
 }
 
+bool RegionTable::hasTable(KeyspaceID keyspace_id, TableID table_id)
+{
+    auto ks_table_id = KeyspaceTableID{keyspace_id, table_id};
+    auto it = tables.find(ks_table_id);
+    if (it == tables.end())
+    {
+        return false;
+    }
+    return true;
+}
+
+
 RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Region & region)
 {
     const auto range = region.getRange();
-    return insertRegion(table, *range, region.id());
+    return insertRegion(table, *range, region);
 }
 
 RegionTable::InternalRegion & RegionTable::insertRegion(
     Table & table,
     const RegionRangeKeys & region_range_keys,
-    const RegionID region_id)
+    const Region & region)
 {
     auto keyspace_id = region_range_keys.getKeyspaceID();
     auto & table_regions = table.regions;
     // Insert table mapping.
     // todo check if region_range_keys.mapped_table_id == table.table_id ??
-    auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region_range_keys.rawKeys()));
+    auto [it, ok] = table_regions.emplace(region.id(), InternalRegion(region.id(), region_range_keys.rawKeys()));
     if (!ok)
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
             "{}: insert duplicate internal region, region_id={}",
             __PRETTY_FUNCTION__,
-            region_id);
+            region.id());
 
     // Insert region mapping.
-    regions[region_id] = KeyspaceTableID{keyspace_id, table.table_id};
+    regions[region.id()] = KeyspaceTableID{keyspace_id, table.table_id};
+
+    table.updateTableCacheBytes(it->second.updateRegionCacheBytes(region.totalSize()));
 
     return it->second;
 }
@@ -108,6 +124,14 @@ RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const Region & regi
         return it->second;
 
     return insertRegion(table, region);
+}
+
+void RegionTable::updateTableCacheBytes(const Region & region, int64_t diff)
+{
+    auto keyspace_id = region.getKeyspaceID();
+    auto table_id = region.getMappedTableID();
+    auto & table = getOrCreateTable(keyspace_id, table_id);
+    table.updateTableCacheBytes(diff);
 }
 
 RegionTable::RegionTable(Context & context_)
@@ -161,7 +185,7 @@ void RegionTable::updateRegion(const Region & region)
 {
     std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
-    internal_region.updateRegionCacheBytes(region.dataSize());
+    updateTableCacheBytes(region, internal_region.updateRegionCacheBytes(region.totalSize()));
 }
 
 namespace
@@ -313,7 +337,7 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtr & regi
 
     func_update_region([&](InternalRegion & internal_region) -> bool {
         internal_region.pause_flush = false;
-        internal_region.updateRegionCacheBytes(region->dataSize());
+        updateTableCacheBytes(*region, internal_region.updateRegionCacheBytes(region->totalSize()));
 
         internal_region.last_flush_time = Clock::now();
         return true;
@@ -385,10 +409,10 @@ void RegionTable::shrinkRegionRange(const Region & region)
     std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
     internal_region.range_in_table = region.getRange()->rawKeys();
-    internal_region.updateRegionCacheBytes(region.dataSize());
+    updateTableCacheBytes(region, internal_region.updateRegionCacheBytes(region.totalSize()));
 }
 
-void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys)
+void RegionTable::extendRegionRange(const Region & region, const RegionRangeKeys & region_range_keys)
 {
     std::lock_guard lock(mutex);
 
@@ -396,7 +420,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
     auto table_id = region_range_keys.getMappedTableID();
     auto new_handle_range = region_range_keys.rawKeys();
 
-    if (auto it = regions.find(region_id); it != regions.end())
+    if (auto it = regions.find(region.id()); it != regions.end())
     {
         auto ks_tbl_id = KeyspaceTableID{keyspace_id, table_id};
         RUNTIME_CHECK_MSG(
@@ -404,13 +428,13 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
             "{}: table id not match the previous one"
             ", region_id={} keyspace={} table_id={} old_keyspace={} old_table_id={}",
             __PRETTY_FUNCTION__,
-            region_id,
+            region.id(),
             keyspace_id,
             table_id,
             it->second.first,
             it->second.second);
 
-        InternalRegion & internal_region = doGetInternalRegion(ks_tbl_id, region_id);
+        InternalRegion & internal_region = doGetInternalRegion(ks_tbl_id, region.id());
 
         if (*(internal_region.range_in_table.first) <= *(new_handle_range.first)
             && *(internal_region.range_in_table.second) >= *(new_handle_range.second))
@@ -420,7 +444,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
                 "internal region has larger range, keyspace={} table_id={} region_id={}",
                 keyspace_id,
                 table_id,
-                region_id);
+                region.id());
         }
         else
         {
@@ -435,8 +459,13 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
     else
     {
         auto & table = getOrCreateTable(keyspace_id, table_id);
-        insertRegion(table, region_range_keys, region_id);
-        LOG_INFO(log, "insert internal region, keyspace={} table_id={} region_id={}", keyspace_id, table_id, region_id);
+        insertRegion(table, region_range_keys, region);
+        LOG_INFO(
+            log,
+            "insert internal region, keyspace={} table_id={} region_id={}",
+            keyspace_id,
+            table_id,
+            region.id());
     }
 }
 

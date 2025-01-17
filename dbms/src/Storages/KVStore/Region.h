@@ -165,6 +165,8 @@ public: // Stats
 
     // Payload size in RegionData, show how much data flows in/out of the Region.
     size_t dataSize() const;
+    // How much memory the Region consumes.
+    size_t totalSize() const;
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
