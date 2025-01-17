@@ -16,10 +16,10 @@
 
 #include <Common/HashTable/HashMap.h>
 #include <Common/HashTable/HashTable.h>
+#include <IO/Endian.h>
 
 #include <new>
 #include <variant>
-
 
 using StringKey8 = UInt64;
 using StringKey16 = DB::UInt128;
@@ -51,20 +51,20 @@ inline StringRef ALWAYS_INLINE toStringRef(const StringKey24 & n)
 struct StringHashTableHash
 {
 #if defined(__SSE4_2__)
-    size_t ALWAYS_INLINE operator()(StringKey8 key) const
+    static size_t ALWAYS_INLINE operator()(StringKey8 key)
     {
         size_t res = -1ULL;
         res = _mm_crc32_u64(res, key);
         return res;
     }
-    size_t ALWAYS_INLINE operator()(const StringKey16 & key) const
+    static size_t ALWAYS_INLINE operator()(const StringKey16 & key)
     {
         size_t res = -1ULL;
         res = _mm_crc32_u64(res, key.low);
         res = _mm_crc32_u64(res, key.high);
         return res;
     }
-    size_t ALWAYS_INLINE operator()(const StringKey24 & key) const
+    static size_t ALWAYS_INLINE operator()(const StringKey24 & key)
     {
         size_t res = -1ULL;
         res = _mm_crc32_u64(res, key.a);
@@ -73,20 +73,20 @@ struct StringHashTableHash
         return res;
     }
 #else
-    size_t ALWAYS_INLINE operator()(StringKey8 key) const
+    static size_t ALWAYS_INLINE operator()(StringKey8 key)
     {
         return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 8);
     }
-    size_t ALWAYS_INLINE operator()(const StringKey16 & key) const
+    static size_t ALWAYS_INLINE operator()(const StringKey16 & key)
     {
         return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 16);
     }
-    size_t ALWAYS_INLINE operator()(const StringKey24 & key) const
+    static size_t ALWAYS_INLINE operator()(const StringKey24 & key)
     {
         return CityHash_v1_0_2::CityHash64(reinterpret_cast<const char *>(&key), 24);
     }
 #endif
-    size_t ALWAYS_INLINE operator()(StringRef key) const { return StringRefHash()(key); }
+    static size_t ALWAYS_INLINE operator()(StringRef key) { return StringRefHash()(key); }
 };
 
 template <typename Cell>
@@ -150,6 +150,7 @@ public:
         return hasZero() ? zeroValue() : nullptr;
     }
 
+    ALWAYS_INLINE inline void prefetch(size_t) {}
     void write(DB::WriteBuffer & wb) const { zeroValue()->write(wb); }
     void writeText(DB::WriteBuffer & wb) const { zeroValue()->writeText(wb); }
     void read(DB::ReadBuffer & rb) { zeroValue()->read(rb); }
@@ -157,6 +158,7 @@ public:
     size_t size() const { return hasZero() ? 1 : 0; }
     bool empty() const { return !hasZero(); }
     size_t getBufferSizeInBytes() const { return sizeof(Cell); }
+    size_t getBufferSizeInCells() const { return 1; }
     void setResizeCallback(const ResizeCallback &) {}
     size_t getCollisions() const { return 0; }
 };
@@ -195,6 +197,8 @@ class StringHashTable : private boost::noncopyable
 {
 protected:
     static constexpr size_t NUM_MAPS = 5;
+    using Self = StringHashTable;
+
     // Map for storing empty string
     using T0 = typename SubMaps::T0;
 
@@ -205,7 +209,6 @@ protected:
 
     // Long strings are stored as StringRef along with saved hash
     using Ts = typename SubMaps::Ts;
-    using Self = StringHashTable;
 
     template <typename, typename, size_t>
     friend class TwoLevelStringHashTable;
@@ -225,6 +228,9 @@ public:
 
     using LookupResult = StringHashTableLookupResult<typename cell_type::mapped_type>;
     using ConstLookupResult = StringHashTableLookupResult<const typename cell_type::mapped_type>;
+
+    static constexpr bool is_string_hash_map = true;
+    static constexpr bool is_two_level = false;
 
     StringHashTable() = default;
 
@@ -257,7 +263,6 @@ public:
 #endif
         dispatch(Self & self, KeyHolder && key_holder, Func && func)
     {
-        StringHashTableHash hash;
         const StringRef & x = keyHolderGetKey(key_holder);
         const size_t sz = x.size;
         if (sz == 0)
@@ -270,7 +275,7 @@ public:
         {
             // Strings with trailing zeros are not representable as fixed-size
             // string keys. Put them to the generic table.
-            return func(self.ms, std::forward<KeyHolder>(key_holder), hash(x));
+            return func(self.ms, std::forward<KeyHolder>(key_holder), StringHashTableHash::operator()(x));
         }
 
         const char * p = x.data;
@@ -306,7 +311,7 @@ public:
                     n[0] <<= s;
             }
             keyHolderDiscardKey(key_holder);
-            return func(self.m1, k8, hash(k8));
+            return func(self.m1, k8, StringHashTableHash::operator()(k8));
         }
         case 1: // 9..16 bytes
         {
@@ -318,7 +323,7 @@ public:
             else
                 n[1] <<= s;
             keyHolderDiscardKey(key_holder);
-            return func(self.m2, k16, hash(k16));
+            return func(self.m2, k16, StringHashTableHash::operator()(k16));
         }
         case 2: // 17..24 bytes
         {
@@ -330,11 +335,11 @@ public:
             else
                 n[2] <<= s;
             keyHolderDiscardKey(key_holder);
-            return func(self.m3, k24, hash(k24));
+            return func(self.m3, k24, StringHashTableHash::operator()(k24));
         }
         default: // >= 25 bytes
         {
-            return func(self.ms, std::forward<KeyHolder>(key_holder), hash(x));
+            return func(self.ms, std::forward<KeyHolder>(key_holder), StringHashTableHash::operator()(x));
         }
         }
     }
@@ -434,6 +439,11 @@ public:
 
     bool empty() const { return m0.empty() && m1.empty() && m2.empty() && m3.empty() && ms.empty(); }
 
+    size_t getBufferSizeInCells() const
+    {
+        return m0.getBufferSizeInCells() + m1.getBufferSizeInCells() + m2.getBufferSizeInCells()
+            + m3.getBufferSizeInCells() + ms.getBufferSizeInCells();
+    }
     size_t getBufferSizeInBytes() const
     {
         return m0.getBufferSizeInBytes() + m1.getBufferSizeInBytes() + m2.getBufferSizeInBytes()
