@@ -107,6 +107,26 @@ AggregateFunctionPtr AggregateFunctionFactory::get(
     return res;
 }
 
+AggregateFunctionPtr AggregateFunctionFactory::getForWindow(
+    const Context & context,
+    const String & name,
+    const DataTypes & argument_types,
+    const Array & parameters,
+    int recursion_level) const
+{
+    AggregateFunctionCombinatorPtr combinator
+        = AggregateFunctionCombinatorFactory::instance().tryFindSuffix("NullForWindow");
+    if (!combinator)
+        throw Exception(
+            "Logical error: cannot find aggregate function combinator to apply a function to Nullable for window "
+            "arguments.",
+            ErrorCodes::LOGICAL_ERROR);
+
+    DataTypes nested_types = combinator->transformArguments(argument_types);
+    AggregateFunctionPtr nested_function = getImpl(context, name, nested_types, parameters, recursion_level);
+    return combinator->transformAggregateFunction(nested_function, argument_types, parameters);
+}
+
 AggregateFunctionPtr AggregateFunctionFactory::getImpl(
     const Context & context,
     const String & name,

@@ -24,19 +24,22 @@
 #include <IO/WriteHelpers.h>
 #include <common/StringRef.h>
 
-
 namespace DB
 {
 /** Aggregate functions that store one of passed values.
   * For example: min, max, any, anyLast.
   */
 
+struct CommonImpl
+{
+    static void decrease(const IColumn &, size_t) { throw Exception("decrease is not implemented yet"); }
+};
 
 /// For numeric values.
 template <typename T>
-struct SingleValueDataFixed
+struct SingleValueDataFixed : public CommonImpl
 {
-private:
+protected:
     using Self = SingleValueDataFixed<T>;
 
     bool has_value
@@ -71,7 +74,6 @@ public:
         if (has())
             readBinary(value, buf);
     }
-
 
     void change(const IColumn & column, size_t row_num, Arena *)
     {
@@ -175,15 +177,17 @@ public:
     {
         return has() && static_cast<const ColumnType &>(column).getData()[row_num] == value;
     }
+
+    void reset() { has_value = false; }
 };
 
 
 /** For strings. Short strings are stored in the object itself, and long strings are allocated separately.
   * NOTE It could also be suitable for arrays of numbers.
   */
-struct SingleValueDataString
+struct SingleValueDataString : public CommonImpl
 {
-private:
+protected:
     using Self = SingleValueDataString;
 
     Int32 size = -1; /// -1 indicates that there is no value.
@@ -215,9 +219,9 @@ private:
 public:
     static constexpr Int32 AUTOMATIC_STORAGE_SIZE = 64;
     static constexpr Int32 MAX_SMALL_STRING_SIZE
-        = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity) - sizeof(large_data) - sizeof(collator);
+        = AUTOMATIC_STORAGE_SIZE - sizeof(size) - sizeof(capacity) - sizeof(large_data) - sizeof(TiDB::TiDBCollatorPtr);
 
-private:
+protected:
     char small_data[MAX_SMALL_STRING_SIZE]{}; /// Including the terminating zero.
 
 public:
@@ -417,6 +421,8 @@ public:
         return has()
             && equalTo(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num), getStringRef());
     }
+
+    void reset() { size = -1; }
 };
 
 static_assert(
@@ -425,9 +431,9 @@ static_assert(
 
 
 /// For any other value types.
-struct SingleValueDataGeneric
+struct SingleValueDataGeneric : public CommonImpl
 {
-private:
+protected:
     using Self = SingleValueDataGeneric;
 
     Field value;
@@ -519,6 +525,7 @@ public:
         {
             Field new_value;
             column.get(row_num, new_value);
+
             if (new_value < value)
             {
                 value = new_value;
@@ -551,6 +558,7 @@ public:
         {
             Field new_value;
             column.get(row_num, new_value);
+
             if (new_value > value)
             {
                 value = new_value;
@@ -575,6 +583,8 @@ public:
     bool isEqualTo(const IColumn & column, size_t row_num) const { return has() && value == column[row_num]; }
 
     bool isEqualTo(const Self & to) const { return has() && to.value == value; }
+
+    void reset() { value = Field(); }
 };
 
 
@@ -606,6 +616,7 @@ struct AggregateFunctionMaxData : Data
     {
         return this->changeIfGreater(column, row_num, arena);
     }
+
     bool changeIfBetter(const Self & to, Arena * arena) { return this->changeIfGreater(to, arena); }
 
     static const char * name() { return "max"; }
@@ -732,7 +743,9 @@ public:
     explicit AggregateFunctionsSingleValue(const DataTypePtr & type)
         : type(type)
     {
-        if (StringRef(Data::name()) == StringRef("min") || StringRef(Data::name()) == StringRef("max"))
+        if (StringRef(Data::name()) == StringRef("min") || StringRef(Data::name()) == StringRef("max")
+            || StringRef(Data::name()) == StringRef("max_for_window")
+            || StringRef(Data::name()) == StringRef("min_for_window"))
         {
             if (!type->isComparable())
                 throw Exception(
@@ -750,6 +763,13 @@ public:
     {
         this->data(place).changeIfBetter(*columns[0], row_num, arena);
     }
+
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
+    {
+        this->data(place).decrease(*columns[0], row_num);
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const override
     {
