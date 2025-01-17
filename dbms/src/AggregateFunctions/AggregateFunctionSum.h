@@ -43,9 +43,26 @@ struct AggregateFunctionSumAddImpl<Decimal<T>>
 };
 
 template <typename T>
+struct AggregateFunctionSumMinusImpl
+{
+    static void NO_SANITIZE_UNDEFINED ALWAYS_INLINE decrease(T & lhs, const T & rhs) { lhs -= rhs; }
+};
+
+template <typename T>
+struct AggregateFunctionSumMinusImpl<Decimal<T>>
+{
+    template <typename U>
+    static void NO_SANITIZE_UNDEFINED ALWAYS_INLINE decrease(Decimal<T> & lhs, const Decimal<U> & rhs)
+    {
+        lhs.value -= static_cast<T>(rhs.value);
+    }
+};
+
+template <typename T>
 struct AggregateFunctionSumData
 {
     using Impl = AggregateFunctionSumAddImpl<T>;
+    using DescreaseImpl = AggregateFunctionSumMinusImpl<T>;
     T sum{};
 
     AggregateFunctionSumData() = default;
@@ -55,6 +72,14 @@ struct AggregateFunctionSumData
     {
         Impl::add(sum, value);
     }
+
+    template <typename U>
+    void NO_SANITIZE_UNDEFINED ALWAYS_INLINE decrease(U value)
+    {
+        DescreaseImpl::decrease(sum, value);
+    }
+
+    void NO_SANITIZE_UNDEFINED ALWAYS_INLINE reset() { sum = T(0); }
 
     /// Vectorized version
     template <typename Value>
@@ -164,6 +189,10 @@ struct AggregateFunctionSumKahanData
     }
 
     void ALWAYS_INLINE add(T value) { addImpl(value, sum, compensation); }
+
+    void ALWAYS_INLINE decrease(T) { throw Exception("Not implemented yet"); }
+
+    void ALWAYS_INLINE reset() { throw Exception("Not implemented yet"); }
 
     /// Vectorized version
     template <typename Value>
@@ -311,7 +340,7 @@ public:
     AggregateFunctionSum(PrecType prec, ScaleType scale)
     {
         std::tie(result_prec, result_scale) = Name::decimalInfer(prec, scale);
-    };
+    }
 
     DataTypePtr getReturnType() const override
     {
@@ -335,6 +364,14 @@ public:
         const auto & column = assert_cast<const ColVecType &>(*columns[0]);
         this->data(place).add(column.getData()[row_num]);
     }
+
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
+    {
+        const auto & column = assert_cast<const ColVecType &>(*columns[0]);
+        this->data(place).decrease(column.getData()[row_num]);
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
 
     /// Vectorized version when there is no GROUP BY keys.
     void addBatchSinglePlace(
