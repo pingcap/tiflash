@@ -539,7 +539,7 @@ void ColumnString::countSerializeByteSizeImpl(
             }
             else
             {
-                byte_size[i] += sizeof(UInt32) + (sizeAt(i) - 1);
+                byte_size[i] += sizeof(UInt32) + sizeAt(i) - 1;
             }
         }
     }
@@ -640,7 +640,7 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
             }
             else
             {
-                byte_size[i] += sizeof(UInt32) * (ele_count)
+                byte_size[i] += sizeof(UInt32) * ele_count
                     // For each sub element, minus 1 because of terminating zero.
                     + (offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) - ele_count);
             }
