@@ -705,15 +705,15 @@ struct TiDBCollatorPtrMap
 
     TiDBCollatorPtrMap()
     {
-#define M(VAR_PREFIX, COLLATOR_NAME, REAL_TYPE, COLLATOR_ID) \
-    static const auto VAR_PREFIX##_##COLLATOR_NAME = REAL_TYPE(COLLATOR_ID);
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID) \
+    static const auto VAR_PREFIX##_##COLLATOR_NAME = IMPL_TYPE(COLLATOR_ID);
         APPLY_FOR_COLLATOR_TYPES(M)
 #undef M
 
 #ifdef M
         static_assert(false, "`M` is defined");
 #endif
-#define M(VAR_PREFIX, COLLATOR_NAME, REAL_TYPE, COLLATOR_ID)  \
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)  \
     do                                                        \
     {                                                         \
         auto & collator = VAR_PREFIX##_##COLLATOR_NAME;       \

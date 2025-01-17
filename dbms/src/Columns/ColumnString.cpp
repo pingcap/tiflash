@@ -709,10 +709,10 @@ void ColumnString::serializeToPosImplType(
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
-#define M(VAR_PREFIX, COLLATOR_NAME, REAL_TYPE, COLLATOR_ID)                                                     \
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                                     \
     case (COLLATOR_ID):                                                                                          \
     {                                                                                                            \
-        serializeToPosImpl<has_null, has_collator, REAL_TYPE>(pos, start, length, collator, sort_key_container); \
+        serializeToPosImpl<has_null, has_collator, IMPL_TYPE>(pos, start, length, collator, sort_key_container); \
         break;                                                                                                   \
     }
 
@@ -787,7 +787,7 @@ void ColumnString::serializeToPosForCmpColumnArray(
     if (has_null)
     {
         if likely (collator != nullptr)
-            serializeToPosForColumnArrayImpl</*has_null=*/true, /*has_collator=*/true>(
+            serializeToPosForColumnArrayImplType</*has_null=*/true, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
@@ -795,7 +795,7 @@ void ColumnString::serializeToPosForCmpColumnArray(
                 collator,
                 sort_key_container);
         else
-            serializeToPosForColumnArrayImpl</*has_null=*/true, /*has_collator=*/false>(
+            serializeToPosForColumnArrayImplType</*has_null=*/true, /*has_collator=*/false>(
                 pos,
                 start,
                 length,
@@ -806,7 +806,7 @@ void ColumnString::serializeToPosForCmpColumnArray(
     else
     {
         if likely (collator != nullptr)
-            serializeToPosForColumnArrayImpl</*has_null=*/false, /*has_collator=*/true>(
+            serializeToPosForColumnArrayImplType</*has_null=*/false, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
@@ -814,7 +814,7 @@ void ColumnString::serializeToPosForCmpColumnArray(
                 collator,
                 sort_key_container);
         else
-            serializeToPosForColumnArrayImpl</*has_null=*/false, /*has_collator=*/true>(
+            serializeToPosForColumnArrayImplType</*has_null=*/false, /*has_collator=*/true>(
                 pos,
                 start,
                 length,
@@ -832,7 +832,7 @@ void ColumnString::serializeToPosForColumnArray(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImpl</*has_null=*/true, /*has_collator=*/false>(
+        serializeToPosForColumnArrayImplType</*has_null=*/true, /*has_collator=*/false>(
             pos,
             start,
             length,
@@ -840,7 +840,7 @@ void ColumnString::serializeToPosForColumnArray(
             nullptr,
             nullptr);
     else
-        serializeToPosForColumnArrayImpl</*has_null=*/false, /*has_collator=*/false>(
+        serializeToPosForColumnArrayImplType</*has_null=*/false, /*has_collator=*/false>(
             pos,
             start,
             length,
@@ -862,10 +862,10 @@ void ColumnString::serializeToPosForColumnArrayImplType(
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
-#define M(VAR_PREFIX, COLLATOR_NAME, REAL_TYPE, COLLATOR_ID)                 \
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                 \
     case (COLLATOR_ID):                                                      \
     {                                                                        \
-        serializeToPosForColumnArrayImpl<has_null, has_collator, REAL_TYPE>( \
+        serializeToPosForColumnArrayImpl<has_null, has_collator, IMPL_TYPE>( \
             pos,                                                             \
             start,                                                           \
             length,                                                          \
