@@ -114,6 +114,7 @@ namespace DB
     M(force_set_parallel_prehandle_threshold)                \
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)                            \
+    M(force_agg_prefetch)                                    \
     M(force_set_fap_candidate_store_id)                      \
     M(force_not_clean_fap_on_destroy)                        \
     M(force_fap_worker_throw)                                \

@@ -231,8 +231,7 @@ struct AggregationMethodStringNoCache
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::
-        HashMethodString<typename Data::value_type, Mapped, /*place_string_to_arena=*/true, /*use_cache=*/false>;
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*use_cache=*/false>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -528,7 +527,7 @@ struct AggregationMethodFixedStringNoCache
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, true, false>;
+    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, false>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -1454,12 +1453,26 @@ protected:
         AggProcessInfo & agg_process_info,
         TiDB::TiDBCollators & collators) const;
 
-    template <bool collect_hit_rate, bool only_loopup, typename Method>
+    template <bool collect_hit_rate, bool only_loopup, bool enable_prefetch, typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
+
+    template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, bool compute_agg_data, typename Method>
+    void handleOneBatch(
+        Method & method,
+        typename Method::State & state,
+        AggProcessInfo & agg_process_info,
+        Arena * aggregates_pool) const;
+
+    template <bool only_lookup, typename Method>
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
+        Method & method,
+        typename Method::State & state,
+        typename Method::State::Derived::KeyHolderType && key_holder,
+        size_t hashval) const;
 
     template <bool only_lookup, typename Method>
     std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
