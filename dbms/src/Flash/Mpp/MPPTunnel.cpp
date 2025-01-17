@@ -19,6 +19,7 @@
 #include <Flash/Mpp/MPPTunnel.h>
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/Utils.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
@@ -74,6 +75,7 @@ MPPTunnel::MPPTunnel(
     const CapacityLimits & queue_limits_,
     bool is_local_,
     bool is_async_,
+    bool same_zone,
     const String & req_id)
     : MPPTunnel(
         fmt::format("tunnel{}+{}", sender_meta_.task_id(), receiver_meta_.task_id()),
@@ -81,6 +83,7 @@ MPPTunnel::MPPTunnel(
         queue_limits_,
         is_local_,
         is_async_,
+        same_zone,
         req_id)
 {}
 
@@ -90,6 +93,7 @@ MPPTunnel::MPPTunnel(
     const CapacityLimits & queue_limits_,
     bool is_local_,
     bool is_async_,
+    bool same_zone,
     const String & req_id)
     : status(TunnelStatus::Unconnected)
     , timeout(timeout_)
@@ -97,6 +101,7 @@ MPPTunnel::MPPTunnel(
     , tunnel_id(tunnel_id_)
     , mem_tracker(current_memory_tracker ? current_memory_tracker->shared_from_this() : nullptr)
     , queue_limit(queue_limits_)
+    , connection_profile_info(is_local_, same_zone)
     , log(Logger::get(req_id, tunnel_id))
     , data_size_in_queue(0)
 {

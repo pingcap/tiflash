@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/DataTypeNullable.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/FileProvider/FileProvider.h>
 #include <Storages/DeltaMerge/File/DMFileMetaV2.h>
-
 namespace DB::ErrorCodes
 {
 extern const int CORRUPTED_DATA;

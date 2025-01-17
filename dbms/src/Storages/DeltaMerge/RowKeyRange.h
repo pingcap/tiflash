@@ -20,6 +20,7 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+#include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/dtpb/column_file.pb.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
@@ -692,12 +693,6 @@ struct RowKeyRange
 
     inline bool intersect(const RowKeyRange & other) const { return other.start < end && start < other.end; }
 
-    // [first, last_include]
-    inline bool include(const RowKeyValueRef & first, const RowKeyValueRef & last_include) const
-    {
-        return check(first) && check(last_include);
-    }
-
     /// Check whether thisRange.Start <= key
     inline bool checkStart(const RowKeyValueRef & value) const { return getStart() <= value; }
 
@@ -706,6 +701,13 @@ struct RowKeyRange
 
     /// Check whether the key is included in this range.
     inline bool check(const RowKeyValueRef & value) const { return checkStart(value) && checkEnd(value); }
+
+    /// `RowKeyRange` denoted as [StartRowKey, EndRowKey). So if rhs.end == this->end, we
+    /// consider `rhs` is included by `this`.
+    inline bool checkRangeIncluded(const RowKeyRange & rhs) const
+    {
+        return checkStart(rhs.getStart()) && (getEnd() == rhs.getEnd() || checkEnd(rhs.getEnd()));
+    }
 
     inline RowKeyValueRef getStart() const { return start.toRowKeyValueRef(); }
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/RandomData.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
 #include <Storages/DeltaMerge/workload/DataGenerator.h>
 #include <Storages/DeltaMerge/workload/KeyGenerator.h>
@@ -73,12 +74,12 @@ public:
         uint64_t ts = ts_gen.get();
         {
             auto & col_def = (*table_info.columns)[1];
-            if (col_def.id != VERSION_COLUMN_ID)
+            if (col_def.id != MutSup::version_col_id)
             {
                 throw std::invalid_argument(fmt::format(
-                    "(*table_info.columns)[1].id is {} not VERSION_COLUMN_ID {}.",
+                    "(*table_info.columns)[1].id is {} not MutSup::version_col_id {}.",
                     col_def.id,
-                    VERSION_COLUMN_ID));
+                    MutSup::version_col_id));
             }
             ColumnWithTypeAndName col({}, col_def.type, col_def.name, col_def.id);
             IColumn::MutablePtr mut_col = col.type->createColumn();
@@ -91,10 +92,12 @@ public:
         // Generate 'delete mark'
         {
             auto & col_def = (*table_info.columns)[2];
-            if (col_def.id != TAG_COLUMN_ID)
+            if (col_def.id != MutSup::delmark_col_id)
             {
-                throw std::invalid_argument(
-                    fmt::format("(*table_info.columns)[2].id is {} not TAG_COLUMN_ID {}.", col_def.id, TAG_COLUMN_ID));
+                throw std::invalid_argument(fmt::format(
+                    "(*table_info.columns)[2].id is {} not MutSup::delmark_col_id {}.",
+                    col_def.id,
+                    MutSup::delmark_col_id));
             }
             ColumnWithTypeAndName col({}, col_def.type, col_def.name, col_def.id);
             IColumn::MutablePtr mut_col = col.type->createColumn();
@@ -113,7 +116,8 @@ public:
                 continue;
             }
             auto & col_def = (*table_info.columns)[i];
-            if (col_def.id == table_info.handle.id || col_def.id == VERSION_COLUMN_ID || col_def.id == TAG_COLUMN_ID)
+            if (col_def.id == table_info.handle.id || col_def.id == MutSup::version_col_id
+                || col_def.id == MutSup::delmark_col_id)
             {
                 continue;
             }

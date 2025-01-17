@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileVectorIndexReader.h>
@@ -20,7 +21,6 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/FileCachePerf.h>
-
 
 namespace DB::ErrorCodes
 {
@@ -198,33 +198,19 @@ std::vector<VectorIndexViewer::SearchResult> DMFileVectorIndexReader::loadVector
 
 void DMFileVectorIndexReader::read(
     MutableColumnPtr & vec_column,
-    const std::span<const VectorIndexViewer::Key> & selected_rows,
-    size_t start_offset,
-    size_t column_size)
+    const std::span<const VectorIndexViewer::Key> & selected_rows)
 {
     Stopwatch watch;
     RUNTIME_CHECK(loaded);
 
-    vec_column->reserve(column_size);
+    vec_column->reserve(selected_rows.size());
     std::vector<Float32> value;
-    size_t current_rowid = start_offset;
     for (auto rowid : selected_rows)
     {
         vec_index->get(rowid, value);
-        if (rowid > current_rowid)
-        {
-            UInt32 nulls = rowid - current_rowid;
-            // Insert [] if column is Not Null, or NULL if column is Nullable
-            vec_column->insertManyDefaults(nulls);
-        }
         vec_column->insertData(reinterpret_cast<const char *>(value.data()), value.size() * sizeof(Float32));
-        current_rowid = rowid + 1;
     }
-    if (current_rowid < start_offset + column_size)
-    {
-        UInt32 nulls = column_size + start_offset - current_rowid;
-        vec_column->insertManyDefaults(nulls);
-    }
+
     perf_stat.duration_read_vec_column += watch.elapsedSeconds();
 }
 

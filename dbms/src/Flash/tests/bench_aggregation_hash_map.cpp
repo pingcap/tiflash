@@ -14,6 +14,7 @@
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
 #include <Columns/ColumnDecimal.h>
+#include <Common/Stopwatch.h>
 #include <DataTypes/DataTypeDate.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeString.h>
@@ -310,7 +311,7 @@ try
         LOG_DEBUG(log, "build_side_watch: {}, hashmap size: {}", build_side_watch.elapsed(), data_variants->size());
 
         std::vector<AggregatedDataVariantsPtr> variants{data_variants};
-        auto merging_buckets = aggregator->mergeAndConvertToBlocks(variants, /*final=*/true, /*max_thread=*/1);
+        auto merging_buckets = aggregator->mergeAndConvertToBlocks(variants, /*final=*/true, /*max_threads=*/1);
         std::vector<Block> res_block;
 
         Stopwatch probe_side_watch;

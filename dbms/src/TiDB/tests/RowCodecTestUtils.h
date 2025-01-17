@@ -225,7 +225,7 @@ std::pair<TableInfo, std::vector<Field>> getTableInfoAndFields(
     getTableInfoFieldsInternal(column_info_fields, std::forward<Types>(column_value_ids)...);
     TableInfo table_info;
     std::vector<Field> fields;
-    bool pk_is_handle = pk_col_ids.size() == 1 && pk_col_ids[0] != ::DB::TiDBPkColumnID;
+    bool pk_is_handle = pk_col_ids.size() == 1 && pk_col_ids[0] != MutSup::extra_handle_id;
 
     for (auto & column_info_field : column_info_fields)
     {
@@ -280,22 +280,22 @@ inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(co
     if (table_info.is_common_handle)
     {
         DM::ColumnDefine extra_handle_column{
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_STRING_TYPE};
+            MutSup::extra_handle_id,
+            MutSup::extra_handle_column_name,
+            MutSup::getExtraHandleColumnStringType()};
         store_columns.emplace_back(extra_handle_column);
     }
     else
     {
         DM::ColumnDefine extra_handle_column{
-            EXTRA_HANDLE_COLUMN_ID,
-            EXTRA_HANDLE_COLUMN_NAME,
-            EXTRA_HANDLE_COLUMN_INT_TYPE};
+            MutSup::extra_handle_id,
+            MutSup::extra_handle_column_name,
+            MutSup::getExtraHandleColumnIntType()};
         store_columns.emplace_back(extra_handle_column);
     }
-    store_columns.emplace_back(VERSION_COLUMN_ID, VERSION_COLUMN_NAME, VERSION_COLUMN_TYPE);
-    store_columns.emplace_back(TAG_COLUMN_ID, TAG_COLUMN_NAME, TAG_COLUMN_TYPE);
-    ColumnID handle_id = EXTRA_HANDLE_COLUMN_ID;
+    store_columns.emplace_back(MutSup::version_col_id, MutSup::version_column_name, MutSup::getVersionColumnType());
+    store_columns.emplace_back(MutSup::delmark_col_id, MutSup::delmark_column_name, MutSup::getDelmarkColumnType());
+    ColumnID handle_id = MutSup::extra_handle_id;
     for (const auto & column_info : table_info.columns)
     {
         if (table_info.pk_is_handle)
@@ -306,7 +306,7 @@ inline DecodingStorageSchemaSnapshotConstPtr getDecodingStorageSchemaSnapshot(co
         store_columns.emplace_back(column_info.id, column_info.name, DB::getDataTypeByColumnInfo(column_info));
     }
 
-    if (handle_id != EXTRA_HANDLE_COLUMN_ID)
+    if (handle_id != MutSup::extra_handle_id)
     {
         auto iter = std::find_if(store_columns.begin(), store_columns.end(), [&](const ColumnDefine & cd) {
             return cd.id == handle_id;
@@ -357,7 +357,7 @@ template <bool is_big, typename T>
 std::tuple<T, size_t> getValueLengthByRowV2(const T & v)
 {
     using NearestType = typename NearestFieldType<T>::Type;
-    auto [table_info, fields] = getTableInfoAndFields({EXTRA_HANDLE_COLUMN_ID}, false, ColumnIDValue(1, v));
+    auto [table_info, fields] = getTableInfoAndFields({MutSup::extra_handle_id}, false, ColumnIDValue(1, v));
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     WriteBufferFromOwnString ss;
     encodeRowV2(table_info, fields, ss);
@@ -372,7 +372,7 @@ template <typename T>
 T getValueByRowV1(const T & v)
 {
     using NearestType = typename NearestFieldType<T>::Type;
-    auto [table_info, fields] = getTableInfoAndFields({EXTRA_HANDLE_COLUMN_ID}, false, ColumnIDValue(1, v));
+    auto [table_info, fields] = getTableInfoAndFields({MutSup::extra_handle_id}, false, ColumnIDValue(1, v));
     auto decoding_schema = getDecodingStorageSchemaSnapshot(table_info);
     WriteBufferFromOwnString ss;
     encodeRowV1(table_info, fields, ss);

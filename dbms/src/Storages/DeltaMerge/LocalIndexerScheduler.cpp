@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <common/logger_useful.h>
@@ -194,6 +195,10 @@ void LocalIndexerScheduler::taskOnSchedule(std::unique_lock<std::mutex> &, const
 {
     for (const auto & file_id : task->user_task.file_ids)
     {
+        if (std::holds_alternative<DMFileID>(file_id))
+            GET_METRIC(tiflash_vector_index_build_count, type_stable).Increment(1);
+        else
+            GET_METRIC(tiflash_vector_index_build_count, type_delta).Increment(1);
         auto [it, inserted] = adding_index_page_id_set.insert(file_id);
         RUNTIME_CHECK(inserted);
         UNUSED(it);

@@ -74,15 +74,11 @@ public:
 
     ~ColumnFileTinyVectorIndexReader();
 
-    // Read vector column data and set filter.
-    // The column will be as same as as the rows of the tiny file,
-    // but only the rows in selected_rows will be filled,
-    // others will be filled with default values.
+    // Read vector column data with the specified rowids.
     void read(
         MutableColumnPtr & vec_column,
         const std::span<const VectorIndexViewer::Key> & read_rowids,
-        size_t rowid_start_offset,
-        size_t read_rows);
+        size_t rowid_start_offset);
 
     // Load vector index and search results.
     // Return the rowids of the selected rows.

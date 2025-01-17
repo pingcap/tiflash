@@ -57,7 +57,6 @@ KVStore::KVStore(Context & context)
     : region_persister(
         context.getSharedContextDisagg()->isDisaggregatedComputeMode() ? nullptr
                                                                        : std::make_unique<RegionPersister>(context))
-    , raft_cmd_res(std::make_unique<RaftCommandResult>())
     , log(Logger::get())
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
@@ -363,7 +362,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         LOG_INFO(log, "region_id={} not found, might be removed already", region_id);
         return;
     }
-    LOG_INFO(log, "Handle destroy {}", region->toString());
+    LOG_INFO(log, "Handle destroy {}, refCount {}", region->toString(), region.use_count());
     region->setPendingRemove();
     removeRegion(
         region_id,

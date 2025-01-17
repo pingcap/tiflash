@@ -129,7 +129,7 @@ protected:
         {
             blks.push_back(blk);
         }
-        auto handle_col1 = vstackBlocks(std::move(blks)).getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+        auto handle_col1 = vstackBlocks(std::move(blks)).getByName(MutSup::extra_handle_column_name).column;
         auto handle_col2 = getSegmentHandle(task->segment->segmentId(), {task->segment->getRowKeyRange()});
         ASSERT_TRUE(sequenceEqual(
             toColumnVectorDataPtr<Int64>(handle_col2)->data(),

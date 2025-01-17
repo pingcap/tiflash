@@ -18,6 +18,7 @@
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 
+#include <atomic>
 #include <memory>
 
 namespace DB
@@ -35,6 +36,7 @@ class ReceivedMessage
     std::vector<std::vector<const String *>> fine_grained_chunks;
     std::atomic<size_t> remaining_consumers;
     size_t fine_grained_consumer_size;
+    std::atomic<bool> packet_size_recorded{false}; // used to flag if fined grained shuffle packet size is recorded
 
 public:
     // Constructor that move chunks.
@@ -54,6 +56,7 @@ public:
     std::atomic<size_t> & getRemainingConsumers() { return remaining_consumers; }
     const std::vector<const String *> & getChunks(size_t stream_id) const;
     const mpp::MPPDataPacket & getPacket() const { return packet->packet; }
+    std::atomic<bool> & getPacketSizeRecorded() { return packet_size_recorded; }
     bool containUsefulMessage() const;
 };
 } // namespace DB

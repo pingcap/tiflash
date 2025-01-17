@@ -85,24 +85,9 @@ public:
     // - current file provider from this context
     explicit DMFileBlockInputStreamBuilder(const Context & context);
 
-    // Build the final stream ptr.
+    // Build the final stream ptr. LocalIndex will take effect.
     // Empty `rowkey_ranges` means not filter by rowkey
-    // Should not use the builder again after `build` is called.
-    DMFileBlockInputStreamPtr build(
-        const DMFilePtr & dmfile,
-        const ColumnDefines & read_columns,
-        const RowKeyRanges & rowkey_ranges,
-        const ScanContextPtr & scan_context);
-
-    // Build the final stream ptr. The return value could be DMFileBlockInputStreamPtr or DMFileWithVectorIndexBlockInputStream.
-    // Empty `rowkey_ranges` means not filter by rowkey
-    // Should not use the builder again after `build` is called.
-    // In the following conditions DMFileWithVectorIndexBlockInputStream will be returned:
-    // 1. BitmapFilter is provided
-    // 2. ANNQueryInfo is available in the RSFilter
-    // 3. The vector column mentioned by ANNQueryInfo is in the read_columns
-    // 4. The vector column mentioned by ANNQueryInfo exists vector index file
-    SkippableBlockInputStreamPtr tryBuildWithVectorIndex(
+    SkippableBlockInputStreamPtr build(
         const DMFilePtr & dmfile,
         const ColumnDefines & read_columns,
         const RowKeyRanges & rowkey_ranges,
@@ -138,9 +123,9 @@ public:
         return *this;
     }
 
-    DMFileBlockInputStreamBuilder & setRSOperator(const RSOperatorPtr & filter_)
+    DMFileBlockInputStreamBuilder & setAnnQureyInfo(const ANNQueryInfoPtr & ann_query_info_)
     {
-        rs_filter = filter_;
+        ann_query_info = ann_query_info_;
         return *this;
     }
 
@@ -162,6 +147,7 @@ public:
         read_one_pack_every_time = true;
         return *this;
     }
+
     DMFileBlockInputStreamBuilder & setRowsThreshold(size_t rows_threshold_per_read_)
     {
         rows_threshold_per_read = rows_threshold_per_read_;
@@ -180,6 +166,12 @@ public:
         return *this;
     }
 
+    DMFileBlockInputStreamBuilder & setDMFilePackFilterResult(const DMFilePackFilterResultPtr & pack_filter_)
+    {
+        pack_filter = pack_filter_;
+        return *this;
+    }
+
     /**
      * @note To really enable the long term cache, you also need to ensure
      * ColumnCacheLongTerm is initialized in the global context.
@@ -189,6 +181,14 @@ public:
         pk_col_id = pk_col_id_;
         return *this;
     }
+
+private:
+    DMFileBlockInputStreamPtr buildNoLocalIndex(
+        const DMFilePtr & dmfile,
+        const ColumnDefines & read_columns,
+        const RowKeyRanges & rowkey_ranges,
+        const ScanContextPtr & scan_context);
+
 
 private:
     // These methods are called by the ctor
@@ -217,8 +217,6 @@ private:
     bool is_fast_scan = false;
     bool enable_del_clean_read = false;
     UInt64 max_data_version = std::numeric_limits<UInt64>::max();
-    // Rough set filter
-    RSOperatorPtr rs_filter;
     // packs filter (filter by pack index)
     IdSetPtr read_packs;
     MarkCachePtr mark_cache;
@@ -233,6 +231,10 @@ private:
     size_t max_sharing_column_bytes_for_all = 0;
     String tracing_id;
     ReadTag read_tag = ReadTag::Internal;
+
+    DMFilePackFilterResultPtr pack_filter;
+
+    ANNQueryInfoPtr ann_query_info = nullptr;
 
     VectorIndexCachePtr vector_index_cache;
     // Note: Currently thie field is assigned only for Stable streams, not available for ColumnFileBig
@@ -251,7 +253,7 @@ private:
  * @param cols The columns to read. Empty means read all columns.
  * @return A shared pointer of an input stream
  */
-DMFileBlockInputStreamPtr createSimpleBlockInputStream(
+SkippableBlockInputStreamPtr createSimpleBlockInputStream(
     const DB::Context & context,
     const DMFilePtr & file,
     ColumnDefines cols = {});

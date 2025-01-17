@@ -79,7 +79,7 @@ inline SortDescription getPkSort(const ColumnDefine & handle)
 {
     SortDescription sort;
     sort.emplace_back(handle.name, 1, 1);
-    sort.emplace_back(VERSION_COLUMN_NAME, 1, 1);
+    sort.emplace_back(MutSup::version_column_name, 1, 1);
     return sort;
 }
 

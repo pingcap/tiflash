@@ -62,16 +62,6 @@ struct MockRaftCommand
     //    ./storage-client.sh "DBGInvoke region_ingest_sst(database_name, table_name, region_id, start, end)"
     static void dbgFuncIngestSST(Context & context, const ASTs & args, DBGInvoker::Printer output);
 
-    // Apply snapshot for a region. (pre-handle)
-    // Usage:
-    //   ./storages-client.sh "DBGInvoke region_snapshot_pre_handle_block(database_name, table_name, region_id, start, end, handle_id1, tso1, del1, r1_c1, r1_c2, ..., handle_id2, tso2, del2, r2_c1, r2_c2, ... )"
-    static void dbgFuncRegionSnapshotPreHandleBlock(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
-    // Apply snapshot for a region. (apply a pre-handle snapshot)
-    // Usage:
-    //   ./storages-client.sh "DBGInvoke region_snapshot_apply_block(region_id)"
-    static void dbgFuncRegionSnapshotApplyBlock(Context & context, const ASTs & args, DBGInvoker::Printer output);
-
     // Simulate a region pre-handle snapshot data to DTFiles
     // Usage:
     //    ./storage-client.sh "DBGInvoke region_snapshot_pre_handle_file(database_name, table_name, region_id, start, end, schema_string, pk_name[, test-fields=1, cfs="write,default"])"

@@ -41,7 +41,7 @@ protected:
 private:
     Block header;
     BitmapFilterPtr bitmap_filter;
-    IColumn::Filter filter;
+    IColumn::Filter filter; // reuse the memory allocated among all `read`
 };
 
 } // namespace DB::DM

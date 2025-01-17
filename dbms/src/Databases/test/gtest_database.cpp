@@ -173,7 +173,7 @@ try
         auto storage = db->tryGetTable(*ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
 
-        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
         EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
@@ -257,7 +257,7 @@ try
         auto storage = db->tryGetTable(*ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
 
-        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
         EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
@@ -272,7 +272,7 @@ try
 
         auto storage = db->tryGetTable(*ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
-        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
         EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
@@ -373,7 +373,7 @@ try
         auto storage = db->tryGetTable(*ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
 
-        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
         EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
@@ -391,7 +391,7 @@ try
 
         auto storage = db2->tryGetTable(*ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
-        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
         EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
@@ -581,7 +581,7 @@ try
         auto storage = db->tryGetTable(*ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
 
-        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
         EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
@@ -597,7 +597,7 @@ try
 
         auto storage = db->tryGetTable(*ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
-        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
         EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
@@ -632,7 +632,7 @@ try
         // Get storage from database
         auto storage = db->tryGetTable(*ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
-        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
         EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
@@ -744,7 +744,7 @@ try
         auto storage = db->tryGetTable(*ctx, tbl_name);
         ASSERT_NE(storage, nullptr);
 
-        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
         EXPECT_EQ(storage->getTableName(), tbl_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);
@@ -793,7 +793,7 @@ try
     const auto * tbl_name = "t_45";
     auto storage = db->tryGetTable(*ctx, tbl_name);
     ASSERT_NE(storage, nullptr);
-    EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+    EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
     EXPECT_EQ(storage->getTableName(), tbl_name);
 
     auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);

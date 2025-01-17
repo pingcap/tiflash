@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/EventRecorder.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
@@ -20,39 +21,24 @@
 #include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
 
-
 namespace DB::DM
 {
 
 void ColumnFileTinyVectorIndexReader::read(
     MutableColumnPtr & vec_column,
     const std::span<const VectorIndexViewer::Key> & read_rowids,
-    size_t rowid_start_offset,
-    size_t read_rows)
+    size_t rowid_start_offset)
 {
     RUNTIME_CHECK(loaded);
 
     Stopwatch watch;
-    vec_column->reserve(read_rows);
+    vec_column->reserve(read_rowids.size());
     std::vector<Float32> value;
-    size_t current_rowid = rowid_start_offset;
     for (const auto & rowid : read_rowids)
     {
         // Each ColomnFileTiny has its own vector index, rowid_start_offset is the offset of the ColmnFilePersistSet.
         vec_index->get(rowid - rowid_start_offset, value);
-        if (rowid > current_rowid)
-        {
-            UInt32 nulls = rowid - current_rowid;
-            // Insert [] if column is Not Null, or NULL if column is Nullable
-            vec_column->insertManyDefaults(nulls);
-        }
         vec_column->insertData(reinterpret_cast<const char *>(value.data()), value.size() * sizeof(Float32));
-        current_rowid = rowid + 1;
-    }
-    if (current_rowid < rowid_start_offset + read_rows)
-    {
-        UInt32 nulls = rowid_start_offset + read_rows - current_rowid;
-        vec_column->insertManyDefaults(nulls);
     }
 
     perf_stat.returned_rows = read_rowids.size();

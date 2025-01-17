@@ -12,27 +12,50 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <Storages/MutableSupport.h>
 
 namespace DB
 {
-const String MutableSupport::mmt_storage_name = "MutableMergeTree";
-const String MutableSupport::txn_storage_name = "TxnMergeTree";
-const String MutableSupport::delta_tree_storage_name = "DeltaMerge";
+const DataTypePtr & MutSup::getExtraHandleColumnIntType()
+{
+    static const auto type = DataTypeFactory::instance().getOrSet("Int64");
+    return type;
+}
 
-const String MutableSupport::tidb_pk_column_name = "_tidb_rowid";
-const String MutableSupport::version_column_name = "_INTERNAL_VERSION";
-const String MutableSupport::delmark_column_name = "_INTERNAL_DELMARK";
-const String MutableSupport::extra_table_id_column_name = "_tidb_tid";
+const DataTypePtr & MutSup::getExtraHandleColumnStringType()
+{
+    static const auto name_and_types = DataTypeString::getTiDBPkColumnStringNameAndTypes();
 
-const DataTypePtr MutableSupport::tidb_pk_column_int_type = DataTypeFactory::instance().get("Int64");
-const DataTypePtr MutableSupport::tidb_pk_column_string_type
-    = DataTypeFactory::instance().get(DataTypeString::getDefaultName());
-const DataTypePtr MutableSupport::version_column_type = DataTypeFactory::instance().get("UInt64");
-const DataTypePtr MutableSupport::delmark_column_type = DataTypeFactory::instance().get("UInt8");
-/// it should not be nullable, but TiDB does not set not null flag for extra_table_id_column_type, so has to align with TiDB
-const DataTypePtr MutableSupport::extra_table_id_column_type = DataTypeFactory::instance().get("Nullable(Int64)");
-;
+    const auto default_name = DataTypeString::getDefaultName();
+    auto itr = std::find_if(name_and_types.begin(), name_and_types.end(), [&default_name](const auto & name_and_type) {
+        return name_and_type.first == default_name;
+    });
+    RUNTIME_CHECK_MSG(
+        itr != name_and_types.end(),
+        "Cannot find '{}' for TiDB primary key column string type",
+        default_name);
+    return itr->second;
+}
+
+const DataTypePtr & MutSup::getVersionColumnType()
+{
+    static const auto type = DataTypeFactory::instance().getOrSet("UInt64");
+    return type;
+}
+
+const DataTypePtr & MutSup::getDelmarkColumnType()
+{
+    static const auto type = DataTypeFactory::instance().getOrSet("UInt8");
+    return type;
+}
+
+const DataTypePtr & MutSup::getExtraTableIdColumnType()
+{
+    /// it should not be nullable, but TiDB does not set not null flag for extra_table_id_column_type, so has to align with TiDB
+    static const auto type = DataTypeFactory::instance().getOrSet("Nullable(Int64)");
+    return type;
+}
 
 } // namespace DB

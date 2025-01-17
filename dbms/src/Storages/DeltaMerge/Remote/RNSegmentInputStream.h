@@ -16,7 +16,7 @@
 
 #include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
-#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
+#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 

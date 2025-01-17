@@ -862,7 +862,7 @@ try
             ann_query_info->set_top_k(1);
             ann_query_info->set_ref_vec_f32(dmsv.encodeVectorFloat32({1.0, 2.0, 3.5}));
 
-            auto filter = std::make_shared<DM::PushDownFilter>(DM::wrapWithANNQueryInfo(nullptr, ann_query_info));
+            auto filter = std::make_shared<DM::PushDownExecutor>(ann_query_info);
 
             dmsv.read(range, filter, createVecFloat32Column<Array>({{1.0, 2.0, 3.5}}));
         }
@@ -873,7 +873,7 @@ try
             ann_query_info->set_top_k(1);
             ann_query_info->set_ref_vec_f32(dmsv.encodeVectorFloat32({1.0, 2.0, 3.8}));
 
-            auto filter = std::make_shared<DM::PushDownFilter>(DM::wrapWithANNQueryInfo(nullptr, ann_query_info));
+            auto filter = std::make_shared<DM::PushDownExecutor>(ann_query_info);
 
             dmsv.read(range, filter, createVecFloat32Column<Array>({{1.0, 2.0, 3.5}}));
         }

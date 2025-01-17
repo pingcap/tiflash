@@ -78,7 +78,6 @@ public:
     std::atomic<uint64_t> mvcc_input_rows{0};
     std::atomic<uint64_t> mvcc_input_bytes{0};
     std::atomic<uint64_t> mvcc_output_rows{0};
-    std::atomic<uint64_t> late_materialization_skip_rows{0};
 
     // Learner read
     std::atomic<uint64_t> learner_read_ns{0};
@@ -133,7 +132,6 @@ public:
         mvcc_input_rows = tiflash_scan_context_pb.mvcc_input_rows();
         mvcc_input_bytes = tiflash_scan_context_pb.mvcc_input_bytes();
         mvcc_output_rows = tiflash_scan_context_pb.mvcc_output_rows();
-        late_materialization_skip_rows = tiflash_scan_context_pb.lm_skip_rows();
         build_bitmap_time_ns = tiflash_scan_context_pb.total_build_bitmap_ms() * 1000000;
         num_stale_read = tiflash_scan_context_pb.stale_read_regions();
         build_inputstream_time_ns = tiflash_scan_context_pb.total_build_inputstream_ms() * 1000000;
@@ -186,7 +184,6 @@ public:
         tiflash_scan_context_pb.set_mvcc_input_rows(mvcc_input_rows);
         tiflash_scan_context_pb.set_mvcc_input_bytes(mvcc_input_bytes);
         tiflash_scan_context_pb.set_mvcc_output_rows(mvcc_output_rows);
-        tiflash_scan_context_pb.set_lm_skip_rows(late_materialization_skip_rows);
         tiflash_scan_context_pb.set_total_build_bitmap_ms(build_bitmap_time_ns / 1000000);
         tiflash_scan_context_pb.set_stale_read_regions(num_stale_read);
         tiflash_scan_context_pb.set_total_build_inputstream_ms(build_inputstream_time_ns / 1000000);
@@ -243,7 +240,6 @@ public:
         mvcc_input_rows += other.mvcc_input_rows;
         mvcc_input_bytes += other.mvcc_input_bytes;
         mvcc_output_rows += other.mvcc_output_rows;
-        late_materialization_skip_rows += other.late_materialization_skip_rows;
 
         learner_read_ns += other.learner_read_ns;
         create_snapshot_time_ns += other.create_snapshot_time_ns;
@@ -300,7 +296,6 @@ public:
         mvcc_input_rows += other.mvcc_input_rows();
         mvcc_input_bytes += other.mvcc_input_bytes();
         mvcc_output_rows += other.mvcc_output_rows();
-        late_materialization_skip_rows += other.lm_skip_rows();
         build_bitmap_time_ns += other.total_build_bitmap_ms() * 1000000;
         num_stale_read += other.stale_read_regions();
         build_inputstream_time_ns += other.total_build_inputstream_ms() * 1000000;

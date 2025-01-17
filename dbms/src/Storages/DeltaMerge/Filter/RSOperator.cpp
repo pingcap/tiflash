@@ -28,7 +28,6 @@
 #include <Storages/DeltaMerge/Filter/Or.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Filter/Unsupported.h>
-#include <Storages/DeltaMerge/Filter/WithANNQueryInfo.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 
 #include <algorithm>
@@ -86,36 +85,7 @@ RSOperatorPtr RSOperator::build(
     if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
 
-    ANNQueryInfoPtr ann_query_info = nullptr;
-    if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)
-        ann_query_info = std::make_shared<tipb::ANNQueryInfo>(dag_query->ann_query_info);
-    if (!ann_query_info)
-        return rs_operator;
-
-    bool is_valid_ann_query = ann_query_info->top_k() != std::numeric_limits<UInt32>::max();
-    bool is_matching_ann_query = std::any_of(
-        table_column_defines.begin(),
-        table_column_defines.end(),
-        [cid = ann_query_info->column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
-    if (!is_valid_ann_query || !is_matching_ann_query)
-        return rs_operator;
-
-    return wrapWithANNQueryInfo(rs_operator, ann_query_info);
-}
-
-RSOperatorPtr wrapWithANNQueryInfo(const RSOperatorPtr & op, const ANNQueryInfoPtr & ann_query_info)
-{
-    return std::make_shared<WithANNQueryInfo>(op, ann_query_info);
-}
-
-ANNQueryInfoPtr getANNQueryInfo(const RSOperatorPtr & op)
-{
-    if (op == nullptr)
-        return nullptr;
-    auto with_ann = std::dynamic_pointer_cast<WithANNQueryInfo>(op);
-    if (with_ann == nullptr)
-        return nullptr;
-    return with_ann->ann_query_info;
+    return rs_operator;
 }
 
 } // namespace DB::DM
