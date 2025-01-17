@@ -42,8 +42,8 @@ try
 {
     const auto [type, write_load, is_common_handle] = std::make_tuple(std::move(args)...);
     const UInt32 delta_rows = state.range(0);
-    auto [context, dm_context, cols, segment, segment_snapshot, random_sequences]
-        = initialize(is_common_handle, delta_rows);
+    auto [context, dm_context, cols, segment, segment_snapshot, write_seq]
+        = initialize(write_load, is_common_handle, delta_rows);
     SCOPE_EXIT({ context->shutdown(); });
 
     if (type == BenchType::DeltaIndex)
@@ -90,8 +90,8 @@ try
     const auto [type, write_load, is_common_handle] = std::make_tuple(std::move(args)...);
     const UInt32 incremental_delta_rows = state.range(0);
     constexpr UInt32 prepared_delta_rows = 10000;
-    auto [context, dm_context, cols, segment, segment_snapshot, random_sequences]
-        = initialize(is_common_handle, prepared_delta_rows);
+    auto [context, dm_context, cols, segment, segment_snapshot, write_seq]
+        = initialize(write_load, is_common_handle, prepared_delta_rows);
     SCOPE_EXIT({ context->shutdown(); });
 
     if (type == BenchType::DeltaIndex)
@@ -103,7 +103,7 @@ try
         segment_snapshot->delta->getSharedDeltaIndex()->updateIfAdvanced(*base_delta_index);
         RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == prepared_delta_rows);
 
-        writeDelta(*dm_context, is_common_handle, *segment, incremental_delta_rows, random_sequences);
+        writeDelta(*dm_context, is_common_handle, *segment, incremental_delta_rows, *write_seq);
         segment_snapshot = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
         RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == prepared_delta_rows);
         RUNTIME_ASSERT(segment_snapshot->delta->getRows() == prepared_delta_rows + incremental_delta_rows);
@@ -122,7 +122,7 @@ try
             VersionChain<decltype(handle_type)> base_version_chain;
             buildVersionChain(*dm_context, *segment_snapshot, base_version_chain);
             RUNTIME_ASSERT(base_version_chain.getReplayedRows() == prepared_delta_rows);
-            writeDelta(*dm_context, is_common_handle, *segment, incremental_delta_rows, random_sequences);
+            writeDelta(*dm_context, is_common_handle, *segment, incremental_delta_rows, *write_seq);
             segment_snapshot = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
             RUNTIME_ASSERT(segment_snapshot->delta->getRows() == prepared_delta_rows + incremental_delta_rows);
             for (auto _ : state)
@@ -147,8 +147,8 @@ try
 {
     const auto [type, write_load, is_common_handle] = std::make_tuple(std::move(args)...);
     const UInt32 delta_rows = state.range(0);
-    auto [context, dm_context, cols, segment, segment_snapshot, random_sequences]
-        = initialize(is_common_handle, delta_rows);
+    auto [context, dm_context, cols, segment, segment_snapshot, write_seq]
+        = initialize(write_load, is_common_handle, delta_rows);
     SCOPE_EXIT({ context->shutdown(); });
 
     auto rs_results = loadPackFilterResults(*dm_context, segment_snapshot, {segment->getRowKeyRange()});
@@ -221,9 +221,19 @@ BENCHMARK_CAPTURE(MVCCFullPlace, CommonHandleIndex, BenchType::DeltaIndex, Write
 BENCHMARK_CAPTURE(MVCCFullPlace, CommonHandleChain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsCommonHandle)
     ->Range(1, 8 << 13);
 
-BENCHMARK_CAPTURE(MVCCIncrementalPlace, CommonHandleIndex, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsCommonHandle)
+BENCHMARK_CAPTURE(
+    MVCCIncrementalPlace,
+    CommonHandleIndex,
+    BenchType::DeltaIndex,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle)
     ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(MVCCIncrementalPlace, CommonHandleChain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsCommonHandle)
+BENCHMARK_CAPTURE(
+    MVCCIncrementalPlace,
+    CommonHandleChain,
+    BenchType::VersionChain,
+    WriteLoad::RandomUpdate,
+    IsCommonHandle)
     ->Range(1, 8 << 13);
 
 BENCHMARK_CAPTURE(MVCCBuildBitmap, CommonHandleIndex, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsCommonHandle)
