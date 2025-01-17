@@ -39,28 +39,32 @@ private:
 
     mutable std::multiset<T> saved_values;
 
-public:
-    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
-
-    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
-
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
         if (!saved_values.empty())
         {
-            typename std::multiset<T>::iterator iter;
             if constexpr (is_min)
-                iter = saved_values.begin();
+            {
+                const auto & iter = saved_values.begin();
+                static_cast<ColumnType &>(to).getData().push_back(*iter);
+            }
             else
-                iter = --(saved_values.end());
-            static_cast<ColumnType &>(to).getData().push_back(*iter);
+            {
+                const auto & iter = saved_values.rbegin();
+                static_cast<ColumnType &>(to).getData().push_back(*iter);
+            }
         }
         else
         {
             static_cast<ColumnType &>(to).insertDefault();
         }
     }
+
+public:
+    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
+
+    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
 
     void reset() { saved_values.clear(); }
 
@@ -72,13 +76,7 @@ public:
         saved_values.erase(iter);
     }
 
-    void changeIfLess(const IColumn & column, size_t row_num, Arena *)
-    {
-        auto to_value = static_cast<const ColumnType &>(column).getData()[row_num];
-        saved_values.insert(to_value);
-    }
-
-    void changeIfGreater(const IColumn & column, size_t row_num, Arena *)
+    void add(const IColumn & column, size_t row_num, Arena *)
     {
         auto to_value = static_cast<const ColumnType &>(column).getData()[row_num];
         saved_values.insert(to_value);
@@ -97,12 +95,11 @@ private:
     struct StringWithCollator
     {
         StringWithCollator(const StringRef & value_, TiDB::TiDBCollatorPtr collator_)
-            : value(value_.toString())
+            : value(value_)
             , collator(collator_)
         {}
 
-        // TODO use std::string is inefficient
-        std::string value;
+        StringRef value;
         TiDB::TiDBCollatorPtr collator;
     };
 
@@ -112,8 +109,7 @@ private:
         {
             if unlikely (left.collator == nullptr)
                 return left.value < right.value;
-            return left.collator
-                ->compareFastPath(left.value.data(), left.value.size(), right.value.data(), right.value.size());
+            return left.collator->compareFastPath(left.value.data, left.value.size, right.value.data, right.value.size);
         }
     };
 
@@ -122,26 +118,34 @@ private:
     mutable multiset saved_values;
     TiDB::TiDBCollatorPtr collator{};
 
-    void saveValue(StringRef value) { saved_values.insert(StringWithCollator(value, collator)); }
+    void saveValue(const StringRef & value) { saved_values.insert(StringWithCollator(value, collator)); }
 
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
         if (!saved_values.empty())
         {
-            multiset::iterator iter;
             if constexpr (is_min)
-                iter = saved_values.begin();
+            {
+                const auto & iter = saved_values.begin();
+                static_cast<ColumnString &>(to).insertDataWithTerminatingZero(iter->value.data, iter->value.size);
+            }
             else
-                iter = --(saved_values.end());
-
-            static_cast<ColumnString &>(to).insertDataWithTerminatingZero(iter->value.data(), iter->value.size());
+            {
+                const auto & iter = saved_values.rbegin();
+                static_cast<ColumnString &>(to).insertDataWithTerminatingZero(iter->value.data, iter->value.size);
+            }
         }
         else
         {
             static_cast<ColumnString &>(to).insertDefault();
         }
     }
+
+public:
+    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
+
+    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
 
     void reset() { saved_values.clear(); }
 
@@ -153,12 +157,7 @@ private:
         saved_values.erase(iter);
     }
 
-    void changeIfLess(const IColumn & column, size_t row_num, Arena *)
-    {
-        saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
-    }
-
-    void changeIfGreater(const IColumn & column, size_t row_num, Arena *)
+    void add(const IColumn & column, size_t row_num, Arena *)
     {
         saveValue(static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num));
     }
@@ -179,28 +178,32 @@ private:
     using Self = SingleValueDataGenericForWindow;
     mutable std::multiset<Field> saved_values;
 
-public:
-    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
-
-    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
-
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
         if (!saved_values.empty())
         {
-            std::multiset<Field>::iterator iter;
             if constexpr (is_min)
-                iter = saved_values.begin();
+            {
+                const auto & iter = saved_values.begin();
+                to.insert(*iter);
+            }
             else
-                iter = --(saved_values.end());
-            to.insert(*iter);
+            {
+                const auto & iter = saved_values.rbegin();
+                to.insert(*iter);
+            }
         }
         else
         {
             to.insertDefault();
         }
     }
+
+public:
+    void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
+
+    void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
 
     void reset() { saved_values.clear(); }
 
@@ -213,14 +216,7 @@ public:
         saved_values.erase(iter);
     }
 
-    void changeIfLess(const IColumn & column, size_t row_num, Arena *)
-    {
-        Field value;
-        column.get(row_num, value);
-        saved_values.insert(value);
-    }
-
-    void changeIfGreater(const IColumn & column, size_t row_num, Arena *)
+    void add(const IColumn & column, size_t row_num, Arena *)
     {
         Field value;
         column.get(row_num, value);
@@ -239,8 +235,9 @@ struct AggregateFunctionMinDataForWindow : Data
 
     void changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
     {
-        return this->changeIfLess(column, row_num, arena);
+        return this->add(column, row_num, arena);
     }
+
     void changeIfBetter(const Self &, Arena *) { throw Exception("Not implemented yet"); }
 
     void insertResultInto(IColumn & to) const { Data::insertMinResultInto(to); }
@@ -253,14 +250,14 @@ struct AggregateFunctionMaxDataForWindow : Data
 {
     using Self = AggregateFunctionMaxDataForWindow<Data>;
 
-    void insertResultInto(IColumn & to) const { Data::insertMaxResultInto(to); }
-
     void changeIfBetter(const IColumn & column, size_t row_num, Arena * arena)
     {
-        return this->changeIfGreater(column, row_num, arena);
+        return this->add(column, row_num, arena);
     }
 
     void changeIfBetter(const Self &, Arena *) { throw Exception("Not implemented yet"); }
+
+    void insertResultInto(IColumn & to) const { Data::insertMaxResultInto(to); }
 
     static const char * name() { return "max_for_window"; }
 };

@@ -33,7 +33,6 @@ namespace DB
 struct CommonImpl
 {
     static void decrease(const IColumn &, size_t) { throw Exception(" decrease is not implemented yet"); }
-    static bool allocatesMemoryInArena() { return false; }
 };
 
 /// For numeric values.
@@ -793,8 +792,6 @@ public:
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
-
-    bool allocatesMemoryInArena() const override { return Data::allocatesMemoryInArena(); }
 };
 
 } // namespace DB

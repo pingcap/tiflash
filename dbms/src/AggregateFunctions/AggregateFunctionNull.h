@@ -42,6 +42,7 @@ extern const int LOGICAL_ERROR;
 extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 } // namespace ErrorCodes
 
+static constexpr UInt64 prefix_size_look_up_table[7] = {sizeof(UInt64), sizeof(UInt64), 9, sizeof(UInt64), 10, 12, 14};
 
 /// This class implements a wrapper around an aggregate function. Despite its name,
 /// this is an adapter. It is used to handle aggregate functions that are called with
@@ -514,6 +515,23 @@ private:
     std::array<char, MAX_ARGS> is_nullable; /// Plain array is better than std::vector due to one indirection less.
 };
 
+// Make the prefix_size >= sizeof(UInt64) and could fit the align size
+inline size_t enlargePrefixSize(size_t prefix_size) noexcept
+{
+    assert(prefix_size != 0);
+    static_assert(sizeof(UInt64) == 8);
+    static_assert((sizeof(prefix_size_look_up_table) / sizeof(UInt64)) == 7);
+
+    // align_size is equal to prefix_size at the beginning
+    [[maybe_unused]] const auto align_size = prefix_size;
+
+    if (prefix_size < 8)
+        prefix_size = prefix_size_look_up_table[prefix_size - 1];
+
+    assert(prefix_size >= sizeof(UInt64) && (prefix_size % align_size == 0));
+    return prefix_size;
+}
+
 template <bool input_is_nullable>
 class AggregateFunctionNullUnaryForWindow
     : public IAggregateFunctionHelper<AggregateFunctionNullUnaryForWindow<input_is_nullable>>
@@ -532,18 +550,8 @@ protected:
 public:
     explicit AggregateFunctionNullUnaryForWindow(AggregateFunctionPtr nested_function_)
         : nested_function(nested_function_)
-    {
-        prefix_size = nested_function->alignOfData();
-        if (prefix_size < sizeof(Int64))
-        {
-            auto tmp = prefix_size;
-            prefix_size += sizeof(Int64);
-            if ((prefix_size % tmp) != 0)
-                prefix_size += tmp - (prefix_size % tmp);
-            assert((prefix_size % tmp) == 0);
-            assert(prefix_size >= (tmp + sizeof(Int64)));
-        }
-    }
+        , prefix_size(enlargePrefixSize(nested_function->alignOfData()))
+    {}
 
     String getName() const override
     {

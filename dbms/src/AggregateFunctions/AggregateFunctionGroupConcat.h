@@ -116,7 +116,6 @@ public:
 
     DataTypePtr getReturnType() const override { return result_is_nullable ? makeNullable(ret_type) : ret_type; }
 
-    /// reject nulls before add()/decrease() of nested agg
     template <bool is_add>
     void addOrDecrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
     {
