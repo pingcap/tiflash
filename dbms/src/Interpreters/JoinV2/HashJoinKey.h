@@ -77,14 +77,14 @@ public:
     ALWAYS_INLINE T getJoinKey(size_t row) { return unalignedLoad<T>(vec + row); }
     ALWAYS_INLINE T getJoinKeyWithBuffer(size_t row) { return unalignedLoad<T>(vec + row); }
 
-    ALWAYS_INLINE size_t getJoinKeyByteSize(const T &) { return sizeof(T); }
+    ALWAYS_INLINE size_t getJoinKeyByteSize(const T &) const { return sizeof(T); }
 
-    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos)
+    ALWAYS_INLINE void serializeJoinKey(const T & t, char * pos) const
     {
         tiflash_compiler_builtin_memcpy(pos, &t, sizeof(T));
     }
 
-    ALWAYS_INLINE T deserializeJoinKey(const char * pos)
+    ALWAYS_INLINE T deserializeJoinKey(const char * pos) const
     {
         T t;
         tiflash_compiler_builtin_memcpy(&t, pos, sizeof(T));
@@ -93,9 +93,9 @@ public:
 
     static constexpr bool joinKeyCompareHashFirst() { return false; }
 
-    ALWAYS_INLINE bool joinKeyIsEqual(T key1, T key2) { return key1 == key2; }
+    ALWAYS_INLINE bool joinKeyIsEqual(T key1, T key2) const { return key1 == key2; }
 
-    ALWAYS_INLINE size_t getRequiredKeyOffset(const T &) { return required_key_offset; }
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const T &) const { return required_key_offset; }
 
 private:
     const T * vec = nullptr;
