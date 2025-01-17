@@ -1555,7 +1555,6 @@ try
 }
 CATCH
 
-
 TEST_P(DeltaMergeStoreRWTest, Split)
 try
 {
