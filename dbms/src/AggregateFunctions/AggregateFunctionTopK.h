@@ -71,12 +71,6 @@ public:
         set.insert(static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num]);
     }
 
-    // TODO move to helper
-    void decrease(AggregateDataPtr __restrict, const IColumn **, size_t, Arena *) const override
-    {
-        throw Exception("");
-    }
-
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).value.merge(this->data(rhs).value);
@@ -203,11 +197,6 @@ public:
         }
     }
 
-    void decrease(AggregateDataPtr __restrict, const IColumn **, size_t, Arena *) const override
-    {
-        throw Exception("");
-    }
-
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).value.merge(this->data(rhs).value);
@@ -215,7 +204,7 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        ColumnArray & arr_to = static_cast<ColumnArray &>(to);
+        auto & arr_to = static_cast<ColumnArray &>(to);
         ColumnArray::Offsets & offsets_to = arr_to.getOffsets();
         IColumn & data_to = arr_to.getData();
 
