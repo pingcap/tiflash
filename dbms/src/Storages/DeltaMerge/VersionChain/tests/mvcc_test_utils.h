@@ -50,8 +50,8 @@ enum class WriteLoad
     RandomInsert = 3,
 };
 
-// constexpr bool IsCommonHandle = true;
-constexpr bool IsNotCommonHandle = false;
+constexpr bool CommonHandle = true;
+constexpr bool NotCommonHandle = false;
 
 
 auto loadPackFilterResults(const DMContext & dm_context, const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
