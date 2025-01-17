@@ -680,23 +680,23 @@ void NO_INLINE Aggregator::executeImpl(
 
     if constexpr (Method::State::is_serialized_key)
     {
-        executeImplMiniBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+        executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
     }
     else if constexpr (Method::Data::is_string_hash_map)
     {
         // StringHashMap doesn't support prefetch.
-        executeImplMiniBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+        executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
     }
     else
     {
         if (disable_prefetch)
-            executeImplMiniBatch<collect_hit_rate, only_lookup, false>(
+            executeImplBatch<collect_hit_rate, only_lookup, false>(
                 method,
                 state,
                 aggregates_pool,
                 agg_process_info);
         else
-            executeImplMiniBatch<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
+            executeImplBatch<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
     }
 }
 
@@ -765,7 +765,7 @@ ALWAYS_INLINE inline void prepareBatch(
 }
 
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
-ALWAYS_INLINE void Aggregator::executeImplMiniBatch(
+ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
     Arena * aggregates_pool,
@@ -776,7 +776,7 @@ ALWAYS_INLINE void Aggregator::executeImplMiniBatch(
 
     /// Optimization for special case when there are no aggregate functions.
     if (params.aggregates_size == 0)
-        return handleMiniBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/false>(
+        return handleOneBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/false>(
             method,
             state,
             agg_process_info,
@@ -822,7 +822,7 @@ ALWAYS_INLINE void Aggregator::executeImplMiniBatch(
     }
 
     /// Generic case.
-    return handleMiniBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/true>(
+    return handleOneBatchImpl<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/true>(
         method,
         state,
         agg_process_info,
@@ -830,7 +830,7 @@ ALWAYS_INLINE void Aggregator::executeImplMiniBatch(
 }
 
 template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, bool compute_agg_data, typename Method>
-void Aggregator::handleMiniBatchImpl(
+void Aggregator::handleOneBatchImpl(
     Method & method,
     typename Method::State & state,
     AggProcessInfo & agg_process_info,
