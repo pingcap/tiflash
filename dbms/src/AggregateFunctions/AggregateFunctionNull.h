@@ -509,6 +509,7 @@ private:
 inline size_t enlargePrefixSize(size_t prefix_size) noexcept
 {
     assert(prefix_size != 0);
+    static_assert(sizeof(UInt64) == 8);
     static_assert((sizeof(prefix_size_look_up_table) / sizeof(UInt64)) == 7);
 
     // align_size is equal to prefix_size at the beginning
