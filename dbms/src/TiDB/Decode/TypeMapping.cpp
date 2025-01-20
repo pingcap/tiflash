@@ -230,16 +230,6 @@ DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_i
     return base;
 }
 
-DataTypePtr getDataTypeByColumnInfoForDisaggregatedStorageLayer(const ColumnInfo & column_info)
-{
-    DataTypePtr base = TypeMapping::instance().getDataType(column_info);
-    if (!column_info.hasNotNullFlag())
-    {
-        return std::make_shared<DataTypeNullable>(base);
-    }
-    return base;
-}
-
 DataTypePtr getDataTypeByFieldType(const tipb::FieldType & field_type)
 {
     ColumnInfo ci = TiDB::fieldTypeToColumnInfo(field_type);

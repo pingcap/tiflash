@@ -87,9 +87,9 @@ StorageDeltaMerge::StorageDeltaMerge(
     Timestamp tombstone,
     Context & global_context_)
     : IManageableStorage{columns_, tombstone}
-    , data_path_contains_database_name(db_engine != "TiFlash")
     , store_inited(false)
     , max_column_id_used(0)
+    , data_path_contains_database_name(db_engine != "TiFlash")
     , global_context(global_context_.getGlobalContext())
     , log(Logger::get(fmt::format("{}.{}", db_name_, table_name_)))
 {
@@ -1429,7 +1429,6 @@ void StorageDeltaMerge::alterSchemaChange(
     decoding_schema_changed = true;
 
     SortDescription pk_desc = getPrimarySortDescription();
-    ColumnDefines store_columns = getStoreColumnDefines();
 
     // after update `new_columns` and store's table columns, we need to update create table statement,
     // so that we can restore table next time.
@@ -1442,32 +1441,6 @@ void StorageDeltaMerge::alterSchemaChange(
         table_info,
         getTombstone(),
         context);
-}
-
-ColumnDefines StorageDeltaMerge::getStoreColumnDefines() const
-{
-    if (storeInited())
-    {
-        return _store->getTableColumns();
-    }
-    std::lock_guard lock(store_mutex);
-    if (storeInited())
-    {
-        return _store->getTableColumns();
-    }
-    ColumnDefines cols;
-    cols.emplace_back(table_column_info->handle_column_define);
-    cols.emplace_back(getVersionColumnDefine());
-    cols.emplace_back(getTagColumnDefine());
-    for (const auto & col : table_column_info->table_column_defines)
-    {
-        if (col.id != table_column_info->handle_column_define.id && col.id != MutSup::version_col_id
-            && col.id != MutSup::delmark_col_id)
-        {
-            cols.emplace_back(col);
-        }
-    }
-    return cols;
 }
 
 String StorageDeltaMerge::getName() const
