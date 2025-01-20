@@ -195,17 +195,17 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         if (size_t passed_count = countBytesInFilter(filter, offset_begin, block_info.read_rows);
             passed_count != block_info.read_rows)
         {
-            std::vector<size_t> positions;
-            positions.reserve(passed_count);
+            IColumn::Offsets offsets;
+            offsets.reserve(passed_count);
             for (size_t i = offset_begin; i < offset_end; ++i)
             {
                 if (filter[i])
-                    positions.push_back(i - offset_begin);
+                    offsets.push_back(i - offset_begin);
             }
             for (size_t i = 0; i < block.columns(); ++i)
             {
                 auto column = block.getByPosition(i).column;
-                columns[i]->insertDisjunctFrom(*column, positions);
+                columns[i]->insertSelectiveFrom(*column, offsets);
             }
         }
         else
