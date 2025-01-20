@@ -201,43 +201,63 @@ try
 CATCH
 
 // [ 1, 8, 64, 512, 4k, 8k, 64k ]
-BENCHMARK_CAPTURE(MVCCFullPlace, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, NotCommonHandle)
-    ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(MVCCFullPlace, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, NotCommonHandle)
-    ->Range(1, 8 << 13);
+#define MVCC_BENCHMARK(FUNC)                                                                                         \
+    BENCHMARK_CAPTURE(FUNC, Index / RandomUpdate, BenchType::DeltaIndex, WriteLoad::RandomUpdate, NotCommonHandle)   \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(FUNC, Chain / RandomUpdate, BenchType::VersionChain, WriteLoad::RandomUpdate, NotCommonHandle) \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(FUNC, Index / AppendOnly, BenchType::DeltaIndex, WriteLoad::AppendOnly, NotCommonHandle)       \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(FUNC, Chain / AppendOnly, BenchType::VersionChain, WriteLoad::AppendOnly, NotCommonHandle)     \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(FUNC, Index / RandomInsert, BenchType::DeltaIndex, WriteLoad::RandomInsert, NotCommonHandle)   \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(FUNC, Chain / RandomInsert, BenchType::VersionChain, WriteLoad::RandomInsert, NotCommonHandle) \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Index / RandomUpdate,                                                                         \
+        BenchType::DeltaIndex,                                                                                       \
+        WriteLoad::RandomUpdate,                                                                                     \
+        IsCommonHandle)                                                                                              \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Chain / RandomUpdate,                                                                         \
+        BenchType::VersionChain,                                                                                     \
+        WriteLoad::RandomUpdate,                                                                                     \
+        IsCommonHandle)                                                                                              \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Index / AppendOnly,                                                                           \
+        BenchType::DeltaIndex,                                                                                       \
+        WriteLoad::AppendOnly,                                                                                       \
+        IsCommonHandle)                                                                                              \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Chain / AppendOnly,                                                                           \
+        BenchType::VersionChain,                                                                                     \
+        WriteLoad::AppendOnly,                                                                                       \
+        IsCommonHandle)                                                                                              \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Index / RandomInsert,                                                                         \
+        BenchType::DeltaIndex,                                                                                       \
+        WriteLoad::RandomInsert,                                                                                     \
+        IsCommonHandle)                                                                                              \
+        ->Range(1, 8 << 13);                                                                                         \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Chain / RandomInsert,                                                                         \
+        BenchType::VersionChain,                                                                                     \
+        WriteLoad::RandomInsert,                                                                                     \
+        IsCommonHandle)                                                                                              \
+        ->Range(1, 8 << 13);
 
-BENCHMARK_CAPTURE(MVCCIncrementalPlace, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, NotCommonHandle)
-    ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(MVCCIncrementalPlace, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, NotCommonHandle)
-    ->Range(1, 8 << 13);
-
-BENCHMARK_CAPTURE(MVCCBuildBitmap, Index, BenchType::DeltaIndex, WriteLoad::RandomUpdate, NotCommonHandle)
-    ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, Chain, BenchType::VersionChain, WriteLoad::RandomUpdate, NotCommonHandle)
-    ->Range(1, 8 << 13);
-
-BENCHMARK_CAPTURE(MVCCFullPlace, CommonHandleIndex, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsCommonHandle)
-    ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(MVCCFullPlace, CommonHandleChain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsCommonHandle)
-    ->Range(1, 8 << 13);
-
-BENCHMARK_CAPTURE(
-    MVCCIncrementalPlace,
-    CommonHandleIndex,
-    BenchType::DeltaIndex,
-    WriteLoad::RandomUpdate,
-    IsCommonHandle)
-    ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(
-    MVCCIncrementalPlace,
-    CommonHandleChain,
-    BenchType::VersionChain,
-    WriteLoad::RandomUpdate,
-    IsCommonHandle)
-    ->Range(1, 8 << 13);
-
-BENCHMARK_CAPTURE(MVCCBuildBitmap, CommonHandleIndex, BenchType::DeltaIndex, WriteLoad::RandomUpdate, IsCommonHandle)
-    ->Range(1, 8 << 13);
-BENCHMARK_CAPTURE(MVCCBuildBitmap, CommonHandleChain, BenchType::VersionChain, WriteLoad::RandomUpdate, IsCommonHandle)
-    ->Range(1, 8 << 13);
+MVCC_BENCHMARK(MVCCFullPlace)
+MVCC_BENCHMARK(MVCCIncrementalPlace)
+MVCC_BENCHMARK(MVCCBuildBitmap)
 } // namespace
