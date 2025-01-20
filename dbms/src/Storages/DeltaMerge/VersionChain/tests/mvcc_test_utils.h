@@ -123,6 +123,23 @@ public:
     virtual ~WriteSequence() = default;
     virtual std::vector<Int64> getStable() = 0;
     virtual std::vector<Int64> getDelta(UInt32 n) = 0;
+
+protected:
+    std::vector<Int64> getVec(Int64 stable_start, Int64 stable_end)
+    {
+        std::vector<Int64> v(stable_end - stable_start);
+        std::iota(v.begin(), v.end(), stable_start);
+        return v;
+    }
+
+    std::vector<Int64> getRandoms(Int64 rand_start, Int64 rand_end)
+    {
+        auto v = getVec(rand_start, rand_end);
+        static constexpr int rnd_seed = 573172;
+        std::mt19937 g(rnd_seed);
+        std::shuffle(v.begin(), v.end(), g);
+        return v;
+    }
 };
 
 class RandomUpdateSequence : public WriteSequence
@@ -130,16 +147,11 @@ class RandomUpdateSequence : public WriteSequence
 public:
     RandomUpdateSequence()
         : max_handle(1000000)
-        , rnd_v(randomInt64s(max_handle))
+        , rnd_v(getRandoms(0, max_handle))
         , pos(rnd_v.begin())
     {}
 
-    std::vector<Int64> getStable() override
-    {
-        std::vector<Int64> v(max_handle);
-        std::iota(v.begin(), v.end(), 0);
-        return v;
-    }
+    std::vector<Int64> getStable() override { return getVec(0, max_handle); }
 
     std::vector<Int64> getDelta(UInt32 n) override
     {
@@ -156,20 +168,49 @@ public:
     }
 
 private:
-    std::vector<Int64> randomInt64s(UInt32 n)
+    const Int64 max_handle;
+    const std::vector<Int64> rnd_v;
+    std::vector<Int64>::const_iterator pos;
+};
+
+class AppendOnlySequence : public WriteSequence
+{
+public:
+    std::vector<Int64> getStable() override { return getVec(0, curr_handle); }
+
+    std::vector<Int64> getDelta(UInt32 n) override
     {
-        static constexpr int rnd_seed = 573172;
-        std::mt19937 g(rnd_seed);
         std::vector<Int64> v(n);
-        for (UInt32 i = 0; i < n; ++i)
-        {
-            v[i] = g() % max_handle;
-        }
+        std::iota(v.begin(), v.end(), curr_handle);
+        curr_handle += n;
         return v;
     }
 
-    const UInt32 max_handle;
-    const std::vector<Int64> rnd_v;
+private:
+    Int64 curr_handle = 1000000;
+};
+
+class RandomInsertSequence : public WriteSequence
+{
+public:
+    RandomInsertSequence()
+        : rnds(getRandoms(0, 10000000)) // 1kw
+        , pos(rnds.begin())
+    {}
+
+    std::vector<Int64> getStable() override { return std::vector<Int64>(rnds.begin(), rnds.begin() + 1000000); }
+
+    std::vector<Int64> getDelta(UInt32 n) override
+    {
+        RUNTIME_CHECK(std::distance(pos, rnds.end()) >= n, std::distance(pos, rnds.end()), n);
+        std::vector<Int64> res;
+        res.insert(res.end(), pos, pos + n);
+        std::advance(pos, n);
+        return res;
+    }
+
+private:
+    const std::vector<Int64> rnds;
     std::vector<Int64>::const_iterator pos;
 };
 
@@ -180,8 +221,9 @@ std::unique_ptr<WriteSequence> createWriteSequence(WriteLoad write_load)
     case WriteLoad::RandomUpdate:
         return std::make_unique<RandomUpdateSequence>();
     case WriteLoad::AppendOnly:
+        return std::make_unique<AppendOnlySequence>();
     case WriteLoad::RandomInsert:
-        return nullptr;
+        return std::make_unique<RandomInsertSequence>();
     }
 }
 
