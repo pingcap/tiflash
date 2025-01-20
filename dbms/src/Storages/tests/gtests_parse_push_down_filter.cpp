@@ -125,6 +125,7 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
         table_info.columns,
         pushed_down_filters,
         columns_to_read,
+        nullptr,
         ctx,
         log);
     return push_down_executor;

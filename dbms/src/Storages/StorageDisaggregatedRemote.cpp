@@ -527,6 +527,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
         table_scan.getColumns(),
         table_scan.getPushedDownFilters(),
         *column_defines,
+        nullptr,
         db_context,
         log);
     const auto read_mode = DM::DeltaMergeStore::getReadMode(

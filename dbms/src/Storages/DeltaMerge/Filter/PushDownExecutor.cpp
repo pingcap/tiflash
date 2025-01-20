@@ -22,6 +22,8 @@
 #include <Storages/SelectQueryInfo.h>
 #include <TiDB/Decode/TypeMapping.h>
 
+#include "common/logger_useful.h"
+
 namespace DB::DM
 {
 PushDownExecutorPtr PushDownExecutor::build(
@@ -30,6 +32,7 @@ PushDownExecutorPtr PushDownExecutor::build(
     const TiDB::ColumnInfos & table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
     const ColumnDefines & columns_to_read,
+    const ColumnValueSetPtr & column_value_set,
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
@@ -169,13 +172,15 @@ PushDownExecutorPtr PushDownExecutor::build(
         filter_columns,
         filter_column_name,
         extra_cast,
-        columns_after_cast);
+        columns_after_cast,
+        column_value_set);
 }
 
 PushDownExecutorPtr PushDownExecutor::build(
     const SelectQueryInfo & query_info,
     const ColumnDefines & columns_to_read,
     const ColumnDefines & table_column_defines,
+    const LocalIndexInfosSnapshot & local_index_infos,
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
@@ -191,6 +196,11 @@ PushDownExecutorPtr PushDownExecutor::build(
         table_column_defines,
         context.getSettingsRef().dt_enable_rough_set_filter,
         tracing_logger);
+    // build column_value_set
+    // FIXME: only push down filters
+    const auto column_value_set
+        = rs_operator && local_index_infos ? rs_operator->buildSets(local_index_infos) : nullptr;
+    LOG_DEBUG(Logger::get(), "ColumnValueSet: {}", column_value_set ? column_value_set->toDebugString() : "nullptr");
     // build ann_query_info
     ANNQueryInfoPtr ann_query_info = nullptr;
     if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)
@@ -209,6 +219,7 @@ PushDownExecutorPtr PushDownExecutor::build(
             columns_to_read_info,
             merged_filters,
             columns_to_read,
+            column_value_set,
             context,
             tracing_logger);
     }
@@ -218,6 +229,7 @@ PushDownExecutorPtr PushDownExecutor::build(
         columns_to_read_info,
         pushed_down_filters,
         columns_to_read,
+        column_value_set,
         context,
         tracing_logger);
 }
