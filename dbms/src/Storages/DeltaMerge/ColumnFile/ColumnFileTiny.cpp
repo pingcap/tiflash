@@ -231,7 +231,7 @@ ColumnFilePersistedPtr ColumnFileTiny::restoreFromCheckpoint(
         auto new_index_page_id = put_remote_page(index_pb.index_page_id());
         auto new_index_pb = index_pb;
         new_index_pb.set_index_page_id(new_index_page_id);
-        new_index_infos->emplace_back(std::move(index_pb));
+        new_index_infos->emplace_back(std::move(new_index_pb));
     }
     return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context, new_index_infos);
 }

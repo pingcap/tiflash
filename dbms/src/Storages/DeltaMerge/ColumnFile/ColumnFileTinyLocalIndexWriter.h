@@ -28,7 +28,7 @@ namespace DB::DM
 
 using ColumnFileTinys = std::vector<ColumnFileTinyPtr>;
 
-// ColumnFileTinyLocalIndexWriter write vector index store in PageStorage for ColumnFileTiny.
+// ColumnFileTinyLocalIndexWriter write local index store in PageStorage for ColumnFileTiny.
 class ColumnFileTinyLocalIndexWriter
 {
 public:
