@@ -750,7 +750,7 @@ void ColumnString::serializeToPosImpl(
 
     /// To avoid virtual function call of sortKey().
     const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
-    /// countSerializeByteSizeForCmp has already checked that the size of one element is not greater than UINT32_MAX
+    /// countSerializeByteSizeImpl has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
