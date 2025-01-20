@@ -310,7 +310,7 @@ private:
     bool is_common_handle = false;
     bool pk_is_handle = false;
 
-    // The following two members must be used under the protection of table structure lock
+    // `decoding_schema_changed` and `decoding_schema_epoch` must be used under the protection of table structure lock
     bool decoding_schema_changed = false;
 
     const bool data_path_contains_database_name = false;
