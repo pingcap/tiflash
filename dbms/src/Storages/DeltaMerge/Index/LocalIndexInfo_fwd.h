@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,17 +14,17 @@
 
 #pragma once
 
-#include <tipb/executor.pb.h>
+#include <memory>
 
 namespace DB::DM
 {
 
-using ANNQueryInfoPtr = std::shared_ptr<tipb::ANNQueryInfo>;
+struct LocalIndexInfo;
 
-class VectorIndexBuilder;
-using VectorIndexBuilderPtr = std::shared_ptr<VectorIndexBuilder>;
+using LocalIndexInfos = std::vector<LocalIndexInfo>;
+using LocalIndexInfosPtr = std::shared_ptr<LocalIndexInfos>;
+using LocalIndexInfosSnapshot = std::shared_ptr<const LocalIndexInfos>;
 
-class VectorIndexViewer;
-using VectorIndexViewerPtr = std::shared_ptr<VectorIndexViewer>;
+struct LocalIndexInfosChangeset;
 
 } // namespace DB::DM

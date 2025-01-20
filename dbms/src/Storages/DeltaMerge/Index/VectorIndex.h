@@ -39,14 +39,13 @@ public:
     using ProceedCheckFn = std::function<bool()>;
 
 public:
-    static VectorIndexBuilderPtr create(IndexID index_id, const TiDB::VectorIndexDefinitionPtr & definition);
+    static VectorIndexBuilderPtr create(const TiDB::VectorIndexDefinitionPtr & definition);
 
     static bool isSupportedType(const IDataType & type);
 
 public:
-    explicit VectorIndexBuilder(IndexID index_id_, const TiDB::VectorIndexDefinitionPtr & definition_)
-        : index_id(index_id_)
-        , definition(definition_)
+    explicit VectorIndexBuilder(const TiDB::VectorIndexDefinitionPtr & definition_)
+        : definition(definition_)
     {}
 
     virtual ~VectorIndexBuilder() = default;
@@ -61,7 +60,6 @@ public:
     virtual void saveToBuffer(WriteBuffer & write_buf) const = 0;
 
 public:
-    const IndexID index_id;
     const TiDB::VectorIndexDefinitionPtr definition;
 };
 
@@ -85,11 +83,11 @@ public:
     using RowFilter = BitmapFilterView;
 
 public:
-    static VectorIndexViewerPtr view(const dtpb::VectorIndexFileProps & file_props, std::string_view path);
-    static VectorIndexViewerPtr load(const dtpb::VectorIndexFileProps & file_props, ReadBuffer & buf);
+    static VectorIndexViewerPtr view(const dtpb::IndexFilePropsV2Vector & file_props, std::string_view path);
+    static VectorIndexViewerPtr load(const dtpb::IndexFilePropsV2Vector & file_props, ReadBuffer & buf);
 
 public:
-    explicit VectorIndexViewer(const dtpb::VectorIndexFileProps & file_props_)
+    explicit VectorIndexViewer(const dtpb::IndexFilePropsV2Vector & file_props_)
         : file_props(file_props_)
     {}
 
@@ -104,7 +102,7 @@ public:
     virtual void get(Key key, std::vector<Float32> & out) const = 0;
 
 public:
-    const dtpb::VectorIndexFileProps file_props;
+    const dtpb::IndexFilePropsV2Vector file_props;
 };
 
 } // namespace DB::DM
