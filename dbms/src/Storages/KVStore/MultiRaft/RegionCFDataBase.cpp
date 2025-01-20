@@ -95,8 +95,9 @@ RegionDataMemDiff RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && v
 }
 
 template <>
-RegionDataMemDiff RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck)
+RegionDataMemDiff RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
+    UNUSED(mode);
     RegionDataMemDiff delta;
     Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
     const auto & decoded = std::get<2>(kv_pair.second);
