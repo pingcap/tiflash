@@ -66,8 +66,8 @@ InvertedIndexViewerPtr ColumnFileTinyInvertedIndexReader::loadInvertedIndex(cons
         auto index_page = data_provider->readTinyData(index_page_id, index_fields);
         ReadBufferFromOwnString read_buf(index_page.data);
         CompressedReadBuffer compressed(read_buf);
-        auto type_id = tiny_file.getDataType(single_column_value_set->column_id)->getTypeId();
-        return InvertedIndexViewer::view(type_id, compressed, inverted_index.inverted_index().uncompressed_size());
+        const auto type = tiny_file.getDataType(single_column_value_set->column_id);
+        return InvertedIndexViewer::view(type, compressed, inverted_index.inverted_index().uncompressed_size());
     };
     if (local_index_cache)
     {

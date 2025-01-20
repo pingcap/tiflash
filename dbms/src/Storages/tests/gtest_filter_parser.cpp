@@ -106,10 +106,12 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     const auto ann_query_info = tipb::ANNQueryInfo{};
     const auto runtime_filter_ids = std::vector<int>();
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{}; // don't care pushed down filters
+    const google::protobuf::RepeatedPtrField<tipb::IndexInfo> empty_used_indexes{}; // don't care used indexes
     std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
         conditions,
         ann_query_info,
         pushed_down_filters,
+        empty_used_indexes,
         table_info.columns,
         runtime_filter_ids, // don't care runtime filter
         0,
@@ -352,7 +354,7 @@ try
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), "And[2: {666}, Unsupported]");
+        EXPECT_EQ(sets->toDebugString(), "2: {666}");
     }
 
     {
@@ -386,9 +388,7 @@ try
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(
-            sets->toDebugString(),
-            "And[2: {[-9223372036854775808, 665], [667, 9223372036854775807]}, Unsupported]");
+        EXPECT_EQ(sets->toDebugString(), "2: {[-9223372036854775808, 665], [667, 9223372036854775807]}");
     }
 
     {
@@ -440,7 +440,7 @@ try
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), "Or[2: {666}, Unsupported]");
+        EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
 
     {
@@ -456,9 +456,7 @@ try
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(
-            sets->toDebugString(),
-            "Or[2: {[-9223372036854775808, 665], [667, 9223372036854775807]}, Unsupported]");
+        EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
 
     {
@@ -475,7 +473,7 @@ try
             "\"col\":\"col_3\"}]}");
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
-        EXPECT_EQ(sets->toDebugString(), "And[3: EMPTY, 2: {789}]");
+        EXPECT_EQ(sets->toDebugString(), "2: {789}");
     }
 
     {

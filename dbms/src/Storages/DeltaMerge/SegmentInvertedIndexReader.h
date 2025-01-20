@@ -43,12 +43,20 @@ public:
         , log(Logger::get())
     {}
 
+    static BitmapFilterPtr loadStable(
+        const SegmentSnapshotPtr & snapshot,
+        const ColumnValueSetPtr & column_value_set,
+        const LocalIndexCachePtr & local_index_cache);
+    static BitmapFilterPtr loadDelta(
+        const SegmentSnapshotPtr & snapshot,
+        const ColumnValueSetPtr & column_value_set,
+        const LocalIndexCachePtr & local_index_cache);
+
     ~SegmentInvertedIndexReader() = default;
 
     // Load bitmap filter from segment snapshot
-    BitmapFilterPtr loadStable();
-    BitmapFilterPtr loadDelta();
-    BitmapFilterPtr loadAll();
+    BitmapFilterPtr loadStableImpl();
+    BitmapFilterPtr loadDeltaImpl();
 };
 
 } // namespace DB::DM

@@ -30,6 +30,9 @@ TiDBTableScan::TiDBTableScan(
     , pushed_down_filters(
           is_partition_table_scan ? table_scan->partition_table_scan().pushed_down_filter_conditions()
                                   : table_scan->tbl_scan().pushed_down_filter_conditions())
+    , used_indexes(
+          is_partition_table_scan ? table_scan->partition_table_scan().used_indexes()
+                                  : table_scan->tbl_scan().used_indexes())
     , ann_query_info(
           is_partition_table_scan ? table_scan->partition_table_scan().ann_query() : table_scan->tbl_scan().ann_query())
     // Only No-partition table need keep order when tablescan executor required keep order.
@@ -99,6 +102,8 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
             *tipb_table_scan->add_columns() = column;
         for (const auto & filter : partition_table_scan.pushed_down_filter_conditions())
             *tipb_table_scan->add_pushed_down_filter_conditions() = filter;
+        for (const auto & index : partition_table_scan.used_indexes())
+            *tipb_table_scan->add_used_indexes() = index;
         tipb_table_scan->set_desc(partition_table_scan.desc());
         for (auto id : partition_table_scan.primary_column_ids())
             tipb_table_scan->add_primary_column_ids(id);

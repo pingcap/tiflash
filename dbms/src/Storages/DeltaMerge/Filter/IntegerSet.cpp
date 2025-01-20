@@ -140,32 +140,6 @@ IntegerSetPtr IntegerSet::createGreaterRangeSet(TypeIndex type_index, Field min,
     }
 }
 
-IntegerSetPtr IntegerSet::createAllSet(TypeIndex type_index)
-{
-    switch (type_index)
-    {
-    case TypeIndex::UInt8:
-    case TypeIndex::UInt16:
-    case TypeIndex::UInt32:
-    case TypeIndex::UInt64:
-    case TypeIndex::Int8:
-    case TypeIndex::Int16:
-    case TypeIndex::Int32:
-    case TypeIndex::Int64:
-    case TypeIndex::Date:
-    case TypeIndex::DateTime:
-    case TypeIndex::Enum8:
-    case TypeIndex::Enum16:
-    case TypeIndex::MyDate:
-    case TypeIndex::MyDateTime:
-    case TypeIndex::MyTimeStamp:
-    case TypeIndex::MyTime:
-        return AllSet::instance();
-    default:
-        return nullptr;
-    }
-}
-
 IntegerSetPtr EmptySet::invert() const
 {
     return AllSet::instance();
@@ -364,12 +338,9 @@ IntegerSetPtr ValueSet<T>::invert() const
 template <typename T>
 BitmapFilterPtr ValueSet<T>::search(InvertedIndexViewerPtr inverted_index, size_t size)
 {
-    BitmapFilterPtr filter = std::make_shared<BitmapFilter>(size, false);
+    auto filter = std::make_shared<BitmapFilter>(size, false);
     for (const auto & value : values)
-    {
-        auto row_ids = inverted_index->search(value);
-        filter->set(row_ids, nullptr);
-    }
+        inverted_index->search(filter, value);
     return filter;
 }
 
@@ -504,9 +475,8 @@ IntegerSetPtr RangeSet<T>::invert() const
 template <typename T>
 BitmapFilterPtr RangeSet<T>::search(InvertedIndexViewerPtr inverted_index, size_t size)
 {
-    BitmapFilterPtr filter = std::make_shared<BitmapFilter>(size, false);
-    auto row_ids = inverted_index->searchRange(start, end == std::numeric_limits<T>::max() ? end : end + 1);
-    filter->set(row_ids, nullptr);
+    auto filter = std::make_shared<BitmapFilter>(size, false);
+    inverted_index->searchRange(filter, start, end);
     return filter;
 }
 
@@ -593,8 +563,19 @@ BitmapFilterPtr CompositeSet<T>::search(InvertedIndexViewerPtr inverted_index, s
     BitmapFilterPtr filter = std::make_shared<BitmapFilter>(size, false);
     for (const auto & set : sets)
     {
-        auto sub_filter = set->search(inverted_index, size);
-        filter->merge(*sub_filter);
+        switch (set->getType())
+        {
+        case SetType::All:
+            return std::make_shared<BitmapFilter>(size, true);
+        case SetType::Empty:
+            break;
+        case SetType::Value:
+        case SetType::Range:
+        case SetType::Composite:
+            auto sub_filter = set->search(inverted_index, size);
+            filter->merge(*sub_filter);
+            break;
+        }
     }
     return filter;
 }

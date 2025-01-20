@@ -846,8 +846,13 @@ BlockInputStreams StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter
-        = PushDownExecutor::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
+    auto filter = PushDownExecutor::build(
+        query_info,
+        columns_to_read,
+        store->getTableColumns(),
+        query_info.dag_query->used_indexes,
+        context,
+        tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -930,8 +935,13 @@ void StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter
-        = PushDownExecutor::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
+    auto filter = PushDownExecutor::build(
+        query_info,
+        columns_to_read,
+        store->getTableColumns(),
+        query_info.dag_query->used_indexes,
+        context,
+        tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 

@@ -43,21 +43,20 @@ ColumnValueSetPtr AndColumnValueSet::tryOptimize()
     new_children.clear();
 
     // Merge single sets on the same index by intersecting their integer sets
-    // Merge multiple UnsupportedColumnValueSet into one
+    // Remove UnsupportedColumnValueSet
     std::unordered_map<IndexID, std::pair<ColumnID, IntegerSetPtr>> merged_sets;
-    ColumnValueSetPtr unsupported_child = nullptr;
     for (auto & child : children)
     {
-        if (auto * single_child = dynamic_cast<SingleColumnValueSet *>(child.get()); single_child)
+        if (auto single_child = std::dynamic_pointer_cast<SingleColumnValueSet>(child); single_child)
         {
             if (auto it = merged_sets.find(single_child->index_id); it != merged_sets.end())
                 it->second = {single_child->column_id, it->second.second->intersectWith(single_child->set)};
             else
                 merged_sets[single_child->index_id] = {single_child->column_id, single_child->set};
         }
-        else if (auto * single_child = dynamic_cast<UnsupportedColumnValueSet *>(child.get()); single_child)
+        else if (child->type == ColumnValueSetType::Unsupported)
         {
-            unsupported_child = child;
+            // Skip
         }
         else
         {
@@ -73,10 +72,10 @@ ColumnValueSetPtr AndColumnValueSet::tryOptimize()
         children.push_back(SingleColumnValueSet::create(value.first, index_id, value.second));
     }
     children.insert(children.end(), new_children.begin(), new_children.end());
-    if (unsupported_child)
-        children.push_back(unsupported_child);
 
     // If there is only one child, return that child
+    if (children.empty())
+        return UnsupportedColumnValueSet::Instance;
     if (children.size() == 1)
         return children.front();
     return this->shared_from_this();
@@ -121,22 +120,21 @@ ColumnValueSetPtr OrColumnValueSet::tryOptimize()
     children.swap(new_children);
     new_children.clear();
 
-    // Merge single sets on the same index by union'ing their integer sets
-    // Merge multiple UnsupportedColumnValueSet into one
+    // Merge single sets on the same index by unioning their integer sets
+    // Return UnsupportedColumnValueSet if there is any
     std::unordered_map<IndexID, std::pair<ColumnID, IntegerSetPtr>> merged_sets;
-    ColumnValueSetPtr unsupported_child = nullptr;
     for (auto & child : children)
     {
-        if (auto * single_child = dynamic_cast<SingleColumnValueSet *>(child.get()))
+        if (auto single_child = std::dynamic_pointer_cast<SingleColumnValueSet>(child); single_child)
         {
             if (auto it = merged_sets.find(single_child->index_id); it != merged_sets.end())
                 it->second = {single_child->column_id, it->second.second->unionWith(single_child->set)};
             else
                 merged_sets[single_child->index_id] = {single_child->column_id, single_child->set};
         }
-        else if (auto * single_child = dynamic_cast<UnsupportedColumnValueSet *>(child.get()); single_child)
+        else if (child->type == ColumnValueSetType::Unsupported)
         {
-            unsupported_child = child;
+            return UnsupportedColumnValueSet::Instance;
         }
         else
         {
@@ -152,8 +150,6 @@ ColumnValueSetPtr OrColumnValueSet::tryOptimize()
         children.push_back(SingleColumnValueSet::create(value.first, index_id, value.second));
     }
     children.insert(children.end(), new_children.begin(), new_children.end());
-    if (unsupported_child)
-        children.push_back(unsupported_child);
 
     // If there is only one child, return that child
     if (children.size() == 1)

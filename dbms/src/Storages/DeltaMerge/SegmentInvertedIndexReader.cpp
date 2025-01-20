@@ -20,7 +20,26 @@
 namespace DB::DM
 {
 
-BitmapFilterPtr SegmentInvertedIndexReader::loadStable()
+BitmapFilterPtr SegmentInvertedIndexReader::loadStable(
+    const SegmentSnapshotPtr & snapshot,
+    const ColumnValueSetPtr & column_value_set,
+    const LocalIndexCachePtr & local_index_cache)
+{
+    SegmentInvertedIndexReader reader(snapshot, column_value_set, local_index_cache);
+    return reader.loadStableImpl();
+}
+
+
+BitmapFilterPtr SegmentInvertedIndexReader::loadDelta(
+    const SegmentSnapshotPtr & snapshot,
+    const ColumnValueSetPtr & column_value_set,
+    const LocalIndexCachePtr & local_index_cache)
+{
+    SegmentInvertedIndexReader reader(snapshot, column_value_set, local_index_cache);
+    return reader.loadDeltaImpl();
+}
+
+BitmapFilterPtr SegmentInvertedIndexReader::loadStableImpl()
 {
     BitmapFilterPtr bitmap_filter = std::make_shared<BitmapFilter>(0, false);
     for (const auto & dmfile : snapshot->stable->getDMFiles())
@@ -34,7 +53,7 @@ BitmapFilterPtr SegmentInvertedIndexReader::loadStable()
     return bitmap_filter;
 }
 
-BitmapFilterPtr SegmentInvertedIndexReader::loadDelta()
+BitmapFilterPtr SegmentInvertedIndexReader::loadDeltaImpl()
 {
     BitmapFilterPtr bitmap_filter = std::make_shared<BitmapFilter>(0, false);
     const auto & persisted_snap = snapshot->delta->getPersistedFileSetSnapshot();
@@ -60,21 +79,6 @@ BitmapFilterPtr SegmentInvertedIndexReader::loadDelta()
         bitmap_filter->append(BitmapFilter(cf->getRows(), true));
     }
     return bitmap_filter;
-}
-
-BitmapFilterPtr SegmentInvertedIndexReader::loadAll()
-{
-    auto stable_bf = loadStable();
-    auto delta_bf = loadDelta();
-    LOG_DEBUG(
-        log,
-        "loadAll: stable_bf: {}/{}, delta_bf: {}/{}",
-        stable_bf->count(),
-        stable_bf->size(),
-        delta_bf->count(),
-        delta_bf->size());
-    stable_bf->append(*delta_bf);
-    return stable_bf;
 }
 
 } // namespace DB::DM

@@ -74,7 +74,6 @@ public:
     static IntegerSetPtr createValueSet(TypeIndex type_index, const Fields & values);
     static IntegerSetPtr createLessRangeSet(TypeIndex type_index, Field max, bool not_included = true);
     static IntegerSetPtr createGreaterRangeSet(TypeIndex type_index, Field min, bool not_included = true);
-    static IntegerSetPtr createAllSet(TypeIndex type_index);
 
 protected:
     SetType type;

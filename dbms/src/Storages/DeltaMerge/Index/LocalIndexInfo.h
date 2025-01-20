@@ -70,6 +70,7 @@ void saveIndexFilePros(
     size_t uncompressed_size);
 
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
+LocalIndexInfosPtr PBToLocalIndexInfos(const google::protobuf::RepeatedPtrField<tipb::IndexInfo> & indexes);
 
 class LocalIndexInfosChangeset
 {

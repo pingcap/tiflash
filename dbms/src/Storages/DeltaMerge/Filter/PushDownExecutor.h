@@ -41,7 +41,8 @@ public:
         const ColumnDefinesPtr & filter_columns_,
         const String filter_column_name_,
         const ExpressionActionsPtr & extra_cast_,
-        const ColumnDefinesPtr & columns_after_cast_)
+        const ColumnDefinesPtr & columns_after_cast_,
+        const ColumnValueSetPtr & column_value_set_)
         : rs_operator(rs_operator_)
         , before_where(beofre_where_)
         , project_after_where(project_after_where_)
@@ -50,11 +51,16 @@ public:
         , extra_cast(extra_cast_)
         , columns_after_cast(columns_after_cast_)
         , ann_query_info(ann_query_info_)
+        , column_value_set(column_value_set_)
     {}
 
-    explicit PushDownExecutor(const RSOperatorPtr & rs_operator_, const ANNQueryInfoPtr & ann_query_info_ = nullptr)
+    explicit PushDownExecutor(
+        const RSOperatorPtr & rs_operator_,
+        const ANNQueryInfoPtr & ann_query_info_ = nullptr,
+        const ColumnValueSetPtr & column_value_set_ = nullptr)
         : rs_operator(rs_operator_)
         , ann_query_info(ann_query_info_)
+        , column_value_set(column_value_set_)
     {}
 
     explicit PushDownExecutor(const ANNQueryInfoPtr & ann_query_info_)
@@ -68,6 +74,7 @@ public:
         const TiDB::ColumnInfos & table_scan_column_info,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
         const ColumnDefines & columns_to_read,
+        const ColumnValueSetPtr & column_value_set,
         const Context & context,
         const LoggerPtr & tracing_logger);
 
@@ -76,6 +83,7 @@ public:
         const SelectQueryInfo & query_info,
         const ColumnDefines & columns_to_read,
         const ColumnDefines & table_column_defines,
+        const LocalIndexInfosSnapshot & local_index_infos,
         const Context & context,
         const LoggerPtr & tracing_logger);
 
@@ -95,8 +103,10 @@ public:
     const ExpressionActionsPtr extra_cast;
     // If the extra_cast is not null, the types of the columns may be changed
     const ColumnDefinesPtr columns_after_cast;
-    // The ANNQueryInfo contains the information of the ANN index
+    // The ann_query_info contains the information of the ANN index
     const ANNQueryInfoPtr ann_query_info;
+    // The column_value_set contains the column values of the pushed down filters
+    const ColumnValueSetPtr column_value_set;
 };
 
 } // namespace DB::DM

@@ -103,10 +103,12 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
     {
         columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
     }
+    const google::protobuf::RepeatedPtrField<tipb::IndexInfo> empty_used_indexes{}; // don't care used indexes
     std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
         conditions,
         ann_query_info,
         pushed_down_filters,
+        empty_used_indexes,
         table_info.columns,
         runtime_filter_ids, // don't care runtime filter
         0,
@@ -125,6 +127,7 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
         table_info.columns,
         pushed_down_filters,
         columns_to_read,
+        nullptr,
         ctx,
         log);
     return push_down_executor;

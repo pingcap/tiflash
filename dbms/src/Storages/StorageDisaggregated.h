@@ -100,7 +100,9 @@ private:
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> buildEstablishDisaggTaskReq(
         const Context & db_context,
         const pingcap::coprocessor::BatchCopTask & batch_cop_task);
-    DM::RSOperatorPtr buildRSOperator(const Context & db_context, const DM::ColumnDefinesPtr & columns_to_read);
+    std::tuple<DM::RSOperatorPtr, DM::ColumnValueSetPtr> buildRSOperatorAndColumnValueSet(
+        const Context & db_context,
+        const DM::ColumnDefinesPtr & columns_to_read);
     std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> packSegmentReadTasks(
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,

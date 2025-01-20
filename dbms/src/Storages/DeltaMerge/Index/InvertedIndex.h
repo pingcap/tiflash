@@ -21,6 +21,7 @@
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <Poco/File.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Index/LocalIndexBuilder.h>
 #include <Storages/DeltaMerge/Index/LocalIndexViewer.h>
 
@@ -41,16 +42,17 @@ namespace InvertedIndex
 // | size of T | number of blocks | offset | size | min | max | offset | size | min | max | ... | offset | size | min | max |
 
 using RowID = UInt32;
+using RowIDs = std::vector<RowID>;
 
-// A block is a minimal unit of IO, it will be as small as possible, but >= 4KB.
-static constexpr size_t BlockSize = 4 * 1024; // 4 KB
+// A block is a minimal unit of IO, it will be as small as possible, but >= 64KB.
+static constexpr size_t BlockSize = 64 * 1024; // 64 KB
 
 // <value, row_ids>
 template <typename T>
 struct BlockEntry
 {
     T value;
-    std::vector<RowID> row_ids;
+    RowIDs row_ids;
 };
 
 template <typename T>
@@ -70,6 +72,10 @@ template <typename T>
 using Meta = std::vector<MetaEntry<T>>;
 } // namespace InvertedIndex
 
+TiDB::InvertedIndexDefinitionPtr tryGetInvertedIndexDefinition(
+    const TiDB::ColumnInfo & col_info,
+    const IDataType & type);
+
 /// Builds a InvertedIndex in memory.
 template <typename T>
 class InvertedIndexBuilder : public LocalIndexBuilder
@@ -77,9 +83,6 @@ class InvertedIndexBuilder : public LocalIndexBuilder
 public:
     using Key = T;
     using RowID = InvertedIndex::RowID;
-
-public:
-    static bool isSupportedType(const IDataType & type);
 
 public:
     explicit InvertedIndexBuilder(const LocalIndexInfo & index_info)
@@ -105,18 +108,17 @@ class InvertedIndexViewer : public LocalIndexViewer
 {
 public:
     using Key = UInt64;
-    using RowID = InvertedIndex::RowID;
 
 public:
     explicit InvertedIndexViewer() = default;
     ~InvertedIndexViewer() override = default;
 
-    static InvertedIndexViewerPtr view(TypeIndex type_id, std::string_view path);
-    static InvertedIndexViewerPtr view(TypeIndex type_id, ReadBuffer & buf, size_t index_size);
+    static InvertedIndexViewerPtr view(const DataTypePtr & type, std::string_view path);
+    static InvertedIndexViewerPtr view(const DataTypePtr & type, ReadBuffer & buf, size_t index_size);
 
-    virtual std::vector<RowID> search(const Key & key) const = 0;
-    // [begin, end)
-    virtual std::vector<RowID> searchRange(const Key & begin, const Key & end) const = 0;
+    virtual void search(BitmapFilterPtr & bitmap_filter, const Key & key) const = 0;
+    // [begin, end]
+    virtual void searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const = 0;
 };
 
 /// Views a InvertedIndex file by loading it into memory.
@@ -124,9 +126,6 @@ public:
 template <typename T>
 class InvertedIndexMemoryViewer : public InvertedIndexViewer
 {
-public:
-    using RowID = InvertedIndexViewer::RowID;
-
 private:
     void load(ReadBuffer & buf, size_t index_size);
 
@@ -141,11 +140,11 @@ public:
 
     ~InvertedIndexMemoryViewer() override = default;
 
-    std::vector<RowID> search(const Key & key) const override;
-    std::vector<RowID> searchRange(const Key & begin, const Key & end) const override;
+    void search(BitmapFilterPtr & bitmap_filter, const Key & key) const override;
+    void searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const override;
 
 private:
-    std::map<T, std::vector<RowID>> index; // set by load
+    std::map<T, std::vector<InvertedIndex::RowID>> index; // set by load
 };
 
 /// Views a InvertedIndex file by reading it from disk.
@@ -153,13 +152,8 @@ private:
 template <typename T>
 class InvertedIndexFileViewer : public InvertedIndexViewer
 {
-public:
-    using RowID = InvertedIndexViewer::RowID;
-
 private:
     void loadMeta(ReadBuffer & buf, size_t index_size);
-
-    InvertedIndex::Block<T> readBlock(UInt32 offset, UInt32 size) const;
 
 public:
     explicit InvertedIndexFileViewer(std::string_view path)
@@ -171,11 +165,14 @@ public:
 
     ~InvertedIndexFileViewer() override = default;
 
-    std::vector<RowID> search(const Key & key) const override;
-    std::vector<RowID> searchRange(const Key & begin, const Key & end) const override;
+    void search(BitmapFilterPtr & bitmap_filter, const Key & key) const override;
+    void searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const override;
 
 private:
-    String path;
+    // Since this viewer will be used in multiple threads,
+    // only store the path and load the file when needed.
+    // Warning: Do not shared file_buf between threads.
+    const String path;
     InvertedIndex::Meta<T> meta; // set by loadMeta
 };
 
