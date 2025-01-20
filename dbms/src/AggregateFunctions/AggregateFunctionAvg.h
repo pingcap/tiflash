@@ -29,6 +29,12 @@ struct AggregateFunctionAvgData
     T sum;
     UInt64 count;
 
+    void reset()
+    {
+        sum = T(0);
+        count = 0;
+    }
+
     AggregateFunctionAvgData()
         : sum(0)
         , count(0)
@@ -77,6 +83,19 @@ public:
         }
         ++this->data(place).count;
     }
+
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
+    {
+        if constexpr (IsDecimal<T>)
+            this->data(place).sum -= static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num];
+        else
+            this->data(place).sum -= static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num];
+
+        --this->data(place).count;
+        assert(this->data(place).count >= 0);
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {

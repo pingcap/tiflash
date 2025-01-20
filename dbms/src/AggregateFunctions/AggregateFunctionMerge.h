@@ -37,7 +37,7 @@ public:
     AggregateFunctionMerge(const AggregateFunctionPtr & nested_, const IDataType & argument)
         : nested_func(nested_)
     {
-        const DataTypeAggregateFunction * data_type = typeid_cast<const DataTypeAggregateFunction *>(&argument);
+        const auto * data_type = typeid_cast<const DataTypeAggregateFunction *>(&argument);
 
         if (!data_type || data_type->getFunctionName() != nested_func->getName())
             throw Exception(
