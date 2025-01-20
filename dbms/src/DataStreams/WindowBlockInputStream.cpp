@@ -1268,7 +1268,6 @@ void WindowTransformAction::writeOutCurrentRow()
             const auto * agg_func = ws.aggregate_function.get();
             auto * buf = ws.aggregate_function_state.data();
 
-            // TODO add `insertMergeResultInto` function?
             agg_func->insertResultInto(buf, *result_column, arena.get());
         }
     }

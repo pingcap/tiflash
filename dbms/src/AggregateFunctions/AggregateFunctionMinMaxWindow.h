@@ -166,6 +166,7 @@ public:
     {
         collator = !collators_.empty() ? collators_[0] : nullptr;
     }
+
     static void write(WriteBuffer &, const IDataType &) { throw Exception("Not implemented yet"); }
     static void read(ReadBuffer &, const IDataType &, Arena *) { throw Exception("Not implemented yet"); }
 };

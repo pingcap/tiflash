@@ -181,7 +181,7 @@ void appendWindowDescription(
     const Names & arg_names,
     const DataTypes & arg_types,
     TiDB::TiDBCollators & arg_collators,
-    const String & func_name,
+    const String & window_func_name,
     WindowDescription & window_description,
     NamesAndTypes & source_columns,
     NamesAndTypes & window_columns,
@@ -189,7 +189,7 @@ void appendWindowDescription(
 {
     assert(arg_names.size() == arg_collators.size() && arg_names.size() == arg_types.size());
 
-    String func_string = genFuncString(func_name, arg_names, arg_collators);
+    String func_string = genFuncString(window_func_name, arg_names, arg_collators);
     if (auto duplicated_return_type
         = findDuplicateAggWindowFunc(func_string, window_description.window_functions_descriptions))
     {
@@ -206,12 +206,13 @@ void appendWindowDescription(
     if (is_agg)
     {
         window_function_description.aggregate_function
-            = AggregateFunctionFactory::instance().getForWindow(context, func_name, arg_types, {});
+            = AggregateFunctionFactory::instance().getForWindow(context, window_func_name, arg_types, {});
         result_type = window_function_description.aggregate_function->getReturnType();
     }
     else
     {
-        window_function_description.window_function = WindowFunctionFactory::instance().get(func_name, arg_types);
+        window_function_description.window_function
+            = WindowFunctionFactory::instance().get(window_func_name, arg_types);
         result_type = window_function_description.window_function->getReturnType();
     }
 
