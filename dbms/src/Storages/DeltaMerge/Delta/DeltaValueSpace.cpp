@@ -156,9 +156,8 @@ std::vector<ColumnFilePtrT> CloneColumnFilesHelper<ColumnFilePtrT>::clone(
                 {
                     auto new_index_page_id = dm_context.storage_pool->newLogPageId();
                     wbs.log.putRefPage(new_index_page_id, index_info.index_page_id());
-                    auto new_index_info = dtpb::ColumnFileIndexInfo{};
+                    auto new_index_info = index_info;
                     new_index_info.set_index_page_id(new_index_page_id);
-                    new_index_info.mutable_index_props()->CopyFrom(index_info.index_props());
                     new_index_infos->emplace_back(std::move(new_index_info));
                 }
                 auto new_column_file = t->cloneWith(new_data_page_id, new_index_infos);

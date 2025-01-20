@@ -225,13 +225,13 @@ ColumnFilePersistedPtr ColumnFileTiny::restoreFromCheckpoint(
 
     // Write index data page to local ps
     auto new_index_infos = std::make_shared<IndexInfos>();
-    for (const auto & index_pb : *index_infos)
+    for (const auto & index_info : *index_infos)
     {
-        details::integrityCheckIndexInfoV2(index_pb);
-        auto new_index_page_id = put_remote_page(index_pb.index_page_id());
-        auto new_index_pb = index_pb;
-        new_index_pb.set_index_page_id(new_index_page_id);
-        new_index_infos->emplace_back(std::move(new_index_pb));
+        details::integrityCheckIndexInfoV2(index_info);
+        auto new_index_page_id = put_remote_page(index_info.index_page_id());
+        auto new_index_info = index_info;
+        new_index_info.set_index_page_id(new_index_page_id);
+        new_index_infos->emplace_back(std::move(new_index_info));
     }
     return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context, new_index_infos);
 }
