@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/WindowTransformAction.h>
 #include <Core/DecimalComparison.h>
+#include <DataStreams/WindowTransformAction.h>
 
 namespace DB
 {

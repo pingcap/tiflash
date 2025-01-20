@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Core/Block.h>
 #include <Interpreters/WindowDescription.h>
 #include <WindowFunctions/WindowUtils.h>
-#include <Core/Block.h>
 
 #include <deque>
 #include <tuple>
