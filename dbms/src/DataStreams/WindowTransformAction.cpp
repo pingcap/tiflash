@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,71 +12,272 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnDecimal.h>
-#include <Columns/ColumnNullable.h>
-#include <Columns/ColumnVector.h>
-#include <Columns/IColumn.h>
-#include <Common/Decimal.h>
-#include <Common/Exception.h>
-#include <Common/typeid_cast.h>
 #include <Core/DecimalComparison.h>
-#include <Core/Field.h>
-#include <DataStreams/WindowBlockInputStream.h>
-#include <Interpreters/WindowDescription.h>
-#include <WindowFunctions/WindowUtils.h>
-#include <common/UInt128.h>
-#include <common/types.h>
-#include <tipb/executor.pb.h>
-
-#include <magic_enum.hpp>
+#include <DataStreams/WindowTransformAction.h>
 
 namespace DB
 {
-WindowBlockInputStream::WindowBlockInputStream(
-    const BlockInputStreamPtr & input,
+namespace ErrorCodes
+{
+extern const int BAD_ARGUMENTS;
+extern const int NOT_IMPLEMENTED;
+} // namespace ErrorCodes
+
+namespace
+{
+template <typename T>
+consteval bool checkIfSimpleNumericType()
+{
+    return std::is_integral_v<T> || std::is_floating_point_v<T>;
+}
+
+template <typename T>
+consteval bool checkIfDecimalFieldType()
+{
+    return std::is_same_v<T, DecimalField<Decimal32>> || std::is_same_v<T, DecimalField<Decimal64>>
+        || std::is_same_v<T, DecimalField<Decimal128>> || std::is_same_v<T, DecimalField<Decimal256>>;
+}
+
+template <typename LeftType, typename RightType>
+bool lessEqual(LeftType left, RightType right)
+{
+    if constexpr (checkIfDecimalFieldType<LeftType>() && checkIfDecimalFieldType<RightType>())
+    {
+        return left <= right;
+    }
+    else if constexpr (checkIfDecimalFieldType<LeftType>())
+    {
+        return DecimalComparison<typename LeftType::DecimalType, RightType, LessOrEqualsOp>::compare(
+            left.getValue(),
+            right,
+            left.getScale(),
+            0);
+    }
+    else if constexpr (checkIfDecimalFieldType<RightType>())
+    {
+        return DecimalComparison<LeftType, typename RightType::DecimalType, LessOrEqualsOp>::compare(
+            left,
+            right.getValue(),
+            0,
+            right.getScale());
+    }
+    else
+    {
+        return left <= right;
+    }
+}
+
+template <typename LeftType, typename RightType>
+bool greaterEqual(LeftType left, RightType right)
+{
+    if constexpr (checkIfDecimalFieldType<LeftType>() && checkIfDecimalFieldType<RightType>())
+    {
+        return left >= right;
+    }
+    else if constexpr (checkIfDecimalFieldType<LeftType>())
+    {
+        return DecimalComparison<typename LeftType::DecimalType, RightType, GreaterOrEqualsOp>::compare(
+            left.getValue(),
+            right,
+            left.getScale(),
+            0);
+    }
+    else if constexpr (checkIfDecimalFieldType<RightType>())
+    {
+        return DecimalComparison<LeftType, typename RightType::DecimalType, GreaterOrEqualsOp>::compare(
+            left,
+            right.getValue(),
+            0,
+            right.getScale());
+    }
+    else
+    {
+        return left >= right;
+    }
+}
+
+// When T is Decimal, we should convert it to DecimalField type
+// as we need scale value when executing the comparison operation.
+template <typename T>
+struct ActualCmpDataType
+{
+    using Type = std::conditional_t<checkIfSimpleNumericType<T>(), T, DecimalField<T>>;
+};
+
+template <typename T>
+typename ActualCmpDataType<T>::Type getValue(const ColumnPtr & col_ptr, size_t idx)
+{
+    return (*col_ptr)[idx].get<typename ActualCmpDataType<T>::Type>();
+}
+
+template <typename T, typename U, bool is_preceding, bool is_desc, bool is_begin>
+bool isInRangeCommonImpl(T current_row_aux_value, U cursor_value)
+{
+    if constexpr (is_begin)
+    {
+        if constexpr (is_desc)
+            return lessEqual(cursor_value, current_row_aux_value);
+        else
+            return greaterEqual(cursor_value, current_row_aux_value);
+    }
+    else
+    {
+        if constexpr (!is_desc)
+            return lessEqual(cursor_value, current_row_aux_value);
+        else
+            return greaterEqual(cursor_value, current_row_aux_value);
+    }
+}
+
+template <typename T, typename U, bool is_preceding, bool is_desc, bool is_begin>
+bool isInRangeIntImpl(T current_row_aux_value, U cursor_value)
+{
+    return isInRangeCommonImpl<T, U, is_preceding, is_desc, is_begin>(current_row_aux_value, cursor_value);
+}
+
+template <typename AuxColType, typename OrderByColType, bool is_preceding, bool is_desc, bool is_begin>
+bool isInRangeDecimalImpl(AuxColType current_row_aux_value, OrderByColType cursor_value)
+{
+    return isInRangeCommonImpl<AuxColType, OrderByColType, is_preceding, is_desc, is_begin>(
+        current_row_aux_value,
+        cursor_value);
+}
+
+template <typename AuxColType, typename OrderByColType, bool is_preceding, bool is_desc, bool is_begin>
+bool isInRangeFloatImpl(AuxColType current_row_aux_value, OrderByColType cursor_value)
+{
+    Float64 current_row_aux_value_float64;
+    Float64 cursor_value_float64;
+
+    if constexpr (checkIfDecimalFieldType<AuxColType>())
+        current_row_aux_value_float64
+            = current_row_aux_value.getValue().template toFloat<Float64>(current_row_aux_value.getScale());
+    else
+        current_row_aux_value_float64 = static_cast<Float64>(current_row_aux_value);
+
+    if constexpr (checkIfDecimalFieldType<OrderByColType>())
+        cursor_value_float64 = cursor_value.getValue().template toFloat<Float64>(cursor_value.getScale());
+    else
+        cursor_value_float64 = static_cast<Float64>(cursor_value);
+
+    return isInRangeCommonImpl<Float64, Float64, is_preceding, is_desc, is_begin>(
+        current_row_aux_value_float64,
+        cursor_value_float64);
+}
+
+template <typename AuxColType, typename OrderByColType, int CmpDataType, bool is_preceding, bool is_desc, bool is_begin>
+bool isInRange(AuxColType current_row_aux_value, OrderByColType cursor_value)
+{
+    if constexpr (
+        CmpDataType == tipb::RangeCmpDataType::Int || CmpDataType == tipb::RangeCmpDataType::DateTime
+        || CmpDataType == tipb::RangeCmpDataType::Duration)
+    {
+        // Two operand must be integer
+        if constexpr (std::is_integral_v<OrderByColType> && std::is_integral_v<AuxColType>)
+        {
+            if constexpr (std::is_unsigned_v<OrderByColType> && std::is_unsigned_v<AuxColType>)
+                return isInRangeIntImpl<UInt64, UInt64, is_preceding, is_desc, is_begin>(
+                    current_row_aux_value,
+                    cursor_value);
+            return isInRangeIntImpl<Int64, Int64, is_preceding, is_desc, is_begin>(current_row_aux_value, cursor_value);
+        }
+        else
+            throw Exception("Unexpected Data Type!");
+    }
+    else if constexpr (CmpDataType == tipb::RangeCmpDataType::Float)
+    {
+        return isInRangeFloatImpl<AuxColType, OrderByColType, is_preceding, is_desc, is_begin>(
+            current_row_aux_value,
+            cursor_value);
+    }
+    else
+    {
+        if constexpr (std::is_floating_point_v<OrderByColType> || std::is_floating_point_v<AuxColType>)
+            throw Exception("Occurrence of float type at here is unexpected!");
+        else if constexpr (!checkIfDecimalFieldType<AuxColType>() && !checkIfDecimalFieldType<OrderByColType>())
+            throw Exception("At least one Decimal type is required");
+        else
+            return isInRangeDecimalImpl<AuxColType, OrderByColType, is_preceding, is_desc, is_begin>(
+                current_row_aux_value,
+                cursor_value);
+    }
+}
+
+template <bool is_begin>
+RowNumber getBoundary(const WindowTransformAction & action)
+{
+    if constexpr (is_begin)
+    {
+        if (action.window_description.frame.begin_preceding)
+            return action.current_row;
+        else
+            return action.partition_end;
+    }
+    else
+    {
+        if (action.window_description.frame.end_preceding)
+            return action.current_row;
+        else
+            return action.partition_end;
+    }
+}
+} // namespace
+
+WindowTransformAction::WindowTransformAction(
+    const Block & input_header,
     const WindowDescription & window_description_,
     const String & req_id)
-    : action(input->getHeader(), window_description_, req_id)
+    : log(Logger::get(req_id))
+    , window_description(window_description_)
 {
-    children.push_back(input);
-}
-
-bool WindowBlockInputStream::returnIfCancelledOrKilled()
-{
-    if (isCancelledOrThrowIfKilled())
+    output_header = input_header;
+    for (const auto & add_column : window_description_.add_columns)
     {
-        action.cleanUp();
-        return true;
-    }
-    return false;
-}
-
-Block WindowBlockInputStream::readImpl()
-{
-    const auto & stream = children.back();
-    while (!action.input_is_finished)
-    {
-        if (returnIfCancelledOrKilled())
-            return {};
-
-        if (Block output_block = action.tryGetOutputBlock())
-            return output_block;
-
-        Block block = stream->read();
-        if (!block)
-            action.input_is_finished = true;
-        else
-            action.appendBlock(block);
-        action.tryCalculate();
+        output_header.insert({add_column.type, add_column.name});
     }
 
-    if (returnIfCancelledOrKilled())
-        return {};
-    // return last partition block, if already return then return null
-    return action.tryGetOutputBlock();
+    initialWorkspaces();
+
+    initialPartitionAndOrderColumnIndices();
 }
 
-<<<<<<< HEAD
+void WindowTransformAction::cleanUp()
+{
+    if (!window_blocks.empty())
+        window_blocks.erase(window_blocks.begin(), window_blocks.end());
+    input_is_finished = true;
+}
+
+void WindowTransformAction::initialPartitionAndOrderColumnIndices()
+{
+    partition_column_indices.reserve(window_description.partition_by.size());
+    for (const auto & column : window_description.partition_by)
+    {
+        partition_column_indices.push_back(output_header.getPositionByName(column.column_name));
+    }
+
+    order_column_indices.reserve(window_description.order_by.size());
+    for (const auto & column : window_description.order_by)
+    {
+        order_column_indices.push_back(output_header.getPositionByName(column.column_name));
+    }
+}
+
+void WindowTransformAction::initialWorkspaces()
+{
+    // Initialize window function workspaces.
+    workspaces.reserve(window_description.window_functions_descriptions.size());
+
+    for (const auto & window_function_description : window_description.window_functions_descriptions)
+    {
+        WindowFunctionWorkspace workspace;
+        workspace.window_function = window_function_description.window_function;
+        workspace.arguments = window_function_description.arguments;
+        workspaces.push_back(std::move(workspace));
+    }
+    only_have_row_number = onlyHaveRowNumber();
+}
+
 // Judge whether current_partition_row is end row of partition in current block
 // How to judge?
 // Compare data in previous partition with the new scanned data.
@@ -124,7 +325,9 @@ bool WindowTransformAction::isDifferentFromPrevPartition(UInt64 current_partitio
 
 void WindowTransformAction::advancePartitionEnd()
 {
-    RUNTIME_ASSERT(!partition_ended, log, "partition_ended should be false here.");
+    // if partition_ended is true, we don't need to advance partition_end
+    if (partition_ended)
+        return;
     const RowNumber end = blocksEnd();
 
     // If we're at the total end of data, we must end the partition. This is one
@@ -975,6 +1178,9 @@ void WindowTransformAction::writeOutCurrentRow()
 
 Block WindowTransformAction::tryGetOutputBlock()
 {
+    // first try calculate the result based on current data
+    tryCalculate();
+    // then return block if it is ready
     assert(first_not_ready_row.block >= first_block_number);
     // The first_not_ready_row might be past-the-end if we have already
     // calculated the window functions for all input rows. That's why the
@@ -1063,6 +1269,10 @@ void WindowTransformAction::appendBlock(Block & current_block)
 
 void WindowTransformAction::tryCalculate()
 {
+    // if there is no input data, we don't need to calculate
+    if (window_blocks.empty())
+        return;
+    auto start_block_index = current_row.block;
     // Start the calculations. First, advance the partition end.
     for (;;)
     {
@@ -1134,6 +1344,11 @@ void WindowTransformAction::tryCalculate()
             first_not_ready_row = current_row;
             frame_ended = false;
             frame_started = false;
+            // each `tryCalculate()` will calculate at most 1 block's data
+            // this is to make sure that in pipeline mode, the execution time
+            // of each iterator won't be too long
+            if (current_row.block != start_block_index)
+                return;
         }
 
         if (input_is_finished)
@@ -1187,14 +1402,6 @@ void WindowTransformAction::appendInfo(FmtBuffer & buffer) const
         boundaryTypeToString(window_description.frame.end_type));
 }
 
-=======
->>>>>>> f56fb91faf (Refine window function codes (#9801))
-void WindowBlockInputStream::appendInfo(FmtBuffer & buffer) const
-{
-    action.appendInfo(buffer);
-}
-<<<<<<< HEAD
-
 void WindowTransformAction::advanceRowNumber(RowNumber & row_num) const
 {
     assert(row_num.block >= first_block_number);
@@ -1216,7 +1423,7 @@ void WindowTransformAction::advanceRowNumber(RowNumber & row_num) const
 RowNumber WindowTransformAction::getPreviousRowNumber(const RowNumber & row_num) const
 {
     assert(row_num.block >= first_block_number);
-    assert(!(row_num.block == 0 && row_num.row == 0));
+    assert(row_num.block != 0 || row_num.row != 0);
 
     RowNumber prev_row_num = row_num;
     if (row_num.row > 0)
@@ -1279,6 +1486,4 @@ bool WindowTransformAction::lag(RowNumber & x, size_t offset) const
     x.row = blockAt(x.block).rows - 1;
     return lag(x, new_offset);
 }
-=======
->>>>>>> f56fb91faf (Refine window function codes (#9801))
 } // namespace DB

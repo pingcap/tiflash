@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,18 +14,15 @@
 
 #pragma once
 
-#include <Common/Decimal.h>
-#include <Common/FmtUtils.h>
-#include <Core/ColumnNumbers.h>
-#include <DataStreams/IProfilingBlockInputStream.h>
-#include <DataStreams/WindowTransformAction.h>
+#include <Core/Block.h>
 #include <Interpreters/WindowDescription.h>
 #include <WindowFunctions/WindowUtils.h>
 
+#include <deque>
+#include <tuple>
+
 namespace DB
 {
-<<<<<<< HEAD
-/* Implementation details.*/
 struct WindowTransformAction
 {
 public:
@@ -99,8 +96,6 @@ public:
 
     void appendBlock(Block & current_block);
 
-    void tryCalculate();
-
     bool onlyHaveRowNumber();
 
     Int64 getPartitionEndRow(size_t block_rows);
@@ -147,6 +142,8 @@ private:
 
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
+
+    void tryCalculate();
 
     template <
         typename AuxColType,
@@ -244,30 +241,5 @@ public:
 
     //TODO: used as template parameters
     bool only_have_row_number = false;
-};
-
-=======
->>>>>>> f56fb91faf (Refine window function codes (#9801))
-class WindowBlockInputStream : public IProfilingBlockInputStream
-{
-    static constexpr auto NAME = "Window";
-
-public:
-    WindowBlockInputStream(
-        const BlockInputStreamPtr & input,
-        const WindowDescription & window_description_,
-        const String & req_id);
-
-    Block getHeader() const override { return action.output_header; };
-
-    String getName() const override { return NAME; }
-
-protected:
-    Block readImpl() override;
-    void appendInfo(FmtBuffer & buffer) const override;
-    bool returnIfCancelledOrKilled();
-
-private:
-    WindowTransformAction action;
 };
 } // namespace DB
