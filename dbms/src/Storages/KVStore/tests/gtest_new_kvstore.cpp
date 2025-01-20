@@ -1251,6 +1251,12 @@ try
     auto & pool = ctx.getBackgroundPool();
     const auto size = TiFlashTestEnv::DEFAULT_BG_POOL_SIZE;
     std::atomic_bool b = false;
+
+    JointThreadInfoJeallocMap & jm = *ctx.getJointThreadInfoJeallocMap();
+
+    size_t original_size
+        = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
+
     auto t = pool.addTask(
         [&]() {
             auto * x = new int[1000];
@@ -1267,14 +1273,11 @@ try
         5 * 60 * 1000);
     std::this_thread::sleep_for(500ms);
 
-    JointThreadInfoJeallocMap & jm = *ctx.getJointThreadInfoJeallocMap();
-    jm.debugClear();
-    jm.accessProxyMap([](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 0); });
     jm.recordThreadAllocInfo();
 
     LOG_INFO(DB::Logger::get(), "bg pool size={}", size);
     UInt64 r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
-    ASSERT_GE(r, sizeof(int) * 1000);
+    ASSERT_GE(r, original_size + sizeof(int) * 1000);
     jm.accessStorageMap([size](const JointThreadInfoJeallocMap::AllocMap & m) {
         // There are some other bg thread pools
         ASSERT_GE(m.size(), size) << m.size();

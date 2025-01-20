@@ -83,7 +83,6 @@ public:
     ~JointThreadInfoJeallocMap();
     void recordThreadAllocInfo();
     void stopThreadAllocInfo();
-    void debugClear();
 
     // Call `thread.(de)allocatedp` for caller
     static std::tuple<uint64_t *, uint64_t *> getPtrs();
