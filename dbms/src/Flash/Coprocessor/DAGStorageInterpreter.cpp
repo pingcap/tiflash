@@ -1441,7 +1441,10 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         {
             // Since we can not know which table's schema is newer, we need to sync all tables' schema.
             need_sync_table_ids.clear();
-            need_sync_table_ids.append_range(table_scan.getPhysicalTableIDs());
+            need_sync_table_ids.insert(
+                need_sync_table_ids.end(),
+                table_scan.getPhysicalTableIDs().begin(),
+                table_scan.getPhysicalTableIDs().end());
             need_sync_table_ids.push_back(logical_table_id);
             table_storages.clear();
             table_locks.clear();
@@ -1481,7 +1484,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             return true;
         }
 
-        LOG_DEBUG(log, "not OK, syncing schemas for keyspace={} table_ids={}", keyspace_id, need_sync_table_ids);
+        LOG_INFO(log, "not OK, syncing schemas for keyspace={} table_ids={}", keyspace_id, need_sync_table_ids);
 
         auto start_time = Clock::now();
         for (auto & table_id : need_sync_table_ids)
