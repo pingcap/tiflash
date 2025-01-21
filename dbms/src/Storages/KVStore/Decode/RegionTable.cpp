@@ -314,8 +314,6 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtr & regi
     func_update_region([&](InternalRegion & internal_region) -> bool {
         internal_region.pause_flush = false;
         internal_region.updateRegionCacheBytes(region->dataSize());
-
-        internal_region.last_flush_time = Clock::now();
         return true;
     });
 
