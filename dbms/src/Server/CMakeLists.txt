@@ -45,6 +45,7 @@ add_library (tiflash-server-lib
     TCPHandler.cpp
     BgStorageInit.cpp
     Bootstrap.cpp
+    Setup.cpp
     StorageConfigParser.cpp
     UserConfigParser.cpp
     RaftConfigParser.cpp)
