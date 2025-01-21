@@ -84,7 +84,7 @@ TCPServersHolder::TCPServersHolder(
 
     std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config, "", "listen_host");
 
-    bool listen_try = config.getBool("listen_try", false);
+    bool listen_try = false;
     if (listen_hosts.empty())
     {
         listen_hosts.emplace_back("0.0.0.0");
@@ -214,7 +214,7 @@ void TCPServersHolder::onExit()
     }
 
     String debug_msg = "Closed all listening sockets.";
-    if (current_connections)
+    if (current_connections > 0)
     {
         LOG_INFO(log, "{} Waiting for {} outstanding connections.", debug_msg, current_connections);
         const int sleep_max_ms = 1000 * config.getInt("shutdown_wait_unfinished", 5);
@@ -237,13 +237,8 @@ void TCPServersHolder::onExit()
     }
 
     debug_msg = "Closed connections.";
-    if (current_connections)
-        LOG_INFO(
-            log,
-            "{} But {} remains."
-            " Tip: To increase wait time add to config: <shutdown_wait_unfinished>60</shutdown_wait_unfinished>",
-            debug_msg,
-            current_connections);
+    if (current_connections > 0)
+        LOG_INFO(log, "{} But {} remains.", debug_msg, current_connections);
     else
         LOG_INFO(log, debug_msg);
 }

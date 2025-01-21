@@ -36,7 +36,6 @@ public:
         Int64 max_connections,
         const LoggerPtr & log_);
 
-
     // terminate all TCP servers when receive exit signal
     void onExit();
 

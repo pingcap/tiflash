@@ -575,7 +575,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     FailPointHelper::initRandomFailPoints(config(), log);
 #endif
 
+    // Setup the config for jemalloc or mimalloc when enabled
     setupAllocator(log);
+
+    // Setup the SIMD flags
     setupSIMD(log);
 
     registerFunctions();
