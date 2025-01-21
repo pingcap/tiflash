@@ -34,6 +34,7 @@
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfCPUCores.h>
+#include <Common/grpcpp.h>
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Flash/DiagnosticsService.h>
@@ -52,11 +53,11 @@
 #include <IO/ReadHelpers.h>
 #include <IO/UseSSL.h>
 #include <Interpreters/AsynchronousMetrics.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
-#include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
 #include <Poco/Util/HelpFormatter.h>
@@ -72,7 +73,7 @@
 #include <Server/Setup.h>
 #include <Server/StatusFile.h>
 #include <Server/StorageConfigParser.h>
-#include <Server/TCPHandlerFactory.h>
+#include <Server/TCPServersHolder.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ReadThread/DMFileReaderPool.h>
@@ -107,12 +108,6 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <thread>
-
-#if Poco_NetSSL_FOUND
-#include <Common/grpcpp.h>
-#include <Poco/Net/Context.h>
-#include <Poco/Net/SecureServerSocket.h>
-#endif
 
 #ifdef FIU_ENABLE
 #include <fiu.h>
@@ -360,24 +355,6 @@ void printGRPCLog(gpr_log_func_args * args)
     }
 }
 
-struct TCPServer : Poco::Net::TCPServer
-{
-    TCPServer(
-        Poco::Net::TCPServerConnectionFactory::Ptr pFactory,
-        Poco::ThreadPool & threadPool,
-        const Poco::Net::ServerSocket & socket,
-        Poco::Net::TCPServerParams::Ptr pParams)
-        : Poco::Net::TCPServer(pFactory, threadPool, socket, pParams)
-    {}
-
-protected:
-    void run() override
-    {
-        setThreadName("TCPServer");
-        Poco::Net::TCPServer::run();
-    }
-};
-
 extern "C" {
 void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
 }
@@ -429,233 +406,6 @@ private:
     RunRaftStoreProxyParms parms;
     pthread_t thread{};
     const LoggerPtr & log;
-};
-
-class Server::TcpHttpServersHolder
-{
-public:
-    TcpHttpServersHolder(Server & server_, const Settings & settings, const LoggerPtr & log_)
-        : server(server_)
-        , log(log_)
-        , server_pool(1, server.config().getUInt("max_connections", 1024))
-    {
-        auto & config = server.config();
-        auto security_config = server.global_context->getSecurityConfig();
-
-        Poco::Timespan keep_alive_timeout(config.getUInt("keep_alive_timeout", 10), 0);
-        Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams; // NOLINT
-        http_params->setTimeout(settings.receive_timeout);
-        http_params->setKeepAliveTimeout(keep_alive_timeout);
-
-        std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config, "", "listen_host");
-
-        bool listen_try = config.getBool("listen_try", false);
-        if (listen_hosts.empty())
-        {
-            listen_hosts.emplace_back("0.0.0.0");
-            listen_try = true;
-        }
-
-        auto make_socket_address = [&](const std::string & host, UInt16 port) {
-            Poco::Net::SocketAddress socket_address;
-            try
-            {
-                socket_address = Poco::Net::SocketAddress(host, port);
-            }
-            catch (const Poco::Net::DNSException & e)
-            {
-                const auto code = e.code();
-                if (code == EAI_FAMILY
-#if defined(EAI_ADDRFAMILY)
-                    || code == EAI_ADDRFAMILY
-#endif
-                )
-                {
-                    LOG_ERROR(
-                        log,
-                        "Cannot resolve listen_host ({}), error {}: {}."
-                        "If it is an IPv6 address and your host has disabled IPv6, then consider to "
-                        "specify IPv4 address to listen in <listen_host> element of configuration "
-                        "file. Example: <listen_host>0.0.0.0</listen_host>",
-                        host,
-                        e.code(),
-                        e.message());
-                }
-
-                throw;
-            }
-            return socket_address;
-        };
-
-        auto socket_bind_listen = [&](auto & socket, const std::string & host, UInt16 port, bool secure = false) {
-            auto address = make_socket_address(host, port);
-#if !POCO_CLICKHOUSE_PATCH || POCO_VERSION <= 0x02000000 // TODO: fill correct version
-            if (secure)
-                /// Bug in old poco, listen() after bind() with reusePort param will fail because have no implementation in SecureServerSocketImpl
-                /// https://github.com/pocoproject/poco/pull/2257
-                socket.bind(address, /* reuseAddress = */ true);
-            else
-#endif
-#if POCO_VERSION < 0x01080000
-                socket.bind(address, /* reuseAddress = */ true);
-#else
-            socket.bind(
-                address,
-                /* reuseAddress = */ true,
-                /* reusePort = */ config.getBool("listen_reuse_port", false));
-#endif
-
-            socket.listen(/* backlog = */ config.getUInt("listen_backlog", 64));
-
-            return address;
-        };
-
-        for (const auto & listen_host : listen_hosts)
-        {
-            /// For testing purposes, user may omit tcp_port or http_port or https_port in configuration file.
-            try
-            {
-                /// TCP
-                if (config.has("tcp_port"))
-                {
-                    if (security_config->hasTlsConfig())
-                    {
-                        LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
-                    }
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port"));
-                    socket.setReceiveTimeout(settings.receive_timeout);
-                    socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(new TCPServer(
-                        new TCPHandlerFactory(server),
-                        server_pool,
-                        socket,
-                        new Poco::Net::TCPServerParams));
-
-                    LOG_INFO(log, "Listening tcp: {}", address.toString());
-                }
-                else if (security_config->hasTlsConfig())
-                {
-                    LOG_INFO(log, "tcp_port is closed because tls config is set");
-                }
-
-                /// TCP with SSL (Not supported yet)
-                if (config.has("tcp_port_secure") && !security_config->hasTlsConfig())
-                {
-#if Poco_NetSSL_FOUND
-                    auto [ca_path, cert_path, key_path] = security_config->getPaths();
-                    Poco::Net::Context::Ptr context
-                        = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, key_path, cert_path, ca_path);
-                    CertificateReloader::initSSLCallback(context, server.global_context.get());
-                    Poco::Net::SecureServerSocket socket(context);
-                    auto address = socket_bind_listen(
-                        socket,
-                        listen_host,
-                        config.getInt("tcp_port_secure"),
-                        /* secure = */ true);
-                    socket.setReceiveTimeout(settings.receive_timeout);
-                    socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(new TCPServer(
-                        new TCPHandlerFactory(server, /* secure= */ true),
-                        server_pool,
-                        socket,
-                        new Poco::Net::TCPServerParams));
-                    LOG_INFO(log, "Listening tcp_secure: {}", address.toString());
-#else
-                    throw Exception{
-                        "SSL support for TCP protocol is disabled because Poco library was built without NetSSL "
-                        "support.",
-                        ErrorCodes::SUPPORT_IS_DISABLED};
-#endif
-                }
-                else if (security_config->hasTlsConfig())
-                {
-                    LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
-                }
-
-                // No TCP server is normal now because we only enable the TCP server
-                // under testing deployment
-                if (servers.empty())
-                    LOG_INFO(log, "No TCP server is created");
-            }
-            catch (const Poco::Net::NetException & e)
-            {
-                if (listen_try)
-                    LOG_ERROR(
-                        log,
-                        "Listen [{}]: {}: {}: {}"
-                        "  If it is an IPv6 or IPv4 address and your host has disabled IPv6 or IPv4, then consider to "
-                        "specify not disabled IPv4 or IPv6 address to listen in <listen_host> element of configuration "
-                        "file. Example for disabled IPv6: <listen_host>0.0.0.0</listen_host> ."
-                        " Example for disabled IPv4: <listen_host>::</listen_host>",
-                        listen_host,
-                        e.code(),
-                        e.what(),
-                        e.message());
-                else
-                    throw;
-            }
-        }
-
-        for (auto & server : servers)
-            server->start();
-    }
-
-    // terminate all TCP servers when receive exit signal
-    void onExit()
-    {
-        auto & config = server.config();
-
-        LOG_INFO(log, "Received termination signal, stopping server...");
-        LOG_INFO(log, "Waiting for current connections to close.");
-
-        int current_connections = 0;
-        for (auto & server : servers)
-        {
-            server->stop();
-            current_connections += server->currentConnections();
-        }
-
-        String debug_msg = "Closed all listening sockets.";
-        if (current_connections)
-        {
-            LOG_INFO(log, "{} Waiting for {} outstanding connections.", debug_msg, current_connections);
-            const int sleep_max_ms = 1000 * config.getInt("shutdown_wait_unfinished", 5);
-            const int sleep_one_ms = 100;
-            int sleep_current_ms = 0;
-            while (sleep_current_ms < sleep_max_ms)
-            {
-                current_connections = 0;
-                for (auto & server : servers)
-                    current_connections += server->currentConnections();
-                if (!current_connections)
-                    break;
-                sleep_current_ms += sleep_one_ms;
-                std::this_thread::sleep_for(std::chrono::milliseconds(sleep_one_ms));
-            }
-        }
-        else
-        {
-            LOG_INFO(log, debug_msg);
-        }
-
-        debug_msg = "Closed connections.";
-        if (current_connections)
-            LOG_INFO(
-                log,
-                "{} But {} remains."
-                " Tip: To increase wait time add to config: <shutdown_wait_unfinished>60</shutdown_wait_unfinished>",
-                debug_msg,
-                current_connections);
-        else
-            LOG_INFO(log, debug_msg);
-    }
-
-private:
-    Server & server;
-    const LoggerPtr & log;
-    Poco::ThreadPool server_pool;
-    std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
 };
 
 // By default init global thread pool by hardware_concurrency
@@ -1516,7 +1266,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     {
-        TcpHttpServersHolder tcp_http_servers_holder(*this, settings, log);
+        TCPServersHolder tcp_http_servers_holder(
+            *this,
+            settings,
+            global_context->getSecurityConfig(),
+            /*max_connections=*/1024,
+            log);
 
         main_config_reloader->addConfigObject(global_context->getSecurityConfig());
         main_config_reloader->start();

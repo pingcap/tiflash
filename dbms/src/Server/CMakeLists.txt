@@ -43,6 +43,7 @@ add_library (tiflash-server-lib
     Server.cpp
     StatusFile.cpp
     TCPHandler.cpp
+    TCPServersHolder.cpp
     BgStorageInit.cpp
     Bootstrap.cpp
     Setup.cpp

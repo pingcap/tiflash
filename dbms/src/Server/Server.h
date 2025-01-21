@@ -63,7 +63,6 @@ private:
 
     ServerInfo server_info;
 
-    class TcpHttpServersHolder;
 };
 
 } // namespace DB
