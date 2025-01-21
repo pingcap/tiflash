@@ -308,9 +308,6 @@ public:
     String getDefaultFormat() const; /// If default_format is not specified, some global default format is returned.
     void setDefaultFormat(const String & name);
 
-    MultiVersion<Macros>::Version getMacros() const;
-    void setMacros(std::unique_ptr<Macros> && macros);
-
     Settings getSettings() const;
     void setSettings(const Settings & settings_);
 

@@ -137,7 +137,6 @@ struct ContextShared
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
     String flags_path; /// Path to the directory with some control flags for server maintenance.
-    String user_files_path; /// Path to the directory with user provided files, usable by 'file' table function.
     PathPool
         path_pool; /// The data directories. RegionPersister and some Storage Engine like DeltaMerge will use this to manage data placement on disks.
     ConfigurationPtr config; /// Global configuration settings.
@@ -163,7 +162,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr
         ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
-    MultiVersion<Macros> macros; /// Substitutions extracted from config.
     String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries; /// The cache of shared queries.
@@ -553,12 +551,6 @@ String Context::getFlagsPath() const
     return shared->flags_path;
 }
 
-String Context::getUserFilesPath() const
-{
-    auto lock = getLock();
-    return shared->user_files_path;
-}
-
 PathPool & Context::getPathPool() const
 {
     auto lock = getLock();
@@ -576,9 +568,6 @@ void Context::setPath(const String & path)
 
     if (shared->flags_path.empty())
         shared->flags_path = shared->path + "flags/";
-
-    if (shared->user_files_path.empty())
-        shared->user_files_path = shared->path + "user_files/";
 }
 
 void Context::setTemporaryPath(const String & path)
@@ -591,12 +580,6 @@ void Context::setFlagsPath(const String & path)
 {
     auto lock = getLock();
     shared->flags_path = path;
-}
-
-void Context::setUserFilesPath(const String & path)
-{
-    auto lock = getLock();
-    shared->user_files_path = path;
 }
 
 void Context::setPathPool(
@@ -1247,16 +1230,6 @@ String Context::getDefaultFormat() const
 void Context::setDefaultFormat(const String & name)
 {
     default_format = name;
-}
-
-MultiVersion<Macros>::Version Context::getMacros() const
-{
-    return shared->macros.get();
-}
-
-void Context::setMacros(std::unique_ptr<Macros> && macros)
-{
-    shared->macros.set(std::move(macros));
 }
 
 const Context & Context::getQueryContext() const

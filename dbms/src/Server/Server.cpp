@@ -921,17 +921,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setFlagsPath(path + "flags/");
     }
 
-    /** Directory with user provided files that are usable by 'file' table function.
-      */
-    {
-        std::string user_files_path = config().getString("user_files_path", path + "user_files/");
-        global_context->setUserFilesPath(user_files_path);
-        Poco::File(user_files_path).createDirectories();
-    }
-
-    if (config().has("macros"))
-        global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
-
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
@@ -1051,7 +1040,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         [&](ConfigurationPtr config) {
             LOG_DEBUG(log, "run main config reloader");
             buildLoggers(*config);
-            global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);

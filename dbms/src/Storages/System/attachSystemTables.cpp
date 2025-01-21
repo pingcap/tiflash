@@ -23,7 +23,6 @@
 #include <Storages/System/StorageSystemEvents.h>
 #include <Storages/System/StorageSystemFunctions.h>
 #include <Storages/System/StorageSystemGraphite.h>
-#include <Storages/System/StorageSystemMacros.h>
 #include <Storages/System/StorageSystemMetrics.h>
 #include <Storages/System/StorageSystemNumbers.h>
 #include <Storages/System/StorageSystemOne.h>
@@ -58,7 +57,6 @@ void attachSystemTablesServer(IDatabase & system_database)
     system_database.attachTable("processes", StorageSystemProcesses::create("processes"));
     system_database.attachTable("metrics", StorageSystemMetrics::create("metrics"));
     system_database.attachTable("graphite_retentions", StorageSystemGraphite::create("graphite_retentions"));
-    system_database.attachTable("macros", StorageSystemMacros::create("macros"));
 }
 
 void attachSystemTablesAsync(IDatabase & system_database, AsynchronousMetrics & async_metrics)
