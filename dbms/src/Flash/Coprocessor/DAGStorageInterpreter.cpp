@@ -1485,7 +1485,7 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             return true;
         }
 
-        LOG_DEBUG(log, "not OK, syncing schemas for keyspace={} table_ids={}", keyspace_id, need_sync_table_ids);
+        LOG_INFO(log, "not OK, syncing schemas for keyspace={} table_ids={}", keyspace_id, need_sync_table_ids);
 
         auto start_time = Clock::now();
         for (auto & table_id : need_sync_table_ids)
