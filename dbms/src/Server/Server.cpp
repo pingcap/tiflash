@@ -66,7 +66,6 @@
 #include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
 #include <Server/MetricsPrometheus.h>
-#include <Server/MetricsTransmitter.h>
 #include <Server/RaftConfigParser.h>
 #include <Server/Server.h>
 #include <Server/ServerInfo.h>
@@ -1293,13 +1292,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
         AsynchronousMetrics async_metrics(*global_context);
         attachSystemTablesAsync(*global_context->getDatabase("system"), async_metrics);
-
-        std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;
-        for (const auto & graphite_key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
-        {
-            metrics_transmitters.emplace_back(
-                std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
-        }
 
         auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
 
