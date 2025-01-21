@@ -251,7 +251,6 @@ private:
 
     void updateTableColumnInfo();
     ColumnsDescription getNewColumnsDescription(const TiDB::TableInfo & table_info);
-    DM::ColumnDefines getStoreColumnDefines() const override;
     bool dataDirExist();
     void shutdownImpl();
 
@@ -273,7 +272,6 @@ private:
         DM::ColumnDefines table_column_defines;
         DM::ColumnDefine handle_column_define;
     };
-    const bool data_path_contains_database_name = false;
 
     mutable std::mutex store_mutex;
 
@@ -281,9 +279,6 @@ private:
     std::atomic<bool> store_inited;
     DM::DeltaMergeStorePtr _store; // NOLINT(readability-identifier-naming)
 
-    Strings pk_column_names; // TODO: remove it. Only use for debug from ch-client.
-    bool is_common_handle = false;
-    bool pk_is_handle = false;
     size_t rowkey_column_size = 0;
     /// The user-defined PK column. If multi-column PK, or no PK, it is 0.
     /// Note that user-defined PK will never be _tidb_rowid.
@@ -295,8 +290,6 @@ private:
 
     mutable std::mutex decode_schema_mutex;
     DecodingStorageSchemaSnapshotPtr decoding_schema_snapshot;
-    // The following two members must be used under the protection of table structure lock
-    bool decoding_schema_changed = false;
     // internal epoch for `decoding_schema_snapshot`
     Int64 decoding_schema_epoch = 1;
 
@@ -310,7 +303,17 @@ private:
 
     std::atomic<bool> shutdown_called{false};
 
-    std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
+    // TODO: remove the following two members, which are only used for debug from ch-client.
+    Strings pk_column_names;
+    std::atomic<UInt64> next_version = 1;
+
+    bool is_common_handle = false;
+    bool pk_is_handle = false;
+
+    // `decoding_schema_changed` and `decoding_schema_epoch` must be used under the protection of table structure lock
+    bool decoding_schema_changed = false;
+
+    const bool data_path_contains_database_name = false;
 
     Context & global_context;
 

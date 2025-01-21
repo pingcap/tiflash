@@ -123,7 +123,7 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const
             column_defines->emplace_back(DM::ColumnDefine{
                 column_info.id,
                 output_name,
-                getDataTypeByColumnInfoForDisaggregatedStorageLayer(column_info),
+                getDataTypeByColumnInfo(column_info),
                 column_info.defaultValueToField()});
             break;
         }

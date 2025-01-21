@@ -73,7 +73,7 @@ namespace DB
     M(force_wait_index_timeout)                                   \
     M(force_local_index_task_memory_limit_exceeded)               \
     M(exception_build_local_index_for_file)                       \
-    M(force_not_support_vector_index)                             \
+    M(force_not_support_local_index)                              \
     M(sync_schema_request_failure)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \

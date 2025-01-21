@@ -12,11 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Note: The `required` and `optional` keyword in this file does not make any sense.
+// -- For example, a field marked `optional` could be possibly required at the application level.
+// The reason why we keep them is to keep the compatibility with the old code.
+// Don't introduce required fields any more!!
+// New fields should use optional instead.
+// See https://protobuf.dev/programming-guides/proto2/
+
 syntax = "proto2";
 
 package dtpb;
 
-import "vector_index.proto"; // for VectorIndexFileProps
+import "index_file_deprecated.proto";
+import "index_file.proto"; // for IndexFilePropsV2
 
 message ColumnFileBig {
     required uint64 id = 1;
@@ -42,9 +50,10 @@ message ColumnSchema {
     required string column_type = 3;
 }
 
-message IndexInfo {
+message ColumnFileIndexInfo {
     required uint64 index_page_id = 1; // which page it stores
-    optional VectorIndexFileProps vector_index = 2; // vector index file properties, needed when read
+    optional VectorIndexFilePropsV1Deprecated deprecated_vector_index = 2; // deprecated. See field 3.
+    optional IndexFilePropsV2 index_props = 3;
 }
 
 message ColumnFileTiny {
@@ -52,7 +61,7 @@ message ColumnFileTiny {
     required uint64 id = 2;
     required uint64 rows = 3;
     required uint64 bytes = 4;
-    repeated IndexInfo indexes = 5;
+    repeated ColumnFileIndexInfo indexes = 5;
 }
 
 enum ColumnFileType {
