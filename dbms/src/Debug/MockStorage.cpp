@@ -28,6 +28,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {
@@ -588,9 +589,9 @@ TableInfo MockStorage::getTableInfoForDeltaMerge(const String & name)
     return table_infos_for_delta_merge[name];
 }
 
-DM::ColumnDefines MockStorage::getStoreColumnDefines(Int64 table_id)
+DM::ColumnDefinesPtr MockStorage::getStoreColumnDefines(Int64 table_id)
 {
-    return storage_delta_merge_map[table_id]->getStoreColumnDefines();
+    return storage_delta_merge_map[table_id]->getStore()->getStoreColumns();
 }
 
 TiDB::ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos)

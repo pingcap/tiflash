@@ -20,7 +20,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-#include <Storages/DeltaMerge/File/DMFileVectorIndexWriter.h>
+#include <Storages/DeltaMerge/File/DMFileLocalIndexWriter.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
@@ -792,10 +792,10 @@ bool SegmentTestBasic::ensureSegmentStableLocalIndex(PageIdU64 segment_id, const
     bool success = false;
     auto segment = segments[segment_id];
     auto dm_files = segment->getStable()->getDMFiles();
-    auto build_info = DMFileVectorIndexWriter::getLocalIndexBuildInfo(local_index_infos, dm_files);
+    auto build_info = DMFileLocalIndexWriter::getLocalIndexBuildInfo(local_index_infos, dm_files);
 
     // Build index
-    DMFileVectorIndexWriter iw(DMFileVectorIndexWriter::Options{
+    DMFileLocalIndexWriter iw(DMFileLocalIndexWriter::Options{
         .path_pool = storage_path_pool,
         .index_infos = build_info.indexes_to_build,
         .dm_files = dm_files,

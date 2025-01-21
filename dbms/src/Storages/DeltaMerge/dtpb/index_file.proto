@@ -1,0 +1,44 @@
+// Copyright 2025 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+syntax = "proto2";
+
+package dtpb;
+
+enum IndexFileKind {
+    INVALID = 0;
+    VECTOR_INDEX = 1;
+}
+
+message IndexFilePropsV2 {
+    optional IndexFileKind kind = 1;
+    optional int64 index_id = 2;  // For which index ID
+    optional uint64 file_size = 3;
+
+    oneof prop {
+        IndexFilePropsV2Vector vector_index = 31;
+    }
+}
+
+// Note: This message is something different to VectorIndexDefinition.
+// VectorIndexDefinition defines an index, comes from table DDL.
+// It includes information about how index should be constructed,
+// for example, it contains HNSW's 'efConstruct' parameter.
+// However, IndexFilePropsV2Vector provides information for read out the index,
+// for example, very basic information about what the index is, and how it is stored.
+message IndexFilePropsV2Vector {
+    optional uint32 format_version = 1; // Currently it must be 0.
+    optional string distance_metric = 2;  // The value is tipb.VectorDistanceMetric
+    optional uint64 dimensions = 3;
+}

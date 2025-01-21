@@ -32,10 +32,9 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type);
 ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
-#define WRAP_FOR_TEST_BEGIN                        \
-    std::vector<bool> pipeline_bools{false, true}; \
-    for (auto enable_pipeline : pipeline_bools)    \
-    {                                              \
+#define WRAP_FOR_TEST_BEGIN                    \
+    for (auto enable_pipeline : {false, true}) \
+    {                                          \
         enablePipeline(enable_pipeline);
 
 #define WRAP_FOR_TEST_END }

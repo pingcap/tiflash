@@ -21,21 +21,20 @@
 
 namespace DB::FailPoints
 {
-extern const char force_not_support_vector_index[];
+extern const char force_not_support_local_index[];
 } // namespace DB::FailPoints
 namespace DB::DM
 {
 
-bool isVectorIndexSupported(const LoggerPtr & logger)
+bool isLocalIndexSupported(const LoggerPtr & logger)
 {
-    // Vector Index requires a specific storage format to work.
     if ((STORAGE_FORMAT_CURRENT.identifier > 0 && STORAGE_FORMAT_CURRENT.identifier < 6)
         || STORAGE_FORMAT_CURRENT.identifier == 100)
     {
         LOG_ERROR(
             logger,
-            "The current storage format is {}, which does not support building vector index. TiFlash will "
-            "write data without vector index.",
+            "The current storage format is {}, which does not support building columnar index "
+            "like vector index or full text index. TiFlash will write data without index.",
             STORAGE_FORMAT_CURRENT.identifier);
         return false;
     }
@@ -52,7 +51,7 @@ ColumnID getVectorIndxColumnID(
         return EmptyColumnID;
 
     // Vector Index requires a specific storage format to work.
-    if (unlikely(!isVectorIndexSupported(logger)))
+    if (unlikely(!isLocalIndexSupported(logger)))
         return EmptyColumnID;
 
     if (idx_info.idx_cols.size() != 1)
@@ -98,8 +97,8 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
     {
         // If the storage format does not support vector index, always return an empty
         // index_info. Meaning we should drop all indexes
-        bool is_storage_format_support = isVectorIndexSupported(logger);
-        fiu_do_on(FailPoints::force_not_support_vector_index, { is_storage_format_support = false; });
+        bool is_storage_format_support = isLocalIndexSupported(logger);
+        fiu_do_on(FailPoints::force_not_support_local_index, { is_storage_format_support = false; });
         if (!is_storage_format_support)
             return LocalIndexInfosChangeset{
                 .new_local_index_infos = new_index_infos,
@@ -125,7 +124,7 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
 
     for (const auto & idx : new_table_info.index_infos)
     {
-        if (!idx.vector_index)
+        if (!idx.hasColumnarIndex())
             continue;
 
         const auto column_id = getVectorIndxColumnID(new_table_info, idx, logger);
@@ -138,10 +137,11 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
             {
                 // create a new index
                 new_index_infos->emplace_back(LocalIndexInfo{
-                    .type = IndexType::Vector,
+                    .kind = idx.columnarIndexKind(),
                     .index_id = idx.id,
                     .column_id = column_id,
-                    .index_definition = idx.vector_index,
+                    // Only one of the below will be set
+                    .def_vector_index = idx.vector_index,
                 });
                 newly_added.emplace_back(idx.id);
                 index_ids_in_new_table.emplace(idx.id);

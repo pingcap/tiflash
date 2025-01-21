@@ -780,12 +780,12 @@ try
         ASSERT_NE(local_index_snap, nullptr);
         ASSERT_EQ(local_index_snap->size(), 1);
         const auto & index = (*local_index_snap)[0];
-        ASSERT_EQ(index.type, IndexType::Vector);
+        ASSERT_EQ(index.kind, TiDB::ColumnarIndexKind::Vector);
         ASSERT_EQ(index.index_id, EmptyIndexID);
         ASSERT_EQ(index.column_id, vec_column_id);
-        ASSERT_EQ(index.index_definition->kind, tipb::VectorIndexKind::HNSW);
-        ASSERT_EQ(index.index_definition->dimension, 1);
-        ASSERT_EQ(index.index_definition->distance_metric, tipb::VectorDistanceMetric::L2);
+        ASSERT_EQ(index.def_vector_index->kind, tipb::VectorIndexKind::HNSW);
+        ASSERT_EQ(index.def_vector_index->dimension, 1);
+        ASSERT_EQ(index.def_vector_index->distance_metric, tipb::VectorDistanceMetric::L2);
     }
 
     const size_t num_rows_write = 128;
@@ -817,12 +817,12 @@ try
         ASSERT_NE(local_index_snap, nullptr);
         ASSERT_EQ(local_index_snap->size(), 1);
         const auto & index = (*local_index_snap)[0];
-        ASSERT_EQ(index.type, IndexType::Vector);
+        ASSERT_EQ(index.kind, TiDB::ColumnarIndexKind::Vector);
         ASSERT_EQ(index.index_id, EmptyIndexID);
         ASSERT_EQ(index.column_id, vec_column_id);
-        ASSERT_EQ(index.index_definition->kind, tipb::VectorIndexKind::HNSW);
-        ASSERT_EQ(index.index_definition->dimension, 1);
-        ASSERT_EQ(index.index_definition->distance_metric, tipb::VectorDistanceMetric::L2);
+        ASSERT_EQ(index.def_vector_index->kind, tipb::VectorIndexKind::HNSW);
+        ASSERT_EQ(index.def_vector_index->dimension, 1);
+        ASSERT_EQ(index.def_vector_index->distance_metric, tipb::VectorDistanceMetric::L2);
     }
 
     const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);

@@ -46,6 +46,7 @@ try
     context.context->getSettingsRef().dt_segment_limit_rows = 1;
     context.context->getSettingsRef().dt_segment_delta_cache_limit_rows = 1;
     context.context->getSettingsRef().dt_segment_force_split_size = 70;
+    context.context->getSettingsRef().enable_hash_join_v2 = false;
     context.addMockDeltaMerge(
         {"test_db", "left_table"},
         {{"col0", TiDB::TP::TypeLongLong}, {"k1", TiDB::TP::TypeLong}, {"k2", TiDB::TP::TypeLong}},
