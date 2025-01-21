@@ -667,7 +667,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
     // TODO: Parse the settings from config file at the program beginning
-    global_context->setDefaultProfiles(config());
+    global_context->setDefaultProfiles();
     LOG_INFO(
         log,
         "Loaded global settings from default_profile and system_profile, changed configs: {{{}}}",
@@ -1116,11 +1116,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         size_t n = config().getUInt64("delta_index_cache_size", 0);
         global_context->setDeltaIndexManager(n);
     }
-
-    /// Set path for format schema files
-    auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
-    global_context->setFormatSchemaPath(format_schema_path.path() + "/");
-    format_schema_path.createDirectories();
 
     // We do not support blocking store by id in OP mode currently.
     global_context->initializeStoreIdBlockList("");

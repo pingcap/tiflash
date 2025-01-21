@@ -144,7 +144,6 @@ struct ContextShared
     Databases databases; /// List of databases and tables in them.
     FormatFactory format_factory; /// Formats.
     String default_profile_name; /// Default profile name used for default values.
-    String system_profile_name; /// Profile used by system processes
     std::shared_ptr<ISecurityManager> security_manager; /// Known users.
     Quotas quotas; /// Known quotas for resource use.
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
@@ -162,7 +161,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr
         ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
-    String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries; /// The cache of shared queries.
     SchemaSyncServicePtr schema_sync_service; /// Schema sync service instance.
@@ -636,8 +634,7 @@ TiFlashSecurityConfigPtr Context::getSecurityConfig()
 
 void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    auto default_profile_name = config.getString("default_profile", "default");
-    String elem = "profiles." + default_profile_name;
+    String elem = "profiles.default";
     if (!config.has(elem))
     {
         return;
@@ -674,7 +671,7 @@ void Context::calculateUserSettings()
     settings = Settings();
 
     /// 2) Apply settings from default profile ("profiles.*" in `users_config`)
-    auto default_profile_name = getDefaultProfileName();
+    auto default_profile_name = shared->default_profile_name;
     if (profile_name != default_profile_name)
         settings.setProfile(default_profile_name, *shared->users_config);
 
@@ -2032,7 +2029,7 @@ void Context::reloadConfig() const
 {
     /// Use mutex if callback may be changed after startup.
     if (!shared->config_reload_callback)
-        throw Exception("Can't reload config beacuse config_reload_callback is not set.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Can't reload config because config_reload_callback is not set.", ErrorCodes::LOGICAL_ERROR);
 
     shared->config_reload_callback();
 }
@@ -2056,32 +2053,11 @@ void Context::setApplicationType(ApplicationType type)
     shared->application_type = type;
 }
 
-void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)
+void Context::setDefaultProfiles()
 {
-    shared->default_profile_name = config.getString("default_profile", "default");
-    shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
-    setSetting("profile", shared->system_profile_name);
+    shared->default_profile_name = "default";
+    setSetting("profile", shared->default_profile_name);
     is_config_loaded = true;
-}
-
-String Context::getDefaultProfileName() const
-{
-    return shared->default_profile_name;
-}
-
-String Context::getSystemProfileName() const
-{
-    return shared->system_profile_name;
-}
-
-String Context::getFormatSchemaPath() const
-{
-    return shared->format_schema_path;
-}
-
-void Context::setFormatSchemaPath(const String & path)
-{
-    shared->format_schema_path = path;
 }
 
 SharedQueriesPtr Context::getSharedQueries()

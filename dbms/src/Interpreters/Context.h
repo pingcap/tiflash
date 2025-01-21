@@ -511,17 +511,11 @@ public:
     ApplicationType getApplicationType() const;
     void setApplicationType(ApplicationType type);
 
-    /// Sets default_profile and system_profile, must be called once during the initialization
-    void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
-    String getDefaultProfileName() const;
-    String getSystemProfileName() const;
+    /// Sets default_profile, must be called once during the initialization
+    void setDefaultProfiles();
 
     void setServerInfo(const ServerInfo & server_info);
     const std::optional<ServerInfo> & getServerInfo() const;
-
-    /// Base path for format schemas
-    String getFormatSchemaPath() const;
-    void setFormatSchemaPath(const String & path);
 
     SharedQueriesPtr getSharedQueries();
 
