@@ -287,11 +287,14 @@ struct TiFlashProxyConfig
     // Return true if proxy need to be started, and `val_map` will be filled with the
     // proxy start params.
     // Return false if proxy is not need.
-    bool tryParseFromConfig(const Poco::Util::LayeredConfiguration & config, bool has_s3_config, const LoggerPtr & log)
+    bool tryParseFromConfig(
+        const Poco::Util::LayeredConfiguration & config,
+        const DisaggregatedMode disaggregated_mode,
+        const bool use_autoscaler,
+        const LoggerPtr & log)
     {
         // tiflash_compute doesn't need proxy.
-        auto disaggregated_mode = getDisaggregatedMode(config);
-        if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
+        if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
         {
             LOG_INFO(log, "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
             return false;
@@ -322,7 +325,8 @@ struct TiFlashProxyConfig
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
-            if (disaggregated_mode != DisaggregatedMode::Compute && has_s3_config)
+            // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
+            if (disaggregated_mode == DisaggregatedMode::Storage)
                 args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
 
             for (auto && [k, v] : args_map)
@@ -333,12 +337,13 @@ struct TiFlashProxyConfig
 
     TiFlashProxyConfig(
         Poco::Util::LayeredConfiguration & config,
-        bool has_s3_config,
+        const DisaggregatedMode disaggregated_mode,
+        const bool use_autoscaler,
         const StorageFormatVersion & format_version,
         const Settings & settings,
         const LoggerPtr & log)
     {
-        is_proxy_runnable = tryParseFromConfig(config, has_s3_config, log);
+        is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, log);
 
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
@@ -807,7 +812,7 @@ private:
 
 // By default init global thread pool by hardware_concurrency
 // Later we will adjust it by `adjustThreadPoolSize`
-void initThreadPool(Poco::Util::LayeredConfiguration & config)
+void initThreadPool(DisaggregatedMode disaggregated_mode)
 {
     size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
 
@@ -817,7 +822,6 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
         /*max_free_threads*/ default_num_threads,
         /*queue_size*/ default_num_threads * 8);
 
-    auto disaggregated_mode = getDisaggregatedMode(config);
     if (disaggregated_mode == DisaggregatedMode::Compute)
     {
         BuildReadTaskForWNPool::initialize(
@@ -996,16 +1000,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerTableFunctions();
     registerStorages();
 
+    const auto disaggregated_mode = getDisaggregatedMode(config());
+    const auto use_autoscaler = useAutoScaler(config());
+
     // Later we may create thread pool from GlobalThreadPool
     // init it before other components
-    initThreadPool(config());
+    initThreadPool(disaggregated_mode);
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
     DM::ScanContext::initCurrentInstanceId(config(), log);
-
-    const auto disaggregated_mode = getDisaggregatedMode(config());
-    const auto use_autoscaler = useAutoScaler(config());
 
     // Some Storage's config is necessary for Proxy
     TiFlashStorageConfig storage_config;
@@ -1056,7 +1060,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // sanitize check for disagg mode
     if (storage_config.s3_config.isS3Enabled())
     {
-        if (auto disaggregated_mode = getDisaggregatedMode(config()); disaggregated_mode == DisaggregatedMode::None)
+        if (disaggregated_mode == DisaggregatedMode::None)
         {
             const String message = "'flash.disaggregated_mode' must be set when S3 is enabled!";
             LOG_ERROR(log, message);
@@ -1087,7 +1091,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Init Proxy's config
     TiFlashProxyConfig proxy_conf( //
         config(),
-        storage_config.s3_config.isS3Enabled(),
+        disaggregated_mode,
+        use_autoscaler,
         STORAGE_FORMAT_CURRENT,
         settings,
         log);
@@ -1239,9 +1244,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Do it as early as possible after loading storage config.
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
 
-    // Use pd address to define which default_database we use by default.
-    // For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
-    std::string default_database = config().getString("default_database", "system");
+    // Use "system" as the default_database for all TCP connections, which is always exist in TiFlash.
+    const std::string default_database = "system";
     Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
     global_context->setPath(path);
