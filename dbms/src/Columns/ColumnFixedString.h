@@ -177,15 +177,8 @@ public:
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
 
-    void deserializeForCmpAndInsertFromPos(
-        PaddedPODArray<char *> & pos,
-        bool use_nt_align_buffer,
-        const TiDB::TiDBCollatorPtr & collator) override
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
     {
-        RUNTIME_CHECK_MSG(
-            !collator,
-            "{} doesn't support deserializeForCmpAndInsertFromPos when collator is not null",
-            getName());
         deserializeAndInsertFromPos(pos, use_nt_align_buffer);
     }
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
@@ -193,13 +186,8 @@ public:
     void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer,
-        const TiDB::TiDBCollatorPtr & collator) override
+        bool use_nt_align_buffer) override
     {
-        RUNTIME_CHECK_MSG(
-            !collator,
-            "{} doesn't support deserializeForCmpAndInsertFromPosColumnArray when collator is not null",
-            getName());
         deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
     }
     void deserializeAndInsertFromPosForColumnArray(

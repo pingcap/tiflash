@@ -353,13 +353,10 @@ void ColumnNullable::serializeToPosForColumnArray(
     getNestedColumn().serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
 }
 
-void ColumnNullable::deserializeForCmpAndInsertFromPos(
-    PaddedPODArray<char *> & pos,
-    bool use_nt_align_buffer,
-    const TiDB::TiDBCollatorPtr & collator)
+void ColumnNullable::deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
 {
-    getNullMapColumn().deserializeForCmpAndInsertFromPos(pos, use_nt_align_buffer, collator);
-    getNestedColumn().deserializeForCmpAndInsertFromPos(pos, use_nt_align_buffer, collator);
+    getNullMapColumn().deserializeForCmpAndInsertFromPos(pos, use_nt_align_buffer);
+    getNestedColumn().deserializeForCmpAndInsertFromPos(pos, use_nt_align_buffer);
 }
 void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
 {
@@ -370,11 +367,10 @@ void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, b
 void ColumnNullable::deserializeForCmpAndInsertFromPosColumnArray(
     PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
-    bool use_nt_align_buffer,
-    const TiDB::TiDBCollatorPtr & collator)
+    bool use_nt_align_buffer)
 {
-    getNullMapColumn().deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
-    getNestedColumn().deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
+    getNullMapColumn().deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer);
+    getNestedColumn().deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer);
 }
 void ColumnNullable::deserializeAndInsertFromPosForColumnArray(
     PaddedPODArray<char *> & pos,

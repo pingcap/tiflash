@@ -374,10 +374,7 @@ public:
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
 
-    void deserializeForCmpAndInsertFromPos(
-        PaddedPODArray<char *> & pos,
-        bool use_nt_align_buffer,
-        const TiDB::TiDBCollatorPtr &) override
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
     {
         deserializeAndInsertFromPos(pos, use_nt_align_buffer);
     }
@@ -386,8 +383,7 @@ public:
     void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer,
-        const TiDB::TiDBCollatorPtr &) override
+        bool use_nt_align_buffer) override
     {
         deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
     }

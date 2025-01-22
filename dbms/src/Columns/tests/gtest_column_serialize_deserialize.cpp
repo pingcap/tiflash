@@ -212,7 +212,7 @@ public:
         if (!for_compare)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -241,7 +241,7 @@ public:
         if (!for_compare)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -261,7 +261,7 @@ public:
         if (!for_compare)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
         if (use_nt_align_buffer)
             new_col_ptr->flushNTAlignBuffer();
 
@@ -319,7 +319,7 @@ public:
         if (!for_compare)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -345,7 +345,7 @@ public:
         if (!for_compare)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -365,7 +365,7 @@ public:
         if (!for_compare)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer, collator);
+            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
         if (use_nt_align_buffer)
             new_col_ptr->flushNTAlignBuffer();
 
@@ -726,29 +726,29 @@ try
     auto col_string = createColumn<String>({"hangzhou", "杭州", "你好世界", "欧元€", "abc里拉₤", "12法郎₣", ""}).column;
     testCountSerializeByteSize(
         col_string,
-        {4 + 8, 4 + 6, 4 + 12, 4 + 9, 4 + 12, 4 + 11, 4 + 0},
+        {4 + 8 + 1, 4 + 6 + 1, 4 + 12 + 1, 4 + 9 + 1, 4 + 12 + 1, 4 + 11 + 1, 4 + 0 + 1},
         true,
         collator_utf8_bin);
     testCountSerializeByteSize(
         col_string,
-        {4 + 8 * collator_utf8_general_ci->maxBytesForOneChar(),
-         4 + 2 * collator_utf8_general_ci->maxBytesForOneChar(),
-         4 + 4 * collator_utf8_general_ci->maxBytesForOneChar(),
-         4 + 3 * collator_utf8_general_ci->maxBytesForOneChar(),
-         4 + 6 * collator_utf8_general_ci->maxBytesForOneChar(),
-         4 + 5 * collator_utf8_general_ci->maxBytesForOneChar(),
-         4 + 0},
+        {4 + 8 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
+         4 + 2 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
+         4 + 4 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
+         4 + 3 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
+         4 + 6 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
+         4 + 5 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
+         4 + 0 + 1},
         true,
         collator_utf8_general_ci);
     testCountSerializeByteSize(
         col_string,
-        {4 + 8 * collator_utf8_unicode_ci->maxBytesForOneChar(),
-         4 + 2 * collator_utf8_unicode_ci->maxBytesForOneChar(),
-         4 + 4 * collator_utf8_unicode_ci->maxBytesForOneChar(),
-         4 + 3 * collator_utf8_unicode_ci->maxBytesForOneChar(),
-         4 + 6 * collator_utf8_unicode_ci->maxBytesForOneChar(),
-         4 + 5 * collator_utf8_unicode_ci->maxBytesForOneChar(),
-         4 + 0},
+        {4 + 8 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
+         4 + 2 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
+         4 + 4 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
+         4 + 3 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
+         4 + 6 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
+         4 + 5 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
+         4 + 0 + 1},
         true,
         collator_utf8_unicode_ci);
 
@@ -756,25 +756,25 @@ try
     testCountSerializeByteSizeForColumnArray(
         col_string,
         col_offset,
-        {4 + 8 * collator_utf8_bin->maxBytesForOneChar(),
-         4 * 3 + (6 + 12 + 9) * collator_utf8_bin->maxBytesForOneChar(),
-         4 * 3 + (12 + 11) * collator_utf8_bin->maxBytesForOneChar()},
+        {4 + 8 * collator_utf8_bin->maxBytesForOneChar() + 1,
+         4 * 3 + (6 + 12 + 9) * collator_utf8_bin->maxBytesForOneChar() + 1 * 3,
+         4 * 3 + (12 + 11) * collator_utf8_bin->maxBytesForOneChar() + 1 * 3},
         true,
         collator_utf8_bin);
     testCountSerializeByteSizeForColumnArray(
         col_string,
         col_offset,
-        {4 + 8 * collator_utf8_general_ci->maxBytesForOneChar(),
-         4 * 3 + (2 + 4 + 3) * collator_utf8_general_ci->maxBytesForOneChar(),
-         4 * 3 + (6 + 5) * collator_utf8_general_ci->maxBytesForOneChar()},
+        {4 + 8 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
+         4 * 3 + (2 + 4 + 3) * collator_utf8_general_ci->maxBytesForOneChar() + 1 * 3,
+         4 * 3 + (6 + 5) * collator_utf8_general_ci->maxBytesForOneChar() + 1 * 3},
         true,
         collator_utf8_general_ci);
     testCountSerializeByteSizeForColumnArray(
         col_string,
         col_offset,
-        {4 + 8 * collator_utf8_unicode_ci->maxBytesForOneChar(),
-         4 * 3 + (2 + 4 + 3) * collator_utf8_unicode_ci->maxBytesForOneChar(),
-         4 * 3 + (6 + 5) * collator_utf8_unicode_ci->maxBytesForOneChar()},
+        {4 + 8 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
+         4 * 3 + (2 + 4 + 3) * collator_utf8_unicode_ci->maxBytesForOneChar() + 1 * 3,
+         4 * 3 + (6 + 5) * collator_utf8_unicode_ci->maxBytesForOneChar() + 1 * 3},
         true,
         collator_utf8_unicode_ci);
 

@@ -259,10 +259,7 @@ public:
                 array_offsets);
     }
 
-    void deserializeForCmpAndInsertFromPos(
-        PaddedPODArray<char *> & pos,
-        bool use_nt_align_buffer,
-        const TiDB::TiDBCollatorPtr &) override
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
     {
         deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer);
     }
@@ -274,8 +271,7 @@ public:
     void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer,
-        const TiDB::TiDBCollatorPtr &) override
+        bool use_nt_align_buffer) override
     {
         deserializeAndInsertFromPosForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
     }

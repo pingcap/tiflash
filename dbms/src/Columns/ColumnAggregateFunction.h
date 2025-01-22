@@ -238,10 +238,7 @@ public:
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void deserializeForCmpAndInsertFromPos(
-        PaddedPODArray<char *> & /* pos */,
-        bool /* use_nt_align_buffer */,
-        const TiDB::TiDBCollatorPtr & /* collator */) override
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) override
     {
         throw Exception(
             "Method deserializeForCmpAndInsertFromPos is not supported for " + getName(),
@@ -257,8 +254,7 @@ public:
     void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & /* pos */,
         const IColumn::Offsets & /* array_offsets */,
-        bool /* use_nt_align_buffer */,
-        const TiDB::TiDBCollatorPtr & /* collator */) override
+        bool /* use_nt_align_buffer */) override
     {
         throw Exception(
             "Method deserializeForCmpAndInsertFromPosColumnArray is not supported for " + getName(),

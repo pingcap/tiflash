@@ -315,10 +315,7 @@ public:
     ///     }
     ///     for (auto & column_ptr : mutable_columns)
     ///         column_ptr->flushNTAlignBuffer();
-    virtual void deserializeForCmpAndInsertFromPos(
-        PaddedPODArray<char *> & /* pos */,
-        bool /* use_nt_align_buffer */,
-        const TiDB::TiDBCollatorPtr & /* collator */)
+    virtual void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */)
         = 0;
     virtual void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) = 0;
 
@@ -329,8 +326,7 @@ public:
     virtual void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & /* pos */,
         const Offsets & /* array_offsets */,
-        bool /* use_nt_align_buffer */,
-        const TiDB::TiDBCollatorPtr & /* collator */)
+        bool /* use_nt_align_buffer */)
         = 0;
     virtual void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,

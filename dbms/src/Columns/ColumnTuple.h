@@ -170,13 +170,10 @@ public:
             column->serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
     }
 
-    void deserializeForCmpAndInsertFromPos(
-        PaddedPODArray<char *> & pos,
-        bool use_nt_align_buffer,
-        const TiDB::TiDBCollatorPtr & collator) override
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
     {
         for (auto & column : columns)
-            column->assumeMutableRef().deserializeForCmpAndInsertFromPos(pos, use_nt_align_buffer, collator);
+            column->assumeMutableRef().deserializeForCmpAndInsertFromPos(pos, use_nt_align_buffer);
     }
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
     {
@@ -187,12 +184,13 @@ public:
     void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer,
-        const TiDB::TiDBCollatorPtr & collator) override
+        bool use_nt_align_buffer) override
     {
         for (auto & column : columns)
-            column->assumeMutableRef()
-                .deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer, collator);
+            column->assumeMutableRef().deserializeForCmpAndInsertFromPosColumnArray(
+                pos,
+                array_offsets,
+                use_nt_align_buffer);
     }
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & pos,
