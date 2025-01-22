@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <ranges>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -199,9 +200,8 @@ std::optional<RowID> VersionChain<HandleType>::findBaseVersionFromDMFileOrDelete
     HandleRef h)
 {
     // From from new to old
-    for (auto itr = dmfile_or_delete_range_list.rbegin(); itr != dmfile_or_delete_range_list.rend(); ++itr)
+    for (auto & dmfile_or_delete_range : dmfile_or_delete_range_list | std::views::reverse)
     {
-        auto & dmfile_or_delete_range = *itr;
         if (auto * dmfile_index = std::get_if<DMFileHandleIndex<HandleType>>(&dmfile_or_delete_range); dmfile_index)
         {
             if (auto row_id = dmfile_index->getBaseVersion(dm_context, h); row_id)

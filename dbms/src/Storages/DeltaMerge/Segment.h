@@ -843,7 +843,7 @@ public:
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;
 
-    VersionChain<Int64> version_chain; // TODO: support common handle
+    std::variant<VersionChain<Int64>, VersionChain<String>> version_chain;
 };
 
 void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info);

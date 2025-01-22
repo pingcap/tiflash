@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <ranges>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -235,9 +236,8 @@ void buildVersionFilter(
     // Delta MVCC
     UInt32 read_rows = 0;
     // Read versions from new to old
-    for (auto itr = cfs.rbegin(); itr != cfs.rend(); ++itr)
+    for (const auto & cf : cfs | std::views::reverse)
     {
-        const auto & cf = *itr;
         if (cf->isDeleteRange()) // Delete range is handled by RowKeyFilter.
             continue;
 
