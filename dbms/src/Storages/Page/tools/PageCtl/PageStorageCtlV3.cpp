@@ -28,6 +28,7 @@
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -54,6 +55,7 @@ struct ControlOptions
         DISPLAY_WAL_ENTRIES = 5,
         DISPLAY_REGION_INFO = 6,
         DISPLAY_BLOB_DATA = 7,
+        DELETE_KVSTORE_REGION = 8,
     };
 
     std::vector<std::string> paths;
@@ -95,6 +97,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
  5 is dump entries in WAL log files
  6 is display all region info
  7 is display blob data (in hex)
+ 8 is delete regino in kvstore
 )") //
         ("show_entries",
          value<bool>()->default_value(true),
@@ -155,6 +158,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     }
     opt.paths = options["paths"].as<std::vector<std::string>>();
     auto mode_int = options["mode"].as<int>();
+    LOG_INFO(DB::Logger::get(), "!!!!!! dsdsdsfAAd {}", mode_int);
     opt.page_id = options["page_id"].as<UInt64>();
     opt.blob_id = options["blob_id"].as<BlobFileId>();
     opt.blob_offset = options["blob_offset"].as<BlobFileOffset>();
@@ -250,6 +254,7 @@ public:
     {
         try
         {
+            LOG_INFO(DB::Logger::get(), "!!!!! run.");
             if (options.is_imitative)
             {
                 auto context = Context::createGlobal();
@@ -314,7 +319,7 @@ private:
         }
 
         // Other display mode need to restore ps instance
-        auto display = [](auto & mvcc_table_directory, auto & blob_store, const ControlOptions & opts) {
+        auto display = [](auto & ps, auto & mvcc_table_directory, auto & blob_store, const ControlOptions & opts) {
             switch (opts.mode)
             {
             case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
@@ -364,6 +369,7 @@ private:
             {
                 if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
                 {
+                    LOG_INFO(DB::Logger::get(), "!!!!! fdfde.");
                     fmt::println("{}", getAllRegionInfo(mvcc_table_directory));
                 }
                 else
@@ -378,6 +384,23 @@ private:
                 fmt::println("hex:{}", hex_data);
                 break;
             }
+            case ControlOptions::DisplayType::DELETE_KVSTORE_REGION:
+            {
+                if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
+                {
+                    if (KVSTORE_NAMESPACE_ID != opts.namespace_id) {
+                        LOG_WARNING(DB::Logger::get(), "A valid KVStore namespace should with namespace id {}", KVSTORE_NAMESPACE_ID);
+                    }
+                    WriteBatch wb(opts.namespace_id);
+                    wb.delPage(opts.page_id);
+                    ps.write(std::move(wb));
+                }
+                else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
+                {
+                    std::cout << "Do not support in Unips mode." << std::endl;
+                }
+                break;
+            }
             default:
                 std::cout << "Invalid display mode." << std::endl;
                 break;
@@ -390,7 +413,7 @@ private:
             ps.restore();
             auto & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
             auto & blobstore = ps.blob_store;
-            display(mvcc_table_directory, blobstore, options);
+            display(ps, mvcc_table_directory, blobstore, options);
         }
         else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
         {
@@ -398,7 +421,7 @@ private:
             ps->restore();
             auto & mvcc_table_directory = ps->page_directory->mvcc_table_directory;
             auto & blobstore = ps->blob_store;
-            display(mvcc_table_directory, *blobstore, options);
+            display(ps, mvcc_table_directory, *blobstore, options);
         }
 
         return 0;
@@ -455,6 +478,7 @@ private:
         return stats_info.toString();
     }
 
+    // mode 2 DISPLAY_DIRECTORY_INFO
     static String getDirectoryInfo(
         typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory,
         bool show_entries,
@@ -539,6 +563,7 @@ private:
             // Only show the given page_id
             if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
             {
+                LOG_INFO(DB::Logger::get(), "!!!!! u128u128u128");
                 if (internal_id.low == page_id && internal_id.high == ns_id)
                 {
                     directory_info.append(page_info(internal_id, versioned_entries, ""));
@@ -547,6 +572,7 @@ private:
             }
             else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
             {
+                LOG_INFO(DB::Logger::get(), "!!!!! universaluniversaluniversal");
                 RUNTIME_CHECK_MSG(
                     storage_type == StorageType::Log || storage_type == StorageType::Data
                         || storage_type == StorageType::Meta || storage_type == StorageType::KVStore,
@@ -766,6 +792,7 @@ private:
         if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
         {
             const auto & page_internal_id = buildV3Id(ns_id, page_id);
+            LOG_INFO(DB::Logger::get(), "!!!!! fdfdf {} {} {}", page_id, ns_id, page_internal_id);
             return check(page_internal_id);
         }
         else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
