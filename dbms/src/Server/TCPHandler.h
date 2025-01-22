@@ -26,9 +26,8 @@
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
 #include <Poco/Net/TCPServerConnection.h>
+#include <Server/IServer.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
-
-#include "IServer.h"
 
 
 namespace DB
@@ -87,7 +86,7 @@ public:
         , connection_context(server.context())
         , query_context(server.context())
     {
-        server_display_name = server.config().getString("display_name", "TiFlash");
+        server_display_name = "TiFlash";
     }
 
     void run() override;
