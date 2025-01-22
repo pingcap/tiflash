@@ -112,8 +112,10 @@ void setupAllocator([[maybe_unused]] const LoggerPtr & log)
 
     LOG_INFO(log, "Got jemalloc config: opt.background_thread {}, opt.max_background_threads {}", old_b, old_max_thd);
 
-    if (!malloc_conf && !old_b)
+    bool not_config_bg = !malloc_conf || strstr(malloc_conf, "background_thread") == NULL;
+    if (not_config_bg && !old_b)
     {
+        // If the user doesn't explicitly set the background_thread opt, and it is actually false, then set it to true.
         LOG_INFO(log, "Try to use background_thread of jemalloc to handle purging asynchronously");
 
         RUN_FAIL_RETURN(je_mallctl("max_background_threads", nullptr, nullptr, (void *)&new_max_thd, sz_st));
