@@ -305,11 +305,6 @@ private:
     EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
 
-    static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
-    {
-        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
-    }
-
     static String localIndexFileName(IndexID index_id, TiDB::ColumnarIndexKind kind)
     {
         // Note: Keep sync with FileCache::getFileType()
