@@ -305,13 +305,14 @@ CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView
     {
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftDataReader reader(*uni_ps);
-        auto * page = new Page(reader.read(UniversalPageId(page_id.data, page_id.len)));
-        if (page->isValid())
+        auto p = reader.read(UniversalPageId(page_id.data, page_id.len));
+        if (p.isValid())
         {
             LOG_TRACE(
                 &Poco::Logger::get("ProxyFFI"),
                 "FFI read page {} success",
                 UniversalPageId(page_id.data, page_id.len));
+            auto * page = new Page(std::move(p));
             return CppStrWithView{
                 .inner = GenRawCppPtr(page, RawCppPtrTypeImpl::UniversalPage),
                 .view = BaseBuffView{page->data.begin(), page->data.size()},
@@ -1009,11 +1010,7 @@ BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_
         if (!value)
         {
             // key not exist
-            LOG_WARNING(
-                Logger::get(),
-                "Failed to get lock by key {}, region_id={}",
-                tikv_key.toDebugString(),
-                region_id);
+            LOG_DEBUG(Logger::get(), "Failed to get lock by key {}, region_id={}", tikv_key.toDebugString(), region_id);
             return BaseBuffView{};
         }
 

@@ -230,6 +230,7 @@ public: // Raft Snapshot
     size_t getOngoingPrehandleSubtaskCount() const;
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     size_t getMaxParallelPrehandleSize() const;
+    size_t getMaxPrehandleSubtaskSize() const;
 
 public: // Raft Read
     void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }

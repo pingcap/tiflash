@@ -47,7 +47,7 @@ struct FieldOffsetInsidePage
     bool operator<(const FieldOffsetInsidePage & rhs) const { return index < rhs.index; }
 };
 
-struct Page
+class Page
 {
 public:
     static Page invalidPage()
@@ -69,7 +69,7 @@ public:
     std::set<FieldOffsetInsidePage> field_offsets;
 
 private:
-    bool is_valid;
+    bool is_valid = false;
 
 public:
     inline bool isValid() const { return is_valid; }

@@ -54,6 +54,17 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
         tables_regions_info.regionCount(),
         tables_regions_info.tableCount());
 
+#if SERVERLESS_PROXY != 0
+    if (context->isKeyspaceInBlocklist(meta.keyspace_id())
+        || context->isRegionsContainsInBlocklist(tables_regions_info.getAllRegionID()))
+    {
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "disaggregated request disabled for keyspace or regions in keyspace",
+            meta.keyspace_id());
+    }
+#endif
+
     // set schema ver and start ts
     auto schema_ver = request->schema_ver();
     context->setSetting("schema_version", schema_ver);

@@ -141,4 +141,22 @@ TablesRegionsInfo TablesRegionsInfo::create(
     return tables_regions_info;
 }
 
+std::vector<RegionID> TablesRegionsInfo::getAllRegionID() const
+{
+    std::vector<RegionID> all_regions;
+    for (const auto & ele : table_regions_info_map)
+    {
+        const auto & single_table_region = ele.second;
+        for (const auto & region : single_table_region.local_regions)
+        {
+            all_regions.push_back(region.first);
+        }
+        for (const auto & region : single_table_region.remote_regions)
+        {
+            all_regions.push_back(region.region_id);
+        }
+    }
+    return all_regions;
+}
+
 } // namespace DB
