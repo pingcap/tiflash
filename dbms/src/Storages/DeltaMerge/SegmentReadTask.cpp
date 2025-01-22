@@ -137,12 +137,11 @@ SegmentReadTask::SegmentReadTask(
                 {
                     for (const auto & index_info : *index_infos)
                     {
-                        if (index_info.vector_index)
-                        {
-                            remote_page_ids.emplace_back(index_info.index_page_id);
-                            remote_page_sizes.emplace_back(index_info.vector_index->index_bytes());
-                            ++count;
-                        }
+                        RUNTIME_CHECK(index_info.has_index_page_id());
+                        RUNTIME_CHECK(index_info.index_props().has_kind());
+                        remote_page_ids.emplace_back(index_info.index_page_id());
+                        remote_page_sizes.emplace_back(index_info.index_props().file_size());
+                        ++count;
                     }
                 }
             }

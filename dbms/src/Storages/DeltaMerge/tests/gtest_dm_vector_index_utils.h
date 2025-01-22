@@ -23,6 +23,7 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TiDB/Decode/DatumCodec.h>
+#include <TiDB/Schema/TiDB.h>
 
 
 namespace DB::DM::tests
@@ -85,10 +86,10 @@ public:
     {
         const LocalIndexInfos index_infos = LocalIndexInfos{
             LocalIndexInfo{
-                .type = IndexType::Vector,
+                .kind = TiDB::ColumnarIndexKind::Vector,
                 .index_id = EmptyIndexID,
                 .column_id = vec_column_id,
-                .index_definition = std::make_shared<TiDB::VectorIndexDefinition>(definition),
+                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(definition),
             },
         };
         return std::make_shared<LocalIndexInfos>(index_infos);

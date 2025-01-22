@@ -31,6 +31,9 @@ public:
     std::optional<Block> flush();
 
 private:
+    std::optional<Block> doDecodeAndSquash(const String & str);
+
+    std::optional<Block> doDecodeAndSquashV1(std::string_view sv);
     std::optional<Block> decodeAndSquashV1Impl(ReadBuffer & istr);
 
 private:

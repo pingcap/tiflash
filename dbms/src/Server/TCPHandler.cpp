@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "TCPHandler.h"
-
 #include <Common/ExternalTable.h>
 #include <Common/FmtUtils.h>
 #include <Common/NetException.h>
@@ -35,6 +33,7 @@
 #include <Interpreters/TablesStatus.h>
 #include <Interpreters/executeQuery.h>
 #include <Poco/Net/NetException.h>
+#include <Server/TCPHandler.h>
 #include <Storages/KVStore/Read/LockException.h>
 #include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/StorageMemory.h>

@@ -59,24 +59,24 @@ struct LastElementCache<Data, false>
 template <typename Mapped>
 class EmplaceResultImpl
 {
-    Mapped & value;
-    Mapped & cached_value;
-    bool inserted;
+    Mapped * value = nullptr;
+    Mapped * cached_value = nullptr;
+    bool inserted = false;
 
 public:
     EmplaceResultImpl(Mapped & value_, Mapped & cached_value_, bool inserted_)
-        : value(value_)
-        , cached_value(cached_value_)
+        : value(&value_)
+        , cached_value(&cached_value_)
         , inserted(inserted_)
     {}
 
     bool isInserted() const { return inserted; }
-    auto & getMapped() const { return value; }
+    auto & getMapped() const { return *value; }
 
     void setMapped(const Mapped & mapped)
     {
-        cached_value = mapped;
-        value = mapped;
+        *cached_value = mapped;
+        *value = mapped;
     }
 };
 
@@ -119,7 +119,7 @@ public:
     bool isFound() const { return found; }
 };
 
-template <typename Derived, typename Value, typename Mapped, bool consecutive_keys_optimization>
+template <typename TDerived, typename Value, typename Mapped, bool consecutive_keys_optimization>
 class HashMethodBase
 {
 public:
@@ -127,6 +127,7 @@ public:
     using FindResult = FindResultImpl<Mapped>;
     static constexpr bool has_mapped = !std::is_same<Mapped, VoidMapped>::value;
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
+    using Derived = TDerived;
 
     template <typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(
@@ -137,6 +138,12 @@ public:
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return emplaceImpl(key_holder, data);
+    }
+
+    template <typename KeyHolder, typename Data>
+    ALWAYS_INLINE inline EmplaceResult emplaceKey(Data & data, KeyHolder && key_holder, size_t hashval)
+    {
+        return emplaceImpl(key_holder, data, hashval);
     }
 
     template <typename Data>
@@ -150,14 +157,20 @@ public:
         return findKeyImpl(keyHolderGetKey(key_holder), data);
     }
 
+    template <typename KeyHolder, typename Data>
+    ALWAYS_INLINE inline FindResult findKey(Data & data, KeyHolder && key_holder, size_t hashval)
+    {
+        return findKeyImpl(keyHolderGetKey(key_holder), data, hashval);
+    }
+
     template <typename Data>
     ALWAYS_INLINE inline size_t getHash(
         const Data & data,
         size_t row,
         Arena & pool,
-        std::vector<String> & sort_key_containers)
+        std::vector<String> & sort_key_containers) const
     {
-        auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
+        auto key_holder = static_cast<const Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
         return data.hash(keyHolderGetKey(key_holder));
     }
 
@@ -180,6 +193,28 @@ protected:
     }
 
     template <typename Data, typename KeyHolder>
+    ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data, size_t hashval)
+    {
+        if constexpr (Cache::consecutive_keys_optimization)
+        {
+            if (cache.found && cache.check(keyHolderGetKey(key_holder)))
+            {
+                if constexpr (has_mapped)
+                    return EmplaceResult(cache.value.second, cache.value.second, false);
+                else
+                    return EmplaceResult(false);
+            }
+        }
+
+        typename Data::LookupResult it;
+        bool inserted = false;
+
+        data.emplace(key_holder, it, inserted, hashval);
+
+        return handleEmplaceResult<Data>(it, inserted);
+    }
+
+    template <typename Data, typename KeyHolder>
     ALWAYS_INLINE inline EmplaceResult emplaceImpl(KeyHolder & key_holder, Data & data)
     {
         if constexpr (Cache::consecutive_keys_optimization)
@@ -195,8 +230,15 @@ protected:
 
         typename Data::LookupResult it;
         bool inserted = false;
+
         data.emplace(key_holder, it, inserted);
 
+        return handleEmplaceResult<Data>(it, inserted);
+    }
+
+    template <typename Data>
+    ALWAYS_INLINE inline EmplaceResult handleEmplaceResult(typename Data::LookupResult & it, bool inserted)
+    {
         [[maybe_unused]] Mapped * cached = nullptr;
         if constexpr (has_mapped)
             cached = &it->getMapped();
@@ -233,7 +275,7 @@ protected:
     }
 
     template <typename Data, typename Key>
-    ALWAYS_INLINE inline FindResult findKeyImpl(Key key, Data & data)
+    ALWAYS_INLINE inline FindResult findKeyImpl(Key & key, Data & data)
     {
         if constexpr (Cache::consecutive_keys_optimization)
         {
@@ -246,8 +288,35 @@ protected:
             }
         }
 
-        auto it = data.find(key);
+        typename Data::LookupResult it;
+        it = data.find(key);
 
+        return handleFindResult<Data, Key>(key, it);
+    }
+
+    template <typename Data, typename Key>
+    ALWAYS_INLINE inline FindResult findKeyImpl(Key & key, Data & data, size_t hashval)
+    {
+        if constexpr (Cache::consecutive_keys_optimization)
+        {
+            if (cache.check(key))
+            {
+                if constexpr (has_mapped)
+                    return FindResult(&cache.value.second, cache.found);
+                else
+                    return FindResult(cache.found);
+            }
+        }
+
+        typename Data::LookupResult it;
+        it = data.find(key, hashval);
+
+        return handleFindResult<Data, Key>(key, it);
+    }
+
+    template <typename Data, typename Key>
+    ALWAYS_INLINE inline FindResult handleFindResult(Key & key, typename Data::LookupResult & it)
+    {
         if constexpr (consecutive_keys_optimization)
         {
             cache.found = it != nullptr;

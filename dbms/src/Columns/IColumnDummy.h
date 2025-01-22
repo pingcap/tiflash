@@ -213,9 +213,9 @@ public:
 
     void insertManyFrom(const IColumn &, size_t, size_t length) override { s += length; }
 
-    void insertDisjunctFrom(const IColumn &, const std::vector<size_t> & position_vec) override
+    void insertSelectiveFrom(const IColumn &, const Offsets & selective_offsets) override
     {
-        s += position_vec.size();
+        s += selective_offsets.size();
     }
 
     void insertRangeFrom(const IColumn & /*src*/, size_t /*start*/, size_t length) override { s += length; }

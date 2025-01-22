@@ -60,7 +60,7 @@ void ExecutionSummary::merge(const tipb::ExecutorExecutionSummary & other)
     inner_zone_send_bytes += other.tiflash_network_summary().inner_zone_send_bytes();
     inner_zone_receive_bytes += other.tiflash_network_summary().inner_zone_receive_bytes();
     inter_zone_send_bytes += other.tiflash_network_summary().inter_zone_send_bytes();
-    inter_zone_receive_bytes += other.tiflash_network_summary().inter_zone_send_bytes();
+    inter_zone_receive_bytes += other.tiflash_network_summary().inter_zone_receive_bytes();
     ru_consumption = mergeRUConsumption(ru_consumption, parseRUConsumption(other));
     scan_context->merge(other.tiflash_scan_context());
 }
@@ -92,7 +92,7 @@ void ExecutionSummary::init(const tipb::ExecutorExecutionSummary & other)
     inner_zone_send_bytes = other.tiflash_network_summary().inner_zone_send_bytes();
     inner_zone_receive_bytes = other.tiflash_network_summary().inner_zone_receive_bytes();
     inter_zone_send_bytes = other.tiflash_network_summary().inter_zone_send_bytes();
-    inter_zone_receive_bytes = other.tiflash_network_summary().inter_zone_send_bytes();
+    inter_zone_receive_bytes = other.tiflash_network_summary().inter_zone_receive_bytes();
     ru_consumption = parseRUConsumption(other);
     scan_context->deserialize(other.tiflash_scan_context());
 }
