@@ -63,7 +63,6 @@ class TMTContext;
 using TMTContextPtr = std::shared_ptr<TMTContext>;
 class ProcessList;
 class ProcessListElement;
-class Macros;
 struct Progress;
 class QueryLog;
 class IDatabase;

@@ -16,7 +16,6 @@
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
-#include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/TiFlashSecurity.h>
