@@ -41,17 +41,13 @@ void searchInt64(benchmark::State & state, Args &&... args)
     std::random_device rd;
     std::mt19937 g(rd());
 
-    auto gen_always_found = [&]() {
+    std::function<Int64()> gen_always_found = [&]() {
         return g() % size;
     };
-    auto gen_always_not_found = [&]() {
+    std::function<Int64()> gen_always_not_found = [&]() {
         return gen_always_found() + size;
     };
-    std::function<long()> gen;
-    if (result == SearchResult::AlwaysFound)
-        gen = gen_always_found;
-    else
-        gen = gen_always_not_found;
+    auto gen = result == SearchResult::AlwaysFound ? gen_always_found : gen_always_not_found;
 
     if (type == SearchType::BinarySearch)
     {
@@ -106,17 +102,13 @@ void searchStruct(benchmark::State & state, Args &&... args)
     std::random_device rd;
     std::mt19937 g(rd());
 
-    auto gen_always_found = [&]() {
+    std::function<Int64()> gen_always_found = [&]() {
         return g() % size;
     };
-    auto gen_always_not_found = [&]() {
+    std::function<Int64()> gen_always_not_found = [&]() {
         return gen_always_found() + size;
     };
-    std::function<long()> gen;
-    if (result == SearchResult::AlwaysFound)
-        gen = gen_always_found;
-    else
-        gen = gen_always_not_found;
+    auto gen = result == SearchResult::AlwaysFound ? gen_always_found : gen_always_not_found;
 
     if (type == SearchType::BinarySearch)
     {
