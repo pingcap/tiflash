@@ -47,29 +47,19 @@ public:
     ~SchemaSyncService();
 
     friend class tests::SchemaSyncTest;
-    bool gc(Timestamp gc_safepoint, KeyspaceID keyspace_id);
+    bool gc(Timestamp gc_safepoint);
 
     void shutdown();
 
 private:
     bool syncSchemas();
 
-<<<<<<< HEAD
     struct GCContext
     {
         Timestamp last_gc_safepoint = 0;
     } gc_context;
 
-    bool gc(Timestamp gc_safepoint);
-=======
-
-    void addKeyspaceGCTasks();
-    void removeKeyspaceGCTasks();
-
-    std::optional<Timestamp> lastGcSafePoint(KeyspaceID keyspace_id) const;
-    void updateLastGcSafepoint(KeyspaceID keyspace_id, Timestamp gc_safepoint);
-    bool gcImpl(Timestamp gc_safepoint, KeyspaceID keyspace_id, bool ignore_remain_regions);
->>>>>>> 62809fe010 (ddl: Fix the physically drop storage instance may block removing regions (#9442))
+    bool gcImpl(Timestamp gc_safepoint, bool ignore_remain_regions);
 
 private:
     Context & context;

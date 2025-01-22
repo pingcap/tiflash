@@ -170,9 +170,9 @@ public:
         drop_interpreter.execute();
     }
 
-    static std::optional<Timestamp> lastGcSafePoint(const SchemaSyncServicePtr & sync_service, KeyspaceID keyspace_id)
+    static std::optional<Timestamp> lastGcSafePoint(const SchemaSyncServicePtr & sync_service)
     {
-        return sync_service->lastGcSafePoint(keyspace_id);
+        return sync_service->gc_context.last_gc_safepoint;
     }
 
 private:
@@ -189,8 +189,6 @@ protected:
     Context & global_ctx;
 };
 
-<<<<<<< HEAD
-=======
 TEST_F(SchemaSyncTest, SchemaDiff)
 try
 {
@@ -202,7 +200,6 @@ try
 }
 CATCH
 
->>>>>>> 62809fe010 (ddl: Fix the physically drop storage instance may block removing regions (#9442))
 TEST_F(SchemaSyncTest, RenameTables)
 try
 {
@@ -274,16 +271,10 @@ try
     sync_service->shutdown(); // shutdown the background tasks
 
     // run gc with safepoint == 0, will be skip
-    ASSERT_FALSE(sync_service->gc(0, NullspaceID));
-    ASSERT_TRUE(sync_service->gc(10000000, NullspaceID));
+    ASSERT_FALSE(sync_service->gc(0));
+    ASSERT_TRUE(sync_service->gc(10000000));
     // run gc with the same safepoint, will be skip
-    ASSERT_FALSE(sync_service->gc(10000000, NullspaceID));
-    // run gc for another keyspace with same safepoint, will be executed
-    ASSERT_TRUE(sync_service->gc(10000000, 1024));
-    // run gc with changed safepoint
-    ASSERT_TRUE(sync_service->gc(20000000, 1024));
-    // run gc with the same safepoint
-    ASSERT_FALSE(sync_service->gc(20000000, 1024));
+    ASSERT_FALSE(sync_service->gc(10000000));
 }
 CATCH
 
@@ -324,23 +315,23 @@ try
 
     {
         // ensure gc_safe_point cache is empty
-        auto last_gc_safe_point = lastGcSafePoint(sync_service, NullspaceID);
-        ASSERT_FALSE(last_gc_safe_point.has_value());
+        auto last_gc_safe_point = lastGcSafePoint(sync_service);
+        ASSERT_EQ(*last_gc_safe_point, 0);
     }
 
     // Run GC, but the table is not physically dropped because `force_set_num_regions_for_table`
-    ASSERT_FALSE(sync_service->gc(std::numeric_limits<UInt64>::max(), NullspaceID));
+    ASSERT_FALSE(sync_service->gc(std::numeric_limits<UInt64>::max()));
     {
         // gc_safe_point cache is not updated
-        auto last_gc_safe_point = lastGcSafePoint(sync_service, NullspaceID);
-        ASSERT_FALSE(last_gc_safe_point.has_value());
+        auto last_gc_safe_point = lastGcSafePoint(sync_service);
+        ASSERT_EQ(*last_gc_safe_point, 0);
     }
 
     // ensure the table is not physically dropped
     size_t num_remain_tables = 0;
     for (auto table_id : table_ids)
     {
-        auto storage = global_ctx.getTMTContext().getStorages().get(NullspaceID, table_id);
+        auto storage = global_ctx.getTMTContext().getStorages().get(table_id);
         ASSERT_TRUE(storage->isTombstone());
         ++num_remain_tables;
     }

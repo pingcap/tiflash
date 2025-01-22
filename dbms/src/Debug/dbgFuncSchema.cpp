@@ -96,14 +96,10 @@ void dbgFuncGcSchemas(Context & context, const ASTs & args, DBGInvoker::Printer 
         gc_safe_point = PDClientHelper::getGCSafePointWithRetry(context.getTMTContext().getPDClient());
     if (!args.empty())
         gc_safe_point = safeGet<Timestamp>(typeid_cast<const ASTLiteral &>(*args[0]).value);
-<<<<<<< HEAD
-    service->gc(gc_safe_point);
-=======
     if (args.size() >= 2)
         ignore_remain_regions = safeGet<String>(typeid_cast<const ASTLiteral &>(*args[1]).value) == "true";
     // Note that only call it in tests, we need to ignore remain regions
-    service->gcImpl(gc_safe_point, NullspaceID, ignore_remain_regions);
->>>>>>> 62809fe010 (ddl: Fix the physically drop storage instance may block removing regions (#9442))
+    service->gcImpl(gc_safe_point, ignore_remain_regions);
 
     output("schemas gc done");
 }

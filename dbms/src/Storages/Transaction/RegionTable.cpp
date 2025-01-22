@@ -12,11 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-<<<<<<< HEAD
-=======
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
->>>>>>> 62809fe010 (ddl: Fix the physically drop storage instance may block removing regions (#9442))
 #include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/IManageableStorage.h>
@@ -437,10 +434,7 @@ void RegionTable::handleInternalRegionsByTable(const TableID table_id, std::func
         callback(it->second.regions);
 }
 
-<<<<<<< HEAD
-std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const TableID table_id) const
-=======
-std::vector<RegionID> RegionTable::getRegionIdsByTable(KeyspaceID keyspace_id, TableID table_id) const
+std::vector<RegionID> RegionTable::getRegionIdsByTable(TableID table_id) const
 {
     fiu_do_on(FailPoints::force_set_num_regions_for_table, {
         if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_num_regions_for_table); v)
@@ -451,7 +445,7 @@ std::vector<RegionID> RegionTable::getRegionIdsByTable(KeyspaceID keyspace_id, T
     });
 
     std::lock_guard lock(mutex);
-    if (auto iter = tables.find(KeyspaceTableID{keyspace_id, table_id}); //
+    if (auto iter = tables.find(table_id); //
         unlikely(iter != tables.end()))
     {
         std::vector<RegionID> ret_regions;
@@ -465,8 +459,7 @@ std::vector<RegionID> RegionTable::getRegionIdsByTable(KeyspaceID keyspace_id, T
     return {};
 }
 
-std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const KeyspaceID keyspace_id, const TableID table_id) const
->>>>>>> 62809fe010 (ddl: Fix the physically drop storage instance may block removing regions (#9442))
+std::vector<std::pair<RegionID, RegionPtr>> RegionTable::getRegionsByTable(const TableID table_id) const
 {
     auto & kvstore = context->getTMTContext().getKVStore();
     std::vector<std::pair<RegionID, RegionPtr>> regions;
