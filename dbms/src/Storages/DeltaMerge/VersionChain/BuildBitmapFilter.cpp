@@ -75,14 +75,28 @@ BitmapFilterPtr buildBitmapFilter(
     const UInt64 read_ts,
     std::variant<VersionChain<Int64>, VersionChain<String>> & variant_version_chain)
 {
-    return std::visit([&](auto & version_chain) {
-        using T = std::decay_t<decltype(version_chain)>;
-        if constexpr (std::is_same_v<T, VersionChain<Int64>>)
-            return buildBitmapFilter(dm_context, snapshot, read_ranges, pack_filter_results, read_ts, version_chain);
-        else if constexpr (std::is_same_v<T, VersionChain<String>>)
-            return buildBitmapFilter(dm_context, snapshot, read_ranges, pack_filter_results, read_ts, version_chain);
-        else
-            static_assert(false, "Only VersionChain<Int64> and VersionChain<String> is supported");
-    }, variant_version_chain);
+    return std::visit(
+        [&](auto & version_chain) {
+            using T = std::decay_t<decltype(version_chain)>;
+            if constexpr (std::is_same_v<T, VersionChain<Int64>>)
+                return buildBitmapFilter(
+                    dm_context,
+                    snapshot,
+                    read_ranges,
+                    pack_filter_results,
+                    read_ts,
+                    version_chain);
+            else if constexpr (std::is_same_v<T, VersionChain<String>>)
+                return buildBitmapFilter(
+                    dm_context,
+                    snapshot,
+                    read_ranges,
+                    pack_filter_results,
+                    read_ts,
+                    version_chain);
+            else
+                static_assert(false, "Only VersionChain<Int64> and VersionChain<String> is supported");
+        },
+        variant_version_chain);
 }
 } // namespace DB::DM
