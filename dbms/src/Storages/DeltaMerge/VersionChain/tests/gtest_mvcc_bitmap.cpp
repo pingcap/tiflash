@@ -25,12 +25,12 @@ using namespace DB::DM::tests::MVCC;
 namespace DB::DM::tests
 {
 template <ExtraHandleType HandleType>
-void randomMVCCBitmapVerify(UInt32 delta_rows)
+void randomMVCCBitmapVerify(WriteLoad write_load, UInt32 delta_rows)
 try
 {
     constexpr bool is_common_handle = std::is_same_v<HandleType, String>;
     auto [context, dm_context, cols, segment, segment_snapshot, random_sequences]
-        = initialize(is_common_handle, delta_rows);
+        = initialize(write_load, is_common_handle, delta_rows);
     SCOPE_EXIT({ context->shutdown(); });
 
     ASSERT_EQ(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first, 0);
@@ -38,7 +38,6 @@ try
     ASSERT_EQ(delta_index->getPlacedStatus().first, delta_rows);
     segment_snapshot->delta->getSharedDeltaIndex()->updateIfAdvanced(*delta_index);
     ASSERT_EQ(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first, delta_rows);
-
 
     VersionChain<HandleType> version_chain;
     buildVersionChain(*dm_context, *segment_snapshot, version_chain);
@@ -66,8 +65,13 @@ try
     RUNTIME_ASSERT(filter1.size() == filter2.size());
     for (UInt32 i = 0; i < filter1.size(); ++i)
     {
-        ASSERT_EQ(filter1[i], filter2[i])
-            << fmt::format("i={}, filter1={}, filter2={}, delta_rows={}", i, filter1[i], filter2[i], delta_rows);
+        ASSERT_EQ(filter1[i], filter2[i]) << fmt::format(
+            "i={}, filter1={}, filter2={}, write_load={}, delta_rows={}",
+            i,
+            filter1[i],
+            filter2[i],
+            magic_enum::enum_name(write_load),
+            delta_rows);
     }
 }
 CATCH
@@ -76,13 +80,15 @@ static constexpr UInt32 max_delta_rows = 8 << 13;
 
 TEST(TestVersionChain, randomMVCCBitmapVerify)
 {
-    for (UInt32 delta_rows = 1; delta_rows <= max_delta_rows; delta_rows *= 8)
-        randomMVCCBitmapVerify<Int64>(delta_rows);
+    for (auto write_load : magic_enum::enum_values<WriteLoad>())
+        for (UInt32 delta_rows = 1; delta_rows <= max_delta_rows; delta_rows *= 8)
+            randomMVCCBitmapVerify<Int64>(write_load, delta_rows);
 }
 
 TEST(TestVersionChain, randomMVCCBitmapVerify_CommonHandle)
 {
-    for (UInt32 delta_rows = 1; delta_rows <= max_delta_rows; delta_rows *= 8)
-        randomMVCCBitmapVerify<String>(delta_rows);
+    for (auto write_load : magic_enum::enum_values<WriteLoad>())
+        for (UInt32 delta_rows = 1; delta_rows <= max_delta_rows; delta_rows *= 8)
+            randomMVCCBitmapVerify<String>(write_load, delta_rows);
 }
 } // namespace DB::DM::tests
