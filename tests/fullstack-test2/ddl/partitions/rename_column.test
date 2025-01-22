@@ -1,0 +1,29 @@
+# Copyright 2025 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+mysql> drop table if exists test.t
+
+mysql> create table test.t (`col5def` mediumint DEFAULT '1398811', `colb0ec` datetime DEFAULT '8060-08-20 09:18:05', `colc4d2` year(4) DEFAULT '2123', `colf318` enum('vzd','f1y','wndk','bdw9','qkg','pj','z3','6pj2q','zgm','x5qj','uiyv') DEFAULT 'bdw9', `3f60e6b3` decimal(33,25) DEFAULT '-66552329.3166265', `colf8a2` bigint DEFAULT '600923851820286643') PARTITION BY HASH (`colf8a2`) PARTITIONS 9;
+mysql> insert into test.t values ();
+mysql> alter table test.t set tiflash replica 1;
+
+mysql> alter table test.t change 3f60e6b3 3f60e6b2 decimal(33,25) DEFAULT '-66552329.3166265';
+mysql> set tidb_enforce_mpp=1; select * from test.t;
++---------+---------------------+---------+---------+-------------------------------------+--------------------+
+| col5def | colb0ec             | colc4d2 | colf318 | 3f60e6b2                            | colf8a2            |
++---------+---------------------+---------+---------+-------------------------------------+--------------------+
+| 1398811 | 8060-08-20 09:18:05 |    2123 | bdw9    | -66552329.3166265000000000000000000 | 600923851820286643 |
++---------+---------------------+---------+---------+-------------------------------------+--------------------+
+
+mysql> drop table test.t;
