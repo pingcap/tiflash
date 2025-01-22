@@ -75,10 +75,19 @@ SchemaSyncService::SchemaSyncService(DB::Context & context_)
         false);
 }
 
+void SchemaSyncService::shutdown()
+{
+    if (handle)
+    {
+        background_pool.removeTask(handle);
+        handle = nullptr;
+        LOG_INFO(log, "SchemaSyncService stopped");
+    }
+}
+
 SchemaSyncService::~SchemaSyncService()
 {
-    background_pool.removeTask(handle);
-    LOG_INFO(log, "SchemaSyncService stopped");
+    shutdown();
 }
 
 bool SchemaSyncService::syncSchemas()
@@ -95,7 +104,11 @@ inline std::tuple<bool, Timestamp> isSafeForGC(const DatabaseOrTablePtr & ptr, T
 
 bool SchemaSyncService::gc(Timestamp gc_safepoint)
 {
-    auto & tmt_context = context.getTMTContext();
+    return gcImpl(gc_safepoint, /*ignore_remain_regions*/ false);
+}
+
+bool SchemaSyncService::gcImpl(Timestamp gc_safepoint, bool ignore_remain_regions)
+{
     // for new deploy cluster, there is an interval that gc_safepoint return 0, skip it
     if (gc_safepoint == 0)
         return false;
@@ -141,6 +154,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint)
         }
     }
 
+    auto & tmt_context = context.getTMTContext();
     // Physically drop tables
     bool succeeded = true;
     for (auto & storage_ptr : storages_to_gc)
@@ -159,6 +173,38 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint)
             return db_info ? SchemaNameMapper().debugCanonicalName(*db_info, table_info)
                            : "(" + database_name + ")." + SchemaNameMapper().debugTableName(table_info);
         }();
+
+        auto & region_table = tmt_context.getRegionTable();
+        if (auto remain_regions = region_table.getRegionIdsByTable(table_info.id); //
+            !remain_regions.empty())
+        {
+            if (likely(!ignore_remain_regions))
+            {
+                LOG_WARNING(
+                    log,
+                    "Physically drop table is skip, regions are not totally removed from TiFlash, remain_region_ids={}"
+                    " table_tombstone={} safepoint={} {}",
+                    remain_regions,
+                    storage->getTombstone(),
+                    gc_safepoint,
+                    canonical_name);
+                succeeded = false; // dropping this table is skipped, do not succee the `last_gc_safepoint`
+                continue;
+            }
+            else
+            {
+                LOG_WARNING(
+                    log,
+                    "Physically drop table is executed while regions are not totally removed from TiFlash,"
+                    " remain_region_ids={} ignore_remain_regions={} table_tombstone={} safepoint={} {} ",
+                    remain_regions,
+                    ignore_remain_regions,
+                    storage->getTombstone(),
+                    gc_safepoint,
+                    canonical_name);
+            }
+        }
+
         LOG_INFO(
             log,
             "Physically drop table begin, table_tombstone={} safepoint={} {}",
@@ -179,7 +225,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint)
         }
         catch (DB::Exception & e)
         {
-            succeeded = false;
+            succeeded = false; // dropping this table is skipped, do not succee the `last_gc_safepoint`
             String err_msg;
             // Maybe a read lock of a table is held for a long time, just ignore it this round.
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
@@ -229,7 +275,7 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint)
         }
         catch (DB::Exception & e)
         {
-            succeeded = false;
+            succeeded = false; // dropping this database is skipped, do not succee the `last_gc_safepoint`
             String err_msg;
             if (e.code() == ErrorCodes::DEADLOCK_AVOIDED)
                 err_msg = "locking attempt has timed out!"; // ignore verbose stack for this error
@@ -239,6 +285,8 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint)
         }
     }
 
+    // TODO: Optimize it after `BackgroundProcessingPool` can the task return how many seconds to sleep
+    //       before next round.
     if (succeeded)
     {
         gc_context.last_gc_safepoint = gc_safepoint;
@@ -248,6 +296,11 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint)
             num_tables_removed,
             num_databases_removed,
             gc_safepoint);
+        // This round of GC could run for a long time. Run immediately to check whether
+        // the latest gc_safepoint has been updated in PD.
+        // - gc_safepoint is not updated, it will be skipped because gc_safepoint == last_gc_safepoint
+        // - gc_safepoint is updated, run again immediately to cleanup other dropped data
+        return true;
     }
     else
     {
@@ -257,9 +310,10 @@ bool SchemaSyncService::gc(Timestamp gc_safepoint)
             "Schema GC meet error, will try again later, last_safepoint={} safepoint={}",
             gc_context.last_gc_safepoint,
             gc_safepoint);
+        // Return false to let it run again after `ddl_sync_interval_seconds` even if the gc_safepoint
+        // on PD is not updated.
+        return false;
     }
-
-    return true;
 }
 
 } // namespace DB
