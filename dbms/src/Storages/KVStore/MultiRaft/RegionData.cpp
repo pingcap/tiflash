@@ -83,7 +83,7 @@ RegionDataMemDiff RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVVa
     case ColumnFamilyType::Lock:
     {
         auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
-        // By inserting a lock, a old lock of the same key could be replaced, for example, perssi -> opti.
+        // By inserting a lock, a old lock of the same key could be replaced. For example, pessimistic lock -> optimistic lock.
         recordMemChange(delta);
         return delta;
     }
