@@ -112,7 +112,7 @@ void setupAllocator([[maybe_unused]] const LoggerPtr & log)
 
     LOG_INFO(log, "Got jemalloc config: opt.background_thread {}, opt.max_background_threads {}", old_b, old_max_thd);
 
-    bool not_config_bg = !malloc_conf || strstr(malloc_conf, "background_thread") == NULL;
+    bool not_config_bg = !malloc_conf || strstr(malloc_conf, "background_thread") == nullptr;
     if (not_config_bg && !old_b)
     {
         // If the user doesn't explicitly set the background_thread opt, and it is actually false, then set it to true.
