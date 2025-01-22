@@ -86,4 +86,12 @@ private:
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
 };
+
+inline std::variant<VersionChain<Int64>, VersionChain<String>> createVersionChain(bool is_common_handle)
+{
+    if (is_common_handle)
+        return std::variant<VersionChain<Int64>, VersionChain<String>>{std::in_place_type<VersionChain<String>>};
+    else
+        return std::variant<VersionChain<Int64>, VersionChain<String>>{std::in_place_type<VersionChain<Int64>>};
+}
 } // namespace DB::DM

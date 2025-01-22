@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <ranges>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -230,9 +231,8 @@ void buildRowKeyFilter(
     RowKeyRanges delete_ranges;
     UInt32 read_rows = 0;
     // Read ColumnFiles from new to old for handling delete ranges
-    for (auto itr = cfs.rbegin(); itr != cfs.rend(); ++itr)
+    for (const auto & cf : cfs | std::views::reverse)
     {
-        const auto & cf = *itr;
         if (const auto * cf_delete_range = cf->tryToDeleteRange(); cf_delete_range)
         {
             delete_ranges.push_back(cf_delete_range->getDeleteRange());

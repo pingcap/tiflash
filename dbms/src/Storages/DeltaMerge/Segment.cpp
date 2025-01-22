@@ -296,6 +296,7 @@ Segment::Segment( //
     , stable(stable_)
     , parent_log(parent_log_)
     , log(parent_log_->getChild(fmt::format("segment_id={} epoch={}", segment_id, epoch)))
+    , version_chain(createVersionChain(is_common_handle))
 {
     if (delta != nullptr)
         delta->resetLogger(log);
