@@ -19,12 +19,9 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/RSResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-
-#include <memory>
-
-#include "Storages/DeltaMerge/Index/RSResult.h"
 
 namespace DB::DM
 {
