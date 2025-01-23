@@ -88,7 +88,7 @@ void AsynchronousMetrics::run()
 
     std::unique_lock lock{wait_mutex};
 
-    /// Next minute + 30 seconds. To be distant with moment of transmission of metrics, see MetricsTransmitter.
+    /// Next minute + 30 seconds. To be distant with moment of transmission of metrics.
     const auto get_next_minute = [] {
         return std::chrono::time_point_cast<std::chrono::minutes, std::chrono::steady_clock>(
                    std::chrono::steady_clock::now() + std::chrono::minutes(1))
