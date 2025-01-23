@@ -46,8 +46,8 @@ BitmapFilterPtr buildBitmapFilter(
     buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, pack_filter_results[0], filter);
     buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
     buildDeletedFilter(dm_context, snapshot, filter);
-
-    bitmap_filter->runOptimize();
+    // TODO: Make buildRowKeyFilter/buildVersionFilter/buildDeletedFilter returns filtered rows.
+    bitmap_filter->setAllMatch(false);
     return bitmap_filter;
 }
 
