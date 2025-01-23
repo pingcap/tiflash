@@ -20,6 +20,13 @@
 
 #include <span>
 
+
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-builtins"
+
+#include <absl/container/btree_map.h>
+#include <absl/container/flat_hash_map.h>
+
 namespace DB::DM
 {
 
@@ -82,7 +89,7 @@ private:
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
     std::shared_ptr<std::vector<RowID>> base_versions; // base_versions->size() == delta.getRows()
-    std::map<HandleType, RowID, std::less<>> new_handle_to_row_ids;
+    absl::btree_map<HandleType, RowID> new_handle_to_row_ids;
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
 };
