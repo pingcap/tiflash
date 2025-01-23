@@ -18,9 +18,6 @@
 #include <Common/StackTrace.h>
 #include <Poco/Exception.h>
 
-#include <memory>
-#include <vector>
-
 
 namespace DB
 {
