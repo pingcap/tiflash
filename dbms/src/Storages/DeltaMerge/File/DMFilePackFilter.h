@@ -111,7 +111,17 @@ public:
             , rows(rows_)
         {}
     };
-    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmapFilter(
+    /**
+    * @brief For all the packs in `pack_filter_results`, if all the rows in the pack
+    *        compliant with RowKey filter and MVCC filter (by `start_ts`) requirements, then
+    *        we skip reading the packs from disk and return the skipped ranges and new
+    *        PackFilterResults for building bitmap.
+    * @return <SkippedRanges, NewPackFilterResults>
+    *        - SkippedRanges: All the rows in the ranges compliant the requirements
+    *        - NewPackFilterResults: Those packs should be read from disk and go through the
+    *                                RowKey filter and MVCC filter
+    */
+    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmap(
         const DMContext & dm_context,
         const DMFiles & dmfiles,
         const DMFilePackFilterResults & pack_filter_results,

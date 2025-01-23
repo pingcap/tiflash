@@ -3161,7 +3161,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     };
 
     auto [skipped_ranges, new_pack_filter_results]
-        = DMFilePackFilter::getSkippedRangeAndFilterForBitmapFilter(dm_context, dmfiles, pack_filter_results, start_ts);
+        = DMFilePackFilter::getSkippedRangeAndFilterForBitmap(dm_context, dmfiles, pack_filter_results, start_ts);
     if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0
         && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {

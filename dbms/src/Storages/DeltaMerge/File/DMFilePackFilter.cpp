@@ -303,7 +303,7 @@ void DMFilePackFilter::tryLoadIndex(RSCheckParam & param, ColId col_id)
 }
 
 std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFilePackFilter::
-    getSkippedRangeAndFilterForBitmapFilter(
+    getSkippedRangeAndFilterForBitmap(
         const DMContext & dm_context,
         const DMFiles & dmfiles,
         const DMFilePackFilterResults & pack_filter_results,
@@ -344,6 +344,8 @@ std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFileP
             if (handle_res[pack_id] == RSResult::Some || pack_stat.not_clean > 0
                 || pack_filter->getMaxVersion(dmfile, pack_id, file_provider, dm_context.scan_context) > start_ts)
             {
+                // `not_clean > 0` means there are more than one version for some rowkeys in this pack
+                // `pack.max_version > start_ts` means some rows will be filtered by MVCC reading
                 // We need to read this pack to do RowKey or MVCC filter.
                 continue;
             }
@@ -351,6 +353,7 @@ std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFileP
             if unlikely (!new_pack_filter)
                 new_pack_filter = std::make_shared<DMFilePackFilterResult>(*pack_filter);
 
+            // This pack is skipped by the skipped_range, do not need to read the rows from disk
             new_pack_filter->pack_res[pack_id] = RSResult::None;
             // When this pack is next to the previous pack, we merge them.
             // Otherwise, we record the previous continuous packs and start a new one.
