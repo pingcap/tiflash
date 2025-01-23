@@ -106,7 +106,7 @@ RegionDataMemDiff RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key
         auto iter = data.find(kv_pair.first);
         if (iter != data.end())
         {
-            // Could be a perssimistic lock is overwritten, or a old generation large txn lock is overwritten.
+            // Could be a pessimistic lock is overwritten, or a old generation large txn lock is overwritten.
             delta.sub(calcTotalKVSize(iter->second));
             data.erase(iter);
 
