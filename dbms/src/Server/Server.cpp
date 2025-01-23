@@ -19,7 +19,6 @@
 #include <Common/DynamicThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
@@ -66,7 +65,6 @@
 #include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
 #include <Server/MetricsPrometheus.h>
-#include <Server/MetricsTransmitter.h>
 #include <Server/RaftConfigParser.h>
 #include <Server/Server.h>
 #include <Server/ServerInfo.h>
@@ -668,7 +666,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
     // TODO: Parse the settings from config file at the program beginning
-    global_context->setDefaultProfiles(config());
+    global_context->setDefaultProfiles();
     LOG_INFO(
         log,
         "Loaded global settings from default_profile and system_profile, changed configs: {{{}}}",
@@ -921,17 +919,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setFlagsPath(path + "flags/");
     }
 
-    /** Directory with user provided files that are usable by 'file' table function.
-      */
-    {
-        std::string user_files_path = config().getString("user_files_path", path + "user_files/");
-        global_context->setUserFilesPath(user_files_path);
-        Poco::File(user_files_path).createDirectories();
-    }
-
-    if (config().has("macros"))
-        global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
-
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
@@ -1051,7 +1038,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         [&](ConfigurationPtr config) {
             LOG_DEBUG(log, "run main config reloader");
             buildLoggers(*config);
-            global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
@@ -1129,11 +1115,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         size_t n = config().getUInt64("delta_index_cache_size", 0);
         global_context->setDeltaIndexManager(n);
     }
-
-    /// Set path for format schema files
-    auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
-    global_context->setFormatSchemaPath(format_schema_path.path() + "/");
-    format_schema_path.createDirectories();
 
     // We do not support blocking store by id in OP mode currently.
     global_context->initializeStoreIdBlockList("");
@@ -1305,13 +1286,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
         AsynchronousMetrics async_metrics(*global_context);
         attachSystemTablesAsync(*global_context->getDatabase("system"), async_metrics);
-
-        std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;
-        for (const auto & graphite_key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
-        {
-            metrics_transmitters.emplace_back(
-                std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
-        }
 
         auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
 

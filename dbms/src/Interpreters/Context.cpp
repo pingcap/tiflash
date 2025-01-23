@@ -16,7 +16,6 @@
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
-#include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/TiFlashSecurity.h>
@@ -137,7 +136,6 @@ struct ContextShared
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
     String flags_path; /// Path to the directory with some control flags for server maintenance.
-    String user_files_path; /// Path to the directory with user provided files, usable by 'file' table function.
     PathPool
         path_pool; /// The data directories. RegionPersister and some Storage Engine like DeltaMerge will use this to manage data placement on disks.
     ConfigurationPtr config; /// Global configuration settings.
@@ -145,7 +143,6 @@ struct ContextShared
     Databases databases; /// List of databases and tables in them.
     FormatFactory format_factory; /// Formats.
     String default_profile_name; /// Default profile name used for default values.
-    String system_profile_name; /// Profile used by system processes
     std::shared_ptr<ISecurityManager> security_manager; /// Known users.
     Quotas quotas; /// Known quotas for resource use.
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
@@ -163,8 +160,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr
         ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
-    MultiVersion<Macros> macros; /// Substitutions extracted from config.
-    String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries; /// The cache of shared queries.
     SchemaSyncServicePtr schema_sync_service; /// Schema sync service instance.
@@ -553,12 +548,6 @@ String Context::getFlagsPath() const
     return shared->flags_path;
 }
 
-String Context::getUserFilesPath() const
-{
-    auto lock = getLock();
-    return shared->user_files_path;
-}
-
 PathPool & Context::getPathPool() const
 {
     auto lock = getLock();
@@ -576,9 +565,6 @@ void Context::setPath(const String & path)
 
     if (shared->flags_path.empty())
         shared->flags_path = shared->path + "flags/";
-
-    if (shared->user_files_path.empty())
-        shared->user_files_path = shared->path + "user_files/";
 }
 
 void Context::setTemporaryPath(const String & path)
@@ -591,12 +577,6 @@ void Context::setFlagsPath(const String & path)
 {
     auto lock = getLock();
     shared->flags_path = path;
-}
-
-void Context::setUserFilesPath(const String & path)
-{
-    auto lock = getLock();
-    shared->user_files_path = path;
 }
 
 void Context::setPathPool(
@@ -653,8 +633,7 @@ TiFlashSecurityConfigPtr Context::getSecurityConfig()
 
 void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    auto default_profile_name = config.getString("default_profile", "default");
-    String elem = "profiles." + default_profile_name;
+    String elem = "profiles.default";
     if (!config.has(elem))
     {
         return;
@@ -691,7 +670,7 @@ void Context::calculateUserSettings()
     settings = Settings();
 
     /// 2) Apply settings from default profile ("profiles.*" in `users_config`)
-    auto default_profile_name = getDefaultProfileName();
+    auto default_profile_name = shared->default_profile_name;
     if (profile_name != default_profile_name)
         settings.setProfile(default_profile_name, *shared->users_config);
 
@@ -1247,16 +1226,6 @@ String Context::getDefaultFormat() const
 void Context::setDefaultFormat(const String & name)
 {
     default_format = name;
-}
-
-MultiVersion<Macros>::Version Context::getMacros() const
-{
-    return shared->macros.get();
-}
-
-void Context::setMacros(std::unique_ptr<Macros> && macros)
-{
-    shared->macros.set(std::move(macros));
 }
 
 const Context & Context::getQueryContext() const
@@ -2059,7 +2028,7 @@ void Context::reloadConfig() const
 {
     /// Use mutex if callback may be changed after startup.
     if (!shared->config_reload_callback)
-        throw Exception("Can't reload config beacuse config_reload_callback is not set.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Can't reload config because config_reload_callback is not set.", ErrorCodes::LOGICAL_ERROR);
 
     shared->config_reload_callback();
 }
@@ -2083,32 +2052,11 @@ void Context::setApplicationType(ApplicationType type)
     shared->application_type = type;
 }
 
-void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)
+void Context::setDefaultProfiles()
 {
-    shared->default_profile_name = config.getString("default_profile", "default");
-    shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
-    setSetting("profile", shared->system_profile_name);
+    shared->default_profile_name = "default";
+    setSetting("profile", shared->default_profile_name);
     is_config_loaded = true;
-}
-
-String Context::getDefaultProfileName() const
-{
-    return shared->default_profile_name;
-}
-
-String Context::getSystemProfileName() const
-{
-    return shared->system_profile_name;
-}
-
-String Context::getFormatSchemaPath() const
-{
-    return shared->format_schema_path;
-}
-
-void Context::setFormatSchemaPath(const String & path)
-{
-    shared->format_schema_path = path;
 }
 
 SharedQueriesPtr Context::getSharedQueries()

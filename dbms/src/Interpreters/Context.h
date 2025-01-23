@@ -63,7 +63,6 @@ class TMTContext;
 using TMTContextPtr = std::shared_ptr<TMTContext>;
 class ProcessList;
 class ProcessListElement;
-class Macros;
 struct Progress;
 class QueryLog;
 class IDatabase;
@@ -308,9 +307,6 @@ public:
     String getDefaultFormat() const; /// If default_format is not specified, some global default format is returned.
     void setDefaultFormat(const String & name);
 
-    MultiVersion<Macros>::Version getMacros() const;
-    void setMacros(std::unique_ptr<Macros> && macros);
-
     Settings getSettings() const;
     void setSettings(const Settings & settings_);
 
@@ -514,17 +510,11 @@ public:
     ApplicationType getApplicationType() const;
     void setApplicationType(ApplicationType type);
 
-    /// Sets default_profile and system_profile, must be called once during the initialization
-    void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
-    String getDefaultProfileName() const;
-    String getSystemProfileName() const;
+    /// Sets default_profile, must be called once during the initialization
+    void setDefaultProfiles();
 
     void setServerInfo(const ServerInfo & server_info);
     const std::optional<ServerInfo> & getServerInfo() const;
-
-    /// Base path for format schemas
-    String getFormatSchemaPath() const;
-    void setFormatSchemaPath(const String & path);
 
     SharedQueriesPtr getSharedQueries();
 

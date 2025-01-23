@@ -238,10 +238,20 @@ public:
 
     /// Count the serialize byte size and added to the byte_size.
     /// The byte_size.size() must be equal to the column size.
+    virtual void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const TiDB::TiDBCollatorPtr & /* collator */) const
+        = 0;
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
+
     /// Count the serialize byte size and added to the byte_size called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The byte_size.size() must be equal to the array_offsets.size().
+    virtual void countSerializeByteSizeForCmpColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const Offsets & /* array_offsets */,
+        const TiDB::TiDBCollatorPtr & /* collator */) const
+        = 0;
     virtual void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const Offsets & /* array_offsets */) const
@@ -252,15 +262,33 @@ public:
     /// Note:
     /// 1. The pos.size() must be greater than or equal to length.
     /// 2. If has_null is true, then the pos[i] could be nullptr, which means the i-th element does not need to be serialized.
+    virtual void serializeToPosForCmp(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        String * /* sort_key_container */) const
+        = 0;
     virtual void serializeToPos(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */) const
         = 0;
+
     /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
     /// serialized data.
     /// Only called by ColumnArray.
+    virtual void serializeToPosForCmpColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const Offsets & /* array_offsets */,
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        String * /* sort_key_container */) const
+        = 0;
     virtual void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
@@ -287,11 +315,19 @@ public:
     ///     }
     ///     for (auto & column_ptr : mutable_columns)
     ///         column_ptr->flushNTAlignBuffer();
+    virtual void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */)
+        = 0;
     virtual void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) = 0;
+
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
     /// Only called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
+    virtual void deserializeForCmpAndInsertFromPosColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const Offsets & /* array_offsets */,
+        bool /* use_nt_align_buffer */)
+        = 0;
     virtual void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         const Offsets & /* array_offsets */,

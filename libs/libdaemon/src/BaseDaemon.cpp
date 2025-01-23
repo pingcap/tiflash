@@ -100,8 +100,6 @@ using Poco::Logger;
 using Poco::Message;
 using Poco::Util::AbstractConfiguration;
 
-constexpr char BaseDaemon::DEFAULT_GRAPHITE_CONFIG_NAME[];
-
 /** For transferring information from signal handler to a separate thread.
   * If you need to do something serious in case of a signal (example: write a message to the log),
   *  then sending information to a separate thread through pipe and doing all the stuff asynchronously
@@ -1161,11 +1159,6 @@ void BaseDaemon::initialize(Application & self)
 
     signal_listener = std::make_unique<SignalListener>(*this);
     signal_listener_thread.start(*signal_listener);
-
-    for (const auto & key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
-    {
-        graphite_writers.emplace(key, std::make_unique<GraphiteWriter>(key));
-    }
 }
 
 void BaseDaemon::logVersion() const

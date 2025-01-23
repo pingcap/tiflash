@@ -44,6 +44,20 @@ private:
 
     ColumnArray(const ColumnArray &) = default;
 
+    template <bool for_compare>
+    void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const;
+
+    template <bool has_null, bool for_compare>
+    void serializeToPosImpl(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const TiDB::TiDBCollatorPtr & collator,
+        String * sort_key_container) const;
+
+    template <bool for_compare>
+    void deserializeAndInsertFromPosImpl(PaddedPODArray<char *> & pos, bool use_nt_align_buffer);
+
 public:
     /** Create immutable column using immutable arguments. This arguments may be shared with other columns.
       * Use IColumn::mutate in order to make mutable column and mutate shared nested columns.
@@ -82,7 +96,19 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
+    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+        const override;
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+
+    void countSerializeByteSizeForCmpColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const IColumn::Offsets & /* array_offsets */,
+        const TiDB::TiDBCollatorPtr & /* collator */) const override
+    {
+        throw Exception(
+            "Method countSerializeByteSizeForCmpColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const IColumn::Offsets & /* array_offsets */) const override
@@ -92,10 +118,28 @@ public:
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    void serializeToPosForCmp(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const TiDB::TiDBCollatorPtr & collator,
+        String * sort_key_container) const override;
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
-    template <bool has_null>
-    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
 
+    void serializeToPosForCmpColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const IColumn::Offsets & /* array_offsets */,
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        String * /* sort_key_container */) const override
+    {
+        throw Exception(
+            "Method serializeToPosForCmpColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
@@ -108,7 +152,18 @@ public:
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
+
+    void deserializeForCmpAndInsertFromPosColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const IColumn::Offsets & /* array_offsets */,
+        bool /* use_nt_align_buffer */) override
+    {
+        throw Exception(
+            "Method deserializeForCmpAndInsertFromPosColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         const IColumn::Offsets & /* array_offsets */,
