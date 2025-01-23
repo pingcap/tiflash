@@ -392,4 +392,37 @@ String RegionData::summary() const
     return fmt::format("write:{},lock:{},default:{}", write_cf.getSize(), lock_cf.getSize(), default_cf.getSize());
 }
 
+size_t RegionData::tryCompactionFilter(const Timestamp safe_point)
+{
+    size_t del_write = 0;
+    auto & write_map = write_cf.getDataMut();
+    auto & default_map = default_cf.getDataMut();
+    for (auto write_map_it = write_map.begin(); write_map_it != write_map.end();)
+    {
+        const auto & decoded_val = std::get<2>(write_map_it->second);
+        const auto & [pk, ts] = write_map_it->first;
+
+        if (decoded_val.write_type == RecordKVFormat::CFModifyFlag::PutFlag)
+        {
+            if (!decoded_val.short_value)
+            {
+                if (auto data_it = default_map.find({pk, decoded_val.prewrite_ts}); data_it == default_map.end())
+                {
+                    // if key-val in write cf can not find matched data in default cf and its commit-ts < gc-safe-point, we can clean it safely.
+                    if (ts < safe_point)
+                    {
+                        del_write += 1;
+                        cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_map_it->second);
+                        write_map_it = write_map.erase(write_map_it);
+                        continue;
+                    }
+                }
+            }
+        }
+        ++write_map_it;
+    }
+    // No need to check default cf. Because tikv will gc default cf before write cf.
+    return del_write;
+}
+
 } // namespace DB

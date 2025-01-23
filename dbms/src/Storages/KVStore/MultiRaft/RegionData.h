@@ -86,6 +86,8 @@ public:
     void assignRegionData(RegionData && new_region_data);
 
     String summary() const;
+    size_t tryCompactionFilter(const Timestamp safe_point);
+
     struct OrphanKeysInfo
     {
         // Protected by region task lock.

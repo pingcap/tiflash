@@ -41,7 +41,7 @@ struct RegionDataMemDiff
         , decoded(0)
     {}
 
-    RegionDataMemDiff operator-() const { return {-payload, -decoded}; }
+    RegionDataMemDiff neg() const { return {-payload, -decoded}; }
 
     void add(const RegionDataMemDiff & other)
     {
