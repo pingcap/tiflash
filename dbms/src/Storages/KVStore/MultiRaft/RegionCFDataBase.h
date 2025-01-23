@@ -41,7 +41,7 @@ struct RegionDataMemDiff
         , decoded(0)
     {}
 
-    RegionDataMemDiff neg() const { return {-payload, -decoded}; }
+    RegionDataMemDiff negative() const { return {-payload, -decoded}; }
 
     void add(const RegionDataMemDiff & other)
     {
@@ -81,9 +81,6 @@ struct RegionCFDataBase
     static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
     static RegionDataMemDiff calcTotalKVSize(const Value & value);
 
-    size_t calcDecodedKeyValueSize(const Value & value);
-    size_t calcDecodedKeyValueSize(const TiKVKey & key, const TiKVValue & value);
-
     RegionDataMemDiff remove(const Key & key, bool quiet = false);
 
     static bool cmp(const Map & a, const Map & b);
@@ -107,6 +104,9 @@ struct RegionCFDataBase
     Data & getDataMut();
 
 private:
+    size_t calcDecodedKeyValueSize(const Value & value);
+    size_t calcDecodedKeyValueSize(const TiKVKey & key, const TiKVValue & value);
+
     static bool shouldIgnoreRemove(const Value & value);
 
 private:

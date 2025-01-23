@@ -137,7 +137,7 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
 
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
         {
-            auto delta = -RegionDefaultCFData::calcTotalKVSize(data_it->second);
+            auto delta = RegionDefaultCFData::calcTotalKVSize(data_it->second).negative();
             cf_data_size += delta.payload;
             decoded_data_size += delta.decoded;
             map.erase(data_it);
@@ -145,7 +145,7 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
         }
     }
 
-    auto delta = -RegionWriteCFData::calcTotalKVSize(write_it->second);
+    auto delta = RegionWriteCFData::calcTotalKVSize(write_it->second);
     cf_data_size += delta.payload;
     decoded_data_size += delta.decoded;
     reportDealloc(-delta.payload);

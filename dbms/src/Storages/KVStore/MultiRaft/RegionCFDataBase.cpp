@@ -177,7 +177,7 @@ RegionDataMemDiff RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
         if (shouldIgnoreRemove(value))
             return {0, 0};
 
-        auto delta = -calcTotalKVSize(value);
+        auto delta = calcTotalKVSize(value).negative();
         if constexpr (std::is_same<Trait, RegionLockCFDataTrait>::value)
         {
             if unlikely (std::get<2>(value)->isLargeTxn())
@@ -331,17 +331,15 @@ template <typename Trait>
 RegionDataMemDiff RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase & new_region_data)
 {
     auto size = readBinary2<size_t>(buf);
-    size_t cf_data_size = 0;
-    size_t decoded_data_size = 0;
+    RegionDataMemDiff total_diff;
     for (size_t i = 0; i < size; ++i)
     {
         auto key = TiKVKey::deserialize(buf);
         auto value = TiKVValue::deserialize(buf);
-        auto r = new_region_data.insert(std::move(key), std::move(value));
-        cf_data_size += r.payload;
-        decoded_data_size += r.decoded;
+        auto diff = new_region_data.insert(std::move(key), std::move(value));
+        total_diff.add(diff);
     }
-    return {cf_data_size, decoded_data_size};
+    return total_diff;
 }
 
 template <typename Trait>
