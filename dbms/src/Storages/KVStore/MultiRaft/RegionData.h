@@ -131,7 +131,7 @@ private:
     RegionLockCFData lock_cf;
     OrphanKeysInfo orphan_keys_info;
 
-    // Size of 3 cfs, reflects size of real palyload flows to KVStore.
+    // Size of 3 cfs, reflects size of real payload flows to KVStore.
     std::atomic<size_t> cf_data_size = 0;
     // Size of decoded structures for convenient access, considered as amplification in memory.
     std::atomic<size_t> decoded_data_size = 0;
