@@ -148,9 +148,9 @@ UInt32 VersionChain<HandleType>::replayBlock(
     {
         const auto h = *itr;
         const RowID curr_row_id = base_versions->size() + stable_rows;
-        if (auto itr = new_handle_to_row_ids.find(h); itr != new_handle_to_row_ids.end())
+        if (auto t = new_handle_to_row_ids.find(h); t != new_handle_to_row_ids.end())
         {
-            base_versions->push_back(itr->second);
+            base_versions->push_back(t->second);
             continue;
         }
         if (auto row_id = findBaseVersionFromDMFileOrDeleteRangeList(dm_context, h); row_id)
@@ -159,7 +159,7 @@ UInt32 VersionChain<HandleType>::replayBlock(
             continue;
         }
 
-        new_handle_to_row_ids.insert(std::make_pair(h, curr_row_id));
+        new_handle_to_row_ids[h] = curr_row_id;
         base_versions->push_back(NotExistRowID);
     }
     return column.size() - offset;
