@@ -101,6 +101,22 @@ public:
         return pack_filter.load();
     }
 
+    struct Range
+    {
+        UInt64 offset;
+        UInt64 rows;
+
+        Range(UInt64 offset_, UInt64 rows_)
+            : offset(offset_)
+            , rows(rows_)
+        {}
+    };
+    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmapFilter(
+        const DMContext & dm_context,
+        const DMFiles & dmfiles,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts);
+
 private:
     DMFilePackFilter(
         const DMFilePtr & dmfile_,
