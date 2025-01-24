@@ -109,21 +109,20 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
     std::ignore = value;
     std::ignore = key;
 
+    RegionDataMemDiff delta;
+
     if (decoded_val.write_type == RecordKVFormat::CFModifyFlag::PutFlag)
     {
         auto & map = default_cf.getDataMut();
 
         if (auto data_it = map.find({pk, decoded_val.prewrite_ts}); data_it != map.end())
         {
-            auto delta = RegionDefaultCFData::calcTotalKVSize(data_it->second).negative();
-            cf_data_size += delta.payload;
-            decoded_data_size += delta.decoded;
+            delta.sub(RegionDefaultCFData::calcTotalKVSize(data_it->second));
             map.erase(data_it);
-            recordMemChange(delta);
         }
     }
 
-    auto delta = RegionWriteCFData::calcTotalKVSize(write_it->second).negative();
+    delta.sub(RegionWriteCFData::calcTotalKVSize(write_it->second));
     cf_data_size += delta.payload;
     decoded_data_size += delta.decoded;
     recordMemChange(delta);
@@ -273,7 +272,7 @@ size_t RegionData::totalSize() const
 
 void RegionData::assignRegionData(RegionData && rhs)
 {
-    reportMemChange(cf_data_size.negative());
+    recordMemChange(cf_data_size.negative());
     cf_data_size = 0;
     decoded_data_size = 0;
 
@@ -353,7 +352,7 @@ RegionData::RegionData(RegionData && data) noexcept
 
 RegionData::~RegionData()
 {
-    reportMemChange(cf_data_size.negative());
+    recordMemChange(cf_data_size.negative());
     cf_data_size = 0;
     decoded_data_size = 0;
 }
