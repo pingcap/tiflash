@@ -194,8 +194,6 @@ mysql> set tidb_enforce_mpp=1; select (a and 1) in (null,0,0), (a and 1) in (nul
 |                    NULL |                       1 |                  0 |                  1 |                  0 |                  1 |
 |                    NULL |                       1 |                  0 |                  1 |               NULL |               NULL |
 +-------------------------+-------------------------+--------------------+--------------------+--------------------+--------------------+
-<<<<<<< HEAD
-=======
 
 mysql> drop table if exists test.t;
 mysql> create table test.t (col0 integer, col1 integer);
@@ -272,4 +270,3 @@ mysql> SET time_zone = 'UTC'; set session tidb_isolation_read_engines='tiflash';
 +------+-------+
 
 mysql> drop table test.tidb_58370;
->>>>>>> 265b329f29 (Fix the incompatible behavior when handling `IN(Timestamp | MysqlTime * )` expressions with timezone (#9779))
