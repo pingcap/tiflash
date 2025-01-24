@@ -28,28 +28,6 @@ extern const int LOGICAL_ERROR;
 extern const int ILLFORMAT_RAFT_ROW;
 } // namespace ErrorCodes
 
-void RegionData::reportAlloc(size_t delta)
-{
-    root_of_kvstore_mem_trackers->alloc(delta, false);
-}
-
-void RegionData::reportDealloc(size_t delta)
-{
-    root_of_kvstore_mem_trackers->free(delta);
-}
-
-void RegionData::reportDelta(size_t prev, size_t current)
-{
-    if (current >= prev)
-    {
-        root_of_kvstore_mem_trackers->alloc(current - prev, false);
-    }
-    else
-    {
-        root_of_kvstore_mem_trackers->free(prev - current);
-    }
-}
-
 void RegionData::recordMemChange(const RegionDataMemDiff & delta)
 {
     cf_data_size += delta.payload;
@@ -141,14 +119,14 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
             cf_data_size += delta.payload;
             decoded_data_size += delta.decoded;
             map.erase(data_it);
-            reportDealloc(-delta.payload);
+            recordMemChange(delta);
         }
     }
 
     auto delta = RegionWriteCFData::calcTotalKVSize(write_it->second).negative();
     cf_data_size += delta.payload;
     decoded_data_size += delta.decoded;
-    reportDealloc(-delta.payload);
+    recordMemChange(delta);
 
     return write_cf.getDataMut().erase(write_it);
 }
@@ -263,7 +241,7 @@ void RegionData::splitInto(const RegionRange & range, RegionData & new_region_da
     RegionDataMemDiff size_changed;
     size_changed.add(default_cf.splitInto(range, new_region_data.default_cf));
     size_changed.add(write_cf.splitInto(range, new_region_data.write_cf));
-    // reportAlloc: Remember to track memory here if we have a region-wise metrics later.
+    // recordMemChange: Remember to track memory here if we have a region-wise metrics later.
     size_changed.add(lock_cf.splitInto(range, new_region_data.lock_cf));
     cf_data_size += size_changed.payload;
     decoded_data_size += size_changed.decoded;
@@ -276,7 +254,7 @@ void RegionData::mergeFrom(const RegionData & ori_region_data)
     RegionDataMemDiff size_changed;
     size_changed.add(default_cf.mergeFrom(ori_region_data.default_cf));
     size_changed.add(write_cf.mergeFrom(ori_region_data.write_cf));
-    // reportAlloc: Remember to track memory here if we have a region-wise metrics later.
+    // recordMemChange: Remember to track memory here if we have a region-wise metrics later.
     size_changed.add(lock_cf.mergeFrom(ori_region_data.lock_cf));
     // `mergeFrom` won't delete from source region.
     cf_data_size += size_changed.payload;
@@ -295,7 +273,7 @@ size_t RegionData::totalSize() const
 
 void RegionData::assignRegionData(RegionData && rhs)
 {
-    reportDealloc(cf_data_size);
+    reportMemChange(cf_data_size.negative());
     cf_data_size = 0;
     decoded_data_size = 0;
 
@@ -331,7 +309,7 @@ void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
 
     region_data.cf_data_size = size_changed.payload;
     region_data.decoded_data_size = size_changed.decoded;
-    reportAlloc(size_changed.payload);
+    recordMemChange(size_changed.payload);
 }
 
 RegionWriteCFData & RegionData::writeCF()
@@ -375,7 +353,7 @@ RegionData::RegionData(RegionData && data) noexcept
 
 RegionData::~RegionData()
 {
-    reportDealloc(cf_data_size);
+    reportMemChange(cf_data_size.negative());
     cf_data_size = 0;
     decoded_data_size = 0;
 }

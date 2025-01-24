@@ -38,10 +38,7 @@ public:
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
     using LockInfoPtr = std::unique_ptr<kvrpcpb::LockInfo>;
 
-    static void reportAlloc(size_t delta);
-    static void reportDealloc(size_t delta);
-    static void reportDelta(size_t prev, size_t current);
-    void recordMemChange(const RegionDataMemDiff & delta);
+    void recordMemChange(const RegionDataMemDiff &);
 
     RegionDataMemDiff insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void remove(ColumnFamilyType cf, const TiKVKey & key);
