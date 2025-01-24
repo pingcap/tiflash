@@ -103,7 +103,7 @@ void ColumnVector<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t st
     static_assert(!(has_null && has_nullmap));
     assert(!has_nullmap || (nullmap && nullmap->size() == size()));
 
-    T val{};
+    T def_val{};
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -115,7 +115,7 @@ void ColumnVector<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t st
         {
             if ((*nullmap)[start + i] != 0)
             {
-                tiflash_compiler_builtin_memcpy(pos[i], &val, sizeof(T));
+                tiflash_compiler_builtin_memcpy(pos[i], &def_val, sizeof(T));
                 pos[i] += sizeof(T);
                 continue;
             }
