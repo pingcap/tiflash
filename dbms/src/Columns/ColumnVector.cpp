@@ -88,24 +88,37 @@ template <typename T>
 void ColumnVector<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true>(pos, start, length);
+        serializeToPosImpl<true, false>(pos, start, length, nullptr);
     else
-        serializeToPosImpl<false>(pos, start, length);
+        serializeToPosImpl<false, false>(pos, start, length, nullptr);
 }
 
 template <typename T>
-template <bool has_null>
-void ColumnVector<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+template <bool has_null, bool has_nullmap>
+void ColumnVector<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
+    static_assert(!(has_null && has_nullmap));
+    assert(!has_nullmap || (nullmap && nullmap->size() == size()));
+
+    T val{};
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
         {
             if (pos[i] == nullptr)
                 continue;
+        }
+        if constexpr (has_nullmap)
+        {
+            if ((*nullmap)[start + i] != 0)
+            {
+                tiflash_compiler_builtin_memcpy(pos[i], &val, sizeof(T));
+                pos[i] += sizeof(T);
+                continue;
+            }
         }
         tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
         pos[i] += sizeof(T);
@@ -121,18 +134,19 @@ void ColumnVector<T>::serializeToPosForColumnArray(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl<true, false>(pos, start, length, array_offsets, nullptr);
     else
-        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl<false, false>(pos, start, length, array_offsets, nullptr);
 }
 
 template <typename T>
-template <bool has_null>
+template <bool has_null, bool has_nullmap>
 void ColumnVector<T>::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
-    const IColumn::Offsets & array_offsets) const
+    const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(
@@ -147,6 +161,9 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
+    static_assert(!(has_null && has_nullmap));
+    assert(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
+
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -155,18 +172,12 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
                 continue;
         }
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
-        if (len <= 4)
+        if constexpr (has_nullmap)
         {
-            for (size_t j = 0; j < len; ++j)
-                tiflash_compiler_builtin_memcpy(
-                    pos[i] + j * sizeof(T),
-                    &data[array_offsets[start + i - 1] + j],
-                    sizeof(T));
+            if ((*nullmap)[i] != 0)
+                continue;
         }
-        else
-        {
-            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
-        }
+        inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
         pos[i] += len * sizeof(T);
     }
 }

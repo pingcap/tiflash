@@ -484,30 +484,44 @@ void ColumnString::getPermutationWithCollationImpl(
 
 void ColumnString::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
-    const TiDB::TiDBCollatorPtr & collator) const
+    const TiDB::TiDBCollatorPtr & collator,
+    const NullMap * nullmap) const
 {
     if likely (collator != nullptr)
     {
         if (collator->maxBytesForOneChar() > 1)
-            countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/true>(byte_size, collator);
+            countSerializeByteSizeNullMap</*compare_semantics=*/true, /*count_code_points=*/true>(byte_size, collator, nullmap);
         else
-            countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/false>(byte_size, collator);
+            countSerializeByteSizeNullMap</*compare_semantics=*/true, /*count_code_points=*/false>(byte_size, collator, nullmap);
     }
     else
     {
-        countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, nullptr);
+        countSerializeByteSizeNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(byte_size, nullptr, nullmap);
     }
 }
 
 void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, nullptr);
+    countSerializeByteSizeNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(byte_size, nullptr, nullptr);
 }
 
-template <bool has_collator, bool count_code_points>
+template <bool compare_semantics, bool count_code_points>
+ALWAYS_INLINE inline void ColumnString::countSerializeByteSizeNullMap(
+    PaddedPODArray<size_t> & byte_size,
+    const TiDB::TiDBCollatorPtr & collator,
+    const NullMap * nullmap) const
+{
+    if (nullmap != nullptr)
+        countSerializeByteSizeImpl<compare_semantics, count_code_points, /*has_nullmap=*/true>(byte_size, collator, nullmap);
+    else
+        countSerializeByteSizeImpl<compare_semantics, count_code_points, /*has_nullmap=*/false>(byte_size, collator, nullptr);
+}
+
+template <bool compare_semantics, bool count_code_points, bool has_nullmap>
 void ColumnString::countSerializeByteSizeImpl(
     PaddedPODArray<size_t> & byte_size,
-    const TiDB::TiDBCollatorPtr & collator) const
+    const TiDB::TiDBCollatorPtr & collator,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
@@ -522,15 +536,25 @@ void ColumnString::countSerializeByteSizeImpl(
                 sizeAt(i));
     }
 
-    if constexpr (has_collator)
+    if constexpr (compare_semantics)
     {
         RUNTIME_CHECK(collator);
+        assert(!has_nullmap || (nullmap && nullmap->size() == size()));
 
         const size_t size = byte_size.size();
         const size_t max_bytes_one_char = collator->maxBytesForOneChar();
         for (size_t i = 0; i < size; ++i)
         {
             assert(sizeAt(i) > 0);
+            if constexpr (has_nullmap)
+            {
+                if ((*nullmap)[i] != 0)
+                {
+                    byte_size[i] += sizeof(UInt32) + 1;
+                    continue;
+                }
+            }
+
             if constexpr (count_code_points)
             {
                 const auto num_char = UTF8::countCodePoints(&chars[offsetAt(i)], sizeAt(i) - 1);
@@ -545,6 +569,7 @@ void ColumnString::countSerializeByteSizeImpl(
     }
     else
     {
+        assert(!has_nullmap);
         size_t size = byte_size.size();
         for (size_t i = 0; i < size; ++i)
             byte_size[i] += sizeof(UInt32) + sizeAt(i);
@@ -554,26 +579,30 @@ void ColumnString::countSerializeByteSizeImpl(
 void ColumnString::countSerializeByteSizeForCmpColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
-    const TiDB::TiDBCollatorPtr & collator) const
+    const TiDB::TiDBCollatorPtr & collator,
+    const NullMap * nullmap) const
 {
     if likely (collator != nullptr)
     {
         if (collator->maxBytesForOneChar() > 1)
-            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/true>(
+            countSerializeByteSizeForColumnArrayNullMap</*compare_semantics=*/true, /*count_code_points=*/true>(
                 byte_size,
                 array_offsets,
-                collator);
+                collator,
+                nullmap);
         else
-            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/false>(
+            countSerializeByteSizeForColumnArrayNullMap</*compare_semantics=*/true, /*count_code_points=*/false>(
                 byte_size,
                 array_offsets,
-                collator);
+                collator,
+                nullmap);
     }
     else
     {
-        countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(
+        countSerializeByteSizeForColumnArrayNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(
             byte_size,
             array_offsets,
+            nullptr,
             nullptr);
     }
 }
@@ -582,17 +611,32 @@ void ColumnString::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
-    countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(
+    countSerializeByteSizeForColumnArrayNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(
         byte_size,
         array_offsets,
+        nullptr,
         nullptr);
 }
 
-template <bool has_collator, bool count_code_points>
+template <bool compare_semantics, bool count_code_points>
+void ColumnString::countSerializeByteSizeForColumnArrayNullMap(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets,
+    const TiDB::TiDBCollatorPtr & collator,
+    const NullMap * nullmap) const
+{
+    if (nullmap != nullptr)
+        countSerializeByteSizeForColumnArrayImpl<compare_semantics, count_code_points, /*has_nullmap=*/true>(byte_size, array_offsets, collator, nullmap);
+    else
+        countSerializeByteSizeForColumnArrayImpl<compare_semantics, count_code_points, /*has_nullmap=*/false>(byte_size, array_offsets, collator, nullptr);
+}
+
+template <bool compare_semantics, bool count_code_points, bool has_nullmap>
 void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
-    const TiDB::TiDBCollatorPtr & collator) const
+    const TiDB::TiDBCollatorPtr & collator,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(
         byte_size.size() == array_offsets.size(),
@@ -616,9 +660,10 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
                 sizeAt(i));
     }
 
-    if constexpr (has_collator)
+    if constexpr (compare_semantics)
     {
         RUNTIME_CHECK(collator);
+        assert(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
 
         size_t size = array_offsets.size();
         const auto max_bytes_one_char = collator->maxBytesForOneChar();
@@ -626,6 +671,15 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         {
             const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
             assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
+            if constexpr (has_nullmap)
+            {
+                if ((*nullmap)[i] != 0)
+                {
+                    byte_size[i] += (sizeof(UInt32) + 1) * ele_count;
+                    continue;
+                }
+            }
+
             if constexpr (count_code_points)
             {
                 size_t cur_row_bytes = 0;
@@ -641,6 +695,7 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
             }
             else
             {
+                // NOTE: didn't check nullmap because we have to iterate through all rows, it's slow.
                 byte_size[i]
                     += sizeof(UInt32) * ele_count + offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]);
             }
@@ -648,6 +703,7 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     }
     else
     {
+        assert(!has_nullmap);
         size_t size = array_offsets.size();
         for (size_t i = 0; i < size; ++i)
             byte_size[i] += sizeof(UInt32) * (array_offsets[i] - array_offsets[i - 1]) + offsetAt(array_offsets[i])
@@ -659,60 +715,63 @@ void ColumnString::serializeToPosForCmp(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
-    bool has_null,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
-    if (has_null)
+    if (nullmap != nullptr)
     {
         if likely (collator != nullptr)
-            serializeToPosImplType</*has_null=*/true, /*has_collator=*/true>(
+            serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
                 pos,
                 start,
                 length,
                 collator,
-                sort_key_container);
+                sort_key_container,
+                nullmap);
         else
-            serializeToPosImplType</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+            serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/true>(pos, start, length, nullptr, nullptr, nullmap);
     }
     else
     {
         if likely (collator != nullptr)
-            serializeToPosImplType</*has_null=*/false, /*has_collator=*/true>(
+            serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
                 pos,
                 start,
                 length,
                 collator,
-                sort_key_container);
+                sort_key_container,
+                nullptr);
         else
-            serializeToPosImplType</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+            serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
     }
 }
 
 void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImplType</*has_null=*/true, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+        serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
     else
-        serializeToPosImplType</*has_null=*/false, /*has_collator=*/false>(pos, start, length, nullptr, nullptr);
+        serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
 }
 
-template <bool has_null, bool has_collator>
+template <bool has_null, bool compare_semantics, bool has_nullmap>
 void ColumnString::serializeToPosImplType(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
     const TiDB::TiDBCollatorPtr & collator,
-    String * sort_key_container) const
+    String * sort_key_container,
+    const NullMap * nullmap) const
 {
-    if constexpr (has_collator)
+    if constexpr (compare_semantics)
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
 #define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                                     \
     case (COLLATOR_ID):                                                                                          \
     {                                                                                                            \
-        serializeToPosImpl<has_null, has_collator, IMPL_TYPE>(pos, start, length, collator, sort_key_container); \
+        serializeToPosImpl<has_null, compare_semantics, IMPL_TYPE, has_nullmap>(pos, start, length, collator, sort_key_container, nullmap); \
         break;                                                                                                   \
     }
 
@@ -728,41 +787,52 @@ void ColumnString::serializeToPosImplType(
     }
     else
     {
-        serializeToPosImpl<has_null, has_collator, TiDB::ITiDBCollator>(
+        assert(!nullmap);
+        serializeToPosImpl<has_null, compare_semantics, TiDB::ITiDBCollator, false>(
             pos,
             start,
             length,
             collator,
-            sort_key_container);
+            sort_key_container,
+            nullptr);
     }
 }
 
-template <bool has_null, bool has_collator, typename DerivedCollator>
+template <bool has_null, bool compare_semantics, typename DerivedCollator, bool has_nullmap>
 void ColumnString::serializeToPosImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
     const TiDB::TiDBCollatorPtr & collator,
-    String * sort_key_container) const
+    String * sort_key_container,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
+
+    static_assert(!(has_null && has_nullmap));
+    assert(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     /// To avoid virtual function call of sortKey().
     const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
     /// countSerializeByteSizeImpl has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
     {
-        if constexpr (has_null)
+        if constexpr (compare_semantics)
         {
-            if (pos[i] == nullptr)
-                continue;
-        }
-
-        UInt32 str_size = sizeAt(start + i);
-        const void * src = &chars[offsetAt(start + i)];
-        if constexpr (has_collator)
-        {
+            UInt32 str_size = sizeAt(start + i);
+            const void * src = &chars[offsetAt(start + i)];
+            if constexpr (has_nullmap)
+            {
+                if ((*nullmap)[i] != 0)
+                {
+                    UInt32 str_size = 1;
+                    tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
+                    *(pos[i]) = '\0';
+                    pos[i] += 1;
+                    continue;
+                }
+            }
             auto sort_key
                 = derived_collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
             // For terminating zero.
@@ -777,6 +847,17 @@ void ColumnString::serializeToPosImpl(
         }
         else
         {
+            assert(!has_nullmap);
+            if constexpr (has_null)
+            {
+                if (pos[i] == nullptr)
+                    continue;
+            }
+
+            UInt32 str_size = sizeAt(start + i);
+            const void * src = &chars[offsetAt(start + i)];
+
+            assert(!nullmap);
             tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
             pos[i] += sizeof(UInt32);
             inline_memcpy(pos[i], src, str_size);
@@ -789,46 +870,50 @@ void ColumnString::serializeToPosForCmpColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
-    bool has_null,
+    const NullMap * nullmap,
     const IColumn::Offsets & array_offsets,
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
-    if (has_null)
+    if (nullmap != nullptr)
     {
         if likely (collator != nullptr)
-            serializeToPosForColumnArrayImplType</*has_null=*/true, /*has_collator=*/true>(
+            serializeToPosForColumnArrayImplType</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
                 pos,
                 start,
                 length,
                 array_offsets,
                 collator,
-                sort_key_container);
+                sort_key_container,
+                nullmap);
         else
-            serializeToPosForColumnArrayImplType</*has_null=*/true, /*has_collator=*/false>(
+            serializeToPosForColumnArrayImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/true>(
                 pos,
                 start,
                 length,
                 array_offsets,
                 nullptr,
-                nullptr);
+                nullptr,
+                nullmap);
     }
     else
     {
         if likely (collator != nullptr)
-            serializeToPosForColumnArrayImplType</*has_null=*/false, /*has_collator=*/true>(
+            serializeToPosForColumnArrayImplType</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
                 pos,
                 start,
                 length,
                 array_offsets,
                 collator,
-                sort_key_container);
+                sort_key_container,
+                nullptr);
         else
-            serializeToPosForColumnArrayImplType</*has_null=*/false, /*has_collator=*/true>(
+            serializeToPosForColumnArrayImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
                 pos,
                 start,
                 length,
                 array_offsets,
+                nullptr,
                 nullptr,
                 nullptr);
     }
@@ -842,46 +927,50 @@ void ColumnString::serializeToPosForColumnArray(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImplType</*has_null=*/true, /*has_collator=*/false>(
+        serializeToPosForColumnArrayImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
             pos,
             start,
             length,
             array_offsets,
             nullptr,
+            nullptr,
             nullptr);
     else
-        serializeToPosForColumnArrayImplType</*has_null=*/false, /*has_collator=*/false>(
+        serializeToPosForColumnArrayImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
             pos,
             start,
             length,
             array_offsets,
+            nullptr,
             nullptr,
             nullptr);
 }
 
-template <bool has_null, bool has_collator>
+template <bool has_null, bool compare_semantics, bool has_nullmap>
 void ColumnString::serializeToPosForColumnArrayImplType(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
     const IColumn::Offsets & array_offsets,
     const TiDB::TiDBCollatorPtr & collator,
-    String * sort_key_container) const
+    String * sort_key_container,
+    const NullMap * nullmap) const
 {
-    if constexpr (has_collator)
+    if constexpr (compare_semantics)
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
 #define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                 \
     case (COLLATOR_ID):                                                      \
     {                                                                        \
-        serializeToPosForColumnArrayImpl<has_null, has_collator, IMPL_TYPE>( \
+        serializeToPosForColumnArrayImpl<has_null, compare_semantics, IMPL_TYPE, has_nullmap>( \
             pos,                                                             \
             start,                                                           \
             length,                                                          \
             array_offsets,                                                   \
             collator,                                                        \
-            sort_key_container);                                             \
+            sort_key_container, \
+                nullmap);                                             \
         break;                                                               \
     }
 
@@ -897,24 +986,27 @@ void ColumnString::serializeToPosForColumnArrayImplType(
     }
     else
     {
-        serializeToPosForColumnArrayImpl<has_null, has_collator, TiDB::ITiDBCollator>(
+        assert(!nullmap);
+        serializeToPosForColumnArrayImpl<has_null, compare_semantics, TiDB::ITiDBCollator, false>(
             pos,
             start,
             length,
             array_offsets,
             collator,
-            sort_key_container);
+            sort_key_container,
+            nullptr);
     }
 }
 
-template <bool has_null, bool has_collator, typename DerivedCollator>
+template <bool has_null, bool compare_semantics, typename DerivedCollator, bool has_nullmap>
 void ColumnString::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
     const IColumn::Offsets & array_offsets,
     const TiDB::TiDBCollatorPtr & collator,
-    String * sort_key_container) const
+    String * sort_key_container,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(
@@ -929,18 +1021,22 @@ void ColumnString::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
+    static_assert(!(has_null && has_nullmap));
+    assert(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
+
     /// countSerializeByteSizeForCmpColumnArray has already checked that the size of one element is not greater than UINT32_MAX
-    if constexpr (has_collator)
+    if constexpr (compare_semantics)
     {
         /// To avoid virtual function call of sortKey().
         const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
         for (size_t i = 0; i < length; ++i)
         {
-            if constexpr (has_null)
+            if constexpr (has_nullmap)
             {
-                if (pos[i] == nullptr)
+                if ((*nullmap)[i] != 0)
                     continue;
             }
+
             for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
             {
                 UInt32 str_size = sizeAt(j);
@@ -961,6 +1057,7 @@ void ColumnString::serializeToPosForColumnArrayImpl(
     }
     else
     {
+        assert(!has_nullmap);
         for (size_t i = 0; i < length; ++i)
         {
             if constexpr (has_null)

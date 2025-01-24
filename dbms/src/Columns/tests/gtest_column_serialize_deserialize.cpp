@@ -31,14 +31,14 @@ public:
     static void testCountSerializeByteSize(
         const ColumnPtr & column_ptr,
         const PaddedPODArray<size_t> & result_byte_size,
-        bool for_compare = false,
+        bool compare_semantics = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr)
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
         for (size_t i = 0; i < column_ptr->size(); ++i)
             byte_size[i] = i;
-        if (!for_compare)
+        if (!compare_semantics)
             column_ptr->countSerializeByteSize(byte_size);
         else
             column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
@@ -51,7 +51,7 @@ public:
         const ColumnPtr & column_ptr,
         const ColumnPtr & offsets,
         const PaddedPODArray<size_t> & result_byte_size,
-        bool for_compare = false,
+        bool compare_semantics = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr)
     {
         auto column_array = ColumnArray::create(column_ptr->cloneFullColumn(), offsets->cloneFullColumn());
@@ -59,7 +59,7 @@ public:
         byte_size.resize_fill_zero(column_array->size());
         for (size_t i = 0; i < column_array->size(); ++i)
             byte_size[i] = i;
-        if (!for_compare)
+        if (!compare_semantics)
             column_array->countSerializeByteSize(byte_size);
         else
             column_array->countSerializeByteSizeForCmp(byte_size, collator);
@@ -164,26 +164,26 @@ public:
 
     static void testSerializeAndDeserialize(
         const ColumnPtr & column_ptr,
-        bool for_compare = false,
+        bool compare_semantics = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
         String * sort_key_container = nullptr)
     {
-        doTestSerializeAndDeserialize(column_ptr, false, for_compare, collator, sort_key_container);
-        doTestSerializeAndDeserialize2(column_ptr, false, for_compare, collator, sort_key_container);
-        doTestSerializeAndDeserialize(column_ptr, true, for_compare, collator, sort_key_container);
-        doTestSerializeAndDeserialize2(column_ptr, true, for_compare, collator, sort_key_container);
+        doTestSerializeAndDeserialize(column_ptr, false, compare_semantics, collator, sort_key_container);
+        doTestSerializeAndDeserialize2(column_ptr, false, compare_semantics, collator, sort_key_container);
+        doTestSerializeAndDeserialize(column_ptr, true, compare_semantics, collator, sort_key_container);
+        doTestSerializeAndDeserialize2(column_ptr, true, compare_semantics, collator, sort_key_container);
     }
 
     static void doTestSerializeAndDeserialize(
         const ColumnPtr & column_ptr,
         bool use_nt_align_buffer,
-        bool for_compare = false,
+        bool compare_semantics = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
         String * sort_key_container = nullptr)
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
-        if (!for_compare)
+        if (!compare_semantics)
             column_ptr->countSerializeByteSize(byte_size);
         else
             column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
@@ -201,15 +201,15 @@ public:
         PaddedPODArray<char *> ori_pos;
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
+        if (!compare_semantics)
             column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, false);
         else
-            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size() / 2, false, collator, sort_key_container);
+            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size() / 2, nullptr, collator, sort_key_container);
 
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-        if (!for_compare)
+        if (!compare_semantics)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
@@ -225,20 +225,20 @@ public:
         pos.push_back(nullptr);
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
+        if (!compare_semantics)
             column_ptr->serializeToPos(pos, byte_size.size() / 2, byte_size.size() - byte_size.size() / 2, true);
         else
             column_ptr->serializeToPosForCmp(
                 pos,
                 byte_size.size() / 2,
                 byte_size.size() - byte_size.size() / 2,
-                true,
+                nullptr,
                 collator,
                 sort_key_container);
         pos.resize(pos.size() - 1);
         ori_pos.resize(ori_pos.size() - 1);
 
-        if (!for_compare)
+        if (!compare_semantics)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
@@ -253,12 +253,12 @@ public:
         }
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
+        if (!compare_semantics)
             column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
         else
-            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size(), true, collator, sort_key_container);
+            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size(), nullptr, collator, sort_key_container);
 
-        if (!for_compare)
+        if (!compare_semantics)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
@@ -279,7 +279,7 @@ public:
     static void doTestSerializeAndDeserialize2(
         const ColumnPtr & column_ptr,
         bool use_nt_align_buffer,
-        bool for_compare = false,
+        bool compare_semantics = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr,
         String * sort_key_container = nullptr)
     {
@@ -287,7 +287,7 @@ public:
             return;
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
-        if (!for_compare)
+        if (!compare_semantics)
             column_ptr->countSerializeByteSize(byte_size);
         else
             column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
@@ -306,17 +306,17 @@ public:
         pos.push_back(nullptr);
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
+        if (!compare_semantics)
             column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, true);
         else
-            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size() / 2, true, collator, sort_key_container);
+            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size() / 2, nullptr, collator, sort_key_container);
         pos.resize(pos.size() - 1);
         ori_pos.resize(ori_pos.size() - 1);
 
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-        if (!for_compare)
+        if (!compare_semantics)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
@@ -331,7 +331,7 @@ public:
         }
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
+        if (!compare_semantics)
             column_ptr
                 ->serializeToPos(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
         else
@@ -339,10 +339,10 @@ public:
                 pos,
                 byte_size.size() / 2 - 1,
                 byte_size.size() - byte_size.size() / 2 + 1,
-                false,
+                nullptr,
                 collator,
                 sort_key_container);
-        if (!for_compare)
+        if (!compare_semantics)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
@@ -357,12 +357,12 @@ public:
         }
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
+        if (!compare_semantics)
             column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
         else
-            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size(), true, collator, sort_key_container);
+            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size(), nullptr, collator, sort_key_container);
 
-        if (!for_compare)
+        if (!compare_semantics)
             new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         else
             new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);

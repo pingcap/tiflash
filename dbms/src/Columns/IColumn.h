@@ -38,6 +38,9 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 class Arena;
 class ColumnGathererStream;
 
+using NullMap = PaddedPODArray<UInt8>;
+using ConstNullMapPtr = const NullMap *;
+
 /// Declares interface to store columns in memory.
 class IColumn : public COWPtr<IColumn>
 {
@@ -240,7 +243,8 @@ public:
     /// The byte_size.size() must be equal to the column size.
     virtual void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & /* byte_size */,
-        const TiDB::TiDBCollatorPtr & /* collator */) const
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        const NullMap * /* nullmap */) const
         = 0;
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
 
@@ -250,7 +254,8 @@ public:
     virtual void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const Offsets & /* array_offsets */,
-        const TiDB::TiDBCollatorPtr & /* collator */) const
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        const NullMap * /* nullmap */) const
         = 0;
     virtual void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
@@ -266,7 +271,7 @@ public:
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
-        bool /* has_null */,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /* sort_key_container */) const
         = 0;
@@ -284,7 +289,7 @@ public:
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
-        bool /* has_null */,
+        const NullMap * /*nullmap*/,
         const Offsets & /* array_offsets */,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /* sort_key_container */) const

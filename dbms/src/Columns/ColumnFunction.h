@@ -122,7 +122,8 @@ public:
 
     void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & /* byte_size */,
-        const TiDB::TiDBCollatorPtr & /* collator */) const override
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        const NullMap * /* nullmap */) const override
     {
         throw Exception(
             "Method countSerializeByteSizeForCmp is not supported for " + getName(),
@@ -136,7 +137,8 @@ public:
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const IColumn::Offsets & /* offsets */,
-        const TiDB::TiDBCollatorPtr & /* collator */) const override
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        const NullMap * /* nullmap */) const override
     {
         throw Exception(
             "Method countSerializeByteSizeForCmpColumnArray is not supported for " + getName(),
@@ -155,7 +157,7 @@ public:
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
-        bool /* has_null */,
+        const NullMap * /* nullmap */,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /*sort_key_container */) const override
     {
@@ -174,7 +176,7 @@ public:
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
-        bool /* has_null */,
+        const NullMap * /* nullmap */,
         const IColumn::Offsets & /* array_offsets */,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /* sort_key_container */) const override

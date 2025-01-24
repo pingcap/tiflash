@@ -21,8 +21,7 @@
 
 namespace DB
 {
-using NullMap = ColumnUInt8::Container;
-using ConstNullMapPtr = const NullMap *;
+static_assert(std::is_same_v<NullMap, ColumnUInt8::Container>);
 
 /// Class that specifies nullable columns. A nullable column represents
 /// a column, which may have any type, provided with the possibility of
@@ -78,14 +77,15 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator, const NullMap * nullmap)
         const override;
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
-        const TiDB::TiDBCollatorPtr & collator) const override;
+        const TiDB::TiDBCollatorPtr & collator,
+        const NullMap * nullmap) const override;
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
@@ -94,7 +94,7 @@ public:
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
-        bool has_null,
+        const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const override;
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
@@ -103,7 +103,7 @@ public:
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
-        bool has_null,
+        const NullMap * nullmap,
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const override;
