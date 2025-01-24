@@ -232,8 +232,10 @@ void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) con
 }
 
 template <bool compare_semantics>
-void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator, const NullMap * nullmap)
-    const
+void ColumnArray::countSerializeByteSizeImpl(
+    PaddedPODArray<size_t> & byte_size,
+    const TiDB::TiDBCollatorPtr & collator,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 

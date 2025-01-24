@@ -490,19 +490,31 @@ void ColumnString::countSerializeByteSizeForCmp(
     if likely (collator != nullptr)
     {
         if (collator->maxBytesForOneChar() > 1)
-            countSerializeByteSizeNullMap</*compare_semantics=*/true, /*count_code_points=*/true>(byte_size, collator, nullmap);
+            countSerializeByteSizeNullMap</*compare_semantics=*/true, /*count_code_points=*/true>(
+                byte_size,
+                collator,
+                nullmap);
         else
-            countSerializeByteSizeNullMap</*compare_semantics=*/true, /*count_code_points=*/false>(byte_size, collator, nullmap);
+            countSerializeByteSizeNullMap</*compare_semantics=*/true, /*count_code_points=*/false>(
+                byte_size,
+                collator,
+                nullmap);
     }
     else
     {
-        countSerializeByteSizeNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(byte_size, nullptr, nullmap);
+        countSerializeByteSizeNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(
+            byte_size,
+            nullptr,
+            nullmap);
     }
 }
 
 void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(byte_size, nullptr, nullptr);
+    countSerializeByteSizeNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(
+        byte_size,
+        nullptr,
+        nullptr);
 }
 
 template <bool compare_semantics, bool count_code_points>
@@ -512,9 +524,15 @@ ALWAYS_INLINE inline void ColumnString::countSerializeByteSizeNullMap(
     const NullMap * nullmap) const
 {
     if (nullmap != nullptr)
-        countSerializeByteSizeImpl<compare_semantics, count_code_points, /*has_nullmap=*/true>(byte_size, collator, nullmap);
+        countSerializeByteSizeImpl<compare_semantics, count_code_points, /*has_nullmap=*/true>(
+            byte_size,
+            collator,
+            nullmap);
     else
-        countSerializeByteSizeImpl<compare_semantics, count_code_points, /*has_nullmap=*/false>(byte_size, collator, nullptr);
+        countSerializeByteSizeImpl<compare_semantics, count_code_points, /*has_nullmap=*/false>(
+            byte_size,
+            collator,
+            nullptr);
 }
 
 template <bool compare_semantics, bool count_code_points, bool has_nullmap>
@@ -626,9 +644,17 @@ void ColumnString::countSerializeByteSizeForColumnArrayNullMap(
     const NullMap * nullmap) const
 {
     if (nullmap != nullptr)
-        countSerializeByteSizeForColumnArrayImpl<compare_semantics, count_code_points, /*has_nullmap=*/true>(byte_size, array_offsets, collator, nullmap);
+        countSerializeByteSizeForColumnArrayImpl<compare_semantics, count_code_points, /*has_nullmap=*/true>(
+            byte_size,
+            array_offsets,
+            collator,
+            nullmap);
     else
-        countSerializeByteSizeForColumnArrayImpl<compare_semantics, count_code_points, /*has_nullmap=*/false>(byte_size, array_offsets, collator, nullptr);
+        countSerializeByteSizeForColumnArrayImpl<compare_semantics, count_code_points, /*has_nullmap=*/false>(
+            byte_size,
+            array_offsets,
+            collator,
+            nullptr);
 }
 
 template <bool compare_semantics, bool count_code_points, bool has_nullmap>
@@ -730,7 +756,13 @@ void ColumnString::serializeToPosForCmp(
                 sort_key_container,
                 nullmap);
         else
-            serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/true>(pos, start, length, nullptr, nullptr, nullmap);
+            serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/true>(
+                pos,
+                start,
+                length,
+                nullptr,
+                nullptr,
+                nullmap);
     }
     else
     {
@@ -743,16 +775,34 @@ void ColumnString::serializeToPosForCmp(
                 sort_key_container,
                 nullptr);
         else
-            serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
+            serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                nullptr,
+                nullptr,
+                nullptr);
     }
 }
 
 void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
+        serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            nullptr,
+            nullptr,
+            nullptr);
     else
-        serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
+        serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            nullptr,
+            nullptr,
+            nullptr);
 }
 
 template <bool has_null, bool compare_semantics, bool has_nullmap>
@@ -768,11 +818,17 @@ void ColumnString::serializeToPosImplType(
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
-#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                                     \
-    case (COLLATOR_ID):                                                                                          \
-    {                                                                                                            \
-        serializeToPosImpl<has_null, compare_semantics, IMPL_TYPE, has_nullmap>(pos, start, length, collator, sort_key_container, nullmap); \
-        break;                                                                                                   \
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                     \
+    case (COLLATOR_ID):                                                          \
+    {                                                                            \
+        serializeToPosImpl<has_null, compare_semantics, IMPL_TYPE, has_nullmap>( \
+            pos,                                                                 \
+            start,                                                               \
+            length,                                                              \
+            collator,                                                            \
+            sort_key_container,                                                  \
+            nullmap);                                                            \
+        break;                                                                   \
     }
 
         switch (collator->getCollatorId())
@@ -908,14 +964,10 @@ void ColumnString::serializeToPosForCmpColumnArray(
                 sort_key_container,
                 nullptr);
         else
-            serializeToPosForColumnArrayImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
-                pos,
-                start,
-                length,
-                array_offsets,
-                nullptr,
-                nullptr,
-                nullptr);
+            serializeToPosForColumnArrayImplType<
+                /*has_null=*/false,
+                /*compare_semantics=*/false,
+                /*has_nullmap=*/false>(pos, start, length, array_offsets, nullptr, nullptr, nullptr);
     }
 }
 
@@ -960,18 +1012,18 @@ void ColumnString::serializeToPosForColumnArrayImplType(
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
-#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                 \
-    case (COLLATOR_ID):                                                      \
-    {                                                                        \
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                   \
+    case (COLLATOR_ID):                                                                        \
+    {                                                                                          \
         serializeToPosForColumnArrayImpl<has_null, compare_semantics, IMPL_TYPE, has_nullmap>( \
-            pos,                                                             \
-            start,                                                           \
-            length,                                                          \
-            array_offsets,                                                   \
-            collator,                                                        \
-            sort_key_container, \
-                nullmap);                                             \
-        break;                                                               \
+            pos,                                                                               \
+            start,                                                                             \
+            length,                                                                            \
+            array_offsets,                                                                     \
+            collator,                                                                          \
+            sort_key_container,                                                                \
+            nullmap);                                                                          \
+        break;                                                                                 \
     }
 
         switch (collator->getCollatorId())

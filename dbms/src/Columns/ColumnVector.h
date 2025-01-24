@@ -328,7 +328,10 @@ public:
         return pos + sizeof(T);
     }
 
-    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &, const NullMap *) const override
+    void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & byte_size,
+        const TiDB::TiDBCollatorPtr &,
+        const NullMap *) const override
     {
         countSerializeByteSize(byte_size);
     }

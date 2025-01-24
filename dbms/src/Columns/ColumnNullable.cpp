@@ -346,8 +346,14 @@ void ColumnNullable::serializeToPosForCmpColumnArray(
     assert(!nullmap);
     getNullMapColumn()
         .serializeToPosForCmpColumnArray(pos, start, length, nullptr, array_offsets, collator, sort_key_container);
-    getNestedColumn()
-        .serializeToPosForCmpColumnArray(pos, start, length, &getNullMapData(), array_offsets, collator, sort_key_container);
+    getNestedColumn().serializeToPosForCmpColumnArray(
+        pos,
+        start,
+        length,
+        &getNullMapData(),
+        array_offsets,
+        collator,
+        sort_key_container);
 }
 void ColumnNullable::serializeToPosForColumnArray(
     PaddedPODArray<char *> & pos,

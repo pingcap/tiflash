@@ -77,8 +77,10 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator, const NullMap * nullmap)
-        const override;
+    void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & byte_size,
+        const TiDB::TiDBCollatorPtr & collator,
+        const NullMap * nullmap) const override;
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
     void countSerializeByteSizeForCmpColumnArray(

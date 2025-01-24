@@ -59,9 +59,9 @@ private:
 
     template <bool has_nullmap>
     void countSerializeByteSizeForColumnArrayImpl(
-            PaddedPODArray<size_t> & byte_size,
-            const IColumn::Offsets & array_offsets,
-            const NullMap * nullmap) const;
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets,
+        const NullMap * nullmap) const;
 
     template <bool has_null, bool has_nullmap>
     void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const NullMap * nullmap) const;
@@ -124,8 +124,10 @@ public:
 
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator, const NullMap * nullmap)
-        const override
+    void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & byte_size,
+        const TiDB::TiDBCollatorPtr & collator,
+        const NullMap * nullmap) const override
     {
         // collator->sortKey() will change the string length, which may exceeds n.
         RUNTIME_CHECK_MSG(

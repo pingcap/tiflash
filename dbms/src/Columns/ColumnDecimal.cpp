@@ -195,7 +195,11 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
 
 template <typename T>
 template <bool has_null, bool compare_semantics, bool has_nullmap>
-void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const NullMap * nullmap) const
+void ColumnDecimal<T>::serializeToPosImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());

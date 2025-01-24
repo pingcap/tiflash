@@ -174,7 +174,10 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &, const NullMap *) const override
+    void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & byte_size,
+        const TiDB::TiDBCollatorPtr &,
+        const NullMap *) const override
     {
         countSerializeByteSizeImpl<true>(byte_size, nullptr);
     }
@@ -207,16 +210,32 @@ public:
         String *) const override
     {
         if (nullmap != nullptr)
-            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(pos, start, length, nullmap);
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                pos,
+                start,
+                length,
+                nullmap);
         else
-            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(pos, start, length, nullptr);
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                nullptr);
     }
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
     {
         if (has_null)
-            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr);
+            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                nullptr);
         else
-            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr);
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                nullptr);
     }
 
     void serializeToPosForCmpColumnArray(
