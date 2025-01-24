@@ -238,6 +238,7 @@ void ColumnArray::countSerializeByteSizeImpl(
     const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
+    assert(!nullmap || (nullmap->size() == size()));
 
     if unlikely (!getOffsets().empty() && getOffsets().back() > UINT32_MAX)
     {
@@ -309,7 +310,7 @@ void ColumnArray::serializeToPosImpl(
         UInt32 len = sizeAt(start + i);
         if constexpr (has_nullmap)
         {
-            if ((*nullmap)[i] != 0)
+            if (DB::isNullAt(*nullmap, i))
                 len = 0;
         }
         tiflash_compiler_builtin_memcpy(pos[i], &len, sizeof(UInt32));

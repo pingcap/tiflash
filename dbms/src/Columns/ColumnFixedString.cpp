@@ -146,7 +146,7 @@ void ColumnFixedString::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte
     {
         if constexpr (has_nullmap)
         {
-            if ((*nullmap)[i] != 0)
+            if (DB::isNullAt(*nullmap, i))
             {
                 byte_size[i] += 1;
                 continue;
@@ -175,7 +175,7 @@ void ColumnFixedString::countSerializeByteSizeForColumnArrayImpl(
     {
         if constexpr (has_nullmap)
         {
-            if ((*nullmap)[i] != 0)
+            if (DB::isNullAt(*nullmap, i))
             {
                 byte_size[i] += array_offsets[i] - array_offsets[i - 1];
                 continue;
@@ -215,7 +215,7 @@ void ColumnFixedString::serializeToPosImpl(
         }
         if constexpr (has_nullmap)
         {
-            if ((*nullmap)[i] != 0)
+            if (DB::isNullAt(*nullmap, i))
             {
                 for (size_t j = 0; j < n; ++j)
                 {
@@ -277,7 +277,7 @@ void ColumnFixedString::serializeToPosForColumnArrayImpl(
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
         if constexpr (has_nullmap)
         {
-            if ((*nullmap)[i] != 0)
+            if (DB::isNullAt(*nullmap, i))
                 continue;
         }
 

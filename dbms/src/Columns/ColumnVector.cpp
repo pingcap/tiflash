@@ -117,7 +117,7 @@ void ColumnVector<T>::serializeToPosImpl(
         }
         if constexpr (has_nullmap)
         {
-            if ((*nullmap)[start + i] != 0)
+            if (DB::isNullAt(*nullmap, start + i))
             {
                 tiflash_compiler_builtin_memcpy(pos[i], &def_val, sizeof(T));
                 pos[i] += sizeof(T);
@@ -175,13 +175,24 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
-        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
         if constexpr (has_nullmap)
         {
-            if ((*nullmap)[i] != 0)
+            if (DB::isNullAt(*nullmap, i))
                 continue;
         }
-        inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+        if (len <= 4)
+        {
+            for (size_t j = 0; j < len; ++j)
+                tiflash_compiler_builtin_memcpy(
+                    pos[i] + j * sizeof(T),
+                    &data[array_offsets[start + i - 1] + j],
+                    sizeof(T));
+        }
+        else
+        {
+            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+        }
         pos[i] += len * sizeof(T);
     }
 }

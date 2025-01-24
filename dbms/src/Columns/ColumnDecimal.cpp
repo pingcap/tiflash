@@ -160,7 +160,6 @@ void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_
     }
 }
 
-// TODO add unit test
 template <typename T>
 template <bool compare_semantics>
 void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
@@ -220,7 +219,7 @@ void ColumnDecimal<T>::serializeToPosImpl(
         {
             if constexpr (has_nullmap)
             {
-                if ((*nullmap)[i] != 0)
+                if (DB::isNullAt(*nullmap, i))
                 {
                     pos[i] = serializeDecimal256Helper(pos[i], def_val);
                     continue;
@@ -232,7 +231,7 @@ void ColumnDecimal<T>::serializeToPosImpl(
         {
             if constexpr (has_nullmap)
             {
-                if ((*nullmap)[i] != 0)
+                if (DB::isNullAt(*nullmap, i))
                 {
                     tiflash_compiler_builtin_memcpy(pos[i], &def_val, sizeof(T));
                     pos[i] += sizeof(T);
@@ -283,7 +282,7 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
         {
             if constexpr (has_nullmap)
             {
-                if ((*nullmap)[i] != 0)
+                if (DB::isNullAt(*nullmap, i))
                     continue;
             }
             for (size_t j = 0; j < len; ++j)
@@ -293,10 +292,21 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
         {
             if constexpr (has_nullmap)
             {
-                if ((*nullmap)[i] != 0)
+                if (DB::isNullAt(*nullmap, i))
                     continue;
             }
-            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+            if (len <= 4)
+            {
+                for (size_t j = 0; j < len; ++j)
+                    tiflash_compiler_builtin_memcpy(
+                        pos[i] + j * sizeof(T),
+                        &data[array_offsets[start + i - 1] + j],
+                        sizeof(T));
+            }
+            else
+            {
+                inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+            }
             pos[i] += len * sizeof(T);
         }
     }

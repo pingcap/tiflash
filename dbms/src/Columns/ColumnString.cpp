@@ -566,7 +566,7 @@ void ColumnString::countSerializeByteSizeImpl(
             assert(sizeAt(i) > 0);
             if constexpr (has_nullmap)
             {
-                if ((*nullmap)[i] != 0)
+                if (DB::isNullAt(*nullmap, i))
                 {
                     byte_size[i] += sizeof(UInt32) + 1;
                     continue;
@@ -699,11 +699,8 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
             assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
             if constexpr (has_nullmap)
             {
-                if ((*nullmap)[i] != 0)
-                {
-                    byte_size[i] += (sizeof(UInt32) + 1) * ele_count;
+                if (DB::isNullAt(*nullmap, i))
                     continue;
-                }
             }
 
             if constexpr (count_code_points)
@@ -721,7 +718,6 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
             }
             else
             {
-                // NOTE: didn't check nullmap because we have to iterate through all rows, it's slow.
                 byte_size[i]
                     += sizeof(UInt32) * ele_count + offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]);
             }
@@ -866,7 +862,6 @@ void ColumnString::serializeToPosImpl(
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
-    static_assert(!(has_null && has_nullmap));
     assert(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     /// To avoid virtual function call of sortKey().
@@ -876,14 +871,16 @@ void ColumnString::serializeToPosImpl(
     {
         if constexpr (compare_semantics)
         {
+            static_assert(!has_null);
             UInt32 str_size = sizeAt(start + i);
             const void * src = &chars[offsetAt(start + i)];
             if constexpr (has_nullmap)
             {
-                if ((*nullmap)[i] != 0)
+                if (DB::isNullAt(*nullmap, i))
                 {
                     UInt32 str_size = 1;
                     tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
+                    pos[i] += sizeof(UInt32);
                     *(pos[i]) = '\0';
                     pos[i] += 1;
                     continue;
@@ -903,7 +900,7 @@ void ColumnString::serializeToPosImpl(
         }
         else
         {
-            assert(!has_nullmap);
+            static_assert(!has_nullmap);
             if constexpr (has_null)
             {
                 if (pos[i] == nullptr)
@@ -913,7 +910,6 @@ void ColumnString::serializeToPosImpl(
             UInt32 str_size = sizeAt(start + i);
             const void * src = &chars[offsetAt(start + i)];
 
-            assert(!nullmap);
             tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
             pos[i] += sizeof(UInt32);
             inline_memcpy(pos[i], src, str_size);
@@ -1038,7 +1034,6 @@ void ColumnString::serializeToPosForColumnArrayImplType(
     }
     else
     {
-        assert(!nullmap);
         serializeToPosForColumnArrayImpl<has_null, compare_semantics, TiDB::ITiDBCollator, false>(
             pos,
             start,
@@ -1073,19 +1068,19 @@ void ColumnString::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
-    static_assert(!(has_null && has_nullmap));
     assert(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
 
     /// countSerializeByteSizeForCmpColumnArray has already checked that the size of one element is not greater than UINT32_MAX
     if constexpr (compare_semantics)
     {
+        static_assert(!has_null);
         /// To avoid virtual function call of sortKey().
         const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
         for (size_t i = 0; i < length; ++i)
         {
             if constexpr (has_nullmap)
             {
-                if ((*nullmap)[i] != 0)
+                if (DB::isNullAt(*nullmap, i))
                     continue;
             }
 
@@ -1109,7 +1104,7 @@ void ColumnString::serializeToPosForColumnArrayImpl(
     }
     else
     {
-        assert(!has_nullmap);
+        static_assert(!has_nullmap);
         for (size_t i = 0; i < length; ++i)
         {
             if constexpr (has_null)

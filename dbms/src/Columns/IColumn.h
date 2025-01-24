@@ -41,6 +41,22 @@ class ColumnGathererStream;
 using NullMap = PaddedPODArray<UInt8>;
 using ConstNullMapPtr = const NullMap *;
 
+inline bool isNullAt(const NullMap & nullmap, size_t n)
+{
+    return nullmap[n] != 0;
+}
+inline void mergeNullMap(const NullMap & m1, const NullMap & m2, NullMap & m3)
+{
+    RUNTIME_CHECK(m1.size() == m2.size());
+    m3.resize_fill_zero(m1.size());
+    for (size_t i = 0; i < m1.size(); ++i)
+        m3[i] = (DB::isNullAt(m1, i) || DB::isNullAt(m2, i));
+}
+inline void setNullAt(NullMap & nullmap, size_t n)
+{
+    nullmap[n] = 1;
+}
+
 /// Declares interface to store columns in memory.
 class IColumn : public COWPtr<IColumn>
 {
