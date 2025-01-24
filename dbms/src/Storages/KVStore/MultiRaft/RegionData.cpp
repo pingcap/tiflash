@@ -145,7 +145,7 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
         }
     }
 
-    auto delta = RegionWriteCFData::calcTotalKVSize(write_it->second);
+    auto delta = RegionWriteCFData::calcTotalKVSize(write_it->second).negative();
     cf_data_size += delta.payload;
     decoded_data_size += delta.decoded;
     reportDealloc(-delta.payload);
