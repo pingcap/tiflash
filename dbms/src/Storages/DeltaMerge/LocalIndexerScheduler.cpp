@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/TiFlashMetrics.h>
 #include <Common/setThreadName.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <common/logger_useful.h>
@@ -64,9 +65,9 @@ LocalIndexerScheduler::LocalIndexerScheduler(const Options & options)
         start();
 }
 
-LocalIndexerScheduler::~LocalIndexerScheduler()
+void LocalIndexerScheduler::shutdown()
 {
-    LOG_INFO(logger, "LocalIndexerScheduler is destroying. Waiting scheduler and tasks to finish...");
+    LOG_INFO(logger, "LocalIndexerScheduler is shutting down. Waiting scheduler and tasks to finish...");
 
     // First quit the scheduler. Don't schedule more tasks.
     is_shutting_down = true;
@@ -81,7 +82,15 @@ LocalIndexerScheduler::~LocalIndexerScheduler()
 
     // Then wait all running tasks to finish.
     pool.reset();
+    LOG_INFO(logger, "LocalIndexerScheduler is shutdown.");
+}
 
+LocalIndexerScheduler::~LocalIndexerScheduler()
+{
+    if (!is_shutting_down)
+    {
+        shutdown();
+    }
     LOG_INFO(logger, "LocalIndexerScheduler is destroyed");
 }
 
@@ -186,6 +195,10 @@ void LocalIndexerScheduler::taskOnSchedule(std::unique_lock<std::mutex> &, const
 {
     for (const auto & file_id : task->user_task.file_ids)
     {
+        if (std::holds_alternative<DMFileID>(file_id))
+            GET_METRIC(tiflash_vector_index_build_count, type_stable).Increment(1);
+        else
+            GET_METRIC(tiflash_vector_index_build_count, type_delta).Increment(1);
         auto [it, inserted] = adding_index_page_id_set.insert(file_id);
         RUNTIME_CHECK(inserted);
         UNUSED(it);
@@ -295,7 +308,10 @@ bool LocalIndexerScheduler::tryAddTaskToPool(std::unique_lock<std::mutex> & lock
         }
     };
 
-    RUNTIME_CHECK(pool);
+    if (is_shutting_down || !pool)
+        // shutting down, retry again
+        return false;
+
     if (!pool->trySchedule(real_job))
         // Concurrent task limit reached
         return false;

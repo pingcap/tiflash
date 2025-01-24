@@ -120,7 +120,7 @@ try
         auto blocks = prepareBlocks(-10, 5, 1000);
         ASSERT_EQ(blocks.size(), 1);
         auto block = blocks[0];
-        auto col = block.getByName(MutableSupport::tidb_pk_column_name);
+        auto col = block.getByName(MutSup::extra_handle_column_name);
         ASSERT_COLUMN_EQ(col, createColumn<Int64>({-10, -9, -8, -7, -6, -5, -4, -3, -2, -1, 0, 1, 2, 3, 4}));
     }
     {
@@ -128,27 +128,27 @@ try
         ASSERT_EQ(blocks.size(), 5);
         {
             auto block = blocks[0];
-            auto col = block.getByName(MutableSupport::tidb_pk_column_name);
+            auto col = block.getByName(MutSup::extra_handle_column_name);
             ASSERT_COLUMN_EQ(col, createColumn<Int64>({1, 2, 3}));
         }
         {
             auto block = blocks[1];
-            auto col = block.getByName(MutableSupport::tidb_pk_column_name);
+            auto col = block.getByName(MutSup::extra_handle_column_name);
             ASSERT_COLUMN_EQ(col, createColumn<Int64>({4, 5, 6}));
         }
         {
             auto block = blocks[2];
-            auto col = block.getByName(MutableSupport::tidb_pk_column_name);
+            auto col = block.getByName(MutSup::extra_handle_column_name);
             ASSERT_COLUMN_EQ(col, createColumn<Int64>({7, 8, 9}));
         }
         {
             auto block = blocks[3];
-            auto col = block.getByName(MutableSupport::tidb_pk_column_name);
+            auto col = block.getByName(MutSup::extra_handle_column_name);
             ASSERT_COLUMN_EQ(col, createColumn<Int64>({10, 11, 12}));
         }
         {
             auto block = blocks[4];
-            auto col = block.getByName(MutableSupport::tidb_pk_column_name);
+            auto col = block.getByName(MutSup::extra_handle_column_name);
             ASSERT_COLUMN_EQ(col, createColumn<Int64>({13}));
         }
     }
@@ -157,17 +157,17 @@ try
         ASSERT_EQ(blocks.size(), 3);
         {
             auto block = blocks[0];
-            auto col = block.getByName(MutableSupport::tidb_pk_column_name);
+            auto col = block.getByName(MutSup::extra_handle_column_name);
             ASSERT_COLUMN_EQ(col, createColumn<Int64>({1}));
         }
         {
             auto block = blocks[1];
-            auto col = block.getByName(MutableSupport::tidb_pk_column_name);
+            auto col = block.getByName(MutSup::extra_handle_column_name);
             ASSERT_COLUMN_EQ(col, createColumn<Int64>({2}));
         }
         {
             auto block = blocks[2];
-            auto col = block.getByName(MutableSupport::tidb_pk_column_name);
+            auto col = block.getByName(MutSup::extra_handle_column_name);
             ASSERT_COLUMN_EQ(col, createColumn<Int64>({3}));
         }
     }

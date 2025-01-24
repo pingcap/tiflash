@@ -129,14 +129,14 @@ try
         while (Block in = column_file_big_reader->readNextBlock())
         {
             ASSERT_EQ(in.columns(), column_defines->size());
-            ASSERT_TRUE(in.has(EXTRA_HANDLE_COLUMN_NAME));
-            ASSERT_TRUE(in.has(VERSION_COLUMN_NAME));
-            auto & pk_column = in.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+            ASSERT_TRUE(in.has(MutSup::extra_handle_column_name));
+            ASSERT_TRUE(in.has(MutSup::version_column_name));
+            auto & pk_column = in.getByName(MutSup::extra_handle_column_name).column;
             for (size_t i = 0; i < pk_column->size(); i++)
             {
                 ASSERT_EQ(pk_column->getInt(i), num_rows_read + i);
             }
-            auto & version_column = in.getByName(VERSION_COLUMN_NAME).column;
+            auto & version_column = in.getByName(MutSup::version_column_name).column;
             for (size_t i = 0; i < version_column->size(); i++)
             {
                 ASSERT_EQ(version_column->getInt(i), tso_value);
@@ -156,14 +156,14 @@ try
         while (Block in = column_file_big_reader2->readNextBlock())
         {
             ASSERT_EQ(in.columns(), column_defines_pk_and_del->size());
-            ASSERT_TRUE(in.has(EXTRA_HANDLE_COLUMN_NAME));
-            ASSERT_TRUE(in.has(TAG_COLUMN_NAME));
-            auto & pk_column = in.getByName(EXTRA_HANDLE_COLUMN_NAME).column;
+            ASSERT_TRUE(in.has(MutSup::extra_handle_column_name));
+            ASSERT_TRUE(in.has(MutSup::delmark_column_name));
+            auto & pk_column = in.getByName(MutSup::extra_handle_column_name).column;
             for (size_t i = 0; i < pk_column->size(); i++)
             {
                 ASSERT_EQ(pk_column->getInt(i), num_rows_read + i);
             }
-            auto & del_column = in.getByName(TAG_COLUMN_NAME).column;
+            auto & del_column = in.getByName(MutSup::delmark_column_name).column;
             for (size_t i = 0; i < del_column->size(); i++)
             {
                 ASSERT_EQ(del_column->getInt(i), 0);

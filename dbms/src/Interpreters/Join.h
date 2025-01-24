@@ -22,6 +22,7 @@
 #include <Core/Spiller.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/RuntimeFilter.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Interpreters/AggregationCommon.h>
@@ -38,14 +39,6 @@
 
 namespace DB
 {
-struct JoinProfileInfo
-{
-    UInt64 peak_build_bytes_usage = 0;
-    bool is_spill_enabled = false;
-    bool is_spilled = false;
-};
-using JoinProfileInfoPtr = std::shared_ptr<JoinProfileInfo>;
-
 class Join;
 using JoinPtr = std::shared_ptr<Join>;
 
@@ -501,7 +494,7 @@ private:
     Block doJoinBlockCross(ProbeProcessInfo & probe_process_info) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
-    Block joinBlockNullAwareSemiImpl(const ProbeProcessInfo & probe_process_info) const;
+    Block joinBlockNullAwareSemiImpl(ProbeProcessInfo & probe_process_info) const;
 
     template <ASTTableJoin::Kind KIND, ASTTableJoin::Strictness STRICTNESS, typename Maps>
     Block joinBlockSemiImpl(ProbeProcessInfo & probe_process_info) const;

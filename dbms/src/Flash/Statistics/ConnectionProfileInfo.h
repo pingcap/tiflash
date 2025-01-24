@@ -14,13 +14,50 @@
 
 #pragma once
 
+#include <common/defines.h>
 #include <common/types.h>
+
+#include <magic_enum.hpp>
 
 namespace DB
 {
+
 struct ConnectionProfileInfo
 {
+    enum ConnectionType
+    {
+        Local = 0,
+        InnerZoneRemote = 1,
+        InterZoneRemote = 2,
+    };
+    using ConnTypeVec = std::vector<ConnectionProfileInfo::ConnectionType>;
+    static ALWAYS_INLINE ConnectionType inferConnectionType(bool is_local, bool same_zone)
+    {
+        if (is_local)
+        {
+            return Local;
+        }
+        else if (same_zone)
+        {
+            return InnerZoneRemote;
+        }
+        else
+        {
+            return InterZoneRemote;
+        }
+    }
+    ConnectionProfileInfo() = default;
+    explicit ConnectionProfileInfo(ConnectionType type_)
+        : type(type_)
+    {}
+    ConnectionProfileInfo(bool is_local, bool same_zone)
+        : ConnectionProfileInfo(inferConnectionType(is_local, same_zone))
+    {}
+
+    String getTypeString() const { return String(magic_enum::enum_name(type)); }
+
     Int64 packets = 0;
     Int64 bytes = 0;
+    ConnectionType type = Local;
 };
 } // namespace DB

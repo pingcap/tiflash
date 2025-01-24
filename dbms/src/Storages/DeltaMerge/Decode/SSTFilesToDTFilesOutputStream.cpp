@@ -275,8 +275,8 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
         {
             // Check whether rows are sorted by handle & version in ascending order.
             SortDescription sort;
-            sort.emplace_back(MutableSupport::tidb_pk_column_name, 1, 0);
-            sort.emplace_back(MutableSupport::version_column_name, 1, 0);
+            sort.emplace_back(MutSup::extra_handle_column_name, 1, 0);
+            sort.emplace_back(MutSup::version_column_name, 1, 0);
 
             if (unlikely(block.rows() > 1 && !isAlreadySorted(block, sort)))
             {
@@ -288,8 +288,8 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::write()
                 const size_t nrows = block.rows();
                 for (size_t i = 0; i < nrows; ++i)
                 {
-                    const auto & pk_col = block.getByName(MutableSupport::tidb_pk_column_name);
-                    const auto & ver_col = block.getByName(MutableSupport::version_column_name);
+                    const auto & pk_col = block.getByName(MutSup::extra_handle_column_name);
+                    const auto & ver_col = block.getByName(MutSup::version_column_name);
                     LOG_ERROR(
                         log,
                         "[Row={}/{}] [pk={}] [ver={}]",
@@ -385,7 +385,7 @@ void SSTFilesToDTFilesOutputStream<ChildStream>::updateRangeFromNonEmptyBlock(Bl
 
     RUNTIME_CHECK(block.rows() > 0);
 
-    const auto & pk_col = block.getByName(MutableSupport::tidb_pk_column_name);
+    const auto & pk_col = block.getByName(MutSup::extra_handle_column_name);
     const auto rowkey_column = RowKeyColumnContainer(pk_col.column, schema_snap->is_common_handle);
     auto & current_file_range = ingest_files_range.back();
 

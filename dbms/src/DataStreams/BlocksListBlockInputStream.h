@@ -27,7 +27,7 @@ class BlocksListBlockInputStream : public IProfilingBlockInputStream
 {
 public:
     /// Acquires the ownership of the block list.
-    BlocksListBlockInputStream(BlocksList && list_)
+    explicit BlocksListBlockInputStream(BlocksList && list_)
         : list(std::move(list_))
         , it(list.begin())
         , end(list.end())

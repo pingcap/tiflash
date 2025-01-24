@@ -819,8 +819,8 @@ try
                 false,
                 3,
                 DMTestEnv::pk_name,
-                EXTRA_HANDLE_COLUMN_ID,
-                EXTRA_HANDLE_COLUMN_INT_TYPE,
+                MutSup::extra_handle_id,
+                MutSup::getExtraHandleColumnIntType(),
                 false,
                 1,
                 true,
@@ -1303,7 +1303,7 @@ try
         ColumnDefines real_columns;
         for (const auto & col : columns)
         {
-            if (col.name != EXTRA_HANDLE_COLUMN_NAME && col.name != TAG_COLUMN_NAME)
+            if (col.name != MutSup::extra_handle_column_name && col.name != MutSup::delmark_column_name)
             {
                 real_columns.emplace_back(col);
             }

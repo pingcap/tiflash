@@ -27,7 +27,4 @@ using VectorIndexBuilderPtr = std::shared_ptr<VectorIndexBuilder>;
 class VectorIndexViewer;
 using VectorIndexViewerPtr = std::shared_ptr<VectorIndexViewer>;
 
-class VectorIndexCache;
-using VectorIndexCachePtr = std::shared_ptr<VectorIndexCache>;
-
 } // namespace DB::DM

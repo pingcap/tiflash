@@ -18,6 +18,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_semi_join_time_exceed[];
+} // namespace FailPoints
 namespace tests
 {
 class JoinExecutorTestRunner : public DB::tests::JoinTestRunner
@@ -29,14 +33,47 @@ public:
 
         /// disable spill
         context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+
+        for (auto enable_pipeline : {false, true})
+        {
+            if (enable_pipeline)
+            {
+                for (auto enable_join_v2 : {false, true})
+                {
+                    if (enable_join_v2)
+                    {
+                        for (UInt64 prefetch_threshold : {0, 100000000})
+                            configs.emplace_back(enable_pipeline, enable_join_v2, prefetch_threshold);
+                    }
+                    else
+                        configs.emplace_back(enable_pipeline, enable_join_v2, 0);
+                }
+            }
+            else
+                configs.emplace_back(enable_pipeline, false, 0);
+        }
     }
+
+    struct JoinTestConfig
+    {
+        JoinTestConfig(bool enable_pipeline_, bool enable_join_v2_, UInt64 prefetch_threshold_)
+            : enable_pipeline(enable_pipeline_)
+            , enable_join_v2(enable_join_v2_)
+            , prefetch_threshold(prefetch_threshold_)
+        {}
+        bool enable_pipeline;
+        bool enable_join_v2;
+        UInt64 prefetch_threshold;
+    };
+    std::vector<JoinTestConfig> configs;
 };
 
-#define WRAP_FOR_JOIN_TEST_BEGIN                   \
-    std::vector<bool> pipeline_bools{false, true}; \
-    for (auto enable_pipeline : pipeline_bools)    \
-    {                                              \
-        enablePipeline(enable_pipeline);
+#define WRAP_FOR_JOIN_TEST_BEGIN                                                    \
+    for (auto cfg : configs)                                                        \
+    {                                                                               \
+        enablePipeline(cfg.enable_pipeline);                                        \
+        context.context->getSettingsRef().enable_hash_join_v2 = cfg.enable_join_v2; \
+        context.context->getSettingsRef().join_v2_probe_enable_prefetch_threshold = cfg.prefetch_threshold;
 
 #define WRAP_FOR_JOIN_TEST_END }
 
@@ -154,6 +191,7 @@ try
          toNullableVec<Int8>({0, 0, 0, 1, 1})},
     };
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     std::vector<UInt64> probe_cache_column_threshold{2, 1000};
     for (size_t i = 0; i < join_type_num; ++i)
     {
@@ -167,7 +205,6 @@ try
                                             .join(context.scan("simple_test", r), join_types[i], {col(k)})
                                             .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
                                             .build(context);
-
             for (auto threshold : probe_cache_column_threshold)
             {
                 context.context->setSetting(
@@ -180,6 +217,7 @@ try
             }
         }
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -552,6 +590,7 @@ try
          toNullableVec<Int8>({0, 0, 0})},
     };
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     /// select * from (t1 JT1 t2 using (a)) JT2 (t3 JT1 t4 using (a)) using (b)
     for (auto [i, jt1] : ext::enumerate(join_types))
     {
@@ -582,6 +621,7 @@ try
             }
         }
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -599,6 +639,8 @@ try
             .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
             .build(context);
     };
+
+    WRAP_FOR_JOIN_TEST_BEGIN
 
     ColumnsWithTypeAndName column_prune_ref_columns;
     column_prune_ref_columns.push_back(toVec<UInt64>({1}));
@@ -715,6 +757,8 @@ try
         {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0), createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
 
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request_1(), 2));
+
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -755,6 +799,7 @@ try
          toNullableVec<Int32>({1, 4})},
     };
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     for (auto [i, tp] : ext::enumerate(join_types))
     {
         auto request = context.scan("join_agg", "t1")
@@ -764,6 +809,7 @@ try
 
         executeAndAssertColumnsEqual(request, expected_cols[i]);
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -1466,6 +1512,7 @@ try
         {{"id", TiDB::TP::TypeLongLong}, {"probe_value", TiDB::TP::TypeLongLong}},
         {probe_key, probe_col});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(90)));
     {
         auto anti_join_request = context.scan("issue_8791", "probe_table")
@@ -1499,6 +1546,7 @@ try
         auto expected_columns = {toVec<UInt64>({240})};
         ASSERT_COLUMNS_EQ_UR(expected_columns, executeStreams(inner_join_request, 1));
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -1911,7 +1959,9 @@ try
                   {})
               .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
               .build(context);
+    WRAP_FOR_JOIN_TEST_BEGIN
     ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request_column, 2));
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -1922,12 +1972,14 @@ try
                        .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
+        WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(
             request,
             {toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"})});
+        WRAP_FOR_JOIN_TEST_END
     }
 }
 CATCH
@@ -1939,12 +1991,14 @@ try
                        .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
+        WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(
             request,
             {toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"})});
+        WRAP_FOR_JOIN_TEST_END
     }
 }
 CATCH
@@ -1968,6 +2022,7 @@ try
     std::shared_ptr<tipb::DAGRequest> request;
     std::shared_ptr<tipb::DAGRequest> request_column_prune;
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     // inner join
     {
         // null table join non-null table
@@ -2464,6 +2519,7 @@ try
                                    .build(context);
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(0), executeStreams(request_column_prune, 2));
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -2512,18 +2568,49 @@ try
         {50},
         {50},
         {50}};
+    context.context->setSetting("enable_hash_join_v2", "false");
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-        WRAP_FOR_JOIN_TEST_BEGIN
-        auto blocks = getExecuteStreamsReturnBlocks(request);
-        ASSERT_EQ(expect[i].size(), blocks.size());
-        for (size_t j = 0; j < blocks.size(); ++j)
+        for (auto enable_pipeline : {false, true})
         {
-            ASSERT_EQ(expect[i][j], blocks[j].rows());
+            enablePipeline(enable_pipeline);
+            auto blocks = getExecuteStreamsReturnBlocks(request);
+            ASSERT_EQ(expect[i].size(), blocks.size());
+            for (size_t j = 0; j < blocks.size(); ++j)
+            {
+                ASSERT_EQ(expect[i][j], blocks[j].rows());
+            }
+            ASSERT_COLUMNS_EQ_UR(genScalarCountResults(50), executeStreams(request_column_prune, 2));
         }
-        ASSERT_COLUMNS_EQ_UR(genScalarCountResults(50), executeStreams(request_column_prune, 2));
-        WRAP_FOR_JOIN_TEST_END
+    }
+
+    context.context->setSetting("enable_hash_join_v2", "true");
+    enablePipeline(true);
+    std::vector<std::vector<size_t>> expect_v2{
+        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+        {2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
+        {7, 7, 7, 7, 7, 7, 7, 1},
+        {25, 25},
+        {49, 1},
+        {50},
+        {50},
+        {50}};
+    for (size_t i = 0; i < block_sizes.size(); ++i)
+    {
+        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+        for (UInt64 prefetch_threshold : {0, 100000000})
+        {
+            context.context->setSetting("join_v2_probe_enable_prefetch_threshold", prefetch_threshold);
+            auto blocks = getExecuteStreamsReturnBlocks(request);
+            ASSERT_EQ(expect_v2[i].size(), blocks.size());
+            for (size_t j = 0; j < blocks.size(); ++j)
+            {
+                ASSERT_EQ(expect_v2[i][j], blocks[j].rows());
+            }
+            ASSERT_COLUMNS_EQ_UR(genScalarCountResults(50), executeStreams(request_column_prune, 2));
+        }
     }
 }
 CATCH
@@ -2566,6 +2653,8 @@ try
             {10},
         },
     };
+
+    context.context->setSetting("enable_hash_join_v2", "false");
     for (size_t index = 0; index < join_types.size(); index++)
     {
         auto request = context.scan("split_test", "t1")
@@ -2583,14 +2672,70 @@ try
         for (size_t i = 0; i < block_sizes.size(); ++i)
         {
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-            WRAP_FOR_JOIN_TEST_BEGIN
-            auto blocks = getExecuteStreamsReturnBlocks(request);
-            ASSERT_EQ(expect[i].size(), blocks.size());
-            for (size_t j = 0; j < blocks.size(); ++j)
+            for (auto enable_pipeline : {false, true})
             {
-                ASSERT_EQ(expect[i][j], blocks[j].rows());
+                enablePipeline(enable_pipeline);
+                auto blocks = getExecuteStreamsReturnBlocks(request);
+                ASSERT_EQ(expect[i].size(), blocks.size());
+                for (size_t j = 0; j < blocks.size(); ++j)
+                {
+                    ASSERT_EQ(expect[i][j], blocks[j].rows());
+                }
             }
-            WRAP_FOR_JOIN_TEST_END
+        }
+    }
+
+    context.context->setSetting("enable_hash_join_v2", "true");
+    enablePipeline(true);
+    std::vector<std::vector<std::vector<size_t>>> expects2{
+        {
+            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+            {2, 2, 2, 2, 2},
+            {7, 3},
+            {10},
+            {10},
+            {10},
+            {10},
+            {10},
+        },
+        {
+            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+            {2, 2, 2, 2, 2},
+            {7, 3},
+            {10},
+            {10},
+            {10},
+            {10},
+            {10},
+        },
+    };
+    for (size_t index = 0; index < join_types.size(); index++)
+    {
+        auto request = context.scan("split_test", "t1")
+                           .join(
+                               context.scan("split_test", "t2"),
+                               *(join_types.begin() + index),
+                               {col("a")},
+                               {},
+                               {},
+                               {gt(col("b"), col("c"))},
+                               {})
+                           .build(context);
+        auto & expect = expects2[index];
+
+        for (size_t i = 0; i < block_sizes.size(); ++i)
+        {
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+            for (UInt64 prefetch_threshold : {0, 100000000})
+            {
+                context.context->setSetting("join_v2_probe_enable_prefetch_threshold", prefetch_threshold);
+                auto blocks = getExecuteStreamsReturnBlocks(request);
+                ASSERT_EQ(expect[i].size(), blocks.size());
+                for (size_t j = 0; j < blocks.size(); ++j)
+                {
+                    ASSERT_EQ(expect[i][j], blocks[j].rows());
+                }
+            }
         }
     }
 }
@@ -2864,6 +3009,7 @@ try
 {
     using tipb::JoinType;
     std::vector<UInt64> cross_join_shallow_copy_thresholds{1, DEFAULT_BLOCK_SIZE * 100};
+    std::vector<bool> semi_join_time_exceed = {true, false};
     /// One join key(t.a = s.a) + no other condition.
     /// left table(t) + right table(s) + result column.
     const std::vector<std::tuple<ColumnsWithTypeAndName, ColumnsWithTypeAndName, ColumnWithTypeAndName>> t1
@@ -2915,7 +3061,18 @@ try
                 = context.scan("null_aware_semi", "t")
                       .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, is_null_aware)
                       .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune
                 = context.scan("null_aware_semi", "t")
                       .join(context.scan("null_aware_semi", "s"), type, {col("a")}, {}, {}, {}, {}, 0, is_null_aware)
@@ -3018,7 +3175,18 @@ try
                                    0,
                                    is_null_aware)
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune = context.scan("null_aware_semi", "t")
                                             .join(
                                                 context.scan("null_aware_semi", "s"),
@@ -3130,7 +3298,18 @@ try
                                    0,
                                    is_null_aware)
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune = context.scan("null_aware_semi", "t")
                                             .join(
                                                 context.scan("null_aware_semi", "s"),
@@ -3298,7 +3477,18 @@ try
                                    0,
                                    is_null_aware)
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune = context.scan("null_aware_semi", "t")
                                             .join(
                                                 context.scan("null_aware_semi", "s"),
@@ -3408,7 +3598,18 @@ try
                                    0,
                                    is_null_aware)
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune = context.scan("null_aware_semi", "t")
                                             .join(
                                                 context.scan("null_aware_semi", "s"),
@@ -3509,7 +3710,18 @@ try
                                    0,
                                    is_null_aware)
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
             auto request_column_prune = context.scan("null_aware_semi", "t")
                                             .join(
                                                 context.scan("null_aware_semi", "s"),
@@ -3565,6 +3777,7 @@ CATCH
 TEST_F(JoinExecutorTestRunner, SemiJoin)
 try
 {
+    std::vector<bool> semi_join_time_exceed = {true, false};
     using tipb::JoinType;
     /// One join key(t.a = s.a) + no other condition.
     /// left table(t) + right table(s) + result column.
@@ -3608,7 +3821,18 @@ try
         {
             auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("semi", "t").join(context.scan("semi", "s"), type, {col("a")}).build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -3652,7 +3876,18 @@ try
                 = context.scan("semi", "t")
                       .join(context.scan("semi", "s"), type, {col("a")}, {}, {}, {lt(col("t.c"), col("s.c"))}, {})
                       .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -3696,7 +3931,18 @@ try
             auto request = context.scan("semi", "t")
                                .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -3778,7 +4024,18 @@ try
                                    {lt(col("t.c"), col("s.c"))},
                                    {})
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 
@@ -3810,7 +4067,18 @@ try
             auto request = context.scan("semi", "t")
                                .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
                                .build(context);
-            executeAndAssertColumnsEqual(request, reference);
+            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            {
+                if (need_force_semi_join_time_exceed)
+                {
+                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                else
+                {
+                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                }
+                executeAndAssertColumnsEqual(request, reference);
+            }
         }
     }
 }

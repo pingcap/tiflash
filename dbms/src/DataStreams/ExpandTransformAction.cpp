@@ -13,7 +13,7 @@
 // limitations under the License.
 
 
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <DataStreams/ExpandTransformAction.h>
 
 #include <algorithm>

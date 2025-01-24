@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/Impls/RFWaitTask.h>
 #include <Operators/UnorderedSourceOp.h>

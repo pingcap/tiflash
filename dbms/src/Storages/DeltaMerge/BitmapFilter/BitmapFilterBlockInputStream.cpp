@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterBlockInputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 
@@ -32,40 +32,18 @@ BitmapFilterBlockInputStream::BitmapFilterBlockInputStream(
 
 Block BitmapFilterBlockInputStream::read()
 {
-    FilterPtr block_filter = nullptr;
-    auto block = children.at(0)->read(block_filter, true);
+    auto block = children.at(0)->read();
     if (!block)
         return block;
 
     filter.resize(block.rows());
-    bool all_match = bitmap_filter->get(filter, block.startOffset(), block.rows());
-    if (!block_filter)
+    if (bool all_match = bitmap_filter->get(filter, block.startOffset(), block.rows()); all_match)
+        return block;
+
+    size_t passed_count = countBytesInFilter(filter);
+    for (auto & col : block)
     {
-        if (all_match)
-            return block;
-        size_t passed_count = countBytesInFilter(filter);
-        for (auto & col : block)
-        {
-            col.column = col.column->filter(filter, passed_count);
-        }
-    }
-    else
-    {
-        RUNTIME_CHECK(filter.size() == block_filter->size(), filter.size(), block_filter->size());
-        if (!all_match)
-        {
-            std::transform(
-                filter.begin(),
-                filter.end(),
-                block_filter->begin(),
-                block_filter->begin(),
-                [](UInt8 a, UInt8 b) { return a && b; });
-        }
-        size_t passed_count = countBytesInFilter(*block_filter);
-        for (auto & col : block)
-        {
-            col.column = col.column->filter(*block_filter, passed_count);
-        }
+        col.column = col.column->filter(filter, passed_count);
     }
     return block;
 }

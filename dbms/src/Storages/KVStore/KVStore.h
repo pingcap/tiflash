@@ -289,10 +289,15 @@ private:
         DM::FileConvertJobType,
         TMTContext & tmt);
 
+    // Note that if there are committed rows in `new_region`, those rows will be left to
+    // the in-memory `RegionData` but not flushed into the IStorage layer after calling
+    // `checkAndApplyPreHandledSnapshot`.
+    // `PreHandle` should take care of the committed rows and only leave uncommitted
+    // key-values in the `new_region`.
     template <typename RegionPtrWrap>
-    void checkAndApplyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt);
     template <typename RegionPtrWrap>
-    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
+    void onSnapshot(const RegionPtrWrap & new_region, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
     RegionPtr handleIngestSSTByDTFile(
         const RegionPtr & region,
@@ -373,9 +378,6 @@ private:
     std::atomic<Timepoint> last_gc_time = Timepoint::min();
 
     mutable std::mutex task_mutex;
-
-    // raft_cmd_res stores the result of applying raft cmd. It must be protected by task_mutex.
-    std::unique_ptr<RaftCommandResult> raft_cmd_res;
 
     LoggerPtr log;
 

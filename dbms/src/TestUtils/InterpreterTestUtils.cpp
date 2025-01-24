@@ -21,6 +21,7 @@
 #include <TestUtils/ExecutorSerializer.h>
 #include <TestUtils/InterpreterTestUtils.h>
 
+#include <boost/algorithm/string/replace.hpp>
 #include <string>
 
 namespace DB::tests
@@ -73,6 +74,7 @@ void InterpreterTestUtils::initExpectResults()
             assert(spilts.size() == 3);
             auto suite_key = fmt::format("~{}", Poco::trim(spilts[0]));
             auto unit_result = fmt::format("~{}", Poco::trim(spilts[2]));
+            boost::replace_all(unit_result, "{StringName}", DataTypeString::getDefaultName());
             case_expect_results[suite_key].push_back(unit_result);
         }
     }

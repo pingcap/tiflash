@@ -37,7 +37,7 @@ public:
     {
         auto cds = DMTestEnv::getDefaultColumns(
             is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
-        cds->push_back(ColumnDefine(100, str_col_name, DataTypeFactory::instance().get("String")));
+        cds->emplace_back(100, str_col_name, DataTypeFactory::instance().get(DataTypeString::getDefaultName()));
         return toEmptyBlock(*cds);
     }
 
@@ -48,9 +48,9 @@ private:
 BlockInputStreamPtr genColumnProjInputStream(BlocksList & blocks, const ColumnDefines & columns, bool is_common_handle)
 {
     ColumnDefine handle_define(
-        TiDBPkColumnID,
+        MutSup::extra_handle_id,
         DMTestEnv::pk_name,
-        is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE);
+        is_common_handle ? MutSup::getExtraHandleColumnStringType() : MutSup::getExtraHandleColumnIntType());
 
     return std::make_shared<DMColumnProjectionBlockInputStream>(
         std::make_shared<DebugBlockInputStream>(blocks, is_common_handle),
@@ -63,9 +63,9 @@ BlockInputStreamPtr genDeleteFilterInputStream(
     bool is_common_handle)
 {
     ColumnDefine handle_define(
-        TiDBPkColumnID,
+        MutSup::extra_handle_id,
         DMTestEnv::pk_name,
-        is_common_handle ? EXTRA_HANDLE_COLUMN_STRING_TYPE : EXTRA_HANDLE_COLUMN_INT_TYPE);
+        is_common_handle ? MutSup::getExtraHandleColumnStringType() : MutSup::getExtraHandleColumnIntType());
 
     return std::make_shared<DMDeleteFilterBlockInputStream>(
         std::make_shared<DebugBlockInputStream>(blocks, is_common_handle),

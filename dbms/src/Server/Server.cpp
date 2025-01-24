@@ -19,7 +19,6 @@
 #include <Common/DynamicThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
-#include <Common/Macros.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
@@ -34,6 +33,7 @@
 #include <Common/getFQDNOrHostName.h>
 #include <Common/getMultipleKeysFromConfig.h>
 #include <Common/getNumberOfCPUCores.h>
+#include <Common/grpcpp.h>
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Flash/DiagnosticsService.h>
@@ -52,25 +52,26 @@
 #include <IO/ReadHelpers.h>
 #include <IO/UseSSL.h>
 #include <Interpreters/AsynchronousMetrics.h>
+#include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
-#include <Poco/Net/NetException.h>
 #include <Poco/StringTokenizer.h>
 #include <Poco/Timestamp.h>
 #include <Poco/Util/HelpFormatter.h>
+#include <Poco/Util/LayeredConfiguration.h>
 #include <Server/BgStorageInit.h>
 #include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
 #include <Server/MetricsPrometheus.h>
-#include <Server/MetricsTransmitter.h>
 #include <Server/RaftConfigParser.h>
 #include <Server/Server.h>
 #include <Server/ServerInfo.h>
+#include <Server/Setup.h>
 #include <Server/StatusFile.h>
 #include <Server/StorageConfigParser.h>
-#include <Server/TCPHandlerFactory.h>
+#include <Server/TCPServersHolder.h>
 #include <Server/UserConfigParser.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/ReadThread/DMFileReaderPool.h>
@@ -106,93 +107,10 @@
 #include <memory>
 #include <thread>
 
-#if Poco_NetSSL_FOUND
-#include <Common/grpcpp.h>
-#include <Poco/Net/Context.h>
-#include <Poco/Net/SecureServerSocket.h>
-#endif
-
-#if USE_JEMALLOC
-#include <jemalloc/jemalloc.h>
-#endif
-
-#if USE_MIMALLOC
-#include <Poco/JSON/Parser.h>
-#include <mimalloc.h>
-
-#include <fstream>
-#endif
-
 #ifdef FIU_ENABLE
 #include <fiu.h>
 #endif
 
-
-#if USE_MIMALLOC
-#define TRY_LOAD_CONF(NAME)                          \
-    {                                                \
-        try                                          \
-        {                                            \
-            auto value = obj->getValue<long>(#NAME); \
-            mi_option_set(NAME, value);              \
-        }                                            \
-        catch (...)                                  \
-        {}                                           \
-    }
-
-void loadMiConfig(Logger * log)
-{
-    auto config = getenv("MIMALLOC_CONF");
-    if (config)
-    {
-        LOG_INFO(log, "Got environment variable MIMALLOC_CONF: {}", config);
-        Poco::JSON::Parser parser;
-        std::ifstream data{config};
-        Poco::Dynamic::Var result = parser.parse(data);
-        auto obj = result.extract<Poco::JSON::Object::Ptr>();
-        TRY_LOAD_CONF(mi_option_show_errors);
-        TRY_LOAD_CONF(mi_option_show_stats);
-        TRY_LOAD_CONF(mi_option_verbose);
-        TRY_LOAD_CONF(mi_option_eager_commit);
-        TRY_LOAD_CONF(mi_option_eager_region_commit);
-        TRY_LOAD_CONF(mi_option_large_os_pages);
-        TRY_LOAD_CONF(mi_option_reserve_huge_os_pages);
-        TRY_LOAD_CONF(mi_option_segment_cache);
-        TRY_LOAD_CONF(mi_option_page_reset);
-        TRY_LOAD_CONF(mi_option_segment_reset);
-        TRY_LOAD_CONF(mi_option_reset_delay);
-        TRY_LOAD_CONF(mi_option_use_numa_nodes);
-        TRY_LOAD_CONF(mi_option_reset_decommits);
-        TRY_LOAD_CONF(mi_option_eager_commit_delay);
-        TRY_LOAD_CONF(mi_option_os_tag);
-    }
-}
-#undef TRY_LOAD_CONF
-#endif
-
-namespace
-{
-[[maybe_unused]] void tryLoadBoolConfigFromEnv(const DB::LoggerPtr & log, bool & target, const char * name)
-{
-    auto * config = getenv(name);
-    if (config)
-    {
-        LOG_INFO(log, "Got environment variable {} = {}", name, config);
-        try
-        {
-            auto result = std::stoul(config);
-            if (result != 0 && result != 1)
-            {
-                LOG_ERROR(log, "Environment variable{} = {} is not valid", name, result);
-                return;
-            }
-            target = result;
-        }
-        catch (...)
-        {}
-    }
-}
-} // namespace
 
 namespace CurrentMetrics
 {
@@ -282,31 +200,36 @@ struct TiFlashProxyConfig
         args.push_back(iter->second.data());
     }
 
-    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config, bool has_s3_config)
+    // Try to parse start args from `config`.
+    // Return true if proxy need to be started, and `val_map` will be filled with the
+    // proxy start params.
+    // Return false if proxy is not need.
+    bool tryParseFromConfig(
+        const Poco::Util::LayeredConfiguration & config,
+        const DisaggregatedMode disaggregated_mode,
+        const bool use_autoscaler,
+        const LoggerPtr & log)
     {
-        auto disaggregated_mode = getDisaggregatedMode(config);
-
         // tiflash_compute doesn't need proxy.
-        if (disaggregated_mode == DisaggregatedMode::Compute && useAutoScaler(config))
+        if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
         {
-            LOG_INFO(
-                Logger::get(),
-                "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
-            return;
+            LOG_INFO(log, "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
+            return false;
         }
 
         Poco::Util::AbstractConfiguration::Keys keys;
         config.keys("flash.proxy", keys);
         if (!config.has("raft.pd_addr"))
         {
-            LOG_WARNING(Logger::get(), "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
+            LOG_WARNING(log, "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
             if (!keys.empty())
-                LOG_WARNING(Logger::get(), "`flash.proxy.*` is ignored because TiFlash Proxy will not start.");
+                LOG_WARNING(log, "`flash.proxy.*` is ignored because TiFlash Proxy will not start.");
 
-            return;
+            return false;
         }
 
         {
+            // config items start from `flash.proxy.`
             std::unordered_map<std::string, std::string> args_map;
             for (const auto & key : keys)
                 args_map[key] = config.getString("flash.proxy." + key);
@@ -319,12 +242,25 @@ struct TiFlashProxyConfig
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
-            if (disaggregated_mode != DisaggregatedMode::Compute && has_s3_config)
+            // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
+            if (disaggregated_mode == DisaggregatedMode::Storage)
                 args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
 
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
         }
+        return true;
+    }
+
+    TiFlashProxyConfig(
+        Poco::Util::LayeredConfiguration & config,
+        const DisaggregatedMode disaggregated_mode,
+        const bool use_autoscaler,
+        const StorageFormatVersion & format_version,
+        const Settings & settings,
+        const LoggerPtr & log)
+    {
+        is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, log);
 
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
@@ -332,7 +268,36 @@ struct TiFlashProxyConfig
             args.push_back(v.first.data());
             args.push_back(v.second.data());
         }
-        is_proxy_runnable = true;
+
+        // Enable unips according to `format_version`
+        if (format_version.page == PageFormat::V4)
+        {
+            LOG_INFO(log, "Using UniPS for proxy");
+            addExtraArgs("unips-enabled", "1");
+        }
+
+        // Set the proxy's memory by size or ratio
+        std::visit(
+            [&](auto && arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, UInt64>)
+                {
+                    if (arg != 0)
+                    {
+                        LOG_INFO(log, "Limit proxy's memory, size={}", arg);
+                        addExtraArgs("memory-limit-size", std::to_string(arg));
+                    }
+                }
+                else if constexpr (std::is_same_v<T, double>)
+                {
+                    if (arg > 0 && arg <= 1.0)
+                    {
+                        LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
+                        addExtraArgs("memory-limit-ratio", std::to_string(arg));
+                    }
+                }
+            },
+            settings.max_memory_usage_for_all_queries.get());
     }
 };
 
@@ -388,100 +353,6 @@ void printGRPCLog(gpr_log_func_args * args)
     }
 }
 
-struct TCPServer : Poco::Net::TCPServer
-{
-    TCPServer(
-        Poco::Net::TCPServerConnectionFactory::Ptr pFactory,
-        Poco::ThreadPool & threadPool,
-        const Poco::Net::ServerSocket & socket,
-        Poco::Net::TCPServerParams::Ptr pParams)
-        : Poco::Net::TCPServer(pFactory, threadPool, socket, pParams)
-    {}
-
-protected:
-    void run() override
-    {
-        setThreadName("TCPServer");
-        Poco::Net::TCPServer::run();
-    }
-};
-
-void UpdateMallocConfig([[maybe_unused]] const LoggerPtr & log)
-{
-#ifdef RUN_FAIL_RETURN
-    static_assert(false);
-#endif
-#define RUN_FAIL_RETURN(f)                                    \
-    do                                                        \
-    {                                                         \
-        if (f)                                                \
-        {                                                     \
-            LOG_ERROR(log, "Fail to update jemalloc config"); \
-            return;                                           \
-        }                                                     \
-    } while (0)
-#if USE_JEMALLOC
-    const char * version;
-    bool old_b, new_b = true;
-    size_t old_max_thd, new_max_thd = 1;
-    size_t sz_b = sizeof(bool), sz_st = sizeof(size_t), sz_ver = sizeof(version);
-
-    RUN_FAIL_RETURN(je_mallctl("version", &version, &sz_ver, nullptr, 0));
-    LOG_INFO(log, "Got jemalloc version: {}", version);
-
-    auto * malloc_conf = getenv("MALLOC_CONF");
-    if (malloc_conf)
-    {
-        LOG_INFO(log, "Got environment variable MALLOC_CONF: {}", malloc_conf);
-    }
-    else
-    {
-        LOG_INFO(log, "Not found environment variable MALLOC_CONF");
-    }
-
-    RUN_FAIL_RETURN(je_mallctl("opt.background_thread", (void *)&old_b, &sz_b, nullptr, 0));
-    RUN_FAIL_RETURN(je_mallctl("opt.max_background_threads", (void *)&old_max_thd, &sz_st, nullptr, 0));
-
-    LOG_INFO(log, "Got jemalloc config: opt.background_thread {}, opt.max_background_threads {}", old_b, old_max_thd);
-
-    if (!malloc_conf && !old_b)
-    {
-        LOG_INFO(log, "Try to use background_thread of jemalloc to handle purging asynchronously");
-
-        RUN_FAIL_RETURN(je_mallctl("max_background_threads", nullptr, nullptr, (void *)&new_max_thd, sz_st));
-        LOG_INFO(log, "Set jemalloc.max_background_threads {}", new_max_thd);
-
-        RUN_FAIL_RETURN(je_mallctl("background_thread", nullptr, nullptr, (void *)&new_b, sz_b));
-        LOG_INFO(log, "Set jemalloc.background_thread {}", new_b);
-    }
-#endif
-
-#if USE_MIMALLOC
-#define MI_OPTION_SHOW(OPTION) LOG_INFO(log, "mimalloc." #OPTION ": {}", mi_option_get(OPTION));
-
-    int version = mi_version();
-    LOG_INFO(log, "Got mimalloc version: {}.{}.{}", (version / 100), ((version % 100) / 10), (version % 10));
-    loadMiConfig(log);
-    MI_OPTION_SHOW(mi_option_show_errors);
-    MI_OPTION_SHOW(mi_option_show_stats);
-    MI_OPTION_SHOW(mi_option_verbose);
-    MI_OPTION_SHOW(mi_option_eager_commit);
-    MI_OPTION_SHOW(mi_option_eager_region_commit);
-    MI_OPTION_SHOW(mi_option_large_os_pages);
-    MI_OPTION_SHOW(mi_option_reserve_huge_os_pages);
-    MI_OPTION_SHOW(mi_option_segment_cache);
-    MI_OPTION_SHOW(mi_option_page_reset);
-    MI_OPTION_SHOW(mi_option_segment_reset);
-    MI_OPTION_SHOW(mi_option_reset_delay);
-    MI_OPTION_SHOW(mi_option_use_numa_nodes);
-    MI_OPTION_SHOW(mi_option_reset_decommits);
-    MI_OPTION_SHOW(mi_option_eager_commit_delay);
-    MI_OPTION_SHOW(mi_option_os_tag);
-#undef MI_OPTION_SHOW
-#endif
-#undef RUN_FAIL_RETURN
-}
-
 extern "C" {
 void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
 }
@@ -516,7 +387,7 @@ struct RaftStoreProxyRunner : boost::noncopyable
         pthread_attr_t attribute;
         pthread_attr_init(&attribute);
         pthread_attr_setstacksize(&attribute, parms.stack_size);
-        LOG_INFO(log, "start raft store proxy");
+        LOG_INFO(log, "Start raft store proxy. Args: {}", parms.conf.args);
         pthread_create(&thread, &attribute, runRaftStoreProxyFFI, &parms);
         pthread_attr_destroy(&attribute);
     }
@@ -535,236 +406,9 @@ private:
     const LoggerPtr & log;
 };
 
-class Server::TcpHttpServersHolder
-{
-public:
-    TcpHttpServersHolder(Server & server_, const Settings & settings, const LoggerPtr & log_)
-        : server(server_)
-        , log(log_)
-        , server_pool(1, server.config().getUInt("max_connections", 1024))
-    {
-        auto & config = server.config();
-        auto security_config = server.global_context->getSecurityConfig();
-
-        Poco::Timespan keep_alive_timeout(config.getUInt("keep_alive_timeout", 10), 0);
-        Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams; // NOLINT
-        http_params->setTimeout(settings.receive_timeout);
-        http_params->setKeepAliveTimeout(keep_alive_timeout);
-
-        std::vector<std::string> listen_hosts = DB::getMultipleValuesFromConfig(config, "", "listen_host");
-
-        bool listen_try = config.getBool("listen_try", false);
-        if (listen_hosts.empty())
-        {
-            listen_hosts.emplace_back("0.0.0.0");
-            listen_try = true;
-        }
-
-        auto make_socket_address = [&](const std::string & host, UInt16 port) {
-            Poco::Net::SocketAddress socket_address;
-            try
-            {
-                socket_address = Poco::Net::SocketAddress(host, port);
-            }
-            catch (const Poco::Net::DNSException & e)
-            {
-                const auto code = e.code();
-                if (code == EAI_FAMILY
-#if defined(EAI_ADDRFAMILY)
-                    || code == EAI_ADDRFAMILY
-#endif
-                )
-                {
-                    LOG_ERROR(
-                        log,
-                        "Cannot resolve listen_host ({}), error {}: {}."
-                        "If it is an IPv6 address and your host has disabled IPv6, then consider to "
-                        "specify IPv4 address to listen in <listen_host> element of configuration "
-                        "file. Example: <listen_host>0.0.0.0</listen_host>",
-                        host,
-                        e.code(),
-                        e.message());
-                }
-
-                throw;
-            }
-            return socket_address;
-        };
-
-        auto socket_bind_listen = [&](auto & socket, const std::string & host, UInt16 port, bool secure = false) {
-            auto address = make_socket_address(host, port);
-#if !POCO_CLICKHOUSE_PATCH || POCO_VERSION <= 0x02000000 // TODO: fill correct version
-            if (secure)
-                /// Bug in old poco, listen() after bind() with reusePort param will fail because have no implementation in SecureServerSocketImpl
-                /// https://github.com/pocoproject/poco/pull/2257
-                socket.bind(address, /* reuseAddress = */ true);
-            else
-#endif
-#if POCO_VERSION < 0x01080000
-                socket.bind(address, /* reuseAddress = */ true);
-#else
-            socket.bind(
-                address,
-                /* reuseAddress = */ true,
-                /* reusePort = */ config.getBool("listen_reuse_port", false));
-#endif
-
-            socket.listen(/* backlog = */ config.getUInt("listen_backlog", 64));
-
-            return address;
-        };
-
-        for (const auto & listen_host : listen_hosts)
-        {
-            /// For testing purposes, user may omit tcp_port or http_port or https_port in configuration file.
-            try
-            {
-                /// TCP
-                if (config.has("tcp_port"))
-                {
-                    if (security_config->hasTlsConfig())
-                    {
-                        LOG_ERROR(log, "tls config is set but tcp_port_secure is not set.");
-                    }
-                    Poco::Net::ServerSocket socket;
-                    auto address = socket_bind_listen(socket, listen_host, config.getInt("tcp_port"));
-                    socket.setReceiveTimeout(settings.receive_timeout);
-                    socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(new TCPServer(
-                        new TCPHandlerFactory(server),
-                        server_pool,
-                        socket,
-                        new Poco::Net::TCPServerParams));
-
-                    LOG_INFO(log, "Listening tcp: {}", address.toString());
-                }
-                else if (security_config->hasTlsConfig())
-                {
-                    LOG_INFO(log, "tcp_port is closed because tls config is set");
-                }
-
-                /// TCP with SSL (Not supported yet)
-                if (config.has("tcp_port_secure") && !security_config->hasTlsConfig())
-                {
-#if Poco_NetSSL_FOUND
-                    auto [ca_path, cert_path, key_path] = security_config->getPaths();
-                    Poco::Net::Context::Ptr context
-                        = new Poco::Net::Context(Poco::Net::Context::TLSV1_2_SERVER_USE, key_path, cert_path, ca_path);
-                    CertificateReloader::initSSLCallback(context, server.global_context.get());
-                    Poco::Net::SecureServerSocket socket(context);
-                    auto address = socket_bind_listen(
-                        socket,
-                        listen_host,
-                        config.getInt("tcp_port_secure"),
-                        /* secure = */ true);
-                    socket.setReceiveTimeout(settings.receive_timeout);
-                    socket.setSendTimeout(settings.send_timeout);
-                    servers.emplace_back(new TCPServer(
-                        new TCPHandlerFactory(server, /* secure= */ true),
-                        server_pool,
-                        socket,
-                        new Poco::Net::TCPServerParams));
-                    LOG_INFO(log, "Listening tcp_secure: {}", address.toString());
-#else
-                    throw Exception{
-                        "SSL support for TCP protocol is disabled because Poco library was built without NetSSL "
-                        "support.",
-                        ErrorCodes::SUPPORT_IS_DISABLED};
-#endif
-                }
-                else if (security_config->hasTlsConfig())
-                {
-                    LOG_INFO(log, "tcp_port_secure is closed because tls config is set");
-                }
-
-                // No TCP server is normal now because we only enable the TCP server
-                // under testing deployment
-                if (servers.empty())
-                    LOG_INFO(log, "No TCP server is created");
-            }
-            catch (const Poco::Net::NetException & e)
-            {
-                if (listen_try)
-                    LOG_ERROR(
-                        log,
-                        "Listen [{}]: {}: {}: {}"
-                        "  If it is an IPv6 or IPv4 address and your host has disabled IPv6 or IPv4, then consider to "
-                        "specify not disabled IPv4 or IPv6 address to listen in <listen_host> element of configuration "
-                        "file. Example for disabled IPv6: <listen_host>0.0.0.0</listen_host> ."
-                        " Example for disabled IPv4: <listen_host>::</listen_host>",
-                        listen_host,
-                        e.code(),
-                        e.what(),
-                        e.message());
-                else
-                    throw;
-            }
-        }
-
-        for (auto & server : servers)
-            server->start();
-    }
-
-    // terminate all TCP servers when receive exit signal
-    void onExit()
-    {
-        auto & config = server.config();
-
-        LOG_INFO(log, "Received termination signal, stopping server...");
-        LOG_INFO(log, "Waiting for current connections to close.");
-
-        int current_connections = 0;
-        for (auto & server : servers)
-        {
-            server->stop();
-            current_connections += server->currentConnections();
-        }
-
-        String debug_msg = "Closed all listening sockets.";
-        if (current_connections)
-        {
-            LOG_INFO(log, "{} Waiting for {} outstanding connections.", debug_msg, current_connections);
-            const int sleep_max_ms = 1000 * config.getInt("shutdown_wait_unfinished", 5);
-            const int sleep_one_ms = 100;
-            int sleep_current_ms = 0;
-            while (sleep_current_ms < sleep_max_ms)
-            {
-                current_connections = 0;
-                for (auto & server : servers)
-                    current_connections += server->currentConnections();
-                if (!current_connections)
-                    break;
-                sleep_current_ms += sleep_one_ms;
-                std::this_thread::sleep_for(std::chrono::milliseconds(sleep_one_ms));
-            }
-        }
-        else
-        {
-            LOG_INFO(log, debug_msg);
-        }
-
-        debug_msg = "Closed connections.";
-        if (current_connections)
-            LOG_INFO(
-                log,
-                "{} But {} remains."
-                " Tip: To increase wait time add to config: <shutdown_wait_unfinished>60</shutdown_wait_unfinished>",
-                debug_msg,
-                current_connections);
-        else
-            LOG_INFO(log, debug_msg);
-    }
-
-private:
-    Server & server;
-    const LoggerPtr & log;
-    Poco::ThreadPool server_pool;
-    std::vector<std::unique_ptr<Poco::Net::TCPServer>> servers;
-};
-
 // By default init global thread pool by hardware_concurrency
 // Later we will adjust it by `adjustThreadPoolSize`
-void initThreadPool(Poco::Util::LayeredConfiguration & config)
+void initThreadPool(DisaggregatedMode disaggregated_mode)
 {
     size_t default_num_threads = std::max(4UL, 2 * std::thread::hardware_concurrency());
 
@@ -774,7 +418,6 @@ void initThreadPool(Poco::Util::LayeredConfiguration & config)
         /*max_free_threads*/ default_num_threads,
         /*queue_size*/ default_num_threads * 8);
 
-    auto disaggregated_mode = getDisaggregatedMode(config);
     if (disaggregated_mode == DisaggregatedMode::Compute)
     {
         BuildReadTaskForWNPool::initialize(
@@ -930,39 +573,28 @@ int Server::main(const std::vector<std::string> & /*args*/)
     FailPointHelper::initRandomFailPoints(config(), log);
 #endif
 
-    UpdateMallocConfig(log);
+    // Setup the config for jemalloc or mimalloc when enabled
+    setupAllocator(log);
 
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_AVX, "TIFLASH_ENABLE_AVX");
-#endif
+    // Setup the SIMD flags
+    setupSIMD(log);
 
-#ifdef TIFLASH_ENABLE_AVX512_SUPPORT
-    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_AVX512, "TIFLASH_ENABLE_AVX512");
-#endif
-
-#ifdef TIFLASH_ENABLE_ASIMD_SUPPORT
-    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_ASIMD, "TIFLASH_ENABLE_ASIMD");
-#endif
-
-#ifdef TIFLASH_ENABLE_SVE_SUPPORT
-    tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
-#endif
     registerFunctions();
     registerAggregateFunctions();
     registerWindowFunctions();
     registerTableFunctions();
     registerStorages();
 
+    const auto disaggregated_mode = getDisaggregatedMode(config());
+    const auto use_autoscaler = useAutoScaler(config());
+
     // Later we may create thread pool from GlobalThreadPool
     // init it before other components
-    initThreadPool(config());
+    initThreadPool(disaggregated_mode);
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
     DM::ScanContext::initCurrentInstanceId(config(), log);
-
-    const auto disaggregated_mode = getDisaggregatedMode(config());
-    const auto use_autoscaler = useAutoScaler(config());
 
     // Some Storage's config is necessary for Proxy
     TiFlashStorageConfig storage_config;
@@ -983,17 +615,16 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     if (storage_config.format_version != 0)
     {
-        if (storage_config.s3_config.isS3Enabled() && storage_config.format_version != STORAGE_FORMAT_V100.identifier
-            && storage_config.format_version != STORAGE_FORMAT_V101.identifier
-            && storage_config.format_version != STORAGE_FORMAT_V102.identifier)
+        if (storage_config.s3_config.isS3Enabled() && !isStorageFormatForDisagg(storage_config.format_version))
         {
-            LOG_WARNING(log, "'storage.format_version' must be set to 100/101/102 when S3 is enabled!");
-            throw Exception(
-                ErrorCodes::INVALID_CONFIG_PARAMETER,
-                "'storage.format_version' must be set to 100/101/102 when S3 is enabled!");
+            auto message = fmt::format(
+                "'storage.format_version' must be set to {} when S3 is enabled!",
+                getStorageFormatsForDisagg());
+            LOG_ERROR(log, message);
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
         }
         setStorageFormat(storage_config.format_version);
-        LOG_INFO(log, "Using format_version={} (explicit storage format detected).", storage_config.format_version);
+        LOG_INFO(log, "Using format_version={} (explicit storage format detected).", STORAGE_FORMAT_CURRENT.identifier);
     }
     else
     {
@@ -1001,8 +632,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             // If the user does not explicitly set format_version in the config file but
             // enables S3, then we set up a proper format version to support S3.
-            setStorageFormat(STORAGE_FORMAT_V102.identifier);
-            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_V102.identifier);
+            setStorageFormat(DEFAULT_STORAGE_FORMAT_FOR_DISAGG.identifier);
+            LOG_INFO(log, "Using format_version={} (infer by S3 is enabled).", STORAGE_FORMAT_CURRENT.identifier);
         }
         else
         {
@@ -1014,40 +645,51 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // sanitize check for disagg mode
     if (storage_config.s3_config.isS3Enabled())
     {
-        if (auto disaggregated_mode = getDisaggregatedMode(config()); disaggregated_mode == DisaggregatedMode::None)
+        if (disaggregated_mode == DisaggregatedMode::None)
         {
-            LOG_WARNING(log, "'flash.disaggregated_mode' must be set when S3 is enabled!");
-            throw Exception(
-                ErrorCodes::INVALID_CONFIG_PARAMETER,
-                "'flash.disaggregated_mode' must be set when S3 is enabled!");
+            const String message = "'flash.disaggregated_mode' must be set when S3 is enabled!";
+            LOG_ERROR(log, message);
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, message);
         }
     }
-
-    LOG_INFO(log, "Using api_version={}", storage_config.api_version);
 
     // Set whether to use safe point v2.
     PDClientHelper::enable_safepoint_v2 = config().getBool("enable_safe_point_v2", false);
 
+    /** Context contains all that query execution is dependent:
+      *  settings, available functions, data types, aggregate functions, databases...
+      */
+    global_context = Context::createGlobal();
+    /// Initialize users config reloader.
+    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
+
+    /// Load global settings from default_profile and system_profile.
+    /// It internally depends on UserConfig::parseSettings.
+    // TODO: Parse the settings from config file at the program beginning
+    global_context->setDefaultProfiles();
+    LOG_INFO(
+        log,
+        "Loaded global settings from default_profile and system_profile, changed configs: {{{}}}",
+        global_context->getSettingsRef().toString());
+    Settings & settings = global_context->getSettingsRef();
+
     // Init Proxy's config
-    TiFlashProxyConfig proxy_conf(config(), storage_config.s3_config.isS3Enabled());
+    TiFlashProxyConfig proxy_conf( //
+        config(),
+        disaggregated_mode,
+        use_autoscaler,
+        STORAGE_FORMAT_CURRENT,
+        settings,
+        log);
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(&tiflash_instance_wrap);
-
-    if (STORAGE_FORMAT_CURRENT.page == PageFormat::V4)
-    {
-        LOG_INFO(log, "Using UniPS for proxy");
-        proxy_conf.addExtraArgs("unips-enabled", "1");
-    }
-    else
-    {
-        LOG_INFO(log, "UniPS is not enabled for proxy, page_version={}", STORAGE_FORMAT_CURRENT.page);
-    }
 
 #ifdef USE_JEMALLOC
     LOG_INFO(log, "Using Jemalloc for TiFlash");
 #else
     LOG_INFO(log, "Not using Jemalloc for TiFlash");
 #endif
+
 
     RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
 
@@ -1092,10 +734,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
-    /** Context contains all that query execution is dependent:
-      *  settings, available functions, data types, aggregate functions, databases...
-      */
-    global_context = Context::createGlobal();
     SCOPE_EXIT({
         if (!proxy_conf.is_proxy_runnable)
             return;
@@ -1191,9 +829,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Do it as early as possible after loading storage config.
     global_context->initializePageStorageMode(global_context->getPathPool(), STORAGE_FORMAT_CURRENT.page);
 
-    // Use pd address to define which default_database we use by default.
-    // For deployed with pd/tidb/tikv use "system", which is always exist in TiFlash.
-    std::string default_database = config().getString("default_database", "system");
+    // Use "system" as the default_database for all TCP connections, which is always exist in TiFlash.
+    const std::string default_database = "system";
     Strings all_normal_path = storage_config.getAllNormalPaths();
     const std::string path = all_normal_path[0];
     global_context->setPath(path);
@@ -1282,38 +919,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setFlagsPath(path + "flags/");
     }
 
-    /** Directory with user provided files that are usable by 'file' table function.
-      */
-    {
-        std::string user_files_path = config().getString("user_files_path", path + "user_files/");
-        global_context->setUserFilesPath(user_files_path);
-        Poco::File(user_files_path).createDirectories();
-    }
-
-    if (config().has("macros"))
-        global_context->setMacros(std::make_unique<Macros>(config(), "macros"));
-
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
-
-    /// Initialize users config reloader.
-    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
-
-    /// Load global settings from default_profile and system_profile.
-    /// It internally depends on UserConfig::parseSettings.
-    // TODO: Parse the settings from config file at the program beginning
-    global_context->setDefaultProfiles(config());
-    LOG_INFO(
-        log,
-        "Loaded global settings from default_profile and system_profile, changed configs: {{{}}}",
-        global_context->getSettingsRef().toString());
 
     ///
     /// The config value in global settings can only be used from here because we just loaded it from config file.
     ///
 
     /// Initialize the background & blockable background thread pool.
-    Settings & settings = global_context->getSettingsRef();
     LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
@@ -1425,7 +1038,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         [&](ConfigurationPtr config) {
             LOG_DEBUG(log, "run main config reloader");
             buildLoggers(*config);
-            global_context->setMacros(std::make_unique<Macros>(*config, "macros"));
             global_context->getTMTContext().reloadConfig(*config);
             global_context->getIORateLimiter().updateConfig(*config);
             global_context->reloadDeltaTreeConfig(*config);
@@ -1457,9 +1069,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (users_config_reloader)
             users_config_reloader->reload();
     });
-
-    /// Limit on total number of concurrently executed queries.
-    global_context->getProcessList().setMaxSize(config().getInt("max_concurrent_queries", 0));
 
     /// Size of cache for marks (index of MergeTree family of tables). It is necessary.
     size_t mark_cache_size = config().getUInt64("mark_cache_size", DEFAULT_MARK_CACHE_SIZE);
@@ -1506,11 +1115,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         size_t n = config().getUInt64("delta_index_cache_size", 0);
         global_context->setDeltaIndexManager(n);
     }
-
-    /// Set path for format schema files
-    auto format_schema_path = Poco::File(config().getString("format_schema_path", path + "format_schemas/"));
-    global_context->setFormatSchemaPath(format_schema_path.path() + "/");
-    format_schema_path.createDirectories();
 
     // We do not support blocking store by id in OP mode currently.
     global_context->initializeStoreIdBlockList("");
@@ -1643,7 +1247,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     {
-        TcpHttpServersHolder tcp_http_servers_holder(*this, settings, log);
+        TCPServersHolder tcp_http_servers_holder(
+            *this,
+            settings,
+            global_context->getSecurityConfig(),
+            /*max_connections=*/1024,
+            log);
 
         main_config_reloader->addConfigObject(global_context->getSecurityConfig());
         main_config_reloader->start();
@@ -1677,13 +1286,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// should init after `createTMTContext` cause we collect some data from the TiFlash context object.
         AsynchronousMetrics async_metrics(*global_context);
         attachSystemTablesAsync(*global_context->getDatabase("system"), async_metrics);
-
-        std::vector<std::unique_ptr<MetricsTransmitter>> metrics_transmitters;
-        for (const auto & graphite_key : DB::getMultipleKeysFromConfig(config(), "", "graphite"))
-        {
-            metrics_transmitters.emplace_back(
-                std::make_unique<MetricsTransmitter>(*global_context, async_metrics, graphite_key));
-        }
 
         auto metrics_prometheus = std::make_unique<MetricsPrometheus>(*global_context, async_metrics);
 

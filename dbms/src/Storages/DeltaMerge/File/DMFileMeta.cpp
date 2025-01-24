@@ -418,14 +418,14 @@ UInt64 DMFileMeta::getFileSize(ColId col_id, const String & filename) const
     {
         return itr->second.nullmap_mark_bytes;
     }
-    // Note that ".size0.dat"/".size0.mrk" must be check before ".dat"/".mrk"
-    else if (endsWith(filename, ".size0.dat"))
+    // Note that ".size0.dat"/".size0.mrk"/".size.dat"/".size.mrk" must be check before ".dat"/".mrk"
+    else if (endsWith(filename, ".size0.dat") || endsWith(filename, ".size.dat"))
     {
-        return itr->second.array_sizes_bytes;
+        return itr->second.sizes_bytes;
     }
-    else if (endsWith(filename, ".size0.mrk"))
+    else if (endsWith(filename, ".size0.mrk") || endsWith(filename, ".size.mrk"))
     {
-        return itr->second.array_sizes_mark_bytes;
+        return itr->second.sizes_mark_bytes;
     }
     else if (endsWith(filename, ".dat"))
     {

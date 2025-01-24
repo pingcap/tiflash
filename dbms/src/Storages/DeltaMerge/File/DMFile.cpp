@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/typeid_cast.h>
 #include <IO/FileProvider/FileProvider.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/File.h>
@@ -209,7 +210,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
 }
 
-size_t DMFile::colIndexSize(ColId id)
+size_t DMFile::colIndexSize(ColId id) const
 {
     if (useMetaV2())
     {
@@ -219,7 +220,7 @@ size_t DMFile::colIndexSize(ColId id)
         }
         else
         {
-            throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Index of {} not exist", id);
+            throw Exception(ErrorCodes::FILE_DOESNT_EXIST, "Index is not exist, col_id={}", id);
         }
     }
     else
@@ -230,7 +231,7 @@ size_t DMFile::colIndexSize(ColId id)
 }
 
 // Only used when metav2 is not enabled, clean it up
-size_t DMFile::colDataSize(ColId id, ColDataType type)
+size_t DMFile::colDataSize(ColId id, ColDataType type) const
 {
     if (useMetaV2())
     {
@@ -243,7 +244,8 @@ size_t DMFile::colDataSize(ColId id, ColDataType type)
         case ColDataType::NullMap:
             return itr->second.nullmap_data_bytes;
         case ColDataType::ArraySizes:
-            return itr->second.array_sizes_bytes;
+        case ColDataType::StringSizes:
+            return itr->second.sizes_bytes;
         }
     }
     else
@@ -258,9 +260,11 @@ size_t DMFile::colDataSize(ColId id, ColDataType type)
             namebase = getFileNameBase(id, {IDataType::Substream::NullMap});
             break;
         case ColDataType::ArraySizes:
+        case ColDataType::StringSizes:
             RUNTIME_CHECK_MSG(
-                type != ColDataType::ArraySizes,
-                "Can not get array map size by filename, col_id={} path={}",
+                false,
+                "Can not get size of {} by filename, col_id={} path={}",
+                magic_enum::enum_name(type),
                 id,
                 path());
             break;

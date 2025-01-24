@@ -136,7 +136,7 @@ struct fmt::formatter<DB::PS::V3::PageEntryV3>
 
         return fmt::format_to(
             ctx.out(),
-            "PageEntry{{file: {}, offset: 0x{:X}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}], "
+            "PageEntry{{file: {}, offset: {}, size: {}, checksum: 0x{:X}, tag: {}, field_offsets: [{}], "
             "checkpoint_info: {}}}",
             entry.file_id,
             entry.offset,

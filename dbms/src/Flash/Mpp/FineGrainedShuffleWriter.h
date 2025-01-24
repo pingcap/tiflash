@@ -40,11 +40,8 @@ public:
         tipb::CompressionMode compression_mode_);
     void prepare(const Block & sample_block) override;
     WaitResult waitForWritable() const override;
-
-protected:
-    bool doWrite(const Block & block) override;
-    bool doFlush() override;
-    void notifyNextPipelineWriter() override;
+    WriteResult write(const Block & block) override;
+    WriteResult flush() override;
 
 private:
     void batchWriteFineGrainedShuffle();

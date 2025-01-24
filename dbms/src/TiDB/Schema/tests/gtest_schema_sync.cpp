@@ -253,7 +253,7 @@ try
     MockTiDB::instance().newDataBase(db_name);
 
     auto cols = ColumnsDescription({
-        {"col1", typeFromString("String")},
+        {"col1", typeFromString(DataTypeString::getDefaultName())},
         {"col2", typeFromString("Int64")},
     });
     // table_name, cols, pk_name
@@ -295,7 +295,7 @@ try
     MockTiDB::instance().newDataBase(db_name);
 
     auto cols = ColumnsDescription({
-        {"col1", typeFromString("String")},
+        {"col1", typeFromString(DataTypeString::getDefaultName())},
         {"col2", typeFromString("Int64")},
     });
     // table_name, cols, pk_name
@@ -351,7 +351,7 @@ try
     MockTiDB::instance().newDataBase(db_name);
 
     auto cols = ColumnsDescription({
-        {"col1", typeFromString("String")},
+        {"col1", typeFromString(DataTypeString::getDefaultName())},
         {"col2", typeFromString("Int64")},
     });
     // table_name, cols, pk_name
@@ -423,7 +423,7 @@ try
     const String tbl_name = "mock_part_tbl";
 
     auto cols = ColumnsDescription({
-        {"col1", typeFromString("String")},
+        {"col1", typeFromString(DataTypeString::getDefaultName())},
         {"col2", typeFromString("Int64")},
     });
 
@@ -480,7 +480,7 @@ try
     const String tbl_name = "mock_part_tbl";
 
     auto cols = ColumnsDescription({
-        {"col1", typeFromString("String")},
+        {"col1", typeFromString(DataTypeString::getDefaultName())},
         {"col2", typeFromString("Int64")},
     });
 
@@ -577,7 +577,7 @@ try
     const String tbl_name = "mock_part_tbl";
 
     auto cols = ColumnsDescription({
-        {"col1", typeFromString("String")},
+        {"col1", typeFromString(DataTypeString::getDefaultName())},
         {"col2", typeFromString("Int64")},
     });
 
@@ -703,7 +703,7 @@ try
     const String tbl_name = "mock_part_tbl";
 
     auto cols = ColumnsDescription({
-        {"col_1", typeFromString("String")},
+        {"col_1", typeFromString(DataTypeString::getDefaultName())},
         {"col_2", typeFromString("Int64")},
     });
 
@@ -862,7 +862,7 @@ try
             ann_query_info->set_top_k(1);
             ann_query_info->set_ref_vec_f32(dmsv.encodeVectorFloat32({1.0, 2.0, 3.5}));
 
-            auto filter = std::make_shared<DM::PushDownFilter>(DM::wrapWithANNQueryInfo(nullptr, ann_query_info));
+            auto filter = std::make_shared<DM::PushDownExecutor>(ann_query_info);
 
             dmsv.read(range, filter, createVecFloat32Column<Array>({{1.0, 2.0, 3.5}}));
         }
@@ -873,7 +873,7 @@ try
             ann_query_info->set_top_k(1);
             ann_query_info->set_ref_vec_f32(dmsv.encodeVectorFloat32({1.0, 2.0, 3.8}));
 
-            auto filter = std::make_shared<DM::PushDownFilter>(DM::wrapWithANNQueryInfo(nullptr, ann_query_info));
+            auto filter = std::make_shared<DM::PushDownExecutor>(ann_query_info);
 
             dmsv.read(range, filter, createVecFloat32Column<Array>({{1.0, 2.0, 3.5}}));
         }

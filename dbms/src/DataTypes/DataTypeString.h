@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #pragma once
-
 #include <DataTypes/IDataType.h>
 
+#include <span>
 
 namespace DB
 {
@@ -26,6 +26,8 @@ public:
     static constexpr bool is_parametric = false;
 
     const char * getFamilyName() const override { return "String"; }
+
+    String getName() const override { return serdes_fmt == SerdesFormat::SeparateSizeAndChars ? NameV2 : LegacyName; }
 
     TypeIndex getTypeId() const override { return TypeIndex::String; }
 
@@ -64,6 +66,47 @@ public:
     bool isString() const override { return true; }
     bool isCategorial() const override { return true; }
     bool canBeInsideNullable() const override { return true; }
+
+    void enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const override;
+
+    void serializeBinaryBulkWithMultipleStreams(
+        const IColumn & column,
+        const OutputStreamGetter & getter,
+        size_t offset,
+        size_t limit,
+        bool position_independent_encoding,
+        SubstreamPath & path) const override;
+
+    void deserializeBinaryBulkWithMultipleStreams(
+        IColumn & column,
+        const InputStreamGetter & getter,
+        size_t limit,
+        double avg_value_size_hint,
+        bool position_independent_encoding,
+        SubstreamPath & path) const override;
+
+    enum class SerdesFormat
+    {
+        None = 0, // Decide by STORAGE_FORMAT_CURRENT
+        SizePrefix = 1, // Legacy format, corresponding to `LegacyName`
+        SeparateSizeAndChars = 2, // New format, corresponding to `NameV2`
+    };
+
+    inline static const String LegacyName{"String"}; // For compatibility of size-prefix format.
+    inline static const String NullableLegacyName{"Nullable(String)"};
+    inline static const String NameV2{"StringV2"}; // The separate size and chars format.
+    inline static const String NullableNameV2{"Nullable(StringV2)"};
+
+    // Both getDefaultName and getNullableDefaultName are unit-tests helpers.
+    static String getDefaultName();
+    static String getNullableDefaultName();
+
+    static std::span<const std::pair<String, DataTypePtr>> getTiDBPkColumnStringNameAndTypes();
+
+    explicit DataTypeString(SerdesFormat serdes_fmt_ = SerdesFormat::None);
+
+private:
+    const SerdesFormat serdes_fmt;
 };
 
 } // namespace DB

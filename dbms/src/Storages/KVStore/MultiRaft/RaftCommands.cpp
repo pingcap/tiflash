@@ -434,7 +434,7 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     };
 
     const auto handle_write_cmd_func = [&]() {
-        size_t cmd_write_cf_cnt = 0, cache_written_size = 0;
+        size_t cmd_write_cf_cnt = 0;
         auto ori_cache_size = dataSize();
         for (UInt64 i = 0; i < cmds.len; ++i)
         {
@@ -452,9 +452,12 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
                     handle_by_index_func(i);
             }
         }
-        cache_written_size = dataSize() - ori_cache_size;
         approx_mem_cache_rows += cmd_write_cf_cnt;
-        approx_mem_cache_bytes += cache_written_size;
+        auto current_size = dataSize();
+        if (auto t = approx_mem_cache_rows + current_size; t > ori_cache_size)
+            approx_mem_cache_rows = t - ori_cache_size;
+        else
+            approx_mem_cache_rows = 0;
     };
 
     DM::WriteResult write_result = std::nullopt;

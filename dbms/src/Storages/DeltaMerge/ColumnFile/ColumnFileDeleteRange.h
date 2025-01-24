@@ -47,7 +47,7 @@ public:
         const ColumnDefinesPtr &,
         ReadTag) const override;
 
-    const auto & getDeleteRange() { return delete_range; }
+    const auto & getDeleteRange() const { return delete_range; }
 
     ColumnFileDeleteRangePtr cloneWith(const RowKeyRange & range)
     {

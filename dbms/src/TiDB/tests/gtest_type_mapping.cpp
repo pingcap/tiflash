@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeString.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
@@ -73,10 +74,24 @@ try
         }
     }
 
-    column_info = reverseGetColumnInfo(NameAndTypePair{name, typeFromString("String")}, 1, default_field, true);
-    ASSERT_EQ(column_info.tp, TiDB::TypeString);
-    auto data_type = getDataTypeByColumnInfo(column_info);
-    ASSERT_EQ(data_type->getName(), "String");
+    {
+        auto legacy_str_type = typeFromString(DataTypeString::LegacyName);
+        ASSERT_EQ(legacy_str_type->getName(), DataTypeString::LegacyName);
+        column_info = reverseGetColumnInfo(NameAndTypePair{name, legacy_str_type}, 1, default_field, true);
+        ASSERT_EQ(column_info.tp, TiDB::TypeString);
+        auto data_type = getDataTypeByColumnInfo(column_info);
+        // Get data type by column_info always returns the default type.
+        ASSERT_EQ(data_type->getName(), DataTypeString::getDefaultName());
+    }
+    {
+        auto str_type = typeFromString(DataTypeString::NameV2);
+        ASSERT_EQ(str_type->getName(), DataTypeString::NameV2);
+        column_info = reverseGetColumnInfo(NameAndTypePair{name, str_type}, 1, default_field, true);
+        ASSERT_EQ(column_info.tp, TiDB::TypeString);
+        auto data_type = getDataTypeByColumnInfo(column_info);
+        // Get data type by column_info always returns the default type.
+        ASSERT_EQ(data_type->getName(), DataTypeString::getDefaultName());
+    }
 
     // TODO: test decimal, datetime, enum
 }

@@ -13,7 +13,8 @@
 // limitations under the License.
 
 #include <Columns/ColumnFunction.h>
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
+#include <Columns/filterColumn.h>
 #include <Functions/IFunction.h>
 #include <Interpreters/ExpressionActions.h>
 #include <fmt/format.h>

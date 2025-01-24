@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/Logger.h>
-#include <DataStreams/AddExtraTableIDColumnTransformAction.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>

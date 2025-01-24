@@ -24,4 +24,8 @@ using IdSetPtr = std::shared_ptr<IdSet>;
 
 class DMFilePackFilter;
 
+class DMFilePackFilterResult;
+using DMFilePackFilterResultPtr = std::shared_ptr<DMFilePackFilterResult>;
+using DMFilePackFilterResults = std::vector<DMFilePackFilterResultPtr>;
+
 } // namespace DB::DM

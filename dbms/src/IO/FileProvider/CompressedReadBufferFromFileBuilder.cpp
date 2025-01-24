@@ -21,7 +21,7 @@ namespace DB
 {
 
 std::unique_ptr<LegacyCompressedReadBufferFromFile> CompressedReadBufferFromFileBuilder::buildLegacy(
-    FileProviderPtr & file_provider,
+    const FileProviderPtr & file_provider,
     const std::string & path,
     const EncryptionPath & encryption_path,
     const ReadLimiterPtr & read_limiter_,
@@ -54,7 +54,7 @@ std::unique_ptr<CompressedReadBufferFromFile> CompressedReadBufferFromFileBuilde
 }
 
 std::unique_ptr<CompressedReadBufferFromFile> CompressedReadBufferFromFileBuilder::build(
-    FileProviderPtr & file_provider,
+    const FileProviderPtr & file_provider,
     const std::string & path,
     const EncryptionPath & encryption_path,
     size_t estimated_size,

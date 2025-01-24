@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <boost_wrapper/string.h>
 

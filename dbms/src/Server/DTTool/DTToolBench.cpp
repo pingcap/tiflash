@@ -89,7 +89,7 @@ ColumnDefinesPtr createColumnDefines(size_t column_number)
         primitive->emplace_back(ColumnDefine{
             static_cast<ColId>(3 + int_num + i),
             fmt::format("str_{}", i),
-            DB::DataTypeFactory::instance().get("String")});
+            DB::DataTypeFactory::instance().get(DataTypeString::getDefaultName())});
     }
     return primitive;
 }
@@ -108,7 +108,7 @@ DB::Block createBlock(
     Block block;
     //PK
     {
-        ColumnWithTypeAndName pk_col(nullptr, EXTRA_HANDLE_COLUMN_INT_TYPE, "id", EXTRA_HANDLE_COLUMN_ID);
+        ColumnWithTypeAndName pk_col(nullptr, MutSup::getExtraHandleColumnIntType(), "id", MutSup::extra_handle_id);
         IColumn::MutablePtr m_col = pk_col.type->createColumn();
         for (size_t i = 0; i < row_number; i++)
         {
@@ -121,7 +121,11 @@ DB::Block createBlock(
     }
     // Version
     {
-        ColumnWithTypeAndName version_col({}, VERSION_COLUMN_TYPE, VERSION_COLUMN_NAME, VERSION_COLUMN_ID);
+        ColumnWithTypeAndName version_col(
+            {},
+            MutSup::getVersionColumnType(),
+            MutSup::version_column_name,
+            MutSup::version_col_id);
         IColumn::MutablePtr m_col = version_col.type->createColumn();
         for (size_t i = 0; i < row_number; ++i)
         {
@@ -135,7 +139,11 @@ DB::Block createBlock(
 
     //Tag
     {
-        ColumnWithTypeAndName tag_col(nullptr, TAG_COLUMN_TYPE, TAG_COLUMN_NAME, TAG_COLUMN_ID);
+        ColumnWithTypeAndName tag_col(
+            nullptr,
+            MutSup::getDelmarkColumnType(),
+            MutSup::delmark_column_name,
+            MutSup::delmark_col_id);
         IColumn::MutablePtr m_col = tag_col.type->createColumn();
         auto & column_data = typeid_cast<ColumnVector<UInt8> &>(*m_col).getData();
         column_data.resize(row_number);
@@ -172,7 +180,7 @@ DB::Block createBlock(
     {
         ColumnWithTypeAndName str_col(
             nullptr,
-            DB::DataTypeFactory::instance().get("String"),
+            DB::DataTypeFactory::instance().get(DataTypeString::getDefaultName()),
             fmt::format("str_{}", i),
             static_cast<ColId>(3 + int_num + i));
         IColumn::MutablePtr m_col = str_col.type->createColumn();

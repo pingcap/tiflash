@@ -198,6 +198,16 @@ private:
         : data{il}
     {}
 
+    template <bool has_null>
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+
+    template <bool has_null>
+    void serializeToPosForColumnArrayImpl(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const IColumn::Offsets & array_offsets) const;
+
 public:
     bool isNumeric() const override { return is_arithmetic_v<T>; }
 
@@ -219,14 +229,14 @@ public:
         data.resize_fill(data.size() + length, value);
     }
 
-    void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) override
+    void insertSelectiveFrom(const IColumn & src, const IColumn::Offsets & selective_offsets) override
     {
         const auto & src_container = static_cast<const Self &>(src).getData();
         size_t old_size = data.size();
-        size_t to_add_size = position_vec.size();
+        size_t to_add_size = selective_offsets.size();
         data.resize(old_size + to_add_size);
         for (size_t i = 0; i < to_add_size; ++i)
-            data[i + old_size] = src_container[position_vec[i]];
+            data[i + old_size] = src_container[selective_offsets[i]];
     }
 
     void insertMany(const Field & field, size_t length) override
@@ -317,29 +327,66 @@ public:
         return pos + sizeof(T);
     }
 
+    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &) const override
+    {
+        countSerializeByteSize(byte_size);
+    }
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+
+    void countSerializeByteSizeForCmpColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr &) const override
+    {
+        countSerializeByteSizeForColumnArray(byte_size, array_offsets);
+    }
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
 
+    void serializeToPosForCmp(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const override
+    {
+        serializeToPos(pos, start, length, has_null);
+    }
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
-    template <bool has_null>
-    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
 
+    void serializeToPosForCmpColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const override
+    {
+        serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
+    }
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
-    template <bool has_null>
-    void serializeToPosForColumnArrayImpl(
-        PaddedPODArray<char *> & pos,
-        size_t start,
-        size_t length,
-        const IColumn::Offsets & array_offsets) const;
 
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
+    {
+        deserializeAndInsertFromPos(pos, use_nt_align_buffer);
+    }
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
+
+    void deserializeForCmpAndInsertFromPosColumnArray(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer) override
+    {
+        deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
+    }
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,

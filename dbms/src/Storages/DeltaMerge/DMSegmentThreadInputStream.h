@@ -42,7 +42,7 @@ public:
         const SegmentReadTaskPoolPtr & task_pool_,
         AfterSegmentRead after_segment_read_,
         const ColumnDefines & columns_to_read_,
-        const PushDownFilterPtr & filter_,
+        const PushDownExecutorPtr & filter_,
         UInt64 start_ts_,
         size_t expected_block_size_,
         ReadMode read_mode_,
@@ -127,7 +127,7 @@ private:
     SegmentReadTaskPoolPtr task_pool;
     AfterSegmentRead after_segment_read;
     ColumnDefines columns_to_read;
-    PushDownFilterPtr filter;
+    PushDownExecutorPtr filter;
     Block header;
     const UInt64 start_ts;
     const size_t expected_block_size;

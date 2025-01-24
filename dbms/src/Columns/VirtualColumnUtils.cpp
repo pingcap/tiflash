@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnsCommon.h>
 #include <Columns/ColumnsNumber.h>
 #include <Columns/VirtualColumnUtils.h>
+#include <Columns/filterColumn.h>
 #include <Common/typeid_cast.h>
 #include <Core/NamesAndTypes.h>
 #include <Interpreters/Context.h>

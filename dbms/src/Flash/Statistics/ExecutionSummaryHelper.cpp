@@ -34,6 +34,12 @@ void fillTiExecutionSummary(
     execution_summary->mutable_tiflash_wait_summary()->set_pipeline_breaker_wait_ns(
         current.time_pipeline_breaker_wait_ns);
     execution_summary->mutable_tiflash_wait_summary()->set_pipeline_queue_wait_ns(current.time_pipeline_queue_ns);
+    execution_summary->mutable_tiflash_network_summary()->set_inner_zone_send_bytes(current.inner_zone_send_bytes);
+    execution_summary->mutable_tiflash_network_summary()->set_inner_zone_receive_bytes(
+        current.inner_zone_receive_bytes);
+    execution_summary->mutable_tiflash_network_summary()->set_inter_zone_send_bytes(current.inter_zone_send_bytes);
+    execution_summary->mutable_tiflash_network_summary()->set_inter_zone_receive_bytes(
+        current.inter_zone_receive_bytes);
     RUNTIME_CHECK(current.ru_consumption.SerializeToString(execution_summary->mutable_ru_consumption()));
 
     // tree-based executors will have executor_id.

@@ -25,7 +25,7 @@ class CompressedReadBufferFromFileBuilder
 {
 public:
     static std::unique_ptr<LegacyCompressedReadBufferFromFile> buildLegacy(
-        FileProviderPtr & file_provider,
+        const FileProviderPtr & file_provider,
         const std::string & path,
         const EncryptionPath & encryption_path,
         const ReadLimiterPtr & read_limiter_,
@@ -39,7 +39,7 @@ public:
         size_t checksum_frame_size);
 
     static std::unique_ptr<CompressedReadBufferFromFile> build(
-        FileProviderPtr & file_provider,
+        const FileProviderPtr & file_provider,
         const std::string & path,
         const EncryptionPath & encryption_path,
         size_t estimated_size,

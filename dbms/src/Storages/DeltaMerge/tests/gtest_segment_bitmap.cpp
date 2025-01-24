@@ -16,11 +16,14 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
+
+
 using namespace std::chrono_literals;
 using namespace DB::tests;
 
@@ -176,6 +179,18 @@ protected:
             auto expected_handle = genSequence<Int64>(test_case.expected_handle);
             ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size));
         }
+    }
+
+    auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
+    {
+        DMFilePackFilterResults results;
+        results.reserve(snap->stable->getDMFiles().size());
+        for (const auto & file : snap->stable->getDMFiles())
+        {
+            auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
+            results.push_back(pack_filter);
+        }
+        return results;
     }
 };
 
@@ -371,7 +386,7 @@ TEST_F(SegmentBitmapFilterTest, CleanStable)
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        EMPTY_RS_OPERATOR,
+        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);
@@ -393,7 +408,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
-            EMPTY_RS_OPERATOR,
+            loadPackFilterResults(snap, {seg->getRowKeyRange()}),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         ASSERT_NE(bitmap_filter, nullptr);
@@ -413,7 +428,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
-            EMPTY_RS_OPERATOR,
+            loadPackFilterResults(snap, {seg->getRowKeyRange()}),
             1,
             DEFAULT_BLOCK_SIZE);
         ASSERT_NE(bitmap_filter, nullptr);
@@ -437,11 +452,12 @@ TEST_F(SegmentBitmapFilterTest, StableRange)
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
     ASSERT_EQ(seg->getStable()->getRows(), 50000);
 
+    auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(10000, 50000)}; // [10000, 50000)
     auto bitmap_filter = seg->buildBitmapFilterStableOnly(
         *dm_context,
         snap,
-        {buildRowKeyRange(10000, 50000)}, // [10000, 50000)
-        EMPTY_RS_OPERATOR,
+        ranges,
+        loadPackFilterResults(snap, ranges),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);
@@ -510,7 +526,7 @@ try
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        nullptr,
+        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_EQ(bitmap_filter->size(), 30);
@@ -540,7 +556,7 @@ try
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        nullptr,
+        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_EQ(bitmap_filter->size(), 750);

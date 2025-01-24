@@ -82,6 +82,7 @@ private:
     friend class COWPtrHelper<ColumnVectorHelper, Self>;
 
 public:
+    using value_type = T;
     using Container = DecimalPaddedPODArray<T>;
 
 private:
@@ -99,6 +100,31 @@ private:
         : data(src.data)
         , scale(src.scale)
     {}
+
+    template <bool for_compare>
+    void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const;
+    template <bool for_compare>
+    void countSerializeByteSizeForColumnArrayImpl(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets) const;
+
+    template <bool has_null, bool for_compare>
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+    template <bool has_null, bool for_compare>
+    void serializeToPosForColumnArrayImpl(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const IColumn::Offsets & array_offsets) const;
+
+    template <bool for_compare>
+    void deserializeAndInsertFromPosImpl(PaddedPODArray<char *> & pos, bool use_nt_align_buffer [[maybe_unused]]);
+
+    template <bool for_compare>
+    void deserializeAndInsertFromPosForColumnArrayImpl(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer [[maybe_unused]]);
 
 public:
     const char * getFamilyName() const override { return TypeName<T>::get(); }
@@ -127,7 +153,7 @@ public:
     void insert(const Field & x) override { data.push_back(DB::get<typename NearestFieldType<T>::Type>(x)); }
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override;
+    void insertSelectiveFrom(const IColumn & src_, const IColumn::Offsets & selective_offsets) override;
     void popBack(size_t n) override { data.resize_assume_reserved(data.size() - n); }
 
     StringRef getRawData() const override
@@ -147,33 +173,116 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &) const override
+    {
+        countSerializeByteSizeImpl<true>(byte_size);
+    }
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
+    {
+        countSerializeByteSizeImpl<false>(byte_size);
+    }
+
+    void countSerializeByteSizeForCmpColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr &) const override
+    {
+        countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets);
+    }
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets) const override;
+        const IColumn::Offsets & array_offsets) const override
+    {
+        countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets);
+    }
 
-    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
-    template <bool has_null>
-    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+    void serializeToPosForCmp(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const override
+    {
+        if (has_null)
+            serializeToPosImpl</*has_null=*/true, /*for_compare=*/true>(pos, start, length);
+        else
+            serializeToPosImpl</*has_null=*/false, /*for_compare=*/true>(pos, start, length);
+    }
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
+    {
+        if (has_null)
+            serializeToPosImpl</*has_null=*/true, /*for_compare=*/false>(pos, start, length);
+        else
+            serializeToPosImpl</*has_null=*/false, /*for_compare=*/false>(pos, start, length);
+    }
 
+    void serializeToPosForCmpColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const override
+    {
+        if (has_null)
+            serializeToPosForColumnArrayImpl</*has_null=*/true, /*for_compare=*/true>(
+                pos,
+                start,
+                length,
+                array_offsets);
+        else
+            serializeToPosForColumnArrayImpl</*has_null=*/false, /*for_compare=*/true>(
+                pos,
+                start,
+                length,
+                array_offsets);
+    }
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
         bool has_null,
-        const IColumn::Offsets & array_offsets) const override;
-    template <bool has_null>
-    void serializeToPosForColumnArrayImpl(
-        PaddedPODArray<char *> & pos,
-        size_t start,
-        size_t length,
-        const IColumn::Offsets & array_offsets) const;
+        const IColumn::Offsets & array_offsets) const override
+    {
+        if (has_null)
+            serializeToPosForColumnArrayImpl</*has_null=*/true, /*for_compare=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets);
+        else
+            serializeToPosForColumnArrayImpl</*has_null=*/false, /*for_compare=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets);
+    }
 
-    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
+    {
+        deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer);
+    }
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
+    {
+        deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
+    }
+
+    void deserializeForCmpAndInsertFromPosColumnArray(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer) override
+    {
+        deserializeAndInsertFromPosForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
+    }
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer) override;
+        bool use_nt_align_buffer) override
+    {
+        deserializeAndInsertFromPosForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
+    }
 
     void flushNTAlignBuffer() override;
 

@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Columns/ColumnsCommon.h>
+#include <Columns/countBytesInFilter.h>
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Core/Block.h>

@@ -32,7 +32,6 @@
 #include <magic_enum.hpp>
 #include <memory>
 #include <mutex>
-#include <type_traits>
 
 namespace DB
 {
@@ -384,6 +383,12 @@ ExchangeReceiverBase<RPCContext>::~ExchangeReceiverBase()
 }
 
 template <typename RPCContext>
+const ConnectionProfileInfo::ConnTypeVec & ExchangeReceiverBase<RPCContext>::getConnTypeVec() const
+{
+    return rpc_context->getConnTypeVec();
+}
+
+template <typename RPCContext>
 void ExchangeReceiverBase<RPCContext>::handleConnectionAfterException()
 {
     std::lock_guard lock(mu);
@@ -728,8 +733,19 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         return detail;
     const auto & packet = recv_msg->getPacket();
 
-    // Record total packet size even if fine grained shuffle is enabled.
-    detail.packet_bytes = packet.ByteSizeLong();
+    // Record total packet size only once when fine grained shuffle is enabled.
+    if (enable_fine_grained_shuffle_flag)
+    {
+        bool init_value = false;
+        if (recv_msg->getPacketSizeRecorded().compare_exchange_strong(init_value, true, std::memory_order_relaxed))
+        {
+            detail.packet_bytes = packet.ByteSizeLong();
+        }
+    }
+    else
+    {
+        detail.packet_bytes = packet.ByteSizeLong();
+    }
 
     switch (auto version = packet.version(); version)
     {
@@ -749,6 +765,7 @@ DecodeDetail ExchangeReceiverBase<RPCContext>::decodeChunks(
         return detail;
     }
     case DB::MPPDataPacketV1:
+    case DB::MPPDataPacketV2:
     {
         for (const auto * chunk : chunks)
         {
@@ -816,7 +833,17 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toExchangeReceiveResult
                 recv_msg->getReqInfo(),
                 recv_msg->getErrorPtr()->msg());
 
-        return toDecodeResult(stream_id, block_queue, header, recv_msg, decoder_ptr);
+        try
+        {
+            return toDecodeResult(stream_id, block_queue, header, recv_msg, decoder_ptr);
+        }
+        catch (DB::Exception & e)
+        {
+            // Add the MPPTask identifier and exector_id to the error message, make it easier to
+            // identify the specific stage within a complex query where the error occurs
+            e.addMessage(fmt::format("{}", exc_log->identifier()));
+            e.rethrow();
+        }
     }
     case ReceiveStatus::eof:
         return handleUnnormalChannel(block_queue, decoder_ptr);
@@ -882,42 +909,36 @@ ExchangeReceiverResult ExchangeReceiverBase<RPCContext>::toDecodeResult(
 {
     assert(recv_msg != nullptr);
     const auto * resp_ptr = recv_msg->getRespPtr(stream_id);
-    if (resp_ptr
-        != nullptr) /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
+    if (resp_ptr == nullptr)
     {
-        auto select_resp = std::make_shared<tipb::SelectResponse>();
-        if (unlikely(!select_resp->ParseFromString(*resp_ptr)))
-        {
-            return ExchangeReceiverResult::newError(recv_msg->getSourceIndex(), recv_msg->getReqInfo(), "decode error");
-        }
-        else
-        {
-            auto result
-                = ExchangeReceiverResult::newOk(select_resp, recv_msg->getSourceIndex(), recv_msg->getReqInfo());
-            /// If mocking TiFlash as TiDB, we should decode chunks from select_resp.
-            if (unlikely(!result.resp->chunks().empty()))
-            {
-                assert(recv_msg->getChunks(stream_id).empty());
-                // Fine grained shuffle should only be enabled when sending data to TiFlash node.
-                // So all data should be encoded into MPPDataPacket.chunks.
-                RUNTIME_CHECK_MSG(
-                    !enable_fine_grained_shuffle_flag,
-                    "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
-                result.decode_detail = CoprocessorReader::decodeChunks(select_resp, block_queue, header, schema);
-            }
-            else if (!recv_msg->getChunks(stream_id).empty())
-            {
-                result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
-            }
-            return result;
-        }
-    }
-    else /// the non-last packets
-    {
+        /// the non-last packets
         auto result = ExchangeReceiverResult::newOk(nullptr, recv_msg->getSourceIndex(), recv_msg->getReqInfo());
         result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
         return result;
     }
+
+    /// the data of the last packet is serialized from tipb::SelectResponse including execution summaries.
+    auto select_resp = std::make_shared<tipb::SelectResponse>();
+    if (unlikely(!select_resp->ParseFromString(*resp_ptr)))
+        return ExchangeReceiverResult::newError(recv_msg->getSourceIndex(), recv_msg->getReqInfo(), "decode error");
+
+    auto result = ExchangeReceiverResult::newOk(select_resp, recv_msg->getSourceIndex(), recv_msg->getReqInfo());
+    /// If mocking TiFlash as TiDB, we should decode chunks from select_resp.
+    if (unlikely(!result.resp->chunks().empty()))
+    {
+        assert(recv_msg->getChunks(stream_id).empty());
+        // Fine grained shuffle should only be enabled when sending data to TiFlash node.
+        // So all data should be encoded into MPPDataPacket.chunks.
+        RUNTIME_CHECK_MSG(
+            !enable_fine_grained_shuffle_flag,
+            "Data should not be encoded into tipb::SelectResponse.chunks when fine grained shuffle is enabled");
+        result.decode_detail = CoprocessorReader::decodeChunks(select_resp, block_queue, header, schema);
+    }
+    else if (!recv_msg->getChunks(stream_id).empty())
+    {
+        result.decode_detail = decodeChunks(stream_id, recv_msg, block_queue, decoder_ptr);
+    }
+    return result;
 }
 
 template <typename RPCContext>
