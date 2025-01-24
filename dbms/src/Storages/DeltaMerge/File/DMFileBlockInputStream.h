@@ -132,8 +132,10 @@ public:
 
     DMFileBlockInputStreamBuilder & setReadPacks(const IdSetPtr & read_packs_)
     {
-        RUNTIME_CHECK_MSG(pack_filter == nullptr, "pack_filter is not nullptr when setting read packs");
         read_packs = read_packs_;
+        RUNTIME_CHECK_MSG(
+            read_packs == nullptr || pack_filter == nullptr,
+            "pack_filter is not nullptr when setting read_packs");
         return *this;
     }
 
@@ -170,8 +172,10 @@ public:
 
     DMFileBlockInputStreamBuilder & setDMFilePackFilterResult(const DMFilePackFilterResultPtr & pack_filter_)
     {
-        RUNTIME_CHECK_MSG(read_packs == nullptr, "read_packs is not nullptr when setting pack filter");
         pack_filter = pack_filter_;
+        RUNTIME_CHECK_MSG(
+            pack_filter == nullptr || read_packs == nullptr,
+            "read_packs is not nullptr when setting pack_filter");
         return *this;
     }
 
