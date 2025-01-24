@@ -62,7 +62,8 @@ public:
 
     // Payload size in RegionData, show how much data flows in/out of the Region.
     size_t dataSize() const;
-    // `dataSize()` plus the decoded data cached.
+    // Reflects most of bytes of memory currently occupied by this object.
+    // it is `dataSize()` and the decoded data cached. 
     size_t totalSize() const;
 
     size_t serialize(WriteBuffer & buf) const;
@@ -81,12 +82,12 @@ public:
     RegionData() = default;
     ~RegionData();
 
-    RegionData(RegionData && data);
-    RegionData & operator=(RegionData &&);
-    void assignRegionData(RegionData && new_region_data);
+    RegionData(RegionData && data) noexcept;
+    RegionData & operator=(RegionData &&) = delete; // explicit use `assignRegionData` instead
+    void assignRegionData(RegionData && rhs);
 
     String summary() const;
-    size_t tryCompactionFilter(const Timestamp safe_point);
+    size_t tryCompactionFilter(Timestamp safe_point);
 
     struct OrphanKeysInfo
     {

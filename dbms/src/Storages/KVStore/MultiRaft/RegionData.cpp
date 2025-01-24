@@ -293,28 +293,21 @@ size_t RegionData::totalSize() const
     return cf_data_size + decoded_data_size;
 }
 
-void RegionData::assignRegionData(RegionData && new_region_data)
+void RegionData::assignRegionData(RegionData && rhs)
 {
     reportDealloc(cf_data_size);
     cf_data_size = 0;
     decoded_data_size = 0;
 
-    default_cf = std::move(new_region_data.default_cf);
-    write_cf = std::move(new_region_data.write_cf);
-    lock_cf = std::move(new_region_data.lock_cf);
-    orphan_keys_info = std::move(new_region_data.orphan_keys_info);
+    default_cf = std::move(rhs.default_cf);
+    write_cf = std::move(rhs.write_cf);
+    lock_cf = std::move(rhs.lock_cf);
+    orphan_keys_info = std::move(rhs.orphan_keys_info);
 
-    cf_data_size = new_region_data.cf_data_size.load();
-    decoded_data_size = new_region_data.decoded_data_size.load();
-    new_region_data.cf_data_size = 0;
-    new_region_data.decoded_data_size = 0;
-}
-
-
-RegionData & RegionData::operator=(RegionData && r)
-{
-    assignRegionData(std::move(r));
-    return *this;
+    cf_data_size = rhs.cf_data_size.load();
+    decoded_data_size = rhs.decoded_data_size.load();
+    rhs.cf_data_size = 0;
+    rhs.decoded_data_size = 0;
 }
 
 size_t RegionData::serialize(WriteBuffer & buf) const
@@ -372,7 +365,7 @@ bool RegionData::isEqual(const RegionData & r2) const
         && cf_data_size == r2.cf_data_size;
 }
 
-RegionData::RegionData(RegionData && data)
+RegionData::RegionData(RegionData && data) noexcept
     : write_cf(std::move(data.write_cf))
     , default_cf(std::move(data.default_cf))
     , lock_cf(std::move(data.lock_cf))
@@ -392,7 +385,7 @@ String RegionData::summary() const
     return fmt::format("write:{},lock:{},default:{}", write_cf.getSize(), lock_cf.getSize(), default_cf.getSize());
 }
 
-size_t RegionData::tryCompactionFilter(const Timestamp safe_point)
+size_t RegionData::tryCompactionFilter(Timestamp safe_point)
 {
     size_t del_write = 0;
     auto & write_map = write_cf.getDataMut();
@@ -412,7 +405,7 @@ size_t RegionData::tryCompactionFilter(const Timestamp safe_point)
                     if (ts < safe_point)
                     {
                         del_write += 1;
-                        cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_map_it->second);
+                        cf_data_size -= RegionWriteCFData::calcTotalKVSize(write_map_it->second).payload;
                         write_map_it = write_map.erase(write_map_it);
                         continue;
                     }

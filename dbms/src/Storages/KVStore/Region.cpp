@@ -98,7 +98,7 @@ void Region::doRemove(ColumnFamilyType type, const TiKVKey & key)
 void Region::clearAllData()
 {
     std::unique_lock lock(mutex);
-    data = RegionData();
+    data.assignRegionData(RegionData());
 }
 
 UInt64 Region::appliedIndex() const

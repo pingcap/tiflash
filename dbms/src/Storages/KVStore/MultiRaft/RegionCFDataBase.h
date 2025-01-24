@@ -18,8 +18,6 @@
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 
-#include <map>
-
 namespace DB
 {
 
@@ -31,8 +29,7 @@ struct RegionDataMemDiff
     Type payload;
     Type decoded;
 
-    template <typename T1, typename T2>
-    RegionDataMemDiff(T1 payload_, T2 decoded_)
+    RegionDataMemDiff(Type payload_, Type decoded_)
         : payload(payload_)
         , decoded(decoded_)
     {}
@@ -72,13 +69,8 @@ struct RegionCFDataBase
     using Pair = std::pair<Key, Value>;
     using Status = bool;
 
-    static const TiKVKey & getTiKVKey(const Value & val);
-    static const TiKVValue & getTiKVValue(const Value & val);
-
     RegionDataMemDiff insert(TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
 
-    static size_t calcTiKVKeyValueSize(const Value & value);
-    static size_t calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value);
     static RegionDataMemDiff calcTotalKVSize(const Value & value);
 
     RegionDataMemDiff remove(const Key & key, bool quiet = false);
@@ -90,8 +82,8 @@ struct RegionCFDataBase
     size_t getSize() const;
 
     RegionCFDataBase() = default;
-    RegionCFDataBase(RegionCFDataBase && region);
-    RegionCFDataBase & operator=(RegionCFDataBase && region);
+    RegionCFDataBase(RegionCFDataBase && region) noexcept;
+    RegionCFDataBase & operator=(RegionCFDataBase && region) noexcept;
 
     RegionDataMemDiff splitInto(const RegionRange & range, RegionCFDataBase & new_region_data);
     RegionDataMemDiff mergeFrom(const RegionCFDataBase & ori_region_data);
@@ -104,8 +96,8 @@ struct RegionCFDataBase
     Data & getDataMut();
 
 private:
-    size_t calcDecodedKeyValueSize(const Value & value);
-    size_t calcDecodedKeyValueSize(const TiKVKey & key, const TiKVValue & value);
+    static const TiKVKey & getTiKVKey(const Value & val);
+    static const TiKVValue & getTiKVValue(const Value & val);
 
     static bool shouldIgnoreRemove(const Value & value);
 
