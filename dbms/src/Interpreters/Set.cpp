@@ -259,15 +259,11 @@ void Set::createFromAST(const DataTypes & types, ASTPtr node, const Context & co
     insertFromBlock(block, fill_set_elements);
 }
 
-<<<<<<< HEAD
-std::vector<const tipb::Expr *> Set::createFromDAGExpr(const DataTypes & types, const tipb::Expr & expr, bool fill_set_elements)
-=======
 std::vector<const tipb::Expr *> Set::createFromDAGExpr(
     const DataTypes & types,
     const tipb::Expr & expr,
     bool fill_set_elements,
     const TimezoneInfo & timezone_info)
->>>>>>> 265b329f29 (Fix the incompatible behavior when handling `IN(Timestamp | MysqlTime * )` expressions with timezone (#9779))
 {
     /// Will form a block with values from the set.
 
