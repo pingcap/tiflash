@@ -120,7 +120,7 @@ public:
 
 private:
     // The memory difference to the KVStore.
-    void recordMemChange(const RegionDataMemDiff &);
+    static void recordMemChange(const RegionDataMemDiff &);
     // The memory difference to this Region.
     void updateMemoryUsage(const RegionDataMemDiff &);
     void resetMemoryUsage();

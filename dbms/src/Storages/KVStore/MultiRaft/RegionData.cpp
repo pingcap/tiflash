@@ -54,31 +54,29 @@ void RegionData::resetMemoryUsage()
 
 RegionDataMemDiff RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
+    RegionDataMemDiff delta;
     switch (cf)
     {
     case ColumnFamilyType::Write:
     {
-        auto delta = write_cf.insert(std::move(key), std::move(value), mode);
-        recordMemChange(delta);
-        updateMemoryUsage(delta);
-        return delta;
+        delta = write_cf.insert(std::move(key), std::move(value), mode);
+        break;
     }
     case ColumnFamilyType::Default:
     {
-        auto delta = default_cf.insert(std::move(key), std::move(value), mode);
-        recordMemChange(delta);
-        updateMemoryUsage(delta);
-        return delta;
+        delta = default_cf.insert(std::move(key), std::move(value), mode);
+        break;
     }
     case ColumnFamilyType::Lock:
     {
-        auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
         // By inserting a lock, a old lock of the same key could be replaced. For example, pessimistic lock -> optimistic lock.
-        recordMemChange(delta);
-        updateMemoryUsage(delta);
-        return delta;
+        delta = lock_cf.insert(std::move(key), std::move(value), mode);
+        break;
     }
     }
+    recordMemChange(delta);
+    updateMemoryUsage(delta);
+    return delta;
 }
 
 void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)

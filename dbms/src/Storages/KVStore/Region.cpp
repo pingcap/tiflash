@@ -122,7 +122,6 @@ RegionPtr Region::splitInto(RegionMeta && meta)
     RegionPtr new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
 
     const auto range = new_region->getRange();
-
     data.splitInto(range->comparableKeys(), new_region->data);
 
     return new_region;
@@ -294,8 +293,7 @@ void Region::assignRegion(Region && new_region)
 /// try to clean illegal data because of feature `compaction filter`
 void Region::tryCompactionFilter(const Timestamp safe_point)
 {
-    size_t del_write = data.tryCompactionFilter(safe_point);
-    if (del_write)
+    if (size_t del_write = data.tryCompactionFilter(safe_point); del_write)
     {
         LOG_INFO(log, "delete {} records in write cf for region_id={}", del_write, meta.regionId());
     }
