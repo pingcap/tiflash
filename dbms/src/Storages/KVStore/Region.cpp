@@ -77,7 +77,7 @@ RegionDataMemDiff Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVVa
             {
                 // We can't assert the key exists in write_cf here,
                 // since it may be already written into DeltaTree.
-                return RegionDataMemDiff{0, 0};
+                return RegionDataMemDiff{};
             }
         }
     }

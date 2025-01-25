@@ -40,7 +40,7 @@ RegionDataMemDiff RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && v
     auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto kv_pair_ptr = Trait::genKVPair(std::move(key), std::move(raw_key), std::move(value));
     if (!kv_pair_ptr)
-        return {0, 0};
+        return {};
 
     auto & kv_pair = *kv_pair_ptr;
     auto & map = data;
@@ -74,7 +74,7 @@ RegionDataMemDiff RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && v
                     ErrorCodes::LOGICAL_ERROR);
             }
             // Duplicated key is ignored
-            return {0, 0};
+            return {};
         }
         else
         {
@@ -162,7 +162,7 @@ RegionDataMemDiff RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
         const Value & value = it->second;
 
         if (shouldIgnoreRemove(value))
-            return {0, 0};
+            return {};
 
         auto delta = calcTotalKVSize(value).negative();
         if constexpr (std::is_same<Trait, RegionLockCFDataTrait>::value)
@@ -178,7 +178,7 @@ RegionDataMemDiff RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
     else if (!quiet)
         throw Exception("Key not found", ErrorCodes::LOGICAL_ERROR);
 
-    return {0, 0};
+    return {};
 }
 
 template <typename Trait>

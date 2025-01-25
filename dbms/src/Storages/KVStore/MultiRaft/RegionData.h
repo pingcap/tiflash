@@ -38,8 +38,6 @@ public:
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
     using LockInfoPtr = std::unique_ptr<kvrpcpb::LockInfo>;
 
-    void recordMemChange(const RegionDataMemDiff &);
-
     RegionDataMemDiff insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void remove(ColumnFamilyType cf, const TiKVKey & key);
 
@@ -119,6 +117,13 @@ public:
         // Stores orphan write cf keys while handling a raftstore v2 snapshot.
         std::unordered_set<TiKVKey> remained_keys;
     };
+
+private:
+    // The memory difference to the KVStore.
+    void recordMemChange(const RegionDataMemDiff &);
+    // The memory difference to this Region.
+    void updateMemoryUsage(const RegionDataMemDiff &);
+    void resetMemoryUsage();
 
 private:
     friend class Region;

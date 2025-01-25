@@ -30,8 +30,6 @@ extern const int ILLFORMAT_RAFT_ROW;
 
 void RegionData::recordMemChange(const RegionDataMemDiff & delta)
 {
-    cf_data_size += delta.payload;
-    decoded_data_size += delta.decoded;
     if (delta.payload > 0)
     {
         root_of_kvstore_mem_trackers->alloc(delta.payload, false);
@@ -42,6 +40,18 @@ void RegionData::recordMemChange(const RegionDataMemDiff & delta)
     }
 }
 
+void RegionData::updateMemoryUsage(const RegionDataMemDiff & delta)
+{
+    cf_data_size += delta.payload;
+    decoded_data_size += delta.decoded;
+}
+
+void RegionData::resetMemoryUsage()
+{
+    cf_data_size = 0;
+    decoded_data_size = 0;
+}
+
 RegionDataMemDiff RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     switch (cf)
@@ -50,12 +60,14 @@ RegionDataMemDiff RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVVa
     {
         auto delta = write_cf.insert(std::move(key), std::move(value), mode);
         recordMemChange(delta);
+        updateMemoryUsage(delta);
         return delta;
     }
     case ColumnFamilyType::Default:
     {
         auto delta = default_cf.insert(std::move(key), std::move(value), mode);
         recordMemChange(delta);
+        updateMemoryUsage(delta);
         return delta;
     }
     case ColumnFamilyType::Lock:
@@ -63,6 +75,7 @@ RegionDataMemDiff RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVVa
         auto delta = lock_cf.insert(std::move(key), std::move(value), mode);
         // By inserting a lock, a old lock of the same key could be replaced. For example, pessimistic lock -> optimistic lock.
         recordMemChange(delta);
+        updateMemoryUsage(delta);
         return delta;
     }
     }
@@ -98,6 +111,7 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
     }
     }
     recordMemChange(delta);
+    updateMemoryUsage(delta);
 }
 
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & write_it)
@@ -123,9 +137,8 @@ RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & writ
     }
 
     delta.sub(RegionWriteCFData::calcTotalKVSize(write_it->second));
-    cf_data_size += delta.payload;
-    decoded_data_size += delta.decoded;
     recordMemChange(delta);
+    updateMemoryUsage(delta);
 
     return write_cf.getDataMut().erase(write_it);
 }
@@ -242,10 +255,8 @@ void RegionData::splitInto(const RegionRange & range, RegionData & new_region_da
     size_changed.add(write_cf.splitInto(range, new_region_data.write_cf));
     // recordMemChange: Remember to track memory here if we have a region-wise metrics later.
     size_changed.add(lock_cf.splitInto(range, new_region_data.lock_cf));
-    cf_data_size += size_changed.payload;
-    decoded_data_size += size_changed.decoded;
-    new_region_data.cf_data_size -= size_changed.payload;
-    new_region_data.decoded_data_size -= size_changed.decoded;
+    updateMemoryUsage(size_changed);
+    new_region_data.updateMemoryUsage(size_changed.negative());
 }
 
 void RegionData::mergeFrom(const RegionData & ori_region_data)
@@ -255,9 +266,8 @@ void RegionData::mergeFrom(const RegionData & ori_region_data)
     size_changed.add(write_cf.mergeFrom(ori_region_data.write_cf));
     // recordMemChange: Remember to track memory here if we have a region-wise metrics later.
     size_changed.add(lock_cf.mergeFrom(ori_region_data.lock_cf));
-    // `mergeFrom` won't delete from source region.
-    cf_data_size += size_changed.payload;
-    decoded_data_size += size_changed.decoded;
+    updateMemoryUsage(size_changed);
+    // `mergeFrom` won't delete from source region. So we don't update it here.
 }
 
 size_t RegionData::dataSize() const
@@ -272,19 +282,16 @@ size_t RegionData::totalSize() const
 
 void RegionData::assignRegionData(RegionData && rhs)
 {
-    recordMemChange(cf_data_size.negative());
-    cf_data_size = 0;
-    decoded_data_size = 0;
+    recordMemChange(RegionDataMemDiff{cf_data_size, decoded_data_size});
+    resetMemoryUsage();
 
     default_cf = std::move(rhs.default_cf);
     write_cf = std::move(rhs.write_cf);
     lock_cf = std::move(rhs.lock_cf);
     orphan_keys_info = std::move(rhs.orphan_keys_info);
 
-    cf_data_size = rhs.cf_data_size.load();
-    decoded_data_size = rhs.decoded_data_size.load();
-    rhs.cf_data_size = 0;
-    rhs.decoded_data_size = 0;
+    updateMemoryUsage(RegionDataMemDiff{rhs.cf_data_size, rhs.decoded_data_size});
+    rhs.resetMemoryUsage();
 }
 
 size_t RegionData::serialize(WriteBuffer & buf) const
@@ -306,9 +313,8 @@ void RegionData::deserialize(ReadBuffer & buf, RegionData & region_data)
     size_changed.add(RegionWriteCFData::deserialize(buf, region_data.write_cf));
     size_changed.add(RegionLockCFData::deserialize(buf, region_data.lock_cf));
 
-    region_data.cf_data_size = size_changed.payload;
-    region_data.decoded_data_size = size_changed.decoded;
-    recordMemChange(size_changed.payload);
+    region_data.updateMemoryUsage(size_changed);
+    region_data.recordMemChange(size_changed);
 }
 
 RegionWriteCFData & RegionData::writeCF()
@@ -352,9 +358,8 @@ RegionData::RegionData(RegionData && data) noexcept
 
 RegionData::~RegionData()
 {
-    recordMemChange(cf_data_size.negative());
-    cf_data_size = 0;
-    decoded_data_size = 0;
+    recordMemChange(RegionDataMemDiff{-cf_data_size, 0});
+    updateMemoryUsage(RegionDataMemDiff{-cf_data_size, 0});
 }
 
 String RegionData::summary() const
