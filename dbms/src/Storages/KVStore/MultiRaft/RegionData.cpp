@@ -369,6 +369,7 @@ String RegionData::summary() const
 
 size_t RegionData::tryCompactionFilter(Timestamp safe_point)
 {
+    RegionDataMemDiff delta;
     size_t del_write = 0;
     auto & write_map = write_cf.getDataMut();
     auto & default_map = default_cf.getDataMut();
@@ -387,7 +388,7 @@ size_t RegionData::tryCompactionFilter(Timestamp safe_point)
                     if (ts < safe_point)
                     {
                         del_write += 1;
-                        cf_data_size -= RegionWriteCFData::calcTotalKVSize(write_map_it->second).payload;
+                        delta.sub(RegionWriteCFData::calcTotalKVSize(write_map_it->second));
                         write_map_it = write_map.erase(write_map_it);
                         continue;
                     }
@@ -396,6 +397,8 @@ size_t RegionData::tryCompactionFilter(Timestamp safe_point)
         }
         ++write_map_it;
     }
+    recordMemChange(delta);
+    updateMemoryUsage(delta);
     // No need to check default cf. Because tikv will gc default cf before write cf.
     return del_write;
 }

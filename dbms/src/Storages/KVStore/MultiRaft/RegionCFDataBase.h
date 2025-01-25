@@ -28,7 +28,7 @@ struct RegionDataMemDiff
     using Type = Int64;
     Type payload;
     Type decoded;
-    
+
     RegionDataMemDiff(Type payload_, Type decoded_)
         : payload(payload_)
         , decoded(decoded_)
