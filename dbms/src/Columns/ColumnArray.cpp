@@ -220,25 +220,21 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
 
 void ColumnArray::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
-    const TiDB::TiDBCollatorPtr & collator,
-    const NullMap * nullmap) const
+    const TiDB::TiDBCollatorPtr & collator) const
 {
-    countSerializeByteSizeImpl<true>(byte_size, collator, nullmap);
+    countSerializeByteSizeImpl<true>(byte_size, collator);
 }
 
 void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeImpl<false>(byte_size, nullptr, nullptr);
+    countSerializeByteSizeImpl<false>(byte_size, nullptr);
 }
 
 template <bool compare_semantics>
-void ColumnArray::countSerializeByteSizeImpl(
-    PaddedPODArray<size_t> & byte_size,
-    const TiDB::TiDBCollatorPtr & collator,
-    const NullMap * nullmap) const
+void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
+    const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
-    assert(!nullmap || (nullmap->size() == size()));
 
     if unlikely (!getOffsets().empty() && getOffsets().back() > UINT32_MAX)
     {
@@ -256,7 +252,7 @@ void ColumnArray::countSerializeByteSizeImpl(
         byte_size[i] += sizeof(UInt32);
 
     if constexpr (compare_semantics)
-        getData().countSerializeByteSizeForCmpColumnArray(byte_size, getOffsets(), collator, nullmap);
+        getData().countSerializeByteSizeForCmpColumnArray(byte_size, getOffsets(), collator);
     else
         getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets());
 }

@@ -484,62 +484,31 @@ void ColumnString::getPermutationWithCollationImpl(
 
 void ColumnString::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
-    const TiDB::TiDBCollatorPtr & collator,
-    const NullMap * nullmap) const
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     if likely (collator != nullptr)
     {
         if (collator->maxBytesForOneChar() > 1)
-            countSerializeByteSizeNullMap</*compare_semantics=*/true, /*count_code_points=*/true>(
-                byte_size,
-                collator,
-                nullmap);
+            countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/true>(byte_size, collator);
         else
-            countSerializeByteSizeNullMap</*compare_semantics=*/true, /*count_code_points=*/false>(
-                byte_size,
-                collator,
-                nullmap);
+            countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/false>(byte_size, collator);
     }
     else
     {
-        countSerializeByteSizeNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(
-            byte_size,
-            nullptr,
-            nullmap);
+        countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, nullptr);
     }
 }
 
+
 void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(
-        byte_size,
-        nullptr,
-        nullptr);
+    countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, nullptr);
 }
 
-template <bool compare_semantics, bool count_code_points>
-ALWAYS_INLINE inline void ColumnString::countSerializeByteSizeNullMap(
-    PaddedPODArray<size_t> & byte_size,
-    const TiDB::TiDBCollatorPtr & collator,
-    const NullMap * nullmap) const
-{
-    if (nullmap != nullptr)
-        countSerializeByteSizeImpl<compare_semantics, count_code_points, /*has_nullmap=*/true>(
-            byte_size,
-            collator,
-            nullmap);
-    else
-        countSerializeByteSizeImpl<compare_semantics, count_code_points, /*has_nullmap=*/false>(
-            byte_size,
-            collator,
-            nullptr);
-}
-
-template <bool compare_semantics, bool count_code_points, bool has_nullmap>
+template <bool has_collator, bool count_code_points>
 void ColumnString::countSerializeByteSizeImpl(
     PaddedPODArray<size_t> & byte_size,
-    const TiDB::TiDBCollatorPtr & collator,
-    const NullMap * nullmap) const
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
@@ -554,24 +523,15 @@ void ColumnString::countSerializeByteSizeImpl(
                 sizeAt(i));
     }
 
-    if constexpr (compare_semantics)
+    if constexpr (has_collator)
     {
         RUNTIME_CHECK(collator);
-        assert(!has_nullmap || (nullmap && nullmap->size() == size()));
 
         const size_t size = byte_size.size();
         const size_t max_bytes_one_char = collator->maxBytesForOneChar();
         for (size_t i = 0; i < size; ++i)
         {
             assert(sizeAt(i) > 0);
-            if constexpr (has_nullmap)
-            {
-                if (DB::isNullAt(*nullmap, i))
-                {
-                    byte_size[i] += sizeof(UInt32) + 1;
-                    continue;
-                }
-            }
 
             if constexpr (count_code_points)
             {
@@ -587,7 +547,6 @@ void ColumnString::countSerializeByteSizeImpl(
     }
     else
     {
-        assert(!has_nullmap);
         size_t size = byte_size.size();
         for (size_t i = 0; i < size; ++i)
             byte_size[i] += sizeof(UInt32) + sizeAt(i);
@@ -597,30 +556,26 @@ void ColumnString::countSerializeByteSizeImpl(
 void ColumnString::countSerializeByteSizeForCmpColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
-    const TiDB::TiDBCollatorPtr & collator,
-    const NullMap * nullmap) const
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     if likely (collator != nullptr)
     {
         if (collator->maxBytesForOneChar() > 1)
-            countSerializeByteSizeForColumnArrayNullMap</*compare_semantics=*/true, /*count_code_points=*/true>(
+            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/true>(
                 byte_size,
                 array_offsets,
-                collator,
-                nullmap);
+                collator);
         else
-            countSerializeByteSizeForColumnArrayNullMap</*compare_semantics=*/true, /*count_code_points=*/false>(
+            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/false>(
                 byte_size,
                 array_offsets,
-                collator,
-                nullmap);
+                collator);
     }
     else
     {
-        countSerializeByteSizeForColumnArrayNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(
+        countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(
             byte_size,
             array_offsets,
-            nullptr,
             nullptr);
     }
 }
@@ -629,40 +584,17 @@ void ColumnString::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
-    countSerializeByteSizeForColumnArrayNullMap</*compare_semantics=*/false, /*count_code_points=*/false>(
+    countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(
         byte_size,
         array_offsets,
-        nullptr,
         nullptr);
 }
 
-template <bool compare_semantics, bool count_code_points>
-void ColumnString::countSerializeByteSizeForColumnArrayNullMap(
-    PaddedPODArray<size_t> & byte_size,
-    const IColumn::Offsets & array_offsets,
-    const TiDB::TiDBCollatorPtr & collator,
-    const NullMap * nullmap) const
-{
-    if (nullmap != nullptr)
-        countSerializeByteSizeForColumnArrayImpl<compare_semantics, count_code_points, /*has_nullmap=*/true>(
-            byte_size,
-            array_offsets,
-            collator,
-            nullmap);
-    else
-        countSerializeByteSizeForColumnArrayImpl<compare_semantics, count_code_points, /*has_nullmap=*/false>(
-            byte_size,
-            array_offsets,
-            collator,
-            nullptr);
-}
-
-template <bool compare_semantics, bool count_code_points, bool has_nullmap>
+template <bool has_collator, bool count_code_points>
 void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
-    const TiDB::TiDBCollatorPtr & collator,
-    const NullMap * nullmap) const
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     RUNTIME_CHECK_MSG(
         byte_size.size() == array_offsets.size(),
@@ -686,10 +618,9 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
                 sizeAt(i));
     }
 
-    if constexpr (compare_semantics)
+    if constexpr (has_collator)
     {
         RUNTIME_CHECK(collator);
-        assert(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
 
         size_t size = array_offsets.size();
         const auto max_bytes_one_char = collator->maxBytesForOneChar();
@@ -697,11 +628,6 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         {
             const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
             assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
-            if constexpr (has_nullmap)
-            {
-                if (DB::isNullAt(*nullmap, i))
-                    continue;
-            }
 
             if constexpr (count_code_points)
             {
@@ -725,7 +651,6 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     }
     else
     {
-        assert(!has_nullmap);
         size_t size = array_offsets.size();
         for (size_t i = 0; i < size; ++i)
             byte_size[i] += sizeof(UInt32) * (array_offsets[i] - array_offsets[i - 1]) + offsetAt(array_offsets[i])

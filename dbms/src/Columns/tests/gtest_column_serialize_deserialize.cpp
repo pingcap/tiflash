@@ -181,9 +181,7 @@ public:
         }
     }
 
-    static void doTestSerializeAndDeserialize(
-        const ColumnPtr & column_ptr,
-        bool use_nt_align_buffer)
+    static void doTestSerializeAndDeserialize(const ColumnPtr & column_ptr, bool use_nt_align_buffer)
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
@@ -250,9 +248,7 @@ public:
         ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
     }
 
-    static void doTestSerializeAndDeserialize2(
-        const ColumnPtr & column_ptr,
-        bool use_nt_align_buffer)
+    static void doTestSerializeAndDeserialize2(const ColumnPtr & column_ptr, bool use_nt_align_buffer)
     {
         if (column_ptr->size() < 2)
             return;
@@ -293,8 +289,7 @@ public:
         }
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        column_ptr
-            ->serializeToPos(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
+        column_ptr->serializeToPos(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
         new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
 
         current_size = 0;
@@ -309,7 +304,7 @@ public:
             ori_pos.push_back(ptr);
         column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
 
-            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
         if (use_nt_align_buffer)
             new_col_ptr->flushNTAlignBuffer();
 

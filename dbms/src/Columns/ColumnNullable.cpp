@@ -284,21 +284,10 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, con
 
 void ColumnNullable::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
-    const TiDB::TiDBCollatorPtr & collator,
-    const NullMap * nullmap) const
+    const TiDB::TiDBCollatorPtr & collator) const
 {
-    if unlikely (nullmap != nullptr)
-    {
-        auto new_nullmap_col = ColumnUInt8::create();
-        DB::mergeNullMap(*nullmap, getNullMapData(), new_nullmap_col->getData());
-        new_nullmap_col->countSerializeByteSizeForCmp(byte_size, collator, nullptr);
-        getNestedColumn().countSerializeByteSizeForCmp(byte_size, collator, &(new_nullmap_col->getData()));
-    }
-    else
-    {
-        getNullMapColumn().countSerializeByteSizeForCmp(byte_size, collator, nullptr);
-        getNestedColumn().countSerializeByteSizeForCmp(byte_size, collator, &getNullMapData());
-    }
+    getNullMapColumn().countSerializeByteSizeForCmp(byte_size, collator);
+    getNestedColumn().countSerializeByteSizeForCmp(byte_size, collator);
 }
 void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
@@ -309,35 +298,10 @@ void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) 
 void ColumnNullable::countSerializeByteSizeForCmpColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
-    const TiDB::TiDBCollatorPtr & collator,
-    const NullMap * nullmap) const
+    const TiDB::TiDBCollatorPtr & collator) const
 {
-    const auto & nested_nullmap = getNullMapData();
-    assert(nested_nullmap.size() == array_offsets.back());
-    if unlikely (nullmap != nullptr)
-    {
-        assert(nullmap->size() == array_offsets.size());
-        auto new_nullmap_col = ColumnUInt8::create();
-        auto & new_nullmap_data = new_nullmap_col->getData();
-        new_nullmap_data.assign(nested_nullmap);
-        for (size_t i = 0; i < array_offsets.size(); ++i)
-        {
-            if (DB::isNullAt(*nullmap, i))
-            {
-                const auto row_size = array_offsets[i] - array_offsets[i - 1];
-                const auto row_offset = array_offsets[i - 1];
-                for (size_t j = row_offset; j < row_offset + row_size; ++j)
-                    setNullAt(new_nullmap_data, j);
-            }
-        }
-        new_nullmap_col->countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, collator, nullptr);
-        getNestedColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, collator, &new_nullmap_data);
-    }
-    else
-    {
-        getNullMapColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, collator, nullptr);
-        getNestedColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, collator, &nested_nullmap);
-    }
+    getNullMapColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, collator);
+    getNestedColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, collator);
 }
 void ColumnNullable::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
@@ -360,7 +324,8 @@ void ColumnNullable::serializeToPosForCmp(
         auto new_nullmap_col = ColumnUInt8::create();
         DB::mergeNullMap(*nullmap, getNullMapData(), new_nullmap_col->getData());
         getNullMapColumn().serializeToPosForCmp(pos, start, length, nullptr, collator, sort_key_container);
-        getNestedColumn().serializeToPosForCmp(pos, start, length, &(new_nullmap_col->getData()), collator, sort_key_container);
+        getNestedColumn()
+            .serializeToPosForCmp(pos, start, length, &(new_nullmap_col->getData()), collator, sort_key_container);
     }
     else
     {
@@ -402,7 +367,8 @@ void ColumnNullable::serializeToPosForCmpColumnArray(
                     setNullAt(new_nullmap_data, j);
             }
         }
-        new_nullmap_col->serializeToPosForCmpColumnArray(pos, start, length, nullptr, array_offsets, collator, sort_key_container);
+        new_nullmap_col
+            ->serializeToPosForCmpColumnArray(pos, start, length, nullptr, array_offsets, collator, sort_key_container);
         getNestedColumn().serializeToPosForCmpColumnArray(
             pos,
             start,

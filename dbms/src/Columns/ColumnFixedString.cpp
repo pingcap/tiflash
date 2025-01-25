@@ -134,33 +134,18 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, 
     return pos + n;
 }
 
-template <bool has_nullmap>
-void ColumnFixedString::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const NullMap * nullmap) const
+void ColumnFixedString::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
-    assert(!nullmap || nullmap->size() == size());
-
     size_t size = byte_size.size();
     for (size_t i = 0; i < size; ++i)
-    {
-        if constexpr (has_nullmap)
-        {
-            if (DB::isNullAt(*nullmap, i))
-            {
-                byte_size[i] += 1;
-                continue;
-            }
-        }
         byte_size[i] += n;
-    }
 }
 
-template <bool has_nullmap>
 void ColumnFixedString::countSerializeByteSizeForColumnArrayImpl(
     PaddedPODArray<size_t> & byte_size,
-    const IColumn::Offsets & array_offsets,
-    const NullMap * nullmap) const
+    const IColumn::Offsets & array_offsets) const
 {
     RUNTIME_CHECK_MSG(
         byte_size.size() == array_offsets.size(),
@@ -168,21 +153,9 @@ void ColumnFixedString::countSerializeByteSizeForColumnArrayImpl(
         byte_size.size(),
         array_offsets.size());
 
-    assert(!nullmap || nullmap->size() == array_offsets.size());
-
     size_t size = array_offsets.size();
     for (size_t i = 0; i < size; ++i)
-    {
-        if constexpr (has_nullmap)
-        {
-            if (DB::isNullAt(*nullmap, i))
-            {
-                byte_size[i] += array_offsets[i] - array_offsets[i - 1];
-                continue;
-            }
-        }
         byte_size[i] += n * (array_offsets[i] - array_offsets[i - 1]);
-    }
 }
 
 void ColumnFixedString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
