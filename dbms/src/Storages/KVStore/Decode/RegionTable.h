@@ -83,7 +83,6 @@ public:
         RegionID region_id;
         std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
         bool pause_flush = false; // TODO Can we remove this?
-        Timepoint last_flush_time = Clock::now();
 
     private:
         Int64 cache_bytes = 0;

@@ -28,16 +28,10 @@ const TiKVKey & RegionCFDataBase<Trait>::getTiKVKey(const Value & val)
     return *std::get<0>(val);
 }
 
-template <typename Value>
-const std::shared_ptr<const TiKVValue> & getTiKVValuePtr(const Value & val)
-{
-    return std::get<1>(val);
-}
-
 template <typename Trait>
 const TiKVValue & RegionCFDataBase<Trait>::getTiKVValue(const Value & val)
 {
-    return *getTiKVValuePtr<Value>(val);
+    return *std::get<1>(val);
 }
 
 template <typename Trait>
@@ -46,7 +40,7 @@ RegionDataMemDiff RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && v
     auto raw_key = RecordKVFormat::decodeTiKVKey(key);
     auto kv_pair_ptr = Trait::genKVPair(std::move(key), std::move(raw_key), std::move(value));
     if (!kv_pair_ptr)
-        return {0, 0};
+        return {};
 
     auto & kv_pair = *kv_pair_ptr;
     auto & map = data;
@@ -80,7 +74,7 @@ RegionDataMemDiff RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && v
                     ErrorCodes::LOGICAL_ERROR);
             }
             // Duplicated key is ignored
-            return {0, 0};
+            return {};
         }
         else
         {
@@ -90,13 +84,13 @@ RegionDataMemDiff RegionCFDataBase<Trait>::insert(TiKVKey && key, TiKVValue && v
         }
     }
 
-    // No decoded data in write & default cf currently.
-    return {calcTiKVKeyValueSize(it->second), 0};
+    return calcTotalKVSize(it->second);
 }
 
 template <>
-RegionDataMemDiff RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck)
+RegionDataMemDiff RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
+    UNUSED(mode);
     RegionDataMemDiff delta;
     Pair kv_pair = RegionLockCFDataTrait::genKVPair(std::move(key), std::move(value));
     const auto & decoded = std::get<2>(kv_pair.second);
@@ -105,7 +99,7 @@ RegionDataMemDiff RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key
         auto iter = data.find(kv_pair.first);
         if (iter != data.end())
         {
-            // Could be a perssimistic lock is overwritten, or a old generation large txn lock is overwritten.
+            // Could be a pessimistic lock is overwritten, or an old generation large txn lock is overwritten.
             delta.sub(calcTotalKVSize(iter->second));
             data.erase(iter);
 
@@ -126,29 +120,23 @@ RegionDataMemDiff RegionCFDataBase<RegionLockCFDataTrait>::insert(TiKVKey && key
 }
 
 template <typename Trait>
-size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const Value & value)
-{
-    return calcTiKVKeyValueSize(getTiKVKey(value), getTiKVValue(value));
-}
-
-template <typename Trait>
 RegionDataMemDiff RegionCFDataBase<Trait>::calcTotalKVSize(const Value & value)
 {
+    Int64 payload_size = getTiKVKey(value).dataSize() + getTiKVValue(value).dataSize();
     if constexpr (std::is_same<Trait, RegionLockCFDataTrait>::value)
     {
-        return {calcTiKVKeyValueSize(getTiKVKey(value), getTiKVValue(value)), std::get<2>(value)->getSize()};
+        return {
+            // We start to count the size of Lock Cf since #8805
+            payload_size,
+            // The decoded size of Lock Cf
+            static_cast<Int64>(std::get<2>(value)->getSize()),
+        };
     }
     else
     {
-        return {calcTiKVKeyValueSize(getTiKVKey(value), getTiKVValue(value)), 0};
+        // No decoded data in write & default cf currently.
+        return {payload_size, 0};
     }
-}
-
-template <typename Trait>
-size_t RegionCFDataBase<Trait>::calcTiKVKeyValueSize(const TiKVKey & key, const TiKVValue & value)
-{
-    // Previously, we don't count size of Lock Cf.
-    return key.dataSize() + value.dataSize();
 }
 
 template <typename Trait>
@@ -174,9 +162,9 @@ RegionDataMemDiff RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
         const Value & value = it->second;
 
         if (shouldIgnoreRemove(value))
-            return {0, 0};
+            return {};
 
-        auto delta = -calcTotalKVSize(value);
+        auto delta = calcTotalKVSize(value).negative();
         if constexpr (std::is_same<Trait, RegionLockCFDataTrait>::value)
         {
             if unlikely (std::get<2>(value)->isLargeTxn())
@@ -190,7 +178,7 @@ RegionDataMemDiff RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
     else if (!quiet)
         throw Exception("Key not found", ErrorCodes::LOGICAL_ERROR);
 
-    return {0, 0};
+    return {};
 }
 
 template <typename Trait>
@@ -224,19 +212,19 @@ size_t RegionCFDataBase<Trait>::getSize() const
 }
 
 template <typename Trait>
-RegionCFDataBase<Trait>::RegionCFDataBase(RegionCFDataBase && region)
+RegionCFDataBase<Trait>::RegionCFDataBase(RegionCFDataBase && region) noexcept
     : data(std::move(region.data))
 {}
 
 template <typename Trait>
-RegionCFDataBase<Trait> & RegionCFDataBase<Trait>::operator=(RegionCFDataBase && region)
+RegionCFDataBase<Trait> & RegionCFDataBase<Trait>::operator=(RegionCFDataBase && region) noexcept
 {
     data = std::move(region.data);
     return *this;
 }
 
 template <typename Trait>
-std::string getTraitName()
+std::string_view getTraitName()
 {
     if constexpr (std::is_same_v<Trait, RegionWriteCFDataTrait>)
     {
@@ -330,17 +318,15 @@ template <typename Trait>
 RegionDataMemDiff RegionCFDataBase<Trait>::deserialize(ReadBuffer & buf, RegionCFDataBase & new_region_data)
 {
     auto size = readBinary2<size_t>(buf);
-    size_t cf_data_size = 0;
-    size_t decoded_data_size = 0;
+    RegionDataMemDiff total_diff;
     for (size_t i = 0; i < size; ++i)
     {
         auto key = TiKVKey::deserialize(buf);
         auto value = TiKVValue::deserialize(buf);
-        auto r = new_region_data.insert(std::move(key), std::move(value));
-        cf_data_size += r.payload;
-        decoded_data_size += r.decoded;
+        auto diff = new_region_data.insert(std::move(key), std::move(value));
+        total_diff.add(diff);
     }
-    return {cf_data_size, decoded_data_size};
+    return total_diff;
 }
 
 template <typename Trait>

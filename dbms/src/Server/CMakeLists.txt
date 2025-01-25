@@ -37,14 +37,15 @@ target_include_directories (server_for_test PRIVATE ${TiFlash_SOURCE_DIR}/contri
 
 add_library (tiflash-server-lib
     CertificateReloader.cpp
-    MetricsTransmitter.cpp
     MetricsPrometheus.cpp
     ServerInfo.cpp
     Server.cpp
     StatusFile.cpp
     TCPHandler.cpp
+    TCPServersHolder.cpp
     BgStorageInit.cpp
     Bootstrap.cpp
+    Setup.cpp
     StorageConfigParser.cpp
     UserConfigParser.cpp
     RaftConfigParser.cpp)

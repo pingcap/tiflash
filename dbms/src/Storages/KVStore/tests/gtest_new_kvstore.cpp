@@ -87,15 +87,17 @@ try
         = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
     MockRaftStoreProxy::FailCond cond;
     const auto decoded_lock_size = sizeof(DecodedLockCFValue) + sizeof(DecodedLockCFValue::Inner);
+    proxy_instance->debugAddRegions(
+        kvs,
+        ctx.getTMTContext(),
+        {1, 2, 3},
+        {{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10)},
+         {RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)},
+         {RecordKVFormat::genKey(table_id, 21), RecordKVFormat::genKey(table_id, 30)}});
 
     auto & region_table = ctx.getTMTContext().getRegionTable();
     {
         // default
-        proxy_instance->debugAddRegions(
-            kvs,
-            ctx.getTMTContext(),
-            {1},
-            {{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10)}});
         auto region_id = 1;
         auto kvr1 = kvs.getRegion(region_id);
         auto [index, term]
@@ -112,6 +114,52 @@ try
         ASSERT_EQ(kvr1->totalSize(), table1.getSize());
     }
     {
+        // lock
+        root_of_kvstore_mem_trackers->reset();
+        auto region_id = 2;
+        auto kvr1 = kvs.getRegion(region_id);
+        auto [index, term]
+            = proxy_instance
+                  ->rawWrite(region_id, {str_key}, {str_lock_value}, {WriteCmdType::Put}, {ColumnFamilyType::Lock});
+        UNUSED(term);
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
+        ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(kvr1->dataSize() + decoded_lock_size, kvr1->getData().totalSize());
+    }
+    {
+        // lock with largetxn
+        root_of_kvstore_mem_trackers->reset();
+        auto region_id = 3;
+        auto kvr1 = kvs.getRegion(region_id);
+        ASSERT_NE(kvr1, nullptr);
+        std::string shor_value = "value";
+        auto lock_for_update_ts = 7777, txn_size = 1;
+        const std::vector<std::string> & async_commit = {"s1", "s2"};
+        const std::vector<uint64_t> & rollback = {3, 4};
+        auto lock_value2 = DB::RegionBench::encodeFullLockCfValue(
+            Region::DelFlag,
+            "primary key",
+            421321,
+            std::numeric_limits<UInt64>::max(),
+            &shor_value,
+            66666,
+            lock_for_update_ts,
+            txn_size,
+            async_commit,
+            rollback,
+            1111);
+        auto [index, term]
+            = proxy_instance
+                  ->rawWrite(region_id, {str_key}, {str_lock_value}, {WriteCmdType::Put}, {ColumnFamilyType::Lock});
+        UNUSED(term);
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
+        ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(kvr1->dataSize() + decoded_lock_size, kvr1->getData().totalSize());
+    }
+    {
+        // insert & remove
         root_of_kvstore_mem_trackers->reset();
         // lock
         proxy_instance->debugAddRegions(
@@ -1266,6 +1314,12 @@ try
     auto & pool = ctx.getBackgroundPool();
     const auto size = TiFlashTestEnv::DEFAULT_BG_POOL_SIZE;
     std::atomic_bool b = false;
+
+    JointThreadInfoJeallocMap & jm = *ctx.getJointThreadInfoJeallocMap();
+
+    size_t original_size
+        = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
+
     auto t = pool.addTask(
         [&]() {
             auto * x = new int[1000];
@@ -1282,14 +1336,11 @@ try
         5 * 60 * 1000);
     std::this_thread::sleep_for(500ms);
 
-    JointThreadInfoJeallocMap & jm = *ctx.getJointThreadInfoJeallocMap();
-    jm.debugClear();
-    jm.accessProxyMap([](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 0); });
     jm.recordThreadAllocInfo();
 
     LOG_INFO(DB::Logger::get(), "bg pool size={}", size);
     UInt64 r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
-    ASSERT_GE(r, sizeof(int) * 1000);
+    ASSERT_GE(r, original_size + sizeof(int) * 1000);
     jm.accessStorageMap([size](const JointThreadInfoJeallocMap::AllocMap & m) {
         // There are some other bg thread pools
         ASSERT_GE(m.size(), size) << m.size();

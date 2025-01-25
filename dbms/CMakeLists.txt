@@ -83,6 +83,7 @@ add_headers_and_sources(dbms src/IO/Compression)
 add_headers_and_sources(dbms src/IO/FileProvider)
 add_headers_and_sources(dbms src/Interpreters)
 add_headers_and_sources(dbms src/Interpreters/SharedContexts)
+add_headers_and_sources(dbms src/Interpreters/JoinV2)
 add_headers_and_sources(dbms src/Columns)
 add_headers_and_sources(dbms src/Storages)
 add_headers_and_sources(dbms src/Storages/S3)
@@ -111,6 +112,9 @@ check_then_add_sources_compile_flag (
     src/Columns/ColumnUtil.cpp
     src/DataTypes/DataTypeString.cpp
     src/Interpreters/Join.cpp
+    src/Interpreters/JoinV2/HashJoin.cpp
+    src/Interpreters/JoinV2/HashJoinBuild.cpp
+    src/Interpreters/JoinV2/HashJoinProbe.cpp
     src/IO/Compression/EncodingUtil.cpp
     src/Storages/DeltaMerge/BitmapFilter/BitmapFilter.cpp
     src/Storages/DeltaMerge/DMVersionFilterBlockInputStream.cpp

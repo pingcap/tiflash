@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndexCache_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 
 namespace DB::DM

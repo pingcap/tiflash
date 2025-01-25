@@ -38,11 +38,6 @@ public:
     using ConstWriteCFIter = RegionWriteCFData::Map::const_iterator;
     using LockInfoPtr = std::unique_ptr<kvrpcpb::LockInfo>;
 
-    static void reportAlloc(size_t delta);
-    static void reportDealloc(size_t delta);
-    static void reportDelta(size_t prev, size_t current);
-    void recordMemChange(const RegionDataMemDiff & delta);
-
     RegionDataMemDiff insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void remove(ColumnFamilyType cf, const TiKVKey & key);
 
@@ -62,7 +57,8 @@ public:
 
     // Payload size in RegionData, show how much data flows in/out of the Region.
     size_t dataSize() const;
-    // `dataSize()` plus the decoded data cached.
+    // Reflects most of bytes of memory currently occupied by this object.
+    // It is `dataSize()` and the decoded data cached.
     size_t totalSize() const;
 
     size_t serialize(WriteBuffer & buf) const;
@@ -81,11 +77,13 @@ public:
     RegionData() = default;
     ~RegionData();
 
-    RegionData(RegionData && data);
-    RegionData & operator=(RegionData &&);
-    void assignRegionData(RegionData && new_region_data);
+    RegionData(RegionData && data) noexcept;
+    RegionData & operator=(RegionData &&) = delete; // explicit use `assignRegionData` instead
+    void assignRegionData(RegionData && rhs);
 
     String summary() const;
+    size_t tryCompactionFilter(Timestamp safe_point);
+
     struct OrphanKeysInfo
     {
         // Protected by region task lock.
@@ -121,6 +119,13 @@ public:
     };
 
 private:
+    // The memory difference to the KVStore.
+    static void recordMemChange(const RegionDataMemDiff &);
+    // The memory difference to this Region.
+    void updateMemoryUsage(const RegionDataMemDiff &);
+    void resetMemoryUsage();
+
+private:
     friend class Region;
 
 private:
@@ -129,7 +134,7 @@ private:
     RegionLockCFData lock_cf;
     OrphanKeysInfo orphan_keys_info;
 
-    // Size of 3 cfs, reflects size of real palyload flows to KVStore.
+    // Size of 3 cfs, reflects size of real payload flows to KVStore.
     std::atomic<size_t> cf_data_size = 0;
     // Size of decoded structures for convenient access, considered as amplification in memory.
     std::atomic<size_t> decoded_data_size = 0;
