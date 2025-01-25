@@ -282,7 +282,7 @@ size_t RegionData::totalSize() const
 
 void RegionData::assignRegionData(RegionData && rhs)
 {
-    recordMemChange(RegionDataMemDiff{cf_data_size, decoded_data_size});
+    recordMemChange(RegionDataMemDiff{-cf_data_size, -decoded_data_size});
     resetMemoryUsage();
 
     default_cf = std::move(rhs.default_cf);
