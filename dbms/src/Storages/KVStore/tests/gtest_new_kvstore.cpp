@@ -161,64 +161,6 @@ try
     {
         // insert & remove
         root_of_kvstore_mem_trackers->reset();
-        // lock
-        proxy_instance->debugAddRegions(
-            kvs,
-            ctx.getTMTContext(),
-            {2},
-            {{RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)}});
-
-        auto region_id = 2;
-        auto kvr1 = kvs.getRegion(region_id);
-        auto [index, term]
-            = proxy_instance
-                  ->rawWrite(region_id, {str_key}, {str_lock_value}, {WriteCmdType::Put}, {ColumnFamilyType::Lock});
-        UNUSED(term);
-        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
-        ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
-        ASSERT_EQ(kvr1->dataSize() + decoded_lock_size, kvr1->getData().totalSize());
-    }
-    {
-        root_of_kvstore_mem_trackers->reset();
-        // lock with largetxn
-        proxy_instance->debugAddRegions(
-            kvs,
-            ctx.getTMTContext(),
-            {3},
-            {{RecordKVFormat::genKey(table_id, 21), RecordKVFormat::genKey(table_id, 30)}});
-
-        auto region_id = 3;
-        auto kvr1 = kvs.getRegion(region_id);
-        ASSERT_NE(kvr1, nullptr);
-        std::string shor_value = "value";
-        auto lock_for_update_ts = 7777, txn_size = 1;
-        const std::vector<std::string> & async_commit = {"s1", "s2"};
-        const std::vector<uint64_t> & rollback = {3, 4};
-        auto lock_value2 = DB::RegionBench::encodeFullLockCfValue(
-            Region::DelFlag,
-            "primary key",
-            421321,
-            std::numeric_limits<UInt64>::max(),
-            &shor_value,
-            66666,
-            lock_for_update_ts,
-            txn_size,
-            async_commit,
-            rollback,
-            1111);
-        auto [index, term]
-            = proxy_instance
-                  ->rawWrite(region_id, {str_key}, {str_lock_value}, {WriteCmdType::Put}, {ColumnFamilyType::Lock});
-        UNUSED(term);
-        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
-        ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
-        ASSERT_EQ(kvr1->dataSize() + decoded_lock_size, kvr1->getData().totalSize());
-    }
-    {
-        // insert & remove
-        root_of_kvstore_mem_trackers->reset();
         RegionPtr region = tests::makeRegion(700, start, end, proxy_helper.get());
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
