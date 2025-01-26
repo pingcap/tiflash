@@ -17,9 +17,10 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DMVersionFilterBlockInputStream.h>
-#include <Storages/DeltaMerge/Decode/SSTScanSoftLimit.h>
+#include <Storages/DeltaMerge/Decode/SnapshotSSTReader.h>
 #include <Storages/KVStore/Decode/PartitionStreams.h>
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
+#include <Storages/KVStore/MultiRaft/RegionState.h>
 
 #include <memory>
 #include <string_view>
@@ -32,7 +33,6 @@ using RegionPtr = std::shared_ptr<Region>;
 
 struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
-class SSTReader;
 class StorageDeltaMerge;
 
 namespace DM
@@ -61,10 +61,8 @@ public:
     SSTFilesToBlockInputStream( //
         RegionPtr region_,
         UInt64 snapshot_index_,
-        const SSTViewVec & snaps_,
-        const TiFlashRaftProxyHelper * proxy_helper_,
+        SnapshotSSTReader && snap_reader_,
         TMTContext & tmt_,
-        std::optional<SSTScanSoftLimit> && soft_limit_,
         std::shared_ptr<PreHandlingTrace::Item> prehandle_task_,
         SSTFilesToBlockInputStreamOpts && opts_);
     ~SSTFilesToBlockInputStream() override;
@@ -76,12 +74,6 @@ public:
     void readPrefix() override;
     void readSuffix() override;
     Block read() override;
-    // Currently it only takes effect if using tablet sst reader which is usually a raftstore v2 case.
-    // Otherwise will return zero.
-    size_t getApproxBytes() const;
-    std::vector<std::string> findSplitKeys(size_t splits_count) const;
-    void resetSoftLimit(std::optional<SSTScanSoftLimit> soft_limit_) { soft_limit = std::move(soft_limit_); }
-    const std::optional<SSTScanSoftLimit> & getSoftLimit() const { return soft_limit; }
 
 public:
     struct ProcessKeys
@@ -98,37 +90,28 @@ public:
     };
 
     const ProcessKeys & getProcessKeys() const { return process_keys; }
-    size_t getSplitId() const
-    {
-        return soft_limit.has_value() ? soft_limit.value().split_id : DM::SSTScanSoftLimit::HEAD_OR_ONLY_SPLIT;
-    }
+    size_t getSplitId() const { return snap_reader.getSplitId(); }
 
     using SSTReaderPtr = std::unique_ptr<SSTReader>;
-    bool maybeSkipBySoftLimit(ColumnFamilyType cf, SSTReader * reader);
-    bool maybeSkipBySoftLimit() { return maybeSkipBySoftLimit(ColumnFamilyType::Write, write_cf_reader.get()); }
+    bool maybeSkipBySoftLimit()
+    {
+        return snap_reader.maybeSkipBySoftLimit(ColumnFamilyType::Write, snap_reader.write_cf_reader.get());
+    }
 
 private:
     void loadCFDataFromSST(ColumnFamilyType cf, const DecodedTiKVKey * rowkey_to_be_included);
 
     // Emits data into block if the transaction to this key is committed.
     Block readCommitedBlock();
-    bool maybeStopBySoftLimit(ColumnFamilyType cf, SSTReader * reader);
-    void checkFinishedState(SSTReaderPtr & reader, ColumnFamilyType cf);
 
 private:
     RegionPtr region;
     UInt64 snapshot_index;
-    const SSTViewVec & snaps;
-    const TiFlashRaftProxyHelper * proxy_helper{nullptr};
     TMTContext & tmt;
-    std::optional<SSTScanSoftLimit> soft_limit;
     std::shared_ptr<PreHandlingTrace::Item> prehandle_task;
     const SSTFilesToBlockInputStreamOpts opts;
-    LoggerPtr log;
-
-    SSTReaderPtr write_cf_reader;
-    SSTReaderPtr default_cf_reader;
-    SSTReaderPtr lock_cf_reader;
+    SnapshotSSTReader snap_reader;
+    const LoggerPtr log;
 
     DecodedTiKVKey default_last_loaded_rowkey;
     DecodedTiKVKey lock_last_loaded_rowkey;

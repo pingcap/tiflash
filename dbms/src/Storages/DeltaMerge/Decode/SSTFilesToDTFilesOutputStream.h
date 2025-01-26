@@ -32,7 +32,6 @@ using RegionPtr = std::shared_ptr<Region>;
 
 struct SSTViewVec;
 struct TiFlashRaftProxyHelper;
-class SSTReader;
 class StorageDeltaMerge;
 using StorageDeltaMergePtr = std::shared_ptr<StorageDeltaMerge>;
 struct DecodingStorageSchemaSnapshot;
