@@ -190,6 +190,7 @@ struct Settings
     M(SettingBool, dt_flush_after_write, false, "[testing] Flush cache or not after write in DeltaTree Engine.")                                                                                                                        \
     M(SettingBool, dt_log_record_version, false, "[testing] Whether log the version of records when write them to storage")                                                                                                             \
     \
+    M(SettingBool, dt_enable_version_chain, true, "")                                                                                                             \
     /* These PageStorage V2 settings are deprecated since v6.5 */ \
     M(SettingUInt64, dt_open_file_max_idle_seconds, 15, "Deprecated.")                                                                                                                                                                  \
     M(SettingUInt64, dt_page_num_max_expect_legacy_files, 100, "Deprecated.")                                                                                                                                                           \
