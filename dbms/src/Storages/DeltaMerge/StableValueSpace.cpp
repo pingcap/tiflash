@@ -473,7 +473,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
         DMFileBlockInputStreamBuilder builder(dm_context.global_context);
         builder.enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
             .enableColumnCacheLongTerm(dm_context.pk_col_id)
-            .setDMFilePackFilterResult(!pack_filter_results.empty() ? pack_filter_results[i] : nullptr)
+            .setDMFilePackFilterResult(pack_filter_results.size() > i ? pack_filter_results[i] : nullptr)
             .setColumnCache(column_caches[i])
             .setTracingID(dm_context.tracing_id)
             .setRowsThreshold(expected_block_size)
@@ -536,7 +536,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::tryGetInputStreamWithVe
         builder.enableCleanRead(enable_handle_clean_read, is_fast_scan, enable_del_clean_read, max_data_version)
             .enableColumnCacheLongTerm(dm_context.pk_col_id)
             .setAnnQureyInfo(ann_query_info)
-            .setDMFilePackFilterResult(!pack_filter_results.empty() ? pack_filter_results[i] : nullptr)
+            .setDMFilePackFilterResult(pack_filter_results.size() > i ? pack_filter_results[i] : nullptr)
             .setColumnCache(column_caches[i])
             .setTracingID(dm_context.tracing_id)
             .setRowsThreshold(expected_block_size)

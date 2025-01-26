@@ -27,11 +27,9 @@
 #include <kvproto/tikvpb.pb.h>
 #pragma GCC diagnostic pop
 
-#include <atomic>
 #include <boost/noncopyable.hpp>
 #include <cstddef>
 #include <memory>
-#include <set>
 
 namespace DB
 {

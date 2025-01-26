@@ -608,7 +608,7 @@ void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContex
 
 TEST_F(RegionKVStoreOldTest, RegionReadWrite)
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     TableID table_id = 100;
     KVStore & kvs = getKVS();
     UInt64 region_id = 1;

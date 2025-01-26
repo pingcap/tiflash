@@ -67,7 +67,7 @@ void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, D
     doInsert(type, std::move(key), std::move(value), mode);
 }
 
-RegionDataRes Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataMemDiff Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     if unlikely (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
@@ -77,12 +77,11 @@ RegionDataRes Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue 
             {
                 // We can't assert the key exists in write_cf here,
                 // since it may be already written into DeltaTree.
-                return 0;
+                return RegionDataMemDiff{};
             }
         }
     }
-    auto ans = data.insert(type, std::move(key), std::move(value), mode);
-    return ans;
+    return data.insert(type, std::move(key), std::move(value), mode);
 }
 
 void Region::remove(const std::string & cf, const TiKVKey & key)
@@ -99,7 +98,7 @@ void Region::doRemove(ColumnFamilyType type, const TiKVKey & key)
 void Region::clearAllData()
 {
     std::unique_lock lock(mutex);
-    data = RegionData();
+    data.assignRegionData(RegionData());
 }
 
 UInt64 Region::appliedIndex() const
@@ -294,35 +293,7 @@ void Region::assignRegion(Region && new_region)
 /// try to clean illegal data because of feature `compaction filter`
 void Region::tryCompactionFilter(const Timestamp safe_point)
 {
-    size_t del_write = 0;
-    auto & write_map = data.writeCF().getDataMut();
-    auto & default_map = data.defaultCF().getDataMut();
-    for (auto write_map_it = write_map.begin(); write_map_it != write_map.end();)
-    {
-        const auto & decoded_val = std::get<2>(write_map_it->second);
-        const auto & [pk, ts] = write_map_it->first;
-
-        if (decoded_val.write_type == RecordKVFormat::CFModifyFlag::PutFlag)
-        {
-            if (!decoded_val.short_value)
-            {
-                if (auto data_it = default_map.find({pk, decoded_val.prewrite_ts}); data_it == default_map.end())
-                {
-                    // if key-val in write cf can not find matched data in default cf and its commit-ts < gc-safe-point, we can clean it safely.
-                    if (ts < safe_point)
-                    {
-                        del_write += 1;
-                        data.cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_map_it->second);
-                        write_map_it = write_map.erase(write_map_it);
-                        continue;
-                    }
-                }
-            }
-        }
-        ++write_map_it;
-    }
-    // No need to check default cf. Because tikv will gc default cf before write cf.
-    if (del_write)
+    if (size_t del_write = data.tryCompactionFilter(safe_point); del_write)
     {
         LOG_INFO(log, "delete {} records in write cf for region_id={}", del_write, meta.regionId());
     }
