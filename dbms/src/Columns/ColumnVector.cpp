@@ -197,7 +197,7 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
         size());
 
     static_assert(!(has_null && has_nullmap));
-    assert(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
 
     for (size_t i = 0; i < length; ++i)
     {
@@ -216,9 +216,9 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
         {
             for (size_t j = 0; j < len; ++j)
                 tiflash_compiler_builtin_memcpy(
-                        pos[i] + j * sizeof(T),
-                        &data[array_offsets[start + i - 1] + j],
-                        sizeof(T));
+                    pos[i] + j * sizeof(T),
+                    &data[array_offsets[start + i - 1] + j],
+                    sizeof(T));
         }
         else
         {

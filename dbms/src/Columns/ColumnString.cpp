@@ -990,7 +990,7 @@ void ColumnString::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
-    assert(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
 
     /// countSerializeByteSizeForCmpColumnArray has already checked that the size of one element is not greater than UINT32_MAX
     if constexpr (compare_semantics)

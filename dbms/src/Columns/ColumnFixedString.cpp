@@ -238,7 +238,7 @@ void ColumnFixedString::serializeToPosForColumnArrayImpl(
         size());
 
     static_assert(!(has_null && has_nullmap));
-    assert(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
 
     for (size_t i = 0; i < length; ++i)
     {

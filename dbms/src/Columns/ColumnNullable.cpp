@@ -319,22 +319,10 @@ void ColumnNullable::serializeToPosForCmp(
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
-    if unlikely (nullmap != nullptr)
-    {
-        // This code path is not efficient, because of the temporary `new_nullmap_col`.
-        // But only got this code path when the column is like ColumnNullable(ColumnTuple(ColumnNullable)),
-        // which is rare for TiFlash, because ColumnTuple is not used for now.
-        auto new_nullmap_col = ColumnUInt8::create();
-        DB::mergeNullMap(start, length, *nullmap, getNullMapData(), new_nullmap_col->getData());
-        new_nullmap_col->serializeToPosForCmp(pos, start, length, nullptr, collator, sort_key_container);
-        getNestedColumn()
-            .serializeToPosForCmp(pos, start, length, &(new_nullmap_col->getData()), collator, sort_key_container);
-    }
-    else
-    {
-        getNullMapColumn().serializeToPosForCmp(pos, start, length, nullptr, collator, sort_key_container);
-        getNestedColumn().serializeToPosForCmp(pos, start, length, &getNullMapData(), collator, sort_key_container);
-    }
+    // Nested ColumnNullable like ColumnNullable(ColumnArray(ColumnNullable(ColumnXXX))) not support.
+    RUNTIME_CHECK_MSG(!nullmap, "serializeToPosForCmp cannot handle nested nullable");
+    getNullMapColumn().serializeToPosForCmp(pos, start, length, nullptr, collator, sort_key_container);
+    getNestedColumn().serializeToPosForCmp(pos, start, length, &getNullMapData(), collator, sort_key_container);
 }
 
 void ColumnNullable::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
@@ -344,78 +332,18 @@ void ColumnNullable::serializeToPos(PaddedPODArray<char *> & pos, size_t start, 
 }
 
 void ColumnNullable::serializeToPosForCmpColumnArray(
-    PaddedPODArray<char *> & pos,
-    size_t start,
-    size_t length,
-    const NullMap * nullmap,
-    const IColumn::Offsets & array_offsets,
-    const TiDB::TiDBCollatorPtr & collator,
-    String * sort_key_container) const
+    PaddedPODArray<char *> & /* pos */,
+    size_t /* start */,
+    size_t /* length */,
+    const NullMap * /* nullmap */,
+    const IColumn::Offsets & /* array_offsets */,
+    const TiDB::TiDBCollatorPtr & /* collator */,
+    String * /* sort_key_container */) const
 {
-    const auto & nested_nullmap = getNullMapData();
-    RUNTIME_CHECK(nested_nullmap.size() == array_offsets.back());
-    const auto nested_start = array_offsets[start - 1];
-    const auto nested_length = array_offsets[start + length - 1] - array_offsets[start - 1];
-
-    if (nullmap != nullptr)
-    {
-        // Got this code path when the column is like ColumnNullable(ColumnArray(ColumnNullable)),
-        RUNTIME_CHECK(nullmap->size() == array_offsets.size());
-        auto new_nullmap_col = ColumnUInt8::create();
-        auto & new_nullmap_data = new_nullmap_col->getData();
-        new_nullmap_data.assign(nested_nullmap);
-        for (size_t i = start; i < start + length; ++i)
-        {
-            if (DB::isNullAt(*nullmap, i))
-            {
-                const auto row_size = array_offsets[i] - array_offsets[i - 1];
-                const auto row_offset = array_offsets[i - 1];
-                for (size_t j = row_offset; j < row_offset + row_size; ++j)
-                    setNullAt(new_nullmap_data, j);
-            }
-        }
-        // new_nullmap_col
-        //     ->serializeToPosForCmpColumnArray(pos, start, length, nullptr, array_offsets, collator, sort_key_container);
-        // getNestedColumn().serializeToPosForCmpColumnArray(
-        //     pos,
-        //     start,
-        //     length,
-        //     &new_nullmap_data,
-        //     array_offsets,
-        //     collator,
-        //     sort_key_container);
-        new_nullmap_col
-            ->serializeToPosForCmp(pos, nested_start, nested_length, nullptr, collator, sort_key_container);
-        getNestedColumn().serializeToPosForCmp(
-            pos,
-            nested_start,
-            nested_length,
-            &new_nullmap_data,
-            collator,
-            sort_key_container);
-    }
-    else
-    {
-        // getNullMapColumn()
-        //     .serializeToPosForCmpColumnArray(pos, start, length, nullptr, array_offsets, collator, sort_key_container);
-        // getNestedColumn().serializeToPosForCmpColumnArray(
-        //     pos,
-        //     start,
-        //     length,
-        //     &getNullMapData(),
-        //     array_offsets,
-        //     collator,
-        //     sort_key_container);
-        getNullMapColumn()
-            .serializeToPosForCmp(pos, nested_start, nested_length, nullptr, collator, sort_key_container);
-        getNestedColumn().serializeToPosForCmp(
-            pos,
-            nested_start,
-            nested_length,
-            &getNullMapData(),
-            collator,
-            sort_key_container);
-    }
+    // Doesn't support ColumnArray(ColumnNullable(ColumnXXX))
+    throw Exception(
+        "Method serializeToPosForCmpColumnArray is not supported for " + getName(),
+        ErrorCodes::NOT_IMPLEMENTED);
 }
 void ColumnNullable::serializeToPosForColumnArray(
     PaddedPODArray<char *> & pos,

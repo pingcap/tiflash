@@ -266,17 +266,41 @@ void ColumnArray::serializeToPosForCmp(
     String * sort_key_container) const
 {
     if (nullmap != nullptr)
-        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(pos, start, length, collator, sort_key_container, nullmap);
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+            pos,
+            start,
+            length,
+            collator,
+            sort_key_container,
+            nullmap);
     else
-        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(pos, start, length, collator, sort_key_container, nullptr);
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            collator,
+            sort_key_container,
+            nullptr);
 }
 
 void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
+        serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            nullptr,
+            nullptr,
+            nullptr);
     else
-        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            nullptr,
+            nullptr,
+            nullptr);
 }
 
 template <bool has_null, bool compare_semantics, bool has_nullmap>
