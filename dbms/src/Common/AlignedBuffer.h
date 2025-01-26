@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Ltd.
+// Copyright 2025 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -37,6 +37,7 @@ public:
     AlignedBuffer() = default;
     AlignedBuffer(size_t size, size_t alignment);
     ~AlignedBuffer();
+    AlignedBuffer(AlignedBuffer && old) noexcept { std::swap(buf, old.buf); }
 
     void reset(size_t size, size_t alignment);
 
