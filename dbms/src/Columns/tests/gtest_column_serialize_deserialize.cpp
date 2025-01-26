@@ -148,19 +148,6 @@ public:
                 }
             }
         }
-        // else if (result_col_ptr->getFamilyName() == String("Nullable"))
-        // {
-        //     for (size_t i = 0; i < result_col_ptr->size(); ++i)
-        //     {
-        //         ASSERT_EQ(result_col_ptr->isNullAt(i), new_col_ptr->isNullAt(i));
-        //     }
-        //     const auto & nested_result_col_ptr = checkAndGetColumn<ColumnNullable>(result_col_ptr.get())->getNestedColumnPtr();
-        //     const auto & nested_new_col_ptr = checkAndGetColumn<ColumnNullable>(new_col_ptr.get())->getNestedColumnPtr();
-        //     checkForColumnWithCollator(
-        //             nested_result_col_ptr,
-        //             nested_new_col_ptr,
-        //             collator);
-        // }
         else
         {
             for (size_t i = 0; i < result_col_ptr->size(); ++i)

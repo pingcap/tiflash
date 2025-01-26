@@ -316,7 +316,7 @@ void ColumnArray::serializeToPosImpl(
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
     static_assert(!(has_null && has_nullmap));
-    assert(!has_nullmap || (nullmap && nullmap->size() == size()));
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     /// countSerializeByteSize has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)

@@ -120,7 +120,7 @@ void ColumnVector<T>::serializeToPosImpl(
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
     static_assert(!(has_null && has_nullmap));
-    assert(!has_nullmap || (nullmap && nullmap->size() == size()));
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     T def_val{};
     for (size_t i = 0; i < length; ++i)
