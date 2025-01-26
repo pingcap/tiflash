@@ -18,6 +18,7 @@
 #include <Common/StackTrace.h>
 #include <common/demangle.h>
 #include <execinfo.h>
+
 StackTrace::StackTrace()
 {
     frames_size = backtrace(frames, STACK_TRACE_MAX_DEPTH);
