@@ -280,7 +280,7 @@ size_t RegionData::totalSize() const
 
 void RegionData::assignRegionData(RegionData && rhs)
 {
-    recordMemChange(RegionDataMemDiff{-cf_data_size, -decoded_data_size});
+    recordMemChange(RegionDataMemDiff{-cf_data_size.load(), -decoded_data_size.load()});
     resetMemoryUsage();
 
     default_cf = std::move(rhs.default_cf);
@@ -288,7 +288,7 @@ void RegionData::assignRegionData(RegionData && rhs)
     lock_cf = std::move(rhs.lock_cf);
     orphan_keys_info = std::move(rhs.orphan_keys_info);
 
-    updateMemoryUsage(RegionDataMemDiff{rhs.cf_data_size, rhs.decoded_data_size});
+    updateMemoryUsage(RegionDataMemDiff{rhs.cf_data_size.load(), rhs.decoded_data_size.load()});
     rhs.resetMemoryUsage();
 }
 

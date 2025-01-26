@@ -29,14 +29,12 @@ struct RegionDataMemDiff
     Type payload;
     Type decoded;
 
-    RegionDataMemDiff(Type payload_, Type decoded_)
+    template<typename T1, typename T2>
+    RegionDataMemDiff(T1 payload_, T2 decoded_)
         : payload(payload_)
         , decoded(decoded_)
     {}
-    RegionDataMemDiff(UInt64 payload_, UInt64 decoded_)
-        : payload(static_cast<Type>(payload_))
-        , decoded(static_cast<Type>(decoded_))
-    {}
+
     RegionDataMemDiff()
         : payload(0)
         , decoded(0)
