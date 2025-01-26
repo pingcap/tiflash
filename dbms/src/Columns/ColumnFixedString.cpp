@@ -188,7 +188,7 @@ void ColumnFixedString::serializeToPosImpl(
         }
         if constexpr (has_nullmap)
         {
-            if (DB::isNullAt(*nullmap, i))
+            if (DB::isNullAt(*nullmap, start + i))
             {
                 for (size_t j = 0; j < n; ++j)
                 {
@@ -247,13 +247,12 @@ void ColumnFixedString::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
-        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
         if constexpr (has_nullmap)
         {
-            if (DB::isNullAt(*nullmap, i))
+            if (DB::isNullAt(*nullmap, start + i))
                 continue;
         }
-
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
         inline_memcpy(pos[i], &chars[n * array_offsets[start + i - 1]], n * len);
         pos[i] += n * len;
     }

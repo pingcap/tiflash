@@ -499,7 +499,6 @@ void ColumnString::countSerializeByteSizeForCmp(
     }
 }
 
-
 void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
     countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, nullptr);
@@ -532,7 +531,6 @@ void ColumnString::countSerializeByteSizeImpl(
         for (size_t i = 0; i < size; ++i)
         {
             assert(sizeAt(i) > 0);
-
             if constexpr (count_code_points)
             {
                 const auto num_char = UTF8::countCodePoints(&chars[offsetAt(i)], sizeAt(i) - 1);
@@ -628,7 +626,6 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         {
             const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
             assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
-
             if constexpr (count_code_points)
             {
                 size_t cur_row_bytes = 0;
@@ -801,7 +798,7 @@ void ColumnString::serializeToPosImpl(
             const void * src = &chars[offsetAt(start + i)];
             if constexpr (has_nullmap)
             {
-                if (DB::isNullAt(*nullmap, i))
+                if (DB::isNullAt(*nullmap, start + i))
                 {
                     UInt32 str_size = 1;
                     tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
@@ -1005,10 +1002,9 @@ void ColumnString::serializeToPosForColumnArrayImpl(
         {
             if constexpr (has_nullmap)
             {
-                if (DB::isNullAt(*nullmap, i))
+                if (DB::isNullAt(*nullmap, start + i))
                     continue;
             }
-
             for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
             {
                 UInt32 str_size = sizeAt(j);

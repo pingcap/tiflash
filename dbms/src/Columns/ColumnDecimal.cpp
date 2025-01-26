@@ -214,30 +214,19 @@ void ColumnDecimal<T>::serializeToPosImpl(
             if (pos[i] == nullptr)
                 continue;
         }
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, start + i))
+                pos[i] = serializeDecimal256Helper(pos[i], def_val);
+            continue;
+        }
 
         if constexpr (compare_semantics && is_Decimal256)
         {
-            if constexpr (has_nullmap)
-            {
-                if (DB::isNullAt(*nullmap, i))
-                {
-                    pos[i] = serializeDecimal256Helper(pos[i], def_val);
-                    continue;
-                }
-            }
             pos[i] = serializeDecimal256Helper(pos[i], data[start + i]);
         }
         else
         {
-            if constexpr (has_nullmap)
-            {
-                if (DB::isNullAt(*nullmap, i))
-                {
-                    tiflash_compiler_builtin_memcpy(pos[i], &def_val, sizeof(T));
-                    pos[i] += sizeof(T);
-                    continue;
-                }
-            }
             tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
             pos[i] += sizeof(T);
         }
@@ -267,7 +256,7 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
         size());
 
     static_assert(!(has_null && has_nullmap));
-    assert(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
+    assert(!has_nullmap || (nullmap && nullmap->size() == array_offsets.back()));
 
     for (size_t i = 0; i < length; ++i)
     {
@@ -276,32 +265,27 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, start + i))
+                continue;
+        }
 
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
         if constexpr (compare_semantics && is_Decimal256)
         {
-            if constexpr (has_nullmap)
-            {
-                if (DB::isNullAt(*nullmap, i))
-                    continue;
-            }
             for (size_t j = 0; j < len; ++j)
                 pos[i] = serializeDecimal256Helper(pos[i], data[array_offsets[start + i - 1] + j]);
         }
         else
         {
-            if constexpr (has_nullmap)
-            {
-                if (DB::isNullAt(*nullmap, i))
-                    continue;
-            }
             if (len <= 4)
             {
                 for (size_t j = 0; j < len; ++j)
                     tiflash_compiler_builtin_memcpy(
-                        pos[i] + j * sizeof(T),
-                        &data[array_offsets[start + i - 1] + j],
-                        sizeof(T));
+                            pos[i] + j * sizeof(T),
+                            &data[array_offsets[start + i - 1] + j],
+                            sizeof(T));
             }
             else
             {

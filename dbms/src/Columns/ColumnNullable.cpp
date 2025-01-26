@@ -354,6 +354,9 @@ void ColumnNullable::serializeToPosForCmpColumnArray(
 {
     const auto & nested_nullmap = getNullMapData();
     RUNTIME_CHECK(nested_nullmap.size() == array_offsets.back());
+    const auto nested_start = array_offsets[start - 1];
+    const auto nested_length = array_offsets[start + length - 1] - array_offsets[start - 1];
+
     if (nullmap != nullptr)
     {
         // Got this code path when the column is like ColumnNullable(ColumnArray(ColumnNullable)),
@@ -371,27 +374,45 @@ void ColumnNullable::serializeToPosForCmpColumnArray(
                     setNullAt(new_nullmap_data, j);
             }
         }
+        // new_nullmap_col
+        //     ->serializeToPosForCmpColumnArray(pos, start, length, nullptr, array_offsets, collator, sort_key_container);
+        // getNestedColumn().serializeToPosForCmpColumnArray(
+        //     pos,
+        //     start,
+        //     length,
+        //     &new_nullmap_data,
+        //     array_offsets,
+        //     collator,
+        //     sort_key_container);
         new_nullmap_col
-            ->serializeToPosForCmpColumnArray(pos, start, length, nullptr, array_offsets, collator, sort_key_container);
-        getNestedColumn().serializeToPosForCmpColumnArray(
+            ->serializeToPosForCmp(pos, nested_start, nested_length, nullptr, collator, sort_key_container);
+        getNestedColumn().serializeToPosForCmp(
             pos,
-            start,
-            length,
+            nested_start,
+            nested_length,
             &new_nullmap_data,
-            array_offsets,
             collator,
             sort_key_container);
     }
     else
     {
+        // getNullMapColumn()
+        //     .serializeToPosForCmpColumnArray(pos, start, length, nullptr, array_offsets, collator, sort_key_container);
+        // getNestedColumn().serializeToPosForCmpColumnArray(
+        //     pos,
+        //     start,
+        //     length,
+        //     &getNullMapData(),
+        //     array_offsets,
+        //     collator,
+        //     sort_key_container);
         getNullMapColumn()
-            .serializeToPosForCmpColumnArray(pos, start, length, nullptr, array_offsets, collator, sort_key_container);
-        getNestedColumn().serializeToPosForCmpColumnArray(
+            .serializeToPosForCmp(pos, nested_start, nested_length, nullptr, collator, sort_key_container);
+        getNestedColumn().serializeToPosForCmp(
             pos,
-            start,
-            length,
+            nested_start,
+            nested_length,
             &getNullMapData(),
-            array_offsets,
             collator,
             sort_key_container);
     }

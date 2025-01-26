@@ -41,7 +41,7 @@ public:
         if (!compare_semantics)
             column_ptr->countSerializeByteSize(byte_size);
         else
-            column_ptr->countSerializeByteSizeForCmp(byte_size, collator, nullptr);
+            column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
             ASSERT_EQ(byte_size[i], i + result_byte_size[i]);
@@ -62,7 +62,7 @@ public:
         if (!compare_semantics)
             column_array->countSerializeByteSize(byte_size);
         else
-            column_array->countSerializeByteSizeForCmp(byte_size, collator, nullptr);
+            column_array->countSerializeByteSizeForCmp(byte_size, collator);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
             ASSERT_EQ(byte_size[i], sizeof(UInt32) + i + result_byte_size[i]);
@@ -148,6 +148,19 @@ public:
                 }
             }
         }
+        // else if (result_col_ptr->getFamilyName() == String("Nullable"))
+        // {
+        //     for (size_t i = 0; i < result_col_ptr->size(); ++i)
+        //     {
+        //         ASSERT_EQ(result_col_ptr->isNullAt(i), new_col_ptr->isNullAt(i));
+        //     }
+        //     const auto & nested_result_col_ptr = checkAndGetColumn<ColumnNullable>(result_col_ptr.get())->getNestedColumnPtr();
+        //     const auto & nested_new_col_ptr = checkAndGetColumn<ColumnNullable>(new_col_ptr.get())->getNestedColumnPtr();
+        //     checkForColumnWithCollator(
+        //             nested_result_col_ptr,
+        //             nested_new_col_ptr,
+        //             collator);
+        // }
         else
         {
             for (size_t i = 0; i < result_col_ptr->size(); ++i)
@@ -156,8 +169,9 @@ public:
                 if (result_col_ptr->isNullAt(i))
                     continue;
                 auto res = result_col_ptr->getDataAt(i);
-                auto sort_key = collator->sortKey(res.data, res.size, sort_key_container);
-                ASSERT_TRUE(sort_key == new_col_ptr->getDataAt(i));
+                auto res_sort_key = collator->sortKey(res.data, res.size, sort_key_container);
+                auto act = new_col_ptr->getDataAt(i);
+                ASSERT_TRUE(res_sort_key == act);
             }
         }
     }
@@ -323,7 +337,7 @@ public:
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
-        column_ptr->countSerializeByteSizeForCmp(byte_size, collator, nullptr);
+        column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
         size_t total_size = 0;
         for (const auto size : byte_size)
             total_size += size;
@@ -603,6 +617,21 @@ try
     testCountSerializeByteSize(col_nullable_array_vec, {1 + 4 + 4, 1 + 4 + 8, 1 + 4 + 12});
     testSerializeAndDeserialize(col_nullable_array_vec);
     testSerializeAndDeserialize(col_nullable_array_vec, true, nullptr, nullptr);
+
+    // ColumnNullable(ColumnArray(ColumnNullable(ColumnString)))
+    auto col_offsets_1 = createColumn<IColumn::Offset>({1, 3, 6}).column;
+    auto col_array_string = ColumnArray::create(col_nullable_string, col_offsets_1);
+    auto col_nullable_array_string = ColumnNullable::create(col_array_string, createColumn<UInt8>({0, 1, 0}).column);
+    testCountSerializeByteSize(col_nullable_array_string,
+            {1 + 4 + 1 + 4 + 4,
+             1 + 4 + 2 + 8 + 4,
+             1 + 4 + 3 + 12 + 7}, true, nullptr);
+    testSerializeAndDeserialize(col_nullable_array_string);
+    testSerializeAndDeserialize(col_nullable_array_string, true, collator_utf8_bin, &sort_key_container);
+    testSerializeAndDeserialize(col_nullable_array_string, true, collator_utf8_general_ci, &sort_key_container);
+    testSerializeAndDeserialize(col_nullable_array_string, true, collator_utf8_unicode_ci, &sort_key_container);
+
+    // ColumnNullable(ColumnTuple(ColumnNullable(ColumnString)))
 }
 CATCH
 

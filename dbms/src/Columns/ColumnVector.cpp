@@ -94,6 +94,21 @@ void ColumnVector<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start,
 }
 
 template <typename T>
+void ColumnVector<T>::serializeToPosForCmp(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr &,
+    String *) const
+{
+    if (nullmap != nullptr)
+        serializeToPosImpl<false, true>(pos, start, length, nullmap);
+    else
+        serializeToPosImpl<false, false>(pos, start, length, nullptr);
+}
+
+template <typename T>
 template <bool has_null, bool has_nullmap>
 void ColumnVector<T>::serializeToPosImpl(
     PaddedPODArray<char *> & pos,
@@ -144,6 +159,22 @@ void ColumnVector<T>::serializeToPosForColumnArray(
 }
 
 template <typename T>
+void ColumnVector<T>::serializeToPosForCmpColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const NullMap * nullmap,
+    const IColumn::Offsets & array_offsets,
+    const TiDB::TiDBCollatorPtr &,
+    String *) const
+{
+    if (nullmap != nullptr)
+        serializeToPosForColumnArrayImpl<false, true>(pos, start, length, array_offsets, nullmap);
+    else
+        serializeToPosForColumnArrayImpl<false, false>(pos, start, length, array_offsets, nullptr);
+}
+
+template <typename T>
 template <bool has_null, bool has_nullmap>
 void ColumnVector<T>::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
@@ -175,19 +206,19 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
         if constexpr (has_nullmap)
         {
-            if (DB::isNullAt(*nullmap, i))
+            if (DB::isNullAt(*nullmap, start + i))
                 continue;
         }
-        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
         if (len <= 4)
         {
             for (size_t j = 0; j < len; ++j)
                 tiflash_compiler_builtin_memcpy(
-                    pos[i] + j * sizeof(T),
-                    &data[array_offsets[start + i - 1] + j],
-                    sizeof(T));
+                        pos[i] + j * sizeof(T),
+                        &data[array_offsets[start + i - 1] + j],
+                        sizeof(T));
         }
         else
         {

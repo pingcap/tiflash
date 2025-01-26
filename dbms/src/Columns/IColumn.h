@@ -282,6 +282,15 @@ public:
     /// Note:
     /// 1. The pos.size() must be greater than or equal to length.
     /// 2. If has_null is true, then the pos[i] could be nullptr, which means the i-th element does not need to be serialized.
+    virtual void serializeToPos(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */) const
+        = 0;
+    // Similar to serializeToPos, but there are two changes to make sure compare semantics is kept:
+    // 1. For ColumnString with collator, this method decode using collator first and then serialize to pos.
+    // 2. For ColumnNullable, a default value of nested column will be serialized if this row is null.
     virtual void serializeToPosForCmp(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
@@ -290,16 +299,17 @@ public:
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /* sort_key_container */) const
         = 0;
-    virtual void serializeToPos(
-        PaddedPODArray<char *> & /* pos */,
-        size_t /* start */,
-        size_t /* length */,
-        bool /* has_null */) const
-        = 0;
 
     /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
     /// serialized data.
     /// Only called by ColumnArray.
+    virtual void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const Offsets & /* array_offsets */) const
+        = 0;
     virtual void serializeToPosForCmpColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
@@ -308,13 +318,6 @@ public:
         const Offsets & /* array_offsets */,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /* sort_key_container */) const
-        = 0;
-    virtual void serializeToPosForColumnArray(
-        PaddedPODArray<char *> & /* pos */,
-        size_t /* start */,
-        size_t /* length */,
-        bool /* has_null */,
-        const Offsets & /* array_offsets */) const
         = 0;
 
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.

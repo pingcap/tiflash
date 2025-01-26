@@ -266,17 +266,17 @@ void ColumnArray::serializeToPosForCmp(
     String * sort_key_container) const
 {
     if (nullmap != nullptr)
-        serializeToPosImpl<false, true, true>(pos, start, length, collator, sort_key_container, nullmap);
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(pos, start, length, collator, sort_key_container, nullmap);
     else
-        serializeToPosImpl<false, true, false>(pos, start, length, collator, sort_key_container, nullmap);
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(pos, start, length, collator, sort_key_container, nullptr);
 }
 
 void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true, false, false>(pos, start, length, nullptr, nullptr, nullptr);
+        serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
     else
-        serializeToPosImpl<false, false, false>(pos, start, length, nullptr, nullptr, nullptr);
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
 }
 
 template <bool has_null, bool compare_semantics, bool has_nullmap>
@@ -306,7 +306,7 @@ void ColumnArray::serializeToPosImpl(
         UInt32 len = sizeAt(start + i);
         if constexpr (has_nullmap)
         {
-            if (DB::isNullAt(*nullmap, i))
+            if (DB::isNullAt(*nullmap, start + i))
                 len = 0;
         }
         tiflash_compiler_builtin_memcpy(pos[i], &len, sizeof(UInt32));
