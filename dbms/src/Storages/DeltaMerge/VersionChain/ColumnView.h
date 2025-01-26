@@ -38,6 +38,12 @@ public:
 
     auto end() const { return data.end(); }
 
+    Int64 operator[](size_t index) const
+    {
+        assert(index < data.size());
+        return data[index];
+    }
+
 private:
     const PaddedPODArray<Int64> & data;
 };
@@ -129,6 +135,14 @@ public:
     auto begin() const { return Iterator(offsets, chars, 0); }
 
     auto end() const { return Iterator(offsets, chars, offsets.size()); }
+
+    std::string_view operator[](size_t index) const
+    {
+        assert(index < offsets.size());
+        const auto off = offsets[index - 1];
+        const auto size = offsets[index] - offsets[index - 1] - 1;
+        return std::string_view(reinterpret_cast<const char *>(chars.data() + off), size);
+    }
 
 private:
     const IColumn::Offsets & offsets;
