@@ -58,6 +58,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         if (force_release_cache)
             clearNewHandleToRowIds();
     });
+
     replayNewHandleToRowIdsIfNull(dm_context, data_provider, cfs, stable_rows);
 
     UInt32 skipped_rows_and_deletes = 0;
@@ -128,8 +129,7 @@ void VersionChain<HandleType>::deleteRangeFromNewHandleToRowIds(const ColumnFile
 {
     auto [start, end] = convertRowKeyRange(cf_delete_range.getDeleteRange());
     auto itr = new_handle_to_row_ids->lower_bound(start);
-    const auto end_itr = new_handle_to_row_ids->lower_bound(end);
-    while (itr != end_itr)
+    while (itr != new_handle_to_row_ids->end() && itr->first < end)
         itr = new_handle_to_row_ids->erase(itr);
 }
 
@@ -144,6 +144,10 @@ void VersionChain<HandleType>::replayNewHandleToRowIdsIfNull(
         return;
 
     new_handle_to_row_ids.emplace();
+
+    if (replayed_rows_and_deletes == 0)
+        return;
+
     UInt32 processed_rows = 0;
     UInt32 processed_deletes = 0;
     for (const auto & cf : cfs)
