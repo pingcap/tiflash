@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <string>
+#include <cstdlib>
 
 
 /** Demangles C++ symbol name.
@@ -37,7 +38,7 @@ struct FreeingDeleter
     template <typename PointerType>
     void operator()(PointerType ptr)
     {
-        std::free(ptr);
+        std::free(ptr); // NOLINT(cppcoreguidelines-no-malloc)
     }
 };
 
