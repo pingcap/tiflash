@@ -33,6 +33,8 @@ namespace DB::DM
 struct DMContext;
 struct SegmentSnapshot;
 class ColumnFile;
+using ColumnFilePtr = std::shared_ptr<ColumnFile>;
+using ColumnFiles = std::vector<ColumnFilePtr>;
 class ColumnFileBig;
 class ColumnFileDeleteRange;
 
@@ -62,6 +64,8 @@ public:
 
     [[nodiscard]] UInt32 getReplayedRows() const { return base_versions->size(); }
 
+    void cleanNewHandleToRowIds() { new_handle_to_row_ids.reset(); }
+
 private:
     [[nodiscard]] UInt32 replayBlock(
         const DMContext & dm_context,
@@ -84,12 +88,19 @@ private:
     void calculateReadPacks(Iterator begin, Iterator end);
     void cleanHandleColumn();
 
+    void deleteRangeFromNewHandleToRowIds(const ColumnFileDeleteRange & cf_delete_range);
+    void replayNewHandleToRowIdsIfNull(
+        const DMContext & dm_context,
+        const IColumnFileDataProviderPtr & data_provider,
+        const ColumnFiles & cfs,
+        const UInt32 stable_rows);
+
     static std::pair<HandleType, HandleType> convertRowKeyRange(const RowKeyRange & range);
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
     std::shared_ptr<std::vector<RowID>> base_versions; // base_versions->size() == delta.getRows()
-    absl::btree_map<HandleType, RowID> new_handle_to_row_ids;
+    std::optional<absl::btree_map<HandleType, RowID>> new_handle_to_row_ids;
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
 };

@@ -53,6 +53,8 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();
 
+    replayNewHandleToRowIdsIfNull(dm_context, data_provider, cfs, stable_rows);
+
     UInt32 skipped_rows_and_deletes = 0;
     auto pos = cfs.begin();
     for (; pos != cfs.end(); ++pos)
@@ -117,6 +119,84 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
 }
 
 template <ExtraHandleType HandleType>
+void VersionChain<HandleType>::deleteRangeFromNewHandleToRowIds(const ColumnFileDeleteRange & cf_delete_range)
+{
+    auto [start, end] = convertRowKeyRange(cf_delete_range.getDeleteRange());
+    auto itr = new_handle_to_row_ids->lower_bound(start);
+    const auto end_itr = new_handle_to_row_ids->lower_bound(end);
+    while (itr != end_itr)
+        itr = new_handle_to_row_ids->erase(itr);
+}
+
+template <ExtraHandleType HandleType>
+void VersionChain<HandleType>::replayNewHandleToRowIdsIfNull(
+    const DMContext & dm_context,
+    const IColumnFileDataProviderPtr & data_provider,
+    const ColumnFiles & cfs,
+    const UInt32 stable_rows)
+{
+    if (new_handle_to_row_ids)
+        return;
+
+    new_handle_to_row_ids.emplace();
+    UInt32 processed_rows = 0;
+    UInt32 processed_deletes = 0;
+    for (const auto & cf : cfs)
+    {
+        if (cf->isBigFile())
+        {
+            processed_rows += cf->getRows();
+        }
+        else if (const auto * cf_delete_range = cf->tryToDeleteRange(); cf_delete_range)
+        {
+            deleteRangeFromNewHandleToRowIds(*cf_delete_range);
+            processed_deletes += cf_delete_range->getDeletes();
+        }
+        else
+        {
+            assert(cf->isInMemoryFile() || cf->isTinyFile());
+            const auto cf_rows = cf->getRows();
+            const auto to_process_rows = std::min(base_versions->size() - processed_rows, cf_rows);
+            const auto cf_base_versions = std::span{base_versions->begin() + processed_rows, to_process_rows};
+            // None of new handle
+            if (std::none_of(cf_base_versions.begin(), cf_base_versions.end(), [](RowID row_id) {
+                    return row_id == NotExistRowID;
+                }))
+                return;
+            auto cf_reader
+                = cf->getReader(dm_context, data_provider, getHandleColumnDefinesPtr<HandleType>(), ReadTag::MVCC);
+            auto block = cf_reader->readNextBlock();
+            RUNTIME_CHECK_MSG(
+                cf_rows == block.rows(),
+                "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
+                cf->toString(),
+                block.rows());
+            const auto handle_col = ColumnView<HandleType>(*(block.begin()->column));
+            auto & tmp = *new_handle_to_row_ids;
+            const auto start_row_id = stable_rows + processed_rows;
+            for (UInt32 i = 0; i < to_process_rows; ++i)
+            {
+                if (cf_base_versions[i] == NotExistRowID)
+                    tmp[handle_col[i]] = start_row_id + i;
+            }
+            processed_rows += to_process_rows;
+        }
+
+        RUNTIME_CHECK(processed_rows <= base_versions->size(), processed_rows, base_versions->size());
+        RUNTIME_CHECK(
+            processed_rows + processed_deletes <= replayed_rows_and_deletes,
+            processed_rows,
+            processed_deletes,
+            replayed_rows_and_deletes);
+        if (processed_rows + processed_deletes == replayed_rows_and_deletes)
+        {
+            RUNTIME_CHECK(processed_rows == base_versions->size(), processed_rows, base_versions->size());
+            return;
+        }
+    }
+}
+
+template <ExtraHandleType HandleType>
 UInt32 VersionChain<HandleType>::replayBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
@@ -148,7 +228,7 @@ UInt32 VersionChain<HandleType>::replayBlock(
     {
         const auto h = *itr;
         const RowID curr_row_id = base_versions->size() + stable_rows;
-        if (auto t = new_handle_to_row_ids.find(h); t != new_handle_to_row_ids.end())
+        if (auto t = new_handle_to_row_ids->find(h); t != new_handle_to_row_ids->end())
         {
             base_versions->push_back(t->second);
             continue;
@@ -159,7 +239,7 @@ UInt32 VersionChain<HandleType>::replayBlock(
             continue;
         }
 
-        new_handle_to_row_ids[h] = curr_row_id;
+        (*new_handle_to_row_ids)[h] = curr_row_id;
         base_versions->push_back(NotExistRowID);
     }
     return column.size() - offset;
@@ -183,13 +263,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
 template <ExtraHandleType HandleType>
 UInt32 VersionChain<HandleType>::replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range)
 {
-    auto [start, end] = convertRowKeyRange(cf_delete_range.getDeleteRange());
-    auto itr = new_handle_to_row_ids.lower_bound(start);
-    const auto end_itr = new_handle_to_row_ids.lower_bound(end);
-    while (itr != end_itr)
-    {
-        itr = new_handle_to_row_ids.erase(itr);
-    }
+    deleteRangeFromNewHandleToRowIds(cf_delete_range);
     dmfile_or_delete_range_list.push_back(cf_delete_range.getDeleteRange());
     return cf_delete_range.getDeletes();
 }
