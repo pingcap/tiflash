@@ -34,7 +34,8 @@ BitmapFilterPtr buildBitmapFilter(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    VersionChain<HandleType> & version_chain);
+    VersionChain<HandleType> & version_chain,
+    const bool force_release_cache);
 
 
 BitmapFilterPtr buildBitmapFilter(
@@ -43,5 +44,6 @@ BitmapFilterPtr buildBitmapFilter(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    std::variant<VersionChain<Int64>, VersionChain<String>> & variant_version_chain);
+    std::variant<VersionChain<Int64>, VersionChain<String>> & variant_version_chain,
+    const bool force_release_cache);
 } // namespace DB::DM

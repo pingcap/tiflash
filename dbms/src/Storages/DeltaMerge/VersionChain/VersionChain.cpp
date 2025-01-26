@@ -25,7 +25,8 @@ namespace DB::DM
 template <ExtraHandleType HandleType>
 std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapshot(
     const DMContext & dm_context,
-    const SegmentSnapshot & snapshot)
+    const SegmentSnapshot & snapshot,
+    const bool force_release_cache)
 {
     // Check Stable: stable always has one DMFile.
     if (dmfile_or_delete_range_list.empty())
@@ -53,6 +54,10 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();
 
+    SCOPE_EXIT({
+        if (force_release_cache)
+            clearNewHandleToRowIds();
+    });
     replayNewHandleToRowIdsIfNull(dm_context, data_provider, cfs, stable_rows);
 
     UInt32 skipped_rows_and_deletes = 0;
