@@ -245,7 +245,7 @@ public:
     // Per-window-function scratch spaces.
     std::vector<WindowFunctionWorkspace> workspaces;
 
-    bool has_agg;
+    bool has_agg = false;
 
     // We are processing the first row in the current partition if it's true
     bool first_processed;
