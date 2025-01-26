@@ -1470,13 +1470,13 @@ void WindowTransformAction::tryCalculate()
 
         // Start the next partition.
         partition_start = partition_end;
+        prev_frame_start = partition_start;
+        prev_frame_end = partition_end;
         advanceRowNumber(partition_end);
         partition_ended = false;
         // We have to reset the frame and other pointers when the new partition starts.
         frame_start = partition_start;
         frame_end = partition_start;
-        prev_frame_start = partition_start;
-        prev_frame_end = partition_end;
         first_processed = true;
         assert(current_row == partition_start);
         current_row_number = 1;
