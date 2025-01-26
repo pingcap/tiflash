@@ -60,11 +60,12 @@ public:
 
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshot(
         const DMContext & dm_context,
-        const SegmentSnapshot & snapshot);
+        const SegmentSnapshot & snapshot,
+        const bool force_release_cache);
 
     [[nodiscard]] UInt32 getReplayedRows() const { return base_versions->size(); }
 
-    void cleanNewHandleToRowIds() { new_handle_to_row_ids.reset(); }
+    void clearNewHandleToRowIds() { new_handle_to_row_ids.reset(); }
 
 private:
     [[nodiscard]] UInt32 replayBlock(

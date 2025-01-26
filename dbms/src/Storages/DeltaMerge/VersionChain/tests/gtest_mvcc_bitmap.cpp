@@ -40,7 +40,7 @@ try
     ASSERT_EQ(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first, delta_rows);
 
     VersionChain<HandleType> version_chain;
-    buildVersionChain(*dm_context, *segment_snapshot, version_chain);
+    buildVersionChain(*dm_context, *segment_snapshot, version_chain, NotReleaseCache);
     ASSERT_EQ(version_chain.getReplayedRows(), delta_rows);
 
     auto rs_results = loadPackFilterResults(*dm_context, segment_snapshot, {segment->getRowKeyRange()});
@@ -58,7 +58,8 @@ try
         {segment->getRowKeyRange()},
         rs_results,
         std::numeric_limits<UInt64>::max(),
-        version_chain);
+        version_chain,
+        NotReleaseCache);
 
     const auto & filter1 = bitmap_filter1->getFilter();
     const auto & filter2 = bitmap_filter2->getFilter();

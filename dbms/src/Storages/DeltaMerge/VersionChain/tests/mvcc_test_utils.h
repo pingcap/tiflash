@@ -38,6 +38,9 @@ inline UInt64 version = 1;
 inline constexpr bool IsCommonHandle = true;
 inline constexpr bool NotCommonHandle = false;
 
+inline constexpr bool ForceReleaseCache = true;
+inline constexpr bool NotReleaseCache = !ForceReleaseCache;
+
 enum class BenchType
 {
     None = 0,
@@ -315,9 +318,13 @@ inline DeltaIndexPtr buildDeltaIndex(
 }
 
 template <typename T>
-auto buildVersionChain(const DMContext & dm_context, const SegmentSnapshot & snapshot, VersionChain<T> & version_chain)
+auto buildVersionChain(
+    const DMContext & dm_context,
+    const SegmentSnapshot & snapshot,
+    VersionChain<T> & version_chain,
+    const bool force_release_cache)
 {
-    return version_chain.replaySnapshot(dm_context, snapshot);
+    return version_chain.replaySnapshot(dm_context, snapshot, force_release_cache);
 }
 
 inline auto initialize(WriteLoad write_load, bool is_common_handle, UInt32 delta_rows)

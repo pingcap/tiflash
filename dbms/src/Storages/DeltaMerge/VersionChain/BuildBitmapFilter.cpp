@@ -30,9 +30,10 @@ BitmapFilterPtr buildBitmapFilter(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    VersionChain<HandleType> & version_chain)
+    VersionChain<HandleType> & version_chain,
+    const bool force_release_cache)
 {
-    const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
+    const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot, force_release_cache);
     //fmt::println("base_ver_snap={}", *base_ver_snap);
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -57,7 +58,8 @@ template BitmapFilterPtr buildBitmapFilter<Int64>(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    VersionChain<Int64> & version_chain);
+    VersionChain<Int64> & version_chain,
+    const bool force_release_cache);
 
 template BitmapFilterPtr buildBitmapFilter<String>(
     const DMContext & dm_context,
@@ -65,7 +67,8 @@ template BitmapFilterPtr buildBitmapFilter<String>(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    VersionChain<String> & version_chain);
+    VersionChain<String> & version_chain,
+    const bool force_release_cache);
 
 BitmapFilterPtr buildBitmapFilter(
     const DMContext & dm_context,
@@ -73,11 +76,19 @@ BitmapFilterPtr buildBitmapFilter(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    std::variant<VersionChain<Int64>, VersionChain<String>> & variant_version_chain)
+    std::variant<VersionChain<Int64>, VersionChain<String>> & variant_version_chain,
+    const bool force_release_cache)
 {
     return std::visit(
         [&](auto & version_chain) {
-            return buildBitmapFilter(dm_context, snapshot, read_ranges, pack_filter_results, read_ts, version_chain);
+            return buildBitmapFilter(
+                dm_context,
+                snapshot,
+                read_ranges,
+                pack_filter_results,
+                read_ts,
+                version_chain,
+                force_release_cache);
         },
         variant_version_chain);
 }
