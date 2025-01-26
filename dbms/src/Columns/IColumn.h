@@ -45,11 +45,12 @@ inline bool isNullAt(const NullMap & nullmap, size_t n)
 {
     return nullmap[n] != 0;
 }
-inline void mergeNullMap(const NullMap & m1, const NullMap & m2, NullMap & m3)
+inline void mergeNullMap(size_t start, size_t length, const NullMap & m1, const NullMap & m2, NullMap & m3)
 {
     RUNTIME_CHECK(m1.size() == m2.size());
+    RUNTIME_CHECK(start + length < m1.size());
     m3.resize_fill_zero(m1.size());
-    for (size_t i = 0; i < m1.size(); ++i)
+    for (size_t i = start; i < start + length; ++i)
         m3[i] = (DB::isNullAt(m1, i) || DB::isNullAt(m2, i));
 }
 inline void setNullAt(NullMap & nullmap, size_t n)

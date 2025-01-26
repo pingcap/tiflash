@@ -107,14 +107,8 @@ private:
         }
     }
 
-    template <bool compare_semantics, bool count_code_points>
-    ALWAYS_INLINE inline void countSerializeByteSizeNullMap(
-        PaddedPODArray<size_t> & byte_size,
-        const TiDB::TiDBCollatorPtr & collator,
-        const NullMap * nullmap) const;
-    template <bool compare_semantics, bool count_code_points>
+    template <bool has_collator, bool count_code_points>
     void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const;
-
     template <bool has_collator, bool count_code_points>
     void countSerializeByteSizeForColumnArrayImpl(
         PaddedPODArray<size_t> & byte_size,

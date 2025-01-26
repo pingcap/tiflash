@@ -321,9 +321,12 @@ void ColumnNullable::serializeToPosForCmp(
 {
     if unlikely (nullmap != nullptr)
     {
+        // This code path is not efficient, because of the temporary `new_nullmap_col`.
+        // But only got this code path when the column is like ColumnNullable(ColumnTuple(ColumnNullable)),
+        // which is rare for TiFlash, because ColumnTuple is not used for now.
         auto new_nullmap_col = ColumnUInt8::create();
-        DB::mergeNullMap(*nullmap, getNullMapData(), new_nullmap_col->getData());
-        getNullMapColumn().serializeToPosForCmp(pos, start, length, nullptr, collator, sort_key_container);
+        DB::mergeNullMap(start, length, *nullmap, getNullMapData(), new_nullmap_col->getData());
+        new_nullmap_col->serializeToPosForCmp(pos, start, length, nullptr, collator, sort_key_container);
         getNestedColumn()
             .serializeToPosForCmp(pos, start, length, &(new_nullmap_col->getData()), collator, sort_key_container);
     }
@@ -350,10 +353,11 @@ void ColumnNullable::serializeToPosForCmpColumnArray(
     String * sort_key_container) const
 {
     const auto & nested_nullmap = getNullMapData();
-    assert(nested_nullmap.size() == array_offsets.back());
-    if unlikely (nullmap != nullptr)
+    RUNTIME_CHECK(nested_nullmap.size() == array_offsets.back());
+    if (nullmap != nullptr)
     {
-        assert(nullmap->size() == array_offsets.size());
+        // Got this code path when the column is like ColumnNullable(ColumnArray(ColumnNullable)),
+        RUNTIME_CHECK(nullmap->size() == array_offsets.size());
         auto new_nullmap_col = ColumnUInt8::create();
         auto & new_nullmap_data = new_nullmap_col->getData();
         new_nullmap_data.assign(nested_nullmap);
