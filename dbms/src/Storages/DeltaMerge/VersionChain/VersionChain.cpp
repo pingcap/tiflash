@@ -127,15 +127,10 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
 template <ExtraHandleType HandleType>
 void VersionChain<HandleType>::deleteRangeFromNewHandleToRowIds(const ColumnFileDeleteRange & cf_delete_range)
 {
-    const auto [start, end] = convertRowKeyRange(cf_delete_range.getDeleteRange());
-    absl::flat_hash_map<HandleType, RowID> tmp;
-    for (const auto & [k, v] : *new_handle_to_row_ids)
-    {
-        if (start <= k && k < end)
-            continue;
-        tmp.emplace(k, v);
-    }
-    new_handle_to_row_ids.emplace(std::move(tmp));
+    auto [start, end] = convertRowKeyRange(cf_delete_range.getDeleteRange());
+    auto itr = new_handle_to_row_ids->lower_bound(start);
+    while (itr != new_handle_to_row_ids->end() && itr->first < end)
+        itr = new_handle_to_row_ids->erase(itr);
 }
 
 template <ExtraHandleType HandleType>
@@ -153,7 +148,7 @@ void VersionChain<HandleType>::replayNewHandleToRowIdsIfNull(
     if (replayed_rows_and_deletes == 0)
         return;
 
-    new_handle_to_row_ids->reserve(new_handle_count_when_clear);
+    //new_handle_to_row_ids->reserve(new_handle_count_when_clear);
 
     UInt32 processed_rows = 0;
     UInt32 processed_deletes = 0;
