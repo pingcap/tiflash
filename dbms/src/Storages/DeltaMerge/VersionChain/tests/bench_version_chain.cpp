@@ -88,8 +88,8 @@ void MVCCIncrementalBuild(benchmark::State & state, Args &&... args)
 try
 {
     const auto [type, write_load, is_common_handle] = std::make_tuple(std::move(args)...);
-    const UInt32 incremental_delta_rows = state.range(0);
-    constexpr UInt32 prepared_delta_rows = 10000;
+    const UInt32 prepared_delta_rows = state.range(0);
+    const UInt32 incremental_delta_rows = state.range(1);
     auto [context, dm_context, cols, segment, segment_snapshot, write_seq]
         = initialize(write_load, is_common_handle, prepared_delta_rows);
     SCOPE_EXIT({ context->shutdown(); });
@@ -258,7 +258,88 @@ CATCH
         IsCommonHandle)                                                                                              \
         ->Range(1, 8 << 13);
 
+// {10000, 20000, 30000, 40000, 50000} * {1, 8, 64, 512, 4k, 8k, 64k}
+#define MVCC_BENCHMARK2(FUNC)                                                                                        \
+    BENCHMARK_CAPTURE(FUNC, Index / RandomUpdate, BenchType::DeltaIndex, WriteLoad::RandomUpdate, NotCommonHandle)   \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(FUNC, Chain / RandomUpdate, BenchType::VersionChain, WriteLoad::RandomUpdate, NotCommonHandle) \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(FUNC, Index / AppendOnly, BenchType::DeltaIndex, WriteLoad::AppendOnly, NotCommonHandle)       \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(FUNC, Chain / AppendOnly, BenchType::VersionChain, WriteLoad::AppendOnly, NotCommonHandle)     \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(FUNC, Index / RandomInsert, BenchType::DeltaIndex, WriteLoad::RandomInsert, NotCommonHandle)   \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(FUNC, Chain / RandomInsert, BenchType::VersionChain, WriteLoad::RandomInsert, NotCommonHandle) \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Index / RandomUpdate,                                                                         \
+        BenchType::DeltaIndex,                                                                                       \
+        WriteLoad::RandomUpdate,                                                                                     \
+        IsCommonHandle)                                                                                              \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Chain / RandomUpdate,                                                                         \
+        BenchType::VersionChain,                                                                                     \
+        WriteLoad::RandomUpdate,                                                                                     \
+        IsCommonHandle)                                                                                              \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Index / AppendOnly,                                                                           \
+        BenchType::DeltaIndex,                                                                                       \
+        WriteLoad::AppendOnly,                                                                                       \
+        IsCommonHandle)                                                                                              \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Chain / AppendOnly,                                                                           \
+        BenchType::VersionChain,                                                                                     \
+        WriteLoad::AppendOnly,                                                                                       \
+        IsCommonHandle)                                                                                              \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Index / RandomInsert,                                                                         \
+        BenchType::DeltaIndex,                                                                                       \
+        WriteLoad::RandomInsert,                                                                                     \
+        IsCommonHandle)                                                                                              \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});                                                      \
+    BENCHMARK_CAPTURE(                                                                                               \
+        FUNC,                                                                                                        \
+        CommonHandle / Chain / RandomInsert,                                                                         \
+        BenchType::VersionChain,                                                                                     \
+        WriteLoad::RandomInsert,                                                                                     \
+        IsCommonHandle)                                                                                              \
+        ->ArgsProduct(                                                                                               \
+            {benchmark::CreateDenseRange(10000, 50000, /*step*/ 10000),                                              \
+             benchmark::CreateRange(1, 8 << 13, /*multi=*/8)});
+
 MVCC_BENCHMARK(MVCCFullBuild)
-MVCC_BENCHMARK(MVCCIncrementalBuild)
+MVCC_BENCHMARK2(MVCCIncrementalBuild)
 MVCC_BENCHMARK(MVCCBuildBitmap)
 } // namespace
