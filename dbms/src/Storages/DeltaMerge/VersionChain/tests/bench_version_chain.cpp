@@ -37,7 +37,7 @@ extern const Metric DT_SnapshotOfRead;
 namespace
 {
 template <typename... Args>
-void MVCCFullPlace(benchmark::State & state, Args &&... args)
+void MVCCFullBuild(benchmark::State & state, Args &&... args)
 try
 {
     const auto [type, write_load, is_common_handle] = std::make_tuple(std::move(args)...);
@@ -84,7 +84,7 @@ try
 CATCH
 
 template <typename... Args>
-void MVCCIncrementalPlace(benchmark::State & state, Args &&... args)
+void MVCCIncrementalBuild(benchmark::State & state, Args &&... args)
 try
 {
     const auto [type, write_load, is_common_handle] = std::make_tuple(std::move(args)...);
@@ -258,7 +258,7 @@ CATCH
         IsCommonHandle)                                                                                              \
         ->Range(1, 8 << 13);
 
-MVCC_BENCHMARK(MVCCFullPlace)
-MVCC_BENCHMARK(MVCCIncrementalPlace)
+MVCC_BENCHMARK(MVCCFullBuild)
+MVCC_BENCHMARK(MVCCIncrementalBuild)
 MVCC_BENCHMARK(MVCCBuildBitmap)
 } // namespace
