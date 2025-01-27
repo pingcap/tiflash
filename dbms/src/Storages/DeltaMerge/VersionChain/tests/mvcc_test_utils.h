@@ -38,7 +38,7 @@ inline UInt64 version = 1;
 inline constexpr bool IsCommonHandle = true;
 inline constexpr bool NotCommonHandle = false;
 
-inline constexpr bool ForceReleaseCache = true;
+inline constexpr bool ForceReleaseCache = false;
 
 enum class BenchType
 {
