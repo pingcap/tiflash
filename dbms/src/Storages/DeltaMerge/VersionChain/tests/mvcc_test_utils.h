@@ -39,7 +39,6 @@ inline constexpr bool IsCommonHandle = true;
 inline constexpr bool NotCommonHandle = false;
 
 inline constexpr bool ForceReleaseCache = true;
-inline constexpr bool NotReleaseCache = !ForceReleaseCache;
 
 enum class BenchType
 {
