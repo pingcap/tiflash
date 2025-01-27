@@ -46,9 +46,6 @@ extern const char random_fail_in_resize_callback[];
 extern const char force_agg_prefetch[];
 } // namespace FailPoints
 
-static constexpr size_t agg_prefetch_step = 16;
-static constexpr size_t agg_mini_batch = 256;
-
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
 #define AggregationMethodNameTwoLevel(NAME) AggregatedDataVariants::AggregationMethod_##NAME##_two_level
 #define AggregationMethodType(NAME) AggregatedDataVariants::Type::NAME
@@ -678,11 +675,12 @@ void NO_INLINE Aggregator::executeImpl(
     const bool disable_prefetch = (method.data.getBufferSizeInBytes() < prefetch_threshold);
 #endif
 
-    if constexpr (Method::State::is_serialized_key)
-    {
-        executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
-    }
-    else if constexpr (Method::Data::is_string_hash_map)
+    // For key_serialized, memory allocation and key serialization will be batch-wise.
+    // For key_string, collation decode will be batch-wise.
+    if constexpr (Method::State::batch_get_key_holder)
+        state.initBatchHandler(agg_process_info.start_row);
+
+    if constexpr (Method::Data::is_string_hash_map)
     {
         // StringHashMap doesn't support prefetch.
         executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
@@ -738,9 +736,9 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
 }
 
 template <typename Method>
-ALWAYS_INLINE inline void prepareBatch(
+ALWAYS_INLINE inline void setupHashVals(
     size_t row_idx,
-    size_t end_row,
+    size_t batch_size,
     std::vector<size_t> & hashvals,
     std::vector<typename Method::State::Derived::KeyHolderType> & key_holders,
     Arena * aggregates_pool,
@@ -748,14 +746,19 @@ ALWAYS_INLINE inline void prepareBatch(
     Method & method,
     typename Method::State & state)
 {
-    assert(hashvals.size() == key_holders.size());
+    assert(hashvals.size() == key_holders.size() && hashvals.size() == batch_size);
 
-    for (size_t i = row_idx, j = 0; i < row_idx + hashvals.size() && i < end_row; ++i, ++j)
+    for (size_t i = row_idx, j = 0; i < row_idx + batch_size; ++i, ++j)
     {
-        key_holders[j] = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
-            i,
-            aggregates_pool,
-            sort_key_containers);
+        if constexpr (Method::State::batch_get_key_holder)
+            key_holders[j] = static_cast<typename Method::State::Derived *>(&state)->getKeyHolderBatch(
+                j,
+                aggregates_pool);
+        else
+            key_holders[j] = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
+                i,
+                aggregates_pool,
+                sort_key_containers);
         hashvals[j] = method.data.hash(keyHolderGetKey(key_holders[j]));
     }
 }
@@ -851,6 +854,7 @@ void Aggregator::handleOneBatch(
 
     size_t i = agg_process_info.start_row;
     const size_t end = agg_process_info.start_row + rows;
+    Arena temp_batch_pool;
 
     size_t mini_batch_size = rows;
     std::vector<size_t> hashvals;
@@ -864,15 +868,20 @@ void Aggregator::handleOneBatch(
         key_holders.resize(agg_mini_batch);
     }
 
+
     // i is the begin row index of each mini batch.
     while (i < end)
     {
+        size_t batch_mem_size = 0;
+        if constexpr (Method::State::batch_get_key_holder)
+            batch_mem_size = state.prepareNextBatch(mini_batch_size, &temp_batch_pool);
+
         if constexpr (enable_prefetch)
         {
             if unlikely (i + mini_batch_size > end)
                 mini_batch_size = end - i;
 
-            prepareBatch(i, end, hashvals, key_holders, aggregates_pool, sort_key_containers, method, state);
+            setupHashVals(i, mini_batch_size, hashvals, key_holders, aggregates_pool, sort_key_containers, method, state);
         }
 
         const auto cur_batch_end = i + mini_batch_size;
@@ -887,6 +896,11 @@ void Aggregator::handleOneBatch(
                 if likely (k + agg_prefetch_step < hashvals.size())
                     method.data.prefetch(hashvals[k + agg_prefetch_step]);
 
+                emplace_result_holder
+                    = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holders[k]), hashvals[k]);
+            }
+            else if constexpr (Method::State::batch_get_key_holder)
+            {
                 emplace_result_holder
                     = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holders[k]), hashvals[k]);
             }
@@ -908,13 +922,9 @@ void Aggregator::handleOneBatch(
                 if constexpr (compute_agg_data)
                 {
                     if (emplace_result.isFound())
-                    {
                         aggregate_data = emplace_result.getMapped();
-                    }
                     else
-                    {
                         agg_process_info.not_found_rows.push_back(j);
-                    }
                 }
                 else
                 {
@@ -957,6 +967,9 @@ void Aggregator::handleOneBatch(
                 places[index_relative_to_start_row] = aggregate_data;
             processed_rows = j;
         }
+
+        if constexpr (Method::State::batch_get_key_holder)
+            temp_batch_pool.rollback(batch_mem_size);
 
         if unlikely (!processed_rows.has_value())
             break;
@@ -1823,6 +1836,12 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     size_t data_index = 0;
     const auto rows = data.size();
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
+    std::unique_ptr<char *[]> key_places;
+
+    static constexpr bool batch_deserialize_key = (Method::State::get_key_holder_batch_size &&
+            Method::State::is_serialized_key);
+    if constexpr (batch_deserialize_key)
+        key_places = std::make_unique<char *[]>(rows);
 
     size_t current_bound = params.max_block_size;
     size_t key_columns_vec_index = 0;
@@ -1830,8 +1849,16 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         if constexpr (!skip_convert_key)
         {
-            agg_keys_helpers[key_columns_vec_index]
-                ->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
+            if constexpr (batch_deserialize_key)
+            {
+                // Assume key is StringRef.
+                key_places[data_index] = key.data;
+            }
+            else
+            {
+                agg_keys_helpers[key_columns_vec_index]
+                    ->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
+            }
         }
         places[data_index] = mapped;
         ++data_index;
@@ -1842,6 +1869,18 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
             current_bound += params.max_block_size;
         }
     });
+
+    if constexpr (!skip_convert_key && batch_deserialize_key)
+    {
+        size_t batch_row_idx = 0;
+        size_t block_idx = 0;
+        while (batch_row_idx < rows)
+        {
+            state.insertKeyIntoColumnsBatch(key_places, key_columns_vec[block_idx]);
+            batch_row_idx += key_columns_vec[block_idx][0]->size();
+            ++block_idx;
+        }
+    }
 
     data_index = 0;
     current_bound = params.max_block_size;

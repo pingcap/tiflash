@@ -52,6 +52,8 @@ class IBlockOutputStream;
 template <typename Method>
 class AggHashTableToBlocksBlockInputStream;
 
+static constexpr size_t agg_prefetch_step = 16;
+static constexpr size_t agg_mini_batch = 256;
 
 /** Different data structures that can be used for aggregation
   * For efficiency, the aggregation data itself is put into the pool.
@@ -231,7 +233,7 @@ struct AggregationMethodStringNoCache
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*use_cache=*/false>;
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*use_cache=*/false, /*get_key_holder_batch_size=*/agg_mini_batch>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -683,7 +685,7 @@ struct AggregationMethodSerialized
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped>;
+    using State = ColumnsHashing::HashMethodSerialized<typename Data::value_type, Mapped, agg_mini_batch>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
