@@ -340,9 +340,11 @@ void ColumnNullable::serializeToPosForCmpColumnArray(
     const TiDB::TiDBCollatorPtr & /* collator */,
     String * /* sort_key_container */) const
 {
-    // Doesn't support ColumnArray(ColumnNullable(ColumnXXX))
+    // Unable to handle ColumnArray(ColumnNullable(ColumnXXX)). Because the pos vector corresponds to the rows of ColumnArray,
+    // while ColumnNullable::nullmap corresponds to the rows of ColumnNullable.
+    // This means it's not easy to correctly serialize the row in ColumnNullable to the corresponding position in pos.
     throw Exception(
-        "Method serializeToPosForCmpColumnArray is not supported for " + getName(),
+        "serializeToPosForCmpColumnArray cannot handle ColumnArray(" + getName() + ")",
         ErrorCodes::NOT_IMPLEMENTED);
 }
 void ColumnNullable::serializeToPosForColumnArray(
