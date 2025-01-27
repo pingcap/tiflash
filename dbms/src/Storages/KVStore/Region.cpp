@@ -92,7 +92,11 @@ void Region::remove(const std::string & cf, const TiKVKey & key)
 
 void Region::doRemove(ColumnFamilyType type, const TiKVKey & key)
 {
-    data.remove(type, key);
+    auto diff = data.remove(type, key);
+    if (data.region_table_size)
+    {
+        *(data.region_table_size) += diff.total();
+    }
 }
 
 void Region::clearAllData()
@@ -182,6 +186,11 @@ raft_serverpb::PeerState Region::peerState() const
 size_t Region::dataSize() const
 {
     return data.dataSize();
+}
+
+size_t Region::totalSize() const
+{
+    return data.totalSize() + sizeof(RegionMeta);
 }
 
 size_t Region::writeCFCount() const

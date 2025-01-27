@@ -38,6 +38,10 @@ void RegionData::recordMemChange(const RegionDataMemDiff & delta)
     {
         root_of_kvstore_mem_trackers->free(-delta.payload);
     }
+    // A region splits and merges, but its derived region all belong to the same table.
+    // So we can summarize here rather than `updateMemoryUsage`.
+    if (region_table_size)
+        *region_table_size += delta.total();
 }
 
 void RegionData::updateMemoryUsage(const RegionDataMemDiff & delta)
@@ -79,7 +83,7 @@ RegionDataMemDiff RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVVa
     return delta;
 }
 
-void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
+RegionDataMemDiff RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
 {
     RegionDataMemDiff delta;
     switch (cf)
@@ -110,6 +114,7 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
     }
     recordMemChange(delta);
     updateMemoryUsage(delta);
+    return delta;
 }
 
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & write_it)

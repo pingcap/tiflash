@@ -199,7 +199,7 @@ RegionID RegionRaftCommandDelegate::execCommitMerge(
             : source_region_meta_delegate.regionState().getRegion().end_key();
 
         region_table.extendRegionRange(
-            id(),
+            *this,
             RegionRangeKeys(TiKVKey::copyFrom(new_start_key), TiKVKey::copyFrom(new_end_key)));
     }
 

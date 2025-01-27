@@ -277,7 +277,7 @@ void KVStore::onSnapshot(
         const auto range = new_region_wrap->getRange();
         auto & region_table = tmt.getRegionTable();
         // extend region to make sure data won't be removed.
-        region_table.extendRegionRange(region_id, *range);
+        region_table.extendRegionRange(*new_region_wrap, *range);
     }
 
     // Register the new Region.
