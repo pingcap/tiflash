@@ -140,13 +140,13 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 }
 
 template <typename T>
-template <bool for_compare>
-void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const
+template <bool compare_semantics>
+void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const NullMap *) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
     size_t size = byte_size.size();
-    if constexpr (for_compare && is_Decimal256)
+    if constexpr (compare_semantics && is_Decimal256)
     {
         for (size_t i = 0; i < size; ++i)
         {
@@ -160,9 +160,8 @@ void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_
     }
 }
 
-// TODO add unit test
 template <typename T>
-template <bool for_compare>
+template <bool compare_semantics>
 void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
@@ -173,7 +172,7 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
         byte_size.size(),
         array_offsets.size());
 
-    if constexpr (for_compare && is_Decimal256)
+    if constexpr (compare_semantics && is_Decimal256)
     {
         size_t size = array_offsets.size();
         for (size_t i = 0; i < size; ++i)
@@ -194,12 +193,20 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
 }
 
 template <typename T>
-template <bool has_null, bool for_compare>
-void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+template <bool has_null, bool compare_semantics, bool has_nullmap>
+void ColumnDecimal<T>::serializeToPosImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
+    static_assert(!(has_null && has_nullmap));
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
+
+    static constexpr T def_val{};
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -207,8 +214,14 @@ void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t s
             if (pos[i] == nullptr)
                 continue;
         }
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, start + i))
+                pos[i] = serializeDecimal256Helper(pos[i], def_val);
+            continue;
+        }
 
-        if constexpr (for_compare && is_Decimal256)
+        if constexpr (compare_semantics && is_Decimal256)
         {
             pos[i] = serializeDecimal256Helper(pos[i], data[start + i]);
         }
@@ -221,12 +234,13 @@ void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t s
 }
 
 template <typename T>
-template <bool has_null, bool for_compare>
+template <bool has_null, bool compare_semantics, bool has_nullmap>
 void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
-    const IColumn::Offsets & array_offsets) const
+    const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(
@@ -241,6 +255,9 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
+    static_assert(!(has_null && has_nullmap));
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
+
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -248,9 +265,14 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, start + i))
+                continue;
+        }
 
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
-        if constexpr (for_compare && is_Decimal256)
+        if constexpr (compare_semantics && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
                 pos[i] = serializeDecimal256Helper(pos[i], data[array_offsets[start + i - 1] + j]);
@@ -275,7 +297,7 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
 }
 
 template <typename T>
-template <bool for_compare>
+template <bool compare_semantics>
 void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
     PaddedPODArray<char *> & pos,
     bool use_nt_align_buffer [[maybe_unused]])
@@ -285,7 +307,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
 
     // is_complex_decimal256 is true means Decimal256 is serialized by [bool, limb_count, n * limb].
     // NT optimization is not implemented for simplicity.
-    static const bool is_complex_decimal256 = (for_compare && is_Decimal256);
+    static const bool is_complex_decimal256 = (compare_semantics && is_Decimal256);
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if (use_nt_align_buffer)
@@ -383,7 +405,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
 }
 
 template <typename T>
-template <bool for_compare>
+template <bool compare_semantics>
 void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
@@ -410,7 +432,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArrayImpl(
     for (size_t i = 0; i < size; ++i)
     {
         size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        if constexpr (for_compare && is_Decimal256)
+        if constexpr (compare_semantics && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
                 pos[i] = const_cast<char *>(
