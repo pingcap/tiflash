@@ -17,6 +17,7 @@
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Decode/RegionTable_fwd.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
@@ -165,6 +166,8 @@ public: // Stats
 
     // Payload size in RegionData, show how much data flows in/out of the Region.
     size_t dataSize() const;
+    // How much memory the Region consumes.
+    size_t totalSize() const;
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
@@ -228,6 +231,8 @@ public: // Stats
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
 
+    void setRegionTableSize(RegionTableSize size) const { data.region_table_size = size; }
+
 public: // Raft Read and Write
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
     CommittedRemover createCommittedRemover(bool use_lock = true);
@@ -278,6 +283,7 @@ private:
     friend class tests::RegionKVStoreTest;
     friend struct RegionBench::DebugRegion;
 
+private:
     // Private methods no need to lock mutex, normally
 
     // Returns the size of data change(inc or dec)

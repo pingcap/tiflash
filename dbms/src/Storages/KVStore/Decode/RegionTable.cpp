@@ -67,14 +67,16 @@ RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id,
 RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Region & region)
 {
     const auto range = region.getRange();
-    return insertRegion(table, *range, region.id());
+    return insertRegion(table, *range, region);
 }
 
 RegionTable::InternalRegion & RegionTable::insertRegion(
     Table & table,
     const RegionRangeKeys & region_range_keys,
-    const RegionID region_id)
+    const Region & region)
 {
+    auto region_id = region.id();
+    region.setRegionTableSize(table.size);
     auto keyspace_id = region_range_keys.getKeyspaceID();
     auto & table_regions = table.regions;
     // Insert table mapping.
@@ -162,6 +164,19 @@ void RegionTable::updateRegion(const Region & region)
     std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
     internal_region.updateRegionCacheBytes(region.dataSize());
+}
+
+size_t RegionTable::getTableRegionSize(KeyspaceID keyspace_id, TableID table_id) const
+{
+    std::scoped_lock lock(mutex);
+
+    auto it = tables.find(KeyspaceTableID{keyspace_id, table_id});
+    if (it == tables.end())
+        return 0;
+    const auto & table = it->second;
+    if (table.size)
+        return *(table.size);
+    return 0;
 }
 
 namespace
@@ -386,10 +401,10 @@ void RegionTable::shrinkRegionRange(const Region & region)
     internal_region.updateRegionCacheBytes(region.dataSize());
 }
 
-void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys)
+void RegionTable::extendRegionRange(const Region & region, const RegionRangeKeys & region_range_keys)
 {
     std::lock_guard lock(mutex);
-
+    const RegionID region_id = region.id();
     auto keyspace_id = region_range_keys.getKeyspaceID();
     auto table_id = region_range_keys.getMappedTableID();
     auto new_handle_range = region_range_keys.rawKeys();
@@ -433,7 +448,7 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
     else
     {
         auto & table = getOrCreateTable(keyspace_id, table_id);
-        insertRegion(table, region_range_keys, region_id);
+        insertRegion(table, region_range_keys, region);
         LOG_INFO(log, "insert internal region, keyspace={} table_id={} region_id={}", keyspace_id, table_id, region_id);
     }
 }

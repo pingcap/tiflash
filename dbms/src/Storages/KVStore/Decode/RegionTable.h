@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
+#include <Storages/KVStore/Decode/RegionTable_fwd.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
@@ -94,9 +95,12 @@ public:
     {
         explicit Table(const TableID table_id_)
             : table_id(table_id_)
-        {}
+        {
+            size = std::make_shared<std::atomic_int64_t>(0);
+        }
         TableID table_id;
         InternalRegions regions;
+        RegionTableSize size;
     };
 
     explicit RegionTable(Context & context_);
@@ -108,7 +112,7 @@ public:
     void shrinkRegionRange(const Region & region);
 
     /// extend range for possible InternalRegion or add one.
-    void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
+    void extendRegionRange(const Region & region, const RegionRangeKeys & region_range_keys);
 
     void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 
@@ -151,6 +155,8 @@ public:
 
     void clear();
 
+    size_t getTableRegionSize(KeyspaceID keyspace_id, TableID table_id) const;
+
 public:
     // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
     // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
@@ -182,7 +188,7 @@ private:
     Table & getOrCreateTable(KeyspaceID keyspace_id, TableID table_id);
     void removeTable(KeyspaceID keyspace_id, TableID table_id);
     InternalRegion & getOrInsertRegion(const Region & region);
-    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
+    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const Region & region);
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
 
