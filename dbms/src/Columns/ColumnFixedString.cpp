@@ -190,11 +190,8 @@ void ColumnFixedString::serializeToPosImpl(
         {
             if (DB::isNullAt(*nullmap, start + i))
             {
-                for (size_t j = 0; j < n; ++j)
-                {
-                    *(pos[i]) = '\0';
-                    pos[i] += 1;
-                }
+                memset(pos[i], '\0', n);
+                pos[i] += n;
                 continue;
             }
         }

@@ -35,6 +35,18 @@ extern const int PARAMETER_OUT_OF_BOUND;
 extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 } // namespace ErrorCodes
 
+struct ColumnStringDefaultValue
+{
+    char mem[sizeof(UInt32) + 1] = {0};
+    ColumnStringDefaultValue()
+    {
+        UInt32 str_size = 1;
+        tiflash_compiler_builtin_memcpy(&mem[0], &str_size, sizeof(str_size));
+    }
+};
+
+static ColumnStringDefaultValue col_str_def_val;
+
 MutableColumnPtr ColumnString::cloneResized(size_t to_size) const
 {
     auto res = ColumnString::create();
@@ -784,6 +796,7 @@ void ColumnString::serializeToPosImpl(
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
+    static_assert(!(has_null && has_nullmap));
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     /// To avoid virtual function call of sortKey().
@@ -793,21 +806,17 @@ void ColumnString::serializeToPosImpl(
     {
         if constexpr (compare_semantics)
         {
-            static_assert(!has_null);
-            UInt32 str_size = sizeAt(start + i);
-            const void * src = &chars[offsetAt(start + i)];
             if constexpr (has_nullmap)
             {
                 if (DB::isNullAt(*nullmap, start + i))
                 {
-                    UInt32 str_size = 1;
-                    tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
-                    pos[i] += sizeof(UInt32);
-                    *(pos[i]) = '\0';
-                    pos[i] += 1;
+                    tiflash_compiler_builtin_memcpy(pos[i], &col_str_def_val.mem[0], sizeof(col_str_def_val.mem));
+                    pos[i] += sizeof(col_str_def_val.mem);
                     continue;
                 }
             }
+            UInt32 str_size = sizeAt(start + i);
+            const void * src = &chars[offsetAt(start + i)];
             auto sort_key
                 = derived_collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
             // For terminating zero.
@@ -822,7 +831,6 @@ void ColumnString::serializeToPosImpl(
         }
         else
         {
-            static_assert(!has_nullmap);
             if constexpr (has_null)
             {
                 if (pos[i] == nullptr)
@@ -990,12 +998,12 @@ void ColumnString::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
+    static_assert(!(has_null && has_nullmap));
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
 
     /// countSerializeByteSizeForCmpColumnArray has already checked that the size of one element is not greater than UINT32_MAX
     if constexpr (compare_semantics)
     {
-        static_assert(!has_null);
         /// To avoid virtual function call of sortKey().
         const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
         for (size_t i = 0; i < length; ++i)
@@ -1025,7 +1033,6 @@ void ColumnString::serializeToPosForColumnArrayImpl(
     }
     else
     {
-        static_assert(!has_nullmap);
         for (size_t i = 0; i < length; ++i)
         {
             if constexpr (has_null)

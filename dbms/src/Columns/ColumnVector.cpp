@@ -122,7 +122,7 @@ void ColumnVector<T>::serializeToPosImpl(
     static_assert(!(has_null && has_nullmap));
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
-    T def_val{};
+    static constexpr T def_val{};
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -206,12 +206,12 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
-        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
         if constexpr (has_nullmap)
         {
             if (DB::isNullAt(*nullmap, start + i))
                 continue;
         }
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
         if (len <= 4)
         {
             for (size_t j = 0; j < len; ++j)

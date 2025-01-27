@@ -206,7 +206,7 @@ void ColumnDecimal<T>::serializeToPosImpl(
     static_assert(!(has_null && has_nullmap));
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
-    T def_val{};
+    static constexpr T def_val{};
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)

@@ -612,6 +612,8 @@ try
     testSerializeAndDeserialize(col_nullable_array_vec);
     testSerializeAndDeserialize(col_nullable_array_vec, true, nullptr, nullptr);
 
+    // ColumnArray(ColumnNullable(ColumnVector)) not support.
+
     // Nested ColumnNullable like ColumnNullable(ColumnArray(ColumnNullable(ColumnString))) not support.
     // auto col_offsets_1 = createColumn<IColumn::Offset>({1, 3, 6}).column;
     // auto col_array_string = ColumnArray::create(col_nullable_string, col_offsets_1);
