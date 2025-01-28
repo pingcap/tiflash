@@ -140,6 +140,137 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 }
 
 template <typename T>
+void ColumnDecimal<T>::countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &) const
+{
+    countSerializeByteSizeImpl<true>(byte_size);
+}
+
+template <typename T>
+void ColumnDecimal<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    countSerializeByteSizeImpl<false>(byte_size);
+}
+
+
+template <typename T>
+void ColumnDecimal<T>::countSerializeByteSizeForCmpColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr &) const
+{
+    countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets);
+}
+
+template <typename T>
+void ColumnDecimal<T>::countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets) const
+{
+    countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets);
+}
+
+
+template <typename T>
+void ColumnDecimal<T>::serializeToPosForCmp(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const
+{
+    if (has_null)
+        serializeToPosImpl</*has_null=*/true, /*for_compare=*/true>(pos, start, length);
+    else
+        serializeToPosImpl</*has_null=*/false, /*for_compare=*/true>(pos, start, length);
+}
+
+template <typename T>
+void ColumnDecimal<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl</*has_null=*/true, /*for_compare=*/false>(pos, start, length);
+    else
+        serializeToPosImpl</*has_null=*/false, /*for_compare=*/false>(pos, start, length);
+}
+
+template <typename T>
+void ColumnDecimal<T>::serializeToPosForCmpColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const
+{
+    if (has_null)
+        serializeToPosForColumnArrayImpl</*has_null=*/true, /*for_compare=*/true>(
+                pos,
+                start,
+                length,
+                array_offsets);
+    else
+        serializeToPosForColumnArrayImpl</*has_null=*/false, /*for_compare=*/true>(
+                pos,
+                start,
+                length,
+                array_offsets);
+}
+
+template <typename T>
+void ColumnDecimal<T>::serializeToPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets) const
+{
+    if (has_null)
+        serializeToPosForColumnArrayImpl</*has_null=*/true, /*for_compare=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets);
+    else
+        serializeToPosForColumnArrayImpl</*has_null=*/false, /*for_compare=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets);
+}
+
+template <typename T>
+void ColumnDecimal<T>::deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
+{
+    deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer);
+}
+
+template <typename T>
+void ColumnDecimal<T>::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
+{
+    deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
+}
+
+template <typename T>
+void ColumnDecimal<T>::deserializeForCmpAndInsertFromPosColumnArray(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer)
+{
+    deserializeAndInsertFromPosForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
+}
+
+template <typename T>
+void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        const IColumn::Offsets & array_offsets,
+        bool use_nt_align_buffer)
+{
+    deserializeAndInsertFromPosForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
+}
+
+template <typename T>
 template <bool for_compare>
 void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const
 {
@@ -160,7 +291,6 @@ void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_
     }
 }
 
-// TODO add unit test
 template <typename T>
 template <bool for_compare>
 void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
