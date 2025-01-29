@@ -716,6 +716,14 @@ struct AggregationMethodSerialized
         for (size_t i = 0; i < key_columns.size(); ++i)
             pos = key_columns[i]->deserializeAndInsertFromArena(pos, collators.empty() ? nullptr : collators[i]);
     }
+
+    static void insertKeyIntoColumnsBatch(
+            PaddedPODArray<char *> & key_places,
+            std::vector<IColumn *> & key_columns)
+    {
+        for (auto * key_column : key_columns)
+            key_column->deserializeForCmpAndInsertFromPos(key_places, true);
+    }
 };
 
 

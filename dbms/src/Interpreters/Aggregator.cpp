@@ -652,6 +652,12 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
     }
 }
 
+template <typename HashMethod>
+concept HasBatchGetKeyHolderMemberFunc = requires
+{
+    // todo also require initBatchHandler()
+    {std::declval<HashMethod>().getKeyHolderBatch(std::declval<size_t>(), std::declval<Arena *>())} -> std::same_as<ArenaKeyHolder>;
+};
 
 /** It's interesting - if you remove `noinline`, then gcc for some reason will inline this function, and the performance decreases (~ 10%).
   * (Probably because after the inline of this function, more internal functions no longer be inlined.)
@@ -677,7 +683,7 @@ void NO_INLINE Aggregator::executeImpl(
 
     // For key_serialized, memory allocation and key serialization will be batch-wise.
     // For key_string, collation decode will be batch-wise.
-    if constexpr (Method::State::batch_get_key_holder)
+    if constexpr (HasBatchGetKeyHolderMemberFunc<Method>)
         state.initBatchHandler(agg_process_info.start_row);
 
     if constexpr (Method::Data::is_string_hash_map)
@@ -1836,12 +1842,13 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     size_t data_index = 0;
     const auto rows = data.size();
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
-    std::unique_ptr<char *[]> key_places;
+    PaddedPODArray<char *> key_places;
 
-    static constexpr bool batch_deserialize_key = (Method::State::get_key_holder_batch_size &&
-            Method::State::is_serialized_key);
+    // For key_serialized, deserialize will be batch-wise if it's serialized batch-wise.
+    static constexpr bool batch_deserialize_key =
+        (Method::State::get_key_holder_batch_size && Method::State::is_serialized_key);
     if constexpr (batch_deserialize_key)
-        key_places = std::make_unique<char *[]>(rows);
+        key_places.reserve(params.max_block_size);
 
     size_t current_bound = params.max_block_size;
     size_t key_columns_vec_index = 0;
@@ -1852,7 +1859,12 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
             if constexpr (batch_deserialize_key)
             {
                 // Assume key is StringRef.
-                key_places[data_index] = key.data;
+                key_places.push_back(key.data);
+                if unlikely(key_places.size() >= params.max_block_size)
+                {
+                    method.insertKeyIntoColumnsBatch(key_places, key_columns_vec[++key_columns_vec_index]);
+                    key_places.clear();
+                }
             }
             else
             {
@@ -1872,14 +1884,8 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
 
     if constexpr (!skip_convert_key && batch_deserialize_key)
     {
-        size_t batch_row_idx = 0;
-        size_t block_idx = 0;
-        while (batch_row_idx < rows)
-        {
-            state.insertKeyIntoColumnsBatch(key_places, key_columns_vec[block_idx]);
-            batch_row_idx += key_columns_vec[block_idx][0]->size();
-            ++block_idx;
-        }
+        if (!key_places.empty())
+            method.insertKeyIntoColumnsBatch(key_places, key_columns_vec[++key_columns_vec_index]);
     }
 
     data_index = 0;
@@ -1922,11 +1928,26 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
         }
         agg_keys_helper.initAggKeys(data.size(), key_columns);
     }
+    
+    PaddedPODArray<char *> key_places;
+    // For key_serialized, deserialize will be batch-wise if it's serialized batch-wise.
+    static constexpr bool batch_deserialize_key =
+        (Method::State::get_key_holder_batch_size && Method::State::is_serialized_key);
+    if constexpr (batch_deserialize_key)
+        key_places.reserve(params.max_block_size);
 
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         if constexpr (!skip_convert_key)
         {
-            agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
+            if constexpr (batch_deserialize_key)
+            {
+                // Assume key is StringRef.
+                key_places.push_back(key.data);
+            }
+            else
+            {
+                agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
+            }
         }
 
         /// reserved, so push_back does not throw exceptions
@@ -1935,6 +1956,12 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
 
         mapped = nullptr;
     });
+
+    if constexpr (!skip_convert_key && batch_deserialize_key)
+    {
+        if (!key_places.empty())
+            method.insertKeyIntoColumnsBatch(key_places, key_columns);
+    }
 }
 
 template <typename Method, typename Table, bool skip_convert_key>

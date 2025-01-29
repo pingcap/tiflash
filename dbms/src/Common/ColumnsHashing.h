@@ -50,7 +50,6 @@ struct HashMethodOneNumber
     using KeyHolderType = FieldType;
 
     static constexpr bool is_serialized_key = false;
-    static constexpr bool batch_get_key_holder = false;
 
     const FieldType * vec;
 
@@ -99,11 +98,14 @@ private:
     size_t prepareNextBatchType(
         const UInt8 * chars,
         const IColumn::Offsets & offsets,
-        size_t batch_size,
+        size_t cur_batch_size,
         const TiDB::TiDBCollatorPtr & collator)
     {
+        if (cur_batch_size <= 0)
+            return 0;
+
         const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
-        for (size_t i = 0; i < batch_size; ++i)
+        for (size_t i = 0; i < cur_batch_size; ++i)
         {
             const auto row = batch_row_idx + i;
             const auto last_offset = offsets[row - 1];
@@ -124,26 +126,33 @@ private:
     }
 
 protected:
-    void init(size_t start_row, size_t batch_size)
+    bool inited() const
     {
-        batch_row_idx = start_row;
-        sort_key_containers.resize(batch_size);
-        batch_rows.resize(batch_size);
+        return !sort_key_containers.empty();
     }
 
-public:
+    void init(size_t start_row, size_t max_batch_size)
+    {
+        RUNTIME_CHECK(max_batch_size >= 256);
+        batch_row_idx = start_row;
+        sort_key_containers.resize(max_batch_size);
+        batch_rows.reserve(max_batch_size);
+    }
+
     size_t prepareNextBatch(
         const UInt8 * chars,
         const IColumn::Offsets & offsets,
-        size_t batch_size,
+        size_t cur_batch_size,
         const TiDB::TiDBCollatorPtr & collator)
     {
+        batch_rows.resize(cur_batch_size);
+
         if likely (collator)
         {
 #define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID) \
             case (COLLATOR_ID): \
             { \
-                return prepareNextBatchType<IMPL_TYPE, true>(chars, offsets, batch_size, collator); \
+                return prepareNextBatchType<IMPL_TYPE, true>(chars, offsets, cur_batch_size, collator); \
                 break; \
             }
 
@@ -159,7 +168,7 @@ public:
         }
         else
         {
-            return prepareNextBatchType<TiDB::ITiDBCollator, false>(chars, offsets, batch_size, collator);
+            return prepareNextBatchType<TiDB::ITiDBCollator, false>(chars, offsets, cur_batch_size, collator);
         }
     }
 
@@ -173,20 +182,19 @@ public:
 };
 
 /// For the case when there is one string key.
-template <typename Value, typename Mapped, bool use_cache = true, size_t get_key_holder_batch_size = 0>
+template <typename Value, typename Mapped, bool use_cache = true>
 struct HashMethodString
-    : public columns_hashing_impl::HashMethodBase<HashMethodString<Value, Mapped, use_cache, get_key_holder_batch_size>, Value, Mapped, use_cache>
+    : public columns_hashing_impl::HashMethodBase<HashMethodString<Value, Mapped, use_cache>, Value, Mapped, use_cache>
     , KeyStringBatchHandlerBase
 {
     using Self = HashMethodString<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
     using KeyHolderType = ArenaKeyHolder;
+    using BatchKeyHolderType = KeyHolderType;
 
-    static_assert(get_key_holder_batch_size == 0 || get_key_holder_batch_size >= 256);
     using BatchHandlerBase = KeyStringBatchHandlerBase;
 
     static constexpr bool is_serialized_key = false;
-    static constexpr bool batch_get_key_holder = (get_key_holder_batch_size > 0);
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
@@ -205,16 +213,16 @@ struct HashMethodString
             collator = collators[0];
     }
 
-    void initBatchHandler(size_t start_row)
+    void initBatchHandler(size_t start_row, size_t max_batch_size)
     {
-        assert(batch_get_key_holder);
-        BatchHandlerBase::init(start_row, get_key_holder_batch_size);
+        assert(!BatchHandlerBase::inited());
+        BatchHandlerBase::init(start_row, max_batch_size);
     }
 
-    size_t prepareNextBatch(Arena *)
+    size_t prepareNextBatch(Arena *, size_t cur_batch_size)
     {
-        assert(batch_get_key_holder);
-        return BatchHandlerBase::prepareNextBatch(chars, *offsets, get_key_holder_batch_size, collator);
+        assert(BatchHandlerBase::inited());
+        return BatchHandlerBase::prepareNextBatch(chars, *offsets, cur_batch_size, collator);
     }
 
     ALWAYS_INLINE inline KeyHolderType getKeyHolder(
@@ -222,7 +230,7 @@ struct HashMethodString
         [[maybe_unused]] Arena * pool,
         std::vector<String> & sort_key_containers) const
     {
-        assert(!batch_get_key_holder);
+        assert(!BatchHandlerBase::inited());
 
         auto last_offset = row == 0 ? 0 : offsets[row - 1];
         // Remove last zero byte.
@@ -244,9 +252,9 @@ struct HashMethodStringBin
     using Self = HashMethodStringBin<Value, Mapped, padding>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
     using KeyHolderType = ArenaKeyHolder;
+    using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = false;
-    static constexpr bool batch_get_key_holder = false;
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
@@ -445,9 +453,9 @@ struct HashMethodFastPathTwoKeysSerialized
     using Self = HashMethodFastPathTwoKeysSerialized<Key1Desc, Key2Desc, Value, Mapped>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
     using KeyHolderType = SerializedKeyHolder;
+    using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = true;
-    static constexpr bool batch_get_key_holder = false;
 
     Key1Desc key_1_desc;
     Key2Desc key_2_desc;
@@ -483,9 +491,9 @@ struct HashMethodFixedString
     using Self = HashMethodFixedString<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
     using KeyHolderType = ArenaKeyHolder;
+    using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = false;
-    static constexpr bool batch_get_key_holder = false;
 
     size_t n;
     const ColumnFixedString::Chars_t * chars;
@@ -532,9 +540,9 @@ struct HashMethodKeysFixed
     using BaseHashed = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::BaseStateKeysFixed<Key, has_nullable_keys_>;
     using KeyHolderType = Key;
+    using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = false;
-    static constexpr bool batch_get_key_holder = false;
     static constexpr bool has_nullable_keys = has_nullable_keys_;
 
     Sizes key_sizes;
@@ -700,33 +708,38 @@ private:
     }
 
 protected:
+    bool inited() const
+    {
+        return !byte_size.empty();
+    }
+
     void init(size_t start_row, const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators)
     {
         batch_row_idx = start_row;
         byte_size.resize_fill_zero(key_columns[0]->size());
+        RUNTIME_CHECK(!byte_size.empty());
         for (size_t i = 0; i < key_columns.size(); ++i)
             key_columns[i]->countSerializeByteSizeForCmp(byte_size, collators.empty() ? nullptr : collators[i]);
     }
 
-public:
     size_t prepareNextBatch(
         const ColumnRawPtrs & key_columns,
         Arena * pool,
-        size_t batch_size,
+        size_t cur_batch_size,
         const TiDB::TiDBCollators & collators)
     {
         santityCheck();
-        resize(batch_size);
+        resize(cur_batch_size);
 
-        if unlikely (batch_size <= 0)
+        if unlikely (cur_batch_size <= 0)
             return 0;
 
         size_t mem_size = 0;
-        for (size_t i = batch_row_idx; i < batch_row_idx + batch_size; ++i)
+        for (size_t i = batch_row_idx; i < batch_row_idx + cur_batch_size; ++i)
             mem_size += byte_size[i];
 
         auto * ptr = static_cast<char *>(pool->alignedAlloc(mem_size, 16));
-        for (size_t i = 0; i < batch_size; ++i)
+        for (size_t i = 0; i < cur_batch_size; ++i)
         {
             pos[i] = ptr;
             ori_pos[i] = ptr;
@@ -737,15 +750,15 @@ public:
             key_columns[i]->serializeToPosForCmp(
                 pos,
                 batch_row_idx,
-                batch_size,
+                cur_batch_size,
                 false,
                 collators.empty() ? nullptr : collators[i],
                 &sort_key_container);
 
-        for (size_t i = 0; i < batch_size; ++i)
+        for (size_t i = 0; i < cur_batch_size; ++i)
             real_byte_size[i] = pos[i] - ori_pos[i];
 
-        batch_row_idx += batch_size;
+        batch_row_idx += cur_batch_size;
 
         return mem_size;
     }
@@ -764,20 +777,17 @@ public:
   * That is, for example, for strings, it contains first the serialized length of the string, and then the bytes.
   * Therefore, when aggregating by several strings, there is no ambiguity.
   */
-template <typename Value, typename Mapped, size_t get_key_holder_batch_size = 0>
+template <typename Value, typename Mapped>
 struct HashMethodSerialized
-    : public columns_hashing_impl::HashMethodBase<HashMethodSerialized<Value, Mapped, get_key_holder_batch_size>, Value, Mapped, false>
+    : public columns_hashing_impl::HashMethodBase<HashMethodSerialized<Value, Mapped>, Value, Mapped, false>
     , KeySerializedBatchHandlerBase
 {
-    using Self = HashMethodSerialized<Value, Mapped, get_key_holder_batch_size>;
+    using Self = HashMethodSerialized<Value, Mapped>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
-
-    static_assert(get_key_holder_batch_size == 0 || get_key_holder_batch_size >= 256);
     using BatchHandlerBase = KeySerializedBatchHandlerBase;
-
     static constexpr bool is_serialized_key = true;
-    static constexpr bool batch_get_key_holder = (get_key_holder_batch_size > 0);
-    using KeyHolderType = typename std::conditional<batch_get_key_holder, ArenaKeyHolder, SerializedKeyHolder>::type;
+    using KeyHolderType = SerializedKeyHolder;
+    using BatchKeyHolderType = ArenaKeyHolder;
 
     ColumnRawPtrs key_columns;
     size_t keys_size;
@@ -792,22 +802,22 @@ struct HashMethodSerialized
         , collators(collators_)
     {}
 
-    void initBatchHandler(size_t start_row)
+    void initBatchHandler(size_t start_row, size_t /* max_batch_size */)
     {
-        assert(batch_get_key_holder);
+        assert(!BatchHandlerBase::inited());
         BatchHandlerBase::init(start_row, key_columns, collators);
     }
 
-    size_t prepareNextBatch(Arena * pool)
+    size_t prepareNextBatch(Arena * pool, size_t cur_batch_size)
     {
-        assert(batch_get_key_holder);
-        return BatchHandlerBase::prepareNextBatch(key_columns, pool, get_key_holder_batch_size, collators);
+        assert(BatchHandlerBase::inited());
+        return BatchHandlerBase::prepareNextBatch(key_columns, pool, cur_batch_size, collators);
     }
 
     ALWAYS_INLINE inline KeyHolderType getKeyHolder(size_t row, Arena * pool, std::vector<String> & sort_key_containers)
         const
     {
-        assert(!batch_get_key_holder);
+        assert(!BatchHandlerBase::inited());
         return SerializedKeyHolder{
             serializeKeysToPoolContiguous(row, keys_size, key_columns, collators, sort_key_containers, *pool),
             pool};
@@ -826,9 +836,9 @@ struct HashMethodHashed
     using Self = HashMethodHashed<Value, Mapped, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
     using KeyHolderType = Key;
+    using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = false;
-    static constexpr bool batch_get_key_holder = false;
 
     ColumnRawPtrs key_columns;
     TiDB::TiDBCollators collators;
