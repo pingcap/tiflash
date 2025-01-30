@@ -52,7 +52,6 @@ class IBlockOutputStream;
 template <typename Method>
 class AggHashTableToBlocksBlockInputStream;
 
-
 /** Different data structures that can be used for aggregation
   * For efficiency, the aggregation data itself is put into the pool.
   * Data and pool ownership (states of aggregate functions)
@@ -714,6 +713,12 @@ struct AggregationMethodSerialized
         for (size_t i = 0; i < key_columns.size(); ++i)
             pos = key_columns[i]->deserializeAndInsertFromArena(pos, collators.empty() ? nullptr : collators[i]);
     }
+
+    static void insertKeyIntoColumnsBatch(PaddedPODArray<char *> & key_places, std::vector<IColumn *> & key_columns)
+    {
+        for (auto * key_column : key_columns)
+            key_column->deserializeForCmpAndInsertFromPos(key_places, true);
+    }
 };
 
 
@@ -754,6 +759,8 @@ struct AggregatedDataVariants : private boost::noncopyable
     /** Specialization for the case when there are no keys.
       */
     AggregatedDataWithoutKey without_key = nullptr;
+
+    bool batch_get_key_holder = false;
 
     using AggregationMethod_key8 = AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key, false>;
     using AggregationMethod_key16 = AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16Key, false>;
@@ -1449,18 +1456,31 @@ protected:
     template <bool collect_hit_rate, bool only_lookup, typename Method>
     void executeImpl(
         Method & method,
-        Arena * aggregates_pool,
+        AggregatedDataVariants & result,
         AggProcessInfo & agg_process_info,
         TiDB::TiDBCollators & collators) const;
 
-    template <bool collect_hit_rate, bool only_loopup, bool enable_prefetch, typename Method>
+    template <
+        bool collect_hit_rate,
+        bool only_loopup,
+        bool enable_prefetch,
+        bool batch_get_key_holder,
+        typename KeyHolderType,
+        typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
 
-    template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, bool compute_agg_data, typename Method>
+    template <
+        bool collect_hit_rate,
+        bool only_lookup,
+        bool enable_prefetch,
+        bool batch_get_key_holder,
+        bool compute_agg_data,
+        typename KeyHolderType,
+        typename Method>
     void handleOneBatch(
         Method & method,
         typename Method::State & state,
@@ -1498,7 +1518,7 @@ protected:
     template <typename Method>
     void mergeSingleLevelDataImpl(ManyAggregatedDataVariants & non_empty_data) const;
 
-    template <typename Method, typename Table, bool skip_convert_key>
+    template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
     void convertToBlockImpl(
         Method & method,
         Table & data,
@@ -1512,7 +1532,7 @@ protected:
     // The template parameter skip_convert_key indicates whether we can skip deserializing the keys in the HashMap.
     // For example, select first_row(c1) from t group by c1, where c1 is a string column with collator,
     // only the result of first_row(c1) needs to be constructed. The key c1 only needs to reference to first_row(c1).
-    template <typename Method, typename Table, bool skip_convert_key>
+    template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
     void convertToBlocksImpl(
         Method & method,
         Table & data,
@@ -1523,7 +1543,7 @@ protected:
         Arena * arena,
         bool final) const;
 
-    template <typename Method, typename Table, bool skip_convert_key>
+    template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
     void convertToBlockImplFinal(
         Method & method,
         Table & data,
@@ -1532,7 +1552,7 @@ protected:
         MutableColumns & final_aggregate_columns,
         Arena * arena) const;
 
-    template <typename Method, typename Table, bool skip_convert_key>
+    template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
     void convertToBlocksImplFinal(
         Method & method,
         Table & data,
@@ -1541,7 +1561,7 @@ protected:
         std::vector<MutableColumns> & final_aggregate_columns_vec,
         Arena * arena) const;
 
-    template <typename Method, typename Table, bool skip_convert_key>
+    template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
     void convertToBlockImplNotFinal(
         Method & method,
         Table & data,
@@ -1549,7 +1569,7 @@ protected:
         std::vector<IColumn *> key_columns,
         AggregateColumnsData & aggregate_columns) const;
 
-    template <typename Method, typename Table, bool skip_convert_key>
+    template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
     void convertToBlocksImplNotFinal(
         Method & method,
         Table & data,
