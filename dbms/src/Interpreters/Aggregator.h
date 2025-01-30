@@ -52,9 +52,6 @@ class IBlockOutputStream;
 template <typename Method>
 class AggHashTableToBlocksBlockInputStream;
 
-static constexpr size_t agg_prefetch_step = 16;
-static constexpr size_t agg_mini_batch = 256;
-
 /** Different data structures that can be used for aggregation
   * For efficiency, the aggregation data itself is put into the pool.
   * Data and pool ownership (states of aggregate functions)
@@ -717,9 +714,7 @@ struct AggregationMethodSerialized
             pos = key_columns[i]->deserializeAndInsertFromArena(pos, collators.empty() ? nullptr : collators[i]);
     }
 
-    static void insertKeyIntoColumnsBatch(
-            PaddedPODArray<char *> & key_places,
-            std::vector<IColumn *> & key_columns)
+    static void insertKeyIntoColumnsBatch(PaddedPODArray<char *> & key_places, std::vector<IColumn *> & key_columns)
     {
         for (auto * key_column : key_columns)
             key_column->deserializeForCmpAndInsertFromPos(key_places, true);
@@ -1461,18 +1456,31 @@ protected:
     template <bool collect_hit_rate, bool only_lookup, typename Method>
     void executeImpl(
         Method & method,
-        Arena * aggregates_pool,
+        AggregatedDataVariants & result,
         AggProcessInfo & agg_process_info,
         TiDB::TiDBCollators & collators) const;
 
-    template <bool collect_hit_rate, bool only_loopup, bool enable_prefetch, typename Method, typename KeyHolderType>
+    template <
+        bool collect_hit_rate,
+        bool only_loopup,
+        bool enable_prefetch,
+        bool batch_get_key_holder,
+        typename KeyHolderType,
+        typename Method>
     void executeImplBatch(
         Method & method,
         typename Method::State & state,
         Arena * aggregates_pool,
         AggProcessInfo & agg_process_info) const;
 
-    template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, bool compute_agg_data, typename Method, typename KeyHolderType>
+    template <
+        bool collect_hit_rate,
+        bool only_lookup,
+        bool enable_prefetch,
+        bool batch_get_key_holder,
+        bool compute_agg_data,
+        typename KeyHolderType,
+        typename Method>
     void handleOneBatch(
         Method & method,
         typename Method::State & state,

@@ -129,11 +129,6 @@ public:
     using Cache = LastElementCache<Value, consecutive_keys_optimization>;
     using Derived = TDerived;
 
-    bool batchGetKeyHolder() const override
-    {
-        return false;
-    }
-
     template <typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(
         Data & data,

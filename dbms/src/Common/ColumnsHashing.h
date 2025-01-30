@@ -48,6 +48,7 @@ struct HashMethodOneNumber
     using Self = HashMethodOneNumber<Value, Mapped, FieldType, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
     using KeyHolderType = FieldType;
+    using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = false;
 
@@ -85,6 +86,8 @@ struct HashMethodOneNumber
     }
 
     const FieldType * getKeyData() const { return vec; }
+
+    bool batchGetKeyHolder() const { return false; }
 };
 
 class KeyStringBatchHandlerBase
@@ -110,7 +113,7 @@ private:
             const auto row = batch_row_idx + i;
             const auto last_offset = offsets[row - 1];
             // Remove last zero byte.
-            StringRef key(chars + last_offset, offsets[row] - offsets[row -1 ] - 1);
+            StringRef key(chars + last_offset, offsets[row] - offsets[row - 1] - 1);
             if constexpr (has_collator)
                 key = derived_collator->sortKey(key.data, key.size, sort_key_containers[i]);
 
@@ -126,10 +129,7 @@ private:
     }
 
 protected:
-    bool inited() const
-    {
-        return !sort_key_containers.empty();
-    }
+    bool inited() const { return !sort_key_containers.empty(); }
 
     void init(size_t start_row, size_t max_batch_size)
     {
@@ -149,20 +149,20 @@ protected:
 
         if likely (collator)
         {
-#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID) \
-            case (COLLATOR_ID): \
-            { \
-                return prepareNextBatchType<IMPL_TYPE, true>(chars, offsets, cur_batch_size, collator); \
-                break; \
-            }
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                    \
+    case (COLLATOR_ID):                                                                         \
+    {                                                                                           \
+        return prepareNextBatchType<IMPL_TYPE, true>(chars, offsets, cur_batch_size, collator); \
+        break;                                                                                  \
+    }
 
             switch (collator->getCollatorId())
             {
                 APPLY_FOR_COLLATOR_TYPES(M)
-                default:
-                {
-                    throw Exception(fmt::format("unexpected collator: {}", collator->getCollatorId()));
-                }
+            default:
+            {
+                throw Exception(fmt::format("unexpected collator: {}", collator->getCollatorId()));
+            }
             };
 #undef M
         }
@@ -213,10 +213,7 @@ struct HashMethodString
             collator = collators[0];
     }
 
-    bool batchGetkeyHolder() override
-    {
-        return BatchHandlerBase::inited();
-    }
+    bool batchGetKeyHolder() const { return BatchHandlerBase::inited(); }
 
     void initBatchHandler(size_t start_row, size_t max_batch_size)
     {
@@ -271,6 +268,8 @@ struct HashMethodStringBin
         offsets = column_string.getOffsets().data();
         chars = column_string.getChars().data();
     }
+
+    bool batchGetKeyHolder() const { return false; }
 
     ALWAYS_INLINE inline KeyHolderType getKeyHolder(ssize_t row, Arena * pool, std::vector<String> &) const
     {
@@ -470,6 +469,8 @@ struct HashMethodFastPathTwoKeysSerialized
         , key_2_desc(key_columns[1])
     {}
 
+    bool batchGetKeyHolder() const { return false; }
+
     ALWAYS_INLINE inline KeyHolderType getKeyHolder(ssize_t row, Arena * pool, std::vector<String> &) const
     {
         StringRef key1;
@@ -516,6 +517,8 @@ struct HashMethodFixedString
         if (!collators.empty())
             collator = collators[0];
     }
+
+    bool batchGetKeyHolder() const { return false; }
 
     ALWAYS_INLINE inline KeyHolderType getKeyHolder(size_t row, Arena * pool, std::vector<String> & sort_key_containers)
         const
@@ -636,6 +639,8 @@ struct HashMethodKeysFixed
 #endif
     }
 
+    bool batchGetKeyHolder() const { return false; }
+
     ALWAYS_INLINE inline KeyHolderType getKeyHolder(size_t row, Arena *, std::vector<String> &) const
     {
         if constexpr (has_nullable_keys)
@@ -713,10 +718,7 @@ private:
     }
 
 protected:
-    bool inited() const
-    {
-        return !byte_size.empty();
-    }
+    bool inited() const { return !byte_size.empty(); }
 
     void init(size_t start_row, const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators)
     {
@@ -756,7 +758,7 @@ protected:
                 pos,
                 batch_row_idx,
                 cur_batch_size,
-                false,
+                nullptr,
                 collators.empty() ? nullptr : collators[i],
                 &sort_key_container);
 
@@ -807,10 +809,7 @@ struct HashMethodSerialized
         , collators(collators_)
     {}
 
-    bool batchGetkeyHolder() override
-    {
-        return BatchHandlerBase::inited();
-    }
+    bool batchGetKeyHolder() const { return BatchHandlerBase::inited(); }
 
     void initBatchHandler(size_t start_row, size_t /* max_batch_size */)
     {
@@ -857,6 +856,8 @@ struct HashMethodHashed
         : key_columns(std::move(key_columns_))
         , collators(collators_)
     {}
+
+    bool batchGetKeyHolder() const { return false; }
 
     ALWAYS_INLINE inline KeyHolderType getKeyHolder(size_t row, Arena *, std::vector<String> & sort_key_containers)
         const
