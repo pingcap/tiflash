@@ -213,6 +213,11 @@ struct HashMethodString
             collator = collators[0];
     }
 
+    bool batchGetkeyHolder() override
+    {
+        return BatchHandlerBase::inited();
+    }
+
     void initBatchHandler(size_t start_row, size_t max_batch_size)
     {
         assert(!BatchHandlerBase::inited());
@@ -801,6 +806,11 @@ struct HashMethodSerialized
         , keys_size(key_columns_.size())
         , collators(collators_)
     {}
+
+    bool batchGetkeyHolder() override
+    {
+        return BatchHandlerBase::inited();
+    }
 
     void initBatchHandler(size_t start_row, size_t /* max_batch_size */)
     {
