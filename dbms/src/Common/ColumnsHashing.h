@@ -48,8 +48,10 @@ struct HashMethodOneNumber
     using Self = HashMethodOneNumber<Value, Mapped, FieldType, use_cache>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
     using KeyHolderType = FieldType;
+    using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = false;
+    static constexpr bool can_batch_get_key_holder = false;
 
     const FieldType * vec;
 
@@ -110,7 +112,7 @@ private:
             const auto row = batch_row_idx + i;
             const auto last_offset = offsets[row - 1];
             // Remove last zero byte.
-            StringRef key(chars + last_offset, offsets[row] - offsets[row -1 ] - 1);
+            StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
             if constexpr (has_collator)
                 key = derived_collator->sortKey(key.data, key.size, sort_key_containers[i]);
 
@@ -121,15 +123,12 @@ private:
 
     void santityCheck() const
     {
-        // Make sure init() has called.
+        // Make sure init() has been called.
         assert(sort_key_containers.size() == batch_rows.size() && !sort_key_containers.empty());
     }
 
 protected:
-    bool inited() const
-    {
-        return !sort_key_containers.empty();
-    }
+    bool inited() const { return !sort_key_containers.empty(); }
 
     void init(size_t start_row, size_t max_batch_size)
     {
@@ -149,20 +148,20 @@ protected:
 
         if likely (collator)
         {
-#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID) \
-            case (COLLATOR_ID): \
-            { \
-                return prepareNextBatchType<IMPL_TYPE, true>(chars, offsets, cur_batch_size, collator); \
-                break; \
-            }
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                    \
+    case (COLLATOR_ID):                                                                         \
+    {                                                                                           \
+        return prepareNextBatchType<IMPL_TYPE, true>(chars, offsets, cur_batch_size, collator); \
+        break;                                                                                  \
+    }
 
             switch (collator->getCollatorId())
             {
                 APPLY_FOR_COLLATOR_TYPES(M)
-                default:
-                {
-                    throw Exception(fmt::format("unexpected collator: {}", collator->getCollatorId()));
-                }
+            default:
+            {
+                throw Exception(fmt::format("unexpected collator: {}", collator->getCollatorId()));
+            }
             };
 #undef M
         }
@@ -172,6 +171,7 @@ protected:
         }
     }
 
+public:
     // NOTE: i is the index of mini batch, it's not the row index of Column.
     ALWAYS_INLINE inline ArenaKeyHolder getKeyHolderBatch(size_t i, Arena * pool) const
     {
@@ -195,6 +195,8 @@ struct HashMethodString
     using BatchHandlerBase = KeyStringBatchHandlerBase;
 
     static constexpr bool is_serialized_key = false;
+    // todo
+    static constexpr bool can_batch_get_key_holder = false;
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
@@ -211,11 +213,6 @@ struct HashMethodString
         chars = column_string.getChars().data();
         if (!collators.empty())
             collator = collators[0];
-    }
-
-    bool batchGetkeyHolder() override
-    {
-        return BatchHandlerBase::inited();
     }
 
     void initBatchHandler(size_t start_row, size_t max_batch_size)
@@ -260,6 +257,7 @@ struct HashMethodStringBin
     using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = false;
+    static constexpr bool can_batch_get_key_holder = false;
 
     const IColumn::Offset * offsets;
     const UInt8 * chars;
@@ -461,6 +459,7 @@ struct HashMethodFastPathTwoKeysSerialized
     using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = true;
+    static constexpr bool can_batch_get_key_holder = false;
 
     Key1Desc key_1_desc;
     Key2Desc key_2_desc;
@@ -499,6 +498,7 @@ struct HashMethodFixedString
     using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = false;
+    static constexpr bool can_batch_get_key_holder = false;
 
     size_t n;
     const ColumnFixedString::Chars_t * chars;
@@ -548,6 +548,7 @@ struct HashMethodKeysFixed
     using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = false;
+    static constexpr bool can_batch_get_key_holder = false;
     static constexpr bool has_nullable_keys = has_nullable_keys_;
 
     Sizes key_sizes;
@@ -713,10 +714,7 @@ private:
     }
 
 protected:
-    bool inited() const
-    {
-        return !byte_size.empty();
-    }
+    bool inited() const { return !byte_size.empty(); }
 
     void init(size_t start_row, const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators)
     {
@@ -756,7 +754,7 @@ protected:
                 pos,
                 batch_row_idx,
                 cur_batch_size,
-                false,
+                nullptr,
                 collators.empty() ? nullptr : collators[i],
                 &sort_key_container);
 
@@ -768,6 +766,7 @@ protected:
         return mem_size;
     }
 
+public:
     // NOTE: i is the index of mini batch, it's not the row index of Column.
     ALWAYS_INLINE inline ArenaKeyHolder getKeyHolderBatch(size_t i, Arena * pool) const
     {
@@ -790,9 +789,11 @@ struct HashMethodSerialized
     using Self = HashMethodSerialized<Value, Mapped>;
     using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
     using BatchHandlerBase = KeySerializedBatchHandlerBase;
-    static constexpr bool is_serialized_key = true;
     using KeyHolderType = SerializedKeyHolder;
     using BatchKeyHolderType = ArenaKeyHolder;
+
+    static constexpr bool is_serialized_key = true;
+    static constexpr bool can_batch_get_key_holder = true;
 
     ColumnRawPtrs key_columns;
     size_t keys_size;
@@ -806,11 +807,6 @@ struct HashMethodSerialized
         , keys_size(key_columns_.size())
         , collators(collators_)
     {}
-
-    bool batchGetkeyHolder() override
-    {
-        return BatchHandlerBase::inited();
-    }
 
     void initBatchHandler(size_t start_row, size_t /* max_batch_size */)
     {
@@ -849,6 +845,7 @@ struct HashMethodHashed
     using BatchKeyHolderType = KeyHolderType;
 
     static constexpr bool is_serialized_key = false;
+    static constexpr bool can_batch_get_key_holder = false;
 
     ColumnRawPtrs key_columns;
     TiDB::TiDBCollators collators;
