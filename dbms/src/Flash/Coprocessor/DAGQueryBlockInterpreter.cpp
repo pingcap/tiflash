@@ -498,7 +498,12 @@ void DAGQueryBlockInterpreter::handleJoin(const tipb::Join & join, DAGPipeline &
         auto & join_execute_info = dagContext().getJoinExecuteInfoMap()[query_block.source_name];
         for (size_t i = 0; i < join_build_concurrency; i++)
         {
+<<<<<<< HEAD
             auto non_joined_stream = chain.getLastActions()->createStreamWithNonJoinedDataIfFullOrRightJoin(
+=======
+            auto non_joined_stream = createStreamWithNonJoinedRows(
+                join_ptr,
+>>>>>>> bf0d129d05 (avoid potential TiFlash crash in `NonJoinedBlockInputStream` (#9364))
                 pipeline.firstStream()->getHeader(),
                 i,
                 join_build_concurrency,
