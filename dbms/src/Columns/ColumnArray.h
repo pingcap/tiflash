@@ -44,18 +44,19 @@ private:
 
     ColumnArray(const ColumnArray &) = default;
 
-    template <bool for_compare>
+    template <bool compare_semantics>
     void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const;
 
-    template <bool has_null, bool for_compare>
+    template <bool has_null, bool compare_semantics, bool has_nullmap>
     void serializeToPosImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
         const TiDB::TiDBCollatorPtr & collator,
-        String * sort_key_container) const;
+        String * sort_key_container,
+        const NullMap * nullmap) const;
 
-    template <bool for_compare>
+    template <bool compare_semantics>
     void deserializeAndInsertFromPosImpl(PaddedPODArray<char *> & pos, bool use_nt_align_buffer);
 
 public:
@@ -122,7 +123,7 @@ public:
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
-        bool has_null,
+        const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const override;
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
@@ -131,7 +132,7 @@ public:
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
-        bool /* has_null */,
+        const NullMap * /* nullmap */,
         const IColumn::Offsets & /* array_offsets */,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /* sort_key_container */) const override
