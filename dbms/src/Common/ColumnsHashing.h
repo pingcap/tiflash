@@ -106,6 +106,8 @@ private:
         if (cur_batch_size <= 0)
             return 0;
 
+        batch_rows.resize(cur_batch_size);
+
         const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
         for (size_t i = 0; i < cur_batch_size; ++i)
         {
@@ -118,13 +120,14 @@ private:
 
             batch_rows[i] = key;
         }
+        batch_row_idx += cur_batch_size;
         return 0;
     }
 
     void santityCheck() const
     {
         // Make sure init() has been called.
-        assert(sort_key_containers.size() == batch_rows.size() && !sort_key_containers.empty());
+        assert(!sort_key_containers.empty());
     }
 
 protected:
@@ -144,8 +147,6 @@ protected:
         size_t cur_batch_size,
         const TiDB::TiDBCollatorPtr & collator)
     {
-        batch_rows.resize(cur_batch_size);
-
         if likely (collator)
         {
 #define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                    \
@@ -195,10 +196,9 @@ struct HashMethodString
     using BatchHandlerBase = KeyStringBatchHandlerBase;
 
     static constexpr bool is_serialized_key = false;
-    // todo
-    static constexpr bool can_batch_get_key_holder = false;
+    static constexpr bool can_batch_get_key_holder = true;
 
-    const IColumn::Offset * offsets;
+    const IColumn::Offsets * offsets;
     const UInt8 * chars;
     TiDB::TiDBCollatorPtr collator = nullptr;
 
@@ -209,7 +209,7 @@ struct HashMethodString
     {
         const IColumn & column = *key_columns[0];
         const auto & column_string = assert_cast<const ColumnString &>(column);
-        offsets = column_string.getOffsets().data();
+        offsets = &column_string.getOffsets();
         chars = column_string.getChars().data();
         if (!collators.empty())
             collator = collators[0];
@@ -234,9 +234,9 @@ struct HashMethodString
     {
         assert(!BatchHandlerBase::inited());
 
-        auto last_offset = row == 0 ? 0 : offsets[row - 1];
+        auto last_offset = (*offsets)[row - 1];
         // Remove last zero byte.
-        StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
+        StringRef key(chars + last_offset, (*offsets)[row] - last_offset - 1);
         if (likely(collator))
             key = collator->sortKey(key.data, key.size, sort_key_containers[0]);
 

@@ -1495,6 +1495,12 @@ protected:
         KeyHolderType & key_holder,
         size_t hashval) const;
 
+    template <bool only_lookup, typename Method, typename KeyHolderType>
+    std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
+        Method & method,
+        typename Method::State & state,
+        KeyHolderType & key_holder) const;
+
     template <bool only_lookup, typename Method>
     std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> emplaceOrFindKey(
         Method & method,

@@ -745,6 +745,25 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     }
 }
 
+template <bool only_lookup, typename Method, typename KeyHolderType>
+std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> Aggregator::emplaceOrFindKey(
+    Method & method,
+    typename Method::State & state,
+    KeyHolderType & key_holder) const
+{
+    try
+    {
+        if constexpr (only_lookup)
+            return state.template findKey(method.data, key_holder);
+        else
+            return state.template emplaceKey(method.data, key_holder);
+    }
+    catch (ResizeException &)
+    {
+        return {};
+    }
+}
+
 template <bool only_lookup, typename Method>
 std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> Aggregator::emplaceOrFindKey(
     Method & method,
@@ -766,8 +785,8 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     }
 }
 
-template <bool batch_get_key_holder, typename Method, typename KeyHolderType>
-ALWAYS_INLINE inline void setupHashVals(
+template <bool enable_prefetch, bool batch_get_key_holder, typename Method, typename KeyHolderType>
+ALWAYS_INLINE inline void setupKeyHolderAndHashVal(
     size_t row_idx,
     size_t batch_size,
     std::vector<size_t> & hashvals,
@@ -777,7 +796,9 @@ ALWAYS_INLINE inline void setupHashVals(
     Method & method,
     typename Method::State & state)
 {
-    assert(hashvals.size() == key_holders.size() && hashvals.size() >= batch_size);
+    key_holders.resize(batch_size);
+    if constexpr (enable_prefetch)
+        hashvals.resize(batch_size);
 
     for (size_t i = row_idx, j = 0; i < row_idx + batch_size; ++i, ++j)
     {
@@ -789,7 +810,9 @@ ALWAYS_INLINE inline void setupHashVals(
                 i,
                 aggregates_pool,
                 sort_key_containers);
-        hashvals[j] = method.data.hash(keyHolderGetKey(key_holders[j]));
+
+        if constexpr (enable_prefetch)
+            hashvals[j] = method.data.hash(keyHolderGetKey(key_holders[j]));
     }
 }
 
@@ -906,7 +929,7 @@ void Aggregator::handleOneBatch(
     size_t mini_batch_size = rows;
     std::vector<size_t> hashvals;
     std::vector<KeyHolderType> key_holders;
-    if constexpr (enable_prefetch)
+    if constexpr (enable_prefetch || batch_get_key_holder)
     {
         // mini batch will only be used when HashTable is big(a.k.a enable_prefetch is true),
         // which can reduce cache miss of agg data.
@@ -925,10 +948,7 @@ void Aggregator::handleOneBatch(
 
         if constexpr (enable_prefetch || batch_get_key_holder)
         {
-            hashvals.resize(mini_batch_size);
-            key_holders.resize(mini_batch_size);
-
-            setupHashVals<batch_get_key_holder>(
+            setupKeyHolderAndHashVal<enable_prefetch, batch_get_key_holder>(
                 i,
                 mini_batch_size,
                 hashvals,
@@ -955,7 +975,7 @@ void Aggregator::handleOneBatch(
             }
             else if constexpr (batch_get_key_holder)
             {
-                emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, key_holders[k], hashvals[k]);
+                emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, key_holders[k]);
             }
             else
             {
