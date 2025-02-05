@@ -65,13 +65,13 @@ try
         auto bench_impl = [&](auto handle_type) {
             {
                 VersionChain<decltype(handle_type)> version_chain;
-                buildVersionChain(*dm_context, *segment_snapshot, version_chain, ForceReleaseCache); // Warming up
+                buildVersionChain(*dm_context, *segment_snapshot, version_chain); // Warming up
                 RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
             }
             for (auto _ : state)
             {
                 VersionChain<decltype(handle_type)> version_chain;
-                buildVersionChain(*dm_context, *segment_snapshot, version_chain, ForceReleaseCache);
+                buildVersionChain(*dm_context, *segment_snapshot, version_chain);
                 RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
             }
         };
@@ -120,7 +120,7 @@ try
     {
         auto bench_impl = [&](auto handle_type) {
             VersionChain<decltype(handle_type)> base_version_chain;
-            buildVersionChain(*dm_context, *segment_snapshot, base_version_chain, ForceReleaseCache);
+            buildVersionChain(*dm_context, *segment_snapshot, base_version_chain);
             RUNTIME_ASSERT(base_version_chain.getReplayedRows() == prepared_delta_rows);
             writeDelta(*dm_context, is_common_handle, *segment, incremental_delta_rows, *write_seq);
             segment_snapshot = segment->createSnapshot(*dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
@@ -129,7 +129,7 @@ try
             {
                 auto version_chain = base_version_chain;
                 RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows);
-                buildVersionChain(*dm_context, *segment_snapshot, version_chain, ForceReleaseCache);
+                buildVersionChain(*dm_context, *segment_snapshot, version_chain);
                 RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows + incremental_delta_rows);
             }
         };
@@ -178,7 +178,7 @@ try
     {
         auto bench_impl = [&](auto handle_type) {
             VersionChain<decltype(handle_type)> version_chain;
-            buildVersionChain(*dm_context, *segment_snapshot, version_chain, ForceReleaseCache);
+            buildVersionChain(*dm_context, *segment_snapshot, version_chain);
             RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
             for (auto _ : state)
             {
@@ -188,8 +188,7 @@ try
                     {segment->getRowKeyRange()},
                     rs_results,
                     std::numeric_limits<UInt64>::max(),
-                    version_chain,
-                    ForceReleaseCache);
+                    version_chain);
                 benchmark::DoNotOptimize(bitmap_filter);
             }
         };
