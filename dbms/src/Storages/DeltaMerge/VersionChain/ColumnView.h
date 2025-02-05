@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,10 +14,10 @@
 
 #pragma once
 
-//#include <common/StringRef.h>
 #include <Columns/ColumnString.h>
 #include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
+
 namespace DB::DM
 {
 template <typename T>
@@ -127,7 +127,7 @@ public:
         bool operator<(const Iterator & other) const { return pos < other.pos; }
 
     private:
-        const IColumn::Offsets * offsets; // Using pointer for operator=
+        const IColumn::Offsets * offsets; // Using pointer for operator assignment
         const ColumnString::Chars_t * chars;
         size_t pos = 0;
     };

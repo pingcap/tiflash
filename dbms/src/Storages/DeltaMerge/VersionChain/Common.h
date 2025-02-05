@@ -28,7 +28,6 @@ struct DMContext;
 
 using RowID = UInt32;
 static constexpr RowID NotExistRowID = std::numeric_limits<RowID>::max();
-static constexpr RowID UnknownRowID = NotExistRowID - 1;
 
 template <typename T>
 concept ExtraHandleType = std::same_as<T, Int64> || std::same_as<T, String>;
@@ -39,12 +38,7 @@ concept HandleRefType = std::same_as<T, Int64> || std::same_as<T, std::string_vi
 template <ExtraHandleType HandleType>
 ColumnDefine getHandleColumnDefine()
 {
-    if constexpr (std::is_same_v<HandleType, Int64>)
-        return getExtraIntHandleColumnDefine();
-    else if constexpr (std::is_same_v<HandleType, String>)
-        return getExtraStringHandleColumnDefine();
-    else
-        static_assert(false, "Not support type");
+    return getExtraHandleColumnDefine(std::is_same_v<HandleType, String>);
 }
 
 // For ColumnFileReader
@@ -72,8 +66,10 @@ bool inRowKeyRange(const RowKeyRange & range, HandleRef handle)
 {
     if constexpr (std::is_same_v<HandleRef, Int64>)
         return range.start.int_value <= handle && handle < range.end.int_value;
-    else
+    else if constexpr (std::is_same_v<HandleRef, std::string_view>)
         return *(range.start.value) <= handle && handle < *(range.end.value);
+    else
+        static_assert(false, "Not support type");
 }
 
 RSResults getRSResultsByRanges(const DMContext & dm_context, const DMFilePtr & dmfile, const RowKeyRanges & ranges);
