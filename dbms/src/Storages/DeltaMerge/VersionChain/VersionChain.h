@@ -19,8 +19,6 @@
 #include <Storages/DeltaMerge/VersionChain/DMFileHandleIndex.h>
 #include <Storages/DeltaMerge/VersionChain/NewHandleIndex.h>
 
-#include <span>
-
 namespace DB::DM
 {
 
@@ -45,7 +43,6 @@ public:
         : replayed_rows_and_deletes(other.replayed_rows_and_deletes)
         , base_versions(std::make_shared<std::vector<RowID>>(*(other.base_versions)))
         , new_handle_to_row_ids(other.new_handle_to_row_ids)
-        , new_handle_count_when_clear(other.new_handle_count_when_clear)
         , dmfile_or_delete_range_list(other.dmfile_or_delete_range_list)
     {}
 
@@ -89,7 +86,6 @@ private:
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
     std::shared_ptr<std::vector<RowID>> base_versions; // base_versions->size() == delta.getRows()
     NewHandleIndex<HandleType> new_handle_to_row_ids;
-    Int32 new_handle_count_when_clear = 0;
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
 };
