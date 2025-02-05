@@ -16,11 +16,10 @@
 
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
+
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-builtins"
-
 #include <absl/container/btree_map.h>
-//#include <absl/container/flat_hash_map.h>
 #include <absl/hash/hash.h>
 
 namespace DB::DM
@@ -88,8 +87,7 @@ public:
 
     void insert(std::string_view handle, RowID row_id)
     {
-        const auto hash_value = hasher(handle);
-        [[maybe_unused]] auto itr = handle_to_row_id.insert(std::pair{hash_value, row_id});
+        std::ignore = handle_to_row_id.insert(std::pair{hasher(handle), row_id});
     }
 
     void deleteRange(const RowKeyRange & range, DeltaValueReader & delta_reader, const UInt32 stable_rows)
@@ -107,7 +105,6 @@ public:
         absl::btree_multimap<Int64, RowID> t;
         auto begin = row_ids.begin();
         auto end = row_ids.end();
-
         auto get_next_continuous_size = [](auto begin, auto end) {
             RUNTIME_CHECK(begin != end);
             auto itr = std::next(begin);
@@ -123,7 +120,6 @@ public:
             const auto read_rows
                 = delta_reader.readRows(mut_cols, /*offset*/ *begin, /*limit*/ size, /*range*/ nullptr);
             RUNTIME_CHECK(std::cmp_equal(read_rows, size), *begin, size, read_rows);
-
             ColumnView<String> handles(*(mut_cols[0]));
             for (size_t i = 0; i < read_rows; ++i)
             {
@@ -131,10 +127,8 @@ public:
                 if (inRowKeyRange(range, h))
                     continue; // deleted
 
-                const auto hash_value = hasher(h);
-                [[maybe_unused]] auto itr = t.insert(std::pair{hash_value, *begin + i + stable_rows});
+                std::ignore = t.insert(std::pair{hasher(h), *begin + i + stable_rows});
             }
-
             begin += size;
         }
         handle_to_row_id.swap(t);
