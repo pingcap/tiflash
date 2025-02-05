@@ -79,24 +79,33 @@ try
     initStorages();
     KVStore & kvs = getKVS();
     auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
-    auto start = RecordKVFormat::genKey(table_id, 0);
-    auto end = RecordKVFormat::genKey(table_id, 100);
-    auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
-    auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
-    auto str_lock_value
-        = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
     MockRaftStoreProxy::FailCond cond;
     const auto decoded_lock_size = sizeof(DecodedLockCFValue) + sizeof(DecodedLockCFValue::Inner);
 
     auto & region_table = ctx.getTMTContext().getRegionTable();
+    auto getStartEnd = [&](RegionID region_id) {
+        return std::make_pair(
+            RecordKVFormat::genKey(table_id, region_id),
+            RecordKVFormat::genKey(table_id, region_id + 99));
+    };
+    auto pickKey = [&](RegionID region_id, UInt64 number) {
+        return RecordKVFormat::genKey(table_id, region_id + number, 111);
+    };
+    auto pickWriteDefault = [&](RegionID, UInt64) {
+        return proxy_instance->generateTiKVKeyValue(111, 999);
+    };
+    auto pickLock = [&](RegionID region_id, UInt64 number) {
+        return RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", region_id + number, 999)
+            .toString();
+    };
     {
         // default
-        proxy_instance->debugAddRegions(
-            kvs,
-            ctx.getTMTContext(),
-            {1},
-            {{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10)}});
-        auto region_id = 1;
+        RegionID region_id = 4100;
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 1);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
+        auto str_lock_value = pickLock(region_id, 1);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
         auto kvr1 = kvs.getRegion(region_id);
         auto [index, term]
             = proxy_instance
@@ -111,13 +120,13 @@ try
     {
         // lock
         root_of_kvstore_mem_trackers->reset();
-        proxy_instance->debugAddRegions(
-            kvs,
-            ctx.getTMTContext(),
-            {2},
-            {{RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)}});
-        auto region_id = 2;
-        auto kvr1 = kvs.getRegion(1);
+        RegionID region_id = 4200;
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 1);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
+        auto str_lock_value = pickLock(region_id, 1);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        auto kvr1 = kvs.getRegion(4100);
         auto kvr2 = kvs.getRegion(region_id);
         auto [index, term]
             = proxy_instance
@@ -125,7 +134,7 @@ try
         UNUSED(term);
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
-        ASSERT_EQ(kvr2->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(kvr2->dataSize(), str_key.dataSize() + str_lock_value.size());
         ASSERT_EQ(kvr2->dataSize() + decoded_lock_size, kvr2->getData().totalSize());
         ASSERT_EQ(
             kvr2->getData().totalSize() + kvr1->getData().totalSize(),
@@ -134,14 +143,14 @@ try
     {
         // lock with largetxn
         root_of_kvstore_mem_trackers->reset();
-        proxy_instance->debugAddRegions(
-            kvs,
-            ctx.getTMTContext(),
-            {3},
-            {{RecordKVFormat::genKey(table_id, 21), RecordKVFormat::genKey(table_id, 30)}});
-        auto region_id = 3;
-        auto kvr1 = kvs.getRegion(1);
-        auto kvr2 = kvs.getRegion(2);
+        RegionID region_id = 4300;
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 1);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
+        auto str_lock_value = pickLock(region_id, 1);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        auto kvr1 = kvs.getRegion(4100);
+        auto kvr2 = kvs.getRegion(4200);
         auto kvr3 = kvs.getRegion(region_id);
         ASSERT_NE(kvr3, nullptr);
         std::string shor_value = "value";
@@ -175,37 +184,60 @@ try
     {
         // insert & remove
         root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(700, start, end, proxy_helper.get());
+        RegionID region_id = 5000;
+        auto originTableSize = region_table.getTableRegionSize(NullspaceID, table_id);
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 1);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
+        auto str_lock_value = pickLock(region_id, 1);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        RegionPtr region = kvs.getRegion(region_id);
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+        auto delta = str_key.dataSize() + str_val_default.size();
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), delta);
+        LOG_INFO(
+            log,
+            "!!!! originTableSize {} delta {} T {}",
+            originTableSize,
+            delta,
+            region_table.getTableRegionSize(NullspaceID, table_id));
+        ASSERT_EQ(originTableSize + delta, region_table.getTableRegionSize(NullspaceID, table_id));
         region->remove("default", TiKVKey::copyFrom(str_key));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
+        // ASSERT_EQ(originTableSize, region_table.getTableRegionSize(NullspaceID, table_id));
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
         // insert
+        RegionID region_id = 6000;
         root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(701, start, end, proxy_helper.get());
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 1);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
+        auto str_lock_value = pickLock(region_id, 1);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        RegionPtr region = kvs.getRegion(region_id);
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
     }
-    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
         // reload
-        proxy_instance->debugAddRegions(
-            kvs,
-            ctx.getTMTContext(),
-            {702},
-            {{RecordKVFormat::genKey(table_id, 7020), RecordKVFormat::genKey(table_id, 7030)}});
+        RegionID region_id = 7000;
         root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = kvs.getRegion(702);
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 1);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
+        auto str_lock_value = pickLock(region_id, 1);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        RegionPtr region = kvs.getRegion(region_id);
+        root_of_kvstore_mem_trackers->reset();
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-        tryPersistRegion(kvs, 702);
+        tryPersistRegion(kvs, region_id);
         root_of_kvstore_mem_trackers->reset();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
         reloadKVSFromDisk(false);
@@ -217,7 +249,14 @@ try
     {
         // commit
         root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(800, start, end, proxy_helper.get());
+        RegionID region_id = 8000;
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 1);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
+        auto str_lock_value = pickLock(region_id, 1);
+
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        RegionPtr region = kvs.getRegion(region_id);
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
         region->insert("write", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_write));
@@ -233,10 +272,18 @@ try
     {
         // split & merge
         root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(900, start, end, proxy_helper.get());
+        RegionID region_id = 12000;
+        RegionID region_id2 = 12002;
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 22);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 22);
+        auto str_lock_value = pickLock(region_id, 22);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        RegionPtr region = kvs.getRegion(region_id);
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
-        auto str_key2 = RecordKVFormat::genKey(table_id, 80, 111);
-        auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
+        auto str_key2 = pickKey(region_id, 80);
+        auto [str_val_write2, str_val_default2] = pickWriteDefault(region_id, 80);
+        auto str_lock_value2 = pickLock(region_id, 80);
         region->insert("default", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
         auto expected = str_key.dataSize() + str_val_default.size() + str_key2.dataSize() + str_val_default2.size();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
@@ -244,8 +291,11 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                createPeer(901, true),
-                createRegionInfo(902, RecordKVFormat::genKey(table_id, 50), end),
+                createPeer(region_id + 1, true),
+                createRegionInfo(
+                    region_id2,
+                    RecordKVFormat::genKey(table_id, 12050),
+                    RecordKVFormat::genKey(table_id, 12099)),
                 initialApplyState()));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
         ASSERT_EQ(region->dataSize(), str_key.dataSize() + str_val_default.size());
@@ -261,14 +311,21 @@ try
     {
         // split & merge with lock
         root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(1000, start, end, proxy_helper.get());
+        RegionID region_id = 13100;
+        RegionID region_id2 = 13102;
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 22);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 22);
+        auto str_lock_value = pickLock(region_id, 22);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        RegionPtr region = kvs.getRegion(region_id);
         region->insert("lock", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_lock_value));
         auto expected = str_key.dataSize() + str_lock_value.size();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
-        auto str_key2 = RecordKVFormat::genKey(table_id, 80, 111);
+        auto str_key2 = pickKey(region_id, 80);
         std::string short_value(97, 'a');
         auto str_lock_value2
-            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 20, 111, &short_value)
+            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 13180, 111, &short_value)
                   .toString();
         region->insert("lock", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_lock_value2));
         expected += str_key2.dataSize() + str_lock_value2.size();
@@ -276,8 +333,11 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                createPeer(1001, true),
-                createRegionInfo(1002, RecordKVFormat::genKey(table_id, 50), end),
+                createPeer(region_id + 1, true),
+                createRegionInfo(
+                    region_id2,
+                    RecordKVFormat::genKey(table_id, 13150),
+                    RecordKVFormat::genKey(table_id, 13199)),
                 initialApplyState()));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
         ASSERT_EQ(region->dataSize(), str_key.dataSize() + str_lock_value.size());
@@ -292,7 +352,7 @@ try
         // replace a lock
         region->insert("lock", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_lock_value2));
         auto str_lock_value2_2
-            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 20, 111).toString();
+            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 13022, 111).toString();
         region->insert("lock", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_lock_value2_2));
         expected -= short_value.size();
         expected -= 2; // Short value prefix and length
@@ -302,21 +362,20 @@ try
     }
     {
         // insert & snapshot
-        UInt64 region_id = 1100;
+        UInt64 region_id = 14100;
         root_of_kvstore_mem_trackers->reset();
-        proxy_instance->debugAddRegions(
-            kvs,
-            ctx.getTMTContext(),
-            {region_id},
-            {{{RecordKVFormat::genKey(table_id, 1100), RecordKVFormat::genKey(table_id, 1200)}}});
-
+        auto [start, end] = getStartEnd(region_id);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
         RegionPtr region = kvs.getRegion(region_id);
         ASSERT_NE(region, nullptr);
-        auto str_key2 = RecordKVFormat::genKey(table_id, 1120, 111);
-        auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
 
-        auto str_key3 = RecordKVFormat::genKey(table_id, 1180, 111);
-        auto [str_val_write3, str_val_default3] = proxy_instance->generateTiKVKeyValue(111, 999);
+        auto str_key2 = pickKey(region_id, 20);
+        auto [str_val_write2, str_val_default2] = pickWriteDefault(region_id, 20);
+        auto str_lock_value2 = pickLock(region_id, 20);
+
+        auto str_key3 = pickKey(region_id, 80);
+        auto [str_val_write3, str_val_default3] = pickWriteDefault(region_id, 80);
+        auto str_lock_value3 = pickLock(region_id, 80);
 
         region->insert("default", TiKVKey::copyFrom(str_key3), TiKVValue::copyFrom(str_val_default3));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key3.dataSize() + str_val_default3.size());
@@ -325,7 +384,7 @@ try
 
         MockSSTReader::getMockSSTData().clear();
         MockSSTGenerator default_cf{region_id, table_id, ColumnFamilyType::Default};
-        default_cf.insert(1180, str_val_default2);
+        default_cf.insert(14180, str_val_default2);
         default_cf.finish_file();
         default_cf.freeze();
         kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
@@ -337,13 +396,25 @@ try
     {
         // assign
         root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(1200, start, end, proxy_helper.get());
+        RegionID region_id = 15100;
+        RegionID region_id2 = 15200;
+        auto [start1, end1] = getStartEnd(1100);
+        auto [start2, end2] = getStartEnd(1200);
+        proxy_instance
+            ->debugAddRegions(kvs, ctx.getTMTContext(), {region_id, region_id2}, {{start1, end1}, {start2, end2}});
+        RegionPtr region = kvs.getRegion(region_id);
+        RegionPtr region2 = kvs.getRegion(region_id2);
+
+        auto str_key = pickKey(region_id, 70);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 70);
+        auto str_lock_value = pickLock(region_id, 70);
+
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
 
-        auto str_key2 = RecordKVFormat::genKey(table_id, 80, 111);
-        auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
-        RegionPtr region2 = tests::makeRegion(1201, start, end, proxy_helper.get());
+        auto str_key2 = pickKey(region_id, 80);
+        auto [str_val_write2, str_val_default2] = pickWriteDefault(region_id, 80);
+        auto str_lock_value2 = pickLock(region_id, 80);
         region2->insert("default", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
         region2->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
 
@@ -352,12 +423,14 @@ try
             root_of_kvstore_mem_trackers->get(),
             str_key.dataSize() + str_val_default.size() + str_key2.dataSize() + str_val_default2.size());
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(
+            region->dataSize(),
+            str_key.dataSize() + str_val_default.size() + str_key2.dataSize() + str_val_default2.size());
         ASSERT_EQ(region->getData().totalSize(), region->dataSize());
         // `region2` is not allowed to access after move, however, we assert here in order to make sure the logic.
         ASSERT_EQ(region2->dataSize(), 0);
         ASSERT_EQ(region2->getData().totalSize(), region2->dataSize());
     }
-    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
 }
 CATCH
 

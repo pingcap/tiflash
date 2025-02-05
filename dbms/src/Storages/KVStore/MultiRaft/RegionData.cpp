@@ -30,6 +30,7 @@ extern const int ILLFORMAT_RAFT_ROW;
 
 void RegionData::recordMemChange(const RegionDataMemDiff & delta)
 {
+    LOG_INFO(DB::Logger::get(), "!!!! recordMemChange {}", delta.payload + delta.decoded);
     if (delta.payload > 0)
     {
         root_of_kvstore_mem_trackers->alloc(delta.payload, false);
@@ -48,12 +49,14 @@ void RegionData::recordMemChange(const RegionDataMemDiff & delta)
 
 void RegionData::updateMemoryUsage(const RegionDataMemDiff & delta)
 {
+    LOG_INFO(DB::Logger::get(), "!!!! updateMemoryUsage {}", delta.payload + delta.decoded);
     cf_data_size += delta.payload;
     decoded_data_size += delta.decoded;
 }
 
 void RegionData::resetMemoryUsage()
 {
+    LOG_INFO(DB::Logger::get(), "!!!! resetMemoryUsage {}", cf_data_size + decoded_data_size);
     cf_data_size = 0;
     decoded_data_size = 0;
 }
