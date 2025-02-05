@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <memory>
 #include <atomic>
+#include <memory>
 
 namespace DB
 {
