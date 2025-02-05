@@ -106,7 +106,7 @@ try
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
         ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(kvr1->dataSize(), kvr1->getData().totalSize());
-        ASSERT_EQ(kvr1->dataSize(), region_table.getTableRegionSize(NullspaceID, table_id));
+        ASSERT_EQ(kvr1->getData().totalSize(), region_table.getTableRegionSize(NullspaceID, table_id));
     }
     {
         // lock
@@ -117,15 +117,19 @@ try
             {2},
             {{RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)}});
         auto region_id = 2;
-        auto kvr1 = kvs.getRegion(region_id);
+        auto kvr1 = kvs.getRegion(1);
+        auto kvr2 = kvs.getRegion(region_id);
         auto [index, term]
             = proxy_instance
                   ->rawWrite(region_id, {str_key}, {str_lock_value}, {WriteCmdType::Put}, {ColumnFamilyType::Lock});
         UNUSED(term);
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
-        ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
-        ASSERT_EQ(kvr1->dataSize() + decoded_lock_size, kvr1->getData().totalSize());
+        ASSERT_EQ(kvr2->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(kvr2->dataSize() + decoded_lock_size, kvr2->getData().totalSize());
+        ASSERT_EQ(
+            kvr2->getData().totalSize() + kvr1->getData().totalSize(),
+            region_table.getTableRegionSize(NullspaceID, table_id));
     }
     {
         // lock with largetxn
@@ -136,8 +140,10 @@ try
             {3},
             {{RecordKVFormat::genKey(table_id, 21), RecordKVFormat::genKey(table_id, 30)}});
         auto region_id = 3;
-        auto kvr1 = kvs.getRegion(region_id);
-        ASSERT_NE(kvr1, nullptr);
+        auto kvr1 = kvs.getRegion(1);
+        auto kvr2 = kvs.getRegion(2);
+        auto kvr3 = kvs.getRegion(region_id);
+        ASSERT_NE(kvr3, nullptr);
         std::string shor_value = "value";
         auto lock_for_update_ts = 7777, txn_size = 1;
         const std::vector<std::string> & async_commit = {"s1", "s2"};
@@ -160,8 +166,11 @@ try
         UNUSED(term);
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_lock_value.size());
-        ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
-        ASSERT_EQ(kvr1->dataSize() + decoded_lock_size, kvr1->getData().totalSize());
+        ASSERT_EQ(kvr3->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(kvr3->dataSize() + decoded_lock_size, kvr3->getData().totalSize());
+        ASSERT_EQ(
+            kvr3->getData().totalSize() + kvr2->getData().totalSize() + kvr1->getData().totalSize(),
+            region_table.getTableRegionSize(NullspaceID, table_id));
     }
     {
         // insert & remove

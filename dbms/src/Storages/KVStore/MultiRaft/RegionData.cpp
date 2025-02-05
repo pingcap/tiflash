@@ -41,7 +41,9 @@ void RegionData::recordMemChange(const RegionDataMemDiff & delta)
     // A region splits and merges, but its derived region all belong to the same table.
     // So we can summarize here rather than `updateMemoryUsage`.
     if (region_table_size)
+    {
         *region_table_size += delta.total();
+    }
 }
 
 void RegionData::updateMemoryUsage(const RegionDataMemDiff & delta)
