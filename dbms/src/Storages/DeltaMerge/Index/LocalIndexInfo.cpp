@@ -175,52 +175,56 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
 
     if (newly_added.empty() && newly_dropped.empty())
     {
-        auto get_logging = [&]() -> String {
-            FmtBuffer buf;
-            buf.append("keep=[");
-            buf.joinStr(
-                original_local_index_id_map.begin(),
-                original_local_index_id_map.end(),
-                [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id.first); },
-                ",");
-            buf.append("]");
-            return buf.toString();
-        };
-        LOG_DEBUG(logger, "Local index info does not changed, {}", get_logging());
-        return LocalIndexInfosChangeset{
+        LocalIndexInfosChangeset changeset{
             .new_local_index_infos = nullptr,
         };
+        for (const auto & it : original_local_index_id_map)
+            changeset.keep_indexes.emplace_back(it.first);
+        return changeset;
     }
 
-    auto get_changed_logging = [&]() -> String {
-        FmtBuffer buf;
-        buf.append("keep=[");
-        buf.joinStr(
-            original_local_index_id_map.begin(),
-            original_local_index_id_map.end(),
-            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id.first); },
-            ",");
-        buf.append("] added=[");
-        buf.joinStr(
-            newly_added.begin(),
-            newly_added.end(),
-            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
-            ",");
-        buf.append("] dropped=[");
-        buf.joinStr(
-            newly_dropped.begin(),
-            newly_dropped.end(),
-            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
-            ",");
-        buf.append("]");
-        return buf.toString();
-    };
-    LOG_INFO(logger, "Local index info generated, {}", get_changed_logging());
-
-    return LocalIndexInfosChangeset{
+    LocalIndexInfosChangeset changeset{
         .new_local_index_infos = new_index_infos,
         .dropped_indexes = std::move(newly_dropped),
     };
+    for (const auto & it : original_local_index_id_map)
+        changeset.keep_indexes.emplace_back(it.first);
+    for (const auto & id : newly_added)
+        changeset.added_indexes.emplace_back(id);
+    return changeset;
+}
+
+String LocalIndexInfosChangeset::toDebugString(bool simple) const
+{
+    FmtBuffer buf;
+    buf.append("keep=[");
+    buf.joinStr(
+        keep_indexes.begin(),
+        keep_indexes.end(),
+        [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
+        ",");
+    buf.append("]");
+    if (simple && added_indexes.empty())
+    {
+        buf.append(" added=[");
+        buf.joinStr(
+            added_indexes.begin(),
+            added_indexes.end(),
+            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
+            ",");
+        buf.append("]");
+    }
+    if (simple && dropped_indexes.empty())
+    {
+        buf.append(" dropped=[");
+        buf.joinStr(
+            dropped_indexes.begin(),
+            dropped_indexes.end(),
+            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
+            ",");
+        buf.append("]");
+    }
+    return buf.toString();
 }
 
 } // namespace DB::DM

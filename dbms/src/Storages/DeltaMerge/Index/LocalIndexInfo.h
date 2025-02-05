@@ -61,7 +61,11 @@ LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const
 struct LocalIndexInfosChangeset
 {
     LocalIndexInfosPtr new_local_index_infos;
+    std::vector<IndexID> keep_indexes;
+    std::vector<IndexID> added_indexes;
     std::vector<IndexID> dropped_indexes;
+
+    String toDebugString(bool simple) const;
 };
 
 // Generate a changeset according to `existing_indexes` and `new_table_info`
