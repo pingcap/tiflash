@@ -61,20 +61,9 @@ public:
 
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshot(
         const DMContext & dm_context,
-        const SegmentSnapshot & snapshot,
-        const bool force_release_cache);
+        const SegmentSnapshot & snapshot);
 
     [[nodiscard]] UInt32 getReplayedRows() const { return base_versions->size(); }
-
-    // TODO: add lock
-    void clearNewHandleToRowIds()
-    {
-        if (new_handle_to_row_ids)
-        {
-            new_handle_count_when_clear = new_handle_to_row_ids->size();
-            new_handle_to_row_ids.reset();
-        }
-    }
 
 private:
     [[nodiscard]] UInt32 replayBlock(
@@ -110,7 +99,7 @@ private:
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
     std::shared_ptr<std::vector<RowID>> base_versions; // base_versions->size() == delta.getRows()
-    std::optional<absl::btree_map<HandleType, RowID>> new_handle_to_row_ids;
+    absl::btree_map<HandleType, RowID> new_handle_to_row_ids;
     Int32 new_handle_count_when_clear = 0;
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
