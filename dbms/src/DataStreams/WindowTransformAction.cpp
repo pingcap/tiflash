@@ -229,6 +229,7 @@ WindowTransformAction::WindowTransformAction(
     const String & req_id)
     : log(Logger::get(req_id))
     , window_description(window_description_)
+    , first_processed(true)
 {
     output_header = input_header;
     for (const auto & add_column : window_description_.add_columns)
