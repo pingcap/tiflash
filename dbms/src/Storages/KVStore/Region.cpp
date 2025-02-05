@@ -92,11 +92,7 @@ void Region::remove(const std::string & cf, const TiKVKey & key)
 
 void Region::doRemove(ColumnFamilyType type, const TiKVKey & key)
 {
-    auto diff = data.remove(type, key);
-    if (data.region_table_size)
-    {
-        *(data.region_table_size) += diff.total();
-    }
+    data.remove(type, key);
 }
 
 void Region::clearAllData()

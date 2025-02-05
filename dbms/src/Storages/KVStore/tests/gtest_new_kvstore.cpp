@@ -201,12 +201,12 @@ try
             originTableSize,
             delta,
             region_table.getTableRegionSize(NullspaceID, table_id));
-        ASSERT_EQ(originTableSize + delta, region_table.getTableRegionSize(NullspaceID, table_id));
+        ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), originTableSize + delta);
         region->remove("default", TiKVKey::copyFrom(str_key));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
-        // ASSERT_EQ(originTableSize, region_table.getTableRegionSize(NullspaceID, table_id));
+        ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), originTableSize);
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
