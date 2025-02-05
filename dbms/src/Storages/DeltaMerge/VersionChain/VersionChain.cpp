@@ -72,6 +72,14 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         && dmfile_or_delete_range_list.size() == 1;
     const auto initial_replayed_rows_and_deletes = replayed_rows_and_deletes;
     SCOPE_EXIT({ cleanHandleColumn(); });
+
+    auto delta_reader = DeltaValueReader(
+        dm_context,
+        snapshot.delta,
+        getHandleColumnDefinesPtr<HandleType>(),
+        /*range*/ {},
+        ReadTag::MVCC);
+
     for (; pos != cfs.end(); ++pos)
     {
         const auto & cf = *pos;
@@ -79,12 +87,12 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
             replayed_rows_and_deletes
-                += replayBlock(dm_context, data_provider, *cf, offset, stable_rows, calculate_read_packs);
+                += replayBlock(dm_context, data_provider, *cf, offset, stable_rows, calculate_read_packs, delta_reader);
             offset = 0;
         }
         else if (const auto * cf_delete_range = cf->tryToDeleteRange(); cf_delete_range)
         {
-            replayed_rows_and_deletes += replayDeleteRange(*cf_delete_range);
+            replayed_rows_and_deletes += replayDeleteRange(*cf_delete_range, delta_reader, stable_rows);
         }
         else if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
@@ -117,22 +125,14 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
 }
 
 template <ExtraHandleType HandleType>
-void VersionChain<HandleType>::deleteRangeFromNewHandleToRowIds(const ColumnFileDeleteRange & cf_delete_range)
-{
-    auto [start, end] = convertRowKeyRange(cf_delete_range.getDeleteRange());
-    auto itr = new_handle_to_row_ids.lower_bound(start);
-    while (itr != new_handle_to_row_ids.end() && itr->first < end)
-        itr = new_handle_to_row_ids.erase(itr);
-}
-
-template <ExtraHandleType HandleType>
 UInt32 VersionChain<HandleType>::replayBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
     const ColumnFile & cf,
     const UInt32 offset,
     const UInt32 stable_rows,
-    const bool calculate_read_packs)
+    const bool calculate_read_packs,
+    DeltaValueReader & delta_reader)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
 
@@ -157,9 +157,9 @@ UInt32 VersionChain<HandleType>::replayBlock(
     {
         const auto h = *itr;
         const RowID curr_row_id = base_versions->size() + stable_rows;
-        if (auto t = new_handle_to_row_ids.find(h); t != new_handle_to_row_ids.end())
+        if (auto t = new_handle_to_row_ids.find(h, delta_reader, stable_rows); t)
         {
-            base_versions->push_back(t->second);
+            base_versions->push_back(*t);
             continue;
         }
         if (auto row_id = findBaseVersionFromDMFileOrDeleteRangeList(dm_context, h); row_id)
@@ -168,7 +168,7 @@ UInt32 VersionChain<HandleType>::replayBlock(
             continue;
         }
 
-        new_handle_to_row_ids[h] = curr_row_id;
+        new_handle_to_row_ids.insert(h, curr_row_id);
         base_versions->push_back(NotExistRowID);
     }
     return column.size() - offset;
@@ -190,9 +190,12 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
 }
 
 template <ExtraHandleType HandleType>
-UInt32 VersionChain<HandleType>::replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range)
+UInt32 VersionChain<HandleType>::replayDeleteRange(
+    const ColumnFileDeleteRange & cf_delete_range,
+    DeltaValueReader & delta_reader,
+    const UInt32 stable_rows)
 {
-    deleteRangeFromNewHandleToRowIds(cf_delete_range);
+    new_handle_to_row_ids.deleteRange(cf_delete_range.getDeleteRange(), delta_reader, stable_rows);
     dmfile_or_delete_range_list.push_back(cf_delete_range.getDeleteRange());
     return cf_delete_range.getDeletes();
 }
@@ -237,15 +240,6 @@ void VersionChain<HandleType>::cleanHandleColumn()
         if (auto * dmfile_index = std::get_if<DMFileHandleIndex<HandleType>>(&dmfile_or_delete_range); dmfile_index)
             dmfile_index->cleanHandleColumn();
     }
-}
-
-template <ExtraHandleType HandleType>
-std::pair<HandleType, HandleType> VersionChain<HandleType>::convertRowKeyRange(const RowKeyRange & range)
-{
-    if constexpr (std::is_same_v<HandleType, Int64>)
-        return {range.start.int_value, range.end.int_value};
-    else
-        return {*(range.start.value), *(range.end.value)};
 }
 
 template class VersionChain<Int64>;

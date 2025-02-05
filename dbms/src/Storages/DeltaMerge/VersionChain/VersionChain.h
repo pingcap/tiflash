@@ -17,15 +17,9 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/VersionChain/DMFileHandleIndex.h>
+#include <Storages/DeltaMerge/VersionChain/NewHandleIndex.h>
 
 #include <span>
-
-
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-builtins"
-
-#include <absl/container/btree_map.h>
-//#include <absl/container/flat_hash_map.h>
 
 namespace DB::DM
 {
@@ -72,12 +66,16 @@ private:
         const ColumnFile & cf,
         const UInt32 offset,
         const UInt32 stable_rows,
-        const bool calculate_read_packs);
+        const bool calculate_read_packs,
+        DeltaValueReader & delta_reader);
     [[nodiscard]] UInt32 replayColumnFileBig(
         const DMContext & dm_context,
         const ColumnFileBig & cf_big,
         const UInt32 stable_rows);
-    [[nodiscard]] UInt32 replayDeleteRange(const ColumnFileDeleteRange & cf_delete_range);
+    [[nodiscard]] UInt32 replayDeleteRange(
+        const ColumnFileDeleteRange & cf_delete_range,
+        DeltaValueReader & delta_reader,
+        const UInt32 stable_rows);
 
     template <HandleRefType HandleRef>
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
@@ -87,19 +85,10 @@ private:
     void calculateReadPacks(Iterator begin, Iterator end);
     void cleanHandleColumn();
 
-    void deleteRangeFromNewHandleToRowIds(const ColumnFileDeleteRange & cf_delete_range);
-    void replayNewHandleToRowIdsIfNull(
-        const DMContext & dm_context,
-        const IColumnFileDataProviderPtr & data_provider,
-        const ColumnFiles & cfs,
-        const UInt32 stable_rows);
-
-    static std::pair<HandleType, HandleType> convertRowKeyRange(const RowKeyRange & range);
-
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
     std::shared_ptr<std::vector<RowID>> base_versions; // base_versions->size() == delta.getRows()
-    absl::btree_map<HandleType, RowID> new_handle_to_row_ids;
+    NewHandleIndex<HandleType> new_handle_to_row_ids;
     Int32 new_handle_count_when_clear = 0;
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
