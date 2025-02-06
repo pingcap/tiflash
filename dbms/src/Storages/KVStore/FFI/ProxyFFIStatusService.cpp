@@ -322,8 +322,10 @@ HttpRequestRes HandleHttpRequestSyncRegion(
         if (status != HttpRequestStatus::Ok)
             return HttpRequestRes{
                 .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
+            };
     }
+
     auto & tmt = *server->tmt;
     std::stringstream ss;
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
@@ -347,7 +349,9 @@ HttpRequestRes HandleHttpRequestSyncRegion(
         .status = status,
         .res = CppStrWithView{
             .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{s->data(), s->size()}}};
+            .view = BaseBuffView{s->data(), s->size()},
+        },
+    };
 }
 
 // Acquiring load schema to sync schema from TiKV in this TiFlash node with given keyspace id.

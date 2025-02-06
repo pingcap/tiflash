@@ -86,7 +86,7 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
         {
             LOG_DEBUG(
                 log,
-                "mpp request disabled for keyspace or regions in keyspace {}",
+                "mpp request disabled for keyspace or regions, keyspace={}",
                 task_request.meta().keyspace_id());
             auto * err = response->mutable_error();
             err->set_msg("mpp request disabled");

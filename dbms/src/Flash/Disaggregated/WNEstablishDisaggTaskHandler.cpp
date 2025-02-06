@@ -60,7 +60,7 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
     {
         throw TiFlashException(
             Errors::Coprocessor::BadRequest,
-            "disaggregated request disabled for keyspace or regions in keyspace",
+            "disaggregated request disabled for keyspace or regions, keyspace={}",
             meta.keyspace_id());
     }
 #endif

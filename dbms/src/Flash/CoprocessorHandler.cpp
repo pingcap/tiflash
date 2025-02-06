@@ -136,7 +136,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             {
                 LOG_DEBUG(
                     log,
-                    "cop request disabled for keyspace or regions in keyspace {}",
+                    "cop request disabled for keyspace or regions, keyspace={}",
                     cop_request->context().keyspace_id());
                 return recordError(grpc::StatusCode::INTERNAL, "cop request disabled");
             }
