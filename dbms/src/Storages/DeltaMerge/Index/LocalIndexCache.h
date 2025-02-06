@@ -53,13 +53,13 @@ private:
 private:
     friend class tests::VectorIndexTestUtils;
 
-    // Drop the in-memory Vector Index if the on-disk file is deleted.
+    // Drop the in-memory Local Index if the on-disk file is deleted.
     // mmaped file could be unmmaped so that disk space can be reclaimed.
     size_t cleanOutdatedCacheEntries();
 
     void cleanOutdatedLoop();
 
-    // TODO(vector-index): Use task on BackgroundProcessingPool instead of a raw thread
+    // TODO(local-index): Use task on BackgroundProcessingPool instead of a raw thread
     std::thread cleaner_thread;
 
 public:

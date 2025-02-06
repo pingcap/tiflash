@@ -45,7 +45,7 @@ size_t LocalIndexCache::cleanOutdatedCacheEntries()
         }
         else if (!Poco::File(file_path).exists())
         {
-            LOG_INFO(log, "Dropping in-memory Vector Index cache because on-disk file is dropped, file={}", file_path);
+            LOG_INFO(log, "Dropping in-memory Local Index cache because on-disk file is dropped, file={}", file_path);
             {
                 std::unique_lock lock(mu);
                 files_to_check.erase(file_path);
@@ -55,7 +55,7 @@ size_t LocalIndexCache::cleanOutdatedCacheEntries()
         }
     }
 
-    LOG_DEBUG(log, "Cleaned {} outdated Vector Index cache entries", cleaned);
+    LOG_DEBUG(log, "Cleaned {} outdated Local Index cache entries", cleaned);
 
     return cleaned;
 }
