@@ -82,6 +82,29 @@ ColumnID getVectorIndxColumnID(
     return EmptyColumnID;
 }
 
+void saveIndexFilePros(const LocalIndexInfo & index_info, dtpb::IndexFilePropsV2 * pb_idx, size_t uncompressed_size)
+{
+    switch (index_info.kind)
+    {
+    case TiDB::ColumnarIndexKind::Vector:
+    {
+        auto * pb_vec_idx = pb_idx->mutable_vector_index();
+        pb_vec_idx->set_format_version(0);
+        pb_vec_idx->set_dimensions(index_info.def_vector_index->dimension);
+        pb_vec_idx->set_distance_metric(tipb::VectorDistanceMetric_Name(index_info.def_vector_index->distance_metric));
+        break;
+    }
+    case TiDB::ColumnarIndexKind::Inverted:
+    {
+        auto * pb_inv_idx = pb_idx->mutable_inverted_index();
+        pb_inv_idx->set_uncompressed_size(uncompressed_size);
+        break;
+    }
+    default:
+        RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index_info.kind));
+    }
+}
+
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger)
 {
     // The same as generate local index infos with no existing_indexes
@@ -180,13 +203,7 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
             if (idx.state == TiDB::StatePublic || idx.state == TiDB::StateWriteReorganization)
             {
                 // create a new index
-                new_index_infos->emplace_back(LocalIndexInfo{
-                    .kind = idx.columnarIndexKind(),
-                    .index_id = idx.id,
-                    .column_id = column_id,
-                    // Only one of the below will be set
-                    .def_vector_index = idx.vector_index,
-                });
+                new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.vector_index));
                 newly_added.emplace_back(idx.id);
                 index_ids_in_new_table.emplace(idx.id);
             }

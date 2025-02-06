@@ -59,7 +59,7 @@ public:
         , options(options)
     {}
 
-    // Build vector index for all files in `options.files`.
+    // Build local index for all files in `options.files`.
     // Only return the files that have been built new indexes.
     using ProceedCheckFn = std::function<bool()>; // Return false to stop building index.
     ColumnFileTinys build(ProceedCheckFn should_proceed) const;

@@ -16,7 +16,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyLocalIndexWriter.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/LocalIndexBuilder.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 
 
@@ -94,7 +95,7 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
     struct IndexToBuild
     {
         LocalIndexInfo info;
-        VectorIndexBuilderPtr builder_vector;
+        LocalIndexBuilderPtr builder_index;
     };
 
     std::unordered_map<ColId, std::vector<IndexToBuild>> index_builders;
@@ -104,10 +105,9 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
         // Just skip if the index is already built
         if (file->hasIndex(index_info.index_id))
             continue;
-        RUNTIME_CHECK(index_info.def_vector_index != nullptr);
         index_builders[index_info.column_id].emplace_back(IndexToBuild{
             .info = index_info,
-            .builder_vector = {},
+            .builder_index = {},
         });
     }
 
@@ -126,16 +126,10 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
 
         for (auto & index : indexes)
         {
-            switch (index.info.kind)
-            {
-            case TiDB::ColumnarIndexKind::Vector:
-                index.builder_vector = VectorIndexBuilder::create(index.info.def_vector_index);
-                break;
-            default:
-                RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                break;
-            }
+            if (auto builder = LocalIndexBuilder::create(index.info); builder)
+                index.builder_index = builder;
         }
+
         read_columns->push_back(*cd_iter);
     }
 
@@ -171,16 +165,8 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
             const auto & col = col_with_type_and_name.column;
             for (const auto & index : index_builders[read_columns->at(col_idx).id])
             {
-                switch (index.info.kind)
-                {
-                case TiDB::ColumnarIndexKind::Vector:
-                    RUNTIME_CHECK(index.builder_vector);
-                    index.builder_vector->addBlock(*col, del_mark, should_proceed);
-                    break;
-                default:
-                    RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                    break;
-                }
+                RUNTIME_CHECK(index.builder_index);
+                index.builder_index->addBlock(*col, del_mark, should_proceed);
             }
         }
     }
@@ -192,40 +178,26 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
         const auto & cd = read_columns->at(col_idx);
         for (const auto & index : index_builders[cd.id])
         {
-            switch (index.info.kind)
-            {
-            case TiDB::ColumnarIndexKind::Vector:
-            {
-                RUNTIME_CHECK(index.builder_vector);
-                auto index_page_id = options.storage_pool->newLogPageId();
-                MemoryWriteBuffer write_buf;
-                CompressedWriteBuffer compressed(write_buf);
-                index.builder_vector->saveToBuffer(compressed);
-                compressed.next();
-                auto data_size = write_buf.count();
-                auto buf = write_buf.tryGetReadBuffer();
-                // ColumnFileDataProviderRNLocalPageCache currently does not support read data with fields
-                options.wbs.log.putPage(index_page_id, 0, buf, data_size, {data_size});
+            RUNTIME_CHECK(index.builder_index);
+            auto index_page_id = options.storage_pool->newLogPageId();
+            MemoryWriteBuffer write_buf;
+            CompressedWriteBuffer compressed(write_buf);
+            index.builder_index->saveToBuffer(compressed);
+            compressed.next();
+            write_buf.next();
+            auto file_size = write_buf.count();
+            auto uncompressed = compressed.getUncompressedBytes();
+            auto buf = write_buf.tryGetReadBuffer();
+            options.wbs.log.putPage(index_page_id, 0, buf, file_size, {file_size});
 
-                auto idx_info = dtpb::ColumnFileIndexInfo{};
-                idx_info.set_index_page_id(index_page_id);
-                auto * idx_props = idx_info.mutable_index_props();
-                idx_props->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
-                idx_props->set_index_id(index.info.index_id);
-                idx_props->set_file_size(data_size);
-                auto * vector_index = idx_props->mutable_vector_index();
-                vector_index->set_format_version(0);
-                vector_index->set_dimensions(index.info.def_vector_index->dimension);
-                vector_index->set_distance_metric(
-                    tipb::VectorDistanceMetric_Name(index.info.def_vector_index->distance_metric));
-                index_infos->emplace_back(std::move(idx_info));
-
-                break;
-            }
-            default:
-                RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                break;
-            }
+            auto idx_info = dtpb::ColumnFileIndexInfo{};
+            idx_info.set_index_page_id(index_page_id);
+            auto * idx_props = idx_info.mutable_index_props();
+            idx_props->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
+            idx_props->set_index_id(index.info.index_id);
+            idx_props->set_file_size(file_size);
+            saveIndexFilePros(index.info, idx_props, uncompressed);
+            index_infos->emplace_back(std::move(idx_info));
         }
     }
 
