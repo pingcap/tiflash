@@ -20,6 +20,7 @@
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
+#include <Storages/DeltaMerge/Index/LocalIndexBuilder.h>
 #include <Storages/DeltaMerge/Index/LocalIndexViewer.h>
 #include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
@@ -31,7 +32,7 @@ namespace DB::DM
 {
 
 /// Builds a VectorIndex in memory.
-class VectorIndexBuilder
+class VectorIndexBuilder : public LocalIndexBuilder
 {
 public:
     /// The key is the row's offset in the DMFile.
@@ -40,28 +41,20 @@ public:
     using ProceedCheckFn = std::function<bool()>;
 
 public:
-    static VectorIndexBuilderPtr create(const TiDB::VectorIndexDefinitionPtr & definition);
+    static VectorIndexBuilderPtr create(const LocalIndexInfo & index_info);
 
     static bool isSupportedType(const IDataType & type);
 
 public:
-    explicit VectorIndexBuilder(const TiDB::VectorIndexDefinitionPtr & definition_)
-        : definition(definition_)
+    explicit VectorIndexBuilder(const LocalIndexInfo & index_info)
+        : LocalIndexBuilder(index_info)
+        , definition(index_info.def_vector_index)
     {}
 
-    virtual ~VectorIndexBuilder() = default;
+    ~VectorIndexBuilder() override = default;
 
-    virtual void addBlock( //
-        const IColumn & column,
-        const ColumnVector<UInt8> * del_mark,
-        ProceedCheckFn should_proceed)
-        = 0;
-
-    virtual void saveToFile(std::string_view path) const = 0;
-    virtual void saveToBuffer(WriteBuffer & write_buf) const = 0;
-
-public:
-    const TiDB::VectorIndexDefinitionPtr definition;
+protected:
+    const TiDB::VectorIndexDefinitionPtr & definition;
 };
 
 /// Views a VectorIndex file.
