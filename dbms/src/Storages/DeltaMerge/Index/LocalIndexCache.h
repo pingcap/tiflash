@@ -63,7 +63,7 @@ private:
     std::thread cleaner_thread;
 
 public:
-    static constexpr const char * COLUMNFILETINY_INDEX_NAME_PREFIX = "vec_index_page_";
+    static constexpr const char * COLUMNFILETINY_INDEX_NAME_PREFIX = "local_index_page_";
     explicit LocalIndexCache(size_t max_entities);
 
     ~LocalIndexCache();
