@@ -17,7 +17,7 @@
 namespace DB::DM
 {
 
-/// Viewer for local index. 
+/// Viewer for local index.
 class LocalIndexViewer
 {
 public:
