@@ -65,9 +65,9 @@ template <HandleRefType HandleRef>
 bool inRowKeyRange(const RowKeyRange & range, HandleRef handle)
 {
     if constexpr (std::is_same_v<HandleRef, Int64>)
-        return range.start.int_value <= handle && handle < range.end.int_value;
+        return range.start.int_value <= handle && (handle < range.end.int_value || range.isEndInfinite());
     else if constexpr (std::is_same_v<HandleRef, std::string_view>)
-        return *(range.start.value) <= handle && handle < *(range.end.value);
+        return *(range.start.value) <= handle && (handle < *(range.end.value) || range.isEndInfinite());
     else
         static_assert(false, "Not support type");
 }

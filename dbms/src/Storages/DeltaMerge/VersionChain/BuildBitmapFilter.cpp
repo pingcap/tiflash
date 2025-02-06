@@ -33,7 +33,7 @@ BitmapFilterPtr buildBitmapFilter(
     VersionChain<HandleType> & version_chain)
 {
     const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
-    //fmt::println("base_ver_snap={}", *base_ver_snap);
+    LOG_DEBUG(snapshot.log, "base_ver_snap={} is_common_handle={}", *base_ver_snap, std::is_same_v<HandleType, String>);
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
     const UInt32 delta_rows = delta.getRows();
@@ -44,8 +44,11 @@ BitmapFilterPtr buildBitmapFilter(
 
     RUNTIME_CHECK(pack_filter_results.size() == 1, pack_filter_results.size());
     buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, pack_filter_results[0], filter);
+    LOG_DEBUG(snapshot.log, "bitmap_filter1={}", bitmap_filter->toDebugString());
     buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
+    LOG_DEBUG(snapshot.log, "bitmap_filter2={}", bitmap_filter->toDebugString());
     buildDeletedFilter(dm_context, snapshot, filter);
+    LOG_DEBUG(snapshot.log, "bitmap_filter3={}", bitmap_filter->toDebugString());
     // TODO: Make buildRowKeyFilter/buildVersionFilter/buildDeletedFilter returns filtered rows.
     bitmap_filter->setAllMatch(false);
     return bitmap_filter;
