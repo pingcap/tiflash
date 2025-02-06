@@ -65,9 +65,9 @@ public:
         using difference_type = std::ptrdiff_t;
 
         Iterator(const IColumn::Offsets & offsets, const ColumnString::Chars_t & chars, size_t pos)
-            : offsets(&offsets)
+            : pos(pos)
+            , offsets(&offsets)
             , chars(&chars)
-            , pos(pos)
         {}
 
         value_type operator*() const
@@ -122,14 +122,15 @@ public:
             return *this;
         }
 
-        bool operator!=(const Iterator & other) const { return pos != other.pos; }
-        bool operator==(const Iterator & other) const { return pos == other.pos; }
-        bool operator<(const Iterator & other) const { return pos < other.pos; }
+        // Perform a lexicographic comparison of elements.
+        // Assume `this->offsets == other.offsets && this->chars == other.chars`,
+        // so it equal to `this->pos <=> other.pos`.
+        auto operator<=>(const Iterator & other) const = default;
 
     private:
+        size_t pos = 0;
         const IColumn::Offsets * offsets; // Using pointer for operator assignment
         const ColumnString::Chars_t * chars;
-        size_t pos = 0;
     };
 
     auto begin() const { return Iterator(offsets, chars, 0); }
