@@ -139,9 +139,21 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
     }
 }
 
+void ColumnDecimal<T>::countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &)
+    const
+{
+    countSerializeByteSizeImpl<true>(byte_size);
+}
+
+template <typename T>
+void ColumnDecimal<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    countSerializeByteSizeImpl<false>(byte_size);
+}
+
 template <typename T>
 template <bool compare_semantics>
-void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const NullMap *) const
+void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
@@ -158,6 +170,23 @@ void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_
         for (size_t i = 0; i < size; ++i)
             byte_size[i] += sizeof(T);
     }
+}
+
+template <typename T>
+void ColumnDecimal<T>::countSerializeByteSizeForCmpColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets,
+    const TiDB::TiDBCollatorPtr &) const
+{
+    countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets);
+}
+
+template <typename T>
+void ColumnDecimal<T>::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets);
 }
 
 template <typename T>
@@ -190,6 +219,96 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
         for (size_t i = 0; i < size; ++i)
             byte_size[i] += sizeof(T) * (array_offsets[i] - array_offsets[i - 1]);
     }
+}
+
+template <typename T>
+void ColumnDecimal<T>::serializeToPosForCmp(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const NullMap * nullmap,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const
+{
+    if (nullmap != nullptr)
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                pos,
+                start,
+                length,
+                nullmap);
+    else
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                nullptr);
+}
+
+template <typename T>
+void ColumnDecimal<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                nullptr);
+    else
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                nullptr);
+}
+
+template <typename T>
+void ColumnDecimal<T>::serializeToPosForCmpColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const NullMap * nullmap,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const
+{
+    if (nullmap != nullptr)
+        serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullmap);
+    else
+        serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullptr);
+}
+
+template <typename T>
+void ColumnDecimal<T>::serializeToPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets) const
+{
+    if (has_null)
+        serializeToPosForColumnArrayImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullptr);
+    else
+        serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullptr);
 }
 
 template <typename T>

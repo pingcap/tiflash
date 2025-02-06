@@ -127,14 +127,14 @@ WriteResult HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
     if (rows > 0)
     {
         rows_in_blocks += rows;
-        if (data_codec_version == MPPDataPacketV1)
+        if (data_codec_version >= MPPDataPacketV1)
             mem_size_in_blocks += block.bytes();
         blocks.push_back(block);
     }
 
     auto row_count_exceed = static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit;
     auto row_bytes_exceed
-        = data_codec_version == MPPDataPacketV1 && mem_size_in_blocks >= MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE;
+        = data_codec_version >= MPPDataPacketV1 && mem_size_in_blocks >= MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE;
 
     if (row_count_exceed || row_bytes_exceed)
         return flush();

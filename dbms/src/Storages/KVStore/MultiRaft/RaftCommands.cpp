@@ -374,11 +374,11 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
                 if unlikely (is_v2)
                 {
                     // There may be orphan default key in a snapshot.
-                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame);
+                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame).payload;
                 }
                 else
                 {
-                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny);
+                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny).payload;
                 }
             }
             catch (Exception & e)

@@ -102,7 +102,7 @@ private:
     {}
 
     template <bool compare_semantics>
-    void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const NullMap *) const;
+    void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const;
     template <bool compare_semantics>
     void countSerializeByteSizeForColumnArrayImpl(
         PaddedPODArray<size_t> & byte_size,
@@ -174,28 +174,16 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &) const override
-    {
-        countSerializeByteSizeImpl<true>(byte_size, nullptr);
-    }
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
-    {
-        countSerializeByteSizeImpl<false>(byte_size, nullptr);
-    }
+    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &) const override;
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
-        const TiDB::TiDBCollatorPtr &) const override
-    {
-        countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets);
-    }
+        const TiDB::TiDBCollatorPtr &) const override;
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets) const override
-    {
-        countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets);
-    }
+        const IColumn::Offsets & array_offsets) const override;
 
     void serializeToPosForCmp(
         PaddedPODArray<char *> & pos,
@@ -203,36 +191,8 @@ public:
         size_t length,
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr &,
-        String *) const override
-    {
-        if (nullmap != nullptr)
-            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                pos,
-                start,
-                length,
-                nullmap);
-        else
-            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                pos,
-                start,
-                length,
-                nullptr);
-    }
-    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
-    {
-        if (has_null)
-            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
-                pos,
-                start,
-                length,
-                nullptr);
-        else
-            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
-                pos,
-                start,
-                length,
-                nullptr);
-    }
+        String *) const override;
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
     void serializeToPosForCmpColumnArray(
         PaddedPODArray<char *> & pos,
@@ -241,69 +201,25 @@ public:
         const NullMap * nullmap,
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr &,
-        String *) const override
-    {
-        if (nullmap != nullptr)
-            serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                pos,
-                start,
-                length,
-                array_offsets,
-                nullmap);
-        else
-            serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                pos,
-                start,
-                length,
-                array_offsets,
-                nullptr);
-    }
+        String *) const override;
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
         bool has_null,
-        const IColumn::Offsets & array_offsets) const override
-    {
-        if (has_null)
-            serializeToPosForColumnArrayImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
-                pos,
-                start,
-                length,
-                array_offsets,
-                nullptr);
-        else
-            serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
-                pos,
-                start,
-                length,
-                array_offsets,
-                nullptr);
-    }
+        const IColumn::Offsets & array_offsets) const override;
 
-    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
-    {
-        deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer);
-    }
-    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
-    {
-        deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
-    }
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
+    void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
 
     void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer) override
-    {
-        deserializeAndInsertFromPosForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
-    }
+        bool use_nt_align_buffer) override;
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer) override
-    {
-        deserializeAndInsertFromPosForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
-    }
+        bool use_nt_align_buffer) override;
 
     void flushNTAlignBuffer() override;
 
