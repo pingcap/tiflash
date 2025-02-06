@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/LRUCache.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache_fwd.h>
-#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndexViewer.h>
+#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <common/types.h>
 
 #include <condition_variable>
@@ -33,10 +33,10 @@ class VectorIndexTestUtils;
 namespace DB::DM
 {
 
-class VectorIndexCache
+class LocalIndexCache
 {
 private:
-    using Cache = LRUCache<String, VectorIndexViewer>;
+    using Cache = LRUCache<String, LocalIndexViewer>;
 
     Cache cache;
     LoggerPtr log;
@@ -64,9 +64,9 @@ private:
 
 public:
     static constexpr const char * COLUMNFILETINY_INDEX_NAME_PREFIX = "vec_index_page_";
-    explicit VectorIndexCache(size_t max_entities);
+    explicit LocalIndexCache(size_t max_entities);
 
-    ~VectorIndexCache();
+    ~LocalIndexCache();
 
     template <typename LoadFunc>
     Cache::MappedPtr getOrSet(const Cache::Key & file_path, LoadFunc && load)

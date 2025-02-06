@@ -13,14 +13,14 @@
 // limitations under the License.
 
 #include <Poco/File.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 
 #include <mutex>
 
 namespace DB::DM
 {
 
-size_t VectorIndexCache::cleanOutdatedCacheEntries()
+size_t LocalIndexCache::cleanOutdatedCacheEntries()
 {
     size_t cleaned = 0;
 
@@ -60,7 +60,7 @@ size_t VectorIndexCache::cleanOutdatedCacheEntries()
     return cleaned;
 }
 
-void VectorIndexCache::cleanOutdatedLoop()
+void LocalIndexCache::cleanOutdatedLoop()
 {
     while (true)
     {
@@ -83,14 +83,14 @@ void VectorIndexCache::cleanOutdatedLoop()
     }
 }
 
-VectorIndexCache::VectorIndexCache(size_t max_entities)
+LocalIndexCache::LocalIndexCache(size_t max_entities)
     : cache(max_entities)
     , log(Logger::get())
 {
     cleaner_thread = std::thread([this] { cleanOutdatedLoop(); });
 }
 
-VectorIndexCache::~VectorIndexCache()
+LocalIndexCache::~LocalIndexCache()
 {
     is_shutting_down = true;
     shutdown_cv.notify_all();

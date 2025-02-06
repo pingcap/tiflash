@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
-#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>

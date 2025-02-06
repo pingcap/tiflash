@@ -109,7 +109,7 @@ enum class PageStorageRunMode : UInt8;
 namespace DM
 {
 class MinMaxIndexCache;
-class VectorIndexCache;
+class LocalIndexCache;
 class ColumnCacheLongTerm;
 class DeltaIndexManager;
 class GlobalStoragePool;
@@ -399,9 +399,9 @@ public:
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
 
-    void setVectorIndexCache(size_t cache_entities);
-    std::shared_ptr<DM::VectorIndexCache> getVectorIndexCache() const;
-    void dropVectorIndexCache() const;
+    void setLocalIndexCache(size_t cache_entities);
+    std::shared_ptr<DM::LocalIndexCache> getLocalIndexCache() const;
+    void dropLocalIndexCache() const;
 
     void setColumnCacheLongTerm(size_t cache_size_in_bytes);
     std::shared_ptr<DM::ColumnCacheLongTerm> getColumnCacheLongTerm() const;

@@ -53,8 +53,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
@@ -148,7 +148,7 @@ struct ContextShared
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
-    mutable DM::VectorIndexCachePtr vector_index_cache;
+    mutable DM::LocalIndexCachePtr local_index_cache;
     mutable DM::ColumnCacheLongTermPtr column_cache_long_term;
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
@@ -1370,26 +1370,26 @@ void Context::dropMinMaxIndexCache() const
         shared->minmax_index_cache->reset();
 }
 
-void Context::setVectorIndexCache(size_t cache_entities)
+void Context::setLocalIndexCache(size_t cache_entities)
 {
     auto lock = getLock();
 
-    RUNTIME_CHECK(!shared->vector_index_cache);
+    RUNTIME_CHECK(!shared->local_index_cache);
 
-    shared->vector_index_cache = std::make_shared<DM::VectorIndexCache>(cache_entities);
+    shared->local_index_cache = std::make_shared<DM::LocalIndexCache>(cache_entities);
 }
 
-DM::VectorIndexCachePtr Context::getVectorIndexCache() const
+DM::LocalIndexCachePtr Context::getLocalIndexCache() const
 {
     auto lock = getLock();
-    return shared->vector_index_cache;
+    return shared->local_index_cache;
 }
 
-void Context::dropVectorIndexCache() const
+void Context::dropLocalIndexCache() const
 {
     auto lock = getLock();
-    if (shared->vector_index_cache)
-        shared->vector_index_cache.reset();
+    if (shared->local_index_cache)
+        shared->local_index_cache.reset();
 }
 
 void Context::setColumnCacheLongTerm(size_t cache_size_in_bytes)

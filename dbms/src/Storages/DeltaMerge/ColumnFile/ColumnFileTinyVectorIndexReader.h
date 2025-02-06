@@ -16,8 +16,8 @@
 
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache_fwd.h>
 
 
 namespace DB::DM
@@ -35,8 +35,8 @@ private:
     const BitmapFilterView valid_rows;
     // Note: ColumnDefine comes from read path does not have vector_index fields.
     const ColumnDefine vec_cd;
-    // Global vector index cache
-    const VectorIndexCachePtr vec_index_cache;
+    // Global local index cache
+    const LocalIndexCachePtr local_index_cache;
     LoggerPtr log;
 
     // Performance statistics
@@ -62,13 +62,13 @@ public:
         const ANNQueryInfoPtr & ann_query_info_,
         const BitmapFilterView && valid_rows_,
         const ColumnDefine & vec_cd_,
-        const VectorIndexCachePtr & vec_index_cache_)
+        const LocalIndexCachePtr & local_index_cache_)
         : tiny_file(tiny_file_)
         , data_provider(data_provider_)
         , ann_query_info(ann_query_info_)
         , valid_rows(std::move(valid_rows_))
         , vec_cd(vec_cd_)
-        , vec_index_cache(vec_index_cache_)
+        , local_index_cache(local_index_cache_)
         , log(Logger::get())
     {}
 
