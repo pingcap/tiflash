@@ -160,14 +160,7 @@ public:
         size_t length,
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator,
-        String *) const override
-    {
-        RUNTIME_CHECK_MSG(!collator, "{} doesn't support serializeToPosForCmp when collator is not null", getName());
-        if (nullmap != nullptr)
-            serializeToPosImpl<false, true>(pos, start, length, nullmap);
-        else
-            serializeToPosImpl<false, false>(pos, start, length, nullptr);
-    }
+        String *) const override;
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
 
     void serializeToPosForCmpColumnArray(
@@ -177,17 +170,7 @@ public:
         const NullMap * nullmap,
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr & collator,
-        String *) const override
-    {
-        RUNTIME_CHECK_MSG(
-            !collator,
-            "{} doesn't support serializeToPosForCmpColumnArray when collator is not null",
-            getName());
-        if (nullmap != nullptr)
-            serializeToPosForColumnArrayImpl<false, true>(pos, start, length, array_offsets, nullmap);
-        else
-            serializeToPosForColumnArrayImpl<false, false>(pos, start, length, array_offsets, nullptr);
-    }
+        String *) const override;
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,

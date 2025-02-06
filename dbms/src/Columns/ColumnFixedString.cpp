@@ -158,6 +158,21 @@ void ColumnFixedString::countSerializeByteSizeForColumnArrayImpl(
         byte_size[i] += n * (array_offsets[i] - array_offsets[i - 1]);
 }
 
+void ColumnFixedString::serializeToPosForCmp(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr & collator,
+    String *) const
+{
+    RUNTIME_CHECK_MSG(!collator, "{} doesn't support serializeToPosForCmp when collator is not null", getName());
+    if (nullmap != nullptr)
+        serializeToPosImpl<false, true>(pos, start, length, nullmap);
+    else
+        serializeToPosImpl<false, false>(pos, start, length, nullptr);
+}
+
 void ColumnFixedString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
@@ -198,6 +213,25 @@ void ColumnFixedString::serializeToPosImpl(
         inline_memcpy(pos[i], &chars[n * (start + i)], n);
         pos[i] += n;
     }
+}
+
+void ColumnFixedString::serializeToPosForCmpColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const NullMap * nullmap,
+    const IColumn::Offsets & array_offsets,
+    const TiDB::TiDBCollatorPtr & collator,
+    String *) const
+{
+    RUNTIME_CHECK_MSG(
+        !collator,
+        "{} doesn't support serializeToPosForCmpColumnArray when collator is not null",
+        getName());
+    if (nullmap != nullptr)
+        serializeToPosForColumnArrayImpl<false, true>(pos, start, length, array_offsets, nullmap);
+    else
+        serializeToPosForColumnArrayImpl<false, false>(pos, start, length, array_offsets, nullptr);
 }
 
 void ColumnFixedString::serializeToPosForColumnArray(
