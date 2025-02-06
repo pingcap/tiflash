@@ -44,6 +44,12 @@ UInt32 buildRowKeyFilterVector(
             || std::none_of(read_ranges.begin(), read_ranges.end(), in_range))
         {
             filter[itr - handles.begin() + start_row_id] = 0;
+            LOG_DEBUG(
+                Logger::get(),
+                "Filter {} out, delete_ranges={}, read_ranges={}",
+                *itr,
+                delete_ranges,
+                read_ranges);
         }
     }
     return handles.end() - handles.begin();
