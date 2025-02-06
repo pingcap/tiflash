@@ -26,7 +26,7 @@ DMFileWithVectorIndexBlockInputStream::DMFileWithVectorIndexBlockInputStream(
     DMFileReader && reader_,
     ColumnDefine && vec_cd_,
     const ScanContextPtr & scan_context_,
-    const VectorIndexCachePtr & vec_index_cache_,
+    const LocalIndexCachePtr & local_index_cache_,
     const BitmapFilterView & valid_rows_,
     const String & tracing_id)
     : log(Logger::get(tracing_id))
@@ -41,7 +41,7 @@ DMFileWithVectorIndexBlockInputStream::DMFileWithVectorIndexBlockInputStream(
           dmfile,
           valid_rows_,
           scan_context,
-          vec_index_cache_))
+          local_index_cache_))
 {}
 
 DMFileWithVectorIndexBlockInputStream::~DMFileWithVectorIndexBlockInputStream()

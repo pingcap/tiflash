@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,16 +14,28 @@
 
 #pragma once
 
-#include <Storages/KVStore/Types.h>
-#include <TiDB/Schema/TiDB_fwd.h>
+#include <tipb/executor.pb.h>
 
 #include <memory>
-#include <vector>
 
 namespace DB::DM
 {
-struct ColumnDefine;
-using ColumnDefines = std::vector<ColumnDefine>;
-using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
+
+class LocalIndexViewer;
+using LocalIndexViewerPtr = std::shared_ptr<LocalIndexViewer>;
+
+class LocalIndexBuilder;
+using LocalIndexBuilderPtr = std::shared_ptr<LocalIndexBuilder>;
+
+class LocalIndexCache;
+using LocalIndexCachePtr = std::shared_ptr<LocalIndexCache>;
+
+using ANNQueryInfoPtr = std::shared_ptr<tipb::ANNQueryInfo>;
+
+class VectorIndexBuilder;
+using VectorIndexBuilderPtr = std::shared_ptr<VectorIndexBuilder>;
+
+class VectorIndexViewer;
+using VectorIndexViewerPtr = std::shared_ptr<VectorIndexViewer>;
 
 } // namespace DB::DM
