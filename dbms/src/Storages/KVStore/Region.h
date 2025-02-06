@@ -231,7 +231,10 @@ public: // Stats
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
 
-    void setRegionTableSize(RegionTableSize size) const { data.region_table_size = size; }
+    // Bind a region to a RegionTable. It could not be bound to another table any more.
+    // All memory changes to this region would relect to the binded table.
+    void setRegionTableSize(RegionTableSize size) const;
+    RegionTableSize resetRegionTableSize() const;
 
 public: // Raft Read and Write
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);

@@ -179,6 +179,17 @@ size_t RegionTable::getTableRegionSize(KeyspaceID keyspace_id, TableID table_id)
     return 0;
 }
 
+void RegionTable::debugClearTableRegionSize(KeyspaceID keyspace_id, TableID table_id) {
+    std::scoped_lock lock(mutex);
+
+    auto it = tables.find(KeyspaceTableID{keyspace_id, table_id});
+    if (it == tables.end())
+        return;
+    const auto & table = it->second;
+    if (table.size)
+        *(table.size) = 0;
+}
+
 namespace
 {
 /// Remove obsolete data for table after data of `handle_range` is removed from this TiFlash node.
@@ -399,6 +410,20 @@ void RegionTable::shrinkRegionRange(const Region & region)
     auto & internal_region = getOrInsertRegion(region);
     internal_region.range_in_table = region.getRange()->rawKeys();
     internal_region.updateRegionCacheBytes(region.dataSize());
+}
+
+void RegionTable::replaceRegion(const RegionPtr & old_region, const RegionPtr & new_region) {
+    const auto region_range_keys = new_region->getRange();
+    // Extend region range to make sure data won't be removed.
+    extendRegionRange(*new_region, *region_range_keys);
+    if (old_region) {
+        // `old_region` will no longer contribute to the memory of the table.
+        auto keyspace_id = region_range_keys->getKeyspaceID();
+        auto table_id = region_range_keys->getMappedTableID();
+        auto & table = getOrCreateTable(keyspace_id, table_id);
+        old_region->resetRegionTableSize();
+        new_region->setRegionTableSize(table.size);
+    }
 }
 
 void RegionTable::extendRegionRange(const Region & region, const RegionRangeKeys & region_range_keys)

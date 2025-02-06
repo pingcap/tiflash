@@ -104,9 +104,14 @@ public:
     };
 
     explicit RegionTable(Context & context_);
+
+    // Iterate over all regions in KVStore, and add them to RegionTable.
     void restore();
 
     void updateRegion(const Region & region);
+
+    // Used by apply snapshot.
+    void replaceRegion(const RegionPtr & old_region, const RegionPtr & new_region);
 
     /// This functional only shrink the table range of this region_id
     void shrinkRegionRange(const Region & region);
@@ -156,6 +161,7 @@ public:
     void clear();
 
     size_t getTableRegionSize(KeyspaceID keyspace_id, TableID table_id) const;
+    void debugClearTableRegionSize(KeyspaceID keyspace_id, TableID table_id);
 
 public:
     // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),

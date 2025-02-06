@@ -392,4 +392,12 @@ Timestamp Region::getLastObservedReadTso() const
     return last_observed_read_tso.load();
 }
 
+void Region::setRegionTableSize(RegionTableSize size) const {
+    data.setRegionTableSize(size);
+}
+
+RegionTableSize Region::resetRegionTableSize() const {
+    return data.resetRegionTableSize();
+}
+
 } // namespace DB

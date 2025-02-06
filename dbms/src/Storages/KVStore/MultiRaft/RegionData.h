@@ -84,6 +84,8 @@ public:
 
     String summary() const;
     size_t tryCompactionFilter(Timestamp safe_point);
+    void setRegionTableSize(RegionTableSize size) const;
+    RegionTableSize resetRegionTableSize() const;
 
     struct OrphanKeysInfo
     {

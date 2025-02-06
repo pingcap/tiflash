@@ -290,6 +290,7 @@ size_t RegionData::totalSize() const
 
 void RegionData::assignRegionData(RegionData && rhs)
 {
+    auto size = rhs.resetRegionTableSize();
     recordMemChange(RegionDataMemDiff{-cf_data_size.load(), -decoded_data_size.load()});
     resetMemoryUsage();
 
@@ -299,6 +300,7 @@ void RegionData::assignRegionData(RegionData && rhs)
     orphan_keys_info = std::move(rhs.orphan_keys_info);
 
     updateMemoryUsage(RegionDataMemDiff{rhs.cf_data_size.load(), rhs.decoded_data_size.load()});
+    setRegionTableSize(size);
     rhs.resetMemoryUsage();
 }
 
@@ -409,6 +411,25 @@ size_t RegionData::tryCompactionFilter(Timestamp safe_point)
     updateMemoryUsage(delta);
     // No need to check default cf. Because tikv will gc default cf before write cf.
     return del_write;
+}
+
+void RegionData::setRegionTableSize(RegionTableSize size) const {
+    region_table_size = size;
+    if(region_table_size) {
+        LOG_INFO(DB::Logger::get(), "!!!!! ADDD {} O {}", dataSize(), *region_table_size);
+        region_table_size->fetch_add(dataSize());
+    }
+}
+
+RegionTableSize RegionData::resetRegionTableSize() const {
+    if(region_table_size) {
+        LOG_INFO(DB::Logger::get(), "!!!!! SUBB {} O {}", dataSize(), *region_table_size);
+        region_table_size->fetch_sub(dataSize());
+    }
+    auto prev = region_table_size;
+    // The region no longer binds to a table.
+    region_table_size = nullptr;
+    return prev;
 }
 
 } // namespace DB
