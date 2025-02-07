@@ -142,13 +142,15 @@ std::optional<std::pair<HandleType, HandleType>> loadDMFileHandleRange(
         global_context.getReadLimiter(),
         /*scan context*/ nullptr);
 
-    return {getMinValue<HandleType>(*minmax_index, 0), getMaxValue<HandleType>(*minmax_index, dmfile.getPacks() - 1)};
+    return std::pair{
+        getMinValue<HandleType>(*minmax_index, 0),
+        getMaxValue<HandleType>(*minmax_index, dmfile.getPacks() - 1)};
 }
 
-template std::optional<std::pair<Int64, Int64>> loadDMFileHandleRange(
+template std::optional<std::pair<Int64, Int64>> loadDMFileHandleRange<Int64>(
     const Context & global_context,
     const DMFile & dmfile);
-template std::optional<std::pair<String, String>> loadDMFileHandleRange(
+template std::optional<std::pair<String, String>> loadDMFileHandleRange<String>(
     const Context & global_context,
     const DMFile & dmfile);
 } // namespace DB::DM
