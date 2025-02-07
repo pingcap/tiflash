@@ -126,6 +126,35 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
 }
 
 template <ExtraHandleType HandleType>
+template <typename Iter>
+void VersionChain<HandleType>::replayHandles(
+    const DMContext & dm_context,
+    Iter begin,
+    Iter end,
+    const UInt32 stable_rows,
+    DeltaValueReader & delta_reader)
+{
+    for (auto itr = begin; itr != end; ++itr)
+    {
+        const auto h = *itr;
+        const RowID curr_row_id = base_versions->size() + stable_rows;
+        if (auto t = new_handle_to_row_ids.find(h, delta_reader, stable_rows); t)
+        {
+            base_versions->push_back(*t);
+            continue;
+        }
+        if (auto row_id = findBaseVersionFromDMFileOrDeleteRangeList(dm_context, h); row_id)
+        {
+            base_versions->push_back(*row_id);
+            continue;
+        }
+
+        new_handle_to_row_ids.insert(h, curr_row_id);
+        base_versions->push_back(NotExistRowID);
+    }
+}
+
+template <ExtraHandleType HandleType>
 UInt32 VersionChain<HandleType>::replayBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
@@ -155,24 +184,7 @@ UInt32 VersionChain<HandleType>::replayBlock(
     if (calculate_read_packs)
         calculateReadPacks(itr, handle_col.end());
 
-    for (; itr != handle_col.end(); ++itr)
-    {
-        const auto h = *itr;
-        const RowID curr_row_id = base_versions->size() + stable_rows;
-        if (auto t = new_handle_to_row_ids.find(h, delta_reader, stable_rows); t)
-        {
-            base_versions->push_back(*t);
-            continue;
-        }
-        if (auto row_id = findBaseVersionFromDMFileOrDeleteRangeList(dm_context, h); row_id)
-        {
-            base_versions->push_back(*row_id);
-            continue;
-        }
-
-        new_handle_to_row_ids.insert(h, curr_row_id);
-        base_versions->push_back(NotExistRowID);
-    }
+    replayHandles(dm_context, itr, handle_col.end(), stable_rows, delta_reader);
     return column.size() - offset;
 }
 
