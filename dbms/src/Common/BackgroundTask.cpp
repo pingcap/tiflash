@@ -90,6 +90,7 @@ void CollectProcInfoBackgroundTask::memCheckJob()
 {
     try
     {
+        LOG_INFO(DB::Logger::get(), "!!!! CollectProcInfoBackgroundTask");
         double resident_set;
         Int64 cur_proc_num_threads = 1;
         UInt64 cur_virt_size = 0;

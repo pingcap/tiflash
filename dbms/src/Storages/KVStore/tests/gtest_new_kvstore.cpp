@@ -34,6 +34,8 @@
 #include <limits>
 
 extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
+extern std::atomic<Int64> real_rss;
+
 namespace DB::tests
 {
 using namespace DB::RecordKVFormat;
@@ -72,12 +74,13 @@ try
 CATCH
 
 
-TEST_F(RegionKVStoreTest, MemoryTracker)
+TEST_F(RegionKVStoreTest, MemoryTracker1)
 try
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     initStorages();
     KVStore & kvs = getKVS();
+    ctx.getTMTContext().debugSetKVStore(kvstore);
     auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
     MockRaftStoreProxy::FailCond cond;
     const auto decoded_lock_size = sizeof(DecodedLockCFValue) + sizeof(DecodedLockCFValue::Inner);
@@ -98,6 +101,8 @@ try
         return RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", region_id + number, 999)
             .toString();
     };
+    real_rss.store(1);
+    kvs.setKVStoreMemoryLimit(1);
     {
         // default
         RegionID region_id = 4100;
@@ -116,6 +121,7 @@ try
         ASSERT_EQ(kvr1->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(kvr1->dataSize(), kvr1->getData().totalSize());
         ASSERT_EQ(kvr1->getData().totalSize(), region_table.getTableRegionSize(NullspaceID, table_id));
+        ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
     }
     {
         // lock
@@ -139,6 +145,7 @@ try
         ASSERT_EQ(
             kvr2->getData().totalSize() + kvr1->getData().totalSize(),
             region_table.getTableRegionSize(NullspaceID, table_id));
+        ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
     }
     {
         // lock with largetxn
@@ -180,6 +187,7 @@ try
         ASSERT_EQ(
             kvr3->getData().totalSize() + kvr2->getData().totalSize() + kvr1->getData().totalSize(),
             region_table.getTableRegionSize(NullspaceID, table_id));
+        ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
     }
     {
         // insert & remove
@@ -201,12 +209,14 @@ try
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
         ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), originTableSize);
+        ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
         // insert
         RegionID region_id = 6000;
         root_of_kvstore_mem_trackers->reset();
+        region_table.debugClearTableRegionSize(NullspaceID, table_id);
         auto [start, end] = getStartEnd(region_id);
         auto str_key = pickKey(region_id, 1);
         auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
@@ -217,43 +227,18 @@ try
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
+        ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
     }
-    {
-        // reload
-        RegionID region_id = 7000;
-        root_of_kvstore_mem_trackers->reset();
-        auto [start, end] = getStartEnd(region_id);
-        auto str_key = pickKey(region_id, 1);
-        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
-        auto str_lock_value = pickLock(region_id, 1);
-        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
-        RegionPtr region = kvs.getRegion(region_id);
-        root_of_kvstore_mem_trackers->reset();
-        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-        tryPersistRegion(kvs, region_id);
-        root_of_kvstore_mem_trackers->reset();
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
-        reloadKVSFromDisk(false);
-        ctx.getTMTContext().debugSetKVStore(kvstore);
-        region_table.restore();
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-        ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
-        ASSERT_EQ(region->dataSize(), region->getData().totalSize());
-        // Only this region is persisted.
-        ASSERT_EQ(region->dataSize(), region_table.getTableRegionSize(NullspaceID, table_id));
-    }
-    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
     {
         // commit
         root_of_kvstore_mem_trackers->reset();
+        region_table.debugClearTableRegionSize(NullspaceID, table_id);
+
         RegionID region_id = 8000;
         auto [start, end] = getStartEnd(region_id);
         auto str_key = pickKey(region_id, 1);
         auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
         auto str_lock_value = pickLock(region_id, 1);
-
-        region_table.debugClearTableRegionSize(NullspaceID, table_id);
         proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
         RegionPtr region = kvs.getRegion(region_id);
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
@@ -270,8 +255,43 @@ try
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
         ASSERT_EQ(0, region_table.getTableRegionSize(NullspaceID, table_id));
+        ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
     }
-    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
+    {
+        // commit by handleWriteRaftCmd
+        root_of_kvstore_mem_trackers->reset();
+        region_table.debugClearTableRegionSize(NullspaceID, table_id);
+
+        RegionID region_id = 8100;
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 1);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
+        auto str_lock_value = pickLock(region_id, 1);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        RegionPtr region = kvs.getRegion(region_id);
+        {
+            auto [view, holder] = MockRaftStoreProxy::createWriteCmdsView(
+                {str_key, str_key},
+                {str_val_default, str_val_write},
+                {WriteCmdType::Put, WriteCmdType::Put},
+                {ColumnFamilyType::Default, ColumnFamilyType::Write});
+            region->handleWriteRaftCmd(view, 66, 6, ctx.getTMTContext());
+            ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
+            ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
+            ASSERT_EQ(region->dataSize(), region->getData().totalSize());
+            ASSERT_EQ(0, region_table.getTableRegionSize(NullspaceID, table_id));
+            ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
+        }
+        {
+            auto [view, holder] = MockRaftStoreProxy::createWriteCmdsView(
+                {str_key},
+                {str_lock_value},
+                {WriteCmdType::Put},
+                {ColumnFamilyType::Lock});
+            region->handleWriteRaftCmd(view, 67, 6, ctx.getTMTContext());
+            ASSERT_EQ(kvs.debug_memory_limit_warning_count, 2);
+        }
+    }
     {
         // split & merge
         root_of_kvstore_mem_trackers->reset();
@@ -314,6 +334,7 @@ try
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
         ASSERT_EQ(new_region->dataSize(), new_region->getData().totalSize());
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));
+        ASSERT_EQ(kvs.debug_memory_limit_warning_count, 2);
     }
     {
         // split & merge with lock
@@ -464,6 +485,62 @@ try
         proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
         kvs.handleDestroy(region_id, ctx.getTMTContext());
         ASSERT_EQ(0, region_table.getTableRegionSize(NullspaceID, table_id));
+    }
+}
+CATCH
+
+TEST_F(RegionKVStoreTest, MemoryTracker2)
+try
+{
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    initStorages();
+    KVStore & kvs = getKVS();
+    ctx.getTMTContext().debugSetKVStore(kvstore);
+    auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+
+    auto & region_table = ctx.getTMTContext().getRegionTable();
+    auto getStartEnd = [&](RegionID region_id) {
+        return std::make_pair(
+            RecordKVFormat::genKey(table_id, region_id),
+            RecordKVFormat::genKey(table_id, region_id + 99));
+    };
+    auto pickKey = [&](RegionID region_id, UInt64 number) {
+        return RecordKVFormat::genKey(table_id, region_id + number, 111);
+    };
+    auto pickWriteDefault = [&](RegionID, UInt64) {
+        return proxy_instance->generateTiKVKeyValue(111, 999);
+    };
+    auto pickLock = [&](RegionID region_id, UInt64 number) {
+        return RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", region_id + number, 999)
+            .toString();
+    };
+    {
+        // reload
+        RegionID region_id = 7000;
+        root_of_kvstore_mem_trackers->reset();
+        region_table.debugClearTableRegionSize(NullspaceID, table_id);
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 1);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
+        auto str_lock_value = pickLock(region_id, 1);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        RegionPtr region = kvs.getRegion(region_id);
+        root_of_kvstore_mem_trackers->reset();
+        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+        tryPersistRegion(kvs, region_id);
+        root_of_kvstore_mem_trackers->reset();
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
+        reloadKVSFromDisk(false);
+        ctx.getTMTContext().debugSetKVStore(kvstore);
+        region_table.restore();
+        LOG_INFO(log, "!!!!! fdfdfdf {}", root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+        LOG_INFO(log, "!!!!! ddddd {}", root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
+        ASSERT_EQ(region->dataSize(), region->getData().totalSize());
+        // Only this region is persisted.
+        ASSERT_EQ(region->dataSize(), region_table.getTableRegionSize(NullspaceID, table_id));
     }
 }
 CATCH

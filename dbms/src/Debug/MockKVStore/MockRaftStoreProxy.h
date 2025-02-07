@@ -266,6 +266,57 @@ struct MockRaftStoreProxy : MutexLockWrap
 
     void clear();
 
+    struct WriteCmdsViewHolder
+    {
+        WriteCmdsViewHolder(
+            std::vector<std::string> kk,
+            std::vector<std::string> vv,
+            std::vector<WriteCmdType> tt,
+            std::vector<ColumnFamilyType> ff)
+        {
+            kholder = std::move(kk);
+            vholder = std::move(vv);
+            for (size_t i = 0; i < kholder.size(); i++)
+            {
+                kbuff.push_back(strIntoView(&kholder[i]));
+            }
+            for (size_t i = 0; i < vholder.size(); i++)
+            {
+                vbuff.push_back(strIntoView(&vholder[i]));
+            }
+            cmd_type = std::move(tt);
+            cmd_cf = std::move(ff);
+        }
+
+        const BaseBuffView * getKeys() const { return kbuff.data(); }
+
+        const BaseBuffView * getVals() const { return vbuff.data(); }
+
+        const WriteCmdType * getTypes() const { return cmd_type.data(); }
+
+        const ColumnFamilyType * getCfs() const { return cmd_cf.data(); }
+
+        std::vector<std::string> kholder;
+        std::vector<std::string> vholder;
+        std::vector<BaseBuffView> kbuff;
+        std::vector<BaseBuffView> vbuff;
+        std::vector<WriteCmdType> cmd_type;
+        std::vector<ColumnFamilyType> cmd_cf;
+    };
+
+    static std::tuple<WriteCmdsView, std::shared_ptr<WriteCmdsViewHolder>> createWriteCmdsView(
+        std::vector<std::string> keys,
+        std::vector<std::string> vals,
+        std::vector<WriteCmdType> cmd_types,
+        std::vector<ColumnFamilyType> cmd_cf)
+    {
+        std::shared_ptr<WriteCmdsViewHolder> holder
+            = std::make_shared<WriteCmdsViewHolder>(keys, vals, cmd_types, cmd_cf);
+        return std::make_tuple(
+            WriteCmdsView{holder->getKeys(), holder->getVals(), holder->getTypes(), holder->getCfs(), keys.size()},
+            holder);
+    }
+
     std::pair<std::string, std::string> generateTiKVKeyValue(uint64_t tso, int64_t t) const;
 
     MockRaftStoreProxy()

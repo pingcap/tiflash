@@ -420,6 +420,10 @@ private:
 
     JointThreadInfoJeallocMapPtr joint_memory_allocation_map;
     size_t maximum_kvstore_memory = 0;
+
+#ifdef DBMS_PUBLIC_GTEST
+    std::atomic<size_t> debug_memory_limit_warning_count = 0;
+#endif
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore
