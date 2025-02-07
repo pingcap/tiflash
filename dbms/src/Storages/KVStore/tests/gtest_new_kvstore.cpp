@@ -195,12 +195,6 @@ try
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         auto delta = str_key.dataSize() + str_val_default.size();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), delta);
-        LOG_INFO(
-            log,
-            "!!!! originTableSize {} delta {} T {}",
-            originTableSize,
-            delta,
-            region_table.getTableRegionSize(NullspaceID, table_id));
         ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), originTableSize + delta);
         region->remove("default", TiKVKey::copyFrom(str_key));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
@@ -258,14 +252,16 @@ try
         auto str_key = pickKey(region_id, 1);
         auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
         auto str_lock_value = pickLock(region_id, 1);
-        
+
         region_table.debugClearTableRegionSize(NullspaceID, table_id);
         proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
         RegionPtr region = kvs.getRegion(region_id);
         region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
         region->insert("write", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_write));
-        ASSERT_EQ(str_key.dataSize() * 2 + str_val_default.size() + str_val_write.size(), region_table.getTableRegionSize(NullspaceID, table_id));
+        ASSERT_EQ(
+            str_key.dataSize() * 2 + str_val_default.size() + str_val_write.size(),
+            region_table.getTableRegionSize(NullspaceID, table_id));
         std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
         ASSERT_TRUE(data_list_read);
         ASSERT_EQ(1, data_list_read->size());
@@ -449,6 +445,25 @@ try
         // `region2` is not allowed to access after move, however, we assert here in order to make sure the logic.
         ASSERT_EQ(region2->dataSize(), 0);
         ASSERT_EQ(region2->getData().totalSize(), region2->dataSize());
+    }
+    {
+        // remove region
+        RegionID region_id = 16000;
+        root_of_kvstore_mem_trackers->reset();
+        region_table.debugClearTableRegionSize(NullspaceID, table_id);
+        auto [start, end] = getStartEnd(region_id);
+        auto str_key = pickKey(region_id, 1);
+        auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
+        auto str_lock_value = pickLock(region_id, 1);
+        proxy_instance->debugAddRegions(kvs, ctx.getTMTContext(), {region_id}, {{start, end}});
+        auto kvr1 = kvs.getRegion(region_id);
+        auto [index, term]
+            = proxy_instance
+                  ->rawWrite(region_id, {str_key}, {str_val_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
+        UNUSED(term);
+        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
+        kvs.handleDestroy(region_id, ctx.getTMTContext());
+        ASSERT_EQ(0, region_table.getTableRegionSize(NullspaceID, table_id));
     }
 }
 CATCH

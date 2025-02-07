@@ -183,7 +183,7 @@ void MockRaftStoreProxy::debugAddRegions(
             auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
             lock.regions.emplace(region_ids[i], region);
             lock.index.add(region);
-            tmt.getRegionTable().updateRegion(*region);
+            tmt.getRegionTable().addRegion(*region);
         }
     }
 }

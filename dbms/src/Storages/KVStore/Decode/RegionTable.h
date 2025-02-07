@@ -79,14 +79,9 @@ public:
             , range_in_table(range_in_table_)
         {}
 
-        void updateRegionCacheBytes(size_t);
-
         RegionID region_id;
         std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
         bool pause_flush = false;
-
-    private:
-        Int64 cache_bytes = 0;
     };
 
     using InternalRegions = std::unordered_map<RegionID, InternalRegion>;
@@ -99,7 +94,7 @@ public:
             size = std::make_shared<std::atomic_int64_t>(0);
         }
         TableID table_id;
-        InternalRegions regions;
+        InternalRegions internal_regions;
         RegionTableSize size;
     };
 
@@ -108,7 +103,11 @@ public:
     // Iterate over all regions in KVStore, and add them to RegionTable.
     void restore();
 
-    void updateRegion(const Region & region);
+    // When a region is added to region table, happens when split ans restore.
+    void addRegion(const Region & region);
+
+    // When a reigon is removed out of TiFlash.
+    void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 
     // Used by apply snapshot.
     void replaceRegion(const RegionPtr & old_region, const RegionPtr & new_region);
@@ -119,7 +118,6 @@ public:
     /// extend range for possible InternalRegion or add one.
     void extendRegionRange(const Region & region, const RegionRangeKeys & region_range_keys);
 
-    void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
@@ -203,7 +201,7 @@ private:
     TableMap tables;
 
     using RegionInfoMap = std::unordered_map<RegionID, KeyspaceTableID>;
-    RegionInfoMap regions;
+    RegionInfoMap region_infos;
     SafeTsMap safe_ts_map;
 
     Context * const context;

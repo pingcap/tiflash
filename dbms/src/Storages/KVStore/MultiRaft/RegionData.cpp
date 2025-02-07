@@ -30,7 +30,6 @@ extern const int ILLFORMAT_RAFT_ROW;
 
 void RegionData::recordMemChange(const RegionDataMemDiff & delta)
 {
-    LOG_INFO(DB::Logger::get(), "!!!! recordMemChange {}", delta.payload + delta.decoded);
     if (delta.payload > 0)
     {
         root_of_kvstore_mem_trackers->alloc(delta.payload, false);
@@ -49,14 +48,12 @@ void RegionData::recordMemChange(const RegionDataMemDiff & delta)
 
 void RegionData::updateMemoryUsage(const RegionDataMemDiff & delta)
 {
-    LOG_INFO(DB::Logger::get(), "!!!! updateMemoryUsage {}", delta.payload + delta.decoded);
     cf_data_size += delta.payload;
     decoded_data_size += delta.decoded;
 }
 
 void RegionData::resetMemoryUsage()
 {
-    LOG_INFO(DB::Logger::get(), "!!!! resetMemoryUsage {}", cf_data_size + decoded_data_size);
     cf_data_size = 0;
     decoded_data_size = 0;
 }
@@ -413,17 +410,19 @@ size_t RegionData::tryCompactionFilter(Timestamp safe_point)
     return del_write;
 }
 
-void RegionData::setRegionTableSize(RegionTableSize size) const {
+void RegionData::setRegionTableSize(RegionTableSize size) const
+{
     region_table_size = size;
-    if(region_table_size) {
-        LOG_INFO(DB::Logger::get(), "!!!!! ADDD {} O {}", dataSize(), *region_table_size);
+    if (region_table_size)
+    {
         region_table_size->fetch_add(dataSize());
     }
 }
 
-RegionTableSize RegionData::resetRegionTableSize() const {
-    if(region_table_size) {
-        LOG_INFO(DB::Logger::get(), "!!!!! SUBB {} O {}", dataSize(), *region_table_size);
+RegionTableSize RegionData::resetRegionTableSize() const
+{
+    if (region_table_size)
+    {
         region_table_size->fetch_sub(dataSize());
     }
     auto prev = region_table_size;
