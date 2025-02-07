@@ -483,16 +483,7 @@ DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
     const Context & db_context,
     const DM::ColumnDefinesPtr & columns_to_read)
 {
-    if (!filter_conditions.hasValue())
-        return DM::EMPTY_RS_OPERATOR;
-
     const bool enable_rs_filter = db_context.getSettingsRef().dt_enable_rough_set_filter;
-    if (!enable_rs_filter)
-    {
-        LOG_DEBUG(log, "Rough set filter is disabled.");
-        return DM::EMPTY_RS_OPERATOR;
-    }
-
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filter_conditions.conditions,
         table_scan.getANNQueryInfo(),
