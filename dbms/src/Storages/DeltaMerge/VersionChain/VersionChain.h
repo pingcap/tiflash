@@ -35,6 +35,7 @@ class VersionChain
 {
 private:
     using HandleRefType = typename std::conditional<std::is_same_v<HandleType, Int64>, Int64, std::string_view>::type;
+
 public:
     VersionChain()
         : base_versions(std::make_shared<std::vector<RowID>>())
@@ -83,6 +84,13 @@ private:
     template <typename Iter>
     void calculateReadPacks(Iter begin, Iter end);
     void cleanHandleColumn();
+    template <typename Iter>
+    void replayHandles(
+        const DMContext & dm_context,
+        Iter begin,
+        Iter end,
+        const UInt32 stable_rows,
+        DeltaValueReader & delta_reader);
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
