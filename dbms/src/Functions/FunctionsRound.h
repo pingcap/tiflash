@@ -1263,6 +1263,14 @@ struct TiDBRoundPrecisionInferer
         }
 
         PrecType new_prec = std::min(decimal_max_prec, int_prec + int_prec_increment + new_scale);
+        if unlikely (new_prec == 0)
+        {
+            // new_prec can be zero when the prec is eq to scale and frac is zero, for example:
+            // select truncate(0.22, 0) from t_col_decimal_2_2;
+            // TiDB will do fold constant, so this branch should reach here, but we still handle it.
+            RUNTIME_CHECK(is_tidb_truncate && frac == 0 && prec == scale);
+            new_prec = 1;
+        }
         return std::make_tuple(new_prec, new_scale);
     }
 };
