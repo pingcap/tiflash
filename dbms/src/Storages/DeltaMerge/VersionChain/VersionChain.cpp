@@ -96,7 +96,8 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         }
         else if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            replayed_rows_and_deletes += replayColumnFileBig(dm_context, *cf_big, stable_rows);
+            replayed_rows_and_deletes
+                += replayColumnFileBig(dm_context, *cf_big, stable_rows, std::span{cfs.begin(), pos});
         }
         else
         {
@@ -179,15 +180,44 @@ template <ExtraHandleType HandleType>
 UInt32 VersionChain<HandleType>::replayColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
-    const UInt32 stable_rows)
+    const UInt32 stable_rows,
+    [[maybe_unused]] const std::span<const ColumnFilePtr> preceding_cfs)
 {
-    const UInt32 rows = cf_big.getRows();
-    const UInt32 start_row_id = base_versions->size() + stable_rows;
-    base_versions->insert(base_versions->end(), rows, NotExistRowID);
+    auto [min, max] = loadDMFileHandleRange(dm_context.global_context, *(cf_big.getFile()));
 
-    dmfile_or_delete_range_list.push_back(
-        DMFileHandleIndex<HandleType>{dm_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
-    return rows;
+    auto is_apply_snapshot = [&]() {
+        if (auto * delete_range = std::get_if<RowKeyRange>(&dmfile_or_delete_range_list.back()); delete_range)
+            return inRowKeyRange(*delete_range, min) && inRowKeyRange(*delete_range, max);
+        return false;
+    };
+    auto is_ingest_sst = [&]() {
+        for (const auto & cf : preceding_cfs)
+        {
+            if (const auto * t = cf->tryToBigFile(); t)
+            {
+                auto [t_min, t_max] = loadDMFileHandleRange(dm_context.global_context, *(t->getFile()));
+                if (min <= t_max && t_min <= max)
+                    return false;
+            }
+            else
+                return false;
+        }
+        return true; // preceding_cfs is empty.
+    };
+
+    if (likely(is_apply_snapshot() || is_ingest_sst()))
+    {
+        const UInt32 rows = cf_big.getRows();
+        const UInt32 start_row_id = base_versions->size() + stable_rows;
+        base_versions->insert(base_versions->end(), rows, NotExistRowID);
+
+        dmfile_or_delete_range_list.push_back(
+            DMFileHandleIndex<HandleType>{dm_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
+        return rows;
+    }
+
+    // TODO: replay dmfile as normal write
+    return 0;
 }
 
 template <ExtraHandleType HandleType>

@@ -50,6 +50,19 @@ T getMaxValue(const MinMaxIndex & minmax_index, size_t i)
         static_assert(false, "Not support type");
 }
 
+template <typename T>
+T getMinValue(const MinMaxIndex & minmax_index, size_t i)
+{
+    if constexpr (std::is_same_v<T, Int64>)
+        return minmax_index.getIntMinMax(i).first;
+    else if constexpr (std::is_same_v<T, String>)
+        return minmax_index.getStringMinMax(i).first.toString();
+    else if constexpr (std::is_same_v<T, UInt64>)
+        return minmax_index.getUInt64MinMax(i).first;
+    else
+        static_assert(false, "Not support type");
+}
+
 std::pair<RSResults, UInt32> clipRSResults(const RSResults & rs_results)
 {
     const auto start = std::find_if(rs_results.begin(), rs_results.end(), [](RSResult r) { return r.isUse(); });
@@ -112,4 +125,30 @@ template std::vector<String> loadPackMaxValue<String>(
     const DMFile & dmfile,
     const ColId col_id);
 
+template <ExtraHandleType HandleType>
+std::optional<std::pair<HandleType, HandleType>> loadDMFileHandleRange(
+    const Context & global_context,
+    const DMFile & dmfile)
+{
+    if (dmfile.getPacks() == 0)
+        return {};
+
+    auto [type, minmax_index] = DMFilePackFilter::loadIndex(
+        dmfile,
+        global_context.getFileProvider(),
+        global_context.getMinMaxIndexCache(),
+        /* set cache*/ true,
+        MutSup::extra_handle_id,
+        global_context.getReadLimiter(),
+        /*scan context*/ nullptr);
+
+    return {getMinValue<HandleType>(*minmax_index, 0), getMaxValue<HandleType>(*minmax_index, dmfile.getPacks() - 1)};
+}
+
+template std::optional<std::pair<Int64, Int64>> loadDMFileHandleRange(
+    const Context & global_context,
+    const DMFile & dmfile);
+template std::optional<std::pair<String, String>> loadDMFileHandleRange(
+    const Context & global_context,
+    const DMFile & dmfile);
 } // namespace DB::DM
