@@ -432,9 +432,9 @@ class KVStoreTaskLock : private boost::noncopyable
 
 void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
 void WaitCheckRegionReadyImpl(
-    const TMTContext &,
     KVStore & kvstore,
     const std::atomic_size_t &,
+    UInt64 read_index_timeout,
     double,
     double,
     double);
