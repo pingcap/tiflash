@@ -117,7 +117,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         {
             UInt64 leader_safe_ts;
             UInt64 self_safe_ts;
-            if (!region_table.isSafeTSLag(region.first, &leader_safe_ts, &self_safe_ts))
+            if (!region_table.safeTsMgr().isSafeTSLag(region.first, &leader_safe_ts, &self_safe_ts))
             {
                 region_list.push_back(region.first);
             }

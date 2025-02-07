@@ -193,7 +193,10 @@ void makeRegionsLag(size_t lag_num)
     auto & tmt = TiFlashTestEnv::getContext()->getTMTContext();
     for (size_t i = 0; i < lag_num; i++)
     {
-        tmt.getRegionTable().updateSafeTS(i, (RegionTable::SafeTsDiffThreshold + 1) << TsoPhysicalShiftBits, 0);
+        tmt.getRegionTable().safeTsMgr().updateSafeTS(
+            i,
+            (SafeTsMgr::SafeTsDiffThreshold + 1) << TsoPhysicalShiftBits,
+            0);
     }
 }
 

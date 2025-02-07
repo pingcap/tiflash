@@ -402,7 +402,8 @@ RegionTableSize Region::resetRegionTableSize() const
     return data.resetRegionTableSize();
 }
 
-size_t getRegionTableSize() const {
+size_t Region::getRegionTableSize() const
+{
     return data.getRegionTableSize();
 }
 

@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/Decode/RegionTable_fwd.h>
+#include <Storages/KVStore/Decode/SafeTsMgr.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
@@ -54,18 +55,6 @@ struct CheckpointInfo;
 using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 struct CheckpointIngestInfo;
 using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
-
-using SafeTS = UInt64;
-enum : SafeTS
-{
-    InvalidSafeTS = std::numeric_limits<UInt64>::max(),
-};
-
-using TsoShiftBits = UInt64;
-enum : TsoShiftBits
-{
-    TsoPhysicalShiftBits = 18,
-};
 
 class RegionTable : private boost::noncopyable
 {
@@ -161,29 +150,9 @@ public:
     size_t getTableRegionSize(KeyspaceID keyspace_id, TableID table_id) const;
     void debugClearTableRegionSize(KeyspaceID keyspace_id, TableID table_id);
 
-public:
-    // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
-    // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
-    // self_safe_ts is the safe_ts in TiFlah learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
-    struct SafeTsEntry
-    {
-        explicit SafeTsEntry(UInt64 leader_safe_ts, UInt64 self_safe_ts)
-            : leader_safe_ts(leader_safe_ts)
-            , self_safe_ts(self_safe_ts)
-        {}
-        std::atomic<UInt64> leader_safe_ts;
-        std::atomic<UInt64> self_safe_ts;
-    };
-    using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
-    using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
+    SafeTsMgr & safeTsMgr() { return safe_ts_mgr; }
+    const SafeTsMgr & safeTsMgr() const { return safe_ts_mgr; }
 
-    void updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts);
-
-    // unit: ms. If safe_ts diff is larger than 2min, we think the data synchronization progress is far behind the leader.
-    static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
-    bool isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts);
-
-    UInt64 getSelfSafeTS(UInt64 region_id) const;
 
 private:
     friend class MockTiDB;
@@ -202,12 +171,12 @@ private:
 
     using RegionInfoMap = std::unordered_map<RegionID, KeyspaceTableID>;
     RegionInfoMap region_infos;
-    SafeTsMap safe_ts_map;
 
     Context * const context;
 
+    SafeTsMgr safe_ts_mgr;
+
     mutable std::mutex mutex;
-    mutable std::shared_mutex rw_lock;
 
     LoggerPtr log;
 };

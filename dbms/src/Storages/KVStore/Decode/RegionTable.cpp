@@ -116,7 +116,7 @@ void RegionTable::clear()
 {
     region_infos.clear();
     tables.clear();
-    safe_ts_map.clear();
+    safe_ts_mgr.safe_ts_map.clear();
 }
 
 void RegionTable::restore()
@@ -143,8 +143,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
     {
         region_infos.erase(region_info.first);
         {
-            std::unique_lock write_lock(rw_lock);
-            safe_ts_map.erase(region_info.first);
+            safe_ts_mgr.remove(region_info.first);
         }
     }
 
@@ -250,10 +249,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
         handle_range = internal_region_it->second.range_in_table;
 
         region_infos.erase(it);
-        {
-            std::unique_lock write_lock(rw_lock);
-            safe_ts_map.erase(region_id);
-        }
+        safe_ts_mgr.remove(region_id);
         table.internal_regions.erase(internal_region_it);
         if (table.internal_regions.empty())
         {
@@ -484,71 +480,5 @@ RegionPtrWithCheckpointInfo::RegionPtrWithCheckpointInfo(const Base & base_, Che
     : base(base_)
     , checkpoint_info(std::move(checkpoint_info_))
 {}
-
-bool RegionTable::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts)
-{
-    {
-        std::shared_lock lock(rw_lock);
-        auto it = safe_ts_map.find(region_id);
-        if (it == safe_ts_map.end())
-        {
-            return false;
-        }
-        *leader_safe_ts = it->second->leader_safe_ts.load(std::memory_order_relaxed);
-        *self_safe_ts = it->second->self_safe_ts.load(std::memory_order_relaxed);
-    }
-    LOG_TRACE(
-        log,
-        "region_id={} table_id={} leader_safe_ts={} self_safe_ts={}",
-        region_id,
-        region_infos[region_id],
-        *leader_safe_ts,
-        *self_safe_ts);
-    return (*leader_safe_ts > *self_safe_ts)
-        && ((*leader_safe_ts >> TsoPhysicalShiftBits) - (*self_safe_ts >> TsoPhysicalShiftBits) > SafeTsDiffThreshold);
-}
-
-UInt64 RegionTable::getSelfSafeTS(UInt64 region_id) const
-{
-    std::shared_lock lock(rw_lock);
-    auto it = safe_ts_map.find(region_id);
-    if (it == safe_ts_map.end())
-    {
-        return 0;
-    }
-    return it->second->self_safe_ts.load(std::memory_order_relaxed);
-}
-
-void RegionTable::updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts)
-{
-    {
-        std::shared_lock lock(rw_lock);
-        auto it = safe_ts_map.find(region_id);
-        if (it == safe_ts_map.end() && (leader_safe_ts == InvalidSafeTS || self_safe_ts == InvalidSafeTS))
-        {
-            LOG_TRACE(
-                log,
-                "safe_ts_map empty but safe ts invalid, region_id={} leader_safe_ts={} self_safe_ts={}",
-                region_id,
-                leader_safe_ts,
-                self_safe_ts);
-            return;
-        }
-        if (it != safe_ts_map.end())
-        {
-            if (leader_safe_ts != InvalidSafeTS)
-            {
-                it->second->leader_safe_ts.store(leader_safe_ts, std::memory_order_relaxed);
-            }
-            if (self_safe_ts != InvalidSafeTS)
-            {
-                it->second->self_safe_ts.store(self_safe_ts, std::memory_order_relaxed);
-            }
-            return;
-        }
-    }
-    std::unique_lock lock(rw_lock);
-    safe_ts_map.emplace(region_id, std::make_unique<SafeTsEntry>(leader_safe_ts, self_safe_ts));
-}
 
 } // namespace DB

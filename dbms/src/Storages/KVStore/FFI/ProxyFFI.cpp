@@ -978,7 +978,7 @@ void HandleSafeTSUpdate(
     try
     {
         RegionTable & region_table = server->tmt->getRegionTable();
-        region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
+        region_table.safeTsMgr().updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
     }
     catch (...)
     {
