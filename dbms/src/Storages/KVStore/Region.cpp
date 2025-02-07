@@ -402,4 +402,8 @@ RegionTableSize Region::resetRegionTableSize() const
     return data.resetRegionTableSize();
 }
 
+size_t getRegionTableSize() const {
+    return data.getRegionTableSize();
+}
+
 } // namespace DB

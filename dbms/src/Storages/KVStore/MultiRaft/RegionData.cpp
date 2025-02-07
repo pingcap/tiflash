@@ -431,4 +431,13 @@ RegionTableSize RegionData::resetRegionTableSize() const
     return prev;
 }
 
+size_t RegionData::getRegionTableSize() const
+{
+    if (region_table_size)
+    {
+        return (*region_table_size);
+    }
+    return 0;
+}
+
 } // namespace DB

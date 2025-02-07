@@ -235,6 +235,7 @@ public: // Stats
     // All memory changes to this region would relect to the binded table.
     void setRegionTableSize(RegionTableSize size) const;
     RegionTableSize resetRegionTableSize() const;
+    size_t getRegionTableSize() const;
 
 public: // Raft Read and Write
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
