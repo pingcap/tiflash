@@ -29,6 +29,8 @@ template <ExtraHandleType HandleType>
 class DMFileHandleIndex
 {
 public:
+    using HandleRefType = typename std::conditional<std::is_same_v<HandleType, Int64>, Int64, std::string_view>::type;
+
     DMFileHandleIndex(
         const DMContext & dm_context_,
         const DMFilePtr & dmfile_,
@@ -53,8 +55,7 @@ public:
             clipped_pack_range.count());
     }
 
-    template <HandleRefType HandleRef>
-    std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRef h)
+    std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRefType h)
     {
         auto clipped_pack_id = getClippedPackId(h);
         if (!clipped_pack_id)
@@ -94,8 +95,7 @@ public:
     }
 
 private:
-    template <HandleRefType HandleRef>
-    std::optional<UInt32> getClippedPackId(HandleRef h)
+    std::optional<UInt32> getClippedPackId(HandleRefType h)
     {
         if (unlikely(rowkey_range && !inRowKeyRange(*rowkey_range, h)))
             return {};
@@ -106,8 +106,7 @@ private:
         return itr - clipped_pack_index.begin();
     }
 
-    template <HandleRefType HandleRef>
-    std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRef h, UInt32 clipped_pack_id)
+    std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRefType h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded(dm_context);
         ColumnView<HandleType> handle_col(*clipped_handle_packs[clipped_pack_id]);

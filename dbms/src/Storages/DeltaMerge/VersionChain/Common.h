@@ -33,7 +33,7 @@ template <typename T>
 concept ExtraHandleType = std::same_as<T, Int64> || std::same_as<T, String>;
 
 template <typename T>
-concept HandleRefType = std::same_as<T, Int64> || std::same_as<T, std::string_view>;
+concept ExtraHandleRefType = std::same_as<T, Int64> || std::same_as<T, std::string_view>;
 
 template <ExtraHandleType HandleType>
 ColumnDefine getHandleColumnDefine()
@@ -61,7 +61,7 @@ inline ColumnDefinesPtr getTagColumnDefinesPtr()
     return cds_ptr;
 }
 
-template <HandleRefType HandleRef>
+template <ExtraHandleRefType HandleRef>
 bool inRowKeyRange(const RowKeyRange & range, HandleRef handle)
 {
     if constexpr (std::is_same_v<HandleRef, Int64>)

@@ -244,10 +244,9 @@ UInt32 VersionChain<HandleType>::replayDeleteRange(
 }
 
 template <ExtraHandleType HandleType>
-template <HandleRefType HandleRef>
 std::optional<RowID> VersionChain<HandleType>::findBaseVersionFromDMFileOrDeleteRangeList(
     const DMContext & dm_context,
-    HandleRef h)
+    HandleRefType h)
 {
     // From from new to old
     for (auto & dmfile_or_delete_range : dmfile_or_delete_range_list | std::views::reverse)
@@ -267,8 +266,8 @@ std::optional<RowID> VersionChain<HandleType>::findBaseVersionFromDMFileOrDelete
 }
 
 template <ExtraHandleType HandleType>
-template <typename Iterator>
-void VersionChain<HandleType>::calculateReadPacks(Iterator begin, Iterator end)
+template <typename Iter>
+void VersionChain<HandleType>::calculateReadPacks(Iter begin, Iter end)
 {
     assert(dmfile_or_delete_range_list.size() == 1);
     auto & dmfile_index = std::get<DMFileHandleIndex<HandleType>>(dmfile_or_delete_range_list.front());
