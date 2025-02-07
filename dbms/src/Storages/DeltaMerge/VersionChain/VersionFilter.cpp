@@ -24,33 +24,19 @@
 
 namespace DB::DM
 {
-[[nodiscard]] UInt32 buildVersionFilterBlock(
-    const DMContext & dm_context,
-    const IColumnFileDataProviderPtr & data_provider,
-    const ColumnFile & cf,
+void buildVersionFilterVector(
+    const PaddedPODArray<UInt64> & versions,
     const UInt64 read_ts,
     const std::vector<RowID> & base_ver_snap,
     const UInt32 stable_rows,
     const UInt32 start_row_id,
     IColumn::Filter & filter)
 {
-    assert(cf.isInMemoryFile() || cf.isTinyFile());
-    auto cf_reader = cf.getReader(dm_context, data_provider, getVersionColumnDefinesPtr(), ReadTag::MVCC);
-    auto block = cf_reader->readNextBlock();
-    RUNTIME_CHECK_MSG(
-        cf.getRows() == block.rows(),
-        "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
-        cf.toString(),
-        block.rows());
-    if (!block)
-        return 0;
-
-    const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column); // Must success
     // Traverse data from new to old
     for (ssize_t i = versions.size() - 1; i >= 0; --i)
     {
         const UInt32 row_id = start_row_id + i;
-        // Already filtered ou, maybe by RowKeyFilter
+        // Already filtered out, maybe by RowKeyFilter
         if (!filter[row_id])
             continue;
 
@@ -73,7 +59,49 @@ namespace DB::DM
         if (base_row_id != NotExistRowID)
             filter[base_row_id] = 0;
     }
-    return versions.size();
+}
+
+[[nodiscard]] UInt32 buildVersionFilterBlock(
+    const DMContext & dm_context,
+    const IColumnFileDataProviderPtr & data_provider,
+    const ColumnFile & cf,
+    const UInt64 read_ts,
+    const std::vector<RowID> & base_ver_snap,
+    const UInt32 stable_rows,
+    const UInt32 start_row_id,
+    IColumn::Filter & filter)
+{
+    auto cf_reader = cf.getReader(dm_context, data_provider, getVersionColumnDefinesPtr(), ReadTag::MVCC);
+    UInt32 read_block_count = 0;
+    UInt32 read_rows = 0;
+    while (true)
+    {
+        // Must make sure different versions of the same handle are sorted ascending.
+        // So that when scanning the version column in reverse order, you can first read the large version and then read the small version of one handle.
+        auto block = cf_reader->readNextBlock();
+        if (!block)
+            break;
+
+        ++read_block_count;
+        read_rows += block.rows();
+        const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column); // Must success
+        buildVersionFilterVector(versions, read_ts, base_ver_snap, stable_rows, start_row_id, filter);
+    }
+
+    RUNTIME_CHECK_MSG(
+        cf.getRows() == read_rows,
+        "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
+        cf.toString(),
+        read_rows);
+
+    if (cf.isInMemoryFile() || cf.isTinyFile())
+        RUNTIME_CHECK_MSG(
+            read_block_count == 1,
+            "ColumnFile={} does not read all data in one block: read_block_count={}, read_rows={}",
+            cf.toString(),
+            read_block_count,
+            read_rows);
+    return read_rows;
 }
 
 template <ExtraHandleType HandleType>
@@ -217,6 +245,19 @@ template <ExtraHandleType HandleType>
     return buildVersionFilterDMFile<HandleType>(dm_context, dmfiles[0], std::nullopt, read_ts, 0, filter);
 }
 
+bool isApplySnapshotOrIngestSST(
+    const ColumnFileBig & cf_big,
+    const UInt32 stable_rows,
+    const UInt32 start_row_id,
+    const std::vector<RowID> & base_ver_snap)
+{
+    const auto offset = start_row_id - stable_rows;
+    const auto rows = cf_big.getRows();
+    return std::all_of(base_ver_snap.begin() + offset, base_ver_snap.begin() + offset + rows, [](RowID row_id) {
+        return row_id == NotExistRowID;
+    });
+}
+
 template <ExtraHandleType HandleType>
 void buildVersionFilter(
     const DMContext & dm_context,
@@ -265,8 +306,20 @@ void buildVersionFilter(
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            const auto n
-                = buildVersionFilterColumnFileBig<HandleType>(dm_context, *cf_big, read_ts, start_row_id, filter);
+            UInt32 n = 0;
+            if (likely(isApplySnapshotOrIngestSST(*cf_big, stable_rows, start_row_id, base_ver_snap)))
+                n = buildVersionFilterColumnFileBig<HandleType>(dm_context, *cf_big, read_ts, start_row_id, filter);
+            else
+                n = buildVersionFilterBlock(
+                    dm_context,
+                    data_provider,
+                    *cf,
+                    read_ts,
+                    base_ver_snap,
+                    stable_rows,
+                    start_row_id,
+                    filter);
+
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
