@@ -97,7 +97,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         else if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
             replayed_rows_and_deletes
-                += replayColumnFileBig(dm_context, *cf_big, stable_rows, std::span{cfs.begin(), pos});
+                += replayColumnFileBig(dm_context, *cf_big, stable_rows, std::span{cfs.begin(), pos}, delta_reader);
         }
         else
         {
@@ -177,7 +177,7 @@ UInt32 VersionChain<HandleType>::replayBlock(
     const auto & column = *(block.begin()->column);
     RUNTIME_CHECK(column.size() > offset, column.size(), offset);
 
-    const auto handle_col = ColumnView<HandleType>(*(block.begin()->column));
+    const auto handle_col = ColumnView<HandleType>(column);
     LOG_DEBUG(Logger::get(), "cf={}, handle_col={}", cf.toString(), handle_col);
     auto itr = handle_col.begin() + offset;
 
@@ -193,7 +193,8 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const UInt32 stable_rows,
-    [[maybe_unused]] const std::span<const ColumnFilePtr> preceding_cfs)
+    [[maybe_unused]] const std::span<const ColumnFilePtr> preceding_cfs,
+    DeltaValueReader & delta_reader)
 {
     auto min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, *(cf_big.getFile()));
     if (!min_max) // DMFile is empty.
@@ -240,8 +241,28 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
         return rows;
     }
 
-    // TODO: replay dmfile as normal write
-    return 0;
+    // Replay dmfile as normal write. At present, only testing may take this path.
+    LOG_WARNING(
+        Logger::get(dm_context.tracing_id),
+        "ColumnFileBig={} is neither apply snapshot nor ingest sst",
+        cf_big.toString());
+    auto cf_reader = cf_big.getReader(
+        dm_context,
+        /*data_provider*/ nullptr,
+        getHandleColumnDefinesPtr<HandleType>(),
+        ReadTag::MVCC);
+    UInt32 read_rows = 0;
+    while (true)
+    {
+        auto block = cf_reader->readNextBlock();
+        if (!block)
+            break;
+        read_rows += block.rows();
+        const auto handle_col = ColumnView<HandleType>(*(block.begin()->column));
+        replayHandles(dm_context, handle_col.begin(), handle_col.end(), stable_rows, delta_reader);
+    }
+    RUNTIME_CHECK(read_rows == cf_big.getRows(), read_rows, cf_big.getRows());
+    return read_rows;
 }
 
 template <ExtraHandleType HandleType>
