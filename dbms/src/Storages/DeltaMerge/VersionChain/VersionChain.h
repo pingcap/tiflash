@@ -72,7 +72,8 @@ private:
         const DMContext & dm_context,
         const ColumnFileBig & cf_big,
         const UInt32 stable_rows,
-        const std::span<const ColumnFilePtr> preceding_cfs);
+        const std::span<const ColumnFilePtr> preceding_cfs,
+        DeltaValueReader & delta_reader);
     [[nodiscard]] UInt32 replayDeleteRange(
         const ColumnFileDeleteRange & cf_delete_range,
         DeltaValueReader & delta_reader,
