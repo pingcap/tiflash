@@ -245,6 +245,10 @@ struct TiFlashProxyConfig
             // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
             if (disaggregated_mode == DisaggregatedMode::Storage)
                 args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
+#if SERVERLESS_PROXY == 1
+            if (config.has("blacklist_file"))
+                args_map["blacklist-ile"] = config.getString("blacklist_file");
+#endif
 
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
@@ -559,6 +563,74 @@ void syncSchemaWithTiDB(
 
     // init schema sync service with tidb
     global_context->initializeSchemaSyncService();
+}
+
+void loadBlockList(
+    [[maybe_unused]] const Poco::Util::LayeredConfiguration & config,
+    Context & global_context,
+    [[maybe_unused]] const LoggerPtr & log)
+{
+#if SERVERLESS_PROXY != 1
+    // We do not support blocking store by id in OP mode currently.
+    global_context.initializeStoreIdBlockList("");
+#else
+    global_context.initializeStoreIdBlockList(global_context.getSettingsRef().disagg_blocklist_wn_store_id);
+
+    /// Load keyspace blacklist json file
+    LOG_INFO(log, "Loading blacklist file.");
+    auto blacklist_file_path = config.getString("blacklist_file", "");
+    if (blacklist_file_path.length() == 0)
+    {
+        LOG_INFO(log, "blocklist file not enabled, ignore it.");
+    }
+    else
+    {
+        auto blacklist_file = Poco::File(blacklist_file_path);
+        if (blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead())
+        {
+            // Read the json file
+            std::ifstream ifs(blacklist_file_path);
+            std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+            Poco::JSON::Parser parser;
+            Poco::Dynamic::Var json_var = parser.parse(json_content);
+            const auto & json_obj = json_var.extract<Poco::JSON::Object::Ptr>();
+
+            // load keyspace list
+            auto keyspace_arr = json_obj->getArray("keyspace_ids");
+            if (!keyspace_arr.isNull())
+            {
+                std::unordered_set<KeyspaceID> keyspace_blocklist;
+                for (size_t i = 0; i < keyspace_arr->size(); i++)
+                {
+                    keyspace_blocklist.emplace(keyspace_arr->getElement<KeyspaceID>(i));
+                }
+                global_context.initKeyspaceBlocklist(keyspace_blocklist);
+            }
+
+            // load region list
+            auto region_arr = json_obj->getArray("region_ids");
+            if (!region_arr.isNull())
+            {
+                std::unordered_set<RegionID> region_blocklist;
+                for (size_t i = 0; i < region_arr->size(); i++)
+                {
+                    region_blocklist.emplace(region_arr->getElement<RegionID>(i));
+                }
+                global_context.initRegionBlocklist(region_blocklist);
+            }
+
+            LOG_INFO(
+                log,
+                "Load blocklist file done, total {} keyspaces and {} regions in blacklist.",
+                keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
+                region_arr.isNull() ? 0 : region_arr->size());
+        }
+        else
+        {
+            LOG_INFO(log, "blocklist file not exists or non-readble, ignore it.");
+        }
+    }
+#endif
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
@@ -1116,8 +1188,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setDeltaIndexManager(n);
     }
 
-    // We do not support blocking store by id in OP mode currently.
-    global_context->initializeStoreIdBlockList("");
+    loadBlockList(config(), *global_context, log);
 
     LOG_INFO(log, "Loading metadata.");
     loadMetadataSystem(*global_context); // Load "system" database. Its engine keeps as Ordinary.

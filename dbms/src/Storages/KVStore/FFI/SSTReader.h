@@ -73,8 +73,8 @@ private:
 };
 
 /// MultiSSTReader helps when there are multiple sst files in a column family.
-/// It is derived from virtual class SSTReader, so it can be holded in a SSTReaderPtr.
-/// It also maintains instance of `R` which is normaly SSTReader(and MockSSTReader in tests),
+/// It is derived from virtual class SSTReader, so it can be held in a SSTReaderPtr.
+/// It also maintains instance of `R` which is normally SSTReader(and MockSSTReader in tests),
 /// to read a single sst file.
 /// An `Initer` function is need to create a instance of `R` from a instance of `E`,
 /// which is usually path of the SST file.
@@ -156,6 +156,7 @@ public:
         {
             // We don't drop if mono is the last instance for safety,
             // and it will be dropped as MultiSSTReader is dropped.
+#if SERVERLESS_PROXY != 1
             LOG_INFO(
                 log,
                 "Open sst file {}, range={} sst_idx={} sst_tot={}",
@@ -163,6 +164,14 @@ public:
                 range->toDebugString(),
                 sst_idx,
                 args.size());
+#else
+            LOG_INFO(
+                log,
+                "Open sst file, range={} sst_idx={} sst_tot={}",
+                range->toDebugString(),
+                sst_idx,
+                args.size());
+#endif
             mono = initer(proxy_helper, args[sst_idx], range, log);
         }
     }
@@ -183,12 +192,16 @@ public:
         , range(range_)
     {
         assert(args.size() > 0);
+#if SERVERLESS_PROXY != 1
         LOG_INFO(
             log,
             "Open sst file first {}, range={} sst_tot={}",
             buffToStrView(args[sst_idx].path),
             range->toDebugString(),
             args.size());
+#else
+        LOG_INFO(log, "Open sst file first, range={} sst_tot={}", range->toDebugString(), args.size());
+#endif
         mono = initer(proxy_helper, args[sst_idx], range, log);
     }
 

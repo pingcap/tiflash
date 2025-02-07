@@ -398,6 +398,22 @@ RegionMap RegionPersister::restore(
             "region_id and page_id not match! region_id={} page_id={}",
             region->id(),
             page.page_id);
+#if SERVERLESS_PROXY == 1
+        if (global_context.isKeyspaceInBlocklist(region->getKeyspaceID()))
+        {
+            LOG_WARNING(
+                log,
+                "Region skip restore because keyspace in blocklist, region_id={} keyspace={}",
+                region->id(),
+                region->getKeyspaceID());
+            return;
+        }
+        if (global_context.isRegionInBlocklist(region->id()))
+        {
+            LOG_WARNING(log, "Region skip restore because region_id in blacklist, region_id={}", region->id());
+            return;
+        }
+#endif
 
         regions.emplace(page.page_id, region);
     };
