@@ -24,6 +24,30 @@
 
 namespace DB::DM
 {
+
+ALWAYS_INLINE void buildVersionFilterRow(const RowID row_id, 
+    const std::vector<RowID> & base_ver_snap,
+    const UInt32 stable_rows,
+    IColumn::Filter & filter)
+{
+    const auto base_row_id = base_ver_snap[row_id - stable_rows];
+    fmt::println("row_id={}, base_row_id={}", row_id, base_row_id);
+    // Most records are likely has only one version.
+    if (likely(base_row_id == NotExistRowID))
+        return;
+
+    // Base version has been filtered out, that means newer version has been chosen,
+    // so filter out current version.
+    if (!filter[base_row_id])
+    {
+        filter[row_id] = 0;
+        return;
+    }
+    
+    // Choose current version and mark base version as filtered out.
+    filter[base_row_id] = 0;
+}
+
 [[nodiscard]] UInt32 buildVersionFilterBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
@@ -50,28 +74,14 @@ namespace DB::DM
     for (ssize_t i = versions.size() - 1; i >= 0; --i)
     {
         const UInt32 row_id = start_row_id + i;
-        // Already filtered ou, maybe by RowKeyFilter
-        if (!filter[row_id])
-            continue;
-
-        // Invisible
+         // Invisible, just filter out
         if (versions[i] > read_ts)
         {
             filter[row_id] = 0;
             continue;
         }
 
-        // Visible
-        const auto base_row_id = base_ver_snap[row_id - stable_rows];
-        // Newer version has been chosen
-        if (base_row_id != NotExistRowID && !filter[base_row_id])
-        {
-            filter[row_id] = 0;
-            continue;
-        }
-        // Choose this version. If has based version, filter it out.
-        if (base_row_id != NotExistRowID)
-            filter[base_row_id] = 0;
+        buildVersionFilterRow(row_id, base_ver_snap, stable_rows, filter);
     }
     return versions.size();
 }
@@ -82,6 +92,8 @@ template <ExtraHandleType HandleType>
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range,
     const UInt64 read_ts,
+    const std::vector<RowID> * base_ver_snap,
+    const std::optional<const UInt32> stable_rows,
     const ssize_t start_row_id,
     IColumn::Filter & filter)
 {
@@ -104,9 +116,23 @@ template <ExtraHandleType HandleType>
         const auto & stat = pack_stats[pack_id];
         if (stat.not_clean || max_versions[pack_id] > read_ts)
         {
+            fmt::println("pack_id={}, not_clean={}, max_version={}, read_ts={}", pack_id, stat.not_clean, max_versions[pack_id], read_ts);
+            // Need read pack to confirm versions.
             need_read_packs->insert(pack_id);
             need_read_pack_to_start_row_ids.emplace(pack_id, pack_start_row_id);
             need_read_rows += stat.rows;
+        }
+        else if (base_ver_snap && stable_rows && stat.rows > 0)
+        {
+            // This branch is to handle ingest dmfile as normal write, instead of apply snapshot or ingtest sst.
+
+            // Versions of this pack meet the requirements, filter out base versions.
+            // FIXME: scan in reverse order
+            for (UInt32 i = 0; i < stat.rows; ++i)
+            {
+                const auto row_id = pack_start_row_id + i;
+                buildVersionFilterRow(row_id, *base_ver_snap, *stable_rows, filter);
+            }
         }
         processed_rows += stat.rows;
     }
@@ -193,6 +219,8 @@ template <ExtraHandleType HandleType>
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const UInt64 read_ts,
+    const std::vector<RowID> & base_ver_snap,
+    const UInt32 stable_rows,
     const ssize_t start_row_id,
     IColumn::Filter & filter)
 {
@@ -201,6 +229,8 @@ template <ExtraHandleType HandleType>
         cf_big.getFile(),
         cf_big.getRange(),
         read_ts,
+        &base_ver_snap,
+        stable_rows,
         start_row_id,
         filter);
 }
@@ -214,7 +244,7 @@ template <ExtraHandleType HandleType>
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-    return buildVersionFilterDMFile<HandleType>(dm_context, dmfiles[0], std::nullopt, read_ts, 0, filter);
+    return buildVersionFilterDMFile<HandleType>(dm_context, dmfiles[0], std::nullopt, read_ts, /*base_ver_snap*/nullptr, /*stable_rows*/std::nullopt, 0, filter);
 }
 
 template <ExtraHandleType HandleType>
@@ -266,7 +296,7 @@ void buildVersionFilter(
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
             const auto n
-                = buildVersionFilterColumnFileBig<HandleType>(dm_context, *cf_big, read_ts, start_row_id, filter);
+                = buildVersionFilterColumnFileBig<HandleType>(dm_context, *cf_big, read_ts, base_ver_snap, stable_rows, start_row_id, filter);
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
