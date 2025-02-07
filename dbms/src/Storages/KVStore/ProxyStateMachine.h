@@ -148,9 +148,29 @@ private:
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
-            // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
+            String extra_label;
             if (disaggregated_mode == DisaggregatedMode::Storage)
-                args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
+            {
+                // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
+                // to distinguish with the node under non-disagg mode
+                extra_label = fmt::format("engine_role={}", DISAGGREGATED_MODE_WRITE_ENGINE_ROLE);
+            }
+            else if (disaggregated_mode == DisaggregatedMode::Compute)
+            {
+                // For compute node, explicitly add a label with `exclusive=no-data` to avoid Region
+                // being placed to the compute node.
+                // Related logic in pd-server:
+                // https://github.com/tikv/pd/blob/v8.5.0/pkg/schedule/placement/label_constraint.go#L69-L95
+                extra_label = "exclusive=no-data";
+            }
+            if (args_map.contains("labels"))
+                extra_label = fmt::format("{},{}", args_map["labels"], extra_label);
+            // For non-disagg mode, no extra labels is required
+            if (!extra_label.empty())
+            {
+                args_map["labels"] = extra_label;
+            }
+
 #if SERVERLESS_PROXY == 1
             if (config.has("blacklist_file"))
                 args_map["blacklist-ile"] = config.getString("blacklist_file");
