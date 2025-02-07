@@ -233,9 +233,11 @@ public: // Stats
 
     // Bind a region to a RegionTable. It could not be bound to another table any more.
     // All memory changes to this region would relect to the binded table.
-    void setRegionTableSize(RegionTableSize size) const;
-    RegionTableSize resetRegionTableSize() const;
+    void setRegionTableCtx(RegionTableCtx size) const;
+    RegionTableCtx resetRegionTableCtx() const;
     size_t getRegionTableSize() const;
+    bool getRegionTableWarned() const { return data.getRegionTableWarned(); }
+    bool setRegionTableWarned(bool desired) const { return data.setRegionTableWarned(desired); }
 
 public: // Raft Read and Write
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);

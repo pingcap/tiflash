@@ -271,7 +271,7 @@ void KVStore::removeRegion(
         auto manage_lock = genRegionMgrWriteLock(task_lock);
         auto it = manage_lock.regions.find(region_id);
         // Disregister from region table size.
-        it->second->resetRegionTableSize();
+        it->second->resetRegionTableCtx();
         manage_lock.index.remove(
             it->second->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(),
             region_id); // remove index

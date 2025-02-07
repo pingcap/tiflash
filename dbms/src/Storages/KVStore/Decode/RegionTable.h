@@ -80,11 +80,11 @@ public:
         explicit Table(const TableID table_id_)
             : table_id(table_id_)
         {
-            size = std::make_shared<std::atomic_int64_t>(0);
+            ctx = createRegionTableCtx();
         }
         TableID table_id;
         InternalRegions internal_regions;
-        RegionTableSize size;
+        RegionTableCtx ctx;
     };
 
     explicit RegionTable(Context & context_);
@@ -106,7 +106,6 @@ public:
 
     /// extend range for possible InternalRegion or add one.
     void extendRegionRange(const Region & region, const RegionRangeKeys & region_range_keys);
-
 
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.

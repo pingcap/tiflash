@@ -40,9 +40,9 @@ void RegionData::recordMemChange(const RegionDataMemDiff & delta)
     }
     // A region splits and merges, but its derived region all belong to the same table.
     // So we can summarize here rather than `updateMemoryUsage`.
-    if (region_table_size)
+    if (region_table_ctx)
     {
-        *region_table_size += delta.total();
+        region_table_ctx->table_size += delta.total();
     }
 }
 
@@ -287,7 +287,7 @@ size_t RegionData::totalSize() const
 
 void RegionData::assignRegionData(RegionData && rhs)
 {
-    auto size = rhs.resetRegionTableSize();
+    auto size = rhs.resetRegionTableCtx();
     recordMemChange(RegionDataMemDiff{-cf_data_size.load(), -decoded_data_size.load()});
     resetMemoryUsage();
 
@@ -297,7 +297,7 @@ void RegionData::assignRegionData(RegionData && rhs)
     orphan_keys_info = std::move(rhs.orphan_keys_info);
 
     updateMemoryUsage(RegionDataMemDiff{rhs.cf_data_size.load(), rhs.decoded_data_size.load()});
-    setRegionTableSize(size);
+    setRegionTableCtx(size);
     rhs.resetMemoryUsage();
 }
 
@@ -410,34 +410,49 @@ size_t RegionData::tryCompactionFilter(Timestamp safe_point)
     return del_write;
 }
 
-void RegionData::setRegionTableSize(RegionTableSize size) const
+void RegionData::setRegionTableCtx(RegionTableCtx ctx) const
 {
-    region_table_size = size;
-    if (region_table_size)
+    region_table_ctx = ctx;
+    if (region_table_ctx)
     {
-        region_table_size->fetch_add(dataSize());
+        region_table_ctx->table_size.fetch_add(dataSize());
     }
 }
 
-RegionTableSize RegionData::resetRegionTableSize() const
+RegionTableCtx RegionData::resetRegionTableCtx() const
 {
-    if (region_table_size)
+    if (region_table_ctx)
     {
-        region_table_size->fetch_sub(dataSize());
+        region_table_ctx->table_size.fetch_sub(dataSize());
     }
-    auto prev = region_table_size;
+    auto prev = region_table_ctx;
     // The region no longer binds to a table.
-    region_table_size = nullptr;
+    region_table_ctx = nullptr;
     return prev;
 }
 
 size_t RegionData::getRegionTableSize() const
 {
-    if (region_table_size)
+    if (region_table_ctx)
     {
-        return (*region_table_size);
+        return region_table_ctx->table_size;
     }
     return 0;
+}
+
+bool RegionData::getRegionTableWarned() const {
+    if (region_table_ctx)
+    {
+        return region_table_ctx->warned;
+    }
+    return 0;
+}
+
+bool RegionData::setRegionTableWarned(bool desired) const {
+    if (region_table_ctx){
+        return region_table_ctx->warned.exchange(desired);
+    }
+    return false;
 }
 
 } // namespace DB

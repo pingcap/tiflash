@@ -71,7 +71,7 @@ RegionTable::InternalRegion & RegionTable::insertRegion(
     const Region & region)
 {
     auto region_id = region.id();
-    region.setRegionTableSize(table.size);
+    region.setRegionTableCtx(table.ctx);
     auto keyspace_id = region_range_keys.getKeyspaceID();
     auto & table_regions = table.internal_regions;
     // Insert table mapping.
@@ -167,8 +167,8 @@ size_t RegionTable::getTableRegionSize(KeyspaceID keyspace_id, TableID table_id)
     if (it == tables.end())
         return 0;
     const auto & table = it->second;
-    if (table.size)
-        return *(table.size);
+    if (table.ctx)
+        return table.ctx->table_size;
     return 0;
 }
 
@@ -180,8 +180,8 @@ void RegionTable::debugClearTableRegionSize(KeyspaceID keyspace_id, TableID tabl
     if (it == tables.end())
         return;
     const auto & table = it->second;
-    if (table.size)
-        *(table.size) = 0;
+    if (table.ctx)
+        table.ctx->table_size = 0;
 }
 
 namespace
@@ -272,6 +272,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     }
 }
 
+// RaftCommands will directly call `writeCommittedByRegion`.
 RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtr & region)
 {
     const RegionID region_id = region->id();
@@ -412,8 +413,8 @@ void RegionTable::replaceRegion(const RegionPtr & old_region, const RegionPtr & 
         auto keyspace_id = region_range_keys->getKeyspaceID();
         auto table_id = region_range_keys->getMappedTableID();
         auto & table = getOrCreateTable(keyspace_id, table_id);
-        old_region->resetRegionTableSize();
-        new_region->setRegionTableSize(table.size);
+        old_region->resetRegionTableCtx();
+        new_region->setRegionTableCtx(table.ctx);
     }
 }
 

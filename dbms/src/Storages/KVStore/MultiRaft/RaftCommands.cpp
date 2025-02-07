@@ -28,6 +28,8 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <common/logger_useful.h>
 
+extern std::atomic<Int64> real_rss;
+
 namespace DB
 {
 Region::CommittedScanner Region::createCommittedScanner(bool use_lock, bool need_value)
@@ -473,6 +475,25 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             handle_write_cmd_func();
         }
 
+        if (default_put_key_count + lock_put_key_count > 0) {
+            // If there are data flow in, we will check if the memory is exhaused.
+            auto limit = tmt.getKVStore()->getKVStoreMemoryLimit();
+            auto current = real_rss.load();
+            /// Region management such as split/merge doesn't change the memory consumed by a table in KVStore.
+            /// The only cases memory is reduced in a table is removing regions, applying snaps and commiting txns.
+            /// The only cases memory is increased in a table is inserting kv pairs and applying snaps.
+            /// So, we only print once for a table, until one memory reduce event will happen.
+            if unlikely (limit > 0 && current > 0 && static_cast<size_t>(current) > limit) {
+                auto table_size = getRegionTableSize();
+                if (table_size > 0.5 * current) {
+                    if (!setRegionTableWarned(true)) {
+                        // If it is the first time.
+                        LOG_INFO(log, "Memory limit exeeded, current{} limit={} table_id={} keyspace_id={} region_id={}", current, limit, mapped_table_id, keyspace_id, id());
+                    }
+                }
+            }
+        }
+
         // If transfer-leader happened during ingest-sst, there might be illegal data.
         if (0 != cmds.len)
         {
@@ -508,6 +529,9 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
                     index,
                     fmt::join(entry_infos.begin(), entry_infos.end(), ":"));
                 e.rethrow();
+            }
+            if (!data_list_to_remove.empty()) {
+                setRegionTableWarned(false);
             }
         }
 

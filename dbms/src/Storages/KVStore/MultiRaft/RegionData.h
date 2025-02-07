@@ -84,9 +84,11 @@ public:
 
     String summary() const;
     size_t tryCompactionFilter(Timestamp safe_point);
-    void setRegionTableSize(RegionTableSize size) const;
-    RegionTableSize resetRegionTableSize() const;
+    void setRegionTableCtx(RegionTableCtx) const;
+    RegionTableCtx resetRegionTableCtx() const;
     size_t getRegionTableSize() const;
+    bool getRegionTableWarned() const;
+    bool setRegionTableWarned(bool) const;
 
     struct OrphanKeysInfo
     {
@@ -142,7 +144,7 @@ private:
     std::atomic<Int64> cf_data_size = 0;
     // Size of decoded structures for convenient access, considered as amplification in memory.
     std::atomic<Int64> decoded_data_size = 0;
-    mutable RegionTableSize region_table_size;
+    mutable RegionTableCtx region_table_ctx;
 };
 
 } // namespace DB

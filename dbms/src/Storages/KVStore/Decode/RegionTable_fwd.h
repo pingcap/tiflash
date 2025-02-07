@@ -19,5 +19,12 @@
 
 namespace DB
 {
-using RegionTableSize = std::shared_ptr<std::atomic_int64_t>;
+struct RegionTableCtxInner {
+    std::atomic_int64_t table_size;
+    std::atomic_bool warned;
+};
+using RegionTableCtx = std::shared_ptr<RegionTableCtxInner>;
+inline RegionTableCtx createRegionTableCtx() {
+    return std::make_shared<RegionTableCtxInner>(0, false);
+}
 } // namespace DB

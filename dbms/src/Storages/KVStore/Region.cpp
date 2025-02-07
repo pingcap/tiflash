@@ -392,14 +392,14 @@ Timestamp Region::getLastObservedReadTso() const
     return last_observed_read_tso.load();
 }
 
-void Region::setRegionTableSize(RegionTableSize size) const
+void Region::setRegionTableCtx(RegionTableCtx size) const
 {
-    data.setRegionTableSize(size);
+    data.setRegionTableCtx(size);
 }
 
-RegionTableSize Region::resetRegionTableSize() const
+RegionTableCtx Region::resetRegionTableCtx() const
 {
-    return data.resetRegionTableSize();
+    return data.resetRegionTableCtx();
 }
 
 size_t Region::getRegionTableSize() const
