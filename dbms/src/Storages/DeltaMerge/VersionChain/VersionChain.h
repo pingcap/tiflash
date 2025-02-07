@@ -15,10 +15,10 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
+#include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/VersionChain/DMFileHandleIndex.h>
 #include <Storages/DeltaMerge/VersionChain/NewHandleIndex.h>
-
 namespace DB::DM
 {
 
@@ -72,6 +72,7 @@ private:
         const DMContext & dm_context,
         const ColumnFileBig & cf_big,
         const UInt32 stable_rows,
+        const StableValueSpace::Snapshot & stable,
         const std::span<const ColumnFilePtr> preceding_cfs,
         DeltaValueReader & delta_reader);
     [[nodiscard]] UInt32 replayDeleteRange(

@@ -96,8 +96,13 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         }
         else if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            replayed_rows_and_deletes
-                += replayColumnFileBig(dm_context, *cf_big, stable_rows, std::span{cfs.begin(), pos}, delta_reader);
+            replayed_rows_and_deletes += replayColumnFileBig(
+                dm_context,
+                *cf_big,
+                stable_rows,
+                stable,
+                std::span{cfs.begin(), pos},
+                delta_reader);
         }
         else
         {
@@ -114,13 +119,16 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
 
     LOG_INFO(
         snapshot.log,
-        "replays {} rows. initial_replayed_rows_and_deletes={}, delta_rows={}, delta_delete_ranges={}, "
-        "replayed_rows_and_deletes={}.",
+        "replays {} rows. initial_replayed_rows_and_deletes={}, delta_rows={}, stable_rows={}, delta_delete_ranges={}, "
+        "replayed_rows_and_deletes={}, ColumnFiles={}, snapshot={}.",
         replayed_rows_and_deletes - initial_replayed_rows_and_deletes,
         initial_replayed_rows_and_deletes,
         delta_rows,
+        stable_rows,
         delta_delete_ranges,
-        replayed_rows_and_deletes);
+        replayed_rows_and_deletes,
+        cfs.size(),
+        snapshot.detailInfo());
 
     return base_versions;
 }
@@ -193,7 +201,8 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const UInt32 stable_rows,
-    [[maybe_unused]] const std::span<const ColumnFilePtr> preceding_cfs,
+    const StableValueSpace::Snapshot & stable,
+    const std::span<const ColumnFilePtr> preceding_cfs,
     DeltaValueReader & delta_reader)
 {
     auto min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, *(cf_big.getFile()));
@@ -212,22 +221,33 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
         }
         return false;
     };
+
+    auto is_dmfile_intersect = [&](const DMFile & file) {
+        auto t_min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, file);
+        if (!t_min_max)
+            return false;
+        const auto & [t_min, t_max] = *t_min_max;
+        return min <= t_max && t_min <= max;
+    };
+
     auto is_ingest_sst = [&]() {
+        for (const auto & file : stable.getDMFiles())
+        {
+            if (is_dmfile_intersect(*file))
+                return false;
+        }
+
         for (const auto & cf : preceding_cfs)
         {
             if (const auto * t = cf->tryToBigFile(); t)
             {
-                auto t_min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, *(t->getFile()));
-                if (!t_min_max)
-                    continue;
-                const auto & [t_min, t_max] = *t_min_max;
-                if (min <= t_max && t_min <= max)
+                if (is_dmfile_intersect(*(t->getFile())))
                     return false;
             }
             else
                 return false;
         }
-        return true; // preceding_cfs is empty.
+        return true;
     };
 
     if (likely(is_apply_snapshot() || is_ingest_sst()))

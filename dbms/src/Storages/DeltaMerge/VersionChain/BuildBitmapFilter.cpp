@@ -33,7 +33,12 @@ BitmapFilterPtr buildBitmapFilter(
     VersionChain<HandleType> & version_chain)
 {
     const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
-    LOG_DEBUG(snapshot.log, "base_ver_snap={} is_common_handle={}", *base_ver_snap, std::is_same_v<HandleType, String>);
+    LOG_DEBUG(
+        snapshot.log,
+        "base_ver_snap={} is_common_handle={} read_ranges={}",
+        *base_ver_snap,
+        std::is_same_v<HandleType, String>,
+        read_ranges);
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
     const UInt32 delta_rows = delta.getRows();

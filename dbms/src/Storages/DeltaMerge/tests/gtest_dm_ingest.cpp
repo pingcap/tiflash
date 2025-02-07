@@ -218,7 +218,7 @@ try
                 filled_n++;
     }
 
-    auto pool = std::make_shared<ThreadPool>(4);
+    auto pool = std::make_shared<ThreadPool>(1);
     for (const auto & op : ops)
     {
         pool->scheduleOrThrowOnError([=, this, &log] {
