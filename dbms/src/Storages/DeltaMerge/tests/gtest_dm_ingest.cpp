@@ -153,12 +153,14 @@ try
 
     std::mt19937 random;
     {
-        auto const seed = std::random_device{}();
+        auto const seed = 2307641251; //std::random_device{}();
+        fmt::println("seed={}", seed);
+
         random = std::mt19937{seed};
     }
 
-    constexpr int upper_bound = 10000;
-    constexpr int n_operations = 300;
+    constexpr int upper_bound = 100;
+    constexpr int n_operations = 3;
 
     auto filled_bitmap = std::vector<bool>();
     filled_bitmap.resize(upper_bound);

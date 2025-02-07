@@ -1106,7 +1106,7 @@ try
             dmContext(),
             segment_snap,
             real_ranges,
-            {},
+            loadPackFilterResults(segment_snap, real_ranges),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
             use_version_chain);

@@ -82,4 +82,9 @@ std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
 template <typename T>
 std::vector<T> loadPackMaxValue(const Context & global_context, const DMFile & dmfile, const ColId col_id);
 
+template <ExtraHandleType HandleType>
+std::optional<std::pair<HandleType, HandleType>> loadDMFileHandleRange(
+    const Context & global_context,
+    const DMFile & dmfile);
+
 } // namespace DB::DM
