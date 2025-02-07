@@ -534,9 +534,7 @@ try
         reloadKVSFromDisk(false);
         ctx.getTMTContext().debugSetKVStore(kvstore);
         region_table.restore();
-        LOG_INFO(log, "!!!!! fdfdfdf {}", root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-        LOG_INFO(log, "!!!!! ddddd {}", root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
         // Only this region is persisted.

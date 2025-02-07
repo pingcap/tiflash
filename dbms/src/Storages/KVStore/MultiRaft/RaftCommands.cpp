@@ -477,7 +477,6 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
 
         if (default_put_key_count + lock_put_key_count > 0)
         {
-            LOG_INFO(log, "!!!!!! DDDDDD 1");
             // If there are data flow in, we will check if the memory is exhaused.
             auto limit = tmt.getKVStore()->getKVStoreMemoryLimit();
             auto current = real_rss.load();
@@ -485,14 +484,11 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             /// The only cases memory is reduced in a table is removing regions, applying snaps and commiting txns.
             /// The only cases memory is increased in a table is inserting kv pairs and applying snaps.
             /// So, we only print once for a table, until one memory reduce event will happen.
-            LOG_INFO(log, "!!!!!! DDDDDD info limit {} current {}", limit, current);
             if unlikely (limit > 0 && current > 0 && static_cast<size_t>(current) >= limit)
             {
                 auto table_size = getRegionTableSize();
-                LOG_INFO(log, "!!!!!! DDDDDD 2 table_size {}", table_size);
                 if (table_size > 0.5 * current)
                 {
-                    LOG_INFO(log, "!!!!!! DDDDDD 3");
                     if (!setRegionTableWarned(true))
                     {
                         // If it is the first time.
@@ -550,7 +546,6 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             }
             if (!data_list_to_remove.empty())
             {
-                LOG_INFO(log, "!!!!!! EEEEEEEE 3");
                 setRegionTableWarned(false);
             }
         }
