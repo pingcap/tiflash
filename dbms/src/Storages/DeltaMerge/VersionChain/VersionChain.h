@@ -33,6 +33,8 @@ class ColumnFileDeleteRange;
 template <ExtraHandleType HandleType>
 class VersionChain
 {
+private:
+    using HandleRefType = typename std::conditional<std::is_same_v<HandleType, Int64>, Int64, std::string_view>::type;
 public:
     VersionChain()
         : base_versions(std::make_shared<std::vector<RowID>>())
@@ -75,12 +77,11 @@ private:
         DeltaValueReader & delta_reader,
         const UInt32 stable_rows);
 
-    template <HandleRefType HandleRef>
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
         const DMContext & dm_context,
-        HandleRef h);
-    template <typename Iterator>
-    void calculateReadPacks(Iterator begin, Iterator end);
+        HandleRefType h);
+    template <typename Iter>
+    void calculateReadPacks(Iter begin, Iter end);
     void cleanHandleColumn();
 
     std::mutex mtx;
