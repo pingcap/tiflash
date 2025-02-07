@@ -18,7 +18,7 @@ mysql> create table test.t1(c1 double, c2 bigint);
 mysql> alter table test.t1 set tiflash replica 1;
 mysql> insert into test.t1 values(-1.23, 0), (1.58, 0), (1.298, 1), (123.2, -1), (123.2, 100), (123.2, -100), (123.2, -100), (1.797693134862315708145274237317043567981e+308, 2), (Null, 2), (1.1, 400), (1.1, -400), (0, 400), (0, -400), (1.1, 3), (0, 3), (99.99, 1), (99.99, -1), (-99.99, 1), (-99.99, -1), (0.0001, 3), (0.0001, -3);
 func> wait_table test t1
-mysql> set tidb_isolation_read_engines='tiflash'; select c1, c2, truncate(c1, c2) from test.t1 order by 1, 2, 3;
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select c1, c2, truncate(c1, c2) from test.t1 order by 1, 2, 3;
 +------------------------+------+------------------------+
 | c1                     | c2   | truncate(c1, c2)       |
 +------------------------+------+------------------------+
@@ -51,7 +51,7 @@ mysql> create table test.t2(c1 varchar(100), c2 bigint);
 mysql> insert into test.t2 values("-1.23", 0), ("-1.23", 1), ("-11.23", -1), ("1.58", 0), ("1.58", 1), ("11.58", -1), ("23.298", -1), ("23.298", -100), ("23.298", 100);
 mysql> alter table test.t2 set tiflash replica 1;
 func> wait_table test t2
-mysql> set tidb_isolation_read_engines='tiflash'; select c1, c2, truncate(c1, c2) from test.t2 order by 1, 2, 3;
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select c1, c2, truncate(c1, c2) from test.t2 order by 1, 2, 3;
 +--------+------+------------------+
 | c1     | c2   | truncate(c1, c2) |
 +--------+------+------------------+
@@ -72,14 +72,14 @@ mysql> create table test.t3(c1 bigint unsigned);
 mysql> alter table test.t3 set tiflash replica 1;
 mysql> insert into test.t3 values(9223372036854775808), (18446744073709551615);
 func> wait_table test t3
-mysql> set tidb_isolation_read_engines='tiflash'; select c1, truncate(c1, -10) from test.t3 order by 1, 2;
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select c1, truncate(c1, -10) from test.t3 order by 1, 2;
 +----------------------+----------------------+
 | c1                   | truncate(c1, -10)    |
 +----------------------+----------------------+
 |  9223372036854775808 |  9223372030000000000 |
 | 18446744073709551615 | 18446744070000000000 |
 +----------------------+----------------------+
-mysql> set tidb_isolation_read_engines='tiflash'; select c1, truncate(c1, -7) from test.t3 order by 1, 2;
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select c1, truncate(c1, -7) from test.t3 order by 1, 2;
 +----------------------+----------------------+
 | c1                   | truncate(c1, -7)     |
 +----------------------+----------------------+
@@ -93,7 +93,7 @@ mysql> create table test.t3_1(c1 bigint);
 mysql> alter table test.t3_1 set tiflash replica 1;
 mysql> insert into test.t3_1 values(-9223372036854775808), (9223372036854775807);
 func> wait_table test t3_1
-mysql> set tidb_isolation_read_engines='tiflash'; select c1, truncate(c1, -10) from test.t3_1 order by 1, 2;
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select c1, truncate(c1, -10) from test.t3_1 order by 1, 2;
 +----------------------+----------------------+
 | c1                   | truncate(c1, -10)    |
 +----------------------+----------------------+
@@ -132,7 +132,7 @@ func> wait_table test t4
 # | 123.20000 |   -1 |              120 |
 # | 123.20000 |  100 |        123.20000 |
 # +-----------+------+------------------+
-mysql> set tidb_isolation_read_engines='tiflash'; select c1, c2, truncate(c1, c2) from test.t4 order by 1, 2, 3;
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select c1, c2, truncate(c1, c2) from test.t4 order by 1, 2, 3;
 +-----------+------+------------------+
 | c1        | c2   | truncate(c1, c2) |
 +-----------+------+------------------+
@@ -188,7 +188,7 @@ mysql> insert into test.t values (-66), (-65), (-64), (-63), (-62), (-61), (-60)
 func> wait_table test f32 f64 d9 d64 t
 
 # const frac
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, 2)), sum(truncate(a, 1)), sum(truncate(a, 0)), sum(truncate(a, -1)), sum(truncate(a, -2)) from test.f32 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, 2)), sum(truncate(a, 1)), sum(truncate(a, 0)), sum(truncate(a, -1)), sum(truncate(a, -2)) from test.f32 group by id order by id
 +------------------------------+---------------------+---------------------+---------------------+----------------------+----------------------+
 | sum(a)                       | sum(truncate(a, 2)) | sum(truncate(a, 1)) | sum(truncate(a, 0)) | sum(truncate(a, -1)) | sum(truncate(a, -2)) |
 +------------------------------+---------------------+---------------------+---------------------+----------------------+----------------------+
@@ -207,7 +207,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 |                         NULL |                NULL |                NULL |                NULL |                 NULL |                 NULL |
 +------------------------------+---------------------+---------------------+---------------------+----------------------+----------------------+
 
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, 8)), sum(truncate(a, 9)), sum(truncate(a, -9)), sum(truncate(a, -10)) from test.f32 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, 8)), sum(truncate(a, 9)), sum(truncate(a, -9)), sum(truncate(a, -10)) from test.f32 group by id order by id
 +------------------------------+---------------------+---------------------+----------------------+-----------------------+
 | sum(a)                       | sum(truncate(a, 8)) | sum(truncate(a, 9)) | sum(truncate(a, -9)) | sum(truncate(a, -10)) |
 +------------------------------+---------------------+---------------------+----------------------+-----------------------+
@@ -226,7 +226,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 |                         NULL |                NULL |                NULL |                 NULL |                  NULL |
 +------------------------------+---------------------+---------------------+----------------------+-----------------------+
 
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, 30)), sum(truncate(a, -30)), sum(truncate(a, 1000000)), sum(truncate(a, -1000000)) from test.f32 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, 30)), sum(truncate(a, -30)), sum(truncate(a, 1000000)), sum(truncate(a, -1000000)) from test.f32 group by id order by id
 +------------------------------+------------------------------+-----------------------+------------------------------+----------------------------+
 | sum(a)                       | sum(truncate(a, 30))         | sum(truncate(a, -30)) | sum(truncate(a, 1000000))    | sum(truncate(a, -1000000)) |
 +------------------------------+------------------------------+-----------------------+------------------------------+----------------------------+
@@ -245,7 +245,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 |                         NULL |                         NULL |                  NULL |                         NULL |                       NULL |
 +------------------------------+------------------------------+-----------------------+------------------------------+----------------------------+
 
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, 2)), sum(truncate(a, 1)), sum(truncate(a, 0)), sum(truncate(a, -1)), sum(truncate(a, -2)) from test.f64 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, 2)), sum(truncate(a, 1)), sum(truncate(a, 0)), sum(truncate(a, -1)), sum(truncate(a, -2)) from test.f64 group by id order by id
 +-----------------+---------------------+---------------------+---------------------+----------------------+----------------------+
 | sum(a)          | sum(truncate(a, 2)) | sum(truncate(a, 1)) | sum(truncate(a, 0)) | sum(truncate(a, -1)) | sum(truncate(a, -2)) |
 +-----------------+---------------------+---------------------+---------------------+----------------------+----------------------+
@@ -264,7 +264,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 |            NULL |                NULL |                NULL |                NULL |                 NULL |                 NULL |
 +-----------------+---------------------+---------------------+---------------------+----------------------+----------------------+
 
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, 8)), sum(truncate(a, 9)), sum(truncate(a, -9)), sum(truncate(a, -10)) from test.f64 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, 8)), sum(truncate(a, 9)), sum(truncate(a, -9)), sum(truncate(a, -10)) from test.f64 group by id order by id
 +-----------------+---------------------+---------------------+----------------------+-----------------------+
 | sum(a)          | sum(truncate(a, 8)) | sum(truncate(a, 9)) | sum(truncate(a, -9)) | sum(truncate(a, -10)) |
 +-----------------+---------------------+---------------------+----------------------+-----------------------+
@@ -283,7 +283,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 |            NULL |                NULL |                NULL |                 NULL |                  NULL |
 +-----------------+---------------------+---------------------+----------------------+-----------------------+
 
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, 30)), sum(truncate(a, -30)), sum(truncate(a, 1000000)), sum(truncate(a, -1000000)) from test.f64 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, 30)), sum(truncate(a, -30)), sum(truncate(a, 1000000)), sum(truncate(a, -1000000)) from test.f64 group by id order by id
 +-----------------+----------------------+-----------------------+---------------------------+----------------------------+
 | sum(a)          | sum(truncate(a, 30)) | sum(truncate(a, -30)) | sum(truncate(a, 1000000)) | sum(truncate(a, -1000000)) |
 +-----------------+----------------------+-----------------------+---------------------------+----------------------------+
@@ -302,7 +302,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 |            NULL |                 NULL |                  NULL |                      NULL |                       NULL |
 +-----------------+----------------------+-----------------------+---------------------------+----------------------------+
 
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, -1)), sum(truncate(a, 0)), sum(truncate(a, 1)) from test.d9 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, -1)), sum(truncate(a, 0)), sum(truncate(a, 1)) from test.d9 group by id order by id
 +-------------+----------------------+---------------------+---------------------+
 | sum(a)      | sum(truncate(a, -1)) | sum(truncate(a, 0)) | sum(truncate(a, 1)) |
 +-------------+----------------------+---------------------+---------------------+
@@ -324,7 +324,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 |        NULL |                 NULL |                NULL |                NULL |
 +-------------+----------------------+---------------------+---------------------+
 
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, 3)), sum(truncate(a, 4)), sum(truncate(a, 5)), sum(truncate(a, 40)) from test.d9 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, 3)), sum(truncate(a, 4)), sum(truncate(a, 5)), sum(truncate(a, 40)) from test.d9 group by id order by id
 +-------------+---------------------+---------------------+---------------------+---------------------------------------+
 | sum(a)      | sum(truncate(a, 3)) | sum(truncate(a, 4)) | sum(truncate(a, 5)) | sum(truncate(a, 40))                  |
 +-------------+---------------------+---------------------+---------------------+---------------------------------------+
@@ -346,7 +346,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 |        NULL |                NULL |                NULL |                NULL |                                  NULL |
 +-------------+---------------------+---------------------+---------------------+---------------------------------------+
 
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, -4)), sum(truncate(a, -5)), sum(truncate(a, -6)), sum(truncate(a, -100)) from test.d9 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, -4)), sum(truncate(a, -5)), sum(truncate(a, -6)), sum(truncate(a, -100)) from test.d9 group by id order by id
 +-------------+----------------------+----------------------+----------------------+------------------------+
 | sum(a)      | sum(truncate(a, -4)) | sum(truncate(a, -5)) | sum(truncate(a, -6)) | sum(truncate(a, -100)) |
 +-------------+----------------------+----------------------+----------------------+------------------------+
@@ -368,7 +368,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 |        NULL |                 NULL |                 NULL |                 NULL |                   NULL |
 +-------------+----------------------+----------------------+----------------------+------------------------+
 
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, -1)), sum(truncate(a, 0)), sum(truncate(a, 1)) from test.d64 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, -1)), sum(truncate(a, 0)), sum(truncate(a, 1)) from test.d64 group by id order by id
 +--------------------------------------------------------------------+-----------------------------------------------------------------+-----------------------------------------------------------------+-------------------------------------------------------------------+
 | sum(a)                                                             | sum(truncate(a, -1))                                            | sum(truncate(a, 0))                                             | sum(truncate(a, 1))                                               |
 +--------------------------------------------------------------------+-----------------------------------------------------------------+-----------------------------------------------------------------+-------------------------------------------------------------------+
@@ -389,7 +389,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 | -99999999999999999999999999999999999999999999999999999999999999.99 | -99999999999999999999999999999999999999999999999999999999999990 | -99999999999999999999999999999999999999999999999999999999999999 | -99999999999999999999999999999999999999999999999999999999999999.9 |
 |                                                               NULL |                                                            NULL |                                                            NULL |                                                              NULL |
 +--------------------------------------------------------------------+-----------------------------------------------------------------+-----------------------------------------------------------------+-------------------------------------------------------------------+
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, 2)), sum(truncate(a, -61)), sum(truncate(a, -62)) from test.d64 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, 2)), sum(truncate(a, -61)), sum(truncate(a, -62)) from test.d64 group by id order by id
 +--------------------------------------------------------------------+--------------------------------------------------------------------+-----------------------------------------------------------------+-----------------------+
 | sum(a)                                                             | sum(truncate(a, 2))                                                | sum(truncate(a, -61))                                           | sum(truncate(a, -62)) |
 +--------------------------------------------------------------------+--------------------------------------------------------------------+-----------------------------------------------------------------+-----------------------+
@@ -410,7 +410,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 | -99999999999999999999999999999999999999999999999999999999999999.99 | -99999999999999999999999999999999999999999999999999999999999999.99 | -90000000000000000000000000000000000000000000000000000000000000 |                     0 |
 |                                                               NULL |                                                               NULL |                                                            NULL |                  NULL |
 +--------------------------------------------------------------------+--------------------------------------------------------------------+-----------------------------------------------------------------+-----------------------+
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a, -63)), sum(truncate(a, -100)) from test.d64 group by id order by id
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(a), sum(truncate(a, -63)), sum(truncate(a, -100)) from test.d64 group by id order by id
 +--------------------------------------------------------------------+-----------------------+------------------------+
 | sum(a)                                                             | sum(truncate(a, -63)) | sum(truncate(a, -100)) |
 +--------------------------------------------------------------------+-----------------------+------------------------+
@@ -433,19 +433,19 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(a), sum(truncate(a,
 +--------------------------------------------------------------------+-----------------------+------------------------+
 
 # const input, variable frac
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(truncate(null, i)) from test.t
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(truncate(null, i)) from test.t
 +------------------------+
 | sum(truncate(null, i)) |
 +------------------------+
 |                   NULL |
 +------------------------+
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(truncate(-123456789123456789, i)) from test.t
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(truncate(-123456789123456789, i)) from test.t
 +---------------------------------------+
 | sum(truncate(-123456789123456789, i)) |
 +---------------------------------------+
 |                  -6145404623034293517 |
 +---------------------------------------+
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(truncate(123456789123456789.123456789123456789, i)) from test.t
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(truncate(123456789123456789.123456789123456789, i)) from test.t
 +---------------------------------------------------------+
 | sum(truncate(123456789123456789.123456789123456789, i)) |
 +---------------------------------------------------------+
@@ -453,25 +453,25 @@ mysql> set tidb_isolation_read_engines='tiflash'; select sum(truncate(1234567891
 +---------------------------------------------------------+
 
 # variable input & frac
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(truncate(a, i)) from test.d9 cross join test.t where a >= 0
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(truncate(a, i)) from test.d9 cross join test.t where a >= 0
 +---------------------+
 | sum(truncate(a, i)) |
 +---------------------+
 |        7378633.8083 |
 +---------------------+
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(truncate(a, i)) from test.d9 cross join test.t where a < 0
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(truncate(a, i)) from test.d9 cross join test.t where a < 0
 +---------------------+
 | sum(truncate(a, i)) |
 +---------------------+
 |       -7378633.8083 |
 +---------------------+
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(truncate(a, i)) from test.d64 cross join test.t where a >= 0
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(truncate(a, i)) from test.d64 cross join test.t where a >= 0
 +----------------------------------------------------------------------+
 | sum(truncate(a, i))                                                  |
 +----------------------------------------------------------------------+
 | 18777777777777777777777777777777777777777777777777777777777778661.72 |
 +----------------------------------------------------------------------+
-mysql> set tidb_isolation_read_engines='tiflash'; select sum(truncate(a, i)) from test.d64 cross join test.t where a < 0
+mysql> set tidb_isolation_read_engines='tiflash'; set tidb_allow_mpp = 1; set tidb_enforce_mpp = 1; select sum(truncate(a, i)) from test.d64 cross join test.t where a < 0
 +-----------------------------------------------------------------------+
 | sum(truncate(a, i))                                                   |
 +-----------------------------------------------------------------------+
