@@ -440,7 +440,8 @@ size_t RegionData::getRegionTableSize() const
     return 0;
 }
 
-bool RegionData::getRegionTableWarned() const {
+bool RegionData::getRegionTableWarned() const
+{
     if (region_table_ctx)
     {
         return region_table_ctx->warned;
@@ -448,8 +449,10 @@ bool RegionData::getRegionTableWarned() const {
     return 0;
 }
 
-bool RegionData::setRegionTableWarned(bool desired) const {
-    if (region_table_ctx){
+bool RegionData::setRegionTableWarned(bool desired) const
+{
+    if (region_table_ctx)
+    {
         return region_table_ctx->warned.exchange(desired);
     }
     return false;

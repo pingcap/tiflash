@@ -1140,7 +1140,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             store_meta.set_id(store_ident->store_id());
             store_meta.set_node_state(metapb::NodeState::Preparing);
             kvstore->setStore(store_meta);
-            kvstore->setKVStoreMemoryLimit(settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity));
+            kvstore->setKVStoreMemoryLimit(
+                settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity));
         }
         global_context->getTMTContext().reloadConfig(config());
 
