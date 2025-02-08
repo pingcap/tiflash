@@ -113,7 +113,7 @@ RegionPtr KVStore::handleIngestSSTByDTFile(
         auto meta_region = region->cloneMetaRegion();
         auto meta_snap = region->dumpRegionMetaSnapshot();
         auto peer_id = meta_snap.peer.id();
-        tmp_region = genRegionPtr(std::move(meta_region), peer_id, index, term);
+        tmp_region = genRegionPtr(std::move(meta_region), peer_id, index, term, tmt, false);
     }
 
     // Decode the KV pairs in ingesting SST into DTFiles

@@ -784,9 +784,7 @@ void handleApplySnapshot(
     std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
-    auto new_region = kvstore.genRegionPtr(std::move(region), peer_id, index, term);
-    auto & region_table = tmt.getRegionTable();
-    region_table.addPrehandlingRegion(*new_region);
+    auto new_region = kvstore.genRegionPtr(std::move(region), peer_id, index, term, tmt, true);
     auto prehandle_result = kvstore.preHandleSnapshotToFiles(new_region, snaps, index, term, deadline_index, tmt);
     kvstore.applyPreHandledSnapshot(
         RegionPtrWithSnapshotFiles{new_region, std::move(prehandle_result.ingest_ids)},

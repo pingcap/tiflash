@@ -484,8 +484,14 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
         region.id());
 }
 
-// Generate a temporary region pointer by the given meta
-RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
+// The only way that to create a region associated to a piece of data, even if it is not going to be inserted in to KVStore.
+RegionPtr KVStore::genRegionPtr(
+    metapb::Region && region,
+    UInt64 peer_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt,
+    bool register_to_table)
 {
     auto meta = ({
         auto peer = findPeer(region, peer_id);
@@ -497,8 +503,13 @@ RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64
         }
         RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
     });
-
-    return std::make_shared<Region>(std::move(meta), proxy_helper);
+    auto new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
+    if (register_to_table)
+    {
+        auto & region_table = tmt.getRegionTable();
+        region_table.addPrehandlingRegion(*new_region);
+    }
+    return new_region;
 }
 
 RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const

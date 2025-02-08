@@ -156,7 +156,13 @@ public: // Region Management
     RegionPtr getRegion(RegionID region_id) const;
     RegionMap getRegionsByRangeOverlap(const RegionRange & range) const;
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
-    RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
+    RegionPtr genRegionPtr(
+        metapb::Region && region,
+        UInt64 peer_id,
+        UInt64 index,
+        UInt64 term,
+        TMTContext & tmt,
+        bool register_to_table);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setKVStoreMemoryLimit(size_t s) { maximum_kvstore_memory = s; }
     size_t getKVStoreMemoryLimit() const { return maximum_kvstore_memory; }

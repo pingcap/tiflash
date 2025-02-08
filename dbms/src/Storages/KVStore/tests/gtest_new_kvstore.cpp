@@ -72,7 +72,6 @@ try
 CATCH
 
 
-
 TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
 try
 {
@@ -610,7 +609,7 @@ try
                     0,
                     0,
                     std::nullopt,
-                    [](){});
+                    []() {});
             }
         }
     }
@@ -1019,8 +1018,17 @@ try
 
         // Overlap
         EXPECT_THROW(
-            proxy_instance
-                ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, std::nullopt),
+            proxy_instance->snapshot(
+                kvs,
+                ctx.getTMTContext(),
+                2,
+                {default_cf},
+                make_meta(),
+                peer_id,
+                0,
+                0,
+                std::nullopt,
+                std::nullopt),
             Exception);
 
         LOG_INFO(log, "Set to applying");
@@ -1028,8 +1036,17 @@ try
         r1->mutState().set_state(raft_serverpb::PeerState::Applying);
         ASSERT_EQ(proxy_helper->getRegionLocalState(1).state(), raft_serverpb::PeerState::Applying);
         EXPECT_THROW(
-            proxy_instance
-                ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, std::nullopt),
+            proxy_instance->snapshot(
+                kvs,
+                ctx.getTMTContext(),
+                2,
+                {default_cf},
+                make_meta(),
+                peer_id,
+                0,
+                0,
+                std::nullopt,
+                std::nullopt),
             Exception);
 
 
@@ -1038,8 +1055,17 @@ try
         r1->mutState().set_state(raft_serverpb::PeerState::Applying);
         r1->mutState().mutable_region()->set_start_key(RecordKVFormat::genKey(table_id, 0));
         r1->mutState().mutable_region()->set_end_key(RecordKVFormat::genKey(table_id, 1));
-        proxy_instance
-            ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, std::nullopt);
+        proxy_instance->snapshot(
+            kvs,
+            ctx.getTMTContext(),
+            2,
+            {default_cf},
+            make_meta(),
+            peer_id,
+            0,
+            0,
+            std::nullopt,
+            std::nullopt);
     }
 }
 CATCH

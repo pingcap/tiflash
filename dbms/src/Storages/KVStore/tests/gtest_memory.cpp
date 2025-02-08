@@ -404,8 +404,10 @@ try
         default_cf.finish_file();
         default_cf.freeze();
         kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();
-        proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 0, 0, std::nullopt, [&](){
-            ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), str_key2.dataSize() + str_val_default2.size());
+        proxy_instance->snapshot(kvs, ctx.getTMTContext(), region_id, {default_cf}, 0, 0, std::nullopt, [&]() {
+            ASSERT_EQ(
+                region_table.getTableRegionSize(NullspaceID, table_id),
+                str_key2.dataSize() + str_val_default2.size());
         });
         ASSERT_EQ(region->dataSize(), 0);
         ASSERT_EQ(region->getData().totalSize(), 0);

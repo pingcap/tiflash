@@ -667,9 +667,7 @@ RawCppPtr PreHandleSnapshot(
         auto & tmt = *server->tmt;
         auto & kvstore = tmt.getKVStore();
         // TODO move this inside `preHandleSnapshotToFiles`, or change `genRegionPtr`.
-        auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
-        auto & region_table = tmt.getRegionTable();
-        region_table.addPrehandlingRegion(*new_region);
+        auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term, tmt, true);
 
 #ifndef NDEBUG
         {
