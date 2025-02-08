@@ -243,8 +243,9 @@ std::shared_ptr<const TiKVValue> RegionData::getLockByKey(const TiKVKey & key) c
         return tikv_val;
     }
 
-    // It is safe to ignore the missing lock key after restart, print a warning log and return nullptr
-    LOG_WARNING(
+    // It is safe to ignore the missing lock key after restart, print a debug log and return nullptr.
+    // In txn file prewrite, proxy will try to get the lock to check the txn existence, the logs may be massive.
+    LOG_DEBUG(
         Logger::get(),
         "Failed to get lock by key in region data, key={} map_size={} count={}",
         key.toDebugString(),

@@ -54,6 +54,7 @@ RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id,
     {
         // Load persisted info.
         it = tables.emplace(ks_table_id, table_id).first;
+        addTableToIndex(keyspace_id, table_id);
         LOG_INFO(log, "get new table, keyspace={} table_id={}", keyspace_id, table_id);
     }
     return it->second;
@@ -149,6 +150,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
 
     // Remove from table map.
     tables.erase(it);
+    removeTableFromIndex(keyspace_id, table_id);
 
     LOG_INFO(log, "remove table from RegionTable success, keyspace={} table_id={}", keyspace_id, table_id);
 }
@@ -353,6 +355,22 @@ void RegionTable::handleInternalRegionsByTable(
     }
 }
 
+void RegionTable::handleInternalRegionsByKeyspace(
+    KeyspaceID keyspace_id,
+    std::function<void(const TableID table_id, const InternalRegions &)> && callback) const
+{
+    std::lock_guard lock(mutex);
+    auto table_set = keyspace_index.find(keyspace_id);
+    if (table_set != keyspace_index.end())
+    {
+        for (auto table_id : table_set->second)
+        {
+            if (auto it = tables.find(KeyspaceTableID{keyspace_id, table_id}); it != tables.end())
+                callback(table_id, it->second.regions);
+        }
+    }
+}
+
 std::vector<RegionID> RegionTable::getRegionIdsByTable(KeyspaceID keyspace_id, TableID table_id) const
 {
     fiu_do_on(FailPoints::force_set_num_regions_for_table, {
@@ -467,6 +485,29 @@ void RegionTable::extendRegionRange(const Region & region, const RegionRangeKeys
         auto & table = getOrCreateTable(keyspace_id, table_id);
         insertRegion(table, region_range_keys, region);
         LOG_INFO(log, "insert internal region, keyspace={} table_id={} region_id={}", keyspace_id, table_id, region_id);
+    }
+}
+
+void RegionTable::addTableToIndex(KeyspaceID keyspace_id, TableID table_id)
+{
+    auto it = keyspace_index.find(keyspace_id);
+    if (it == keyspace_index.end())
+    {
+        keyspace_index.emplace(keyspace_id, std::unordered_set<TableID>{table_id});
+    }
+    else
+    {
+        it->second.insert(table_id);
+    }
+}
+void RegionTable::removeTableFromIndex(KeyspaceID keyspace_id, TableID table_id)
+{
+    auto it = keyspace_index.find(keyspace_id);
+    if (it != keyspace_index.end())
+    {
+        it->second.erase(table_id);
+        if (it->second.empty())
+            keyspace_index.erase(it);
     }
 }
 

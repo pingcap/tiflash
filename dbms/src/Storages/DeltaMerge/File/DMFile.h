@@ -191,7 +191,7 @@ public:
      */
     ColumnDefines getColumnDefines(bool sort_by_id = true) const
     {
-        ColumnDefines results{};
+        ColumnDefines results;
         results.reserve(this->meta->column_stats.size());
         for (const auto & cs : this->meta->column_stats)
         {

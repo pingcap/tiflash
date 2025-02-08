@@ -16,8 +16,8 @@
 
 #include <Core/ColumnWithTypeAndName.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -72,7 +72,7 @@ public:
         return ColumnDefine(vec_column_id, vec_column_name, ::DB::tests::typeFromString("Array(Float32)"));
     }
 
-    static size_t cleanVectorCacheEntries(const std::shared_ptr<VectorIndexCache> & cache)
+    static size_t cleanLocalIndexCacheEntries(const std::shared_ptr<LocalIndexCache> & cache)
     {
         return cache->cleanOutdatedCacheEntries();
     }

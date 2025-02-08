@@ -105,7 +105,6 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     const size_t max_print_region = 30;
     static const std::chrono::minutes PRINT_LOG_INTERVAL = std::chrono::minutes{5};
     static Timepoint last_print_log_time = Clock::now();
-    // TODO(iosmanthus): TiDB should support tiflash replica.
     RegionTable & region_table = tmt.getRegionTable();
     // Note that the IStorage instance could be not exist if there is only empty region for the table in this TiFlash instance.
     region_table.handleInternalRegionsByTable(keyspace_id, table_id, [&](const RegionTable::InternalRegions & regions) {
@@ -287,6 +286,74 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     };
 }
 
+// Acquiring the all the region ids created in this TiFlash node with given keyspace id.
+HttpRequestRes HandleHttpRequestSyncRegion(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    HttpRequestStatus status = HttpRequestStatus::Ok;
+    pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
+    {
+        auto log = Logger::get("HandleHttpRequestSyncRegion");
+        LOG_TRACE(log, "handling sync region request, path: {}, api_name: {}", path, api_name);
+        // schema: /keyspace/{keyspace_id}
+        auto query = path.substr(api_name.size());
+        std::vector<std::string> query_parts;
+        boost::split(query_parts, query, boost::is_any_of("/"));
+        if (query_parts.size() != 2 || query_parts[0] != "keyspace")
+        {
+            LOG_ERROR(log, "invalid SyncRegion request: {}", query);
+            status = HttpRequestStatus::ErrorParam;
+            return HttpRequestRes{
+                .status = status,
+                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+        }
+        try
+        {
+            keyspace_id = std::stoll(query_parts[1]);
+        }
+        catch (...)
+        {
+            status = HttpRequestStatus::ErrorParam;
+        }
+        if (status != HttpRequestStatus::Ok)
+            return HttpRequestRes{
+                .status = status,
+                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
+            };
+    }
+
+    auto & tmt = *server->tmt;
+    std::stringstream ss;
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    Poco::JSON::Array::Ptr list = new Poco::JSON::Array();
+    RegionTable & region_table = tmt.getRegionTable();
+    region_table.handleInternalRegionsByKeyspace(
+        keyspace_id,
+        [&](const TableID table_id, const RegionTable::InternalRegions & regions) {
+            if (!tmt.getStorages().get(keyspace_id, table_id))
+                return;
+            for (const auto & region : regions)
+            {
+                list->add(region.first);
+            }
+        });
+    json->set("count", list->size());
+    json->set("regions", list);
+    json->stringify(ss);
+    auto * s = RawCppString::New(ss.str());
+    return HttpRequestRes{
+        .status = status,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{s->data(), s->size()},
+        },
+    };
+}
+
 // Acquiring load schema to sync schema from TiKV in this TiFlash node with given keyspace id.
 HttpRequestRes HandleHttpRequestSyncSchema(
     EngineStoreServerWrap * server,
@@ -391,6 +458,7 @@ using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
 
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
+    {"/tiflash/sync-region/", HandleHttpRequestSyncRegion},
     {"/tiflash/sync-schema/", HandleHttpRequestSyncSchema},
     {"/tiflash/store-status", HandleHttpRequestStoreStatus},
     {"/tiflash/remote/owner/info", HandleHttpRequestRemoteOwnerInfo},
