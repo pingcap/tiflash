@@ -42,7 +42,6 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Functions/registerFunctions.h>
-#include <Storages/KVStore/ProxyStateMachine.h>
 #include <IO/BaseFile/RateLimiter.h>
 #include <IO/Encryption/DataKeyManager.h>
 #include <IO/Encryption/KeyspacesKeyManager.h>
@@ -84,6 +83,7 @@
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/ProxyStateMachine.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -591,9 +591,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     proxy_machine.runProxy();
 
-    SCOPE_EXIT({
-        proxy_machine.waitProxyStopped();
-    });
+    SCOPE_EXIT({ proxy_machine.waitProxyStopped(); });
 
     /// get CPU/memory/disk info of this server
     proxy_machine.getServerInfo(server_info);
@@ -602,9 +600,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
-    SCOPE_EXIT({
-        proxy_machine.destroyProxyContext();
-    });
+    SCOPE_EXIT({ proxy_machine.destroyProxyContext(); });
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
@@ -822,7 +818,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalPageIdAllocator();
-    if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (!is_compute_mode)
     {
         global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
         LOG_INFO(
@@ -836,8 +832,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::optional<raft_serverpb::StoreIdent> store_ident;
     // Only when this node is disagg compute node and autoscaler is enabled, we don't need the WriteNodePageStorage instance
     // Disagg compute node without autoscaler still need this instance for proxy's data
-    if (!(global_context->getSharedContextDisagg()->isDisaggregatedComputeMode()
-          && global_context->getSharedContextDisagg()->use_autoscaler))
+    if (!(is_compute_mode && global_context->getSharedContextDisagg()->use_autoscaler))
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
         if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
@@ -864,7 +859,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getSharedContextDisagg()->initFastAddPeerContext(settings.fap_handle_concurrency);
     }
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (is_compute_mode)
     {
         global_context->getSharedContextDisagg()->initReadNodePageCache(
             global_context->getPathPool(),
@@ -960,7 +955,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     ///   0 means cache is disabled.
     ///   We cannot support unlimited delta index cache in disaggregated mode for now,
     ///   because cache items will be never explicitly removed.
-    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (is_compute_mode)
     {
         constexpr auto delta_index_cache_ratio = 0.02;
         constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
@@ -989,22 +984,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     attachSystemTablesServer(*global_context->getDatabase("system"));
 
     {
-        /// create TMTContext
+        /// Create TMTContext
         auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
-        if (store_ident)
-        {
-            // Many service would depends on `store_id` when disagg is enabled.
-            // setup the store_id restored from store_ident ASAP
-            // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-            auto kvstore = global_context->getTMTContext().getKVStore();
-            metapb::Store store_meta;
-            store_meta.set_id(store_ident->store_id());
-            store_meta.set_node_state(metapb::NodeState::Preparing);
-            kvstore->setStore(store_meta);
-        }
-        global_context->getTMTContext().reloadConfig(config());
+        proxy_machine.initKVStore(global_context->getTMTContext(), store_ident);
 
+        global_context->getTMTContext().reloadConfig(config());
         // setup the kv cluster for disagg compute node fetching config
         if (S3::ClientFactory::instance().isEnabled())
         {
@@ -1030,7 +1015,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
     BgStorageInitHolder bg_init_stores;
-    if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (!is_compute_mode)
     {
         if (global_context->getSharedContextDisagg()->notDisaggregatedMode() || store_ident.has_value())
         {
@@ -1158,7 +1143,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (proxy_machine.isProxyRunnable())
         {
             const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
-            if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+            if (is_compute_mode)
             {
                 // compute node do not need to handle read index
                 LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", store_id);
@@ -1181,10 +1166,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
             }
         }
 
-        proxy_machine.waitServiceStarted();
-        SCOPE_EXIT({
-            proxy_machine.stopProxy(tmt_context);
-        });
+        proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
+        SCOPE_EXIT({ proxy_machine.stopProxy(tmt_context); });
 
         {
             // Report the unix timestamp, git hash, release version
@@ -1249,12 +1232,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // And we want to make sure LAC is cleanedup.
             // The effects are there will be no resource control during [lac.safeStop(), FlashGrpcServer destruct done],
             // but it's basically ok, that duration is small(normally 100-200ms).
-            if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() && use_autoscaler
-                && LocalAdmissionController::global_instance)
+            if (is_compute_mode && use_autoscaler && LocalAdmissionController::global_instance)
                 LocalAdmissionController::global_instance->safeStop();
         });
 
-        tmt_context.setStatusRunning();
+        proxy_machine.runTiFlash(tmt_context);
 
         try
         {
