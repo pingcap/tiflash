@@ -20,11 +20,13 @@
 int main(int argc, char * argv[])
 {
     benchmark::Initialize(&argc, argv);
+    DB::tests::TiFlashTestEnv::setupLogger();
+    // Each time TiFlashTestEnv::getContext() is called, some log will print, it's annoying.
+    Poco::Logger::root().setLevel("error");
     DB::tests::TiFlashTestEnv::initializeGlobalContext();
     if (::benchmark::ReportUnrecognizedArguments(argc, argv))
         return 1;
     DB::LocalAdmissionController::global_instance = std::make_unique<DB::MockLocalAdmissionController>();
-    DB::tests::TiFlashTestEnv::setupLogger("error");
     ::benchmark::RunSpecifiedBenchmarks();
     DB::tests::TiFlashTestEnv::shutdown();
     ::benchmark::Shutdown();
