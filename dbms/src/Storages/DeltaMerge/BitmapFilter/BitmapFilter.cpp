@@ -153,14 +153,12 @@ void BitmapFilter::runOptimize()
 String BitmapFilter::toDebugString() const
 {
     String s(filter.size(), '1');
-    for (UInt32 i = 0; i < filter.size(); i++)
+    for (UInt32 i = 0; i < filter.size(); ++i)
     {
         if (!filter[i])
-        {
             s[i] = '0';
-        }
     }
-    return fmt::format("{}", s);
+    return s;
 }
 
 size_t BitmapFilter::count() const
