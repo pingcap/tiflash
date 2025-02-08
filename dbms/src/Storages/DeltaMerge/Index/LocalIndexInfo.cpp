@@ -88,6 +88,50 @@ LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const
     return generateLocalIndexInfos(nullptr, table_info, logger).new_local_index_infos;
 }
 
+namespace
+{
+LocalIndexInfosChangeset nothingChanged(const std::unordered_map<IndexID, size_t> & original_local_index_id_map)
+{
+    std::vector<IndexID> all_indexes;
+    all_indexes.reserve(original_local_index_id_map.size());
+    for (const auto & it : original_local_index_id_map)
+        all_indexes.emplace_back(it.first);
+    size_t end_offset = all_indexes.size();
+    return LocalIndexInfosChangeset{
+        .new_local_index_infos = nullptr,
+        .all_indexes = std::move(all_indexes),
+        .added_indexes_offset = end_offset,
+        .dropped_indexes_offset = end_offset,
+    };
+}
+LocalIndexInfosChangeset getChangeset(
+    LocalIndexInfosPtr && new_index_infos,
+    const std::unordered_map<IndexID, size_t> & original_local_index_id_map,
+    const std::vector<IndexID> & newly_added,
+    const std::vector<IndexID> & newly_dropped)
+{
+    std::vector<IndexID> all_indexes;
+    all_indexes.reserve(original_local_index_id_map.size() + newly_added.size() + newly_dropped.size());
+    for (const auto & it : original_local_index_id_map)
+        all_indexes.emplace_back(it.first);
+
+    const size_t added_begin_offset = all_indexes.size();
+    for (const auto & id : newly_added)
+        all_indexes.emplace_back(id);
+
+    const size_t dropped_begin_offset = all_indexes.size();
+    for (const auto & id : newly_dropped)
+        all_indexes.emplace_back(id);
+
+    return LocalIndexInfosChangeset{
+        .new_local_index_infos = std::move(new_index_infos),
+        .all_indexes = std::move(all_indexes),
+        .added_indexes_offset = added_begin_offset,
+        .dropped_indexes_offset = dropped_begin_offset,
+    };
+}
+} // namespace
+
 LocalIndexInfosChangeset generateLocalIndexInfos(
     const LocalIndexInfosSnapshot & existing_indexes,
     const TiDB::TableInfo & new_table_info,
@@ -175,36 +219,26 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
 
     if (newly_added.empty() && newly_dropped.empty())
     {
-        LocalIndexInfosChangeset changeset{
-            .new_local_index_infos = nullptr,
-        };
-        for (const auto & it : original_local_index_id_map)
-            changeset.keep_indexes.emplace_back(it.first);
-        return changeset;
+        return nothingChanged(original_local_index_id_map);
     }
 
-    LocalIndexInfosChangeset changeset{
-        .new_local_index_infos = new_index_infos,
-        .dropped_indexes = std::move(newly_dropped),
-    };
-    for (const auto & it : original_local_index_id_map)
-        changeset.keep_indexes.emplace_back(it.first);
-    for (const auto & id : newly_added)
-        changeset.added_indexes.emplace_back(id);
-    return changeset;
+    return getChangeset(std::move(new_index_infos), original_local_index_id_map, newly_added, newly_dropped);
 }
 
-String LocalIndexInfosChangeset::toDebugString(bool simple) const
+String LocalIndexInfosChangeset::toDebugString() const
 {
     FmtBuffer buf;
     buf.append("keep=[");
+    auto keep_indexes = keepIndexes();
     buf.joinStr(
         keep_indexes.begin(),
         keep_indexes.end(),
         [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
         ",");
     buf.append("]");
-    if (simple && added_indexes.empty())
+
+    auto added_indexes = addedIndexes();
+    if (new_local_index_infos != nullptr || !added_indexes.empty())
     {
         buf.append(" added=[");
         buf.joinStr(
@@ -214,7 +248,8 @@ String LocalIndexInfosChangeset::toDebugString(bool simple) const
             ",");
         buf.append("]");
     }
-    if (simple && dropped_indexes.empty())
+    auto dropped_indexes = droppedIndexes();
+    if (new_local_index_infos != nullptr || !dropped_indexes.empty())
     {
         buf.append(" dropped=[");
         buf.joinStr(

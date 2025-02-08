@@ -21,6 +21,8 @@
 #include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/VectorIndex.h>
 
+#include <span>
+
 namespace TiDB
 {
 struct TableInfo;
@@ -58,14 +60,44 @@ struct LocalIndexInfo
 
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
 
-struct LocalIndexInfosChangeset
+class LocalIndexInfosChangeset
 {
+public:
     LocalIndexInfosPtr new_local_index_infos;
-    std::vector<IndexID> keep_indexes;
-    std::vector<IndexID> added_indexes;
-    std::vector<IndexID> dropped_indexes;
+    // This vector store all the keep/added/dropped index IDs.
+    // The keep indexes: [0, added_indexes_offset)
+    // The added indexes: [added_indexes_offset, added_indexes_offset + dropped_indexes_offset)
+    // The dropped indexes: [dropped_index_offset, end-of-the-vector)
+    const std::vector<IndexID> all_indexes;
+    const size_t added_indexes_offset;
+    const size_t dropped_indexes_offset;
 
-    String toDebugString(bool simple) const;
+public:
+    std::span<const IndexID> keepIndexes() const
+    {
+        return std::span(all_indexes.begin(), all_indexes.begin() + added_indexes_offset);
+    }
+    std::span<const IndexID> addedIndexes() const
+    {
+        return std::span(
+            all_indexes.begin() + added_indexes_offset,
+            all_indexes.begin() + added_indexes_offset + dropped_indexes_offset);
+    }
+    std::span<const IndexID> droppedIndexes() const
+    {
+        return std::span(all_indexes.begin() + added_indexes_offset + dropped_indexes_offset, all_indexes.end());
+    }
+    std::vector<IndexID> copyDroppedIndexes() const
+    {
+        std::vector<IndexID> r;
+        for (const auto & id : droppedIndexes())
+        {
+            r.emplace_back(id);
+        }
+        return r;
+    }
+
+    String toDebugString() const;
 };
 
 // Generate a changeset according to `existing_indexes` and `new_table_info`
