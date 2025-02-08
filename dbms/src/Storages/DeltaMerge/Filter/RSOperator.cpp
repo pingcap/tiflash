@@ -75,7 +75,11 @@ RSOperatorPtr RSOperator::build(
             table_column_defines.cend(),
             [col_id = col_info.id](const ColumnDefine & cd) { return cd.id == col_id; });
         if (iter == table_column_defines.cend())
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Column id {} not found in table column defines", col_info.id);
+        {
+            // Some columns may not be in the table schema, such as extra table id column.
+            column_id_to_attr[col_info.id] = Attr{.col_name = "", .col_id = col_info.id, .type = nullptr};
+            continue;
+        }
         const auto & cd = *iter;
         column_id_to_attr[cd.id] = Attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
     }
