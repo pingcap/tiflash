@@ -242,7 +242,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         uint64_t index,
         uint64_t term,
         std::optional<uint64_t> deadline_index,
-        bool cancel_after_prehandle);
+        std::optional<std::function<void()>> cancel_after_prehandle);
     std::tuple<RegionPtr, PrehandleResult> snapshot(
         KVStore & kvs,
         TMTContext & tmt,
@@ -251,7 +251,7 @@ struct MockRaftStoreProxy : MutexLockWrap
         uint64_t index,
         uint64_t term,
         std::optional<uint64_t> deadline_index,
-        bool cancel_after_prehandle = false);
+        std::optional<std::function<void()>> cancel_after_prehandle = std::nullopt);
 
     void doApply(
         KVStore & kvs,

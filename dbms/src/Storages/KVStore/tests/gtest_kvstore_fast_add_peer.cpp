@@ -853,7 +853,7 @@ try
         11,
         11,
         std::nullopt,
-        false);
+        std::nullopt);
     eventuallyPredicate([&]() {
         return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
@@ -975,7 +975,7 @@ try
         10,
         10,
         std::nullopt,
-        false);
+        std::nullopt);
 
     std::mutex exe_mut;
     std::unique_lock exe_lock(exe_mut);
@@ -1059,7 +1059,7 @@ try
             0,
             0,
             std::nullopt,
-            false);
+            std::nullopt);
     }
     ASSERT_EQ(fap_context->tasks_trace->queryState(region_id), FAPAsyncTasks::TaskState::NotScheduled);
 
