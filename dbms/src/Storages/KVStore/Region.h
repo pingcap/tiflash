@@ -134,8 +134,9 @@ public: // Simple Read and Write
     Region() = delete;
     ~Region();
 
-    void insertFromSnap(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
-    void insertFromSnap(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    void insertDebug(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    void insertFromSnap(TMTContext & tmt, ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    void insertFromSnap(TMTContext & tmt, const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
     void remove(const std::string & cf, const TiKVKey & key);
 
     // Directly drop all data in this Region object.
@@ -239,7 +240,7 @@ public: // Stats
     size_t getRegionTableSize() const { return data.getRegionTableSize(); }
     bool getRegionTableWarned() const { return data.getRegionTableWarned(); }
     bool setRegionTableWarned(bool desired) const { return data.setRegionTableWarned(desired); }
-    void resetWarnMemoryLimitByTable();
+    void resetWarnMemoryLimitByTable() const;
     void maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from);
 
 public: // Raft Read and Write

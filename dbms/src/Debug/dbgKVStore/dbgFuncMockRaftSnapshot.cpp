@@ -154,7 +154,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
                                          : RecordKVFormat::encodeWriteCfValue(Region::PutFlag, prewrite_ts, value);
             TiKVKey commit_key = RecordKVFormat::appendTs(key, commit_ts);
 
-            region->insertFromSnap(ColumnFamilyType::Write, std::move(commit_key), std::move(commit_value));
+            region->insertFromSnap(context.getTMTContext(), ColumnFamilyType::Write, std::move(commit_key), std::move(commit_value));
         }
         MockTiKV::instance().getRaftIndex(region_id);
     }

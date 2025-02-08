@@ -205,9 +205,9 @@ try
     TableID table_id = 100;
     auto region = makeTmpRegion();
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
-    region->insertFromSnap("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
-    region->insertFromSnap("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
-    region->insertFromSnap("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+    region->insertDebug("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+    region->insertDebug("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+    region->insertDebug("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
     region->updateRaftLogEagerIndex(1024);
 
@@ -237,9 +237,9 @@ try
     TableID table_id = 100;
     auto region = makeTmpRegion();
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
-    region->insertFromSnap("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
-    region->insertFromSnap("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
-    region->insertFromSnap("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+    region->insertDebug("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+    region->insertDebug("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+    region->insertDebug("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
     region->updateRaftLogEagerIndex(1024);
 
@@ -284,9 +284,9 @@ try
     }
 
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
-    region->insertFromSnap("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
-    region->insertFromSnap("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
-    region->insertFromSnap("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+    region->insertDebug("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
+    region->insertDebug("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+    region->insertDebug("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
     const auto path = dir_path + "/region_state.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -542,10 +542,10 @@ protected:
 TEST_P(RegionPersisterTest, Concurrency)
 try
 {
-    RegionManager region_manager;
-
     auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & tmt = ctx.getTMTContext();
 
+    RegionManager region_manager;
     RegionMap regions;
     const TableID table_id = 100;
 
@@ -567,18 +567,19 @@ try
 
         auto region = makeRegion(createRegionMeta(region_100, table_id));
         TiKVKey key = RecordKVFormat::genKey(table_id, region_100, diff++);
-        region->insertFromSnap(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
+        region->insertFromSnap(tmt, ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
         region->insertFromSnap(
+            tmt,
             ColumnFamilyType::Write,
             TiKVKey::copyFrom(key),
             RecordKVFormat::encodeWriteCfValue('P', 0));
         region->insertFromSnap(
+            tmt,
             ColumnFamilyType::Lock,
             TiKVKey::copyFrom(key),
             RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
         persister.persist(*region, region_task_lock);
-
         regions.emplace(region->id(), region);
     });
     LOG_INFO(log, "paused before persisting region 100");
@@ -591,12 +592,14 @@ try
 
         auto region = makeRegion(createRegionMeta(region_101, table_id));
         TiKVKey key = RecordKVFormat::genKey(table_id, region_101, diff++);
-        region->insertFromSnap(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
+        region->insertFromSnap(tmt, ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
         region->insertFromSnap(
+            tmt, 
             ColumnFamilyType::Write,
             TiKVKey::copyFrom(key),
             RecordKVFormat::encodeWriteCfValue('P', 0));
         region->insertFromSnap(
+            tmt, 
             ColumnFamilyType::Lock,
             TiKVKey::copyFrom(key),
             RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
@@ -620,6 +623,7 @@ try
     RegionManager region_manager;
 
     auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & tmt = ctx.getTMTContext();
 
     size_t region_num = 100;
     RegionMap regions;
@@ -639,12 +643,14 @@ try
 
             auto region = makeRegion(createRegionMeta(i, table_id));
             TiKVKey key = RecordKVFormat::genKey(table_id, i, diff++);
-            region->insertFromSnap(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
+            region->insertFromSnap(tmt, ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
             region->insertFromSnap(
+                tmt,
                 ColumnFamilyType::Write,
                 TiKVKey::copyFrom(key),
                 RecordKVFormat::encodeWriteCfValue('P', 0));
             region->insertFromSnap(
+                tmt,
                 ColumnFamilyType::Lock,
                 TiKVKey::copyFrom(key),
                 RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
@@ -707,10 +713,10 @@ CATCH
 TEST_P(RegionPersisterTest, LargeRegion)
 try
 {
-    RegionManager region_manager;
-
     auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & tmt = ctx.getTMTContext();
 
+    RegionManager region_manager;
     const TableID table_id = 100;
     const RegionID region_id_base = 20;
     const String large_value(1024 * 512, 'v');
@@ -736,14 +742,17 @@ try
                 }
                 TiKVKey key = RecordKVFormat::genKey(table_id, handle_id, tso++);
                 region->insertFromSnap(
+                    tmt,
                     ColumnFamilyType::Default,
                     TiKVKey::copyFrom(key),
                     TiKVValue(large_value.data()));
                 region->insertFromSnap(
+                    tmt,
                     ColumnFamilyType::Write,
                     TiKVKey::copyFrom(key),
                     RecordKVFormat::encodeWriteCfValue('P', 0));
                 region->insertFromSnap(
+                    tmt,
                     ColumnFamilyType::Lock,
                     TiKVKey::copyFrom(key),
                     RecordKVFormat::encodeLockCfValue('P', "", 0, 0));

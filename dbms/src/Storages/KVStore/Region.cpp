@@ -58,15 +58,21 @@ LockInfoPtr Region::getLockInfo(const RegionLockReadQuery & query) const
     return data.getLockInfo(query);
 }
 
-void Region::insertFromSnap(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
-{
-    insertFromSnap(NameToCF(cf), std::move(key), std::move(value), mode);
+void Region::insertDebug(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode) {
+    std::unique_lock<std::shared_mutex> lock(mutex);
+    doInsert(NameToCF(cf), std::move(key), std::move(value), mode);
 }
 
-void Region::insertFromSnap(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
+void Region::insertFromSnap(TMTContext & tmt, const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+{
+    insertFromSnap(tmt, NameToCF(cf), std::move(key), std::move(value), mode);
+}
+
+void Region::insertFromSnap(TMTContext & tmt, ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     doInsert(type, std::move(key), std::move(value), mode);
+    maybeWarnMemoryLimitByTable(tmt, "snapshot");
 }
 
 RegionDataMemDiff Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
@@ -433,7 +439,7 @@ void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
     }
 }
 
-void Region::resetWarnMemoryLimitByTable()
+void Region::resetWarnMemoryLimitByTable() const
 {
     setRegionTableWarned(false);
 }

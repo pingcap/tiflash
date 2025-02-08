@@ -644,8 +644,6 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
     region->updateCommitIndex(index);
     // Would set `appleid_index` in genRegionPtr.
     auto new_kv_region = kvs.genRegionPtr(std::move(region_meta), peer_id, index, term, tmt, true);
-    auto & region_table = tmt.getRegionTable();
-    region_table.addPrehandlingRegion(*new_kv_region);
 
     std::vector<SSTView> ssts;
     for (auto & cf : cfs)

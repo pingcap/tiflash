@@ -444,7 +444,6 @@ void RegionTable::replaceRegion(const RegionPtr & old_region, const RegionPtr & 
         if unlikely (!new_region->getRegionTableCtx())
         {
             // For most of the cases, the region is prehandled, so the ctx is set at that moment.
-            LOG_INFO(DB::Logger::get(), "!!!! fdsfdfsdf");
             new_region->setRegionTableCtx(table.ctx);
         }
     }

@@ -21,6 +21,8 @@ namespace DB
 {
 struct RegionTableCtxInner
 {
+    // KVStore size of all regions of this table, including the prehandling one.
+    // So, this size may be larger than the table's real size.
     std::atomic_int64_t table_size;
     std::atomic_bool warned;
 };

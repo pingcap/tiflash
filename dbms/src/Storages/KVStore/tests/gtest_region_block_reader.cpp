@@ -665,8 +665,8 @@ try
     };
     for (const auto & [k, v] : kvs)
     {
-        region->insertFromSnap(
-            ColumnFamilyType::Write,
+        region->insertDebug(
+            "write",
             TiKVKey(bytesFromHexString(k)),
             TiKVValue(bytesFromHexString(v)));
     }

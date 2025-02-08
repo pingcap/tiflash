@@ -281,6 +281,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
             auto ongoing = ongoing_prehandle_task_count.fetch_sub(1) - 1;
             new_region->afterPrehandleSnapshot(ongoing);
         });
+        new_region->resetWarnMemoryLimitByTable();
         PrehandleResult result = preHandleSSTsToDTFiles( //
             new_region,
             snaps,
@@ -289,6 +290,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
             DM::FileConvertJobType::ApplySnapshot,
             tmt);
         result.stats.start_time = start_time;
+        new_region->resetWarnMemoryLimitByTable();
         return result;
     }
     catch (DB::Exception & e)
