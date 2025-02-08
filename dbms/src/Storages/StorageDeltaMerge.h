@@ -23,13 +23,8 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-<<<<<<< HEAD
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
-#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
-=======
-#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo_fwd.h>
->>>>>>> 20cdf6deaa (vector: Reduce logging under debug level (#9852))
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
