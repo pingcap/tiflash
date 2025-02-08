@@ -3996,6 +3996,17 @@ CATCH
 
 void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
 {
+    // This test case is design for delta index.
+    // Always use delta index in this case.
+    auto & global_settings = db_context->getGlobalContext().getSettingsRef();
+    bool enable_version_chain = global_settings.dt_enable_version_chain;
+    if (enable_version_chain)
+        global_settings.set("dt_enable_version_chain", "false");
+    SCOPE_EXIT({
+        if (enable_version_chain)
+            global_settings.set("dt_enable_version_chain", "true");
+    });
+
     auto table_column_defines = DMTestEnv::getDefaultColumns();
     store = reload(table_column_defines);
 
