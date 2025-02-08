@@ -25,7 +25,7 @@ struct RowKeyRange;
 using RowKeyRanges = std::vector<RowKeyRange>;
 
 template <ExtraHandleType HandleType>
-void buildRowKeyFilter(
+UInt32 buildRowKeyFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,

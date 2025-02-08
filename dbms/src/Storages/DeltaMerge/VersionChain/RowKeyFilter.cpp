@@ -124,12 +124,14 @@ UInt32 buildRowKeyFilterDMFile(
 
     const auto & pack_stats = dmfile->getPackStats();
     UInt32 processed_rows = 0;
+    UInt32 filtered_out_rows = 0;
     for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
     {
         const auto pack_id = valid_start_pack_id + i;
         if (!valid_handle_res[i].isUse())
         {
             std::fill_n(filter.begin() + start_row_id + processed_rows, pack_stats[pack_id].rows, false);
+            filtered_out_rows += pack_stats[pack_id].rows;
         }
         else if (!valid_handle_res[i].allMatch())
         {
@@ -141,7 +143,7 @@ UInt32 buildRowKeyFilterDMFile(
     }
 
     if (need_read_rows == 0)
-        return processed_rows;
+        return filtered_out_rows;
 
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     builder.onlyReadOnePackEveryTime().setReadPacks(need_read_packs).setReadTag(ReadTag::MVCC);
@@ -152,10 +154,11 @@ UInt32 buildRowKeyFilterDMFile(
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
+        read_rows += block.rows();
         const auto handles = ColumnView<HandleType>(*(block.begin()->column));
         const auto itr = need_read_pack_to_start_row_ids.find(pack_id);
         RUNTIME_CHECK(itr != need_read_pack_to_start_row_ids.end(), need_read_pack_to_start_row_ids, pack_id);
-        read_rows += buildRowKeyFilterVector(
+        filtered_out_rows += buildRowKeyFilterVector(
             handles,
             delete_ranges,
             read_ranges,
@@ -163,7 +166,7 @@ UInt32 buildRowKeyFilterDMFile(
             filter);
     }
     RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
-    return processed_rows;
+    return filtered_out_rows;
 }
 
 template <ExtraHandleType HandleType>
@@ -216,7 +219,7 @@ UInt32 buildRowKeyFilterStable(
 } // namespace
 
 template <ExtraHandleType HandleType>
-void buildRowKeyFilter(
+UInt32 buildRowKeyFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
@@ -234,6 +237,7 @@ void buildRowKeyFilter(
 
     RowKeyRanges delete_ranges;
     UInt32 read_rows = 0;
+    UInt32 filtered_out_rows = 0;
     // Read ColumnFiles from new to old for handling delete ranges
     for (const auto & cf : cfs | std::views::reverse)
     {
@@ -251,7 +255,7 @@ void buildRowKeyFilter(
         // TODO: add min-max value in tiny/memory column file to optimize rowkey filter.
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            const auto n = buildRowKeyFilterBlock<HandleType>(
+            filtered_out_rows += buildRowKeyFilterBlock<HandleType>(
                 dm_context,
                 data_provider,
                 *cf,
@@ -259,44 +263,42 @@ void buildRowKeyFilter(
                 read_ranges,
                 start_row_id,
                 filter);
-            RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            const auto n = buildRowKeyFilterColumnFileBig<HandleType>(
+            filtered_out_rows += buildRowKeyFilterColumnFileBig<HandleType>(
                 dm_context,
                 *cf_big,
                 delete_ranges,
                 read_ranges,
                 start_row_id,
                 filter);
-            RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
     }
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
 
-    const auto n = buildRowKeyFilterStable<HandleType>(
+    filtered_out_rows += buildRowKeyFilterStable<HandleType>(
         dm_context,
         stable,
         delete_ranges,
         read_ranges,
         stable_filter_res,
         filter);
-    RUNTIME_CHECK(n == stable_rows, n, stable_rows);
+    return filtered_out_rows;
 }
 
-template void buildRowKeyFilter<Int64>(
+template UInt32 buildRowKeyFilter<Int64>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & filter_res,
     IColumn::Filter & filter);
 
-template void buildRowKeyFilter<String>(
+template UInt32 buildRowKeyFilter<String>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
