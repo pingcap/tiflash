@@ -97,7 +97,7 @@ public:
         return r;
     }
 
-    String toDebugString() const;
+    String toString() const;
 };
 
 // Generate a changeset according to `existing_indexes` and `new_table_info`

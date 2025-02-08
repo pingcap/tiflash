@@ -225,7 +225,7 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
     return getChangeset(std::move(new_index_infos), original_local_index_id_map, newly_added, newly_dropped);
 }
 
-String LocalIndexInfosChangeset::toDebugString() const
+String LocalIndexInfosChangeset::toString() const
 {
     FmtBuffer buf;
     buf.append("keep=[");
