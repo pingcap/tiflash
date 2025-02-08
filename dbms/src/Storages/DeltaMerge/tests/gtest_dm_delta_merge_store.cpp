@@ -951,8 +951,7 @@ CATCH
 TEST_P(DeltaMergeStoreRWTest, WriteMultipleBlock)
 try
 {
-    constexpr size_t num_write_rows = 32;
-    constexpr bool clear_data_in_range = true;
+    const size_t num_write_rows = 32;
 
     // Test write multi blocks without overlap
     {
@@ -980,7 +979,7 @@ try
             auto file_ids = file_ids1;
             file_ids.insert(file_ids.cend(), file_ids2.begin(), file_ids2.end());
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, !clear_data_in_range);
+            store->ingestFiles(dm_context, range, file_ids, false);
             break;
         }
         case TestMode::PageStorageV2_MemoryAndDisk:
@@ -992,7 +991,7 @@ try
             auto range = range1.merge(range3);
             auto file_ids = file_ids1;
             file_ids.insert(file_ids.cend(), file_ids3.begin(), file_ids3.end());
-            store->ingestFiles(dm_context, range, file_ids, !clear_data_in_range);
+            store->ingestFiles(dm_context, range, file_ids, false);
 
             store->write(*db_context, db_context->getSettingsRef(), block2);
             break;
@@ -1030,7 +1029,7 @@ try
 
     // Test write multi blocks with overlap
     {
-        UInt64 tso1 = 3; // ts of the same key should incre...
+        UInt64 tso1 = 1;
         UInt64 tso2 = 100;
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso1);
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso1);
@@ -1052,11 +1051,11 @@ try
         {
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
-            store->ingestFiles(dm_context, range1, {file_ids1}, clear_data_in_range);
+            store->ingestFiles(dm_context, range1, {file_ids1}, false);
             auto [range2, file_ids2] = genDMFile(*dm_context, block2);
-            store->ingestFiles(dm_context, range2, {file_ids2}, clear_data_in_range);
+            store->ingestFiles(dm_context, range2, {file_ids2}, false);
             auto [range3, file_ids3] = genDMFile(*dm_context, block3);
-            store->ingestFiles(dm_context, range3, {file_ids3}, clear_data_in_range);
+            store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
         case TestMode::PageStorageV2_MemoryAndDisk:
@@ -1066,9 +1065,9 @@ try
 
             auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
             auto [range1, file_ids1] = genDMFile(*dm_context, block1);
-            store->ingestFiles(dm_context, range1, {file_ids1}, clear_data_in_range);
+            store->ingestFiles(dm_context, range1, {file_ids1}, false);
             auto [range3, file_ids3] = genDMFile(*dm_context, block3);
-            store->ingestFiles(dm_context, range3, {file_ids3}, clear_data_in_range);
+            store->ingestFiles(dm_context, range3, {file_ids3}, false);
             break;
         }
         }
@@ -1110,8 +1109,8 @@ try
             db_context->getSettingsRef(),
             columns,
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
-            /* num_streams= */ 2,
-            /* start_ts= */ static_cast<UInt64>(2),
+            /* num_streams= */ 1,
+            /* start_ts= */ static_cast<UInt64>(1),
             EMPTY_FILTER,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1123,7 +1122,7 @@ try
             in,
             Strings({DMTestEnv::pk_name}),
             createColumns({
-                createColumn<Int64>(createNumbers<Int64>(64, 96)),
+                createColumn<Int64>(createNumbers<Int64>(0, 2 * num_write_rows)),
             }));
     }
 }
@@ -3997,16 +3996,6 @@ CATCH
 
 void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
 {
-    // Always use delta index in this case.
-    auto & global_settings = db_context->getGlobalContext().getSettingsRef();
-    bool enable_version_chain = global_settings.dt_enable_version_chain;
-    if (enable_version_chain)
-        global_settings.set("dt_enable_version_chain", "false");
-    SCOPE_EXIT({
-        if (enable_version_chain)
-            global_settings.set("dt_enable_version_chain", "true");
-    });
-
     auto table_column_defines = DMTestEnv::getDefaultColumns();
     store = reload(table_column_defines);
 
