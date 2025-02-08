@@ -399,17 +399,8 @@ void Region::setRegionTableCtx(RegionTableCtx size) const
     data.setRegionTableCtx(size);
 }
 
-RegionTableCtx Region::resetRegionTableCtx() const
+void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
 {
-    return data.resetRegionTableCtx();
-}
-
-size_t Region::getRegionTableSize() const
-{
-    return data.getRegionTableSize();
-}
-
-void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from) {
     // If there are data flow in, we will check if the memory is exhaused.
     auto limit = tmt.getKVStore()->getKVStoreMemoryLimit();
     auto current = real_rss.load();
@@ -442,7 +433,8 @@ void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from) {
     }
 }
 
-void Region::resetWarnMemoryLimitByTable() {
+void Region::resetWarnMemoryLimitByTable()
+{
     setRegionTableWarned(false);
 }
 

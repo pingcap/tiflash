@@ -161,6 +161,15 @@ void RegionTable::addRegion(const Region & region)
     getOrInsertRegion(region);
 }
 
+void RegionTable::addPrehandlingRegion(const Region & region)
+{
+    std::lock_guard lock(mutex);
+    auto keyspace_id = region.getKeyspaceID();
+    auto table_id = region.getMappedTableID();
+    auto & table = getOrCreateTable(keyspace_id, table_id);
+    region.setRegionTableCtx(table.ctx);
+}
+
 size_t RegionTable::getTableRegionSize(KeyspaceID keyspace_id, TableID table_id) const
 {
     std::scoped_lock lock(mutex);
@@ -432,7 +441,12 @@ void RegionTable::replaceRegion(const RegionPtr & old_region, const RegionPtr & 
         auto table_id = region_range_keys->getMappedTableID();
         auto & table = getOrCreateTable(keyspace_id, table_id);
         old_region->resetRegionTableCtx();
-        new_region->setRegionTableCtx(table.ctx);
+        if unlikely (!new_region->getRegionTableCtx())
+        {
+            // For most of the cases, the region is prehandled, so the ctx is set at that moment.
+            LOG_INFO(DB::Logger::get(), "!!!! fdsfdfsdf");
+            new_region->setRegionTableCtx(table.ctx);
+        }
     }
 }
 

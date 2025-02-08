@@ -667,10 +667,11 @@ RawCppPtr PreHandleSnapshot(
         auto & tmt = *server->tmt;
         auto & kvstore = tmt.getKVStore();
         auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
+        auto & region_table = tmt.getRegionTable();
+        region_table.addPrehandlingRegion(*new_region);
 
 #ifndef NDEBUG
         {
-            auto & kvstore = server->tmt->getKVStore();
             auto state = kvstore->getProxyHelper()->getRegionLocalState(new_region->id());
             assert(state.state() == raft_serverpb::PeerState::Applying);
         }

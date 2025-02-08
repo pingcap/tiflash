@@ -457,6 +457,7 @@ static void runInParallel(
     const size_t split_id = part_limit.split_id;
 
     auto part_new_region = std::make_shared<Region>(new_region->getMeta().clone(), proxy_helper);
+    part_new_region->setRegionTableCtx(new_region->getRegionTableCtx());
     auto part_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
         part_new_region,
         prehandle_ctx.snapshot_index,

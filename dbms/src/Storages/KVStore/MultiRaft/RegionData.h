@@ -84,7 +84,9 @@ public:
 
     String summary() const;
     size_t tryCompactionFilter(Timestamp safe_point);
+
     void setRegionTableCtx(RegionTableCtx) const;
+    RegionTableCtx getRegionTableCtx() const;
     RegionTableCtx resetRegionTableCtx() const;
     size_t getRegionTableSize() const;
     bool getRegionTableWarned() const;

@@ -420,6 +420,11 @@ void RegionData::setRegionTableCtx(RegionTableCtx ctx) const
     }
 }
 
+RegionTableCtx RegionData::getRegionTableCtx() const
+{
+    return region_table_ctx;
+}
+
 RegionTableCtx RegionData::resetRegionTableCtx() const
 {
     if (region_table_ctx)

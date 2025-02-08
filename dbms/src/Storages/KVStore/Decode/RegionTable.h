@@ -95,6 +95,8 @@ public:
     // When a region is added to region table, happens when split ans restore.
     void addRegion(const Region & region);
 
+    void addPrehandlingRegion(const Region & region);
+
     // When a reigon is removed out of TiFlash.
     void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 

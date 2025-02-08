@@ -568,7 +568,10 @@ try
         auto region = makeRegion(createRegionMeta(region_100, table_id));
         TiKVKey key = RecordKVFormat::genKey(table_id, region_100, diff++);
         region->insertFromSnap(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
-        region->insertFromSnap(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+        region->insertFromSnap(
+            ColumnFamilyType::Write,
+            TiKVKey::copyFrom(key),
+            RecordKVFormat::encodeWriteCfValue('P', 0));
         region->insertFromSnap(
             ColumnFamilyType::Lock,
             TiKVKey::copyFrom(key),
@@ -589,7 +592,10 @@ try
         auto region = makeRegion(createRegionMeta(region_101, table_id));
         TiKVKey key = RecordKVFormat::genKey(table_id, region_101, diff++);
         region->insertFromSnap(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
-        region->insertFromSnap(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+        region->insertFromSnap(
+            ColumnFamilyType::Write,
+            TiKVKey::copyFrom(key),
+            RecordKVFormat::encodeWriteCfValue('P', 0));
         region->insertFromSnap(
             ColumnFamilyType::Lock,
             TiKVKey::copyFrom(key),
@@ -634,7 +640,10 @@ try
             auto region = makeRegion(createRegionMeta(i, table_id));
             TiKVKey key = RecordKVFormat::genKey(table_id, i, diff++);
             region->insertFromSnap(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
-            region->insertFromSnap(ColumnFamilyType::Write, TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+            region->insertFromSnap(
+                ColumnFamilyType::Write,
+                TiKVKey::copyFrom(key),
+                RecordKVFormat::encodeWriteCfValue('P', 0));
             region->insertFromSnap(
                 ColumnFamilyType::Lock,
                 TiKVKey::copyFrom(key),
@@ -726,7 +735,10 @@ try
                     break;
                 }
                 TiKVKey key = RecordKVFormat::genKey(table_id, handle_id, tso++);
-                region->insertFromSnap(ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue(large_value.data()));
+                region->insertFromSnap(
+                    ColumnFamilyType::Default,
+                    TiKVKey::copyFrom(key),
+                    TiKVValue(large_value.data()));
                 region->insertFromSnap(
                     ColumnFamilyType::Write,
                     TiKVKey::copyFrom(key),

@@ -665,7 +665,10 @@ try
     };
     for (const auto & [k, v] : kvs)
     {
-        region->insertFromSnap(ColumnFamilyType::Write, TiKVKey(bytesFromHexString(k)), TiKVValue(bytesFromHexString(v)));
+        region->insertFromSnap(
+            ColumnFamilyType::Write,
+            TiKVKey(bytesFromHexString(k)),
+            TiKVValue(bytesFromHexString(v)));
     }
 
     auto data_list_read = ReadRegionCommitCache(region, true);
