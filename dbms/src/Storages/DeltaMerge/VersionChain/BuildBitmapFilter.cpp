@@ -56,6 +56,10 @@ BitmapFilterPtr buildBitmapFilter(
     LOG_DEBUG(snapshot.log, "bitmap_filter2={}", bitmap_filter->toDebugString());
     auto delete_filtered_out_rows = buildDeletedFilter(dm_context, snapshot, filter);
     LOG_DEBUG(snapshot.log, "bitmap_filter3={}", bitmap_filter->toDebugString());
+
+    // rowkey_filtered_out_rows + version_filtered_out_rows + delete_filtered_out_rows
+    // may greater than the number of rows that are filtered out.
+    // because the same row may be filtered out by multiple filters and counted multiple times.
     bitmap_filter->setAllMatch(rowkey_filtered_out_rows + version_filtered_out_rows + delete_filtered_out_rows == 0);
     return bitmap_filter;
 }

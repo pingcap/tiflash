@@ -82,7 +82,7 @@ UInt32 buildVersionFilterVector(
     auto cf_reader = cf.getReader(dm_context, data_provider, version_cds_ptr, ReadTag::MVCC);
     UInt32 read_block_count = 0;
     UInt32 read_rows = 0;
-    UInt32 filered_out_rows = 0;
+    UInt32 filtered_out_rows = 0;
     while (true)
     {
         // Must make sure different versions of the same handle are sorted ascending.
@@ -164,6 +164,7 @@ template <ExtraHandleType HandleType>
         dm_context.scan_context);
 
     UInt32 read_rows = 0;
+    UInt32 filtered_out_rows = 0;
     for (auto pack_id : *need_read_packs)
     {
         auto block = stream->read();
@@ -181,7 +182,7 @@ template <ExtraHandleType HandleType>
             for (UInt32 i = 0; i < block.rows(); ++i)
             {
                 filter[pack_start_row_id + i] = versions[i] <= read_ts;
-                filtered_out_rows += version[i] > read_ts;
+                filtered_out_rows += (versions[i] > read_ts);
             }
         }
 
@@ -207,7 +208,7 @@ template <ExtraHandleType HandleType>
                 if (!filter[base_row_id])
                 {
                     std::fill_n(filter.begin() + base_row_id + 1, count - 1, 0);
-                    filered_out_rows += count - 1;
+                    filtered_out_rows += count - 1;
                     continue;
                 }
                 else
@@ -220,7 +221,7 @@ template <ExtraHandleType HandleType>
                         if (filter[base_row_id + i])
                         {
                             filter[base_row_id + i - 1] = 0;
-                            ++filered_out_rows;
+                            ++filtered_out_rows;
                         }
                         else
                             break;
@@ -341,7 +342,7 @@ UInt32 buildVersionFilter(
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
     }
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
-    filered_out_rows += buildVersionFilterStable<HandleType>(dm_context, stable, read_ts, filter);
+    filtered_out_rows += buildVersionFilterStable<HandleType>(dm_context, stable, read_ts, filter);
     return filtered_out_rows;
 }
 
