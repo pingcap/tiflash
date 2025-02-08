@@ -81,8 +81,6 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
-#include <Storages/KVStore/FFI/ProxyFFI.h>
-#include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/ProxyStateMachine.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
@@ -102,7 +100,6 @@
 #include <common/logger_useful.h>
 #include <sys/resource.h>
 
-#include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
@@ -650,7 +647,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         log,
         "disaggregated_mode={} use_autoscaler={} enable_s3={}",
         magic_enum::enum_name(global_context->getSharedContextDisagg()->disaggregated_mode),
-        global_context->getSharedContextDisagg()->use_autoscaler,
+        use_autoscaler,
         storage_config.s3_config.isS3Enabled());
 
     if (storage_config.s3_config.isS3Enabled())
@@ -661,6 +658,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.s3_config.isS3Enabled());
 
     const auto is_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();
+    const auto is_storage_mode = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
     const auto [remote_cache_paths, remote_cache_capacity_quota]
         = storage_config.remote_cache_config.getCacheDirInfos(is_compute_mode);
     global_context->initializePathCapacityMetric( //
@@ -795,11 +793,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity),
         settings.bytes_that_rss_larger_than_limit);
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (is_compute_mode)
     {
         // No need to have local index scheduler.
     }
-    else if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+    else if (is_storage_mode)
     {
         // There is no compute task in write node.
         // Set the pool size to 80% of logical cores and 60% of memory
@@ -832,7 +830,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::optional<raft_serverpb::StoreIdent> store_ident;
     // Only when this node is disagg compute node and autoscaler is enabled, we don't need the WriteNodePageStorage instance
     // Disagg compute node without autoscaler still need this instance for proxy's data
-    if (!(is_compute_mode && global_context->getSharedContextDisagg()->use_autoscaler))
+    if (!(is_compute_mode && use_autoscaler))
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
         if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
