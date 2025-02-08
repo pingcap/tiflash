@@ -366,7 +366,7 @@ void RegionTable::handleInternalRegionsByKeyspace(
         for (auto table_id : table_set->second)
         {
             if (auto it = tables.find(KeyspaceTableID{keyspace_id, table_id}); it != tables.end())
-                callback(table_id, it->second.regions);
+                callback(table_id, it->second.internal_regions);
         }
     }
 }
