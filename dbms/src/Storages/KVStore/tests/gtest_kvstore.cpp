@@ -333,8 +333,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
             "lock",
             RecordKVFormat::genKey(table_id, 3),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-        region->insertFromSnap(
-            tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         region->insertFromSnap(
             tmt,
             "write",
@@ -346,8 +345,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
             "lock",
             RecordKVFormat::genKey(table_id, 8),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-        region->insertFromSnap(
-            tmt, "default", RecordKVFormat::genKey(table_id, 8, 5), TiKVValue("value1"));
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 8, 5), TiKVValue("value1"));
         region->insertFromSnap(
             tmt,
             "write",
@@ -402,8 +400,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
             "lock",
             RecordKVFormat::genKey(table_id, 3),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-        region->insertFromSnap(
-            tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         region->insertFromSnap(
             tmt,
             "write",
@@ -468,12 +465,11 @@ void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContex
             // Region 1 with handle_id == 6
             auto region = kvs.getRegion(target_region_id);
             region->insertFromSnap(
-            tmt,
+                tmt,
                 "lock",
                 RecordKVFormat::genKey(table_id, 6),
                 RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-            region->insertFromSnap(
-                tmt, "default", RecordKVFormat::genKey(table_id, 6, 5), TiKVValue("value1"));
+            region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 6, 5), TiKVValue("value1"));
             region->insertFromSnap(
                 tmt,
                 "write",
@@ -489,8 +485,7 @@ void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContex
                 "lock",
                 RecordKVFormat::genKey(table_id, 2),
                 RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-            region->insertFromSnap(
-                tmt, "default", RecordKVFormat::genKey(table_id, 2, 5), TiKVValue("value1"));
+            region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 2, 5), TiKVValue("value1"));
             region->insertFromSnap(
                 tmt,
                 "write",
@@ -663,8 +658,7 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
             "lock",
             RecordKVFormat::genKey(table_id, 3),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20, nullptr, 5));
-        region->insertFromSnap(
-            tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         region->insertFromSnap(
             tmt,
             "write",
@@ -791,8 +785,7 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
     }
     {
         ASSERT_EQ(0, region->dataSize());
-        region->insertFromSnap(
-            tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         ASSERT_LT(0, region->dataSize());
         region->remove("default", RecordKVFormat::genKey(table_id, 3, 5));
         ASSERT_EQ(0, region->dataSize());

@@ -135,8 +135,18 @@ public: // Simple Read and Write
     ~Region();
 
     void insertDebug(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
-    void insertFromSnap(TMTContext & tmt, ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
-    void insertFromSnap(TMTContext & tmt, const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    void insertFromSnap(
+        TMTContext & tmt,
+        ColumnFamilyType type,
+        TiKVKey && key,
+        TiKVValue && value,
+        DupCheck mode = DupCheck::Deny);
+    void insertFromSnap(
+        TMTContext & tmt,
+        const std::string & cf,
+        TiKVKey && key,
+        TiKVValue && value,
+        DupCheck mode = DupCheck::Deny);
     void remove(const std::string & cf, const TiKVKey & key);
 
     // Directly drop all data in this Region object.

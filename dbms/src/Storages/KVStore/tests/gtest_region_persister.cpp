@@ -594,12 +594,12 @@ try
         TiKVKey key = RecordKVFormat::genKey(table_id, region_101, diff++);
         region->insertFromSnap(tmt, ColumnFamilyType::Default, TiKVKey::copyFrom(key), TiKVValue("value1"));
         region->insertFromSnap(
-            tmt, 
+            tmt,
             ColumnFamilyType::Write,
             TiKVKey::copyFrom(key),
             RecordKVFormat::encodeWriteCfValue('P', 0));
         region->insertFromSnap(
-            tmt, 
+            tmt,
             ColumnFamilyType::Lock,
             TiKVKey::copyFrom(key),
             RecordKVFormat::encodeLockCfValue('P', "", 0, 0));

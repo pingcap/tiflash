@@ -58,7 +58,8 @@ LockInfoPtr Region::getLockInfo(const RegionLockReadQuery & query) const
     return data.getLockInfo(query);
 }
 
-void Region::insertDebug(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode) {
+void Region::insertDebug(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+{
     std::unique_lock<std::shared_mutex> lock(mutex);
     doInsert(NameToCF(cf), std::move(key), std::move(value), mode);
 }

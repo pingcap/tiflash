@@ -277,8 +277,12 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
             BaseBuffView key = reader->keyView();
             BaseBuffView value = reader->valueView();
             // TODO: use doInsert to avoid locking
-            region
-                ->insertFromSnap(tmt, cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len), DupCheck::AllowSame);
+            region->insertFromSnap(
+                tmt,
+                cf,
+                TiKVKey(key.data, key.len),
+                TiKVValue(value.data, value.len),
+                DupCheck::AllowSame);
             (*p_process_keys) += 1;
             (*p_process_keys_bytes) += (key.len + value.len);
             reader->next();
