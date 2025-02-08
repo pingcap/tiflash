@@ -205,29 +205,27 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     const std::span<const ColumnFilePtr> preceding_cfs,
     DeltaValueReader & delta_reader)
 {
-    auto min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, *(cf_big.getFile()));
-    if (!min_max) // DMFile is empty.
+    auto cf_big_min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, *(cf_big.getFile()));
+    if (!cf_big_min_max) // DMFile is empty.
         return 0;
 
-    const auto & [min, max] = *min_max;
+    HandleRefType cf_big_min = cf_big_min_max->first;
+    HandleRefType cf_big_max = cf_big_min_max->second;
+
     auto is_apply_snapshot = [&]() {
+        if (dmfile_or_delete_range_list.empty())
+            return false;
         if (auto * delete_range = std::get_if<RowKeyRange>(&dmfile_or_delete_range_list.back()); delete_range)
-        {
-            if constexpr (std::is_same_v<HandleType, String>)
-                return inRowKeyRange<std::string_view>(*delete_range, min)
-                    && inRowKeyRange<std::string_view>(*delete_range, max);
-            else
-                return inRowKeyRange(*delete_range, min) && inRowKeyRange(*delete_range, max);
-        }
+            return inRowKeyRange(*delete_range, cf_big_min) && inRowKeyRange(*delete_range, cf_big_max);
         return false;
     };
 
     auto is_dmfile_intersect = [&](const DMFile & file) {
-        auto t_min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, file);
-        if (!t_min_max)
+        auto file_min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, file);
+        if (!file_min_max)
             return false;
-        const auto & [t_min, t_max] = *t_min_max;
-        return min <= t_max && t_min <= max;
+        const auto & [file_min, file_max] = *file_min_max;
+        return cf_big_min <= file_max && file_min <= cf_big_max;
     };
 
     auto is_ingest_sst = [&]() {
