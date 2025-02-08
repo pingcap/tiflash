@@ -48,14 +48,15 @@ BitmapFilterPtr buildBitmapFilter(
     auto & filter = bitmap_filter->getFilter();
 
     RUNTIME_CHECK(pack_filter_results.size() == 1, pack_filter_results.size());
-    buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, pack_filter_results[0], filter);
+    auto rowkey_filtered_out_rows
+        = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, pack_filter_results[0], filter);
     LOG_DEBUG(snapshot.log, "bitmap_filter1={}", bitmap_filter->toDebugString());
-    buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
+    auto version_filtered_out_rows
+        = buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
     LOG_DEBUG(snapshot.log, "bitmap_filter2={}", bitmap_filter->toDebugString());
-    buildDeletedFilter(dm_context, snapshot, filter);
+    auto delete_filtered_out_rows = buildDeletedFilter(dm_context, snapshot, filter);
     LOG_DEBUG(snapshot.log, "bitmap_filter3={}", bitmap_filter->toDebugString());
-    // TODO: Make buildRowKeyFilter/buildVersionFilter/buildDeletedFilter returns filtered rows.
-    bitmap_filter->setAllMatch(false);
+    bitmap_filter->setAllMatch(rowkey_filtered_out_rows + version_filtered_out_rows + delete_filtered_out_rows == 0);
     return bitmap_filter;
 }
 

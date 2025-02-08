@@ -24,7 +24,7 @@
 
 namespace DB::DM
 {
-void buildVersionFilterVector(
+UInt32 buildVersionFilterVector(
     const PaddedPODArray<UInt64> & versions,
     const UInt64 read_ts,
     const std::vector<RowID> & base_ver_snap,
@@ -32,6 +32,7 @@ void buildVersionFilterVector(
     const UInt32 start_row_id,
     IColumn::Filter & filter)
 {
+    UInt32 filtered_out_rows = 0;
     // Traverse data from new to old
     for (ssize_t i = versions.size() - 1; i >= 0; --i)
     {
@@ -44,6 +45,7 @@ void buildVersionFilterVector(
         if (versions[i] > read_ts)
         {
             filter[row_id] = 0;
+            ++filtered_out_rows;
             continue;
         }
 
@@ -53,12 +55,17 @@ void buildVersionFilterVector(
         if (base_row_id != NotExistRowID && !filter[base_row_id])
         {
             filter[row_id] = 0;
+            ++filtered_out_rows;
             continue;
         }
         // Choose this version. If has based version, filter it out.
         if (base_row_id != NotExistRowID)
+        {
+            ++filtered_out_rows;
             filter[base_row_id] = 0;
+        }
     }
+    return filtered_out_rows;
 }
 
 [[nodiscard]] UInt32 buildVersionFilterBlock(
@@ -75,6 +82,7 @@ void buildVersionFilterVector(
     auto cf_reader = cf.getReader(dm_context, data_provider, version_cds_ptr, ReadTag::MVCC);
     UInt32 read_block_count = 0;
     UInt32 read_rows = 0;
+    UInt32 filered_out_rows = 0;
     while (true)
     {
         // Must make sure different versions of the same handle are sorted ascending.
@@ -86,7 +94,8 @@ void buildVersionFilterVector(
         ++read_block_count;
         read_rows += block.rows();
         const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column); // Must success
-        buildVersionFilterVector(versions, read_ts, base_ver_snap, stable_rows, start_row_id, filter);
+        filtered_out_rows
+            += buildVersionFilterVector(versions, read_ts, base_ver_snap, stable_rows, start_row_id, filter);
     }
 
     RUNTIME_CHECK_MSG(
@@ -102,7 +111,7 @@ void buildVersionFilterVector(
             cf.toString(),
             read_block_count,
             read_rows);
-    return read_rows;
+    return filtered_out_rows;
 }
 
 template <ExtraHandleType HandleType>
@@ -141,7 +150,7 @@ template <ExtraHandleType HandleType>
     }
 
     if (need_read_rows == 0)
-        return processed_rows;
+        return 0;
 
     // If all packs need to read is clean, we can just read version column.
     // However, the benefits in general scenarios may not be significant.
@@ -170,7 +179,10 @@ template <ExtraHandleType HandleType>
         if (max_versions[pack_id] > read_ts)
         {
             for (UInt32 i = 0; i < block.rows(); ++i)
+            {
                 filter[pack_start_row_id + i] = versions[i] <= read_ts;
+                filtered_out_rows += version[i] > read_ts;
+            }
         }
 
         // Filter multiple versions
@@ -195,6 +207,7 @@ template <ExtraHandleType HandleType>
                 if (!filter[base_row_id])
                 {
                     std::fill_n(filter.begin() + base_row_id + 1, count - 1, 0);
+                    filered_out_rows += count - 1;
                     continue;
                 }
                 else
@@ -205,7 +218,10 @@ template <ExtraHandleType HandleType>
                     for (UInt32 i = 1; i < count; ++i)
                     {
                         if (filter[base_row_id + i])
+                        {
                             filter[base_row_id + i - 1] = 0;
+                            ++filered_out_rows;
+                        }
                         else
                             break;
                     }
@@ -214,7 +230,7 @@ template <ExtraHandleType HandleType>
         }
     }
     RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
-    return processed_rows;
+    return filtered_out_rows;
 }
 
 template <ExtraHandleType HandleType>
@@ -260,7 +276,7 @@ bool isApplySnapshotOrIngestSST(
 }
 
 template <ExtraHandleType HandleType>
-void buildVersionFilter(
+UInt32 buildVersionFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
@@ -278,6 +294,7 @@ void buildVersionFilter(
 
     // Delta MVCC
     UInt32 read_rows = 0;
+    UInt32 filtered_out_rows = 0;
     // Read versions from new to old
     for (const auto & cf : cfs | std::views::reverse)
     {
@@ -292,7 +309,7 @@ void buildVersionFilter(
         // TODO: add clean and max version in tiny file
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            const auto n = buildVersionFilterBlock(
+            filtered_out_rows += buildVersionFilterBlock(
                 dm_context,
                 data_provider,
                 *cf,
@@ -301,17 +318,16 @@ void buildVersionFilter(
                 stable_rows,
                 start_row_id,
                 filter);
-            RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            UInt32 n = 0;
             if (likely(isApplySnapshotOrIngestSST(*cf_big, stable_rows, start_row_id, base_ver_snap)))
-                n = buildVersionFilterColumnFileBig<HandleType>(dm_context, *cf_big, read_ts, start_row_id, filter);
+                filtered_out_rows
+                    += buildVersionFilterColumnFileBig<HandleType>(dm_context, *cf_big, read_ts, start_row_id, filter);
             else
-                n = buildVersionFilterBlock(
+                filtered_out_rows += buildVersionFilterBlock(
                     dm_context,
                     data_provider,
                     *cf,
@@ -320,25 +336,23 @@ void buildVersionFilter(
                     stable_rows,
                     start_row_id,
                     filter);
-
-            RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
     }
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
-    const auto n = buildVersionFilterStable<HandleType>(dm_context, stable, read_ts, filter);
-    RUNTIME_CHECK(n == stable_rows, n, stable_rows);
+    filered_out_rows += buildVersionFilterStable<HandleType>(dm_context, stable, read_ts, filter);
+    return filtered_out_rows;
 }
 
-template void buildVersionFilter<Int64>(
+template UInt32 buildVersionFilter<Int64>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
     IColumn::Filter & filter);
 
-template void buildVersionFilter<String>(
+template UInt32 buildVersionFilter<String>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,

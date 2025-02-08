@@ -23,7 +23,7 @@ struct DMContext;
 struct SegmentSnapshot;
 
 template <ExtraHandleType HandleType>
-void buildVersionFilter(
+UInt32 buildVersionFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,

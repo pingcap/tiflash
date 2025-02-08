@@ -44,11 +44,13 @@ UInt32 buildDeletedFilterBlock(
         cf.toString(),
         block.rows());
     const auto & deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column); // Must success.
+    UInt32 filered_out_rows = 0;
     for (UInt32 i = 0; i < deleteds.size(); ++i)
     {
         filter[start_row_id + i] = filter[start_row_id + i] && !deleteds[i];
+        filtered_out_rows += deleteds[i];
     }
-    return deleteds.size();
+    return filtered_out_rows;
 }
 
 UInt32 buildDeletedFilterDMFile(
@@ -83,7 +85,7 @@ UInt32 buildDeletedFilterDMFile(
     }
 
     if (need_read_rows == 0)
-        return processed_rows;
+        return 0;
 
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     builder.onlyReadOnePackEveryTime().setReadPacks(need_read_packs).setReadTag(ReadTag::MVCC);
@@ -98,14 +100,16 @@ UInt32 buildDeletedFilterDMFile(
         const auto itr = need_read_pack_to_start_row_ids.find(pack_id);
         RUNTIME_CHECK(itr != need_read_pack_to_start_row_ids.end(), need_read_pack_to_start_row_ids, pack_id);
         const UInt32 pack_start_row_id = itr->second;
+        UInt32 filtered_out_rows = 0;
         for (UInt32 i = 0; i < deleteds.size(); ++i)
         {
             filter[pack_start_row_id + i] = filter[pack_start_row_id + i] && !deleteds[i];
+            filtered_out_rows += deleteds[i];
         }
         read_rows += pack_stats[pack_id].rows;
     }
     RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
-    return processed_rows;
+    return filtered_out_rows;
 }
 
 UInt32 buildDeletedFilterColumnFileBig(
@@ -138,9 +142,8 @@ void buildDeletedFilter(const DMContext & dm_context, const SegmentSnapshot & sn
     const auto & data_provider = delta.getDataProvider();
     assert(filter.size() == total_rows);
 
-    auto read_rows = buildDeletedFilterStable(dm_context, stable, filter);
-    RUNTIME_CHECK(stable_rows == read_rows, stable_rows, read_rows);
-
+    auto filtered_out_rows = buildDeletedFilterStable(dm_context, stable, filter);
+    auto read_rows = stable_rows;
     for (const auto & cf : cfs)
     {
         if (cf->isDeleteRange())
@@ -153,19 +156,18 @@ void buildDeletedFilter(const DMContext & dm_context, const SegmentSnapshot & sn
         // TODO: add deleted_rows in tiny file
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            const auto n = buildDeletedFilterBlock(dm_context, data_provider, *cf, start_row_id, filter);
-            RUNTIME_CHECK(cf_rows == n, cf_rows, n);
+            filered_out_rows += buildDeletedFilterBlock(dm_context, data_provider, *cf, start_row_id, filter);
             continue;
         }
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            const auto n = buildDeletedFilterColumnFileBig(dm_context, *cf_big, start_row_id, filter);
-            RUNTIME_CHECK(cf_rows == n, cf_rows, n);
+            filered_out_rows += buildDeletedFilterColumnFileBig(dm_context, *cf_big, start_row_id, filter);
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
     }
     RUNTIME_CHECK(read_rows == total_rows, read_rows, total_rows);
+    return filered_out_rows;
 }
 } // namespace DB::DM
