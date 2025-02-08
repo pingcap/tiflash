@@ -457,6 +457,33 @@ void loadBlockList(
 #endif
 }
 
+void setOpenFileLimit(std::optional<UInt64> new_limit)
+{
+    rlimit rlim{};
+    if (getrlimit(RLIMIT_NOFILE, &rlim))
+        throw Poco::Exception("Cannot getrlimit");
+
+    if (rlim.rlim_cur == rlim.rlim_max)
+    {
+        LOG_DEBUG(DB::Logger::get(), "rlimit on number of file descriptors is {}", rlim.rlim_cur);
+    }
+    else
+    {
+        rlim_t old = rlim.rlim_cur;
+        rlim.rlim_cur = new_limit.value_or(rlim.rlim_max);
+        int rc = setrlimit(RLIMIT_NOFILE, &rlim);
+        if (rc != 0)
+            LOG_WARNING(
+                DB::Logger::get(),
+                "Cannot set max number of file descriptors to {}"
+                ". Try to specify max_open_files according to your system limits. error: {}",
+                rlim.rlim_cur,
+                strerror(errno));
+        else
+            LOG_DEBUG(DB::Logger::get(), "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
+    }
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
@@ -715,30 +742,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     /// Try to increase limit on number of open files.
+    if (config().hasProperty("max_open_files"))
     {
-        rlimit rlim{};
-        if (getrlimit(RLIMIT_NOFILE, &rlim))
-            throw Poco::Exception("Cannot getrlimit");
-
-        if (rlim.rlim_cur == rlim.rlim_max)
-        {
-            LOG_DEBUG(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
-        }
-        else
-        {
-            rlim_t old = rlim.rlim_cur;
-            rlim.rlim_cur = config().getUInt("max_open_files", rlim.rlim_max);
-            int rc = setrlimit(RLIMIT_NOFILE, &rlim);
-            if (rc != 0)
-                LOG_WARNING(
-                    log,
-                    "Cannot set max number of file descriptors to {}"
-                    ". Try to specify max_open_files according to your system limits. error: {}",
-                    rlim.rlim_cur,
-                    strerror(errno));
-            else
-                LOG_DEBUG(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
-        }
+        setOpenFileLimit(config().getUInt("max_open_files"));
+    }
+    else
+    {
+        setOpenFileLimit(std::nullopt);
     }
 
     static ServerErrorHandler error_handler;
