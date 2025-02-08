@@ -42,6 +42,7 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Functions/registerFunctions.h>
+#include <Storages/KVStore/ProxyStateMachine.h>
 #include <IO/BaseFile/RateLimiter.h>
 #include <IO/Encryption/DataKeyManager.h>
 #include <IO/Encryption/KeyspacesKeyManager.h>
@@ -183,128 +184,6 @@ std::string Server::getDefaultCorePath() const
     return getCanonicalPath(config().getString("path")) + "cores";
 }
 
-struct TiFlashProxyConfig
-{
-    std::vector<const char *> args;
-    std::unordered_map<std::string, std::string> val_map;
-    bool is_proxy_runnable = false;
-
-    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
-
-    void addExtraArgs(const std::string & k, const std::string & v)
-    {
-        std::string key = "--" + k;
-        val_map[key] = v;
-        auto iter = val_map.find(key);
-        args.push_back(iter->first.data());
-        args.push_back(iter->second.data());
-    }
-
-    // Try to parse start args from `config`.
-    // Return true if proxy need to be started, and `val_map` will be filled with the
-    // proxy start params.
-    // Return false if proxy is not need.
-    bool tryParseFromConfig(
-        const Poco::Util::LayeredConfiguration & config,
-        const DisaggregatedMode disaggregated_mode,
-        const bool use_autoscaler,
-        const LoggerPtr & log)
-    {
-        // tiflash_compute doesn't need proxy.
-        if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
-        {
-            LOG_INFO(log, "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
-            return false;
-        }
-
-        Poco::Util::AbstractConfiguration::Keys keys;
-        config.keys("flash.proxy", keys);
-        if (!config.has("raft.pd_addr"))
-        {
-            LOG_WARNING(log, "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
-            if (!keys.empty())
-                LOG_WARNING(log, "`flash.proxy.*` is ignored because TiFlash Proxy will not start.");
-
-            return false;
-        }
-
-        {
-            // config items start from `flash.proxy.`
-            std::unordered_map<std::string, std::string> args_map;
-            for (const auto & key : keys)
-                args_map[key] = config.getString("flash.proxy." + key);
-
-            args_map["pd-endpoints"] = config.getString("raft.pd_addr");
-            args_map["engine-version"] = TiFlashBuildInfo::getReleaseVersion();
-            args_map["engine-git-hash"] = TiFlashBuildInfo::getGitHash();
-            if (!args_map.contains("engine-addr"))
-                args_map["engine-addr"] = config.getString("flash.service_addr", "0.0.0.0:3930");
-            else
-                args_map["advertise-engine-addr"] = args_map["engine-addr"];
-            args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
-            // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
-            if (disaggregated_mode == DisaggregatedMode::Storage)
-                args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
-#if SERVERLESS_PROXY == 1
-            if (config.has("blacklist_file"))
-                args_map["blacklist-ile"] = config.getString("blacklist_file");
-#endif
-
-            for (auto && [k, v] : args_map)
-                val_map.emplace("--" + k, std::move(v));
-        }
-        return true;
-    }
-
-    TiFlashProxyConfig(
-        Poco::Util::LayeredConfiguration & config,
-        const DisaggregatedMode disaggregated_mode,
-        const bool use_autoscaler,
-        const StorageFormatVersion & format_version,
-        const Settings & settings,
-        const LoggerPtr & log)
-    {
-        is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, log);
-
-        args.push_back("TiFlash Proxy");
-        for (const auto & v : val_map)
-        {
-            args.push_back(v.first.data());
-            args.push_back(v.second.data());
-        }
-
-        // Enable unips according to `format_version`
-        if (format_version.page == PageFormat::V4)
-        {
-            LOG_INFO(log, "Using UniPS for proxy");
-            addExtraArgs("unips-enabled", "1");
-        }
-
-        // Set the proxy's memory by size or ratio
-        std::visit(
-            [&](auto && arg) {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, UInt64>)
-                {
-                    if (arg != 0)
-                    {
-                        LOG_INFO(log, "Limit proxy's memory, size={}", arg);
-                        addExtraArgs("memory-limit-size", std::to_string(arg));
-                    }
-                }
-                else if constexpr (std::is_same_v<T, double>)
-                {
-                    if (arg > 0 && arg <= 1.0)
-                    {
-                        LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
-                        addExtraArgs("memory-limit-ratio", std::to_string(arg));
-                    }
-                }
-            },
-            settings.max_memory_usage_for_all_queries.get());
-    }
-};
-
 pingcap::ClusterConfig getClusterConfig(
     TiFlashSecurityConfigPtr security_config,
     const int api_version,
@@ -357,58 +236,6 @@ void printGRPCLog(gpr_log_func_args * args)
     }
 }
 
-extern "C" {
-void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
-}
-
-struct RaftStoreProxyRunner : boost::noncopyable
-{
-    struct RunRaftStoreProxyParms
-    {
-        const EngineStoreServerHelper * helper;
-        const TiFlashProxyConfig & conf;
-
-        /// set big enough stack size to avoid runtime error like stack-overflow.
-        size_t stack_size = 1024 * 1024 * 20;
-    };
-
-    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, const LoggerPtr & log_)
-        : parms(std::move(parms_))
-        , log(log_)
-    {}
-
-    void join() const
-    {
-        if (!parms.conf.is_proxy_runnable)
-            return;
-        pthread_join(thread, nullptr);
-    }
-
-    void run()
-    {
-        if (!parms.conf.is_proxy_runnable)
-            return;
-        pthread_attr_t attribute;
-        pthread_attr_init(&attribute);
-        pthread_attr_setstacksize(&attribute, parms.stack_size);
-        LOG_INFO(log, "Start raft store proxy. Args: {}", parms.conf.args);
-        pthread_create(&thread, &attribute, runRaftStoreProxyFFI, &parms);
-        pthread_attr_destroy(&attribute);
-    }
-
-private:
-    static void * runRaftStoreProxyFFI(void * pv)
-    {
-        setThreadName("RaftStoreProxy");
-        const auto & parms = *static_cast<const RunRaftStoreProxyParms *>(pv);
-        run_raftstore_proxy_ffi(static_cast<int>(parms.conf.args.size()), parms.conf.args.data(), parms.helper);
-        return nullptr;
-    }
-
-    RunRaftStoreProxyParms parms;
-    pthread_t thread{};
-    const LoggerPtr & log;
-};
 
 // By default init global thread pool by hardware_concurrency
 // Later we will adjust it by `adjustThreadPoolSize`
@@ -753,8 +580,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         STORAGE_FORMAT_CURRENT,
         settings,
         log);
-    EngineStoreServerWrap tiflash_instance_wrap{};
-    auto helper = GetEngineStoreServerHelper(&tiflash_instance_wrap);
+
+    ProxyStateMachine proxy_machine{log, std::move(proxy_conf)};
 
 #ifdef USE_JEMALLOC
     LOG_INFO(log, "Using Jemalloc for TiFlash");
@@ -762,57 +589,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
     LOG_INFO(log, "Not using Jemalloc for TiFlash");
 #endif
 
-
-    RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
-
-    if (proxy_conf.is_proxy_runnable)
-    {
-        proxy_runner.run();
-
-        LOG_INFO(log, "wait for tiflash proxy initializing");
-        while (!tiflash_instance_wrap.proxy_helper)
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        LOG_INFO(log, "tiflash proxy is initialized");
-    }
-    else
-    {
-        LOG_WARNING(log, "Skipped initialize TiFlash Proxy");
-    }
+    proxy_machine.runProxy();
 
     SCOPE_EXIT({
-        if (!proxy_conf.is_proxy_runnable)
-            return;
-
-        LOG_INFO(log, "Let tiflash proxy shutdown");
-        tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
-        tiflash_instance_wrap.tmt = nullptr;
-        LOG_INFO(log, "Wait for tiflash proxy thread to join");
-        proxy_runner.join();
-        LOG_INFO(log, "tiflash proxy thread is joined");
+        proxy_machine.waitProxyStopped();
     });
 
     /// get CPU/memory/disk info of this server
-    diagnosticspb::ServerInfoRequest request;
-    diagnosticspb::ServerInfoResponse response;
-    request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
-    std::string req = request.SerializeAsString();
-    ffi_get_server_info_from_proxy(reinterpret_cast<intptr_t>(&helper), strIntoView(&req), &response);
-    server_info.parseSysInfo(response);
-    setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
-    computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
-    LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
+    proxy_machine.getServerInfo(server_info);
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
     SCOPE_EXIT({
-        if (!proxy_conf.is_proxy_runnable)
-            return;
-
-        LOG_INFO(log, "Unlink tiflash_instance_wrap.tmt");
-        // Reset the `tiflash_instance_wrap.tmt` before `global_context` get released, or it will be a dangling pointer
-        tiflash_instance_wrap.tmt = nullptr;
+        proxy_machine.destroyProxyContext();
     });
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
@@ -822,28 +613,28 @@ int Server::main(const std::vector<std::string> & /*args*/)
     global_context->initializeJointThreadInfoJeallocMap();
 
     /// Init File Provider
-    if (proxy_conf.is_proxy_runnable)
+    if (proxy_machine.isProxyRunnable())
     {
-        const bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        const bool enable_encryption = proxy_machine.getProxyHelper()->checkEncryptionEnabled();
         if (enable_encryption && storage_config.s3_config.isS3Enabled())
         {
             LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
             // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
             KeyManagerPtr key_manager
-                = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(tiflash_instance_wrap.proxy_helper);
+                = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(proxy_machine.getProxyHelper());
             global_context->initializeFileProvider(key_manager, true);
         }
         else if (enable_encryption)
         {
-            const auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            const auto method = proxy_machine.getProxyHelper()->getEncryptionMethod();
             LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
-            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
             global_context->initializeFileProvider(key_manager, method != EncryptionMethod::Plaintext);
         }
         else
         {
             LOG_INFO(log, "encryption is disabled");
-            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
             global_context->initializeFileProvider(key_manager, false);
         }
     }
@@ -1051,7 +842,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
         if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
         {
-            if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled() && storage_config.s3_config.isS3Enabled())
+            if (proxy_machine.getProxyHelper()->checkEncryptionEnabled() && storage_config.s3_config.isS3Enabled())
             {
                 global_context->getFileProvider()->setPageStoragePtrForKeyManager(wn_ps);
             }
@@ -1222,7 +1013,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
     LOG_INFO(log, "Init S3 GC Manager");
-    global_context->getTMTContext().initS3GCManager(tiflash_instance_wrap.proxy_helper);
+    global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());
     // Initialize the thread pool of storage before the storage engine is initialized.
     LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
@@ -1276,11 +1067,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     {
-        if (proxy_conf.is_proxy_runnable && !tiflash_instance_wrap.proxy_helper)
+        if (proxy_machine.isProxyRunnable() && !proxy_machine.isProxyHelperInited())
             throw Exception("Raft Proxy Helper is not set, should not happen");
         auto & path_pool = global_context->getPathPool();
         /// initialize TMTContext
-        global_context->getTMTContext().restore(path_pool, tiflash_instance_wrap.proxy_helper);
+        global_context->getTMTContext().restore(path_pool, proxy_machine.getProxyHelper());
     }
 
     /// setting up elastic thread pool
@@ -1363,40 +1154,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SessionCleaner session_cleaner(*global_context);
         auto & tmt_context = global_context->getTMTContext();
 
-        if (proxy_conf.is_proxy_runnable)
+        proxy_machine.startProxyService(tmt_context, store_ident);
+        if (proxy_machine.isProxyRunnable())
         {
-            // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
-            // This conflicts with the assumption that tiflash does not contain any Region leader peer and leads to unexpected errors
-            LOG_INFO(log, "Waiting for TiKV cluster to be bootstrapped");
-            while (!tmt_context.getPDClient()->isClusterBootstrapped())
-            {
-                const int wait_seconds = 3;
-                LOG_ERROR(
-                    log,
-                    "Waiting for cluster to be bootstrapped, we will sleep for {} seconds and try again.",
-                    wait_seconds);
-                ::sleep(wait_seconds);
-            }
-
-            tiflash_instance_wrap.tmt = &tmt_context;
-            LOG_INFO(log, "Let tiflash proxy start all services");
-            // Set tiflash instance status to running, then wait for proxy enter running status
-            tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
-            while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-            // proxy update store-id before status set `RaftProxyStatus::Running`
-            assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
             const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
-            if (store_ident)
-            {
-                RUNTIME_ASSERT(
-                    store_id == store_ident->store_id(),
-                    log,
-                    "store id mismatch store_id={} store_ident.store_id={}",
-                    store_id,
-                    store_ident->store_id());
-            }
             if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
             {
                 // compute node do not need to handle read index
@@ -1417,57 +1178,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
-
-                // if set 0, DO NOT enable read-index worker
-                size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1);
-                if (runner_cnt > 0)
-                {
-                    auto & kvstore_ptr = tmt_context.getKVStore();
-                    kvstore_ptr->initReadIndexWorkers(
-                        [&]() {
-                            // get from tmt context
-                            return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
-                        },
-                        /*running thread count*/ runner_cnt);
-                    tmt_context.getKVStore()->asyncRunReadIndexWorkers();
-                    WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
-                }
             }
         }
+
+        proxy_machine.waitServiceStarted();
         SCOPE_EXIT({
-            if (!proxy_conf.is_proxy_runnable)
-            {
-                tmt_context.setStatusTerminated();
-                return;
-            }
-            if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
-            {
-                LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
-                exit(-1);
-            }
-            LOG_INFO(log, "Set store context status Stopping");
-            tmt_context.setStatusStopping();
-            {
-                // Wait until there is no read-index task.
-                while (tmt_context.getKVStore()->getReadIndexEvent())
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            }
-            tmt_context.setStatusTerminated();
-            tmt_context.getKVStore()->stopReadIndexWorkers();
-            LOG_INFO(log, "Set store context status Terminated");
-            {
-                // update status and let proxy stop all services except encryption.
-                tiflash_instance_wrap.status = EngineStoreServerStatus::Stopping;
-                LOG_INFO(log, "Set engine store server status Stopping");
-            }
-            // wait proxy to stop services
-            if (proxy_conf.is_proxy_runnable)
-            {
-                LOG_INFO(log, "Let tiflash proxy to stop all services");
-                while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stopped)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                LOG_INFO(log, "All services in tiflash proxy are stopped");
-            }
+            proxy_machine.stopProxy(tmt_context);
         });
 
         {
