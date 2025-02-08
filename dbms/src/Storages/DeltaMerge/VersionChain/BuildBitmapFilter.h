@@ -36,12 +36,11 @@ BitmapFilterPtr buildBitmapFilter(
     const UInt64 read_ts,
     VersionChain<HandleType> & version_chain);
 
-
 BitmapFilterPtr buildBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    std::variant<VersionChain<Int64>, VersionChain<String>> & variant_version_chain);
+    GenericVersionChain & generic_version_chain);
 } // namespace DB::DM

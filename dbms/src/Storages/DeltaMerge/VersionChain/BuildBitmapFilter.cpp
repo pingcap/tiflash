@@ -81,12 +81,12 @@ BitmapFilterPtr buildBitmapFilter(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     const UInt64 read_ts,
-    std::variant<VersionChain<Int64>, VersionChain<String>> & variant_version_chain)
+    GenericVersionChain & generic_version_chain)
 {
     return std::visit(
         [&](auto & version_chain) {
             return buildBitmapFilter(dm_context, snapshot, read_ranges, pack_filter_results, read_ts, version_chain);
         },
-        variant_version_chain);
+        generic_version_chain);
 }
 } // namespace DB::DM

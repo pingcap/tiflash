@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/VersionChain/DMFileHandleIndex.h>
 #include <Storages/DeltaMerge/VersionChain/NewHandleIndex.h>
+
 namespace DB::DM
 {
 
@@ -68,6 +69,7 @@ private:
         const UInt32 stable_rows,
         const bool calculate_read_packs,
         DeltaValueReader & delta_reader);
+
     [[nodiscard]] UInt32 replayColumnFileBig(
         const DMContext & dm_context,
         const ColumnFileBig & cf_big,
@@ -75,6 +77,7 @@ private:
         const StableValueSpace::Snapshot & stable,
         const std::span<const ColumnFilePtr> preceding_cfs,
         DeltaValueReader & delta_reader);
+
     [[nodiscard]] UInt32 replayDeleteRange(
         const ColumnFileDeleteRange & cf_delete_range,
         DeltaValueReader & delta_reader,
@@ -83,9 +86,12 @@ private:
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
         const DMContext & dm_context,
         HandleRefType h);
+
     template <typename Iter>
     void calculateReadPacks(Iter begin, Iter end);
+
     void cleanHandleColumn();
+
     template <typename Iter>
     void replayHandles(
         const DMContext & dm_context,
@@ -102,11 +108,13 @@ private:
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;
 };
 
-inline std::variant<VersionChain<Int64>, VersionChain<String>> createVersionChain(bool is_common_handle)
+using GenericVersionChain = std::variant<VersionChain<Int64>, VersionChain<String>>;
+
+inline GenericVersionChain createVersionChain(bool is_common_handle)
 {
     if (is_common_handle)
-        return std::variant<VersionChain<Int64>, VersionChain<String>>{std::in_place_type<VersionChain<String>>};
+        return GenericVersionChain{std::in_place_type<VersionChain<String>>};
     else
-        return std::variant<VersionChain<Int64>, VersionChain<String>>{std::in_place_type<VersionChain<Int64>>};
+        return GenericVersionChain{std::in_place_type<VersionChain<Int64>>};
 }
 } // namespace DB::DM
