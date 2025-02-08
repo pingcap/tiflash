@@ -29,8 +29,8 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Filter/Unsupported.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <TiDB/Schema/TiDB.h>
 
-#include <algorithm>
 
 namespace DB::DM
 {
@@ -66,22 +66,21 @@ RSOperatorPtr RSOperator::build(
         return EMPTY_RS_OPERATOR;
     }
 
-    /// Query from TiDB / TiSpark
-    auto create_attr_by_column_id = [&table_column_defines](ColumnID column_id) -> Attr {
+    // Query from TiDB / TiSpark
+    FilterParser::ColumnIDToAttrMap column_id_to_attr;
+    for (const auto & col_info : scan_column_infos)
+    {
         auto iter = std::find_if(
-            table_column_defines.begin(),
-            table_column_defines.end(),
-            [column_id](const ColumnDefine & d) -> bool { return d.id == column_id; });
-        if (iter != table_column_defines.end())
-            return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-        // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
-        return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
-    };
-    auto rs_operator = FilterParser::parseDAGQuery(
-        *dag_query,
-        scan_column_infos,
-        std::move(create_attr_by_column_id),
-        tracing_logger);
+            table_column_defines.cbegin(),
+            table_column_defines.cend(),
+            [col_id = col_info.id](const ColumnDefine & cd) { return cd.id == col_id; });
+        if (iter == table_column_defines.cend())
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Column id {} not found in table column defines", col_info.id);
+        const auto & cd = *iter;
+        column_id_to_attr[cd.id] = Attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
+    }
+
+    auto rs_operator = FilterParser::parseDAGQuery(*dag_query, scan_column_infos, column_id_to_attr, tracing_logger);
     if (likely(rs_operator != DM::EMPTY_RS_OPERATOR))
         LOG_DEBUG(tracing_logger, "Rough set filter: {}", rs_operator->toDebugString());
 
