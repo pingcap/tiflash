@@ -24,15 +24,14 @@ RSResults getRSResultsByRanges(const DMContext & dm_context, const DMFilePtr & d
     if (ranges.empty())
         return RSResults(dmfile->getPacks(), RSResult::All);
 
-    auto pack_filter = DMFilePackFilter::loadFrom(
-        dm_context,
-        dmfile,
-        /*set cache*/ true,
-        ranges,
-        EMPTY_RS_OPERATOR,
-        /*read_packs*/ {});
-
-    return pack_filter->getHandleRes();
+    return DMFilePackFilter::loadFrom(
+               dm_context,
+               dmfile,
+               /*set_cache_if_miss*/ true,
+               ranges,
+               EMPTY_RS_OPERATOR,
+               /*read_packs*/ {})
+        ->getHandleRes();
 }
 
 namespace
@@ -40,11 +39,11 @@ namespace
 template <typename T>
 T getMaxValue(const MinMaxIndex & minmax_index, size_t i)
 {
-    if constexpr (std::is_same_v<T, Int64>)
+    if constexpr (std::is_same_v<T, Int64>) // For non-clustered index handle column
         return minmax_index.getIntMinMax(i).second;
-    else if constexpr (std::is_same_v<T, String>)
+    else if constexpr (std::is_same_v<T, String>) // For clustered index handle column
         return minmax_index.getStringMinMax(i).second.toString();
-    else if constexpr (std::is_same_v<T, UInt64>)
+    else if constexpr (std::is_same_v<T, UInt64>) // For version column
         return minmax_index.getUInt64MinMax(i).second;
     else
         static_assert(false, "Not support type");
@@ -53,16 +52,17 @@ T getMaxValue(const MinMaxIndex & minmax_index, size_t i)
 template <typename T>
 T getMinValue(const MinMaxIndex & minmax_index, size_t i)
 {
-    if constexpr (std::is_same_v<T, Int64>)
+    if constexpr (std::is_same_v<T, Int64>) // For non-clustered index handle column
         return minmax_index.getIntMinMax(i).first;
-    else if constexpr (std::is_same_v<T, String>)
+    else if constexpr (std::is_same_v<T, String>) // For clustered index handle column
         return minmax_index.getStringMinMax(i).first.toString();
-    else if constexpr (std::is_same_v<T, UInt64>)
-        return minmax_index.getUInt64MinMax(i).first;
     else
         static_assert(false, "Not support type");
 }
 
+// Clip RSResults by removing the leading and trailing RSResult::None.
+// Return the clipped RSResults and the pack_id of the first RSResult::Use.
+// Because DMFile of ColumnFileBig only takes packs intersect with the `segment_range`.
 std::pair<RSResults, UInt32> clipRSResults(const RSResults & rs_results)
 {
     const auto start = std::find_if(rs_results.begin(), rs_results.end(), [](RSResult r) { return r.isUse(); });
@@ -70,7 +70,7 @@ std::pair<RSResults, UInt32> clipRSResults(const RSResults & rs_results)
         return {};
     const auto end = std::find_if(start, rs_results.end(), [](RSResult r) { return !r.isUse(); });
     const auto start_pack_id = start - rs_results.begin();
-    return std::make_pair(RSResults(start, end), start_pack_id);
+    return std::pair{RSResults(start, end), start_pack_id};
 }
 } // namespace
 

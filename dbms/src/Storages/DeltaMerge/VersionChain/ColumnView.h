@@ -44,6 +44,8 @@ public:
         return data[index];
     }
 
+    size_t size() const { return data.size(); }
+
 private:
     const PaddedPODArray<Int64> & data;
 };
@@ -144,6 +146,8 @@ public:
         const auto size = offsets[index] - offsets[index - 1] - 1;
         return std::string_view(reinterpret_cast<const char *>(chars.data() + off), size);
     }
+
+    size_t size() const { return offsets.size(); }
 
 private:
     const IColumn::Offsets & offsets;

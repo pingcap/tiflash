@@ -34,25 +34,21 @@ UInt32 buildRowKeyFilterVector(
     const UInt32 start_row_id,
     IColumn::Filter & filter)
 {
-    for (auto itr = handles.begin(); itr != handles.end(); ++itr)
+    UInt32 filtered_out_rows = 0;
+    for (UInt32 i = 0; i < handles.size(); ++i)
     {
-        auto in_range = [h = *itr](const RowKeyRange & range) {
+        auto in_range = [h = handles[i]](const RowKeyRange & range) {
             return inRowKeyRange(range, h);
         };
         // IN delete_ranges or NOT IN read_ranges
         if (std::any_of(delete_ranges.begin(), delete_ranges.end(), in_range)
             || std::none_of(read_ranges.begin(), read_ranges.end(), in_range))
         {
-            filter[itr - handles.begin() + start_row_id] = 0;
-            LOG_DEBUG(
-                Logger::get(),
-                "Filter {} out, delete_ranges={}, read_ranges={}",
-                *itr,
-                delete_ranges,
-                read_ranges);
+            filter[i + start_row_id] = 0;
+            filtered_out_rows++;
         }
     }
-    return handles.end() - handles.begin();
+    return filtered_out_rows;
 }
 
 template <ExtraHandleType HandleType>
@@ -67,7 +63,8 @@ UInt32 buildRowKeyFilterBlock(
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
     const UInt32 rows = cf.getRows();
-    assert(rows > 0);
+    if (rows == 0)
+        return 0;
 
     auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<HandleType>(), ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
@@ -251,7 +248,7 @@ void buildRowKeyFilter(
         const UInt32 start_row_id = total_rows - read_rows - cf_rows;
         read_rows += cf_rows;
 
-        // TODO: add min-max value in tiny file to optimize rowkey filter.
+        // TODO: add min-max value in tiny/memory column file to optimize rowkey filter.
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
             const auto n = buildRowKeyFilterBlock<HandleType>(
@@ -265,7 +262,8 @@ void buildRowKeyFilter(
             RUNTIME_CHECK(cf_rows == n, cf_rows, n);
             continue;
         }
-        else if (const auto * cf_big = cf->tryToBigFile(); cf_big)
+
+        if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
             const auto n = buildRowKeyFilterColumnFileBig<HandleType>(
                 dm_context,
