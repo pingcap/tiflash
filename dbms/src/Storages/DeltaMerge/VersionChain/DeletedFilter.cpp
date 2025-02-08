@@ -35,7 +35,8 @@ UInt32 buildDeletedFilterBlock(
     if (rows == 0)
         return 0;
 
-    auto cf_reader = cf.getReader(dm_context, data_provider, getTagColumnDefinesPtr(), ReadTag::MVCC);
+    static const auto delmark_cds_ptr = std::make_shared<ColumnDefines>(1, getTagColumnDefine());
+    auto cf_reader = cf.getReader(dm_context, data_provider, delmark_cds_ptr, ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
     RUNTIME_CHECK_MSG(
         rows == block.rows(),

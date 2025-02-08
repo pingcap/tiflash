@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -32,9 +32,6 @@ static constexpr RowID NotExistRowID = std::numeric_limits<RowID>::max();
 template <typename T>
 concept ExtraHandleType = std::same_as<T, Int64> || std::same_as<T, String>;
 
-template <typename T>
-concept ExtraHandleRefType = std::same_as<T, Int64> || std::same_as<T, std::string_view>;
-
 template <ExtraHandleType HandleType>
 ColumnDefine getHandleColumnDefine()
 {
@@ -49,27 +46,15 @@ ColumnDefinesPtr getHandleColumnDefinesPtr()
     return cds_ptr;
 }
 
-inline ColumnDefinesPtr getVersionColumnDefinesPtr()
+template <typename HandleRefType>
+bool inRowKeyRange(const RowKeyRange & range, HandleRefType handle)
 {
-    static auto cds_ptr = std::make_shared<ColumnDefines>(1, getVersionColumnDefine());
-    return cds_ptr;
-}
-
-inline ColumnDefinesPtr getTagColumnDefinesPtr()
-{
-    static auto cds_ptr = std::make_shared<ColumnDefines>(1, getTagColumnDefine());
-    return cds_ptr;
-}
-
-template <ExtraHandleRefType HandleRef>
-bool inRowKeyRange(const RowKeyRange & range, HandleRef handle)
-{
-    if constexpr (std::is_same_v<HandleRef, Int64>)
+    if constexpr (std::is_same_v<HandleRefType, Int64>)
         return range.start.int_value <= handle && (handle < range.end.int_value || range.isEndInfinite());
-    else if constexpr (std::is_same_v<HandleRef, std::string_view>)
+    else if constexpr (std::is_same_v<HandleRefType, std::string_view>)
         return *(range.start.value) <= handle && (handle < *(range.end.value) || range.isEndInfinite());
     else
-        static_assert(false, "Not support type");
+        static_assert(false, "Only suport Int64 and std::string_view");
 }
 
 RSResults getRSResultsByRanges(const DMContext & dm_context, const DMFilePtr & dmfile, const RowKeyRanges & ranges);

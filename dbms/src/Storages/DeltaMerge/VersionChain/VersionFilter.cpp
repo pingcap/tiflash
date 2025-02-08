@@ -71,7 +71,8 @@ void buildVersionFilterVector(
     const UInt32 start_row_id,
     IColumn::Filter & filter)
 {
-    auto cf_reader = cf.getReader(dm_context, data_provider, getVersionColumnDefinesPtr(), ReadTag::MVCC);
+    static const auto version_cds_ptr = std::make_shared<ColumnDefines>(1, getVersionColumnDefine());
+    auto cf_reader = cf.getReader(dm_context, data_provider, version_cds_ptr, ReadTag::MVCC);
     UInt32 read_block_count = 0;
     UInt32 read_rows = 0;
     while (true)
