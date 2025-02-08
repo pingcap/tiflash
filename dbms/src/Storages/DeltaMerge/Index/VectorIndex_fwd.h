@@ -24,10 +24,14 @@ using ANNQueryInfoPtr = std::shared_ptr<tipb::ANNQueryInfo>;
 class VectorIndexBuilder;
 using VectorIndexBuilderPtr = std::shared_ptr<VectorIndexBuilder>;
 
+<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/Index/VectorIndex_fwd.h
 class VectorIndexViewer;
 using VectorIndexViewerPtr = std::shared_ptr<VectorIndexViewer>;
 
 class VectorIndexCache;
 using VectorIndexCachePtr = std::shared_ptr<VectorIndexCache>;
+=======
+class LocalIndexInfosChangeset;
+>>>>>>> 20cdf6deaa (vector: Reduce logging under debug level (#9852)):dbms/src/Storages/DeltaMerge/Index/LocalIndexInfo_fwd.h
 
 } // namespace DB::DM
