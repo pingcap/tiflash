@@ -452,7 +452,7 @@ bool RegionData::getRegionTableWarned() const
     {
         return region_table_ctx->warned;
     }
-    return 0;
+    return false;
 }
 
 bool RegionData::setRegionTableWarned(bool desired) const
