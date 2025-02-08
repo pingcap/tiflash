@@ -153,14 +153,12 @@ try
 
     std::mt19937 random;
     {
-        auto const seed = 2307641251; //std::random_device{}();
-        fmt::println("seed={}", seed);
-
+        auto const seed = std::random_device{}();
         random = std::mt19937{seed};
     }
 
-    constexpr int upper_bound = 100;
-    constexpr int n_operations = 3;
+    constexpr int upper_bound = 10000;
+    constexpr int n_operations = 300;
 
     auto filled_bitmap = std::vector<bool>();
     filled_bitmap.resize(upper_bound);
@@ -218,7 +216,7 @@ try
                 filled_n++;
     }
 
-    auto pool = std::make_shared<ThreadPool>(1);
+    auto pool = std::make_shared<ThreadPool>(4);
     for (const auto & op : ops)
     {
         pool->scheduleOrThrowOnError([=, this, &log] {
