@@ -2253,17 +2253,12 @@ try
         std::vector<int>{},
         0,
         context->getTimezoneInfo());
-    auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> Attr {
-        auto iter
-            = std::find_if(columns_to_read.begin(), columns_to_read.end(), [column_id](const ColumnDefine & d) -> bool {
-                  return d.id == column_id;
-              });
-        if (iter != columns_to_read.end())
-            return Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-        return Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
-    };
-    const auto op
-        = DB::DM::FilterParser::parseDAGQuery(*dag_query, column_infos, create_attr_by_column_id, Logger::get());
+    FilterParser::ColumnIDToAttrMap column_id_to_attr;
+    for (const auto & cd : columns_to_read)
+    {
+        column_id_to_attr[cd.id] = Attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
+    }
+    const auto op = DB::DM::FilterParser::parseDAGQuery(*dag_query, column_infos, column_id_to_attr, Logger::get());
     EXPECT_EQ(
         op->toDebugString(),
         R"raw({"op":"and","children":[{"op":"in","col":"b","value":"["1","2"]},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"},{"op":"unsupported","reason":"Multiple ColumnRef in expression is not supported, sig=InInt"}]})raw");
