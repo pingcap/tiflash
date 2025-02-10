@@ -24,7 +24,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
 
-
 using namespace std::chrono_literals;
 using namespace DB::tests;
 
@@ -162,26 +161,31 @@ protected:
         std::optional<std::pair<Int64, Int64>> rowkey_range;
     };
 
-    void runTestCase(TestCase test_case)
+    inline static constexpr bool use_version_chain = true;
+    inline static constexpr bool is_common_handle = true;
+    inline static constexpr auto max_read_ts = std::numeric_limits<UInt64>::max();
+
+    void runTestCase(TestCase test_case, int caller_line, const std::vector<RowID> & expected_base_versions)
     {
+        auto info = fmt::format("caller_line={}", caller_line);
         auto [row_id, handle] = writeSegment(test_case.seg_data, test_case.rowkey_range);
         if (test_case.expected_size == 0)
         {
-            ASSERT_EQ(nullptr, row_id);
-            ASSERT_EQ(nullptr, handle);
+            ASSERT_EQ(nullptr, row_id) << info;
+            ASSERT_EQ(nullptr, handle) << info;
         }
         else
         {
-            ASSERT_EQ(test_case.expected_size, row_id->size());
+            ASSERT_EQ(test_case.expected_size, row_id->size()) << info;
             auto expected_row_id = genSequence<UInt32>(test_case.expected_row_id);
-            ASSERT_TRUE(sequenceEqual(expected_row_id.data(), row_id->data(), test_case.expected_size));
+            ASSERT_TRUE(sequenceEqual(expected_row_id.data(), row_id->data(), test_case.expected_size)) << info;
 
-            ASSERT_EQ(test_case.expected_size, handle->size());
+            ASSERT_EQ(test_case.expected_size, handle->size()) << info;
             auto expected_handle = genSequence<Int64>(test_case.expected_handle);
-            ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size));
+            ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size)) << info;
         }
 
-        verifyBitmapFilter(SEG_ID);
+        verifyVersionChain(SEG_ID, caller_line, expected_base_versions);
     }
 
     auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
@@ -196,21 +200,22 @@ protected:
         return results;
     }
 
-    inline static constexpr bool use_version_chain = true;
-    void verifyBitmapFilter(const PageIdU64 seg_id, const UInt64 read_ts = std::numeric_limits<UInt64>::max())
+    void verifyVersionChain(
+        const PageIdU64 seg_id,
+        int caller_line,
+        const std::vector<RowID> & excepted_base_versions,
+        const UInt64 read_ts = max_read_ts)
     {
+        auto info = fmt::format("caller_line={}", caller_line);
         auto [seg, snap] = getSegmentForRead(seg_id);
+        auto actual_base_versions = std::visit(
+            [&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); },
+            seg->version_chain);
+        ASSERT_EQ(excepted_base_versions.size(), actual_base_versions->size()) << info;
+        for (size_t i = 0; i < excepted_base_versions.size(); ++i)
+            ASSERT_EQ(excepted_base_versions[i], (*actual_base_versions)[i]) << fmt::format("i={}, {}", i, info);
 
-        auto bitmap_filter1 = seg->buildBitmapFilter(
-            *dm_context,
-            snap,
-            {seg->getRowKeyRange()},
-            loadPackFilterResults(snap, {seg->getRowKeyRange()}),
-            read_ts,
-            DEFAULT_BLOCK_SIZE,
-            !use_version_chain);
-
-        auto bitmap_filter2 = seg->buildBitmapFilter(
+        auto bitmap_filter_version_chain = seg->buildBitmapFilter(
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
@@ -219,110 +224,216 @@ protected:
             DEFAULT_BLOCK_SIZE,
             use_version_chain);
 
-        ASSERT_EQ(bitmap_filter1->toDebugString(), bitmap_filter2->toDebugString());
+        auto bitmap_filter_delta_index = seg->buildBitmapFilter(
+            *dm_context,
+            snap,
+            {seg->getRowKeyRange()},
+            loadPackFilterResults(snap, {seg->getRowKeyRange()}),
+            read_ts,
+            DEFAULT_BLOCK_SIZE,
+            !use_version_chain);
+
+        ASSERT_EQ(bitmap_filter_delta_index->toDebugString(), bitmap_filter_version_chain->toDebugString()) << info;
     }
 };
 
 TEST_F(SegmentBitmapFilterTest, InMemory1)
 try
 {
-    runTestCase(TestCase("d_mem:[0, 1000)", 1000, "[0, 1000)", "[0, 1000)"));
+    runTestCase(
+        TestCase{"d_mem:[0, 1000)", 1000, "[0, 1000)", "[0, 1000)"},
+        __LINE__,
+        std::vector<RowID>(1000, NotExistRowID));
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory2)
 try
 {
-    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem:[0, 1000)", 1000, "[1000, 2000)", "[0, 1000)"});
+    std::vector<RowID> excepted_base_versions(2000);
+    std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
+    std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 0); // d_mem:[0, 1000)
+    runTestCase(
+        TestCase{"d_mem:[0, 1000)|d_mem:[0, 1000)", 1000, "[1000, 2000)", "[0, 1000)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory3)
 try
 {
-    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem:[100, 200)", 1000, "[0, 100)|[1000, 1100)|[200, 1000)", "[0, 1000)"});
+    std::vector<RowID> excepted_base_versions(1100);
+    std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
+    std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 100); // d_mem:[100, 200)
+    runTestCase(
+        TestCase{"d_mem:[0, 1000)|d_mem:[100, 200)", 1000, "[0, 100)|[1000, 1100)|[200, 1000)", "[0, 1000)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory4)
 try
 {
-    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem:[-100, 100)", 1100, "[1000, 1200)|[100, 1000)", "[-100, 1000)"});
+    std::vector<RowID> excepted_base_versions(1200);
+    std::fill(
+        excepted_base_versions.begin(),
+        excepted_base_versions.begin() + 1100,
+        NotExistRowID); // d_mem:[0, 1000) + d_mem:[-100, 0)
+    std::iota(excepted_base_versions.begin() + 1100, excepted_base_versions.end(), 0); // d_mem:[0, 100)
+    runTestCase(
+        TestCase{"d_mem:[0, 1000)|d_mem:[-100, 100)", 1100, "[1000, 1200)|[100, 1000)", "[-100, 1000)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory5)
 try
 {
-    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem_del:[0, 1000)", 0, "", ""});
+    std::vector<RowID> excepted_base_versions(2000);
+    std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
+    std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 0); // d_mem_del:[0, 1000)
+    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem_del:[0, 1000)", 0, "", ""}, __LINE__, excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory6)
 try
 {
-    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem_del:[100, 200)", 900, "[0, 100)|[200, 1000)", "[0, 100)|[200, 1000)"});
+    std::vector<RowID> excepted_base_versions(1100);
+    std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
+    std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 100); // d_mem_del:[100, 200)
+    runTestCase(
+        TestCase{"d_mem:[0, 1000)|d_mem_del:[100, 200)", 900, "[0, 100)|[200, 1000)", "[0, 100)|[200, 1000)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, InMemory7)
 try
 {
-    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem_del:[-100, 100)", 900, "[100, 1000)", "[100, 1000)"});
+    std::vector<RowID> excepted_base_versions(1200);
+    std::fill(
+        excepted_base_versions.begin(),
+        excepted_base_versions.begin() + 1100,
+        NotExistRowID); // d_mem:[0, 1000) + d_mem:[-100, 0)
+    std::iota(excepted_base_versions.begin() + 1100, excepted_base_versions.end(), 0); // d_mem_del:[0, 100)
+    runTestCase(
+        TestCase{"d_mem:[0, 1000)|d_mem_del:[-100, 100)", 900, "[100, 1000)", "[100, 1000)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, Tiny1)
 try
 {
-    runTestCase(TestCase{"d_tiny:[100, 500)|d_mem:[200, 1000)", 900, "[0, 100)|[400, 1200)", "[100, 1000)"});
+    std::vector<RowID> excepted_base_versions(1200);
+    std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 400, NotExistRowID); // d_tiny:[100, 500)
+    std::iota(
+        excepted_base_versions.begin() + 400,
+        excepted_base_versions.begin() + 400 + 300,
+        100); // d_mem:[200, 500)
+    std::fill(
+        excepted_base_versions.begin() + 400 + 300,
+        excepted_base_versions.end(),
+        NotExistRowID); // d_mem:[500, 1000)
+    runTestCase(
+        TestCase{"d_tiny:[100, 500)|d_mem:[200, 1000)", 900, "[0, 100)|[400, 1200)", "[100, 1000)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, TinyDel1)
 try
 {
-    runTestCase(TestCase{
-        "d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)",
-        400,
-        "[500, 600)|[0, 100)|[200, 400)",
-        "[0, 200)|[300, 500)"});
+    std::vector<RowID> excepted_base_versions(600);
+    std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 400, NotExistRowID); // d_tiny:[100, 500)
+    std::iota(
+        excepted_base_versions.begin() + 400,
+        excepted_base_versions.begin() + 400 + 100,
+        100); // d_tiny_del:[200, 300)
+    std::fill(
+        excepted_base_versions.begin() + 400 + 100,
+        excepted_base_versions.end(),
+        NotExistRowID); // d_mem:[0, 100)
+    runTestCase(
+        TestCase{
+            "d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)",
+            400,
+            "[500, 600)|[0, 100)|[200, 400)",
+            "[0, 200)|[300, 500)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, DeleteRange)
 try
 {
-    runTestCase(TestCase{
-        "d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)",
-        390,
-        "[0, 140)|[400, 450)|[200, 400)",
-        "[100, 290)|[300, 500)"});
+    std::vector<RowID> excepted_base_versions(450);
+    std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 400, NotExistRowID); // d_tiny:[100, 500)
+    std::iota(excepted_base_versions.begin() + 400, excepted_base_versions.begin() + 400 + 10, 140); // d_mem:[240, 250)
+    std::fill(
+        excepted_base_versions.begin() + 400 + 10,
+        excepted_base_versions.end(),
+        NotExistRowID); // d_mem:[250, 290)
+    runTestCase(
+        TestCase{
+            "d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)",
+            390,
+            "[0, 140)|[400, 450)|[200, 400)",
+            "[100, 290)|[300, 500)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, Big)
 try
 {
-    runTestCase(TestCase{
-        "d_tiny:[100, 500)|d_dr:[250, 1000)|d_big:[250, 1000)|d_mem:[240, 290)",
-        900,
-        "[0, 140)|[1150, 1200)|[440, 1150)",
-        "[100, 1000)"});
+    std::vector<RowID> excepted_base_versions(400 + 750 + 50);
+    std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 400, NotExistRowID); // d_tiny:[100, 500)
+    std::iota(
+        excepted_base_versions.begin() + 400,
+        excepted_base_versions.begin() + 400 + 250,
+        150); // d_big:[250, 500)
+    std::fill(
+        excepted_base_versions.begin() + 400 + 250,
+        excepted_base_versions.begin() + 400 + 250 + 500,
+        NotExistRowID); // d_big:[500, 1000)
+    std::iota(excepted_base_versions.begin() + 400 + 250 + 500, excepted_base_versions.end(), 140); // d_mem:[240, 290)
+    runTestCase(
+        TestCase{
+            "d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)",
+            900,
+            "[0, 140)|[1150, 1200)|[440, 1150)",
+            "[100, 1000)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, Stable1)
 try
 {
-    runTestCase(TestCase{"s:[0, 1024)", 1024, "[0, 1024)", "[0, 1024)"});
+    std::vector<RowID> excepted_base_versions{};
+    runTestCase(TestCase{"s:[0, 1024)", 1024, "[0, 1024)", "[0, 1024)"}, __LINE__, excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, Stable2)
 try
 {
-    runTestCase(TestCase{"s:[0, 1024)|d_dr:[0, 1023)", 1, "[1023, 1024)", "[1023, 1024)"});
+    std::vector<RowID> excepted_base_versions{};
+    runTestCase(
+        TestCase{"s:[0, 1024)|d_dr:[0, 1023)", 1, "[1023, 1024)", "[1023, 1024)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
@@ -330,55 +441,103 @@ CATCH
 TEST_F(SegmentBitmapFilterTest, Stable3)
 try
 {
-    runTestCase(TestCase{
-        "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)",
-        886,
-        "[0, 128)|[256, 300)|[310, 1024)",
-        "[0, 128)|[256, 300)|[310, 1024)"});
+    std::vector<RowID> excepted_base_versions(10);
+    std::iota(excepted_base_versions.begin(), excepted_base_versions.end(), 300); // s:[300, 310)
+    runTestCase(
+        TestCase{
+            "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)",
+            886,
+            "[0, 128)|[256, 300)|[310, 1024)",
+            "[0, 128)|[256, 300)|[310, 1024)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, Mix)
 try
 {
-    runTestCase(TestCase{
-        "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
-        946,
-        "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
-        "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"});
+    std::vector<RowID> excepted_base_versions(10 + 55 + 7);
+    std::iota(excepted_base_versions.begin(), excepted_base_versions.begin() + 10, 300); // s:[300, 310)
+    std::fill(
+        excepted_base_versions.begin() + 10,
+        excepted_base_versions.begin() + 10 + 55,
+        NotExistRowID); // d_tiny:[200, 255)
+    std::iota(excepted_base_versions.begin() + 10 + 55, excepted_base_versions.end(), 298); // d_mem:[298, 305)
+    runTestCase(
+        TestCase{
+            "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
+            946,
+            "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
+            "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, Ranges)
 try
 {
+    std::vector<RowID> excepted_base_versions(10 + 55 + 7);
+    std::iota(excepted_base_versions.begin(), excepted_base_versions.begin() + 10, 300); // s:[300, 310)
+    std::fill(
+        excepted_base_versions.begin() + 10,
+        excepted_base_versions.begin() + 10 + 55,
+        NotExistRowID); // d_tiny:[200, 255)
+    std::iota(excepted_base_versions.begin() + 10 + 55, excepted_base_versions.end(), 298); // d_mem:[298, 305)
     read_ranges.emplace_back(buildRowKeyRange(222, 244));
     read_ranges.emplace_back(buildRowKeyRange(300, 303));
     read_ranges.emplace_back(buildRowKeyRange(555, 666));
-    runTestCase(TestCase{
-        "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
-        136,
-        "[1056, 1078)|[1091, 1094)|[555, 666)",
-        "[222, 244)|[300, 303)|[555, 666)"});
+    runTestCase(
+        TestCase{
+            "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
+            136,
+            "[1056, 1078)|[1091, 1094)|[555, 666)",
+            "[222, 244)|[300, 303)|[555, 666)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
 TEST_F(SegmentBitmapFilterTest, LogicalSplit)
 try
 {
-    runTestCase(TestCase{
-        "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
-        946,
-        "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
-        "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"});
+    std::vector<RowID> excepted_base_versions(10 + 55 + 7);
+    std::iota(excepted_base_versions.begin(), excepted_base_versions.begin() + 10, 300); // s:[300, 310)
+    std::fill(
+        excepted_base_versions.begin() + 10,
+        excepted_base_versions.begin() + 10 + 55,
+        NotExistRowID); // d_tiny:[200, 255)
+    std::iota(excepted_base_versions.begin() + 10 + 55, excepted_base_versions.end(), 298); // d_mem:[298, 305)
+    runTestCase(
+        TestCase{
+            "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
+            946,
+            "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
+            "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"},
+        __LINE__,
+        excepted_base_versions);
 
     auto new_seg_id = splitSegmentAt(SEG_ID, 512, Segment::SplitMode::Logical);
 
     ASSERT_TRUE(new_seg_id.has_value());
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
-
-    verifyBitmapFilter(SEG_ID);
-    verifyBitmapFilter(*new_seg_id);
+    // segment_range: [-inf, 512)
+    // "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)"
+    verifyVersionChain(SEG_ID, __LINE__, excepted_base_versions);
+    // segment_range: [512, +inf)
+    // "s:[0, 1024)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)"
+    std::vector<RowID> other_excepted_base_versions(10 + 55 + 7);
+    std::iota(other_excepted_base_versions.begin(), other_excepted_base_versions.begin() + 10, 300); // s:[300, 310)
+    std::iota(
+        other_excepted_base_versions.begin() + 10,
+        other_excepted_base_versions.begin() + 10 + 55,
+        200); // d_tiny:[200, 255)
+    std::iota(
+        other_excepted_base_versions.begin() + 10 + 55,
+        other_excepted_base_versions.end(),
+        298); // d_mem:[298, 305)
+    verifyVersionChain(*new_seg_id, __LINE__, other_excepted_base_versions);
 
     auto left_handle = getSegmentHandle(SEG_ID, {});
     const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
@@ -425,7 +584,7 @@ TEST_F(SegmentBitmapFilterTest, CleanStable)
     std::string expect_result;
     expect_result.append(std::string(25000, '1'));
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
-    verifyBitmapFilter(SEG_ID);
+    verifyVersionChain(SEG_ID, __LINE__, {});
 }
 
 TEST_F(SegmentBitmapFilterTest, NotCleanStable)
@@ -453,7 +612,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
         }
         expect_result.append(std::string(5000, '1'));
         ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
-        verifyBitmapFilter(SEG_ID);
+        verifyVersionChain(SEG_ID, __LINE__, {});
     }
     {
         // Stale read
@@ -474,7 +633,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
         }
         expect_result.append(std::string(5000, '0'));
         ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
-        verifyBitmapFilter(SEG_ID, 1);
+        verifyVersionChain(SEG_ID, __LINE__, {}, 1);
     }
 }
 
@@ -502,7 +661,7 @@ TEST_F(SegmentBitmapFilterTest, StableRange)
     expect_result.append(std::string(40000, '1'));
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
 
-    verifyBitmapFilter(SEG_ID);
+    verifyVersionChain(SEG_ID, __LINE__, {});
 }
 
 TEST_F(SegmentBitmapFilterTest, StableLogicalSplit)
@@ -520,8 +679,8 @@ try
     ASSERT_TRUE(new_seg_id.has_value());
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
 
-    verifyBitmapFilter(SEG_ID);
-    verifyBitmapFilter(*new_seg_id);
+    verifyVersionChain(SEG_ID, __LINE__, {});
+    verifyVersionChain(*new_seg_id, __LINE__, {});
 
     auto left_handle = getSegmentHandle(SEG_ID, {});
     const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
@@ -554,12 +713,15 @@ try
 {
     // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
     // Packs in rowkey_range: [270, 280)|[280, 290)|[290, 300)
-    runTestCase(TestCase{
-        /*seg_data*/ "d_big:[250, 1000):10",
-        /*expected_size*/ 20,
-        /*expected_row_id*/ "[5, 25)",
-        /*expected_handle*/ "[275, 295)",
-        /*rowkey_range*/ std::pair<Int64, Int64>{275, 295}});
+    runTestCase(
+        TestCase{
+            /*seg_data*/ "d_big:[250, 1000):10",
+            /*expected_size*/ 20,
+            /*expected_row_id*/ "[5, 25)",
+            /*expected_handle*/ "[275, 295)",
+            /*rowkey_range*/ std::pair<Int64, Int64>{275, 295}},
+        __LINE__,
+        std::vector<RowID>(30, NotExistRowID));
 
     auto [seg, snap] = getSegmentForRead(SEG_ID);
     auto bitmap_filter = seg->buildBitmapFilter(
@@ -579,11 +741,14 @@ CATCH
 TEST_F(SegmentBitmapFilterTest, StablePart)
 try
 {
-    runTestCase(TestCase{
-        /*seg_data*/ "s:[250, 1000):10",
-        /*expected_size*/ 750,
-        /*expected_row_id*/ "[0, 750)",
-        /*expected_handle*/ "[250, 1000)"});
+    runTestCase(
+        TestCase{
+            /*seg_data*/ "s:[250, 1000):10",
+            /*expected_size*/ 750,
+            /*expected_row_id*/ "[0, 750)",
+            /*expected_handle*/ "[250, 1000)"},
+        __LINE__,
+        {});
 
     {
         auto [seg, snap] = getSegmentForRead(SEG_ID);
