@@ -363,7 +363,7 @@ struct Settings
 
     /// Write changed settings to buffer. (For example, to be sent to remote server.)
     void serialize(WriteBuffer & buf) const;
-    
+
     String toString() const;
 };
 
