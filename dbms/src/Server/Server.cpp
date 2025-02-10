@@ -1064,7 +1064,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (proxy_machine.isProxyRunnable() && !proxy_machine.isProxyHelperInited())
             throw Exception("Raft Proxy Helper is not set, should not happen");
         auto & path_pool = global_context->getPathPool();
-        /// initialize TMTContext
+        /// Restore TMTContext, including KVStore and RegionTable.
         global_context->getTMTContext().restore(path_pool, proxy_machine.getProxyHelper());
     }
 

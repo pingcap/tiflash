@@ -39,6 +39,9 @@ extern "C" {
 void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
 }
 
+struct RaftStoreProxyRunner;
+struct ProxyStateMachine;
+
 /// Manages the argument being passed to proxy, through `run_raftstore_proxy_ffi` call.
 // This is different from `TiFlashRaftConfig` which serves computing.
 struct TiFlashProxyConfig
@@ -158,6 +161,10 @@ struct TiFlashProxyConfig
         return true;
     }
 
+    friend struct RaftStoreProxyRunner;
+    friend struct ProxyStateMachine;
+
+private:
     std::vector<const char *> args;
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
@@ -260,7 +267,8 @@ struct ProxyStateMachine
         }
         else
         {
-            LOG_WARNING(log, "KVStore is not initialized because no store_ident is provided");
+            // Could be a auto-scaled compute node.
+            LOG_INFO(log, "KVStore is not initialized because no store_ident is provided");
         }
     }
 
