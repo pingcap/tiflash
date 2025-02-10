@@ -1060,7 +1060,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_DEBUG(log, "Shutted down storages.");
     });
 
-    proxy_machine.restoreKVStore(global_context->getPathPool());
+    proxy_machine.restoreKVStore(global_context->getTMTContext(), global_context->getPathPool());
 
     /// setting up elastic thread pool
     bool enable_elastic_threadpool = settings.enable_elastic_threadpool;
