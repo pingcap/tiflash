@@ -228,7 +228,7 @@ private:
         NamesAndTypes & source_columns,
         NamesAndTypes & window_columns);
 
-    void buildWindowOrAggFuncImpl(
+    void buildCommonWindowFunc(
         const tipb::Expr & expr,
         const ExpressionActionsPtr & actions,
         const String & window_func_name,

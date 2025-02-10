@@ -886,7 +886,7 @@ void DAGExpressionAnalyzer::buildLeadLag(
         false);
 }
 
-void DAGExpressionAnalyzer::buildWindowOrAggFuncImpl(
+void DAGExpressionAnalyzer::buildCommonWindowFunc(
     const tipb::Expr & expr,
     const ExpressionActionsPtr & actions,
     const String & window_func_name,
@@ -940,7 +940,7 @@ void DAGExpressionAnalyzer::appendWindowColumns(
         }
         else if (isWindowFunction(expr.tp()))
         {
-            buildWindowOrAggFuncImpl(
+            buildCommonWindowFunc(
                 expr,
                 actions,
                 getWindowFunctionName(expr),
@@ -951,7 +951,7 @@ void DAGExpressionAnalyzer::appendWindowColumns(
         }
         else
         {
-            buildWindowOrAggFuncImpl(
+            buildCommonWindowFunc(
                 expr,
                 actions,
                 getAggFunctionNameForWindow(expr, window_description.need_decrease),

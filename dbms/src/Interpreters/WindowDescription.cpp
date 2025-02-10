@@ -83,32 +83,23 @@ void WindowDescription::fillArgColumnNumbers()
 
 void WindowDescription::initNeedDecrease(bool has_agg)
 {
-    need_decrease = false;
-
     if (!has_agg)
         return;
 
-    if (frame.begin_type == WindowFrame::BoundaryType::Unbounded
-        && frame.end_type == WindowFrame::BoundaryType::Unbounded)
-        return;
+    need_decrease = true;
 
     if (frame.begin_type == WindowFrame::BoundaryType::Unbounded)
-        return;
-
-    if (frame.end_type == WindowFrame::BoundaryType::Unbounded)
     {
-        need_decrease = true;
+        need_decrease = false;
         return;
     }
 
     if (frame.type == WindowFrame::FrameType::Rows)
     {
-        if (frame.begin_offset == 0 && frame.end_offset == 0)
-            return;
-        if (frame.begin_preceding == frame.end_preceding && frame.begin_offset == frame.end_offset)
-            return;
+        if ((frame.begin_offset == 0 && frame.end_offset == 0)
+            || (frame.begin_preceding == frame.end_preceding && frame.begin_offset == frame.end_offset))
+            need_decrease = false;
     }
-    need_decrease = true;
 }
 
 String frameTypeToString(const WindowFrame::FrameType & type)
