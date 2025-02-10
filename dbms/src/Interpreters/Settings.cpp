@@ -180,4 +180,21 @@ void Settings::serialize(WriteBuffer & buf) const
 #undef WRITE
 }
 
+String Settings::toString() const
+{
+    FmtBuffer buf;
+#define WRITE(TYPE, NAME, DEFAULT, DESCRIPTION)                                   \
+    if ((NAME).changed)                                                           \
+    {                                                                             \
+        buf.fmtAppend("{}={}(default {}), ", #NAME, (NAME).toString(), #DEFAULT); \
+    }
+
+    APPLY_FOR_SETTINGS(WRITE)
+
+#undef WRITE
+    if (buf.size() > 2)
+        buf.resize(buf.size() - 2);
+    return buf.toString();
+}
+
 } // namespace DB
