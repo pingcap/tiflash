@@ -336,6 +336,9 @@ try
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal32>>(std::make_tuple(1, 0), {"0"}),
         this->execute(column({3, 3}, {"0.025"}), createConstColumn<Int64>(1, 0)));
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal32>>(std::make_tuple(1, 0), {"0"}),
+        this->execute(column({3, 3}, {"0.025"}), createConstColumn<Int64>(1, -1)));
 }
 CATCH
 } // namespace tests
