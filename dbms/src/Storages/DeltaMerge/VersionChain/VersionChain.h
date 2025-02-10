@@ -46,9 +46,10 @@ public:
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
 
-    [[nodiscard]] UInt32 getReplayedRows() const { return base_versions->size(); }
-
-    [[nodiscard]] auto deepCopyForTest() const { return VersionChain(*this); }
+#ifdef DBMS_PUBLIC_GTEST
+    [[nodiscard]] auto getReplayedRows() const { return base_versions->size(); }
+    [[nodiscard]] auto deepCopy() const { return VersionChain(*this); }
+#endif
 
 private:
     VersionChain(const VersionChain & other)
@@ -60,7 +61,6 @@ private:
     VersionChain & operator=(const VersionChain &) = delete;
     VersionChain(VersionChain &&) = delete;
     VersionChain & operator=(VersionChain &&) = delete;
-
 
     [[nodiscard]] UInt32 replayBlock(
         const DMContext & dm_context,

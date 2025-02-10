@@ -128,7 +128,7 @@ try
             RUNTIME_ASSERT(segment_snapshot->delta->getRows() == prepared_delta_rows + incremental_delta_rows);
             for (auto _ : state)
             {
-                auto version_chain = base_version_chain.deepCopyForTest();
+                auto version_chain = base_version_chain.deepCopy();
                 RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows);
                 buildVersionChain(*dm_context, *segment_snapshot, version_chain);
                 RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows + incremental_delta_rows);

@@ -74,6 +74,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     const auto initial_replayed_rows_and_deletes = replayed_rows_and_deletes;
     SCOPE_EXIT({ cleanHandleColumn(); });
 
+    // TODO: make delta_reader optonal.
     auto delta_reader = DeltaValueReader(
         dm_context,
         snapshot.delta,
@@ -81,23 +82,25 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         /*range*/ {},
         ReadTag::MVCC);
 
+    UInt32 curr_replayed_rows = 0;
+    UInt32 curr_replayed_deletes = 0;
     for (; pos != cfs.end(); ++pos)
     {
         const auto & cf = *pos;
 
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            replayed_rows_and_deletes
+            curr_replayed_rows
                 += replayBlock(dm_context, data_provider, *cf, offset, stable_rows, calculate_read_packs, delta_reader);
             offset = 0;
         }
         else if (const auto * cf_delete_range = cf->tryToDeleteRange(); cf_delete_range)
         {
-            replayed_rows_and_deletes += replayDeleteRange(*cf_delete_range, delta_reader, stable_rows);
+            curr_replayed_deletes += replayDeleteRange(*cf_delete_range, delta_reader, stable_rows);
         }
         else if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            replayed_rows_and_deletes += replayColumnFileBig(
+            curr_replayed_rows += replayColumnFileBig(
                 dm_context,
                 *cf_big,
                 stable_rows,
@@ -111,6 +114,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         }
     }
 
+    replayed_rows_and_deletes += curr_replayed_rows + curr_replayed_deletes;
     RUNTIME_CHECK(
         replayed_rows_and_deletes == delta_rows + delta_delete_ranges,
         replayed_rows_and_deletes,
@@ -120,16 +124,10 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
 
     LOG_INFO(
         snapshot.log,
-        "replays {} rows. initial_replayed_rows_and_deletes={}, delta_rows={}, stable_rows={}, delta_delete_ranges={}, "
-        "replayed_rows_and_deletes={}, ColumnFiles={}, snapshot={}.",
-        replayed_rows_and_deletes - initial_replayed_rows_and_deletes,
-        initial_replayed_rows_and_deletes,
-        delta_rows,
-        stable_rows,
-        delta_delete_ranges,
-        replayed_rows_and_deletes,
-        cfs.size(),
-        snapshot.detailInfo());
+        "Snapshot={}, replays {} rows and {} deletes",
+        snapshot.detailInfo(),
+        curr_replayed_rows,
+        curr_replayed_deletes);
 
     return base_versions;
 }
