@@ -686,6 +686,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     const auto is_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();
     const auto is_storage_mode = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+    const auto not_disaggmode = global_context->getSharedContextDisagg()->notDisaggregatedMode();
     const auto [remote_cache_paths, remote_cache_capacity_quota]
         = storage_config.remote_cache_config.getCacheDirInfos(is_compute_mode);
     global_context->initializePathCapacityMetric( //
@@ -861,7 +862,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+    if (is_storage_mode)
     {
         global_context->getSharedContextDisagg()->initWriteNodeSnapManager();
         global_context->getSharedContextDisagg()->initFastAddPeerContext(settings.fap_handle_concurrency);
@@ -1025,7 +1026,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     BgStorageInitHolder bg_init_stores;
     if (!is_compute_mode)
     {
-        if (global_context->getSharedContextDisagg()->notDisaggregatedMode() || store_ident.has_value())
+        if (not_disaggmode || store_ident.has_value())
         {
             // This node has been bootstrapped, the `store_id` is set. Or non-disagg mode,
             // do not depend on `store_id`. Start sync schema before serving any requests.
@@ -1082,8 +1083,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-    if (global_context->getSharedContextDisagg()->notDisaggregatedMode()
-        || /*has_been_bootstrap*/ store_ident.has_value())
+    if (not_disaggmode || /*has_been_bootstrap*/ store_ident.has_value())
     {
         // If S3 enabled, wait for all DeltaMergeStores' initialization
         // before this instance can accept requests.
@@ -1091,8 +1091,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         bg_init_stores.waitUntilFinish();
     }
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
-        && /*has_been_bootstrap*/ store_ident.has_value())
+    if (is_storage_mode && /*has_been_bootstrap*/ store_ident.has_value())
     {
         // Only disagg write node that has been bootstrap need wait. For the write node does not bootstrap, its
         // store id is allocated later.
@@ -1185,8 +1184,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         // For test mode, TaskScheduler and LAC is controlled by test case.
         // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
-        const bool init_pipeline_and_lac
-            = !global_context->isTest() && !global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+        const bool init_pipeline_and_lac = !global_context->isTest() && !is_storage_mode;
         if (init_pipeline_and_lac)
         {
 #ifdef DBMS_PUBLIC_GTEST

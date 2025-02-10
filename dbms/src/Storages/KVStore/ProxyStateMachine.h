@@ -216,6 +216,8 @@ private:
 
 struct ProxyStateMachine
 {
+    // A TikvServer will be bootstrapped, FFI mechanism is enabled.
+    // However, the raftstore service is not started until we call `startProxyService`.
     void runProxy()
     {
         if (proxy_conf.is_proxy_runnable)
@@ -245,9 +247,12 @@ struct ProxyStateMachine
             store_meta.set_id(store_ident->store_id());
             store_meta.set_node_state(metapb::NodeState::Preparing);
             kvstore->setStore(store_meta);
+        } else {
+            LOG_WARNING(log, "KVStore is not initialized because no store_ident is provided");
         }
     }
 
+    /// Set tiflash's state to Running, and wait proxy's state to Running.
     void startProxyService(TMTContext & tmt_context, const std::optional<raft_serverpb::StoreIdent> & store_ident)
     {
         if (!proxy_conf.is_proxy_runnable)
@@ -407,6 +412,8 @@ struct ProxyStateMachine
 private:
     LoggerPtr log;
     TiFlashProxyConfig proxy_conf;
+    // The TiFlash's context of the FFI mechanism.
+    // It also manages TiFlash's status which would be fetched by `fn_handle_get_engine_store_server_status`.
     EngineStoreServerWrap tiflash_instance_wrap;
     EngineStoreServerHelper helper;
     std::unique_ptr<RaftStoreProxyRunner> proxy_runner;
