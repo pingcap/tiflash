@@ -381,14 +381,16 @@ struct ProxyStateMachine
         }
     }
 
-    // TMTContext can not be accessed now.
+    // TMTContext can not be accessed after this is called.
     void destroyProxyContext()
     {
         if (!proxy_conf.is_proxy_runnable)
             return;
 
         LOG_INFO(log, "Unlink tiflash_instance_wrap.tmt");
-        // Reset the `tiflash_instance_wrap.tmt` before `global_context` get released, or it will be a dangling pointer
+        // Reset the `tiflash_instance_wrap.tmt` before `global_context` get released, or it will be a dangling pointer.
+        // The problem is first reported in #9037, however, we proposed an insufficient fix.
+        // The real fix is in #9064 which make the `reportThreadAllocBatch` method static.
         tiflash_instance_wrap.tmt = nullptr;
     }
 
