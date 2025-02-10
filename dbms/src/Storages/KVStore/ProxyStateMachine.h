@@ -313,7 +313,8 @@ struct ProxyStateMachine
         }
     }
 
-    void runTiFlash(TMTContext & tmt_context) { tmt_context.setStatusRunning(); }
+    // Set KVStore to running, so that it could handle read index requests.
+    void runKVStore(TMTContext & tmt_context) { tmt_context.setStatusRunning(); }
 
     /// Stop all services in TMTContext and ReadIndexWorkers.
     /// Then, inform proxy to stop by setting `tiflash_instance_wrap.status`.

@@ -1242,7 +1242,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                 LocalAdmissionController::global_instance->safeStop();
         });
 
-        proxy_machine.runTiFlash(tmt_context);
+        proxy_machine.runKVStore(tmt_context);
 
         try
         {
