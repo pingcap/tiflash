@@ -1060,13 +1060,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_DEBUG(log, "Shutted down storages.");
     });
 
-    {
-        if (proxy_machine.isProxyRunnable() && !proxy_machine.isProxyHelperInited())
-            throw Exception("Raft Proxy Helper is not set, should not happen");
-        auto & path_pool = global_context->getPathPool();
-        /// Restore TMTContext, including KVStore and RegionTable.
-        global_context->getTMTContext().restore(path_pool, proxy_machine.getProxyHelper());
-    }
+    proxy_machine.restoreKVStore(global_context->getPathPool());
 
     /// setting up elastic thread pool
     bool enable_elastic_threadpool = settings.enable_elastic_threadpool;

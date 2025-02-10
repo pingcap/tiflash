@@ -272,6 +272,14 @@ struct ProxyStateMachine
         }
     }
 
+    void restoreKVStore(PathPool & path_pool)
+    {
+        if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.proxy_helper == nullptr)
+            throw Exception("Raft Proxy Helper is not set, should not happen");
+        /// Restore TMTContext, including KVStore and RegionTable.
+        global_context->getTMTContext().restore(path_pool, proxy_machine.getProxyHelper());
+    }
+
     /// Set tiflash's state to Running, and wait proxy's state to Running.
     void startProxyService(TMTContext & tmt_context, const std::optional<raft_serverpb::StoreIdent> & store_ident)
     {
