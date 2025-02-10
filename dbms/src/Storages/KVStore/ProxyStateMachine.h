@@ -265,11 +265,6 @@ struct ProxyStateMachine
             store_meta.set_node_state(metapb::NodeState::Preparing);
             kvstore->setStore(store_meta);
         }
-        else
-        {
-            // Could be a auto-scaled compute node.
-            LOG_INFO(log, "KVStore is not initialized because no store_ident is provided");
-        }
     }
 
     /// Restore TMTContext, including KVStore and RegionTable.
