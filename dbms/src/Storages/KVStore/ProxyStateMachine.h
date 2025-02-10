@@ -273,7 +273,7 @@ struct ProxyStateMachine
     }
 
     /// Restore TMTContext, including KVStore and RegionTable.
-    void restoreKVStore(TMTContext & tmt_context, PathPool & path_pool)
+    void restoreKVStore(TMTContext & tmt_context, PathPool & path_pool) const
     {
         if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.proxy_helper == nullptr)
             throw Exception("Raft Proxy Helper is not set, should not happen");
@@ -319,7 +319,7 @@ struct ProxyStateMachine
         }
     }
 
-    void waitProxyServiceReady(TMTContext & tmt_context, std::atomic_size_t & terminate_signals_counter)
+    void waitProxyServiceReady(TMTContext & tmt_context, std::atomic_size_t & terminate_signals_counter) const
     {
         if (!proxy_conf.is_proxy_runnable)
             return;
@@ -340,7 +340,7 @@ struct ProxyStateMachine
     }
 
     // Set KVStore to running, so that it could handle read index requests.
-    void runKVStore(TMTContext & tmt_context) { tmt_context.setStatusRunning(); }
+    void runKVStore(TMTContext & tmt_context) const { tmt_context.setStatusRunning(); }
 
     /// Stop all services in TMTContext and ReadIndexWorkers.
     /// Then, inform proxy to stop by setting `tiflash_instance_wrap.status`.
@@ -412,7 +412,7 @@ struct ProxyStateMachine
 
     bool isProxyHelperInited() const { return tiflash_instance_wrap.proxy_helper != nullptr; }
 
-    TiFlashRaftProxyHelper * getProxyHelper() { return tiflash_instance_wrap.proxy_helper; }
+    TiFlashRaftProxyHelper * getProxyHelper() const { return tiflash_instance_wrap.proxy_helper; }
 
     EngineStoreServerWrap * getEngineStoreServerWrap() { return &tiflash_instance_wrap; }
 

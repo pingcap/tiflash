@@ -607,12 +607,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     ProxyStateMachine proxy_machine{log, std::move(proxy_conf)};
 
-#ifdef USE_JEMALLOC
-    LOG_INFO(log, "Using Jemalloc for TiFlash");
-#else
-    LOG_INFO(log, "Not using Jemalloc for TiFlash");
-#endif
-
     proxy_machine.runProxy();
 
     SCOPE_EXIT({ proxy_machine.waitProxyStopped(); });
