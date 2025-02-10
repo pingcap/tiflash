@@ -480,7 +480,7 @@ void setOpenFileLimit(std::optional<UInt64> new_limit, const LoggerPtr & log)
                 rlim.rlim_cur,
                 strerror(errno));
         else
-            LOG_DEBUG(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
+            LOG_INFO(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
     }
 }
 
