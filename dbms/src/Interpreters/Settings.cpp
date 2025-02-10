@@ -29,7 +29,7 @@ void Settings::set(const String & name, const Field & value)
 {
 #define TRY_SET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME) NAME.set(value);
 
-    if (false) {}
+    if (false) {} // NOLINT(readability-simplify-boolean-expr)
     APPLY_FOR_SETTINGS(TRY_SET)
     else
     {
@@ -44,7 +44,7 @@ void Settings::set(const String & name, ReadBuffer & buf)
 {
 #define TRY_SET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME) NAME.set(buf);
 
-    if (false) {}
+    if (false) {} // NOLINT(readability-simplify-boolean-expr)
     APPLY_FOR_SETTINGS(TRY_SET)
     else
     {
@@ -59,7 +59,7 @@ void Settings::ignore(const String & name, ReadBuffer & buf)
 {
 #define TRY_IGNORE(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME) decltype(NAME)(DEFAULT).set(buf);
 
-    if (false) {}
+    if (false) {} // NOLINT(readability-simplify-boolean-expr)
     APPLY_FOR_SETTINGS(TRY_IGNORE)
     else
     {
@@ -75,7 +75,7 @@ void Settings::set(const String & name, const String & value)
 {
 #define TRY_SET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME) NAME.set(value);
 
-    if (false) {}
+    if (false) {} // NOLINT(readability-simplify-boolean-expr)
     APPLY_FOR_SETTINGS(TRY_SET)
     else
     {
@@ -89,7 +89,7 @@ String Settings::get(const String & name) const
 {
 #define GET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME) return NAME.toString();
 
-    if (false) {}
+    if (false) {} // NOLINT(readability-simplify-boolean-expr)
     APPLY_FOR_SETTINGS(GET)
     else
     {
@@ -108,7 +108,7 @@ bool Settings::tryGet(const String & name, String & value) const
         return true;                              \
     }
 
-    if (false) {}
+    if (false) {} // NOLINT(readability-simplify-boolean-expr)
     APPLY_FOR_SETTINGS(TRY_GET)
     else
     {
@@ -184,7 +184,7 @@ void Settings::deserialize(ReadBuffer & buf)
 void Settings::serialize(WriteBuffer & buf) const
 {
 #define WRITE(TYPE, NAME, DEFAULT, DESCRIPTION) \
-    if (NAME.changed)                           \
+    if ((NAME).changed)                         \
     {                                           \
         writeStringBinary(#NAME, buf);          \
         NAME.write(buf);                        \
