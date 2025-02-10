@@ -27,7 +27,7 @@ extern const int NO_ELEMENTS_IN_CONFIG;
 /// Set the configuration by name.
 void Settings::set(const String & name, const Field & value)
 {
-#define TRY_SET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME) NAME.set(value);
+#define TRY_SET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME)(NAME).set(value);
 
     if (false) {} // NOLINT(readability-simplify-boolean-expr)
     APPLY_FOR_SETTINGS(TRY_SET)
@@ -42,7 +42,7 @@ void Settings::set(const String & name, const Field & value)
 /// Set the configuration by name. Read the binary serialized value from the buffer (for interserver interaction).
 void Settings::set(const String & name, ReadBuffer & buf)
 {
-#define TRY_SET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME) NAME.set(buf);
+#define TRY_SET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME)(NAME).set(buf);
 
     if (false) {} // NOLINT(readability-simplify-boolean-expr)
     APPLY_FOR_SETTINGS(TRY_SET)
@@ -73,7 +73,7 @@ void Settings::ignore(const String & name, ReadBuffer & buf)
     */
 void Settings::set(const String & name, const String & value)
 {
-#define TRY_SET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME) NAME.set(value);
+#define TRY_SET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME)(NAME).set(value);
 
     if (false) {} // NOLINT(readability-simplify-boolean-expr)
     APPLY_FOR_SETTINGS(TRY_SET)
@@ -87,7 +87,7 @@ void Settings::set(const String & name, const String & value)
 
 String Settings::get(const String & name) const
 {
-#define GET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME) return NAME.toString();
+#define GET(TYPE, NAME, DEFAULT, DESCRIPTION) else if (name == #NAME) return (NAME).toString();
 
     if (false) {} // NOLINT(readability-simplify-boolean-expr)
     APPLY_FOR_SETTINGS(GET)
