@@ -66,7 +66,7 @@ struct TiFlashProxyConfig
             LOG_INFO(log, "Using UniPS for proxy");
             addExtraArgs("unips-enabled", "1");
         }
-        runner_cnt = config.getUInt("flash.read_index_runner_count", 1);
+        read_index_runner_count = config.getUInt("flash.read_index_runner_count", 1);
 
         // Set the proxy's memory by size or ratio
         std::visit(
@@ -161,7 +161,7 @@ struct TiFlashProxyConfig
     std::vector<const char *> args;
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
-    size_t runner_cnt;
+    size_t read_index_runner_count;
 };
 
 struct RaftStoreProxyRunner : boost::noncopyable
@@ -309,7 +309,7 @@ struct ProxyStateMachine
             return;
 
         // If set 0, DO NOT enable read-index worker
-        if (proxy_conf.runner_cnt > 0)
+        if (proxy_conf.read_index_runner_count > 0)
         {
             auto & kvstore_ptr = tmt_context.getKVStore();
             kvstore_ptr->initReadIndexWorkers(
@@ -317,7 +317,7 @@ struct ProxyStateMachine
                     // get from tmt context
                     return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
                 },
-                /*running thread count*/ proxy_conf.runner_cnt);
+                /*running thread count*/ proxy_conf.read_index_runner_count);
             tmt_context.getKVStore()->asyncRunReadIndexWorkers();
             WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
         }
