@@ -122,6 +122,8 @@ void setupAllocator([[maybe_unused]] const LoggerPtr & log)
         RUN_FAIL_RETURN(je_mallctl("background_thread", nullptr, nullptr, (void *)&new_b, sz_b));
         LOG_INFO(log, "Set jemalloc.background_thread {}", new_b);
     }
+#else
+    LOG_INFO(log, "Not using Jemalloc for TiFlash");
 #endif
 
 #if USE_MIMALLOC
