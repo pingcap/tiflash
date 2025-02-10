@@ -71,7 +71,6 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
 
     const bool calculate_read_packs = (cfs.end() - pos == 1) && ((*pos)->isInMemoryFile() || (*pos)->isTinyFile())
         && dmfile_or_delete_range_list.size() == 1;
-    const auto initial_replayed_rows_and_deletes = replayed_rows_and_deletes;
     SCOPE_EXIT({ cleanHandleColumn(); });
 
     // TODO: make delta_reader optonal.
