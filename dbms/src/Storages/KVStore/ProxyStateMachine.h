@@ -40,16 +40,59 @@ void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineSt
 }
 
 /// Manages the argument being passed to proxy, through `run_raftstore_proxy_ffi` call.
-// It is different from `TiFlashRaftConfig` which serves computing.
+// This is different from `TiFlashRaftConfig` which serves computing.
 struct TiFlashProxyConfig
 {
-    std::vector<const char *> args;
-    std::unordered_map<std::string, std::string> val_map;
-    bool is_proxy_runnable = false;
-    size_t runner_cnt;
+    TiFlashProxyConfig(
+        Poco::Util::LayeredConfiguration & config,
+        const DisaggregatedMode disaggregated_mode,
+        const bool use_autoscaler,
+        const StorageFormatVersion & format_version,
+        const Settings & settings,
+        const LoggerPtr & log)
+    {
+        is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, log);
+
+        args.push_back("TiFlash Proxy");
+        for (const auto & v : val_map)
+        {
+            args.push_back(v.first.data());
+            args.push_back(v.second.data());
+        }
+
+        // Enable unips according to `format_version`
+        if (format_version.page == PageFormat::V4)
+        {
+            LOG_INFO(log, "Using UniPS for proxy");
+            addExtraArgs("unips-enabled", "1");
+        }
+        runner_cnt = config.getUInt("flash.read_index_runner_count", 1);
+
+        // Set the proxy's memory by size or ratio
+        std::visit(
+            [&](auto && arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, UInt64>)
+                {
+                    if (arg != 0)
+                    {
+                        LOG_INFO(log, "Limit proxy's memory, size={}", arg);
+                        addExtraArgs("memory-limit-size", std::to_string(arg));
+                    }
+                }
+                else if constexpr (std::is_same_v<T, double>)
+                {
+                    if (arg > 0 && arg <= 1.0)
+                    {
+                        LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
+                        addExtraArgs("memory-limit-ratio", std::to_string(arg));
+                    }
+                }
+            },
+            settings.max_memory_usage_for_all_queries.get());
+    }
 
     // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
-
     void addExtraArgs(const std::string & k, const std::string & v)
     {
         std::string key = "--" + k;
@@ -115,54 +158,10 @@ struct TiFlashProxyConfig
         return true;
     }
 
-    TiFlashProxyConfig(
-        Poco::Util::LayeredConfiguration & config,
-        const DisaggregatedMode disaggregated_mode,
-        const bool use_autoscaler,
-        const StorageFormatVersion & format_version,
-        const Settings & settings,
-        const LoggerPtr & log)
-    {
-        is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, log);
-
-        args.push_back("TiFlash Proxy");
-        for (const auto & v : val_map)
-        {
-            args.push_back(v.first.data());
-            args.push_back(v.second.data());
-        }
-
-        // Enable unips according to `format_version`
-        if (format_version.page == PageFormat::V4)
-        {
-            LOG_INFO(log, "Using UniPS for proxy");
-            addExtraArgs("unips-enabled", "1");
-        }
-        runner_cnt = config.getUInt("flash.read_index_runner_count", 1);
-
-        // Set the proxy's memory by size or ratio
-        std::visit(
-            [&](auto && arg) {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, UInt64>)
-                {
-                    if (arg != 0)
-                    {
-                        LOG_INFO(log, "Limit proxy's memory, size={}", arg);
-                        addExtraArgs("memory-limit-size", std::to_string(arg));
-                    }
-                }
-                else if constexpr (std::is_same_v<T, double>)
-                {
-                    if (arg > 0 && arg <= 1.0)
-                    {
-                        LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
-                        addExtraArgs("memory-limit-ratio", std::to_string(arg));
-                    }
-                }
-            },
-            settings.max_memory_usage_for_all_queries.get());
-    }
+    std::vector<const char *> args;
+    std::unordered_map<std::string, std::string> val_map;
+    bool is_proxy_runnable = false;
+    size_t runner_cnt;
 };
 
 struct RaftStoreProxyRunner : boost::noncopyable
@@ -216,6 +215,17 @@ private:
 
 struct ProxyStateMachine
 {
+    ProxyStateMachine(LoggerPtr log_, TiFlashProxyConfig && proxy_conf_)
+        : log(std::move(log_))
+        , proxy_conf(std::move(proxy_conf_))
+    {
+        helper = GetEngineStoreServerHelper(&tiflash_instance_wrap);
+        proxy_runner = std::make_unique<RaftStoreProxyRunner>(
+            RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf},
+            log);
+    }
+
+
     // A TikvServer will be bootstrapped, FFI mechanism is enabled.
     // However, the raftstore service is not started until we call `startProxyService`.
     void runProxy()
@@ -378,16 +388,6 @@ struct ProxyStateMachine
         LOG_INFO(log, "Wait for tiflash proxy thread to join");
         proxy_runner->join();
         LOG_INFO(log, "tiflash proxy thread is joined");
-    }
-
-    ProxyStateMachine(LoggerPtr log_, TiFlashProxyConfig && proxy_conf_)
-        : log(std::move(log_))
-        , proxy_conf(std::move(proxy_conf_))
-    {
-        helper = GetEngineStoreServerHelper(&tiflash_instance_wrap);
-        proxy_runner = std::make_unique<RaftStoreProxyRunner>(
-            RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf},
-            log);
     }
 
     bool isProxyRunnable() const { return proxy_conf.is_proxy_runnable; }

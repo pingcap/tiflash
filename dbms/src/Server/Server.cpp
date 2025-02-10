@@ -684,11 +684,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getFileProvider(),
         storage_config.s3_config.isS3Enabled());
 
-    const auto is_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();
-    const auto is_storage_mode = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
-    const auto not_disaggmode = global_context->getSharedContextDisagg()->notDisaggregatedMode();
+    const auto is_disagg_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();
+    const auto is_disagg_storage_mode = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+    const auto not_disagg_mode = global_context->getSharedContextDisagg()->notDisaggregatedMode();
     const auto [remote_cache_paths, remote_cache_capacity_quota]
-        = storage_config.remote_cache_config.getCacheDirInfos(is_compute_mode);
+        = storage_config.remote_cache_config.getCacheDirInfos(is_disagg_compute_mode);
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
         storage_config.main_data_paths,
@@ -704,7 +704,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.kvstore_data_path, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
-    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_compute_mode)
+    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_disagg_compute_mode)
     {
         config.initCacheDir();
         FileCache::initialize(global_context->getPathCapacity(), config);
@@ -804,11 +804,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity),
         settings.bytes_that_rss_larger_than_limit);
 
-    if (is_compute_mode)
+    if (is_disagg_compute_mode)
     {
         // No need to have local index scheduler.
     }
-    else if (is_storage_mode)
+    else if (is_disagg_storage_mode)
     {
         // There is no compute task in write node.
         // Set the pool size to 80% of logical cores and 60% of memory
@@ -827,7 +827,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalPageIdAllocator();
-    if (!is_compute_mode)
+    if (!is_disagg_compute_mode)
     {
         global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
         LOG_INFO(
@@ -841,7 +841,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::optional<raft_serverpb::StoreIdent> store_ident;
     // Only when this node is disagg compute node and autoscaler is enabled, we don't need the WriteNodePageStorage instance
     // Disagg compute node without autoscaler still need this instance for proxy's data
-    if (!(is_compute_mode && use_autoscaler))
+    if (!(is_disagg_compute_mode && use_autoscaler))
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
         if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
@@ -862,13 +862,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    if (is_storage_mode)
+    if (is_disagg_storage_mode)
     {
         global_context->getSharedContextDisagg()->initWriteNodeSnapManager();
         global_context->getSharedContextDisagg()->initFastAddPeerContext(settings.fap_handle_concurrency);
     }
 
-    if (is_compute_mode)
+    if (is_disagg_compute_mode)
     {
         global_context->getSharedContextDisagg()->initReadNodePageCache(
             global_context->getPathPool(),
@@ -964,7 +964,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     ///   0 means cache is disabled.
     ///   We cannot support unlimited delta index cache in disaggregated mode for now,
     ///   because cache items will be never explicitly removed.
-    if (is_compute_mode)
+    if (is_disagg_compute_mode)
     {
         constexpr auto delta_index_cache_ratio = 0.02;
         constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
@@ -1024,9 +1024,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
     BgStorageInitHolder bg_init_stores;
-    if (!is_compute_mode)
+    if (!is_disagg_compute_mode)
     {
-        if (not_disaggmode || store_ident.has_value())
+        if (not_disagg_mode || store_ident.has_value())
         {
             // This node has been bootstrapped, the `store_id` is set. Or non-disagg mode,
             // do not depend on `store_id`. Start sync schema before serving any requests.
@@ -1083,7 +1083,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-    if (not_disaggmode || /*has_been_bootstrap*/ store_ident.has_value())
+    if (not_disagg_mode || /*has_been_bootstrap*/ store_ident.has_value())
     {
         // If S3 enabled, wait for all DeltaMergeStores' initialization
         // before this instance can accept requests.
@@ -1091,7 +1091,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         bg_init_stores.waitUntilFinish();
     }
 
-    if (is_storage_mode && /*has_been_bootstrap*/ store_ident.has_value())
+    if (is_disagg_storage_mode && /*has_been_bootstrap*/ store_ident.has_value())
     {
         // Only disagg write node that has been bootstrap need wait. For the write node does not bootstrap, its
         // store id is allocated later.
@@ -1150,7 +1150,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         if (proxy_machine.isProxyRunnable())
         {
             const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
-            if (is_compute_mode)
+            if (is_disagg_compute_mode)
             {
                 // compute node do not need to handle read index
                 LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", store_id);
@@ -1170,10 +1170,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
+                proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
             }
         }
 
-        proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
         SCOPE_EXIT({ proxy_machine.stopProxy(tmt_context); });
 
         {
@@ -1184,7 +1184,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         // For test mode, TaskScheduler and LAC is controlled by test case.
         // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
-        const bool init_pipeline_and_lac = !global_context->isTest() && !is_storage_mode;
+        const bool init_pipeline_and_lac = !global_context->isTest() && !is_disagg_storage_mode;
         if (init_pipeline_and_lac)
         {
 #ifdef DBMS_PUBLIC_GTEST
@@ -1238,7 +1238,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // And we want to make sure LAC is cleanedup.
             // The effects are there will be no resource control during [lac.safeStop(), FlashGrpcServer destruct done],
             // but it's basically ok, that duration is small(normally 100-200ms).
-            if (is_compute_mode && use_autoscaler && LocalAdmissionController::global_instance)
+            if (is_disagg_compute_mode && use_autoscaler && LocalAdmissionController::global_instance)
                 LocalAdmissionController::global_instance->safeStop();
         });
 
