@@ -39,9 +39,6 @@ extern "C" {
 void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
 }
 
-struct RaftStoreProxyRunner;
-struct ProxyStateMachine;
-
 /// Manages the argument being passed to proxy, through `run_raftstore_proxy_ffi` call.
 // This is different from `TiFlashRaftConfig` which serves computing.
 struct TiFlashProxyConfig
@@ -55,13 +52,6 @@ struct TiFlashProxyConfig
         const LoggerPtr & log)
     {
         is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, log);
-
-        args.push_back("TiFlash Proxy");
-        for (const auto & v : val_map)
-        {
-            args.push_back(v.first.data());
-            args.push_back(v.second.data());
-        }
 
         // Enable unips according to `format_version`
         if (format_version.page == PageFormat::V4)
@@ -95,15 +85,26 @@ struct TiFlashProxyConfig
             settings.max_memory_usage_for_all_queries.get());
     }
 
-    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
-    void addExtraArgs(const std::string & k, const std::string & v)
+    std::vector<const char *> getArgs() const
     {
-        std::string key = "--" + k;
-        val_map[key] = v;
-        auto iter = val_map.find(key);
-        args.push_back(iter->first.data());
-        args.push_back(iter->second.data());
+        std::vector<const char *> args;
+        args.reserve(val_map.size() + 1);
+        args.push_back("TiFlash Proxy");
+        for (const auto & [k, v] : val_map)
+        {
+            args.push_back(k.data());
+            args.push_back(v.data());
+        }
+        return args;
     }
+
+    bool isProxyRunnable() const { return is_proxy_runnable; }
+
+    size_t getReadIndexRunnerCount() const { return read_index_runner_count; }
+
+private:
+    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
+    void addExtraArgs(const std::string & k, const std::string & v) { val_map["--" + k] = v; }
 
     // Try to parse start args from `config`.
     // Return true if proxy need to be started, and `val_map` will be filled with the
@@ -161,11 +162,6 @@ struct TiFlashProxyConfig
         return true;
     }
 
-    friend struct RaftStoreProxyRunner;
-    friend struct ProxyStateMachine;
-
-private:
-    std::vector<const char *> args;
     std::unordered_map<std::string, std::string> val_map;
     bool is_proxy_runnable = false;
     size_t read_index_runner_count;
@@ -189,19 +185,19 @@ struct RaftStoreProxyRunner : boost::noncopyable
 
     void join() const
     {
-        if (!parms.conf.is_proxy_runnable)
+        if (!parms.conf.isProxyRunnable())
             return;
         pthread_join(thread, nullptr);
     }
 
     void run()
     {
-        if (!parms.conf.is_proxy_runnable)
+        if (!parms.conf.isProxyRunnable())
             return;
         pthread_attr_t attribute;
         pthread_attr_init(&attribute);
         pthread_attr_setstacksize(&attribute, parms.stack_size);
-        LOG_INFO(log, "Start raft store proxy. Args: {}", parms.conf.args);
+        LOG_INFO(log, "Start raft store proxy. Args: {}", parms.conf.getArgs());
         pthread_create(&thread, &attribute, runRaftStoreProxyFFI, &parms);
         pthread_attr_destroy(&attribute);
     }
@@ -211,7 +207,8 @@ private:
     {
         setThreadName("RaftStoreProxy");
         const auto & parms = *static_cast<const RunRaftStoreProxyParms *>(pv);
-        run_raftstore_proxy_ffi(static_cast<int>(parms.conf.args.size()), parms.conf.args.data(), parms.helper);
+        const auto args = parms.conf.getArgs();
+        run_raftstore_proxy_ffi(static_cast<int>(args.size()), args.data(), parms.helper);
         return nullptr;
     }
 
@@ -237,7 +234,7 @@ struct ProxyStateMachine
     // However, the raftstore service is not started until we call `startProxyService`.
     void runProxy()
     {
-        if (proxy_conf.is_proxy_runnable)
+        if (proxy_conf.isProxyRunnable())
         {
             proxy_runner->run();
 
@@ -270,7 +267,7 @@ struct ProxyStateMachine
     /// Restore TMTContext, including KVStore and RegionTable.
     void restoreKVStore(TMTContext & tmt_context, PathPool & path_pool) const
     {
-        if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.proxy_helper == nullptr)
+        if (proxy_conf.isProxyRunnable() && tiflash_instance_wrap.proxy_helper == nullptr)
             throw Exception("Raft Proxy Helper is not set, should not happen");
         tmt_context.restore(path_pool, tiflash_instance_wrap.proxy_helper);
     }
@@ -278,7 +275,7 @@ struct ProxyStateMachine
     /// Set tiflash's state to Running, and wait proxy's state to Running.
     void startProxyService(TMTContext & tmt_context, const std::optional<raft_serverpb::StoreIdent> & store_ident)
     {
-        if (!proxy_conf.is_proxy_runnable)
+        if (!proxy_conf.isProxyRunnable())
             return;
         // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
         // This conflicts with the assumption that tiflash does not contain any Region leader peer and leads to unexpected errors
@@ -316,11 +313,11 @@ struct ProxyStateMachine
 
     void waitProxyServiceReady(TMTContext & tmt_context, std::atomic_size_t & terminate_signals_counter) const
     {
-        if (!proxy_conf.is_proxy_runnable)
+        if (!proxy_conf.isProxyRunnable())
             return;
 
         // If set 0, DO NOT enable read-index worker
-        if (proxy_conf.read_index_runner_count > 0)
+        if (proxy_conf.getReadIndexRunnerCount() > 0)
         {
             auto & kvstore_ptr = tmt_context.getKVStore();
             kvstore_ptr->initReadIndexWorkers(
@@ -328,7 +325,7 @@ struct ProxyStateMachine
                     // get from tmt context
                     return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
                 },
-                /*running thread count*/ proxy_conf.read_index_runner_count);
+                /*running thread count*/ proxy_conf.getReadIndexRunnerCount());
             tmt_context.getKVStore()->asyncRunReadIndexWorkers();
             WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
         }
@@ -341,12 +338,12 @@ struct ProxyStateMachine
     /// Then, inform proxy to stop by setting `tiflash_instance_wrap.status`.
     void stopProxy(TMTContext & tmt_context)
     {
-        if (!proxy_conf.is_proxy_runnable)
+        if (!proxy_conf.isProxyRunnable())
         {
             tmt_context.setStatusTerminated();
             return;
         }
-        if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
+        if (proxy_conf.isProxyRunnable() && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
         {
             LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
             exit(-1);
@@ -367,7 +364,7 @@ struct ProxyStateMachine
             LOG_INFO(log, "Set engine store server status Stopping");
         }
         // wait proxy to stop services
-        if (proxy_conf.is_proxy_runnable)
+        if (proxy_conf.isProxyRunnable())
         {
             LOG_INFO(log, "Let tiflash proxy to stop all services");
             while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stopped)
@@ -379,7 +376,7 @@ struct ProxyStateMachine
     // TMTContext can not be accessed after this is called.
     void destroyProxyContext()
     {
-        if (!proxy_conf.is_proxy_runnable)
+        if (!proxy_conf.isProxyRunnable())
             return;
 
         LOG_INFO(log, "Unlink tiflash_instance_wrap.tmt");
@@ -392,7 +389,7 @@ struct ProxyStateMachine
     /// Inform proxy to shutdown, and join the thread.
     void waitProxyStopped()
     {
-        if (!proxy_conf.is_proxy_runnable)
+        if (!proxy_conf.isProxyRunnable())
             return;
 
         LOG_INFO(log, "Let tiflash proxy shutdown");
@@ -403,7 +400,7 @@ struct ProxyStateMachine
         LOG_INFO(log, "tiflash proxy thread is joined");
     }
 
-    bool isProxyRunnable() const { return proxy_conf.is_proxy_runnable; }
+    bool isProxyRunnable() const { return proxy_conf.isProxyRunnable(); }
 
     bool isProxyHelperInited() const { return tiflash_instance_wrap.proxy_helper != nullptr; }
 
