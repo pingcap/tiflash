@@ -42,25 +42,26 @@ public:
         : base_versions(std::make_shared<std::vector<RowID>>())
     {}
 
-    // Deep copy, only use for micro-benchmark or unit-tests.
-    VersionChain(const VersionChain & other)
-        : replayed_rows_and_deletes(other.replayed_rows_and_deletes)
-        , base_versions(std::make_shared<std::vector<RowID>>(*(other.base_versions)))
-        , new_handle_to_row_ids(other.new_handle_to_row_ids)
-        , dmfile_or_delete_range_list(other.dmfile_or_delete_range_list)
-    {}
-
-    VersionChain & operator=(const VersionChain &) = delete;
-    VersionChain(VersionChain &&) = delete;
-    VersionChain & operator=(VersionChain &&) = delete;
-
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshot(
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
 
     [[nodiscard]] UInt32 getReplayedRows() const { return base_versions->size(); }
 
+    [[nodiscard]] auto deepCopyForTest() const { return VersionChain(*this); }
+
 private:
+    VersionChain(const VersionChain & other)
+        : replayed_rows_and_deletes(other.replayed_rows_and_deletes)
+        , base_versions(std::make_shared<std::vector<RowID>>(*(other.base_versions)))
+        , new_handle_to_row_ids(other.new_handle_to_row_ids)
+        , dmfile_or_delete_range_list(other.dmfile_or_delete_range_list)
+    {}
+    VersionChain & operator=(const VersionChain &) = delete;
+    VersionChain(VersionChain &&) = delete;
+    VersionChain & operator=(VersionChain &&) = delete;
+
+
     [[nodiscard]] UInt32 replayBlock(
         const DMContext & dm_context,
         const IColumnFileDataProviderPtr & data_provider,

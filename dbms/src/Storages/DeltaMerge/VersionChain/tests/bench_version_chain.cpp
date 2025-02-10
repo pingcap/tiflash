@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
+#include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
 #include <Storages/DeltaMerge/VersionChain/tests/mvcc_test_utils.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/PathPool.h>
@@ -127,7 +128,7 @@ try
             RUNTIME_ASSERT(segment_snapshot->delta->getRows() == prepared_delta_rows + incremental_delta_rows);
             for (auto _ : state)
             {
-                auto version_chain = base_version_chain;
+                auto version_chain = base_version_chain.deepCopyForTest();
                 RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows);
                 buildVersionChain(*dm_context, *segment_snapshot, version_chain);
                 RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows + incremental_delta_rows);
