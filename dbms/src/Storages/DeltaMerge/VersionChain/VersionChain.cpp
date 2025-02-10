@@ -27,9 +27,10 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot)
 {
-    // Check Stable: stable always has one DMFile.
     if (dmfile_or_delete_range_list.empty())
     {
+        // In theory, we can support stable composed of multiple disjoint dmfiles.
+        // But it is not necessary for now. For simplicity, assume stable always has one DMFile.
         const auto & dmfiles = snapshot.stable->getDMFiles();
         RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
         dmfile_or_delete_range_list.push_back(
@@ -41,14 +42,14 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     const auto & delta = *(snapshot.delta);
     const UInt32 delta_rows = delta.getRows();
     const UInt32 delta_delete_ranges = delta.getDeletes();
-    std::lock_guard lock(mtx);
+    std::lock_guard lock(mtx); // Not run concurrently. Because it can reuse the result of the previous replay.
     if (delta_rows + delta_delete_ranges <= replayed_rows_and_deletes)
     {
         RUNTIME_CHECK(base_versions->size() >= delta_rows, base_versions->size(), delta_rows);
         return base_versions;
     }
 
-    // Copy for write
+    // base_versions may be shared for read, so copy for write here.
     base_versions = std::make_shared<std::vector<RowID>>(*base_versions);
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();

@@ -182,6 +182,7 @@ struct Settings
     M(SettingUInt64, dt_merged_file_max_size, 16 * 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                \
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingDouble, dt_page_gc_threshold_raft_data, 0.05, "Max valid rate of deciding to do a GC for BlobFile storing PageData in PageStorage")                                                                                        \
+    M(SettingBool, enable_version_chain, true, "need restart process to take effect")                                                                                                                                                   \
     /* DeltaTree engine testing settings */\
     M(SettingUInt64, dt_insert_max_rows, 0, "[testing] Max rows of insert blocks when write into DeltaTree Engine. By default 0 means no limit.")                                                                                       \
     M(SettingBool, dt_raw_filter_range, true, "[unused] Do range filter or not when read data in raw mode in DeltaTree Engine.")                                                                                                        \
@@ -190,7 +191,6 @@ struct Settings
     M(SettingBool, dt_flush_after_write, false, "[testing] Flush cache or not after write in DeltaTree Engine.")                                                                                                                        \
     M(SettingBool, dt_log_record_version, false, "[testing] Whether log the version of records when write them to storage")                                                                                                             \
     \
-    M(SettingBool, dt_enable_version_chain, true, "")                                                                                                             \
     /* These PageStorage V2 settings are deprecated since v6.5 */ \
     M(SettingUInt64, dt_open_file_max_idle_seconds, 15, "Deprecated.")                                                                                                                                                                  \
     M(SettingUInt64, dt_page_num_max_expect_legacy_files, 100, "Deprecated.")                                                                                                                                                           \

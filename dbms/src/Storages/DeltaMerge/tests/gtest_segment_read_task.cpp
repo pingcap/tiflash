@@ -92,12 +92,12 @@ protected:
 
         // Always use delta index in this case.
         auto & global_settings = db_context->getGlobalContext().getSettingsRef();
-        bool enable_version_chain = global_settings.dt_enable_version_chain;
+        bool enable_version_chain = global_settings.enable_version_chain;
         if (enable_version_chain)
-            global_settings.set("dt_enable_version_chain", "false");
+            global_settings.set("enable_version_chain", "false");
         SCOPE_EXIT({
             if (enable_version_chain)
-                global_settings.set("dt_enable_version_chain", "true");
+                global_settings.set("enable_version_chain", "true");
         });
         // read the left segment after split
         auto task = std::make_shared<DM::SegmentReadTask>(

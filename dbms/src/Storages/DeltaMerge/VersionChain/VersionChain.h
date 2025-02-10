@@ -102,7 +102,14 @@ private:
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
-    std::shared_ptr<std::vector<RowID>> base_versions; // base_versions->size() == delta.getRows()
+    // After replaySnapshot, base_versions->size() == delta.getRows().
+    // The records in delta correspond one-to-one with base_versions.
+    // Base version means the oldest version that has not been garbage collected yet.
+    // (*base_versions)[n] is the row id of the oldest version of the n-th record in delta.
+    // And different versions of the same record has the same base version except the base version itself.
+    // The base version of the base version is NotExistRowID.
+    // Therefore, base version of a record acts as a pivot, like the primary key in trancation.
+    std::shared_ptr<std::vector<RowID>> base_versions;
     NewHandleIndex<HandleType> new_handle_to_row_ids;
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
     std::vector<DMFileOrDeleteRange> dmfile_or_delete_range_list;

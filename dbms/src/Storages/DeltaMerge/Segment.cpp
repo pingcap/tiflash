@@ -3508,7 +3508,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         pack_filter_results,
         start_ts,
         build_bitmap_filter_block_rows,
-        dm_context.global_context.getSettingsRef().dt_enable_version_chain);
+        dm_context.global_context.getSettingsRef().enable_version_chain);
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
     if (!hasCacheableColumn(columns_to_read))
