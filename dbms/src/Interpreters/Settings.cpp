@@ -104,7 +104,7 @@ bool Settings::tryGet(const String & name, String & value) const
 #define TRY_GET(TYPE, NAME, DEFAULT, DESCRIPTION) \
     else if (name == #NAME)                       \
     {                                             \
-        value = NAME.toString();                  \
+        value = (NAME).toString();                \
         return true;                              \
     }
 
@@ -187,7 +187,7 @@ void Settings::serialize(WriteBuffer & buf) const
     if ((NAME).changed)                         \
     {                                           \
         writeStringBinary(#NAME, buf);          \
-        NAME.write(buf);                        \
+        (NAME).write(buf);                      \
     }
 
     APPLY_FOR_SETTINGS(WRITE)
