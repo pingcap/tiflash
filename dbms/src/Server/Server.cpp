@@ -745,11 +745,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Try to increase limit on number of open files.
     if (config().hasProperty("max_open_files"))
     {
-        setOpenFileLimit(config().getUInt("max_open_files"));
+        setOpenFileLimit(config().getUInt("max_open_files"), log);
     }
     else
     {
-        setOpenFileLimit(std::nullopt);
+        setOpenFileLimit(std::nullopt, log);
     }
 
     static ServerErrorHandler error_handler;

@@ -247,7 +247,9 @@ struct ProxyStateMachine
             store_meta.set_id(store_ident->store_id());
             store_meta.set_node_state(metapb::NodeState::Preparing);
             kvstore->setStore(store_meta);
-        } else {
+        }
+        else
+        {
             LOG_WARNING(log, "KVStore is not initialized because no store_ident is provided");
         }
     }
