@@ -457,7 +457,7 @@ void loadBlockList(
 #endif
 }
 
-void setOpenFileLimit(std::optional<UInt64> new_limit)
+void setOpenFileLimit(std::optional<UInt64> new_limit, const LoggerPtr & log)
 {
     rlimit rlim{};
     if (getrlimit(RLIMIT_NOFILE, &rlim))
@@ -465,7 +465,7 @@ void setOpenFileLimit(std::optional<UInt64> new_limit)
 
     if (rlim.rlim_cur == rlim.rlim_max)
     {
-        LOG_DEBUG(DB::Logger::get(), "rlimit on number of file descriptors is {}", rlim.rlim_cur);
+        LOG_DEBUG(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
     }
     else
     {
@@ -474,13 +474,13 @@ void setOpenFileLimit(std::optional<UInt64> new_limit)
         int rc = setrlimit(RLIMIT_NOFILE, &rlim);
         if (rc != 0)
             LOG_WARNING(
-                DB::Logger::get(),
+                log,
                 "Cannot set max number of file descriptors to {}"
                 ". Try to specify max_open_files according to your system limits. error: {}",
                 rlim.rlim_cur,
                 strerror(errno));
         else
-            LOG_DEBUG(DB::Logger::get(), "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
+            LOG_DEBUG(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
     }
 }
 
