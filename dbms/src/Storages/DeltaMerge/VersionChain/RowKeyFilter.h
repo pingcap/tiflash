@@ -24,6 +24,8 @@ struct SegmentSnapshot;
 struct RowKeyRange;
 using RowKeyRanges = std::vector<RowKeyRange>;
 
+// Filter out rows by read_ranges.
+// Return the number of filtered out rows.
 template <ExtraHandleType HandleType>
 UInt32 buildRowKeyFilter(
     const DMContext & dm_context,
