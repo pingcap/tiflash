@@ -624,7 +624,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
-    SCOPE_EXIT({ proxy_machine.destroyProxyContext(); });
     global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
@@ -734,12 +733,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     StatusFile status{path + "status"};
 
     SCOPE_EXIT({
+        proxy_machine.destroyProxyContext();
         /** Explicitly destroy Context. It is more convenient than in destructor of Server, because logger is still available.
           * At this moment, no one could own shared part of Context.
           */
         global_context.reset();
 
-        LOG_DEBUG(log, "Destroyed global context.");
+        LOG_INFO(log, "Destroyed global context.");
     });
 
     /// Try to increase limit on number of open files.

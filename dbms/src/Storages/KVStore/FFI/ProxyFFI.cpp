@@ -94,6 +94,7 @@ EngineStoreApplyRes HandleWriteRaftCmd(const EngineStoreServerWrap * server, Wri
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         return server->tmt->getKVStore()
             ->handleWriteRaftCmd(cmds, header.region_id, header.index, header.term, *server->tmt);
     }
@@ -112,6 +113,7 @@ EngineStoreApplyRes HandleAdminRaftCmd(
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         raft_cmdpb::AdminRequest request;
         raft_cmdpb::AdminResponse response;
         CHECK_PARSE_PB_BUFF(request, req_buff.data, req_buff.len);
@@ -136,6 +138,7 @@ uint8_t NeedFlushData(EngineStoreServerWrap * server, uint64_t region_id)
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto & kvstore = server->tmt->getKVStore();
         return kvstore->needFlushRegionData(region_id, *server->tmt);
     }
@@ -157,6 +160,7 @@ uint8_t TryFlushData(
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto & kvstore = server->tmt->getKVStore();
         return kvstore->tryFlushRegionData(
             region_id,
@@ -286,6 +290,7 @@ void HandleConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr pt
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         auto * wb = reinterpret_cast<UniversalWriteBatch *>(ptr);
         LOG_TRACE(&Poco::Logger::get("ProxyFFI"), "FFI consume write batch {}", wb->toString());
@@ -303,6 +308,7 @@ CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftDataReader reader(*uni_ps);
         auto p = reader.read(UniversalPageId(page_id.data, page_id.len));
@@ -338,6 +344,7 @@ RawCppPtrCarr HandleScanPage(const EngineStoreServerWrap * server, BaseBuffView 
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         LOG_TRACE(
             &Poco::Logger::get("ProxyFFI"),
             "FFI scan page from {} to {}",
@@ -384,6 +391,7 @@ CppStrWithView HandleGetLowerBound(const EngineStoreServerWrap * server, BaseBuf
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftDataReader reader(*uni_ps);
         auto page_id_opt = reader.getLowerBound(UniversalPageId(raw_page_id.data, raw_page_id.len));
@@ -419,6 +427,7 @@ uint8_t IsPSEmpty(const EngineStoreServerWrap * server)
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         return uni_ps->isEmpty();
     }
@@ -433,6 +442,7 @@ void HandlePurgePageStorage(const EngineStoreServerWrap * server)
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         uni_ps->gc({});
     }
@@ -461,6 +471,7 @@ void HandleDestroy(EngineStoreServerWrap * server, uint64_t region_id)
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto & kvstore = server->tmt->getKVStore();
         Stopwatch watch;
         kvstore->handleDestroy(region_id, *server->tmt);
@@ -477,6 +488,7 @@ EngineStoreApplyRes HandleIngestSST(EngineStoreServerWrap * server, SSTViewVec s
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto & kvstore = server->tmt->getKVStore();
         return kvstore->handleIngestSST(header.region_id, snaps, header.index, header.term, *server->tmt);
     }
@@ -493,6 +505,7 @@ StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
     StoreStats res{}; // res.fs_stats.ok = false by default
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto global_capacity = server->tmt->getContext().getPathCapacity();
         res.fs_stats = global_capacity->getFsStats();
         // TODO: set engine read/write stats
@@ -662,6 +675,7 @@ RawCppPtr PreHandleSnapshot(
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         metapb::Region region;
         CHECK_PARSE_PB_BUFF(region, region_buff.data, region_buff.len);
         auto & tmt = *server->tmt;
@@ -698,6 +712,7 @@ void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, Raw
         auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
         try
         {
+            RUNTIME_CHECK(server->tmt != nullptr);
             auto & kvstore = server->tmt->getKVStore();
             kvstore->applyPreHandledSnapshot(
                 RegionPtrWithSnapshotFiles{snap->region, std::move(snap->prehandle_result.ingest_ids)},
@@ -725,6 +740,7 @@ void AbortPreHandledSnapshot(EngineStoreServerWrap * server, uint64_t region_id,
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         UNUSED(peer_id);
         auto & kvstore = server->tmt->getKVStore();
         kvstore->abortPreHandleSnapshot(region_id, *server->tmt);
@@ -747,6 +763,7 @@ void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, RawVoidPtr res, R
     auto * snap = reinterpret_cast<PreHandledSnapshotWithFiles *>(res);
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto s = RegionPtrWithSnapshotFiles{snap->region, std::move(snap->prehandle_result.ingest_ids)};
         auto & kvstore = server->tmt->getKVStore();
         kvstore->releasePreHandledSnapshot(s, *server->tmt);
@@ -762,6 +779,7 @@ bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id)
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto & kvstore = server->tmt->getKVStore();
         return kvstore->getRegion(region_id) != nullptr;
     }
@@ -881,6 +899,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
     std::string config_file_path;
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         config_file_path = server->tmt->getContext().getConfigRef().getString("config-file");
         std::ifstream stream(config_file_path);
         if (!stream)
@@ -908,7 +927,7 @@ void SetStore(EngineStoreServerWrap * server, BaseBuffView buff)
     metapb::Store store{};
     CHECK_PARSE_PB_BUFF(store, buff.data, buff.len);
     assert(server);
-    assert(server->tmt);
+    RUNTIME_CHECK(server->tmt != nullptr);
     assert(store.id() != 0);
     server->tmt->getKVStore()->setStore(std::move(store));
 }
@@ -978,6 +997,7 @@ void HandleSafeTSUpdate(
 {
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         RegionTable & region_table = server->tmt->getRegionTable();
         region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
     }
@@ -1004,6 +1024,7 @@ BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_
     auto tikv_key = TiKVKey(key.data, key.len);
     try
     {
+        RUNTIME_CHECK(server->tmt != nullptr);
         auto & kvstore = server->tmt->getKVStore();
         auto region = kvstore->getRegion(region_id);
         auto value = region->getLockByKey(tikv_key);
