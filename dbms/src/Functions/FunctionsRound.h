@@ -1126,7 +1126,7 @@ struct TiDBIntegerRound
         else
         {
             // To make sure static_cast<OutputType>(Pow::result[-frac]) will not overflow.
-            assert(Pow::result[max_digits] < std::numeric_limits<OutputType>::max());
+            assert(Pow::result[-frac] < std::numeric_limits<OutputType>::max());
             const auto base = static_cast<OutputType>(Pow::result[-frac]);
 
             const auto remainder = value % base;
@@ -1267,7 +1267,8 @@ struct TiDBRoundPrecisionInferer
         {
             // new_prec can be zero when the prec is eq to scale and frac is zero, for example:
             // select truncate(0.22, 0) from t_col_decimal_2_2;
-            // TiDB will do fold constant, so this branch should reach here, but we still handle it.
+            // TiDB will do fold constant, so this branch should reach,
+            // but we still handle it so unit test can pass(TestFunctionsTruncateWithFracDecimal.Basic).
             RUNTIME_CHECK(is_tidb_truncate && frac == 0 && prec == scale);
             new_prec = 1;
         }
