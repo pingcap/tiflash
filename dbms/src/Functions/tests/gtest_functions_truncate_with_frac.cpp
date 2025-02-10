@@ -332,6 +332,10 @@ try
         this->execute(
             createConstColumn<Decimal>(std::make_tuple(max_prec - 5, 0), 100, "1"),
             createConstColumn<Int64>(100, 5)));
+
+    ASSERT_COLUMN_EQ(
+        createColumn<Nullable<Decimal32>>(std::make_tuple(1, 0), {"0"}),
+        this->execute(column({3, 3}, {"0.025"}), createConstColumn<Int64>(1, 0)));
 }
 CATCH
 } // namespace tests
