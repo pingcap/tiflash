@@ -38,6 +38,7 @@ void registerFunctionsRound(FunctionFactory & factory)
     factory.registerFunction<FunctionTrunc>("truncate", FunctionFactory::CaseInsensitive);
 
     factory.registerFunction<FunctionTiDBRoundWithFrac>();
+    factory.registerFunction<FunctionTiDBTruncateWithFrac>();
 }
 
 } // namespace DB
