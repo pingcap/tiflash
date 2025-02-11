@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Core/DecimalComparison.h>
 #include <DataStreams/WindowTransformAction.h>
 
@@ -266,24 +267,31 @@ void WindowTransformAction::initialPartitionAndOrderColumnIndices()
 
 void WindowTransformAction::initialWorkspaces()
 {
-    // Initialize window function workspaces.
-    workspaces.reserve(window_description.window_functions_descriptions.size());
+    auto workspace_num = window_description.window_functions_descriptions.size();
+    window_workspaces.reserve(workspace_num);
+    aggregation_workspaces.reserve(workspace_num);
 
-    for (const auto & window_function_description : window_description.window_functions_descriptions)
+    for (size_t i = 0; i < workspace_num; i++)
     {
+        const auto & desc = window_description.window_functions_descriptions[i];
         WindowFunctionWorkspace workspace;
-        workspace.window_function = window_function_description.window_function;
-        workspace.arguments = window_function_description.arguments;
+        workspace.idx = i;
+        workspace.window_function = desc.window_function;
+        workspace.arguments = desc.arguments;
         workspace.argument_columns.assign(workspace.arguments.size(), nullptr);
-        initialAggregateFunction(workspace, window_function_description);
-        workspaces.push_back(std::move(workspace));
+        if (workspace.window_function == nullptr)
+        {
+            initialAggregateFunction(workspace, desc);
+            aggregation_workspaces.push_back(std::move(workspace));
+        }
+        else
+            window_workspaces.push_back(std::move(workspace));
     }
 
     has_rank_or_dense_rank = false;
-    for (const auto & workspace : workspaces)
+    for (const auto & workspace : window_workspaces)
     {
-        if (workspace.window_function != nullptr
-            && (workspace.window_function->getName() != "rank" || workspace.window_function->getName() != "dense_rank"))
+        if (workspace.window_function->getName() == "rank" || workspace.window_function->getName() == "dense_rank")
         {
             has_rank_or_dense_rank = true;
             break;
@@ -295,9 +303,6 @@ void WindowTransformAction::initialAggregateFunction(
     WindowFunctionWorkspace & workspace,
     const WindowFunctionDescription & window_function_description)
 {
-    if (window_function_description.aggregate_function == nullptr)
-        return;
-
     has_agg = true;
 
     workspace.aggregate_function = window_function_description.aggregate_function;
@@ -1200,20 +1205,19 @@ void WindowTransformAction::writeOutCurrentRow()
     assert(current_row < partition_end);
     assert(current_row.block >= first_block_number);
 
-    for (size_t wi = 0; wi < workspaces.size(); ++wi)
+    for (auto & ws : window_workspaces)
     {
-        auto & ws = workspaces[wi];
         if (ws.window_function)
-            ws.window_function->windowInsertResultInto(*this, wi, ws.arguments);
-        else
-        {
-            const auto & block = blockAt(current_row);
-            IColumn * result_column = block.output_columns[wi].get();
-            const auto * agg_func = ws.aggregate_function.get();
-            auto * buf = ws.aggregate_function_state.data();
+            ws.window_function->windowInsertResultInto(*this, ws.idx, ws.arguments);
+    }
 
-            agg_func->insertResultInto(buf, *result_column, arena.get());
-        }
+    for (auto & ws : aggregation_workspaces)
+    {
+        const auto & block = blockAt(current_row);
+        IColumn * result_column = block.output_columns[ws.idx].get();
+        const auto * agg_func = ws.aggregate_function.get();
+        auto * buf = ws.aggregate_function_state.data();
+        agg_func->insertResultInto(buf, *result_column, arena.get());
     }
 }
 
@@ -1287,14 +1291,29 @@ void WindowTransformAction::appendBlock(Block & current_block)
     auto & window_block = window_blocks.back();
     window_block.rows = current_block.rows();
 
+    size_t workspace_num = window_workspaces.size() + aggregation_workspaces.size();
+    auto window_iter = window_workspaces.begin();
+    auto window_end = window_workspaces.end();
+    auto agg_iter = aggregation_workspaces.begin();
+    auto agg_end = aggregation_workspaces.end();
+
     // Initialize output columns and add new columns to output block.
-    for (auto & ws : workspaces)
+    for (size_t i = 0; i < workspace_num; i++)
     {
         MutableColumnPtr res;
-        if (ws.window_function != nullptr)
-            res = ws.window_function->getReturnType()->createColumn();
+        if (window_iter != window_end && window_iter->idx == i)
+        {
+            res = window_iter->window_function->getReturnType()->createColumn();
+            window_iter++;
+        }
+        else if (agg_iter != agg_end && agg_iter->idx == i)
+        {
+            res = agg_iter->aggregate_function->getReturnType()->createColumn();
+            agg_iter++;
+        }
         else
-            res = ws.aggregate_function->getReturnType()->createColumn();
+            throw Exception("Encounter unexpected case");
+
         res->reserve(window_block.rows);
         window_block.output_columns.push_back(std::move(res));
     }
@@ -1332,11 +1351,19 @@ void WindowTransformAction::updateAggregationState()
     assert(partition_start <= frame_start);
     assert(frame_end <= partition_end);
 
-    for (auto & ws : workspaces)
-    {
-        if (ws.window_function)
-            continue;
+    bool only_add = false;
 
+    if (!first_processed)
+    {
+        if ((prev_frame_start == frame_start) && (prev_frame_end == frame_end))
+            return;
+
+        if (prev_frame_start == frame_start)
+            only_add = true;
+    }
+
+    for (auto & ws : aggregation_workspaces)
+    {
         RowNumber start = frame_start;
         if constexpr (need_decrease)
         {
@@ -1352,8 +1379,10 @@ void WindowTransformAction::updateAggregationState()
         }
         else
         {
-            // TODO do not reset when prev_frame_start == frame_start
-            ws.aggregate_function->reset(ws.aggregate_function_state.data());
+            if (only_add)
+                start = prev_frame_end;
+            else
+                ws.aggregate_function->reset(ws.aggregate_function_state.data());
         }
 
         addAggregationState(ws, start, frame_end);
@@ -1380,7 +1409,6 @@ void WindowTransformAction::tryCalculate()
         {
             assert(input_is_finished);
         }
-
 
         while (current_row < partition_end)
         {

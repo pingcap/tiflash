@@ -241,7 +241,8 @@ public:
     std::vector<size_t> order_column_indices;
 
     // Per-window-function scratch spaces.
-    std::vector<WindowFunctionWorkspace> workspaces;
+    std::vector<WindowFunctionWorkspace> window_workspaces;
+    std::vector<WindowFunctionWorkspace> aggregation_workspaces;
 
     bool has_agg = false;
 

@@ -66,5 +66,7 @@ struct WindowFunctionWorkspace
     UInt64 cached_block_number = std::numeric_limits<UInt64>::max();
 
     ColumnNumbers arguments;
+
+    UInt64 idx;
 };
 } // namespace DB
