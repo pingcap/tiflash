@@ -108,6 +108,7 @@ protected:
     {
         const auto & type = unit.type;
         auto [begin, end, including_right_boundary] = unit.range;
+        fmt::println("begin={}, end={}, including_right_boundary={}", begin, end, including_right_boundary);
         const auto write_count = end - begin + including_right_boundary;
         if (type == "d_mem")
         {
@@ -811,30 +812,53 @@ try
 CATCH
 
 TEST_P(SegmentBitmapFilterTest, Inf)
+try
 {
-    writeSegmentGeneric("d_mem:[0, 50000)");
-    mergeSegmentDelta(SEG_ID, true);
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-    ASSERT_EQ(seg->getDelta()->getRows(), 0);
-    ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
-    ASSERT_EQ(seg->getStable()->getRows(), 50000);
+    if (is_common_handle)
+        return;
 
-    auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(10000, 50000, is_common_handle)}; // [10000, 50000)
-    auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+    writeSegmentGeneric(
+        "d_mem:[-9223372036854775808, -9223372036854775800)|d_mem:[9223372036854775800, 9223372036854775807]");
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(seg->getDelta()->getRows(), 16);
+    ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
+    ASSERT_EQ(seg->getStable()->getRows(), 0);
+
+    auto handle = getSegmentHandle(SEG_ID, {});
+    fmt::println("{}", ColumnView<Int64>{*handle});
+
+    const RowKeyRanges ranges = {RowKeyRange{
+        RowKeyValue::fromHandle(std::numeric_limits<Int64>::min()),
+        RowKeyValue::fromHandle(std::numeric_limits<Int64>::max()),
+        is_common_handle,
+        1}};
+    ASSERT_TRUE(ranges[0].isStartInfinite());
+    ASSERT_FALSE(ranges[0].isEndInfinite());
+
+    //RowKeyRanges ranges = {RowKeyRange::newAll(is_common_handle, 1)};
+    auto bitmap_filter_version_chain = seg->buildBitmapFilter(
         *dm_context,
         snap,
         ranges,
         loadPackFilterResults(snap, ranges),
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
-    ASSERT_NE(bitmap_filter, nullptr);
-    std::string expect_result;
-    // [0, 10000) is filtered by range.
-    expect_result.append(std::string(10000, '0'));
-    expect_result.append(std::string(40000, '1'));
-    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+        max_read_ts,
+        DEFAULT_BLOCK_SIZE,
+        use_version_chain);
 
-    verifyVersionChain(SEG_ID, __LINE__, {});
+    auto bitmap_filter_delta_index = seg->buildBitmapFilter(
+        *dm_context,
+        snap,
+        ranges,
+        loadPackFilterResults(snap, {ranges}),
+        max_read_ts,
+        DEFAULT_BLOCK_SIZE,
+        !use_version_chain);
+
+    fmt::println("{}", bitmap_filter_version_chain->toDebugString());
+    fmt::println("{}", bitmap_filter_delta_index->toDebugString());
+
+    ASSERT_EQ(bitmap_filter_version_chain->toDebugString(), bitmap_filter_delta_index->toDebugString());
 }
+CATCH
 
 } // namespace DB::DM::tests

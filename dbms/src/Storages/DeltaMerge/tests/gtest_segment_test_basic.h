@@ -108,7 +108,11 @@ public:
      */
     bool ensureSegmentStableLocalIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos);
 
-    Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
+    Block prepareWriteBlock(
+        Int64 start_key,
+        Int64 end_key,
+        bool is_deleted = false,
+        bool including_right_boundary = false);
     Block prepareWriteBlockInSegmentRange(
         PageIdU64 segment_id,
         UInt64 total_write_rows,
@@ -156,7 +160,7 @@ protected:
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
-    virtual Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted);
+    virtual Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted, bool including_right_boundary);
 
     virtual void prepareColumns(const ColumnDefinesPtr &) {}
 

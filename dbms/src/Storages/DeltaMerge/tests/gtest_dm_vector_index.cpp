@@ -1228,9 +1228,9 @@ public:
     ColumnDefine cdPK() { return getExtraHandleColumnDefine(options.is_common_handle); }
 
 protected:
-    Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted) override
+    Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted, bool including_right_boundary) override
     {
-        auto block = SegmentTestBasic::prepareWriteBlockImpl(start_key, end_key, is_deleted);
+        auto block = SegmentTestBasic::prepareWriteBlockImpl(start_key, end_key, is_deleted, including_right_boundary);
         block.insert(colVecFloat32(fmt::format("[{}, {})", start_key, end_key), vec_column_name, vec_column_id));
         return block;
     }
@@ -1644,9 +1644,13 @@ protected:
         return ColumnDefine(extra_column_id, extra_column_name, tests::typeFromString("Int64"));
     }
 
-    Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted) override
+    Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted, bool including_right_boundary) override
     {
-        auto block = VectorIndexSegmentTestBase::prepareWriteBlockImpl(start_key, end_key, is_deleted);
+        auto block = VectorIndexSegmentTestBase::prepareWriteBlockImpl(
+            start_key,
+            end_key,
+            is_deleted,
+            including_right_boundary);
         block.insert(
             colInt64(fmt::format("[{}, {})", start_key + 1000, end_key + 1000), extra_column_name, extra_column_id));
         return block;

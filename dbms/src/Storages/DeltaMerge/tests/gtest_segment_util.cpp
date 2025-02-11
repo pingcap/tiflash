@@ -27,9 +27,9 @@ std::tuple<T, T, bool> parseRange(String & str_range)
     boost::algorithm::trim(str_range);
     RUNTIME_CHECK(str_range.front() == '[' && (str_range.back() == ')' || str_range.back() == ']'), str_range);
     std::vector<String> values;
-    str_range = str_range.substr(1, str_range.size() - 2);
-    boost::split(values, str_range, boost::is_any_of(","));
-    RUNTIME_CHECK(values.size() == 2, str_range);
+    const auto left_right = str_range.substr(1, str_range.size() - 2);
+    boost::split(values, left_right, boost::is_any_of(","));
+    RUNTIME_CHECK(values.size() == 2, left_right);
     return {static_cast<T>(std::stol(values[0])), static_cast<T>(std::stol(values[1])), str_range.back() == ']'};
 }
 

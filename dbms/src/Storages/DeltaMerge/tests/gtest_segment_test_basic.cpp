@@ -361,10 +361,14 @@ std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageIdU64 segment_i
     return {start_key, end_key};
 }
 
-Block SegmentTestBasic::prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted)
+Block SegmentTestBasic::prepareWriteBlockImpl(
+    Int64 start_key,
+    Int64 end_key,
+    bool is_deleted,
+    bool including_right_boundary)
 {
-    RUNTIME_CHECK(start_key <= end_key);
-    if (end_key == start_key)
+    RUNTIME_CHECK(start_key <= end_key, start_key, end_key);
+    if (end_key == start_key && !including_right_boundary)
         return Block{};
     version++;
     return DMTestEnv::prepareSimpleWriteBlock(
@@ -378,12 +382,18 @@ Block SegmentTestBasic::prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bo
         options.is_common_handle,
         1,
         true,
-        is_deleted);
+        is_deleted,
+        /*with_null_uint64*/ false,
+        including_right_boundary);
 }
 
-Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted)
+Block SegmentTestBasic::prepareWriteBlock(
+    Int64 start_key,
+    Int64 end_key,
+    bool is_deleted,
+    bool including_right_boundary)
 {
-    return prepareWriteBlockImpl(start_key, end_key, is_deleted);
+    return prepareWriteBlockImpl(start_key, end_key, is_deleted, including_right_boundary);
 }
 
 Block sortvstackBlocks(std::vector<Block> && blocks)
@@ -404,24 +414,39 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
     std::optional<Int64> write_start_key,
     bool is_deleted)
 {
-    RUNTIME_CHECK(total_write_rows < std::numeric_limits<Int64>::max());
+    RUNTIME_CHECK(0 < total_write_rows && total_write_rows < std::numeric_limits<Int64>::max());
 
-    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
-    auto [segment_start_key, segment_end_key] = getSegmentKeyRange(segment_id);
-    auto segment_max_rows = static_cast<UInt64>(segment_end_key - segment_start_key);
-
-    if (segment_max_rows == 0)
-        return {};
-
+    bool including_right_boundary = false;
     if (write_start_key.has_value())
     {
-        // When write start key is specified, the caller must know exactly the segment range.
-        RUNTIME_CHECK(*write_start_key >= segment_start_key);
-        RUNTIME_CHECK(static_cast<UInt64>(segment_end_key - *write_start_key) > 0);
+        including_right_boundary
+            = *write_start_key + static_cast<Int64>(total_write_rows - 1) == std::numeric_limits<Int64>::max();
+        RUNTIME_CHECK(
+            std::numeric_limits<Int64>::max() - static_cast<Int64>(total_write_rows) + including_right_boundary
+                >= *write_start_key,
+            std::numeric_limits<Int64>::max() - static_cast<Int64>(total_write_rows),
+            including_right_boundary,
+            *write_start_key);
     }
+
+    auto seg = segments.find(segment_id);
+    RUNTIME_CHECK(seg != segments.end());
+    auto segment_range = seg->second->getRowKeyRange();
+    auto [segment_start_key, segment_end_key] = getSegmentKeyRange(segment_id);
+    if (write_start_key.has_value())
+        RUNTIME_CHECK_MSG(
+            segment_start_key <= *write_start_key
+                && (*write_start_key < segment_end_key || segment_range.isEndInfinite()),
+            "write_start_key={} segment_range={}",
+            *write_start_key,
+            segment_range.toDebugString());
 
     if (!write_start_key.has_value())
     {
+        auto segment_max_rows = static_cast<UInt64>(segment_end_key - segment_start_key);
+        if (segment_max_rows == 0)
+            return {};
+
         // When write start key is unspecified, we will:
         // A. If the segment is large enough, we randomly pick a write start key in the range.
         // B. If the segment is small, we write from the beginning.
@@ -455,9 +480,15 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
         Int64 write_end_key_this_round = *write_start_key + static_cast<Int64>(write_rows_this_round);
         RUNTIME_CHECK(write_end_key_this_round <= segment_end_key);
 
-        Block block = prepareWriteBlock(*write_start_key, write_end_key_this_round, is_deleted);
+        fmt::println(
+            "*write_start_key={}, write_end_key_this_round={}, including_right_boundary={}",
+            *write_start_key,
+            write_end_key_this_round,
+            including_right_boundary);
+        Block block
+            = prepareWriteBlock(*write_start_key, write_end_key_this_round, is_deleted, including_right_boundary);
         blocks.emplace_back(block);
-        remaining_rows -= write_rows_this_round;
+        remaining_rows -= write_rows_this_round + including_right_boundary;
 
         LOG_DEBUG(
             logger,
