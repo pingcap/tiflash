@@ -974,7 +974,7 @@ struct TiDBFloatingRound
 
     static OutputType eval(InputType input, FracType frac)
     {
-        // modified from https://github.com/pingcap/tidb/blob/26237b35f857c2388eab46f9ee3b351687143681/types/helper.go#L33-L48 and
+        // ported from https://github.com/pingcap/tidb/blob/26237b35f857c2388eab46f9ee3b351687143681/types/helper.go#L33-L48 and
         // https://github.com/pingcap/tidb/blob/26237b35f857c2388eab46f9ee3b351687143681/types/helper.go#L50-L61.
         auto value = static_cast<OutputType>(input);
         auto base = 1.0;
@@ -1117,7 +1117,7 @@ struct TiDBIntegerRound
 
     static OutputType evalTruncate(InputType input, FracType frac)
     {
-        // modified from https://github.com/pingcap/tidb/blob/807b8923c0181d89d4ea8e4195f9d27d299298a7/pkg/expression/builtin_math.go#L2196-L2219
+        // ported from https://github.com/pingcap/tidb/blob/807b8923c0181d89d4ea8e4195f9d27d299298a7/pkg/expression/builtin_math.go#L2196-L2219
         const auto value = static_cast<OutputType>(input);
         if (frac >= 0)
             return value;
