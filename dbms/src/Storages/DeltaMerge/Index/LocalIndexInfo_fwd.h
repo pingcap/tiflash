@@ -25,6 +25,6 @@ using LocalIndexInfos = std::vector<LocalIndexInfo>;
 using LocalIndexInfosPtr = std::shared_ptr<LocalIndexInfos>;
 using LocalIndexInfosSnapshot = std::shared_ptr<const LocalIndexInfos>;
 
-struct LocalIndexInfosChangeset;
+class LocalIndexInfosChangeset;
 
 } // namespace DB::DM

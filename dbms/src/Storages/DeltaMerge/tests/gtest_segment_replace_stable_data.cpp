@@ -451,7 +451,7 @@ public:
         }
 
         auto & global_context = TiFlashTestEnv::getGlobalContext();
-        // global_context.dropVectorIndexCache();
+        // global_context.dropLocalIndexCache();
         global_context.getSharedContextDisagg()->remote_data_store = nullptr;
         global_context.setPageStorageRunMode(orig_mode);
 

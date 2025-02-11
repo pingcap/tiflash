@@ -1294,7 +1294,11 @@ CATCH
 TEST(ProxyMode, Normal)
 try
 {
+#if SERVERLESS_PROXY == 0
     ASSERT_EQ(SERVERLESS_PROXY, 0);
+#else
+    ASSERT_EQ(SERVERLESS_PROXY, 1);
+#endif
 }
 CATCH
 

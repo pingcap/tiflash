@@ -53,8 +53,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
@@ -148,7 +148,7 @@ struct ContextShared
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
-    mutable DM::VectorIndexCachePtr vector_index_cache;
+    mutable DM::LocalIndexCachePtr local_index_cache;
     mutable DM::ColumnCacheLongTermPtr column_cache_long_term;
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
@@ -183,6 +183,8 @@ struct ContextShared
 
     JointThreadInfoJeallocMapPtr joint_memory_allocation_map; /// Joint thread-wise alloc/dealloc map
 
+    std::unordered_set<KeyspaceID> keyspace_blocklist;
+    std::unordered_set<RegionID> region_blocklist;
     std::unordered_set<uint64_t> store_id_blocklist; /// Those store id are blocked from batch cop request.
 
     class SessionKeyHash
@@ -1370,26 +1372,26 @@ void Context::dropMinMaxIndexCache() const
         shared->minmax_index_cache->reset();
 }
 
-void Context::setVectorIndexCache(size_t cache_entities)
+void Context::setLocalIndexCache(size_t cache_entities)
 {
     auto lock = getLock();
 
-    RUNTIME_CHECK(!shared->vector_index_cache);
+    RUNTIME_CHECK(!shared->local_index_cache);
 
-    shared->vector_index_cache = std::make_shared<DM::VectorIndexCache>(cache_entities);
+    shared->local_index_cache = std::make_shared<DM::LocalIndexCache>(cache_entities);
 }
 
-DM::VectorIndexCachePtr Context::getVectorIndexCache() const
+DM::LocalIndexCachePtr Context::getLocalIndexCache() const
 {
     auto lock = getLock();
-    return shared->vector_index_cache;
+    return shared->local_index_cache;
 }
 
-void Context::dropVectorIndexCache() const
+void Context::dropLocalIndexCache() const
 {
     auto lock = getLock();
-    if (shared->vector_index_cache)
-        shared->vector_index_cache.reset();
+    if (shared->local_index_cache)
+        shared->local_index_cache.reset();
 }
 
 void Context::setColumnCacheLongTerm(size_t cache_size_in_bytes)
@@ -2173,6 +2175,37 @@ MockMPPServerInfo Context::mockMPPServerInfo() const
 void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
 {
     mpp_server_info = info;
+}
+
+void Context::initKeyspaceBlocklist(const std::unordered_set<KeyspaceID> & keyspace_ids)
+{
+    auto lock = getLock();
+    shared->keyspace_blocklist = keyspace_ids;
+}
+bool Context::isKeyspaceInBlocklist(const KeyspaceID keyspace_id)
+{
+    auto lock = getLock();
+    return shared->keyspace_blocklist.count(keyspace_id) > 0;
+}
+void Context::initRegionBlocklist(const std::unordered_set<RegionID> & region_ids)
+{
+    auto lock = getLock();
+    shared->region_blocklist = region_ids;
+}
+bool Context::isRegionInBlocklist(const RegionID region_id)
+{
+    auto lock = getLock();
+    return shared->region_blocklist.count(region_id) > 0;
+}
+bool Context::isRegionsContainsInBlocklist(const std::vector<RegionID> & regions)
+{
+    auto lock = getLock();
+    for (const auto region : regions)
+    {
+        if (isRegionInBlocklist(region))
+            return true;
+    }
+    return false;
 }
 
 const std::unordered_set<uint64_t> * Context::getStoreIdBlockList() const

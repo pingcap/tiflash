@@ -27,6 +27,7 @@
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -109,7 +110,7 @@ enum class PageStorageRunMode : UInt8;
 namespace DM
 {
 class MinMaxIndexCache;
-class VectorIndexCache;
+class LocalIndexCache;
 class ColumnCacheLongTerm;
 class DeltaIndexManager;
 class GlobalStoragePool;
@@ -399,9 +400,9 @@ public:
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
 
-    void setVectorIndexCache(size_t cache_entities);
-    std::shared_ptr<DM::VectorIndexCache> getVectorIndexCache() const;
-    void dropVectorIndexCache() const;
+    void setLocalIndexCache(size_t cache_entities);
+    std::shared_ptr<DM::LocalIndexCache> getLocalIndexCache() const;
+    void dropLocalIndexCache() const;
 
     void setColumnCacheLongTerm(size_t cache_size_in_bytes);
     std::shared_ptr<DM::ColumnCacheLongTerm> getColumnCacheLongTerm() const;
@@ -550,6 +551,12 @@ public:
     void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
 
     void mockConfigLoaded() { is_config_loaded = true; }
+
+    void initKeyspaceBlocklist(const std::unordered_set<KeyspaceID> & keyspace_ids);
+    bool isKeyspaceInBlocklist(KeyspaceID keyspace_id);
+    void initRegionBlocklist(const std::unordered_set<RegionID> & region_ids);
+    bool isRegionInBlocklist(RegionID region_id);
+    bool isRegionsContainsInBlocklist(const std::vector<RegionID> & regions);
 
     bool initializeStoreIdBlockList(const String &);
     const std::unordered_set<uint64_t> * getStoreIdBlockList() const;

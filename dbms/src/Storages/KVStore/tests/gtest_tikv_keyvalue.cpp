@@ -17,6 +17,7 @@
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
@@ -29,7 +30,9 @@ inline bool checkTableInvolveRange(const TableID table_id, const RangeRef & rang
 {
     const TiKVKey start_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::min());
     const TiKVKey end_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::max());
-    return !(end_key < range.first || (!range.second.empty() && start_key >= range.second));
+    // clang-format off
+    return !(end_key < range.first|| (!range.second.empty() && start_key >= range.second)); // NOLINT(readability-simplify-boolean-expr)
+    // clang-format on
 }
 
 inline TiKVKey genIndex(const TableID tableId, const Int64 id)
@@ -42,6 +45,42 @@ inline TiKVKey genIndex(const TableID tableId, const Int64 id)
     auto big_endian_handle_id = RecordKVFormat::encodeInt64(id);
     memcpy(key.data() + 1 + 8 + 2, reinterpret_cast<const char *>(&big_endian_handle_id), 8);
     return RecordKVFormat::encodeAsTiKVKey(key);
+}
+
+TEST(TiKVKeyValueTest, KeyFormat)
+{
+    Timestamp prewrite_ts = 5;
+    {
+        std::string short_value(128, 'F');
+        auto v = RecordKVFormat::encodeWriteCfValue(
+            RecordKVFormat::CFModifyFlag::PutFlag,
+            prewrite_ts,
+            short_value,
+            false);
+        auto decoded = RecordKVFormat::decodeWriteCfValue(v);
+        ASSERT_TRUE(decoded.has_value());
+        ASSERT_EQ(decoded->write_type, RecordKVFormat::CFModifyFlag::PutFlag);
+        ASSERT_EQ(decoded->prewrite_ts, prewrite_ts);
+        ASSERT_NE(decoded->short_value, nullptr);
+        ASSERT_EQ(*decoded->short_value, short_value);
+    }
+#if SERVERLESS_PROXY != 0
+    {
+        // For serverless branch, the short_value length use varUInt
+        std::string short_value(1025, 'F');
+        auto v = RecordKVFormat::encodeWriteCfValue(
+            RecordKVFormat::CFModifyFlag::PutFlag,
+            prewrite_ts,
+            short_value,
+            false);
+        auto decoded = RecordKVFormat::decodeWriteCfValue(v);
+        ASSERT_TRUE(decoded.has_value());
+        ASSERT_EQ(decoded->write_type, RecordKVFormat::CFModifyFlag::PutFlag);
+        ASSERT_EQ(decoded->prewrite_ts, prewrite_ts);
+        ASSERT_NE(decoded->short_value, nullptr);
+        ASSERT_EQ(*decoded->short_value, short_value);
+    }
+#endif
 }
 
 TEST(TiKVKeyValueTest, PortedTests)

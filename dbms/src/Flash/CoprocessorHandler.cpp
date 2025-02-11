@@ -130,6 +130,18 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             TablesRegionsInfo tables_regions_info(true);
             auto & table_regions_info = tables_regions_info.getSingleTableRegions();
 
+#if SERVERLESS_PROXY != 0
+            if (cop_context.db_context.isKeyspaceInBlocklist(cop_request->context().keyspace_id())
+                || cop_context.db_context.isRegionInBlocklist(cop_context.kv_context.region_id()))
+            {
+                LOG_DEBUG(
+                    log,
+                    "cop request disabled for keyspace or regions, keyspace={}",
+                    cop_request->context().keyspace_id());
+                return recordError(grpc::StatusCode::INTERNAL, "cop request disabled");
+            }
+#endif
+
             const std::unordered_set<UInt64> bypass_lock_ts(
                 cop_context.kv_context.resolved_locks().begin(),
                 cop_context.kv_context.resolved_locks().end());
@@ -200,7 +212,12 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
     }
     catch (LockException & e)
     {
-        LOG_WARNING(log, "LockException: region_id={}, message: {}", cop_request->context().region_id(), e.message());
+        LOG_WARNING(
+            log,
+            "LockException: region_id={}, message: {}, is_txn_file={}",
+            cop_request->context().region_id(),
+            e.message(),
+            e.locks[0].second->is_txn_file());
         GET_METRIC(tiflash_coprocessor_request_error, reason_meet_lock).Increment();
         if constexpr (is_stream)
         {

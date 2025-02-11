@@ -21,8 +21,8 @@
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileLocalIndexWriter.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
@@ -1735,7 +1735,7 @@ public:
         global_context.tryReleaseWriteNodePageStorageForTest();
         global_context.initializeWriteNodePageStorageIfNeed(global_context.getPathPool());
 
-        global_context.setVectorIndexCache(1000);
+        global_context.setLocalIndexCache(1000);
 
         auto kvstore = db_context->getTMTContext().getKVStore();
         {
@@ -1784,7 +1784,7 @@ public:
         FileCache::shutdown();
 
         auto & global_context = TiFlashTestEnv::getGlobalContext();
-        global_context.dropVectorIndexCache();
+        global_context.dropLocalIndexCache();
         global_context.getSharedContextDisagg()->remote_data_store = nullptr;
         global_context.setPageStorageRunMode(orig_mode);
 
@@ -2308,9 +2308,9 @@ try
     }
     {
         // We should be able to clear something from the vector index cache.
-        auto vec_cache = TiFlashTestEnv::getGlobalContext().getVectorIndexCache();
-        ASSERT_NE(vec_cache, nullptr);
-        ASSERT_EQ(1, cleanVectorCacheEntries(vec_cache));
+        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getLocalIndexCache();
+        ASSERT_NE(local_index_cache, nullptr);
+        ASSERT_EQ(1, cleanLocalIndexCacheEntries(local_index_cache));
     }
     {
         // When cache is evicted (and memory cache is dropped), the query should be fine.
@@ -2448,9 +2448,9 @@ try
     }
     {
         // We should be able to clear something from the vector index cache.
-        auto vec_cache = TiFlashTestEnv::getGlobalContext().getVectorIndexCache();
-        ASSERT_NE(vec_cache, nullptr);
-        ASSERT_EQ(1, cleanVectorCacheEntries(vec_cache));
+        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getLocalIndexCache();
+        ASSERT_NE(local_index_cache, nullptr);
+        ASSERT_EQ(1, cleanLocalIndexCacheEntries(local_index_cache));
     }
     {
         // Query should be fine.

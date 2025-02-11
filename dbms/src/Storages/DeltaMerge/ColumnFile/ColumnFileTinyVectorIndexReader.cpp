@@ -18,7 +18,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyVectorIndexReader.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
 
 namespace DB::DM
@@ -84,10 +84,11 @@ void ColumnFileTinyVectorIndexReader::loadVectorIndex()
         CompressedReadBuffer compressed(read_buf);
         return VectorIndexViewer::load(index_info_iter->index_props().vector_index(), compressed);
     };
-    if (vec_index_cache)
+    if (local_index_cache)
     {
-        const auto key = fmt::format("{}{}", VectorIndexCache::COLUMNFILETINY_INDEX_NAME_PREFIX, index_page_id);
-        vec_index = vec_index_cache->getOrSet(key, load_from_page_storage);
+        const auto key = fmt::format("{}{}", LocalIndexCache::COLUMNFILETINY_INDEX_NAME_PREFIX, index_page_id);
+        auto local_index = local_index_cache->getOrSet(key, load_from_page_storage);
+        vec_index = std::dynamic_pointer_cast<VectorIndexViewer>(local_index);
     }
     else
         vec_index = load_from_page_storage();
