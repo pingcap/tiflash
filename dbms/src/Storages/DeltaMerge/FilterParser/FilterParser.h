@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Interpreters/TimezoneInfo.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
@@ -21,7 +22,6 @@
 #include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 
-#include <functional>
 #include <unordered_map>
 
 
@@ -36,11 +36,11 @@ class FilterParser
 {
 public:
     /// From dag.
-    using AttrCreatorByColumnID = std::function<Attr(const DB::ColumnID)>;
+    using ColumnIDToAttrMap = std::unordered_map<ColumnID, Attr>;
     static RSOperatorPtr parseDAGQuery(
         const DAGQueryInfo & dag_info,
         const TiDB::ColumnInfos & scan_column_infos,
-        AttrCreatorByColumnID && creator,
+        const ColumnIDToAttrMap & id_to_attr,
         const LoggerPtr & log);
 
     // only for runtime filter in predicate

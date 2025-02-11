@@ -112,19 +112,13 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
         0,
         timezone_info);
 
-    auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
-        auto iter = std::find_if(
-            columns_to_read.begin(),
-            columns_to_read.end(),
-            [column_id](const DM::ColumnDefine & d) -> bool { return d.id == column_id; });
-        if (iter != columns_to_read.end())
-            return DM::Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-        // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
-        return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
-    };
+    DM::FilterParser::ColumnIDToAttrMap column_id_to_attr;
+    for (const auto & cd : columns_to_read)
+    {
+        column_id_to_attr[cd.id] = DM::Attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
+    }
 
-    auto rs_operator
-        = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
+    auto rs_operator = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, column_id_to_attr, log);
     auto push_down_executor = DM::PushDownExecutor::build(
         rs_operator,
         std::make_shared<tipb::ANNQueryInfo>(dag_query->ann_query_info),
