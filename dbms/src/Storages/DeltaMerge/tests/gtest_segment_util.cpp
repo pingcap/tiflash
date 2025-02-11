@@ -19,27 +19,26 @@
 namespace DB::DM::tests
 {
 
-// "[a, b)" => std::pair{a, b}
 template <typename T>
-std::pair<T, T> parseRange(String & str_range)
+std::tuple<T, T, bool> parseRange(String & str_range)
 {
     boost::algorithm::trim(str_range);
-    RUNTIME_CHECK(str_range.front() == '[' && str_range.back() == ')', str_range);
+    RUNTIME_CHECK(str_range.front() == '[' && (str_range.back() == ')' || str_range.back() == ']'), str_range);
     std::vector<String> values;
     str_range = str_range.substr(1, str_range.size() - 2);
     boost::split(values, str_range, boost::is_any_of(","));
     RUNTIME_CHECK(values.size() == 2, str_range);
-    return {static_cast<T>(std::stol(values[0])), static_cast<T>(std::stol(values[1]))};
+    return {static_cast<T>(std::stol(values[0])), static_cast<T>(std::stol(values[1])), str_range.back() == ']'};
 }
 
 // "[a, b)|[c, d)" => [std::pair{a, b}, std::pair{c, d}]
 template <typename T>
-std::vector<std::pair<T, T>> parseRanges(std::string_view str_ranges)
+std::vector<std::tuple<T, T, bool>> parseRanges(std::string_view str_ranges)
 {
     std::vector<String> ranges;
     boost::split(ranges, str_ranges, boost::is_any_of("|"));
     RUNTIME_CHECK(!ranges.empty(), str_ranges);
-    std::vector<std::pair<T, T>> vector_ranges;
+    std::vector<std::tuple<T, T, bool>> vector_ranges;
     vector_ranges.reserve(ranges.size());
     for (auto & r : ranges)
     {
@@ -89,8 +88,8 @@ void check(const std::vector<SegDataUnit> & seg_data_units)
         {
             mem_units.emplace_back(i);
         }
-        auto [begin, end] = seg_data_units[i].range;
-        RUNTIME_CHECK(begin < end, begin, end);
+        auto [begin, end, including_right_boundary] = seg_data_units[i].range;
+        RUNTIME_CHECK(end - begin + including_right_boundary > 0, begin, end, including_right_boundary);
     }
     RUNTIME_CHECK(stable_units.empty() || (stable_units.size() == 1 && stable_units[0] == 0));
     std::vector<size_t> expected_mem_units(mem_units.size());
@@ -114,21 +113,21 @@ std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
 }
 
 template <typename T>
-std::vector<T> genSequence(T begin, T end)
+std::vector<T> genSequence(T begin, T end, bool including_right_boundary)
 {
-    auto size = end - begin;
+    auto size = end - begin + including_right_boundary;
     std::vector<T> v(size);
     std::iota(v.begin(), v.end(), begin);
     return v;
 }
 
 template <typename T>
-std::vector<T> genSequence(const std::vector<std::pair<T, T>> & ranges)
+std::vector<T> genSequence(const std::vector<std::tuple<T, T, bool>> & ranges)
 {
     std::vector<T> res;
-    for (auto [begin, end] : ranges)
+    for (auto [begin, end, including_right_boundary] : ranges)
     {
-        auto v = genSequence(begin, end);
+        auto v = genSequence(begin, end, including_right_boundary);
         res.insert(res.end(), v.begin(), v.end());
     }
     return res;

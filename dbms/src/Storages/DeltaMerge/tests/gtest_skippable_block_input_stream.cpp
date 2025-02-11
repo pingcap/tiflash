@@ -269,29 +269,29 @@ protected:
     void writeSegment(const SegDataUnit & unit)
     {
         const auto & type = unit.type;
-        auto [begin, end] = unit.range;
-
+        const auto [begin, end, including_right_boundary] = unit.range;
+        const auto write_count = end - begin + including_right_boundary;
         if (type == "d_mem")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, end - begin, begin);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin);
         }
         else if (type == "d_mem_del")
         {
-            SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, end - begin, begin);
+            SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, write_count, begin);
         }
         else if (type == "d_tiny")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, end - begin, begin);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin);
             SegmentTestBasic::flushSegmentCache(SEG_ID);
         }
         else if (type == "d_tiny_del")
         {
-            SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, end - begin, begin);
+            SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, write_count, begin);
             SegmentTestBasic::flushSegmentCache(SEG_ID);
         }
         else if (type == "d_big")
         {
-            SegmentTestBasic::ingestDTFileIntoDelta(SEG_ID, end - begin, begin, false);
+            SegmentTestBasic::ingestDTFileIntoDelta(SEG_ID, write_count, begin, false);
         }
         else if (type == "d_dr")
         {
@@ -299,7 +299,7 @@ protected:
         }
         else if (type == "s")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, end - begin, begin);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin);
             SegmentTestBasic::mergeSegmentDelta(SEG_ID);
         }
         else

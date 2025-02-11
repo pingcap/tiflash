@@ -22,18 +22,19 @@
 namespace DB::DM::tests
 {
 
-// "[a, b)" => std::pair{a, b}
+// "[a, b)" => std::tuple{a, b, false}
+// "[a, b]" => std::tuple{a, b, true}
 template <typename T>
-std::pair<T, T> parseRange(String & str_range);
+std::tuple<T, T, bool> parseRange(String & str_range);
 
-// "[a, b)|[c, d)" => [std::pair{a, b}, std::pair{c, d}]
+// "[a, b)|[c, d]" => [std::tuple{a, b, false}, std::tuple{c, d, true}]
 template <typename T>
-std::vector<std::pair<T, T>> parseRanges(std::string_view str_ranges);
+std::vector<std::tuple<T, T, bool>> parseRanges(std::string_view str_ranges);
 
 struct SegDataUnit
 {
     String type;
-    std::pair<Int64, Int64> range; // Data range
+    std::tuple<Int64, Int64, bool> range; // {left, right, including_right_boundary}
     std::optional<size_t> pack_size; // For DMFile
 };
 
@@ -45,7 +46,7 @@ void check(const std::vector<SegDataUnit> & seg_data_units);
 std::vector<SegDataUnit> parseSegData(std::string_view seg_data);
 
 template <typename T>
-std::vector<T> genSequence(T begin, T end);
+std::vector<T> genSequence(T begin, T end, bool including_right_boundary);
 
 template <typename T>
 std::vector<T> genSequence(const std::vector<std::pair<T, T>> & ranges);

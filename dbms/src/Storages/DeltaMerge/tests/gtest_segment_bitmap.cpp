@@ -107,24 +107,24 @@ protected:
     void writeSegment(const SegDataUnit & unit)
     {
         const auto & type = unit.type;
-        auto [begin, end] = unit.range;
-
+        auto [begin, end, including_right_boundary] = unit.range;
+        const auto write_count = end - begin + including_right_boundary;
         if (type == "d_mem")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, end - begin, begin);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin);
         }
         else if (type == "d_mem_del")
         {
-            SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, end - begin, begin);
+            SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, write_count, begin);
         }
         else if (type == "d_tiny")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, end - begin, begin);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin);
             SegmentTestBasic::flushSegmentCache(SEG_ID);
         }
         else if (type == "d_tiny_del")
         {
-            SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, end - begin, begin);
+            SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, write_count, begin);
             SegmentTestBasic::flushSegmentCache(SEG_ID);
         }
         else if (type == "d_big")
@@ -143,7 +143,7 @@ protected:
         }
         else if (type == "s")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, end - begin, begin);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin);
             if (unit.pack_size)
             {
                 db_context->getSettingsRef().dt_segment_stable_pack_rows = *(unit.pack_size);
@@ -809,5 +809,32 @@ try
         "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
 }
 CATCH
+
+TEST_P(SegmentBitmapFilterTest, Inf)
+{
+    writeSegmentGeneric("d_mem:[0, 50000)");
+    mergeSegmentDelta(SEG_ID, true);
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(seg->getDelta()->getRows(), 0);
+    ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
+    ASSERT_EQ(seg->getStable()->getRows(), 50000);
+
+    auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(10000, 50000, is_common_handle)}; // [10000, 50000)
+    auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+        *dm_context,
+        snap,
+        ranges,
+        loadPackFilterResults(snap, ranges),
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE);
+    ASSERT_NE(bitmap_filter, nullptr);
+    std::string expect_result;
+    // [0, 10000) is filtered by range.
+    expect_result.append(std::string(10000, '0'));
+    expect_result.append(std::string(40000, '1'));
+    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+
+    verifyVersionChain(SEG_ID, __LINE__, {});
+}
 
 } // namespace DB::DM::tests
