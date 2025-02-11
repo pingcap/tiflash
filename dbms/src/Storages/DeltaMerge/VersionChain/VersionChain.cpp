@@ -204,6 +204,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     HandleRefType cf_big_min = cf_big_min_max->first;
     HandleRefType cf_big_max = cf_big_min_max->second;
 
+    // If a ColumnFileBig is apply snapshot or ingest sst, there is no data locally that intersects with it.
     auto is_apply_snapshot = [&]() {
         if (dmfile_or_delete_range_list.empty())
             return false;
@@ -222,10 +223,8 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
 
     auto is_ingest_sst = [&]() {
         for (const auto & file : stable.getDMFiles())
-        {
             if (is_dmfile_intersect(*file))
                 return false;
-        }
 
         for (const auto & cf : preceding_cfs)
         {
