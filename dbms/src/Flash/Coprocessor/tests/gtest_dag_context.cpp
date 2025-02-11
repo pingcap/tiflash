@@ -34,7 +34,7 @@ TEST(DAGContextTest, FlagsTest)
     ASSERT_EQ(context.getFlags(), f1);
 
     context.delFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
-    ASSERT_EQ(context.getFlags(), f);
+    ASSERT_EQ(context.getFlags(), TiDBSQLFlags::IN_LOAD_DATA_STMT);
 }
 
 } // namespace tests
