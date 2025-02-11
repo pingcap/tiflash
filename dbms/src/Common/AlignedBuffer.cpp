@@ -32,6 +32,7 @@ void AlignedBuffer::alloc(size_t size, size_t alignment)
             fmt::format("Cannot allocate memory (posix_memalign), size: {}, alignment: {}.", size, alignment),
             ErrorCodes::CANNOT_ALLOCATE_MEMORY,
             res);
+    assert(buf == nullptr);
     buf = new_buf;
 }
 

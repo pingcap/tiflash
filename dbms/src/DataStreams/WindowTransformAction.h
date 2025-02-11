@@ -93,8 +93,6 @@ public:
 
     void appendBlock(Block & current_block);
 
-    bool onlyHaveRowNumber();
-
     Int64 getPartitionEndRow(size_t block_rows);
 
     void appendInfo(FmtBuffer & buffer) const;
@@ -195,8 +193,8 @@ private:
 
             if (ws.cached_block_number != block_number)
             {
-                for (size_t i = 0; i < ws.argument_column_indices.size(); ++i)
-                    ws.argument_columns[i] = block.input_columns[ws.argument_column_indices[i]].get();
+                for (size_t i = 0; i < ws.arguments.size(); ++i)
+                    ws.argument_columns[i] = block.input_columns[ws.arguments[i]].get();
                 ws.cached_block_number = block_number;
             }
 
@@ -314,7 +312,6 @@ public:
 
     std::unique_ptr<Arena> arena;
 
-    //TODO: used as template parameters
-    bool only_have_row_number = false;
+    bool has_rank_or_dense_rank = false;
 };
 } // namespace DB

@@ -274,12 +274,21 @@ void WindowTransformAction::initialWorkspaces()
         WindowFunctionWorkspace workspace;
         workspace.window_function = window_function_description.window_function;
         workspace.arguments = window_function_description.arguments;
-        workspace.argument_column_indices = window_function_description.arguments;
-        workspace.argument_columns.assign(workspace.argument_column_indices.size(), nullptr);
+        workspace.argument_columns.assign(workspace.arguments.size(), nullptr);
         initialAggregateFunction(workspace, window_function_description);
         workspaces.push_back(std::move(workspace));
     }
-    only_have_row_number = onlyHaveRowNumber();
+
+    has_rank_or_dense_rank = false;
+    for (const auto & workspace : workspaces)
+    {
+        if (workspace.window_function != nullptr
+            && (workspace.window_function->getName() != "rank" || workspace.window_function->getName() != "dense_rank"))
+        {
+            has_rank_or_dense_rank = true;
+            break;
+        }
+    }
 }
 
 void WindowTransformAction::initialAggregateFunction(
@@ -1238,16 +1247,6 @@ Block WindowTransformAction::tryGetOutputBlock()
     return {};
 }
 
-bool WindowTransformAction::onlyHaveRowNumber()
-{
-    for (const auto & workspace : workspaces)
-    {
-        if (workspace.window_function != nullptr && workspace.window_function->getName() != "row_number")
-            return false;
-    }
-    return true;
-}
-
 void WindowTransformAction::releaseAlreadyOutputWindowBlock()
 {
     // We don't really have to keep the entire partition, and it can be big, so
@@ -1353,6 +1352,7 @@ void WindowTransformAction::updateAggregationState()
         }
         else
         {
+            // TODO do not reset when prev_frame_start == frame_start
             ws.aggregate_function->reset(ws.aggregate_function_state.data());
         }
 
@@ -1385,7 +1385,7 @@ void WindowTransformAction::tryCalculate()
         while (current_row < partition_end)
         {
             // if window only have row_number function, we can ignore judging peers
-            if (!only_have_row_number)
+            if (!has_rank_or_dense_rank)
             {
                 // peer_group_last save the row before current_row
                 if (!arePeers(peer_group_last, current_row))

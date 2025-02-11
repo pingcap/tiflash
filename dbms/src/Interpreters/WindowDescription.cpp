@@ -84,7 +84,10 @@ void WindowDescription::fillArgColumnNumbers()
 void WindowDescription::initNeedDecrease(bool has_agg)
 {
     if (!has_agg)
+    {
+        need_decrease = false;
         return;
+    }
 
     need_decrease = true;
 
