@@ -19,6 +19,8 @@
 namespace DB::DM::tests
 {
 
+namespace
+{
 template <typename T>
 std::tuple<T, T, bool> parseRange(String & str_range)
 {
@@ -97,6 +99,16 @@ void check(const std::vector<SegDataUnit> & seg_data_units)
     RUNTIME_CHECK(mem_units == expected_mem_units, expected_mem_units, mem_units);
 }
 
+template <typename T>
+std::vector<T> genSequence(T begin, T end, bool including_right_boundary)
+{
+    auto size = end - begin + including_right_boundary;
+    std::vector<T> v(size);
+    std::iota(v.begin(), v.end(), begin);
+    return v;
+}
+} // namespace
+
 std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
 {
     std::vector<String> str_seg_data_units;
@@ -110,15 +122,6 @@ std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
     }
     check(seg_data_units);
     return seg_data_units;
-}
-
-template <typename T>
-std::vector<T> genSequence(T begin, T end, bool including_right_boundary)
-{
-    auto size = end - begin + including_right_boundary;
-    std::vector<T> v(size);
-    std::iota(v.begin(), v.end(), begin);
-    return v;
 }
 
 template <typename T>
