@@ -1197,8 +1197,7 @@ struct TiDBConvertToDecimal
                     v *= 10;
                     if (v > max_value)
                     {
-                        context.getDAGContext()->handleOverflowError(
-                            "cast string as decimal");
+                        context.getDAGContext()->handleOverflowError("cast string as decimal");
                         return static_cast<UType>(is_negative ? -max_value : max_value);
                     }
                     current_scale++;
