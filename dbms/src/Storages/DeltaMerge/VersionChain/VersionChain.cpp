@@ -73,13 +73,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         && dmfile_or_delete_range_list.size() == 1;
     SCOPE_EXIT({ cleanHandleColumn(); });
 
-    // TODO: make delta_reader optonal.
-    auto delta_reader = DeltaValueReader(
-        dm_context,
-        snapshot.delta,
-        getHandleColumnDefinesPtr<HandleType>(),
-        /*range*/ {},
-        ReadTag::MVCC);
+    auto delta_reader = createDeltaValueReaderIfCommonHandle(dm_context, snapshot.delta);
 
     UInt32 curr_replayed_rows = 0;
     UInt32 curr_replayed_deletes = 0;
@@ -138,7 +132,7 @@ void VersionChain<HandleType>::replayHandles(
     Iter begin,
     Iter end,
     const UInt32 stable_rows,
-    DeltaValueReader & delta_reader)
+    std::optional<DeltaValueReader> & delta_reader)
 {
     for (auto itr = begin; itr != end; ++itr)
     {
@@ -168,7 +162,7 @@ UInt32 VersionChain<HandleType>::replayBlock(
     const UInt32 offset,
     const UInt32 stable_rows,
     const bool calculate_read_packs,
-    DeltaValueReader & delta_reader)
+    std::optional<DeltaValueReader> & delta_reader)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
 
@@ -201,7 +195,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     const UInt32 stable_rows,
     const StableValueSpace::Snapshot & stable,
     const std::span<const ColumnFilePtr> preceding_cfs,
-    DeltaValueReader & delta_reader)
+    std::optional<DeltaValueReader> & delta_reader)
 {
     auto cf_big_min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, *(cf_big.getFile()));
     if (!cf_big_min_max) // DMFile is empty.
@@ -284,7 +278,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
 template <ExtraHandleType HandleType>
 UInt32 VersionChain<HandleType>::replayDeleteRange(
     const ColumnFileDeleteRange & cf_delete_range,
-    DeltaValueReader & delta_reader,
+    std::optional<DeltaValueReader> & delta_reader,
     const UInt32 stable_rows)
 {
     new_handle_to_row_ids.deleteRange(cf_delete_range.getDeleteRange(), delta_reader, stable_rows);
@@ -331,6 +325,22 @@ void VersionChain<HandleType>::cleanHandleColumn()
         if (auto * dmfile_index = std::get_if<DMFileHandleIndex<HandleType>>(&dmfile_or_delete_range); dmfile_index)
             dmfile_index->cleanHandleColumn();
     }
+}
+
+template <ExtraHandleType HandleType>
+std::optional<DeltaValueReader> VersionChain<HandleType>::createDeltaValueReaderIfCommonHandle(
+    const DMContext & dm_context,
+    const DeltaSnapshotPtr & delta_snap)
+{
+    if constexpr (std::is_same_v<HandleType, String>)
+        return DeltaValueReader{
+            dm_context,
+            delta_snap,
+            getHandleColumnDefinesPtr<HandleType>(),
+            /*range*/ {},
+            ReadTag::MVCC};
+    else
+        return std::nullopt;
 }
 
 template class VersionChain<Int64>;

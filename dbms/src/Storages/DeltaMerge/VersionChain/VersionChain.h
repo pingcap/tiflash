@@ -69,7 +69,7 @@ private:
         const UInt32 offset,
         const UInt32 stable_rows,
         const bool calculate_read_packs,
-        DeltaValueReader & delta_reader);
+        std::optional<DeltaValueReader> & delta_reader);
 
     [[nodiscard]] UInt32 replayColumnFileBig(
         const DMContext & dm_context,
@@ -77,11 +77,11 @@ private:
         const UInt32 stable_rows,
         const StableValueSpace::Snapshot & stable,
         const std::span<const ColumnFilePtr> preceding_cfs,
-        DeltaValueReader & delta_reader);
+        std::optional<DeltaValueReader> & delta_reader);
 
     [[nodiscard]] UInt32 replayDeleteRange(
         const ColumnFileDeleteRange & cf_delete_range,
-        DeltaValueReader & delta_reader,
+        std::optional<DeltaValueReader> & delta_reader,
         const UInt32 stable_rows);
 
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
@@ -99,7 +99,11 @@ private:
         Iter begin,
         Iter end,
         const UInt32 stable_rows,
-        DeltaValueReader & delta_reader);
+        std::optional<DeltaValueReader> & delta_reader);
+
+    std::optional<DeltaValueReader> createDeltaValueReaderIfCommonHandle(
+        const DMContext & dm_context,
+        const DeltaSnapshotPtr & delta_snap);
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()

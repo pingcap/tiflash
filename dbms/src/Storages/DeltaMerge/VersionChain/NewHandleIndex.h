@@ -35,7 +35,10 @@ template <>
 class NewHandleIndex<Int64>
 {
 public:
-    std::optional<RowID> find(Int64 handle, DeltaValueReader & /*delta_reader*/, const UInt32 /*stable_rows*/) const
+    std::optional<RowID> find(
+        Int64 handle,
+        std::optional<DeltaValueReader> & /*delta_reader*/,
+        const UInt32 /*stable_rows*/) const
     {
         if (auto itr = handle_to_row_id.find(handle); itr != handle_to_row_id.end())
             return itr->second;
@@ -53,7 +56,10 @@ public:
             itr->second);
     }
 
-    void deleteRange(const RowKeyRange & range, DeltaValueReader & /*delta_reader*/, const UInt32 /*stable_rows*/)
+    void deleteRange(
+        const RowKeyRange & range,
+        std::optional<DeltaValueReader> & /*delta_reader*/,
+        const UInt32 /*stable_rows*/)
     {
         auto itr = handle_to_row_id.lower_bound(range.start.int_value);
         while (itr != handle_to_row_id.end() && itr->first < range.end.int_value)
@@ -68,16 +74,23 @@ template <>
 class NewHandleIndex<String>
 {
 public:
-    std::optional<RowID> find(std::string_view handle, DeltaValueReader & delta_reader, const UInt32 stable_rows) const
+    std::optional<RowID> find(
+        std::string_view handle,
+        std::optional<DeltaValueReader> & delta_reader,
+        const UInt32 stable_rows) const
     {
+        RUNTIME_CHECK_MSG(delta_reader.has_value(), "DeltaValueReader is required for common handle");
         const auto hash_value = hasher(handle);
         const auto [start, end] = handle_to_row_id.equal_range(hash_value);
         for (auto itr = start; itr != end; ++itr)
         {
             MutableColumns mut_cols(1);
             mut_cols[0] = ColumnString::create();
-            const auto read_rows
-                = delta_reader.readRows(mut_cols, /*offset*/ itr->second - stable_rows, /*limit*/ 1, /*range*/ nullptr);
+            const auto read_rows = delta_reader->readRows(
+                mut_cols,
+                /*offset*/ itr->second - stable_rows,
+                /*limit*/ 1,
+                /*range*/ nullptr);
             RUNTIME_CHECK(read_rows == 1, itr->second, stable_rows, read_rows);
             if (mut_cols[0]->getDataAt(0) == handle)
                 return itr->second;
@@ -90,8 +103,12 @@ public:
         std::ignore = handle_to_row_id.insert(std::pair{hasher(handle), row_id});
     }
 
-    void deleteRange(const RowKeyRange & range, DeltaValueReader & delta_reader, const UInt32 stable_rows)
+    void deleteRange(
+        const RowKeyRange & range,
+        std::optional<DeltaValueReader> & delta_reader,
+        const UInt32 stable_rows)
     {
+        RUNTIME_CHECK_MSG(delta_reader.has_value(), "DeltaValueReader is required for common handle");
         if (handle_to_row_id.empty())
             return;
 
@@ -118,7 +135,7 @@ public:
             MutableColumns mut_cols(1);
             mut_cols[0] = ColumnString::create();
             const auto read_rows
-                = delta_reader.readRows(mut_cols, /*offset*/ *begin, /*limit*/ size, /*range*/ nullptr);
+                = delta_reader->readRows(mut_cols, /*offset*/ *begin, /*limit*/ size, /*range*/ nullptr);
             RUNTIME_CHECK(std::cmp_equal(read_rows, size), *begin, size, read_rows);
             ColumnView<String> handles(*(mut_cols[0]));
             for (size_t i = 0; i < read_rows; ++i)
