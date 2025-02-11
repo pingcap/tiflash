@@ -295,7 +295,7 @@ protected:
         }
         else if (type == "d_dr")
         {
-            SegmentTestBasic::writeSegmentWithDeleteRange(SEG_ID, begin, end);
+            SegmentTestBasic::writeSegmentWithDeleteRange(SEG_ID, begin, end, /*is_common_handle*/ false);
         }
         else if (type == "s")
         {

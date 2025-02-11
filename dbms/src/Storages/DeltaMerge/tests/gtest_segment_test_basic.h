@@ -133,9 +133,9 @@ public:
     std::vector<Block> readSegment(PageIdU64 segment_id, bool need_row_id, const RowKeyRanges & ranges);
     ColumnPtr getSegmentRowId(PageIdU64 segment_id, const RowKeyRanges & ranges);
     ColumnPtr getSegmentHandle(PageIdU64 segment_id, const RowKeyRanges & ranges);
-    void writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end);
+    void writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end, bool is_common_handle);
     RowKeyValue buildRowKeyValue(Int64 key);
-    static RowKeyRange buildRowKeyRange(Int64 begin, Int64 end);
+    static RowKeyRange buildRowKeyRange(Int64 begin, Int64 end, bool is_common_handle);
 
     size_t getPageNumAfterGC(StorageType type, NamespaceID ns_id) const;
 

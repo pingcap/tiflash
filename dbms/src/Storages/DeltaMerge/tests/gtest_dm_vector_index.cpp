@@ -1196,7 +1196,7 @@ public:
         ColumnDefines columns_to_read,
         ANNQueryInfoPtr ann_query)
     {
-        auto range = buildRowKeyRange(begin, end);
+        auto range = buildRowKeyRange(begin, end, /*is_common_handle*/ false);
         auto [segment, snapshot] = getSegmentForRead(segment_id);
         // load DMilePackFilterResult for each DMFile
         DMFilePackFilterResults pack_filter_results;

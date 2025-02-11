@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
+#include <Storages/DeltaMerge/VersionChain/ColumnView.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -30,8 +31,17 @@ using namespace DB::tests;
 namespace DB::DM::tests
 {
 
-class SegmentBitmapFilterTest : public SegmentTestBasic
+class SegmentBitmapFilterTest
+    : public SegmentTestBasic
+    , public testing::WithParamInterface</*is_common_handle*/ bool>
 {
+public:
+    void SetUp() override
+    {
+        is_common_handle = GetParam();
+        SegmentTestBasic::SetUp(SegmentTestOptions{.is_common_handle = is_common_handle});
+    }
+
 protected:
     DB::LoggerPtr log = DB::Logger::get("SegmentBitmapFilterTest");
     static constexpr auto SEG_ID = DELTA_MERGE_FIRST_SEGMENT_ID;
@@ -43,7 +53,15 @@ protected:
     {
         auto itr = segments.find(SEG_ID);
         RUNTIME_CHECK(itr != segments.end(), SEG_ID);
-        itr->second->rowkey_range = buildRowKeyRange(begin, end);
+        itr->second->rowkey_range = buildRowKeyRange(begin, end, is_common_handle);
+    }
+
+    void writeSegmentGeneric(std::string_view seg_data)
+    {
+        if (is_common_handle)
+            writeSegment<String>(seg_data);
+        else
+            writeSegment<Int64>(seg_data);
     }
 
     /*
@@ -61,7 +79,8 @@ protected:
 
     Returns {row_id, handle}.
     */
-    std::pair<const PaddedPODArray<UInt32> *, const PaddedPODArray<Int64> *> writeSegment(
+    template <typename HandleType>
+    std::pair<const PaddedPODArray<UInt32> *, const std::optional<ColumnView<HandleType>>> writeSegment(
         std::string_view seg_data,
         std::optional<std::pair<Int64, Int64>> rowkey_range = std::nullopt)
     {
@@ -77,12 +96,11 @@ protected:
         if (hold_row_id == nullptr)
         {
             RUNTIME_CHECK(hold_handle == nullptr);
-            return {nullptr, nullptr};
+            return {nullptr, std::nullopt};
         }
         else
         {
-            RUNTIME_CHECK(hold_handle != nullptr);
-            return {toColumnVectorDataPtr<UInt32>(hold_row_id), toColumnVectorDataPtr<Int64>(hold_handle)};
+            return {toColumnVectorDataPtr<UInt32>(hold_row_id), ColumnView<HandleType>(*hold_handle)};
         }
     }
 
@@ -121,7 +139,7 @@ protected:
         }
         else if (type == "d_dr")
         {
-            SegmentTestBasic::writeSegmentWithDeleteRange(SEG_ID, begin, end);
+            SegmentTestBasic::writeSegmentWithDeleteRange(SEG_ID, begin, end, is_common_handle);
         }
         else if (type == "s")
         {
@@ -162,27 +180,35 @@ protected:
     };
 
     inline static constexpr bool use_version_chain = true;
-    inline static constexpr bool is_common_handle = true;
     inline static constexpr auto max_read_ts = std::numeric_limits<UInt64>::max();
 
+    void runTestCaseGeneric(TestCase test_case, int caller_line, const std::vector<RowID> & expected_base_versions)
+    {
+        if (is_common_handle)
+            runTestCase<String>(test_case, caller_line, expected_base_versions);
+        else
+            runTestCase<Int64>(test_case, caller_line, expected_base_versions);
+    }
+
+    template <typename HandleType>
     void runTestCase(TestCase test_case, int caller_line, const std::vector<RowID> & expected_base_versions)
     {
         auto info = fmt::format("caller_line={}", caller_line);
-        auto [row_id, handle] = writeSegment(test_case.seg_data, test_case.rowkey_range);
+        auto [row_id, handle] = writeSegment<HandleType>(test_case.seg_data, test_case.rowkey_range);
         if (test_case.expected_size == 0)
         {
             ASSERT_EQ(nullptr, row_id) << info;
-            ASSERT_EQ(nullptr, handle) << info;
+            ASSERT_EQ(std::nullopt, handle) << info;
         }
         else
         {
             ASSERT_EQ(test_case.expected_size, row_id->size()) << info;
             auto expected_row_id = genSequence<UInt32>(test_case.expected_row_id);
-            ASSERT_TRUE(sequenceEqual(expected_row_id.data(), row_id->data(), test_case.expected_size)) << info;
+            ASSERT_TRUE(sequenceEqual(expected_row_id, *row_id)) << info;
 
             ASSERT_EQ(test_case.expected_size, handle->size()) << info;
-            auto expected_handle = genSequence<Int64>(test_case.expected_handle);
-            ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size)) << info;
+            auto expected_handle = genHandleSequence<HandleType>(test_case.expected_handle);
+            ASSERT_TRUE(sequenceEqual(expected_handle, *handle)) << info;
         }
 
         verifyVersionChain(SEG_ID, caller_line, expected_base_versions);
@@ -235,45 +261,65 @@ protected:
 
         ASSERT_EQ(bitmap_filter_delta_index->toDebugString(), bitmap_filter_version_chain->toDebugString()) << info;
     }
+
+    void checkHandle(PageIdU64 seg_id, std::string_view seq_ranges, int caller_line)
+    {
+        auto info = fmt::format("caller_line={}", caller_line);
+        auto handle = getSegmentHandle(seg_id, {});
+        if (is_common_handle)
+        {
+            auto expected_handle = genHandleSequence<String>(seq_ranges);
+            ASSERT_TRUE(sequenceEqual(expected_handle, ColumnView<String>{*handle})) << info;
+        }
+        else
+        {
+            auto expected_handle = genHandleSequence<Int64>(seq_ranges);
+            ASSERT_TRUE(sequenceEqual(expected_handle, ColumnView<Int64>{*handle})) << info;
+        }
+    }
+
+    bool is_common_handle = false;
 };
 
-TEST_F(SegmentBitmapFilterTest, InMemory1)
+INSTANTIATE_TEST_CASE_P(MVCC, SegmentBitmapFilterTest, /* is_common_handle */ ::testing::Bool());
+
+TEST_P(SegmentBitmapFilterTest, InMemory1)
 try
 {
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{"d_mem:[0, 1000)", 1000, "[0, 1000)", "[0, 1000)"},
         __LINE__,
         std::vector<RowID>(1000, NotExistRowID));
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory2)
+TEST_P(SegmentBitmapFilterTest, InMemory2)
 try
 {
     std::vector<RowID> excepted_base_versions(2000);
     std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
     std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 0); // d_mem:[0, 1000)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{"d_mem:[0, 1000)|d_mem:[0, 1000)", 1000, "[1000, 2000)", "[0, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory3)
+TEST_P(SegmentBitmapFilterTest, InMemory3)
 try
 {
     std::vector<RowID> excepted_base_versions(1100);
     std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
     std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 100); // d_mem:[100, 200)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{"d_mem:[0, 1000)|d_mem:[100, 200)", 1000, "[0, 100)|[1000, 1100)|[200, 1000)", "[0, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory4)
+TEST_P(SegmentBitmapFilterTest, InMemory4)
 try
 {
     std::vector<RowID> excepted_base_versions(1200);
@@ -282,37 +328,37 @@ try
         excepted_base_versions.begin() + 1100,
         NotExistRowID); // d_mem:[0, 1000) + d_mem:[-100, 0)
     std::iota(excepted_base_versions.begin() + 1100, excepted_base_versions.end(), 0); // d_mem:[0, 100)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{"d_mem:[0, 1000)|d_mem:[-100, 100)", 1100, "[1000, 1200)|[100, 1000)", "[-100, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory5)
+TEST_P(SegmentBitmapFilterTest, InMemory5)
 try
 {
     std::vector<RowID> excepted_base_versions(2000);
     std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
     std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 0); // d_mem_del:[0, 1000)
-    runTestCase(TestCase{"d_mem:[0, 1000)|d_mem_del:[0, 1000)", 0, "", ""}, __LINE__, excepted_base_versions);
+    runTestCaseGeneric(TestCase{"d_mem:[0, 1000)|d_mem_del:[0, 1000)", 0, "", ""}, __LINE__, excepted_base_versions);
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory6)
+TEST_P(SegmentBitmapFilterTest, InMemory6)
 try
 {
     std::vector<RowID> excepted_base_versions(1100);
     std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
     std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 100); // d_mem_del:[100, 200)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{"d_mem:[0, 1000)|d_mem_del:[100, 200)", 900, "[0, 100)|[200, 1000)", "[0, 100)|[200, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, InMemory7)
+TEST_P(SegmentBitmapFilterTest, InMemory7)
 try
 {
     std::vector<RowID> excepted_base_versions(1200);
@@ -321,14 +367,14 @@ try
         excepted_base_versions.begin() + 1100,
         NotExistRowID); // d_mem:[0, 1000) + d_mem:[-100, 0)
     std::iota(excepted_base_versions.begin() + 1100, excepted_base_versions.end(), 0); // d_mem_del:[0, 100)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{"d_mem:[0, 1000)|d_mem_del:[-100, 100)", 900, "[100, 1000)", "[100, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Tiny1)
+TEST_P(SegmentBitmapFilterTest, Tiny1)
 try
 {
     std::vector<RowID> excepted_base_versions(1200);
@@ -341,14 +387,14 @@ try
         excepted_base_versions.begin() + 400 + 300,
         excepted_base_versions.end(),
         NotExistRowID); // d_mem:[500, 1000)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{"d_tiny:[100, 500)|d_mem:[200, 1000)", 900, "[0, 100)|[400, 1200)", "[100, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, TinyDel1)
+TEST_P(SegmentBitmapFilterTest, TinyDel1)
 try
 {
     std::vector<RowID> excepted_base_versions(600);
@@ -361,7 +407,7 @@ try
         excepted_base_versions.begin() + 400 + 100,
         excepted_base_versions.end(),
         NotExistRowID); // d_mem:[0, 100)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{
             "d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)",
             400,
@@ -372,7 +418,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, DeleteRange)
+TEST_P(SegmentBitmapFilterTest, DeleteRange)
 try
 {
     std::vector<RowID> excepted_base_versions(450);
@@ -382,7 +428,7 @@ try
         excepted_base_versions.begin() + 400 + 10,
         excepted_base_versions.end(),
         NotExistRowID); // d_mem:[250, 290)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{
             "d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)",
             390,
@@ -393,7 +439,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Big)
+TEST_P(SegmentBitmapFilterTest, Big)
 try
 {
     std::vector<RowID> excepted_base_versions(400 + 750 + 50);
@@ -407,7 +453,7 @@ try
         excepted_base_versions.begin() + 400 + 250 + 500,
         NotExistRowID); // d_big:[500, 1000)
     std::iota(excepted_base_versions.begin() + 400 + 250 + 500, excepted_base_versions.end(), 140); // d_mem:[240, 290)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{
             "d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)",
             900,
@@ -418,19 +464,19 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Stable1)
+TEST_P(SegmentBitmapFilterTest, Stable1)
 try
 {
     std::vector<RowID> excepted_base_versions{};
-    runTestCase(TestCase{"s:[0, 1024)", 1024, "[0, 1024)", "[0, 1024)"}, __LINE__, excepted_base_versions);
+    runTestCaseGeneric(TestCase{"s:[0, 1024)", 1024, "[0, 1024)", "[0, 1024)"}, __LINE__, excepted_base_versions);
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Stable2)
+TEST_P(SegmentBitmapFilterTest, Stable2)
 try
 {
     std::vector<RowID> excepted_base_versions{};
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{"s:[0, 1024)|d_dr:[0, 1023)", 1, "[1023, 1024)", "[1023, 1024)"},
         __LINE__,
         excepted_base_versions);
@@ -438,12 +484,12 @@ try
 CATCH
 
 
-TEST_F(SegmentBitmapFilterTest, Stable3)
+TEST_P(SegmentBitmapFilterTest, Stable3)
 try
 {
     std::vector<RowID> excepted_base_versions(10);
     std::iota(excepted_base_versions.begin(), excepted_base_versions.end(), 300); // s:[300, 310)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{
             "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)",
             886,
@@ -454,7 +500,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Mix)
+TEST_P(SegmentBitmapFilterTest, Mix)
 try
 {
     std::vector<RowID> excepted_base_versions(10 + 55 + 7);
@@ -464,7 +510,7 @@ try
         excepted_base_versions.begin() + 10 + 55,
         NotExistRowID); // d_tiny:[200, 255)
     std::iota(excepted_base_versions.begin() + 10 + 55, excepted_base_versions.end(), 298); // d_mem:[298, 305)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{
             "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
             946,
@@ -475,7 +521,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, Ranges)
+TEST_P(SegmentBitmapFilterTest, Ranges)
 try
 {
     std::vector<RowID> excepted_base_versions(10 + 55 + 7);
@@ -485,10 +531,10 @@ try
         excepted_base_versions.begin() + 10 + 55,
         NotExistRowID); // d_tiny:[200, 255)
     std::iota(excepted_base_versions.begin() + 10 + 55, excepted_base_versions.end(), 298); // d_mem:[298, 305)
-    read_ranges.emplace_back(buildRowKeyRange(222, 244));
-    read_ranges.emplace_back(buildRowKeyRange(300, 303));
-    read_ranges.emplace_back(buildRowKeyRange(555, 666));
-    runTestCase(
+    read_ranges.emplace_back(buildRowKeyRange(222, 244, is_common_handle));
+    read_ranges.emplace_back(buildRowKeyRange(300, 303, is_common_handle));
+    read_ranges.emplace_back(buildRowKeyRange(555, 666, is_common_handle));
+    runTestCaseGeneric(
         TestCase{
             "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
             136,
@@ -499,7 +545,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, LogicalSplit)
+TEST_P(SegmentBitmapFilterTest, LogicalSplit)
 try
 {
     std::vector<RowID> excepted_base_versions(10 + 55 + 7);
@@ -509,7 +555,7 @@ try
         excepted_base_versions.begin() + 10 + 55,
         NotExistRowID); // d_tiny:[200, 255)
     std::iota(excepted_base_versions.begin() + 10 + 55, excepted_base_versions.end(), 298); // d_mem:[298, 305)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{
             "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
             946,
@@ -539,35 +585,27 @@ try
         298); // d_mem:[298, 305)
     verifyVersionChain(*new_seg_id, __LINE__, other_excepted_base_versions);
 
-    auto left_handle = getSegmentHandle(SEG_ID, {});
-    const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
-    auto expected_left_handle = genSequence<Int64>("[0, 128)|[200, 255)|[256, 305)|[310, 512)");
-    ASSERT_EQ(expected_left_handle.size(), left_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_h->data(), left_h->size()));
+    checkHandle(SEG_ID, "[0, 128)|[200, 255)|[256, 305)|[310, 512)", __LINE__);
 
     auto left_row_id = getSegmentRowId(SEG_ID, {});
-    const auto * left_r = toColumnVectorDataPtr<UInt32>(left_row_id);
+    const auto & left_r = toColumnVectorData<UInt32>(left_row_id);
     auto expected_left_row_id = genSequence<UInt32>("[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 512)");
-    ASSERT_EQ(expected_left_row_id.size(), left_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_row_id.data(), left_r->data(), left_r->size()));
+    ASSERT_EQ(expected_left_row_id.size(), left_r.size());
+    ASSERT_TRUE(sequenceEqual(expected_left_row_id, left_r));
 
-    auto right_handle = getSegmentHandle(*new_seg_id, {});
-    const auto * right_h = toColumnVectorDataPtr<Int64>(right_handle);
-    auto expected_right_handle = genSequence<Int64>("[512, 1024)");
-    ASSERT_EQ(expected_right_handle.size(), right_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_handle.data(), right_h->data(), right_h->size()));
+    checkHandle(*new_seg_id, "[512, 1024)", __LINE__);
 
     auto right_row_id = getSegmentRowId(*new_seg_id, {});
-    const auto * right_r = toColumnVectorDataPtr<UInt32>(right_row_id);
+    const auto & right_r = toColumnVectorData<UInt32>(right_row_id);
     auto expected_right_row_id = genSequence<UInt32>("[512, 1024)");
-    ASSERT_EQ(expected_right_row_id.size(), right_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
+    ASSERT_EQ(expected_right_row_id.size(), right_r.size());
+    ASSERT_TRUE(sequenceEqual(expected_right_row_id, right_r));
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, CleanStable)
+TEST_P(SegmentBitmapFilterTest, CleanStable)
 {
-    writeSegment("d_mem:[0, 20000)|d_mem:[30000, 35000)");
+    writeSegmentGeneric("d_mem:[0, 20000)|d_mem:[30000, 35000)");
     mergeSegmentDelta(SEG_ID, true);
     auto [seg, snap] = getSegmentForRead(SEG_ID);
     ASSERT_EQ(seg->getDelta()->getRows(), 0);
@@ -587,9 +625,9 @@ TEST_F(SegmentBitmapFilterTest, CleanStable)
     verifyVersionChain(SEG_ID, __LINE__, {});
 }
 
-TEST_F(SegmentBitmapFilterTest, NotCleanStable)
+TEST_P(SegmentBitmapFilterTest, NotCleanStable)
 {
-    writeSegment("d_mem:[0, 10000)|d_mem:[5000, 15000)");
+    writeSegmentGeneric("d_mem:[0, 10000)|d_mem:[5000, 15000)");
     mergeSegmentDelta(SEG_ID, true);
     auto [seg, snap] = getSegmentForRead(SEG_ID);
     ASSERT_EQ(seg->getDelta()->getRows(), 0);
@@ -637,16 +675,16 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
     }
 }
 
-TEST_F(SegmentBitmapFilterTest, StableRange)
+TEST_P(SegmentBitmapFilterTest, StableRange)
 {
-    writeSegment("d_mem:[0, 50000)");
+    writeSegmentGeneric("d_mem:[0, 50000)");
     mergeSegmentDelta(SEG_ID, true);
     auto [seg, snap] = getSegmentForRead(SEG_ID);
     ASSERT_EQ(seg->getDelta()->getRows(), 0);
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
     ASSERT_EQ(seg->getStable()->getRows(), 50000);
 
-    auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(10000, 50000)}; // [10000, 50000)
+    auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(10000, 50000, is_common_handle)}; // [10000, 50000)
     auto bitmap_filter = seg->buildBitmapFilterStableOnly(
         *dm_context,
         snap,
@@ -664,10 +702,10 @@ TEST_F(SegmentBitmapFilterTest, StableRange)
     verifyVersionChain(SEG_ID, __LINE__, {});
 }
 
-TEST_F(SegmentBitmapFilterTest, StableLogicalSplit)
+TEST_P(SegmentBitmapFilterTest, StableLogicalSplit)
 try
 {
-    writeSegment("d_mem:[0, 50000)");
+    writeSegmentGeneric("d_mem:[0, 50000)");
     mergeSegmentDelta(SEG_ID, true);
     auto [seg, snap] = getSegmentForRead(SEG_ID);
     ASSERT_EQ(seg->getDelta()->getRows(), 0);
@@ -682,38 +720,30 @@ try
     verifyVersionChain(SEG_ID, __LINE__, {});
     verifyVersionChain(*new_seg_id, __LINE__, {});
 
-    auto left_handle = getSegmentHandle(SEG_ID, {});
-    const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
-    auto expected_left_handle = genSequence<Int64>("[0, 25000)");
-    ASSERT_EQ(expected_left_handle.size(), left_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_h->data(), left_h->size()));
+    checkHandle(SEG_ID, "[0, 25000)", __LINE__);
 
     auto left_row_id = getSegmentRowId(SEG_ID, {});
-    const auto * left_r = toColumnVectorDataPtr<UInt32>(left_row_id);
+    const auto & left_r = toColumnVectorData<UInt32>(left_row_id);
     auto expected_left_row_id = genSequence<UInt32>("[0, 25000)");
-    ASSERT_EQ(expected_left_row_id.size(), left_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_row_id.data(), left_r->data(), left_r->size()));
+    ASSERT_EQ(expected_left_row_id.size(), left_r.size());
+    ASSERT_TRUE(sequenceEqual(expected_left_row_id, left_r));
 
-    auto right_handle = getSegmentHandle(*new_seg_id, {});
-    const auto * right_h = toColumnVectorDataPtr<Int64>(right_handle);
-    auto expected_right_handle = genSequence<Int64>("[25000, 50000)");
-    ASSERT_EQ(expected_right_handle.size(), right_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_handle.data(), right_h->data(), right_h->size()));
+    checkHandle(*new_seg_id, "[25000, 50000)", __LINE__);
 
     auto right_row_id = getSegmentRowId(*new_seg_id, {});
-    const auto * right_r = toColumnVectorDataPtr<UInt32>(right_row_id);
+    const auto & right_r = toColumnVectorData<UInt32>(right_row_id);
     auto expected_right_row_id = genSequence<UInt32>("[25000, 50000)");
-    ASSERT_EQ(expected_right_row_id.size(), right_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
+    ASSERT_EQ(expected_right_row_id.size(), right_r.size());
+    ASSERT_TRUE(sequenceEqual(expected_right_row_id, right_r));
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, BigPart)
+TEST_P(SegmentBitmapFilterTest, BigPart)
 try
 {
     // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
     // Packs in rowkey_range: [270, 280)|[280, 290)|[290, 300)
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{
             /*seg_data*/ "d_big:[250, 1000):10",
             /*expected_size*/ 20,
@@ -738,10 +768,10 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, StablePart)
+TEST_P(SegmentBitmapFilterTest, StablePart)
 try
 {
-    runTestCase(
+    runTestCaseGeneric(
         TestCase{
             /*seg_data*/ "s:[250, 1000):10",
             /*expected_size*/ 750,

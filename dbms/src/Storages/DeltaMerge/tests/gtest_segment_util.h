@@ -14,10 +14,10 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <common/defines.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
-
 
 namespace DB::DM::tests
 {
@@ -53,7 +53,44 @@ std::vector<T> genSequence(const std::vector<std::pair<T, T>> & ranges);
 template <typename T>
 std::vector<T> genSequence(std::string_view str_ranges);
 
+template <typename T>
+std::vector<T> genHandleSequence(std::string_view str_ranges)
+{
+    auto v = genSequence<Int64>(str_ranges);
+    if constexpr (std::is_same_v<T, Int64>)
+        return v;
+    else
+    {
+        static_assert(std::is_same_v<T, String>);
+        std::vector<String> res(v.size());
+        for (size_t i = 0; i < v.size(); i++)
+            res[i] = genMockCommonHandle(v[i], 1);
+        return res;
+    }
+}
+
 template <typename E, typename A>
-::testing::AssertionResult sequenceEqual(const E * expected, const A * actual, size_t size);
+::testing::AssertionResult sequenceEqual(const E & expected, const A & actual)
+{
+    if (expected.size() != actual.size())
+    {
+        return ::testing::AssertionFailure()
+            << fmt::format("Size mismatch: expected {} vs actual {}.", expected.size(), actual.size());
+    }
+    for (size_t i = 0; i < expected.size(); i++)
+    {
+        if (expected[i] != actual[i])
+        {
+            return ::testing::AssertionFailure() << fmt::format(
+                       "Value at index {} mismatch: expected {} vs actual {}. expected => {} actual => {}",
+                       i,
+                       expected[i],
+                       actual[i],
+                       expected,
+                       actual);
+        }
+    }
+    return ::testing::AssertionSuccess();
+}
 
 } // namespace DB::DM::tests

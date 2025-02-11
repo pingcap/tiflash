@@ -1008,10 +1008,10 @@ Block mergeSegmentRowIds(std::vector<Block> && blocks)
     return accumulated_block;
 }
 
-RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end)
+RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end, bool is_common_handle)
 {
     HandleRange range(begin, end);
-    return RowKeyRange::fromHandleRange(range);
+    return RowKeyRange::fromHandleRange(range, is_common_handle);
 }
 
 std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(PageIdU64 segment_id)
@@ -1081,9 +1081,9 @@ ColumnPtr SegmentTestBasic::getSegmentHandle(PageIdU64 segment_id, const RowKeyR
     }
 }
 
-void SegmentTestBasic::writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end)
+void SegmentTestBasic::writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end, bool is_common_handle)
 {
-    auto range = buildRowKeyRange(begin, end);
+    auto range = buildRowKeyRange(begin, end, is_common_handle);
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
     RUNTIME_CHECK(segment->write(*dm_context, range));

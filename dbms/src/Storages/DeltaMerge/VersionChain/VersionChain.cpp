@@ -178,7 +178,6 @@ UInt32 VersionChain<HandleType>::replayBlock(
     RUNTIME_CHECK(column.size() > offset, column.size(), offset);
 
     const auto handle_col = ColumnView<HandleType>(column);
-    LOG_DEBUG(Logger::get(), "cf={}, handle_col={}", cf.toString(), handle_col);
     auto itr = handle_col.begin() + offset;
 
     if (calculate_read_packs)

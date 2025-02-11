@@ -141,28 +141,7 @@ std::vector<T> genSequence(std::string_view str_ranges)
     return genSequence(vector_ranges);
 }
 
-template <typename E, typename A>
-::testing::AssertionResult sequenceEqual(const E * expected, const A * actual, size_t size)
-{
-    for (size_t i = 0; i < size; i++)
-    {
-        if (expected[i] != actual[i])
-        {
-            return ::testing::AssertionFailure() << fmt::format(
-                       "Value at index {} mismatch: expected {} vs actual {}. expected => {} actual => {}",
-                       i,
-                       expected[i],
-                       actual[i],
-                       std::vector<E>(expected, expected + size),
-                       std::vector<A>(actual, actual + size));
-        }
-    }
-    return ::testing::AssertionSuccess();
-}
-
 template std::vector<Int64> genSequence(std::string_view str_ranges);
 template std::vector<UInt32> genSequence(std::string_view str_ranges);
-template ::testing::AssertionResult sequenceEqual(const UInt32 * expected, const UInt32 * actual, size_t size);
-template ::testing::AssertionResult sequenceEqual(const Int64 * expected, const Int64 * actual, size_t size);
 
 } // namespace DB::DM::tests
