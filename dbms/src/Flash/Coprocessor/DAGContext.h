@@ -89,7 +89,8 @@ constexpr UInt64 PAD_CHAR_TO_FULL_LENGTH = 1u << 2u;
 constexpr UInt64 IN_INSERT_STMT = 1u << 3u;
 constexpr UInt64 IN_UPDATE_OR_DELETE_STMT = 1u << 4u;
 constexpr UInt64 IN_SELECT_STMT = 1u << 5u;
-constexpr UInt64 OVERFLOW_AS_WARNING = 1u << 6u;
+// TiDB removed OverflowAsWarning flag in tidb/pull/49122.
+// constexpr UInt64 OVERFLOW_AS_WARNING = 1u << 6u;
 constexpr UInt64 IGNORE_ZERO_IN_DATE = 1u << 7u;
 constexpr UInt64 DIVIDED_BY_ZERO_AS_WARNING = 1u << 8u;
 constexpr UInt64 IN_LOAD_DATA_STMT = 1u << 10u;
@@ -210,7 +211,7 @@ public:
         bool is_append = false);
 
     void handleTruncateError(const String & msg);
-    void handleOverflowError(const String & msg, const TiFlashError & error);
+    void handleOverflowError(const String & msg);
     void handleDivisionByZero();
     void handleInvalidTime(const String & msg, const TiFlashError & error);
     void appendWarning(const String & msg, int32_t code = 0);
@@ -408,6 +409,7 @@ private:
     void initExecutorIdToJoinIdMap();
     void initOutputInfo();
     tipb::EncodeType analyzeDAGEncodeType() const;
+    void handleTruncateErrorInternal(const String & msg);
 
 private:
     std::shared_ptr<ProcessListEntry> process_list_entry;
