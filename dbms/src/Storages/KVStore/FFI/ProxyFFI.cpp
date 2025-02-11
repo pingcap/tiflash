@@ -303,7 +303,6 @@ void HandleConsumeWriteBatch(const EngineStoreServerWrap * server, RawVoidPtr pt
         exit(-1);
     }
 }
-
 CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView page_id)
 {
     try
@@ -311,13 +310,14 @@ CppStrWithView HandleReadPage(const EngineStoreServerWrap * server, BaseBuffView
         RUNTIME_CHECK(server->tmt != nullptr);
         auto uni_ps = server->tmt->getContext().getWriteNodePageStorage();
         RaftDataReader reader(*uni_ps);
-        auto * page = new Page(reader.read(UniversalPageId(page_id.data, page_id.len)));
-        if (page->isValid())
+        auto p = reader.read(UniversalPageId(page_id.data, page_id.len));
+        if (p.isValid())
         {
             LOG_TRACE(
                 &Poco::Logger::get("ProxyFFI"),
                 "FFI read page {} success",
                 UniversalPageId(page_id.data, page_id.len));
+            auto * page = new Page(std::move(p));
             return CppStrWithView{
                 .inner = GenRawCppPtr(page, RawCppPtrTypeImpl::UniversalPage),
                 .view = BaseBuffView{page->data.begin(), page->data.size()},
