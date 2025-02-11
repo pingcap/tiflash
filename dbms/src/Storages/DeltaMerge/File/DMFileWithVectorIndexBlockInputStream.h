@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/File/DMFileVectorIndexReader.h>
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream_fwd.h>
-#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
 
 
@@ -60,7 +60,7 @@ public:
         DMFileReader && reader,
         ColumnDefine && vec_cd,
         const ScanContextPtr & scan_context,
-        const VectorIndexCachePtr & vec_index_cache,
+        const LocalIndexCachePtr & local_index_cache,
         const BitmapFilterView & valid_rows,
         const String & tracing_id)
     {
@@ -71,7 +71,7 @@ public:
             std::move(reader),
             std::move(vec_cd),
             scan_context,
-            vec_index_cache,
+            local_index_cache,
             valid_rows,
             tracing_id);
     }
@@ -83,7 +83,7 @@ public:
         DMFileReader && reader_,
         ColumnDefine && vec_cd_,
         const ScanContextPtr & scan_context_,
-        const VectorIndexCachePtr & vec_index_cache_,
+        const LocalIndexCachePtr & local_index_cache_,
         const BitmapFilterView & valid_rows_,
         const String & tracing_id);
 

@@ -80,6 +80,8 @@ public:
     }
     UInt64 tableCount() const { return table_regions_info_map.size(); }
 
+    std::vector<RegionID> getAllRegionID() const;
+
 private:
     bool is_single_table;
     std::unordered_map<TableID, SingleTableRegions> table_regions_info_map;
