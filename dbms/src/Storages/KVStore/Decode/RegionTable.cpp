@@ -117,7 +117,7 @@ void RegionTable::clear()
 {
     region_infos.clear();
     tables.clear();
-    safe_ts_mgr.safe_ts_map.clear();
+    safe_ts_mgr.clear();
 }
 
 void RegionTable::restore()

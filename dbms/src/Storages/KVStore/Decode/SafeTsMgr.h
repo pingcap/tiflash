@@ -70,7 +70,13 @@ struct SafeTsMgr
         std::unique_lock write_lock(rw_lock);
         safe_ts_map.erase(region_id);
     }
+    void clear()
+    {
+        std::unique_lock write_lock(rw_lock);
+        safe_ts_map.clear();
+    }
 
+private:
     SafeTsMap safe_ts_map;
     mutable std::shared_mutex rw_lock;
 };
