@@ -83,7 +83,7 @@ public:
         {}
         TableID table_id;
         InternalRegions internal_regions;
-        RegionTableCtx ctx;
+        RegionTableCtxPtr ctx;
     };
 
     explicit RegionTable(Context & context_);

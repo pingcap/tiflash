@@ -411,7 +411,7 @@ size_t RegionData::tryCompactionFilter(Timestamp safe_point)
     return del_write;
 }
 
-void RegionData::setRegionTableCtx(RegionTableCtx ctx) const
+void RegionData::setRegionTableCtx(RegionTableCtxPtr ctx) const
 {
     region_table_ctx = ctx;
     if (region_table_ctx)
@@ -420,12 +420,12 @@ void RegionData::setRegionTableCtx(RegionTableCtx ctx) const
     }
 }
 
-RegionTableCtx RegionData::getRegionTableCtx() const
+RegionTableCtxPtr RegionData::getRegionTableCtx() const
 {
     return region_table_ctx;
 }
 
-RegionTableCtx RegionData::resetRegionTableCtx() const
+RegionTableCtxPtr RegionData::resetRegionTableCtx() const
 {
     if (region_table_ctx)
     {

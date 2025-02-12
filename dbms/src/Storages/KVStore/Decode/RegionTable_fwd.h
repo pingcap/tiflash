@@ -19,16 +19,16 @@
 
 namespace DB
 {
-struct RegionTableCtxInner
+struct RegionTableCtx
 {
     // KVStore size of all regions of this table, including the prehandling one.
     // So, this size may be larger than the table's real size.
     std::atomic_int64_t table_size;
     std::atomic_bool warned;
 };
-using RegionTableCtx = std::shared_ptr<RegionTableCtxInner>;
-inline RegionTableCtx createRegionTableCtx()
+using RegionTableCtxPtr = std::shared_ptr<RegionTableCtx>;
+inline RegionTableCtxPtr createRegionTableCtx()
 {
-    return std::make_shared<RegionTableCtxInner>(0, false);
+    return std::make_shared<RegionTableCtx>(0, false);
 }
 } // namespace DB

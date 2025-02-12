@@ -244,9 +244,9 @@ public: // Stats
 
     // Bind a region to a RegionTable. It could not be bound to another table any more.
     // All memory changes to this region would reflect to the binded table.
-    void setRegionTableCtx(RegionTableCtx size) const;
-    RegionTableCtx getRegionTableCtx() const { return data.getRegionTableCtx(); }
-    RegionTableCtx resetRegionTableCtx() const { return data.resetRegionTableCtx(); }
+    void setRegionTableCtx(RegionTableCtxPtr size) const;
+    RegionTableCtxPtr getRegionTableCtx() const { return data.getRegionTableCtx(); }
+    RegionTableCtxPtr resetRegionTableCtx() const { return data.resetRegionTableCtx(); }
     size_t getRegionTableSize() const { return data.getRegionTableSize(); }
     bool getRegionTableWarned() const { return data.getRegionTableWarned(); }
     bool setRegionTableWarned(bool desired) const { return data.setRegionTableWarned(desired); }

@@ -85,9 +85,9 @@ public:
     String summary() const;
     size_t tryCompactionFilter(Timestamp safe_point);
 
-    void setRegionTableCtx(RegionTableCtx) const;
-    RegionTableCtx getRegionTableCtx() const;
-    RegionTableCtx resetRegionTableCtx() const;
+    void setRegionTableCtx(RegionTableCtxPtr) const;
+    RegionTableCtxPtr getRegionTableCtx() const;
+    RegionTableCtxPtr resetRegionTableCtx() const;
     size_t getRegionTableSize() const;
     bool getRegionTableWarned() const;
     bool setRegionTableWarned(bool) const;
@@ -146,7 +146,7 @@ private:
     std::atomic<Int64> cf_data_size = 0;
     // Size of decoded structures for convenient access, considered as amplification in memory.
     std::atomic<Int64> decoded_data_size = 0;
-    mutable RegionTableCtx region_table_ctx;
+    mutable RegionTableCtxPtr region_table_ctx;
 };
 
 } // namespace DB

@@ -401,9 +401,9 @@ Timestamp Region::getLastObservedReadTso() const
     return last_observed_read_tso.load();
 }
 
-void Region::setRegionTableCtx(RegionTableCtx size) const
+void Region::setRegionTableCtx(RegionTableCtxPtr ctx) const
 {
-    data.setRegionTableCtx(size);
+    data.setRegionTableCtx(ctx);
 }
 
 void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
