@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Stopwatch.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -27,6 +28,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot)
 {
+    Stopwatch sw_total;
     if (dmfile_or_delete_range_list.empty())
     {
         // In theory, we can support stable composed of multiple disjoint dmfiles.
@@ -117,10 +119,11 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
 
     LOG_INFO(
         snapshot.log,
-        "Snapshot={}, replays {} rows and {} deletes",
+        "Snapshot={}, replays {} rows and {} deletes, cost={}ms",
         snapshot.detailInfo(),
         curr_replayed_rows,
-        curr_replayed_deletes);
+        curr_replayed_deletes,
+        sw_total.elapsed() / 1000000);
 
     return base_versions;
 }

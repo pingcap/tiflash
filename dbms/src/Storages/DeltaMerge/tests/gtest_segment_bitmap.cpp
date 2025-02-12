@@ -131,7 +131,7 @@ protected:
         {
             SegmentTestBasic::ingestDTFileIntoDelta(
                 SEG_ID,
-                end - begin,
+                write_count,
                 begin,
                 false,
                 unit.pack_size,
@@ -810,7 +810,9 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, Int64Boundary)
+// Since rowkey_range is a left closed and right open interval, the right boundary is not included.
+// So the maximum value of Int64 needs to be handled carefully.
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_Int64Boundary)
 try
 {
     if (is_common_handle)
@@ -864,6 +866,78 @@ try
 
         ASSERT_EQ(bitmap_filter->toDebugString(), "1111111111111111");
     }
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_Stable)
+try
+{
+    runTestCaseGeneric(
+        TestCase{
+            /*seg_data*/ "s:[250, 1000):50",
+            /*expected_size*/ 750,
+            /*expected_row_id*/ "[0, 750)",
+            /*expected_handle*/ "[250, 1000)"},
+        __LINE__,
+        {});
+
+    RowKeyRanges read_ranges = {
+        buildRowKeyRange(318, 520, is_common_handle),
+        buildRowKeyRange(618, 737, is_common_handle),
+        buildRowKeyRange(918, 998, is_common_handle),
+    };
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto bitmap_filter = seg->buildBitmapFilter(
+        *dm_context,
+        snap,
+        read_ranges,
+        loadPackFilterResults(snap, read_ranges),
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE,
+        use_version_chain);
+
+    String expect_result(750, '0');
+    std::fill(expect_result.begin() + 318 - 250, expect_result.begin() + 520 - 250, '1');
+    std::fill(expect_result.begin() + 618 - 250, expect_result.begin() + 737 - 250, '1');
+    std::fill(expect_result.begin() + 918 - 250, expect_result.begin() + 998 - 250, '1');
+    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_CFBig)
+try
+{
+    runTestCaseGeneric(
+        TestCase{
+            /*seg_data*/ "d_big:[250, 1000):50",
+            /*expected_size*/ 500,
+            /*expected_row_id*/ "[38, 538)",
+            /*expected_handle*/ "[388, 888)",
+            /*segment_range*/ std::pair{388, 888}},
+        __LINE__,
+        std::vector<RowID>(550, NotExistRowID));
+
+    RowKeyRanges read_ranges = {
+        buildRowKeyRange(318, 520, is_common_handle),
+        buildRowKeyRange(618, 737, is_common_handle),
+        buildRowKeyRange(818, 998, is_common_handle),
+    };
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    read_ranges = Segment::shrinkRowKeyRanges(seg->rowkey_range, read_ranges);
+    auto bitmap_filter = seg->buildBitmapFilter(
+        *dm_context,
+        snap,
+        read_ranges,
+        loadPackFilterResults(snap, read_ranges),
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE,
+        use_version_chain);
+
+    String expect_result(550, '0');
+    std::fill(expect_result.begin() + 388 - 350, expect_result.begin() + 520 - 350, '1');
+    std::fill(expect_result.begin() + 618 - 350, expect_result.begin() + 737 - 350, '1');
+    std::fill(expect_result.begin() + 818 - 350, expect_result.begin() + 888 - 350, '1');
+    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
 }
 CATCH
 
