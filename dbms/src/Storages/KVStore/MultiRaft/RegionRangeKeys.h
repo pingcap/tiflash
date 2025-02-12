@@ -60,8 +60,9 @@ public:
     explicit RegionRangeKeys(RegionRange && range)
         : RegionRangeKeys(std::move(range.first.key), std::move(range.second.key))
     {}
-    TableID getMappedTableID() const;
-    KeyspaceID getKeyspaceID() const;
+    TableID getMappedTableID() const { return mapped_table_id; }
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
+    KeyspaceTableID getKeyspaceTableID() const { return KeyspaceTableID(keyspace_id, mapped_table_id); }
     std::string toDebugString() const;
 
     static bool isRangeOverlapped(const RegionRange & a, const RegionRange & b)
