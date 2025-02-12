@@ -72,7 +72,7 @@ public:
 
     RegionMeta(RegionMeta && rhs);
 
-    static RegionMeta genFromPb(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
+    static RegionMeta genFromMetaRegion(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
 
     RegionID regionId() const;
     UInt64 peerId() const;
