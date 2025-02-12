@@ -497,7 +497,11 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
     return sortvstackBlocks(std::move(blocks));
 }
 
-void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool shuffle)
+void SegmentTestBasic::writeSegment(
+    PageIdU64 segment_id,
+    UInt64 write_rows,
+    std::optional<Int64> start_at,
+    bool shuffle)
 {
     LOG_INFO(logger_op, "writeSegment, segment_id={} write_rows={}", segment_id, write_rows);
 

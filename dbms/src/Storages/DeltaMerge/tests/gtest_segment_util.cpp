@@ -71,7 +71,7 @@ SegDataUnit parseSegDataUnit(String & s)
             unit.pack_size = std::stoul(values[i].substr(attr_pack_size_prefix.size()));
             continue;
         }
-        
+
         // Make data in ColumnFileTiny or ColumnFileMem unsorted.
         std::string_view attr_shuffle{"shuffle"};
         if (values[i] == attr_shuffle)
@@ -82,24 +82,7 @@ SegDataUnit parseSegDataUnit(String & s)
         }
         RUNTIME_CHECK_MSG(false, "{}: {} is unsupported", s, values[i]);
     }
-
-    if (values.size() == 2)
-    {
-        return SegDataUnit{
-            .type = boost::algorithm::trim_copy(values[0]),
-            .range = parseRange<Int64>(values[1]),
-        };
-    }
-    else if (values.size() == 3)
-    {
-        RUNTIME_CHECK(values[0] == "d_big" || values[0] == "s", s);
-        return SegDataUnit{
-            .type = boost::algorithm::trim_copy(values[0]),
-            .range = parseRange<Int64>(values[1]),
-            .pack_size = std::stoul(values[2]),
-        };
-    }
-    RUNTIME_CHECK_MSG(false, "parseSegDataUnit failed: {}", s);
+    return unit;
 }
 
 void check(const std::vector<SegDataUnit> & seg_data_units)
@@ -121,10 +104,8 @@ void check(const std::vector<SegDataUnit> & seg_data_units)
         auto [begin, end, including_right_boundary] = seg_data_units[i].range;
         RUNTIME_CHECK(end - begin + including_right_boundary > 0, begin, end, including_right_boundary);
     }
+    // If stable exists, it should be the first one.
     RUNTIME_CHECK(stable_units.empty() || (stable_units.size() == 1 && stable_units[0] == 0));
-    std::vector<size_t> expected_mem_units(mem_units.size());
-    std::iota(expected_mem_units.begin(), expected_mem_units.end(), seg_data_units.size() - mem_units.size());
-    RUNTIME_CHECK(mem_units == expected_mem_units, expected_mem_units, mem_units);
 }
 
 template <typename T>

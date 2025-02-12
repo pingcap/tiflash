@@ -944,6 +944,27 @@ CATCH
 TEST_P(SegmentBitmapFilterTest, RowKeyFilter_CFTinyOrMem)
 try
 {
+    writeSegmentGeneric("d_mem:[115, 277):shuffle|d_tiny:[140, 250):shuffle");
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    const auto read_ranges = RowKeyRanges{buildRowKeyRange(120, 260, is_common_handle)};
+    auto bitmap_filter_version_chain = seg->buildBitmapFilter(
+        *dm_context,
+        snap,
+        read_ranges,
+        loadPackFilterResults(snap, read_ranges),
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE,
+        use_version_chain);
+    auto bitmap_filter_delta_index = seg->buildBitmapFilter(
+        *dm_context,
+        snap,
+        read_ranges,
+        loadPackFilterResults(snap, read_ranges),
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE,
+        !use_version_chain);
+    // The result is random, because the shuffle is random.
+    ASSERT_EQ(bitmap_filter_delta_index->toDebugString(), bitmap_filter_version_chain->toDebugString());
 }
 CATCH
 
