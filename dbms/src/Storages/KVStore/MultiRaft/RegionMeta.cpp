@@ -513,7 +513,8 @@ static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_
         region.id());
 }
 
-RegionMeta RegionMeta::genFromMetaRegion(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term) {
+RegionMeta RegionMeta::genFromMetaRegion(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
+{
     auto peer = findPeer(region, peer_id);
     raft_serverpb::RaftApplyState apply_state;
     {
