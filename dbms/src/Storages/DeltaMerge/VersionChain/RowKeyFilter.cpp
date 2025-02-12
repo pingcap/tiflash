@@ -35,7 +35,6 @@ UInt32 buildRowKeyFilterVector(
     IColumn::Filter & filter)
 {
     UInt32 filtered_out_rows = 0;
-    fmt::println("RowKeyFilter: {}", handles);
     for (UInt32 i = 0; i < handles.size(); ++i)
     {
         auto in_range = [h = handles[i]](const RowKeyRange & range) {

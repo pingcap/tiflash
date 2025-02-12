@@ -479,12 +479,6 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
         RUNTIME_CHECK(write_rows_this_round > 0);
         Int64 write_end_key_this_round = *write_start_key + static_cast<Int64>(write_rows_this_round);
         RUNTIME_CHECK(write_end_key_this_round <= segment_end_key);
-
-        fmt::println(
-            "*write_start_key={}, write_end_key_this_round={}, including_right_boundary={}",
-            *write_start_key,
-            write_end_key_this_round,
-            including_right_boundary);
         Block block
             = prepareWriteBlock(*write_start_key, write_end_key_this_round, is_deleted, including_right_boundary);
         blocks.emplace_back(block);
