@@ -209,7 +209,7 @@ void WaitCheckRegionReadyImpl(
 
         LOG_INFO(
             log,
-            "{} regions need to fetch latest apply-index in next round, sleep for {:.3f}s, tot_regions={}",
+            "{} regions need to fetch latest commit-index in next round, sleep for {:.3f}s, tot_regions={}",
             remain_regions.size(),
             wait_tick_time,
             total_regions_cnt);
@@ -228,7 +228,7 @@ void WaitCheckRegionReadyImpl(
             " ");
         LOG_WARNING(
             log,
-            "{} regions CANNOT fetch latest apply-index from TiKV, (region-id): {}",
+            "{} regions CANNOT fetch latest commit-index from TiKV, (region-id): {}",
             remain_regions.size(),
             buffer.toString());
     }
