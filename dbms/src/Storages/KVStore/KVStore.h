@@ -161,8 +161,7 @@ public: // Region Management
         UInt64 peer_id,
         UInt64 index,
         UInt64 term,
-        TMTContext & tmt,
-        bool register_to_table);
+        std::optional<std::reference_wrapper<RegionTable>> region_table);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
     void setKVStoreMemoryLimit(size_t s) { maximum_kvstore_memory = s; }
     size_t getKVStoreMemoryLimit() const { return maximum_kvstore_memory; }

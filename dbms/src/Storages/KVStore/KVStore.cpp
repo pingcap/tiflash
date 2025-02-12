@@ -490,8 +490,7 @@ RegionPtr KVStore::genRegionPtr(
     UInt64 peer_id,
     UInt64 index,
     UInt64 term,
-    TMTContext & tmt,
-    bool register_to_table)
+    std::optional<std::reference_wrapper<RegionTable>> region_table)
 {
     auto meta = ({
         auto peer = findPeer(region, peer_id);
@@ -504,10 +503,9 @@ RegionPtr KVStore::genRegionPtr(
         RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
     });
     auto new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
-    if (register_to_table)
+    if (region_table)
     {
-        auto & region_table = tmt.getRegionTable();
-        region_table.addPrehandlingRegion(*new_region);
+        region_table.value().get().addPrehandlingRegion(*new_region);
     }
     return new_region;
 }
