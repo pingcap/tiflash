@@ -968,4 +968,11 @@ try
 }
 CATCH
 
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange)
+try
+{
+    // TODO: Add test case for delete range.
+}
+CATCH
+
 } // namespace DB::DM::tests
