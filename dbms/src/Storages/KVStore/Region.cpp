@@ -428,7 +428,7 @@ void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
 #endif
                 LOG_INFO(
                     log,
-                    "Memory limit exeeded, current={} limit={} table_id={} keyspace_id={} region_id={} from={}",
+                    "Memory limit exceeded, current={} limit={} table_id={} keyspace_id={} region_id={} from={}",
                     current,
                     limit,
                     mapped_table_id,

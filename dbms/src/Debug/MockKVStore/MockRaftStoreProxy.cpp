@@ -642,7 +642,7 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
 
     // The new entry is committed on Proxy's side.
     region->updateCommitIndex(index);
-    // Would set `appleid_index` in genRegionPtr.
+    // Would set `applied_index` in genRegionPtr.
     auto new_kv_region = kvs.genRegionPtr(std::move(region_meta), peer_id, index, term, tmt.getRegionTable());
 
     std::vector<SSTView> ssts;
