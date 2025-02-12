@@ -279,7 +279,6 @@ void WindowTransformAction::initialWorkspaces()
         workspace.idx = i;
         workspace.window_function = desc.window_function;
         workspace.arguments = desc.arguments;
-        workspace.argument_columns.assign(workspace.arguments.size(), nullptr);
         if (workspace.window_function == nullptr)
         {
             initialAggregateFunction(workspace, desc);
@@ -310,10 +309,9 @@ void WindowTransformAction::initialAggregateFunction(
 {
     has_agg = true;
 
+    workspace.argument_columns.assign(workspace.arguments.size(), nullptr);
     workspace.aggregate_function = window_function_description.aggregate_function;
     const auto & aggregate_function = workspace.aggregate_function;
-    if (!arena && aggregate_function->allocatesMemoryInArena())
-        arena = std::make_unique<Arena>();
 
     workspace.aggregate_function_state.reset(aggregate_function->sizeOfData(), aggregate_function->alignOfData());
     aggregate_function->create(workspace.aggregate_function_state.data());
@@ -1212,8 +1210,7 @@ void WindowTransformAction::writeOutCurrentRow()
 
     for (auto & ws : window_workspaces)
     {
-        if (ws.window_function)
-            ws.window_function->windowInsertResultInto(*this, ws.idx, ws.arguments);
+        ws.window_function->windowInsertResultInto(*this, ws.idx, ws.arguments);
     }
 
     for (auto & ws : aggregation_workspaces)
@@ -1222,7 +1219,7 @@ void WindowTransformAction::writeOutCurrentRow()
         IColumn * result_column = block.output_columns[ws.idx].get();
         const auto * agg_func = ws.aggregate_function.get();
         auto * buf = ws.aggregate_function_state.data();
-        agg_func->insertResultInto(buf, *result_column, arena.get());
+        agg_func->insertResultInto(buf, *result_column, nullptr);
     }
 }
 
@@ -1336,7 +1333,7 @@ void WindowTransformAction::updateAggregationState()
     assert(partition_start <= frame_start);
     assert(frame_end <= partition_end);
 
-    bool only_add = false;
+    bool append_add = false;
 
     if (!first_processed)
     {
@@ -1344,27 +1341,20 @@ void WindowTransformAction::updateAggregationState()
             return;
 
         if (prev_frame_start == frame_start)
-            only_add = true;
+            append_add = true;
     }
 
     for (auto & ws : aggregation_workspaces)
     {
         RowNumber start = frame_start;
-        if constexpr (need_decrease)
+        if (need_decrease && checkIfNeedDecrease())
         {
-            if (checkIfNeedDecrease())
-            {
-                decreaseAggregationState(ws, prev_frame_start, frame_start);
-                start = prev_frame_end;
-            }
-            else
-            {
-                ws.aggregate_function->reset(ws.aggregate_function_state.data());
-            }
+            decreaseAggregationState(ws, prev_frame_start, frame_start);
+            start = prev_frame_end;
         }
         else
         {
-            if (only_add)
+            if (append_add)
                 start = prev_frame_end;
             else
                 ws.aggregate_function->reset(ws.aggregate_function_state.data());
@@ -1397,7 +1387,7 @@ void WindowTransformAction::tryCalculate()
 
         while (current_row < partition_end)
         {
-            // if window only have row_number function, we can ignore judging peers
+            // if window does not contain rank or dense rank function, we can ignore judging peers
             if (!has_rank_or_dense_rank)
             {
                 // peer_group_last save the row before current_row

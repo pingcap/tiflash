@@ -203,16 +203,15 @@ private:
             const auto end_row = block_number == end.block ? end.row : block.rows;
             auto * columns = ws.argument_columns.data();
 
-            auto * arena_ptr = arena.get();
             for (auto row = start_row; row < end_row; ++row)
             {
                 if constexpr (is_add)
                 {
-                    agg_func->add(buf, columns, row, arena_ptr);
+                    agg_func->add(buf, columns, row, nullptr);
                 }
                 else
                 {
-                    agg_func->decrease(buf, columns, row, arena_ptr);
+                    agg_func->decrease(buf, columns, row, nullptr);
                 }
             }
         }
@@ -311,8 +310,6 @@ public:
 
     // Auxiliary variable for range frame type when calculating frame_end
     RowNumber prev_frame_end;
-
-    std::unique_ptr<Arena> arena;
 
     bool has_rank_or_dense_rank = false;
 };
