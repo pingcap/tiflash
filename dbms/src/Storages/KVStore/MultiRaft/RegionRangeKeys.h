@@ -52,16 +52,18 @@ class RegionRangeKeys : boost::noncopyable
 public:
     using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
 
-    const RegionRange & comparableKeys() const;
+    const RegionRange & comparableKeys() const { return ori; }
     static RegionRange cloneRange(const RegionRange & from);
     static RegionRange makeComparableKeys(TiKVKey && start_key, TiKVKey && end_key);
-    const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys() const;
+    const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys() const { return raw; }
+
     explicit RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key);
     explicit RegionRangeKeys(RegionRange && range)
         : RegionRangeKeys(std::move(range.first.key), std::move(range.second.key))
     {}
-    TableID getMappedTableID() const;
-    KeyspaceID getKeyspaceID() const;
+    KeyspaceTableID getKeyspaceTableID() const { return KeyspaceTableID(keyspace_id, mapped_table_id); }
+    TableID getMappedTableID() const { return mapped_table_id; }
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
     std::string toDebugString() const;
 
     static bool isRangeOverlapped(const RegionRange & a, const RegionRange & b)
