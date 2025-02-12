@@ -33,10 +33,7 @@ struct RegionDataMemDiff
         : payload(payload_)
         , decoded(decoded_)
     {}
-    RegionDataMemDiff(UInt64 payload_, UInt64 decoded_)
-        : payload(static_cast<Type>(payload_))
-        , decoded(static_cast<Type>(decoded_))
-    {}
+
     RegionDataMemDiff()
         : payload(0)
         , decoded(0)

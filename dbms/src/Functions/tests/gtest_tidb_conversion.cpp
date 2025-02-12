@@ -1004,7 +1004,7 @@ try
 
     auto & dag_context = getDAGContext();
     UInt64 ori_flags = dag_context.getFlags();
-    dag_context.addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     dag_context.clearWarnings();
 
     ASSERT_COLUMN_EQ(
@@ -2258,7 +2258,7 @@ try
     // from_prec(3) + to_scale(7) > Int32::real_prec(10) - 1, so CastInternalType should be **Int64**.
     auto & dag_context = getDAGContext();
     UInt64 ori_flags = dag_context.getFlags();
-    dag_context.addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);
+    dag_context.addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);
     dag_context.clearWarnings();
     ASSERT_COLUMN_EQ(
         createColumn<Nullable<Decimal32>>(

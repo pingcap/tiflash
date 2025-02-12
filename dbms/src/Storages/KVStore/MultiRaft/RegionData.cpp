@@ -236,8 +236,9 @@ std::shared_ptr<const TiKVValue> RegionData::getLockByKey(const TiKVKey & key) c
         return tikv_val;
     }
 
-    // It is safe to ignore the missing lock key after restart, print a warning log and return nullptr
-    LOG_WARNING(
+    // It is safe to ignore the missing lock key after restart, print a debug log and return nullptr.
+    // In txn file prewrite, proxy will try to get the lock to check the txn existence, the logs may be massive.
+    LOG_DEBUG(
         Logger::get(),
         "Failed to get lock by key in region data, key={} map_size={} count={}",
         key.toDebugString(),
@@ -280,7 +281,7 @@ size_t RegionData::totalSize() const
 
 void RegionData::assignRegionData(RegionData && rhs)
 {
-    recordMemChange(RegionDataMemDiff{-cf_data_size, -decoded_data_size});
+    recordMemChange(RegionDataMemDiff{-cf_data_size.load(), -decoded_data_size.load()});
     resetMemoryUsage();
 
     default_cf = std::move(rhs.default_cf);
@@ -288,7 +289,7 @@ void RegionData::assignRegionData(RegionData && rhs)
     lock_cf = std::move(rhs.lock_cf);
     orphan_keys_info = std::move(rhs.orphan_keys_info);
 
-    updateMemoryUsage(RegionDataMemDiff{rhs.cf_data_size, rhs.decoded_data_size});
+    updateMemoryUsage(RegionDataMemDiff{rhs.cf_data_size.load(), rhs.decoded_data_size.load()});
     rhs.resetMemoryUsage();
 }
 

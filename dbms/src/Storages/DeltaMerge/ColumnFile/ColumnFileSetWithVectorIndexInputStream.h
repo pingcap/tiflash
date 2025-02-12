@@ -38,7 +38,7 @@ private:
     const ANNQueryInfoPtr ann_query_info;
     const BitmapFilterView valid_rows;
     // Global vector index cache
-    const VectorIndexCachePtr vec_index_cache;
+    const LocalIndexCachePtr vec_index_cache;
     const ColumnDefine vec_cd;
     const ColumnDefinesPtr rest_col_defs;
 
@@ -69,7 +69,7 @@ public:
         , data_provider(data_provider_)
         , ann_query_info(ann_query_info_)
         , valid_rows(std::move(valid_rows_))
-        , vec_index_cache(context_.global_context.getVectorIndexCache())
+        , vec_index_cache(context_.global_context.getLocalIndexCache())
         , vec_cd(std::move(vec_cd_))
         , rest_col_defs(rest_col_defs_)
         , column_files(reader.snapshot->getColumnFiles())

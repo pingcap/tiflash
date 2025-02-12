@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/LRUCache.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache_fwd.h>
-#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndexViewer.h>
+#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <common/types.h>
 
 #include <condition_variable>
@@ -33,10 +33,10 @@ class VectorIndexTestUtils;
 namespace DB::DM
 {
 
-class VectorIndexCache
+class LocalIndexCache
 {
 private:
-    using Cache = LRUCache<String, VectorIndexViewer>;
+    using Cache = LRUCache<String, LocalIndexViewer>;
 
     Cache cache;
     LoggerPtr log;
@@ -53,20 +53,20 @@ private:
 private:
     friend class tests::VectorIndexTestUtils;
 
-    // Drop the in-memory Vector Index if the on-disk file is deleted.
+    // Drop the in-memory Local Index if the on-disk file is deleted.
     // mmaped file could be unmmaped so that disk space can be reclaimed.
     size_t cleanOutdatedCacheEntries();
 
     void cleanOutdatedLoop();
 
-    // TODO(vector-index): Use task on BackgroundProcessingPool instead of a raw thread
+    // TODO(local-index): Use task on BackgroundProcessingPool instead of a raw thread
     std::thread cleaner_thread;
 
 public:
-    static constexpr const char * COLUMNFILETINY_INDEX_NAME_PREFIX = "vec_index_page_";
-    explicit VectorIndexCache(size_t max_entities);
+    static constexpr const char * COLUMNFILETINY_INDEX_NAME_PREFIX = "local_index_page_";
+    explicit LocalIndexCache(size_t max_entities);
 
-    ~VectorIndexCache();
+    ~LocalIndexCache();
 
     template <typename LoadFunc>
     Cache::MappedPtr getOrSet(const Cache::Key & file_path, LoadFunc && load)
