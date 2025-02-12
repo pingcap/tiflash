@@ -1248,16 +1248,22 @@ void WindowTransformAction::advanceFrameEndCurrentRow()
                 }
                 break;
             }
-            frame_end = tmp;
+
+            if (tmp < partition_end)
+            {
+                frame_end = tmp;
+                frame_ended = true;
+            } else {
+                frame_ended = false;
+            }
         }
     }
     else
     {
         frame_end = current_row;
+        frame_ended = true;
         advanceRowNumber(frame_end);
     }
-
-    frame_ended = true;
 }
 
 void WindowTransformAction::advanceFrameEnd()
