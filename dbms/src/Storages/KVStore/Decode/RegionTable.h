@@ -166,7 +166,6 @@ private:
     void removeTable(KeyspaceID keyspace_id, TableID table_id);
     InternalRegion & getOrInsertRegion(const Region & region);
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const Region & region);
-    InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
     void addTableToIndex(KeyspaceID keyspace_id, TableID table_id);
     void removeTableFromIndex(KeyspaceID keyspace_id, TableID table_id);

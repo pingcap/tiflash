@@ -60,12 +60,6 @@ RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id,
     return it->second;
 }
 
-RegionTable::InternalRegion & RegionTable::insertRegion(Table & table, const Region & region)
-{
-    const auto range = region.getRange();
-    return insertRegion(table, *range, region);
-}
-
 RegionTable::InternalRegion & RegionTable::insertRegion(
     Table & table,
     const RegionRangeKeys & region_range_keys,
@@ -105,7 +99,7 @@ RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const Region & regi
     if (auto it = table_regions.find(region.id()); it != table_regions.end())
         return it->second;
 
-    return insertRegion(table, region);
+    return insertRegion(table, *region.getRange(), region);
 }
 
 RegionTable::RegionTable(Context & context_)
@@ -143,9 +137,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
     for (const auto & region_info : table.internal_regions)
     {
         region_infos.erase(region_info.first);
-        {
-            safe_ts_mgr.remove(region_info.first);
-        }
+        safe_ts_mgr.remove(region_info.first);
     }
 
     // Remove from table map.
@@ -436,6 +428,7 @@ void RegionTable::replaceRegion(const RegionPtr & old_region, const RegionPtr & 
     extendRegionRange(*new_region, *region_range_keys);
     if (old_region)
     {
+        std::scoped_lock lock(mutex);
         // `old_region` will no longer contribute to the memory of the table.
         auto keyspace_id = region_range_keys->getKeyspaceID();
         auto table_id = region_range_keys->getMappedTableID();

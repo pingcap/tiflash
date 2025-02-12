@@ -107,7 +107,7 @@ RegionPtr KVStore::handleIngestSSTByDTFile(
     if (index <= region->appliedIndex())
         return nullptr;
 
-    // Create a tmp region to store uncommitted data
+    // Create a tmp region to store uncommitted data, the uncommitted data will be merged from `tmp_region` to the existing region. So here ignore the region_table.
     RegionPtr tmp_region;
     {
         auto meta_region = region->cloneMetaRegion();
