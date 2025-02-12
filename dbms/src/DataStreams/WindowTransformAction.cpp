@@ -1189,7 +1189,9 @@ void WindowTransformAction::advanceFrameEndCurrentRow()
             {
                 frame_end = tmp;
                 frame_ended = true;
-            } else {
+            }
+            else
+            {
                 frame_ended = false;
             }
         }
