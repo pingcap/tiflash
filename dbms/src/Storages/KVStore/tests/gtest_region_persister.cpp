@@ -567,14 +567,8 @@ try
         auto region = makeRegion(createRegionMeta(region_100, table_id));
         TiKVKey key = RecordKVFormat::genKey(table_id, region_100, diff++);
         region->insertDebug("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
-        region->insertDebug(
-            "write",
-            TiKVKey::copyFrom(key),
-            RecordKVFormat::encodeWriteCfValue('P', 0));
-        region->insertDebug(
-            "lock",
-            TiKVKey::copyFrom(key),
-            RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+        region->insertDebug("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+        region->insertDebug("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
         persister.persist(*region, region_task_lock);
         regions.emplace(region->id(), region);
@@ -590,14 +584,8 @@ try
         auto region = makeRegion(createRegionMeta(region_101, table_id));
         TiKVKey key = RecordKVFormat::genKey(table_id, region_101, diff++);
         region->insertDebug("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
-        region->insertDebug(
-            "write",
-            TiKVKey::copyFrom(key),
-            RecordKVFormat::encodeWriteCfValue('P', 0));
-        region->insertDebug(
-            "lock",
-            TiKVKey::copyFrom(key),
-            RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+        region->insertDebug("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+        region->insertDebug("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
         persister.persist(*region, region_task_lock);
 
@@ -638,14 +626,8 @@ try
             auto region = makeRegion(createRegionMeta(i, table_id));
             TiKVKey key = RecordKVFormat::genKey(table_id, i, diff++);
             region->insertDebug("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
-            region->insertDebug(
-                "write",
-                TiKVKey::copyFrom(key),
-                RecordKVFormat::encodeWriteCfValue('P', 0));
-            region->insertDebug(
-                "lock",
-                TiKVKey::copyFrom(key),
-                RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+            region->insertDebug("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+            region->insertDebug("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
             persister.persist(*region, region_task_lock);
 
@@ -733,16 +715,9 @@ try
                     break;
                 }
                 TiKVKey key = RecordKVFormat::genKey(table_id, handle_id, tso++);
-                region->insertFromSnap(
-                    tmt,
-                    "default",
-                    TiKVKey::copyFrom(key),
-                    TiKVValue(large_value.data()));
-                region->insertFromSnap(
-                    tmt,
-                    "write",
-                    TiKVKey::copyFrom(key),
-                    RecordKVFormat::encodeWriteCfValue('P', 0));
+                region->insertFromSnap(tmt, "default", TiKVKey::copyFrom(key), TiKVValue(large_value.data()));
+                region
+                    ->insertFromSnap(tmt, "write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
                 region->insertFromSnap(
                     tmt,
                     "lock",
