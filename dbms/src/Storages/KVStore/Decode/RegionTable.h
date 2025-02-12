@@ -78,14 +78,9 @@ public:
             , range_in_table(range_in_table_)
         {}
 
-        void updateRegionCacheBytes(size_t);
-
         RegionID region_id;
         std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
         bool pause_flush = false;
-
-    private:
-        Int64 cache_bytes = 0;
     };
 
     using InternalRegions = std::unordered_map<RegionID, InternalRegion>;
@@ -96,7 +91,7 @@ public:
             : table_id(table_id_)
         {}
         TableID table_id;
-        InternalRegions regions;
+        InternalRegions internal_regions;
     };
 
     explicit RegionTable(Context & context_);
@@ -212,7 +207,7 @@ private:
 };
 
 
-// A wrap of RegionPtr, with snapshot files directory waitting to be ingested
+// A wrap of RegionPtr, with snapshot files directory waiting to be ingested
 struct RegionPtrWithSnapshotFiles
 {
     using Base = RegionPtr;

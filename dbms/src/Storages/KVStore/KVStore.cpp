@@ -467,7 +467,7 @@ size_t KVStore::getOngoingPrehandleSubtaskCount() const
 // Generate a temporary region pointer by the given meta
 RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
 {
-    auto meta = RegionMeta::genFromPb(std::move(region), peer_id, index, term);
+    auto meta = RegionMeta::genFromMetaRegion(std::move(region), peer_id, index, term);
     return std::make_shared<Region>(std::move(meta), proxy_helper);
 }
 
@@ -477,7 +477,7 @@ RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
 }
 
 
-void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfoType type, uint64_t value)
+void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfoType type, uint64_t value) const
 {
     joint_memory_allocation_map->reportThreadAllocInfoForProxy(v, type, value);
 }
