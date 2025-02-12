@@ -90,6 +90,7 @@ protected:
         // hack to change the "immutable" delta-index on delta-snapshot for testing
         (*const_cast<DeltaIndexPtr *>(&first_snap->delta->getSharedDeltaIndex())) = broken_delta_index;
 
+        // read the left segment after split
         auto task = std::make_shared<DM::SegmentReadTask>(
             first,
             first_snap,
