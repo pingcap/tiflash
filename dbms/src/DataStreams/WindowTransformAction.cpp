@@ -270,6 +270,7 @@ void WindowTransformAction::initialWorkspaces()
     auto workspace_num = window_description.window_functions_descriptions.size();
     window_workspaces.reserve(workspace_num);
     aggregation_workspaces.reserve(workspace_num);
+    return_types.reserve(workspace_num);
 
     for (size_t i = 0; i < workspace_num; i++)
     {
@@ -282,10 +283,14 @@ void WindowTransformAction::initialWorkspaces()
         if (workspace.window_function == nullptr)
         {
             initialAggregateFunction(workspace, desc);
+            return_types.push_back(workspace.aggregate_function->getReturnType());
             aggregation_workspaces.push_back(std::move(workspace));
         }
         else
+        {
+            return_types.push_back(workspace.window_function->getReturnType());
             window_workspaces.push_back(std::move(workspace));
+        }
     }
 
     has_rank_or_dense_rank = false;
@@ -1291,29 +1296,9 @@ void WindowTransformAction::appendBlock(Block & current_block)
     auto & window_block = window_blocks.back();
     window_block.rows = current_block.rows();
 
-    size_t workspace_num = window_workspaces.size() + aggregation_workspaces.size();
-    auto window_iter = window_workspaces.begin();
-    auto window_end = window_workspaces.end();
-    auto agg_iter = aggregation_workspaces.begin();
-    auto agg_end = aggregation_workspaces.end();
-
-    // Initialize output columns and add new columns to output block.
-    for (size_t i = 0; i < workspace_num; i++)
+    for (const auto & return_type : return_types)
     {
-        MutableColumnPtr res;
-        if (window_iter != window_end && window_iter->idx == i)
-        {
-            res = window_iter->window_function->getReturnType()->createColumn();
-            window_iter++;
-        }
-        else if (agg_iter != agg_end && agg_iter->idx == i)
-        {
-            res = agg_iter->aggregate_function->getReturnType()->createColumn();
-            agg_iter++;
-        }
-        else
-            throw Exception("Encounter unexpected case");
-
+        MutableColumnPtr res = return_type->createColumn();
         res->reserve(window_block.rows);
         window_block.output_columns.push_back(std::move(res));
     }
@@ -1499,13 +1484,13 @@ void WindowTransformAction::tryCalculate()
 
         // Start the next partition.
         partition_start = partition_end;
-        prev_frame_start = partition_start;
-        prev_frame_end = partition_end;
         advanceRowNumber(partition_end);
         partition_ended = false;
         // We have to reset the frame and other pointers when the new partition starts.
         frame_start = partition_start;
         frame_end = partition_start;
+        prev_frame_start = partition_start;
+        prev_frame_end = partition_start;
         first_processed = true;
         assert(current_row == partition_start);
         current_row_number = 1;

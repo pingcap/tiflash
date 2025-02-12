@@ -94,7 +94,6 @@ void WindowAggFuncTest::executeTest(const TestCase & test)
 
     for (size_t i = 0; i < test.test_case_num; i++)
     {
-        std::cout << "iiiiiiiiiiiii: " << i << std::endl;
         if (test.is_range_frame)
         {
             frame.start = buildRangeFrameBound<Int64>(
@@ -144,7 +143,6 @@ try
     std::vector<Int64> start_offset{0, 1, 3, 10, 0, 0, 0, 3};
     std::vector<Int64> end_offset{0, 0, 0, 0, 1, 3, 10, 3};
     std::vector<std::vector<std::optional<Int64>>> res;
-    std::cout << "11111111111111111111" << std::endl;
     res
         = {{0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
            {0, -1, -1, 4, 10, 2, 2, -4, -6, -1, 7, 4, 6, 0, -12, -1, 3, 4, -5, 2, 7, 5},
@@ -156,7 +154,6 @@ try
            {0, 9, 9, 9, 9, -4, -3, -3, -3, -5, 4, 1, 3, 4, -3, 0, -9, 4, -5, 7, 7, 7}};
 
     executeTest(TestCase(Sum(value_col), start_offset, end_offset, res, {}, false, false));
-    std::cout << "222222222222222" << std::endl;
     res
         = {{0, -1, 0, 4, 6, 2, 0, -4, -2, 1, 7, -3, 9, -9, -3, 2, 1, 4, -5, 2, 5, 0},
            {0, -1, -1, 4, 6, 2, 2, -4, -2, -1, 7, -3, 9, -9, -3, 2, 3, 4, -5, 2, 5, 0},
@@ -167,7 +164,6 @@ try
            {0, 9, 10, 10, 6, -3, -5, -5, -1, 1, 4, -3, 0, -12, -3, 3, 1, 4, -5, 7, 5, 0},
            {0, 3, 3, 9, 10, 2, -2, -6, -5, -1, 7, 6, 6, -9, -3, 3, 3, 4, -5, 2, 5, 0}};
     executeTest(TestCase(Sum(value_col), start_offset, end_offset, res, {}, true, false));
-    std::cout << "3333333333333333333" << std::endl;
     res
         = {{0, -1, {}, {}, 6, 2, {}, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},
            {0, -1, -1, {}, 6, 2, 2, -4, {}, {}, 7, {}, 9, {}, {}, {}, {}, 4, {}, 2, {}, 0},

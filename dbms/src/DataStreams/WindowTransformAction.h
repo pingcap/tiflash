@@ -243,6 +243,7 @@ public:
     // Per-window-function scratch spaces.
     std::vector<WindowFunctionWorkspace> window_workspaces;
     std::vector<WindowFunctionWorkspace> aggregation_workspaces;
+    std::vector<DataTypePtr> return_types;
 
     bool has_agg = false;
 
