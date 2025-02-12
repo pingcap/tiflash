@@ -71,21 +71,26 @@ uint64_t avx2_byte_count(const char * src, size_t size, char target);
 namespace mem_utils
 {
 
+FLATTEN_INLINE_PURE static inline bool IsStrEqualWithSameSize(const char * lhs, const char * rhs, size_t size)
+{
+#ifdef TIFLASH_ENABLE_AVX_SUPPORT
+#ifdef __AVX2__
+    return mem_utils::details::avx2_mem_equal(lhs, rhs, size);
+#else
+    return mem_utils::avx2_mem_equal(lhs, rhs, size);
+#endif
+#else
+    return 0 == std::memcmp(lhs, rhs, size);
+#endif
+}
+
 // same function like `std::string_view == std::string_view`
 FLATTEN_INLINE_PURE static inline bool IsStrViewEqual(const std::string_view & lhs, const std::string_view & rhs)
 {
     if (lhs.size() != rhs.size())
         return false;
 
-#ifdef TIFLASH_ENABLE_AVX_SUPPORT
-#ifdef __AVX2__
-    return mem_utils::details::avx2_mem_equal(lhs.data(), rhs.data(), lhs.size());
-#else
-    return mem_utils::avx2_mem_equal(lhs.data(), rhs.data(), lhs.size());
-#endif
-#else
-    return 0 == std::memcmp(lhs.data(), rhs.data(), lhs.size());
-#endif
+    return IsStrEqualWithSameSize(lhs.data(), rhs.data(), lhs.size());
 }
 
 // same function like `std::string_view.compare(std::string_view)`

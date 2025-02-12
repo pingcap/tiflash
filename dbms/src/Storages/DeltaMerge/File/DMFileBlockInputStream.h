@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
@@ -22,7 +23,6 @@
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm_fwd.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream_fwd.h>
-#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -132,6 +132,9 @@ public:
     DMFileBlockInputStreamBuilder & setReadPacks(const IdSetPtr & read_packs_)
     {
         read_packs = read_packs_;
+        RUNTIME_CHECK_MSG(
+            read_packs == nullptr || pack_filter == nullptr,
+            "pack_filter is not nullptr when setting read_packs");
         return *this;
     }
 
@@ -169,6 +172,9 @@ public:
     DMFileBlockInputStreamBuilder & setDMFilePackFilterResult(const DMFilePackFilterResultPtr & pack_filter_)
     {
         pack_filter = pack_filter_;
+        RUNTIME_CHECK_MSG(
+            pack_filter == nullptr || read_packs == nullptr,
+            "read_packs is not nullptr when setting pack_filter");
         return *this;
     }
 
@@ -198,12 +204,12 @@ private:
     DMFileBlockInputStreamBuilder & setCaches(
         const MarkCachePtr & mark_cache_,
         const MinMaxIndexCachePtr & index_cache_,
-        const VectorIndexCachePtr & vector_index_cache_,
+        const LocalIndexCachePtr & local_index_cache_,
         const ColumnCacheLongTermPtr & column_cache_long_term_)
     {
         mark_cache = mark_cache_;
         index_cache = index_cache_;
-        vector_index_cache = vector_index_cache_;
+        local_index_cache = local_index_cache_;
         column_cache_long_term = column_cache_long_term_;
         return *this;
     }
@@ -236,7 +242,7 @@ private:
 
     ANNQueryInfoPtr ann_query_info = nullptr;
 
-    VectorIndexCachePtr vector_index_cache;
+    LocalIndexCachePtr local_index_cache;
     // Note: Currently thie field is assigned only for Stable streams, not available for ColumnFileBig
     std::optional<BitmapFilterView> bitmap_filter;
 

@@ -16,7 +16,6 @@
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
-#include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/TiFlashSecurity.h>
@@ -54,8 +53,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
@@ -137,7 +136,6 @@ struct ContextShared
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
     String flags_path; /// Path to the directory with some control flags for server maintenance.
-    String user_files_path; /// Path to the directory with user provided files, usable by 'file' table function.
     PathPool
         path_pool; /// The data directories. RegionPersister and some Storage Engine like DeltaMerge will use this to manage data placement on disks.
     ConfigurationPtr config; /// Global configuration settings.
@@ -145,13 +143,12 @@ struct ContextShared
     Databases databases; /// List of databases and tables in them.
     FormatFactory format_factory; /// Formats.
     String default_profile_name; /// Default profile name used for default values.
-    String system_profile_name; /// Profile used by system processes
     std::shared_ptr<ISecurityManager> security_manager; /// Known users.
     Quotas quotas; /// Known quotas for resource use.
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
-    mutable DM::VectorIndexCachePtr vector_index_cache;
+    mutable DM::LocalIndexCachePtr local_index_cache;
     mutable DM::ColumnCacheLongTermPtr column_cache_long_term;
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
@@ -163,8 +160,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr
         ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
-    MultiVersion<Macros> macros; /// Substitutions extracted from config.
-    String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries; /// The cache of shared queries.
     SchemaSyncServicePtr schema_sync_service; /// Schema sync service instance.
@@ -188,6 +183,8 @@ struct ContextShared
 
     JointThreadInfoJeallocMapPtr joint_memory_allocation_map; /// Joint thread-wise alloc/dealloc map
 
+    std::unordered_set<KeyspaceID> keyspace_blocklist;
+    std::unordered_set<RegionID> region_blocklist;
     std::unordered_set<uint64_t> store_id_blocklist; /// Those store id are blocked from batch cop request.
 
     class SessionKeyHash
@@ -553,12 +550,6 @@ String Context::getFlagsPath() const
     return shared->flags_path;
 }
 
-String Context::getUserFilesPath() const
-{
-    auto lock = getLock();
-    return shared->user_files_path;
-}
-
 PathPool & Context::getPathPool() const
 {
     auto lock = getLock();
@@ -576,9 +567,6 @@ void Context::setPath(const String & path)
 
     if (shared->flags_path.empty())
         shared->flags_path = shared->path + "flags/";
-
-    if (shared->user_files_path.empty())
-        shared->user_files_path = shared->path + "user_files/";
 }
 
 void Context::setTemporaryPath(const String & path)
@@ -591,12 +579,6 @@ void Context::setFlagsPath(const String & path)
 {
     auto lock = getLock();
     shared->flags_path = path;
-}
-
-void Context::setUserFilesPath(const String & path)
-{
-    auto lock = getLock();
-    shared->user_files_path = path;
 }
 
 void Context::setPathPool(
@@ -653,8 +635,7 @@ TiFlashSecurityConfigPtr Context::getSecurityConfig()
 
 void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    auto default_profile_name = config.getString("default_profile", "default");
-    String elem = "profiles." + default_profile_name;
+    String elem = "profiles.default";
     if (!config.has(elem))
     {
         return;
@@ -691,7 +672,7 @@ void Context::calculateUserSettings()
     settings = Settings();
 
     /// 2) Apply settings from default profile ("profiles.*" in `users_config`)
-    auto default_profile_name = getDefaultProfileName();
+    auto default_profile_name = shared->default_profile_name;
     if (profile_name != default_profile_name)
         settings.setProfile(default_profile_name, *shared->users_config);
 
@@ -1249,16 +1230,6 @@ void Context::setDefaultFormat(const String & name)
     default_format = name;
 }
 
-MultiVersion<Macros>::Version Context::getMacros() const
-{
-    return shared->macros.get();
-}
-
-void Context::setMacros(std::unique_ptr<Macros> && macros)
-{
-    shared->macros.set(std::move(macros));
-}
-
 const Context & Context::getQueryContext() const
 {
     if (!query_context)
@@ -1401,26 +1372,26 @@ void Context::dropMinMaxIndexCache() const
         shared->minmax_index_cache->reset();
 }
 
-void Context::setVectorIndexCache(size_t cache_entities)
+void Context::setLocalIndexCache(size_t cache_entities)
 {
     auto lock = getLock();
 
-    RUNTIME_CHECK(!shared->vector_index_cache);
+    RUNTIME_CHECK(!shared->local_index_cache);
 
-    shared->vector_index_cache = std::make_shared<DM::VectorIndexCache>(cache_entities);
+    shared->local_index_cache = std::make_shared<DM::LocalIndexCache>(cache_entities);
 }
 
-DM::VectorIndexCachePtr Context::getVectorIndexCache() const
+DM::LocalIndexCachePtr Context::getLocalIndexCache() const
 {
     auto lock = getLock();
-    return shared->vector_index_cache;
+    return shared->local_index_cache;
 }
 
-void Context::dropVectorIndexCache() const
+void Context::dropLocalIndexCache() const
 {
     auto lock = getLock();
-    if (shared->vector_index_cache)
-        shared->vector_index_cache.reset();
+    if (shared->local_index_cache)
+        shared->local_index_cache.reset();
 }
 
 void Context::setColumnCacheLongTerm(size_t cache_size_in_bytes)
@@ -2059,7 +2030,7 @@ void Context::reloadConfig() const
 {
     /// Use mutex if callback may be changed after startup.
     if (!shared->config_reload_callback)
-        throw Exception("Can't reload config beacuse config_reload_callback is not set.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Can't reload config because config_reload_callback is not set.", ErrorCodes::LOGICAL_ERROR);
 
     shared->config_reload_callback();
 }
@@ -2083,32 +2054,11 @@ void Context::setApplicationType(ApplicationType type)
     shared->application_type = type;
 }
 
-void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)
+void Context::setDefaultProfiles()
 {
-    shared->default_profile_name = config.getString("default_profile", "default");
-    shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
-    setSetting("profile", shared->system_profile_name);
+    shared->default_profile_name = "default";
+    setSetting("profile", shared->default_profile_name);
     is_config_loaded = true;
-}
-
-String Context::getDefaultProfileName() const
-{
-    return shared->default_profile_name;
-}
-
-String Context::getSystemProfileName() const
-{
-    return shared->system_profile_name;
-}
-
-String Context::getFormatSchemaPath() const
-{
-    return shared->format_schema_path;
-}
-
-void Context::setFormatSchemaPath(const String & path)
-{
-    shared->format_schema_path = path;
 }
 
 SharedQueriesPtr Context::getSharedQueries()
@@ -2225,6 +2175,37 @@ MockMPPServerInfo Context::mockMPPServerInfo() const
 void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
 {
     mpp_server_info = info;
+}
+
+void Context::initKeyspaceBlocklist(const std::unordered_set<KeyspaceID> & keyspace_ids)
+{
+    auto lock = getLock();
+    shared->keyspace_blocklist = keyspace_ids;
+}
+bool Context::isKeyspaceInBlocklist(const KeyspaceID keyspace_id)
+{
+    auto lock = getLock();
+    return shared->keyspace_blocklist.count(keyspace_id) > 0;
+}
+void Context::initRegionBlocklist(const std::unordered_set<RegionID> & region_ids)
+{
+    auto lock = getLock();
+    shared->region_blocklist = region_ids;
+}
+bool Context::isRegionInBlocklist(const RegionID region_id)
+{
+    auto lock = getLock();
+    return shared->region_blocklist.count(region_id) > 0;
+}
+bool Context::isRegionsContainsInBlocklist(const std::vector<RegionID> & regions)
+{
+    auto lock = getLock();
+    for (const auto region : regions)
+    {
+        if (isRegionInBlocklist(region))
+            return true;
+    }
+    return false;
 }
 
 const std::unordered_set<uint64_t> * Context::getStoreIdBlockList() const

@@ -16,7 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileVectorIndexReader.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/FileCache.h>
@@ -65,12 +65,14 @@ void DMFileVectorIndexReader::loadVectorIndex()
     // Check vector index exists on the column
     auto vector_index = dmfile->getLocalIndex(col_id, index_id);
     RUNTIME_CHECK(vector_index.has_value(), col_id, index_id);
-    perf_stat.index_size = vector_index->index_bytes();
+    RUNTIME_CHECK(vector_index->index_props().kind() == dtpb::IndexFileKind::VECTOR_INDEX);
+    RUNTIME_CHECK(vector_index->index_props().has_vector_index());
+    perf_stat.index_size = vector_index->index_props().file_size();
 
     // If local file is invalidated, cache is not valid anymore. So we
     // need to ensure file exists on local fs first.
     const auto index_file_path = index_id > 0 //
-        ? dmfile->vectorIndexPath(index_id) //
+        ? dmfile->localIndexPath(index_id, TiDB::ColumnarIndexKind::Vector) //
         : dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
     String local_index_file_path;
     if (auto s3_file_name = S3::S3FilenameView::fromKeyWithPrefix(index_file_path); s3_file_name.isValid())
@@ -88,7 +90,9 @@ void DMFileVectorIndexReader::loadVectorIndex()
         {
             try
             {
-                if (auto file_guard = file_cache->downloadFileForLocalRead(s3_file_name, vector_index->index_bytes());
+                if (auto file_guard = file_cache->downloadFileForLocalRead( //
+                        s3_file_name,
+                        vector_index->index_props().file_size());
                     file_guard)
                 {
                     local_index_file_path = file_guard->getLocalFileName();
@@ -122,17 +126,22 @@ void DMFileVectorIndexReader::loadVectorIndex()
 
     auto load_from_file = [&]() {
         perf_stat.has_load_from_file = true;
-        return VectorIndexViewer::view(*vector_index, local_index_file_path);
+        return VectorIndexViewer::view(vector_index->index_props().vector_index(), local_index_file_path);
     };
 
     Stopwatch watch;
-    if (vec_index_cache)
+    if (local_index_cache)
+    {
         // Note: must use local_index_file_path as the cache key, because cache
         // will check whether file is still valid and try to remove memory references
         // when file is dropped.
-        vec_index = vec_index_cache->getOrSet(local_index_file_path, load_from_file);
+        auto local_index = local_index_cache->getOrSet(local_index_file_path, load_from_file);
+        vec_index = std::dynamic_pointer_cast<VectorIndexViewer>(local_index);
+    }
     else
+    {
         vec_index = load_from_file();
+    }
 
     perf_stat.duration_load_index += watch.elapsedSeconds();
     RUNTIME_CHECK(vec_index != nullptr);

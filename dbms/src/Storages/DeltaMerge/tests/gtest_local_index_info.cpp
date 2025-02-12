@@ -22,7 +22,7 @@
 
 namespace DB::FailPoints
 {
-extern const char force_not_support_vector_index[];
+extern const char force_not_support_local_index[];
 } // namespace DB::FailPoints
 namespace DB::DM::tests
 {
@@ -42,8 +42,10 @@ try
     LocalIndexInfosPtr index_info = nullptr;
     // check the same
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto changeset = generateLocalIndexInfos(index_info, table_info, logger);
+        auto new_index_info = changeset.new_local_index_infos;
         ASSERT_EQ(new_index_info, nullptr);
+        LOG_INFO(logger, changeset.toString());
         // check again, nothing changed, return nullptr
         ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
 
@@ -68,7 +70,7 @@ try
         table_info.index_infos.emplace_back(expect_idx);
     }
 
-    FailPointHelper::enableFailPoint(FailPoints::force_not_support_vector_index);
+    FailPointHelper::enableFailPoint(FailPoints::force_not_support_local_index);
 
     // check the result when storage format not support
     auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
@@ -121,17 +123,23 @@ try
 
     // check the different
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto changeset = generateLocalIndexInfos(index_info, table_info, logger);
+        auto new_index_info = changeset.new_local_index_infos;
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 1);
         const auto & idx = (*new_index_info)[0];
-        ASSERT_EQ(IndexType::Vector, idx.type);
+        ASSERT_EQ(TiDB::ColumnarIndexKind::Vector, idx.kind);
         ASSERT_EQ(expect_idx.id, idx.index_id);
         ASSERT_EQ(100, idx.column_id);
-        ASSERT_NE(nullptr, idx.index_definition);
-        ASSERT_EQ(expect_idx.vector_index->kind, idx.index_definition->kind);
-        ASSERT_EQ(expect_idx.vector_index->dimension, idx.index_definition->dimension);
-        ASSERT_EQ(expect_idx.vector_index->distance_metric, idx.index_definition->distance_metric);
+        ASSERT_NE(nullptr, idx.def_vector_index);
+        ASSERT_EQ(expect_idx.vector_index->kind, idx.def_vector_index->kind);
+        ASSERT_EQ(expect_idx.vector_index->dimension, idx.def_vector_index->dimension);
+        ASSERT_EQ(expect_idx.vector_index->distance_metric, idx.def_vector_index->distance_metric);
+
+        ASSERT_EQ(0, changeset.keepIndexes().size());
+        ASSERT_EQ(1, changeset.addedIndexes().size());
+        ASSERT_EQ(0, changeset.droppedIndexes().size());
+        LOG_INFO(logger, changeset.toString());
 
         // check again, nothing changed, return nullptr
         ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
@@ -154,25 +162,31 @@ try
     }
     // check the different
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto changeset = generateLocalIndexInfos(index_info, table_info, logger);
+        auto new_index_info = changeset.new_local_index_infos;
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 2);
         const auto & idx0 = (*new_index_info)[0];
-        ASSERT_EQ(IndexType::Vector, idx0.type);
+        ASSERT_EQ(TiDB::ColumnarIndexKind::Vector, idx0.kind);
         ASSERT_EQ(expect_idx.id, idx0.index_id);
         ASSERT_EQ(100, idx0.column_id);
-        ASSERT_NE(nullptr, idx0.index_definition);
-        ASSERT_EQ(expect_idx.vector_index->kind, idx0.index_definition->kind);
-        ASSERT_EQ(expect_idx.vector_index->dimension, idx0.index_definition->dimension);
-        ASSERT_EQ(expect_idx.vector_index->distance_metric, idx0.index_definition->distance_metric);
+        ASSERT_NE(nullptr, idx0.def_vector_index);
+        ASSERT_EQ(expect_idx.vector_index->kind, idx0.def_vector_index->kind);
+        ASSERT_EQ(expect_idx.vector_index->dimension, idx0.def_vector_index->dimension);
+        ASSERT_EQ(expect_idx.vector_index->distance_metric, idx0.def_vector_index->distance_metric);
         const auto & idx1 = (*new_index_info)[1];
-        ASSERT_EQ(IndexType::Vector, idx1.type);
+        ASSERT_EQ(TiDB::ColumnarIndexKind::Vector, idx1.kind);
         ASSERT_EQ(expect_idx2.id, idx1.index_id);
         ASSERT_EQ(100, idx1.column_id);
-        ASSERT_NE(nullptr, idx1.index_definition);
-        ASSERT_EQ(expect_idx2.vector_index->kind, idx1.index_definition->kind);
-        ASSERT_EQ(expect_idx2.vector_index->dimension, idx1.index_definition->dimension);
-        ASSERT_EQ(expect_idx2.vector_index->distance_metric, idx1.index_definition->distance_metric);
+        ASSERT_NE(nullptr, idx1.def_vector_index);
+        ASSERT_EQ(expect_idx2.vector_index->kind, idx1.def_vector_index->kind);
+        ASSERT_EQ(expect_idx2.vector_index->dimension, idx1.def_vector_index->dimension);
+        ASSERT_EQ(expect_idx2.vector_index->distance_metric, idx1.def_vector_index->distance_metric);
+
+        ASSERT_EQ(1, changeset.keepIndexes().size());
+        ASSERT_EQ(1, changeset.addedIndexes().size());
+        ASSERT_EQ(0, changeset.droppedIndexes().size());
+        LOG_INFO(logger, changeset.toString());
 
         // check again, nothing changed, return nullptr
         ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
@@ -181,7 +195,7 @@ try
         index_info = new_index_info;
     }
 
-    // Remove the second vecotr index and add a new vector index to the TableInfo.
+    // Remove the second vector index and add a new vector index to the TableInfo.
     TiDB::IndexInfo expect_idx3;
     {
         // drop the second index
@@ -198,25 +212,31 @@ try
     }
     // check the different
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto changeset = generateLocalIndexInfos(index_info, table_info, logger);
+        auto new_index_info = changeset.new_local_index_infos;
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 2);
         const auto & idx0 = (*new_index_info)[0];
-        ASSERT_EQ(IndexType::Vector, idx0.type);
+        ASSERT_EQ(TiDB::ColumnarIndexKind::Vector, idx0.kind);
         ASSERT_EQ(expect_idx.id, idx0.index_id);
         ASSERT_EQ(100, idx0.column_id);
-        ASSERT_NE(nullptr, idx0.index_definition);
-        ASSERT_EQ(expect_idx.vector_index->kind, idx0.index_definition->kind);
-        ASSERT_EQ(expect_idx.vector_index->dimension, idx0.index_definition->dimension);
-        ASSERT_EQ(expect_idx.vector_index->distance_metric, idx0.index_definition->distance_metric);
+        ASSERT_NE(nullptr, idx0.def_vector_index);
+        ASSERT_EQ(expect_idx.vector_index->kind, idx0.def_vector_index->kind);
+        ASSERT_EQ(expect_idx.vector_index->dimension, idx0.def_vector_index->dimension);
+        ASSERT_EQ(expect_idx.vector_index->distance_metric, idx0.def_vector_index->distance_metric);
         const auto & idx1 = (*new_index_info)[1];
-        ASSERT_EQ(IndexType::Vector, idx1.type);
+        ASSERT_EQ(TiDB::ColumnarIndexKind::Vector, idx1.kind);
         ASSERT_EQ(expect_idx3.id, idx1.index_id);
         ASSERT_EQ(100, idx1.column_id);
-        ASSERT_NE(nullptr, idx1.index_definition);
-        ASSERT_EQ(expect_idx3.vector_index->kind, idx1.index_definition->kind);
-        ASSERT_EQ(expect_idx3.vector_index->dimension, idx1.index_definition->dimension);
-        ASSERT_EQ(expect_idx3.vector_index->distance_metric, idx1.index_definition->distance_metric);
+        ASSERT_NE(nullptr, idx1.def_vector_index);
+        ASSERT_EQ(expect_idx3.vector_index->kind, idx1.def_vector_index->kind);
+        ASSERT_EQ(expect_idx3.vector_index->dimension, idx1.def_vector_index->dimension);
+        ASSERT_EQ(expect_idx3.vector_index->distance_metric, idx1.def_vector_index->distance_metric);
+
+        ASSERT_EQ(1, changeset.keepIndexes().size());
+        ASSERT_EQ(1, changeset.addedIndexes().size());
+        ASSERT_EQ(1, changeset.droppedIndexes().size());
+        LOG_INFO(logger, changeset.toString());
 
         // check again, nothing changed, return nullptr
         ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);

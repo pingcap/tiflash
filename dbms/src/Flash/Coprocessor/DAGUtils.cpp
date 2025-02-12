@@ -57,7 +57,7 @@ const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::First, "first_row"},
     {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
     {tipb::ExprType::GroupConcat, "groupArray"},
-    //{tipb::ExprType::Avg, ""},
+    {tipb::ExprType::Avg, "avg"}, // Only used in aggregation in window function
     //{tipb::ExprType::Agg_BitAnd, ""},
     //{tipb::ExprType::Agg_BitOr, ""},
     //{tipb::ExprType::Agg_BitXor, ""},
@@ -309,10 +309,10 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Radians, "radians"},
     {tipb::ScalarFuncSig::Sin, "sin"},
     {tipb::ScalarFuncSig::Tan, "tan"},
-    {tipb::ScalarFuncSig::TruncateInt, "trunc"},
-    {tipb::ScalarFuncSig::TruncateReal, "trunc"},
-    //{tipb::ScalarFuncSig::TruncateDecimal, "cast"},
-    {tipb::ScalarFuncSig::TruncateUint, "trunc"},
+    {tipb::ScalarFuncSig::TruncateInt, "tidbTruncateWithFrac"},
+    {tipb::ScalarFuncSig::TruncateReal, "tidbTruncateWithFrac"},
+    {tipb::ScalarFuncSig::TruncateDecimal, "tidbTruncateWithFrac"},
+    {tipb::ScalarFuncSig::TruncateUint, "tidbTruncateWithFrac"},
 
     {tipb::ScalarFuncSig::LogicalAnd, "and"},
     {tipb::ScalarFuncSig::LogicalOr, "or"},

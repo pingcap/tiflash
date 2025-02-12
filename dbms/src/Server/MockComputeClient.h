@@ -18,6 +18,9 @@
 #include <coprocessor.pb.h>
 #include <fmt/core.h>
 #include <kvproto/tikvpb.grpc.pb.h>
+
+#include <magic_enum.hpp>
+
 using grpc::Channel;
 using grpc::Status;
 

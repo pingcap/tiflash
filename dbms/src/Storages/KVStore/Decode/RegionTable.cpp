@@ -46,6 +46,11 @@ namespace FailPoints
 extern const char force_set_num_regions_for_table[];
 } // namespace FailPoints
 
+void RegionTable::InternalRegion::updateRegionCacheBytes(size_t cache_bytes_)
+{
+    cache_bytes = cache_bytes_;
+}
+
 RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id, const TableID table_id)
 {
     auto ks_table_id = KeyspaceTableID{keyspace_id, table_id};
@@ -54,6 +59,7 @@ RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id,
     {
         // Load persisted info.
         it = tables.emplace(ks_table_id, table_id).first;
+        addTableToIndex(keyspace_id, table_id);
         LOG_INFO(log, "get new table, keyspace={} table_id={}", keyspace_id, table_id);
     }
     return it->second;
@@ -148,6 +154,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
 
     // Remove from table map.
     tables.erase(it);
+    removeTableFromIndex(keyspace_id, table_id);
 
     LOG_INFO(log, "remove table from RegionTable success, keyspace={} table_id={}", keyspace_id, table_id);
 }
@@ -156,7 +163,7 @@ void RegionTable::updateRegion(const Region & region)
 {
     std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
-    internal_region.cache_bytes = region.dataSize();
+    internal_region.updateRegionCacheBytes(region.dataSize());
 }
 
 namespace
@@ -308,9 +315,7 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtr & regi
 
     func_update_region([&](InternalRegion & internal_region) -> bool {
         internal_region.pause_flush = false;
-        internal_region.cache_bytes = region->dataSize();
-
-        internal_region.last_flush_time = Clock::now();
+        internal_region.updateRegionCacheBytes(region->dataSize());
         return true;
     });
 
@@ -330,6 +335,22 @@ void RegionTable::handleInternalRegionsByTable(
     if (auto it = tables.find(KeyspaceTableID{keyspace_id, table_id}); it != tables.end())
     {
         callback(it->second.regions);
+    }
+}
+
+void RegionTable::handleInternalRegionsByKeyspace(
+    KeyspaceID keyspace_id,
+    std::function<void(const TableID table_id, const InternalRegions &)> && callback) const
+{
+    std::lock_guard lock(mutex);
+    auto table_set = keyspace_index.find(keyspace_id);
+    if (table_set != keyspace_index.end())
+    {
+        for (auto table_id : table_set->second)
+        {
+            if (auto it = tables.find(KeyspaceTableID{keyspace_id, table_id}); it != tables.end())
+                callback(table_id, it->second.regions);
+        }
     }
 }
 
@@ -380,7 +401,7 @@ void RegionTable::shrinkRegionRange(const Region & region)
     std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
     internal_region.range_in_table = region.getRange()->rawKeys();
-    internal_region.cache_bytes = region.dataSize();
+    internal_region.updateRegionCacheBytes(region.dataSize());
 }
 
 void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys)
@@ -432,6 +453,29 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         auto & table = getOrCreateTable(keyspace_id, table_id);
         insertRegion(table, region_range_keys, region_id);
         LOG_INFO(log, "insert internal region, keyspace={} table_id={} region_id={}", keyspace_id, table_id, region_id);
+    }
+}
+
+void RegionTable::addTableToIndex(KeyspaceID keyspace_id, TableID table_id)
+{
+    auto it = keyspace_index.find(keyspace_id);
+    if (it == keyspace_index.end())
+    {
+        keyspace_index.emplace(keyspace_id, std::unordered_set<TableID>{table_id});
+    }
+    else
+    {
+        it->second.insert(table_id);
+    }
+}
+void RegionTable::removeTableFromIndex(KeyspaceID keyspace_id, TableID table_id)
+{
+    auto it = keyspace_index.find(keyspace_id);
+    if (it != keyspace_index.end())
+    {
+        it->second.erase(table_id);
+        if (it->second.empty())
+            keyspace_index.erase(it);
     }
 }
 
