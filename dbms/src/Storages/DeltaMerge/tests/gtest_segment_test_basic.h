@@ -72,7 +72,7 @@ public:
      * When begin_key is specified, new rows will be written from specified key. Otherwise, new rows may be
      * written randomly in the segment range.
      */
-    void writeSegment(PageIdU64 segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt);
+    void writeSegment(PageIdU64 segment_id, UInt64 write_rows = 100, std::optional<Int64> start_at = std::nullopt, bool shuffle = false);
     void ingestDTFileIntoDelta(
         PageIdU64 segment_id,
         UInt64 write_rows = 100,

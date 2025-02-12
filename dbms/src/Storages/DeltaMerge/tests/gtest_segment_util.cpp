@@ -55,6 +55,34 @@ SegDataUnit parseSegDataUnit(String & s)
     boost::algorithm::trim(s);
     std::vector<String> values;
     boost::split(values, s, boost::is_any_of(":"));
+    for (auto & v : values)
+        boost::algorithm::trim(v);
+    RUNTIME_CHECK(values.size() >= 2, s, values);
+    SegDataUnit unit;
+    unit.type = values[0];
+    unit.range = parseRange<Int64>(values[1]);
+    for (size_t i = 2; i < values.size(); i++)
+    {
+        // Pack size for DMFile
+        std::string_view attr_pack_size_prefix{"pack_size_"};
+        if (values[i].starts_with(attr_pack_size_prefix))
+        {
+            RUNTIME_CHECK(unit.type == "d_big" || unit.type == "s", s, unit.type);
+            unit.pack_size = std::stoul(values[i].substr(attr_pack_size_prefix.size()));
+            continue;
+        }
+        
+        // Make data in ColumnFileTiny or ColumnFileMem unsorted.
+        std::string_view attr_shuffle{"shuffle"};
+        if (values[i] == attr_shuffle)
+        {
+            RUNTIME_CHECK(unit.type == "d_mem" || unit.type == "d_tiny", s, unit.type);
+            unit.shuffle = true;
+            continue;
+        }
+        RUNTIME_CHECK_MSG(false, "{}: {} is unsupported", s, values[i]);
+    }
+
     if (values.size() == 2)
     {
         return SegDataUnit{

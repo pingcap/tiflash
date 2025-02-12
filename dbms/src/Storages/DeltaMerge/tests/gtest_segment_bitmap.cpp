@@ -111,7 +111,7 @@ protected:
         const auto write_count = end - begin + including_right_boundary;
         if (type == "d_mem")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle);
         }
         else if (type == "d_mem_del")
         {
@@ -119,7 +119,7 @@ protected:
         }
         else if (type == "d_tiny")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle);
             SegmentTestBasic::flushSegmentCache(SEG_ID);
         }
         else if (type == "d_tiny_del")
@@ -745,7 +745,7 @@ try
     // Packs in rowkey_range: [270, 280)|[280, 290)|[290, 300)
     runTestCaseGeneric(
         TestCase{
-            /*seg_data*/ "d_big:[250, 1000):10",
+            /*seg_data*/ "d_big:[250, 1000):pack_size_10",
             /*expected_size*/ 20,
             /*expected_row_id*/ "[5, 25)",
             /*expected_handle*/ "[275, 295)",
@@ -773,7 +773,7 @@ try
 {
     runTestCaseGeneric(
         TestCase{
-            /*seg_data*/ "s:[250, 1000):10",
+            /*seg_data*/ "s:[250, 1000):pack_size_10",
             /*expected_size*/ 750,
             /*expected_row_id*/ "[0, 750)",
             /*expected_handle*/ "[250, 1000)"},
@@ -874,7 +874,7 @@ try
 {
     runTestCaseGeneric(
         TestCase{
-            /*seg_data*/ "s:[250, 1000):50",
+            /*seg_data*/ "s:[250, 1000):pack_size_50",
             /*expected_size*/ 750,
             /*expected_row_id*/ "[0, 750)",
             /*expected_handle*/ "[250, 1000)"},
@@ -909,7 +909,7 @@ try
 {
     runTestCaseGeneric(
         TestCase{
-            /*seg_data*/ "d_big:[250, 1000):50",
+            /*seg_data*/ "d_big:[250, 1000):pack_size_50",
             /*expected_size*/ 500,
             /*expected_row_id*/ "[38, 538)",
             /*expected_handle*/ "[388, 888)",
@@ -938,6 +938,12 @@ try
     std::fill(expect_result.begin() + 618 - 350, expect_result.begin() + 737 - 350, '1');
     std::fill(expect_result.begin() + 818 - 350, expect_result.begin() + 888 - 350, '1');
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_CFTinyOrMem)
+try
+{
 }
 CATCH
 

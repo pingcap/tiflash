@@ -497,7 +497,7 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
     return sortvstackBlocks(std::move(blocks));
 }
 
-void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at)
+void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at, bool shuffle)
 {
     LOG_INFO(logger_op, "writeSegment, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -517,6 +517,15 @@ void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std
         end_key);
 
     auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
+
+    if (shuffle)
+    {
+        IColumn::Permutation perm(block.rows());
+        std::iota(perm.begin(), perm.end(), 0);
+        std::shuffle(perm.begin(), perm.end(), std::mt19937(std::random_device()()));
+        for (auto & column : block)
+            column.column = column.column->permute(perm, 0);
+    }
     segment->write(*dm_context, block, false);
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
