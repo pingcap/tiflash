@@ -517,7 +517,7 @@ void DeltaMergeStore::checkAllSegmentsLocalIndex(std::vector<IndexID> && dropped
         for (const auto & [end, segment] : segments)
         {
             UNUSED(end);
-            // cleanup the index error messaage for dropped indexes
+            // cleanup the index error message for dropped indexes
             segment->clearIndexBuildError(dropped_indexes);
 
             if (segmentEnsureStableLocalIndexAsync(segment))
