@@ -267,7 +267,7 @@ void WindowTransformAction::initialPartitionAndOrderColumnIndices()
 
 void WindowTransformAction::initialWorkspaces()
 {
-    auto workspace_num = window_description.window_functions_descriptions.size();
+    const auto workspace_num = window_description.window_functions_descriptions.size();
     window_workspaces.reserve(workspace_num);
     aggregation_workspaces.reserve(workspace_num);
     return_types.reserve(workspace_num);
@@ -1314,6 +1314,11 @@ bool WindowTransformAction::checkIfNeedDecrease()
     // added row refers to the rows that have been added in the previous frame
     UInt64 add_row_num = distance(prev_frame_end, frame_start);
     UInt64 decrease_row_num = distance(frame_start, prev_frame_start);
+
+    // We always choose the operation that need less steps.
+    // Suppose add_row_num is 10 and decrease_row_num is 5,
+    // we need to loop 10 times for add and if we choose to decrease,
+    // we will need to loop for only 5 times.
     return add_row_num > decrease_row_num;
 }
 
