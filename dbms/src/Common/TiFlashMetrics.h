@@ -916,10 +916,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
     M(tiflash_network_transmission_bytes,                                                                                           \
       "Total network transmission bytes",                                                                                           \
       Counter,                                                                                                                      \
-      F(type_sent_total, {"type", "hash_original"}),                                                                                \
-      F(type_sent_cross_zone, {"type", "hash_none_compression_remote"}),                                                            \
-      F(type_received_total, {"type", "hash_none_compression_local"}),                                                              \
-      F(type_received_cross_zone, {"type", "hash_lz4_compression"}))
+      F(type_sent_total, {"type", "sent_total"}),                                                                                   \
+      F(type_sent_cross_zone, {"type", "sent_cross_zone"}),                                                                         \
+      F(type_received_total, {"type", "received_total"}),                                                                           \
+      F(type_received_cross_zone, {"type", "received_cross_zone"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
