@@ -17,8 +17,6 @@
 #include <Functions/FunctionHelpers.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
-#include <IO/Compression/CompressedReadBuffer.h>
-#include <IO/Compression/CompressedWriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
@@ -167,14 +165,24 @@ LocalIndexBuilderPtr createInvertedIndexBuilder(const LocalIndexInfo & index_inf
     }
 }
 
-template <typename T>
-bool InvertedIndexBuilder<T>::isSupportedType(const IDataType & type)
+TiDB::InvertedIndexDefinitionPtr tryGetInvertedIndexDefinition(
+    const TiDB::ColumnInfo & col_info,
+    const IDataType & type)
 {
     const auto * nullable = checkAndGetDataType<DataTypeNullable>(&type);
-    if (nullable)
-        return nullable->getNestedType()->isValueRepresentedByInteger();
+    const auto * real_type = nullable ? nullable->getNestedType().get() : &type;
+    bool is_integer = real_type->isValueRepresentedByInteger() && !real_type->isDecimal();
+    if (!is_integer)
+        return nullptr;
 
-    return type.isValueRepresentedByInteger();
+    bool is_unsigned
+        = (col_info.tp == 7 /* MyDateTime */ || col_info.tp == 10 /* MyDate */
+           || col_info.tp == 12 /* MyDateTime */);
+    is_unsigned = is_unsigned || col_info.hasUnsignedFlag();
+    return std::make_shared<TiDB::InvertedIndexDefinition>(TiDB::InvertedIndexDefinition{
+        .is_signed = !is_unsigned,
+        .type_size = static_cast<UInt8>(real_type->getSizeOfValueInMemory()),
+    });
 }
 
 template <typename T>
@@ -238,22 +246,14 @@ void InvertedIndexBuilder<T>::saveToBuffer(WriteBuffer & write_buf) const
 
     // 1. write data by block
     size_t offset = 0;
-    size_t uncompressed_offset = 0;
-    static const CompressionSettings settings(CompressionMethod::LZ4);
-    CompressedWriteBuffer compressed(write_buf, settings);
 
     InvertedIndex::Block<T> block;
     auto write_block = [&] {
-        InvertedIndex::serializeBlock(block, compressed);
-        meta.emplace_back(
-            offset,
-            compressed.getUncompressedBytes() - uncompressed_offset,
-            block.front().value,
-            block.back().value);
+        InvertedIndex::serializeBlock(block, write_buf);
+        size_t total_size = write_buf.count();
+        meta.emplace_back(offset, total_size - offset, block.front().value, block.back().value);
         block.clear();
-        compressed.next(); // compress
-        offset = compressed.getCompressedBytes();
-        uncompressed_offset = compressed.getUncompressedBytes();
+        offset = total_size;
     };
 
     for (const auto & [key, row_ids] : index)
@@ -386,11 +386,10 @@ void InvertedIndexMemoryViewer<T>::load(ReadBuffer & read_buf, size_t index_size
 
     // 5. read blocks & build index
     ReadBufferFromString rbuf(buffer.substr(0, data_size));
-    CompressedReadBuffer compressed(rbuf);
     for (const auto meta_entry : meta)
     {
         std::vector<char> block_data(meta_entry.size);
-        compressed.readBig(block_data.data(), meta_entry.size);
+        rbuf.readBig(block_data.data(), meta_entry.size);
         ReadBufferFromString block_buf(block_data);
         InvertedIndex::Block<T> block;
         InvertedIndex::deserializeBlock(block, block_buf);
@@ -451,13 +450,12 @@ void InvertedIndexFileViewer<T>::loadMeta(ReadBuffer & read_buf, size_t index_si
 }
 
 template <typename T>
-InvertedIndex::Block<T> InvertedIndexFileViewer<T>::readBlock(UInt32 offset, UInt32 size) const
+InvertedIndex::Block<T> InvertedIndexFileViewer<T>::readBlock(ReadBufferFromFile & file_buf, UInt32 offset, UInt32 size)
+    const
 {
-    ReadBufferFromFile file_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-    file_buf.ignore(offset);
-    CompressedReadBuffer compressed(file_buf);
+    file_buf.seek(offset, SEEK_SET);
     std::vector<char> block_data(size);
-    RUNTIME_CHECK(compressed.readBig(block_data.data(), size) == size);
+    RUNTIME_CHECK(file_buf.readBig(block_data.data(), size) == size);
     ReadBufferFromString block_buf(block_data);
     InvertedIndex::Block<T> block;
     InvertedIndex::deserializeBlock(block, block_buf);
@@ -474,7 +472,8 @@ std::vector<typename InvertedIndexFileViewer<T>::RowID> InvertedIndexFileViewer<
     if (it == meta.end())
         return std::vector<RowID>{};
 
-    const auto block = readBlock(it->offset, it->size);
+    ReadBufferFromFile file_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+    const auto block = readBlock(file_buf, it->offset, it->size);
     auto block_it
         = std::find_if(block.begin(), block.end(), [&](const auto & entry) { return entry.value == real_key; });
     return block_it == block.end() ? std::vector<RowID>{} : block_it->row_ids;
@@ -497,9 +496,10 @@ std::vector<typename InvertedIndexFileViewer<T>::RowID> InvertedIndexFileViewer<
         return entry.min < key;
     });
 
+    ReadBufferFromFile file_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
     for (auto it = meta_begin; it != meta_end; ++it)
     {
-        const auto block = readBlock(it->offset, it->size);
+        const auto block = readBlock(file_buf, it->offset, it->size);
         auto block_begin
             = std::lower_bound(block.begin(), block.end(), real_begin, [](const auto & entry, const auto & key) {
                   return entry.value < key;

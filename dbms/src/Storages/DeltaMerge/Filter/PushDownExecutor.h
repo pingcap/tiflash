@@ -54,9 +54,10 @@ public:
         , column_value_set(column_value_set_)
     {}
 
-    explicit PushDownExecutor(const RSOperatorPtr & rs_operator_, const ANNQueryInfoPtr & ann_query_info_ = nullptr)
+    explicit PushDownExecutor(const RSOperatorPtr & rs_operator_, const ANNQueryInfoPtr & ann_query_info_ = nullptr, const ColumnValueSetPtr & column_value_set_ = nullptr)
         : rs_operator(rs_operator_)
         , ann_query_info(ann_query_info_)
+        , column_value_set(column_value_set_)
     {}
 
     explicit PushDownExecutor(const ANNQueryInfoPtr & ann_query_info_)

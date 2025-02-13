@@ -41,6 +41,7 @@ namespace InvertedIndex
 // | size of T | number of blocks | offset | size | min | max | offset | size | min | max | ... | offset | size | min | max |
 
 using RowID = UInt32;
+using RowIDs = std::vector<RowID>;
 
 // A block is a minimal unit of IO, it will be as small as possible, but >= 4KB.
 static constexpr size_t BlockSize = 4 * 1024; // 4 KB
@@ -50,7 +51,7 @@ template <typename T>
 struct BlockEntry
 {
     T value;
-    std::vector<RowID> row_ids;
+    RowIDs row_ids;
 };
 
 template <typename T>
@@ -70,6 +71,10 @@ template <typename T>
 using Meta = std::vector<MetaEntry<T>>;
 } // namespace InvertedIndex
 
+TiDB::InvertedIndexDefinitionPtr tryGetInvertedIndexDefinition(
+    const TiDB::ColumnInfo & col_info,
+    const IDataType & type);
+
 /// Builds a InvertedIndex in memory.
 template <typename T>
 class InvertedIndexBuilder : public LocalIndexBuilder
@@ -77,9 +82,6 @@ class InvertedIndexBuilder : public LocalIndexBuilder
 public:
     using Key = T;
     using RowID = InvertedIndex::RowID;
-
-public:
-    static bool isSupportedType(const IDataType & type);
 
 public:
     explicit InvertedIndexBuilder(const LocalIndexInfo & index_info)
@@ -106,6 +108,7 @@ class InvertedIndexViewer : public LocalIndexViewer
 public:
     using Key = UInt64;
     using RowID = InvertedIndex::RowID;
+    using RowIDs = std::vector<RowID>;
 
 public:
     explicit InvertedIndexViewer() = default;
@@ -114,9 +117,9 @@ public:
     static InvertedIndexViewerPtr view(TypeIndex type_id, std::string_view path);
     static InvertedIndexViewerPtr view(TypeIndex type_id, ReadBuffer & buf, size_t index_size);
 
-    virtual std::vector<RowID> search(const Key & key) const = 0;
+    virtual RowIDs search(const Key & key) const = 0;
     // [begin, end)
-    virtual std::vector<RowID> searchRange(const Key & begin, const Key & end) const = 0;
+    virtual RowIDs searchRange(const Key & begin, const Key & end) const = 0;
 };
 
 /// Views a InvertedIndex file by loading it into memory.
@@ -124,9 +127,6 @@ public:
 template <typename T>
 class InvertedIndexMemoryViewer : public InvertedIndexViewer
 {
-public:
-    using RowID = InvertedIndexViewer::RowID;
-
 private:
     void load(ReadBuffer & buf, size_t index_size);
 
@@ -141,11 +141,11 @@ public:
 
     ~InvertedIndexMemoryViewer() override = default;
 
-    std::vector<RowID> search(const Key & key) const override;
-    std::vector<RowID> searchRange(const Key & begin, const Key & end) const override;
+    RowIDs search(const Key & key) const override;
+    RowIDs searchRange(const Key & begin, const Key & end) const override;
 
 private:
-    std::map<T, std::vector<RowID>> index; // set by load
+    std::map<T, RowIDs> index; // set by load
 };
 
 /// Views a InvertedIndex file by reading it from disk.
@@ -153,13 +153,10 @@ private:
 template <typename T>
 class InvertedIndexFileViewer : public InvertedIndexViewer
 {
-public:
-    using RowID = InvertedIndexViewer::RowID;
-
 private:
     void loadMeta(ReadBuffer & buf, size_t index_size);
 
-    InvertedIndex::Block<T> readBlock(UInt32 offset, UInt32 size) const;
+    InvertedIndex::Block<T> readBlock(ReadBufferFromFile & file_buf, UInt32 offset, UInt32 size) const;
 
 public:
     explicit InvertedIndexFileViewer(std::string_view path)
@@ -171,8 +168,8 @@ public:
 
     ~InvertedIndexFileViewer() override = default;
 
-    std::vector<RowID> search(const Key & key) const override;
-    std::vector<RowID> searchRange(const Key & begin, const Key & end) const override;
+    RowIDs search(const Key & key) const override;
+    RowIDs searchRange(const Key & begin, const Key & end) const override;
 
 private:
     String path;

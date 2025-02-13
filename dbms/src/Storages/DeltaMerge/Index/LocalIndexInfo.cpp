@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/Types.h>
@@ -121,22 +122,14 @@ LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const
     if (!new_index_infos)
         new_index_infos = std::make_shared<LocalIndexInfos>();
     // FIXME: remove this
+    if (table_info.replica_info.count <= 0)
+        return new_index_infos;
     static IndexID index_id = 0;
     for (const auto & col : table_info.columns)
     {
         auto type = getDataTypeByColumnInfo(col);
-        if (type->isValueRepresentedByInteger())
-        {
-            bool is_unsigned
-                = (col.tp == 7 /* MyDateTime */ || col.tp == 10 /* MyDate */
-                   || col.tp == 12 /* MyDateTime */);
-            is_unsigned = is_unsigned || col.hasUnsignedFlag();
-            auto definition = std::make_shared<TiDB::InvertedIndexDefinition>(TiDB::InvertedIndexDefinition{
-                .is_signed = !is_unsigned,
-                .type_size = static_cast<UInt8>(type->getSizeOfValueInMemory()),
-            });
+        if (auto definition = tryGetInvertedIndexDefinition(col, *type))
             new_index_infos->emplace_back(++index_id, col.id, definition);
-        }
     }
     return new_index_infos;
 }

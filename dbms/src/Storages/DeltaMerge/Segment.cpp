@@ -72,8 +72,6 @@
 #include <ext/scope_guard.h>
 #include <memory>
 
-#include "Storages/DeltaMerge/Index/RSResult.h"
-
 
 namespace ProfileEvents
 {
@@ -3492,42 +3490,61 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         start_ts,
         build_bitmap_filter_block_rows);
 
-    if (executor->column_value_set)
+    if (executor->column_value_set && executor->column_value_set->type != ColumnValueSetType::Unsupported)
     {
-        SegmentInvertedIndexReader index_reader(
-            segment_snap,
-            executor->column_value_set,
-            dm_context.global_context.getLocalIndexCache());
-        auto index_bitmap_filter = index_reader.loadAll();
-        bitmap_filter->intersect(*index_bitmap_filter);
-
-        // Modify pack_filter_results according to the bitmap_filter.
-        const auto & dmfiles = segment_snap->stable->getDMFiles();
-        size_t offset = 0;
-        size_t skipped_pack = 0;
-        for (size_t i = 0; i < dmfiles.size(); ++i)
+        bool all_dmfile_packs_skipped = false;
+        for (const auto & res : pack_filter_results)
         {
-            const auto & dmfile = dmfiles[i];
-            const auto & pack_stats = dmfile->getPackStats();
-            for (size_t pack_id = 0; pack_id < pack_stats.size(); ++pack_id)
+            if (res->countUsePack() == 0)
             {
-                if (pack_filter_results[i]->getPackRes()[pack_id].isUse()
-                    && index_bitmap_filter->isAllNotMatch(offset, pack_stats[pack_id].rows))
-                {
-                    pack_filter_results[i]->mutPackRes(pack_id, RSResult::None);
-                    ++skipped_pack;
-                }
-                offset += pack_stats[pack_id].rows;
+                all_dmfile_packs_skipped = true;
+                break;
             }
         }
+        if (!all_dmfile_packs_skipped)
+        {
+            SegmentInvertedIndexReader index_reader(
+                segment_snap,
+                executor->column_value_set,
+                dm_context.global_context.getLocalIndexCache());
+            auto index_bitmap_filter = index_reader.loadAll();
+            bitmap_filter->intersect(*index_bitmap_filter);
 
-        LOG_DEBUG(
-            segment_snap->log,
-            "Finish load inverted index, column_value_set={}, bitmap_filter={}/{}, skipped_pack={}",
-            executor->column_value_set->toDebugString(),
-            bitmap_filter->count(),
-            bitmap_filter->size(),
-            skipped_pack);
+            // Modify pack_filter_results according to the bitmap_filter.
+            const auto & dmfiles = segment_snap->stable->getDMFiles();
+            size_t offset = 0;
+            size_t skipped_pack = 0;
+            for (size_t i = 0; i < dmfiles.size(); ++i)
+            {
+                const auto & dmfile = dmfiles[i];
+                const auto & pack_stats = dmfile->getPackStats();
+                for (size_t pack_id = 0; pack_id < pack_stats.size(); ++pack_id)
+                {
+                    if (pack_filter_results[i]->getPackRes()[pack_id].isUse()
+                        && index_bitmap_filter->isAllNotMatch(offset, pack_stats[pack_id].rows))
+                    {
+                        pack_filter_results[i]->mutPackRes(pack_id, RSResult::None);
+                        ++skipped_pack;
+                    }
+                    offset += pack_stats[pack_id].rows;
+                }
+            }
+
+            LOG_INFO(
+                segment_snap->log,
+                "Finish load inverted index, column_value_set={}, bitmap_filter={}/{}, skipped_pack={}",
+                executor->column_value_set->toDebugString(),
+                bitmap_filter->count(),
+                bitmap_filter->size(),
+                skipped_pack);
+        }
+        else
+        {
+            LOG_INFO(
+                segment_snap->log,
+                "Skip load inverted index, all dmfile packs are skipped, column_value_set={}",
+                executor->column_value_set->toDebugString());
+        }
     }
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.

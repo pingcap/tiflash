@@ -52,7 +52,7 @@ PushDownExecutorPtr PushDownExecutor::build(
     if (pushed_down_filters.empty())
     {
         LOG_DEBUG(tracing_logger, "Push down filter is empty");
-        return std::make_shared<PushDownExecutor>(rs_operator, valid_ann_query_info);
+        return std::make_shared<PushDownExecutor>(rs_operator, valid_ann_query_info, column_value_set);
     }
     std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
     for (const auto & column : columns_to_read)
@@ -197,10 +197,8 @@ PushDownExecutorPtr PushDownExecutor::build(
         context.getSettingsRef().dt_enable_rough_set_filter,
         tracing_logger);
     // build column_value_set
-    // FIXME: only push down filters
     const auto column_value_set
         = rs_operator && local_index_infos ? rs_operator->buildSets(local_index_infos) : nullptr;
-    LOG_DEBUG(Logger::get(), "ColumnValueSet: {}", column_value_set ? column_value_set->toDebugString() : "nullptr");
     // build ann_query_info
     ANNQueryInfoPtr ann_query_info = nullptr;
     if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)
