@@ -160,18 +160,6 @@ protected:
 
     struct TestCase
     {
-        TestCase(
-            std::string_view seg_data_,
-            size_t expected_size_,
-            std::string_view expected_row_id_,
-            std::string_view expected_handle_,
-            std::optional<std::pair<Int64, Int64>> rowkey_range_ = std::nullopt)
-            : seg_data(seg_data_)
-            , expected_size(expected_size_)
-            , expected_row_id(expected_row_id_)
-            , expected_handle(expected_handle_)
-            , rowkey_range(rowkey_range_)
-        {}
         std::string seg_data;
         size_t expected_size;
         std::string expected_row_id;
@@ -287,7 +275,11 @@ TEST_P(SegmentBitmapFilterTest, InMemory1)
 try
 {
     runTestCaseGeneric(
-        TestCase{"d_mem:[0, 1000)", 1000, "[0, 1000)", "[0, 1000)"},
+        TestCase{
+            .seg_data = "d_mem:[0, 1000)",
+            .expected_size = 1000,
+            .expected_row_id = "[0, 1000)",
+            .expected_handle = "[0, 1000)"},
         __LINE__,
         std::vector<RowID>(1000, NotExistRowID));
 }
@@ -300,7 +292,11 @@ try
     std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
     std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 0); // d_mem:[0, 1000)
     runTestCaseGeneric(
-        TestCase{"d_mem:[0, 1000)|d_mem:[0, 1000)", 1000, "[1000, 2000)", "[0, 1000)"},
+        TestCase{
+            .seg_data = "d_mem:[0, 1000)|d_mem:[0, 1000)",
+            .expected_size = 1000,
+            .expected_row_id = "[1000, 2000)",
+            .expected_handle = "[0, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -313,7 +309,11 @@ try
     std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
     std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 100); // d_mem:[100, 200)
     runTestCaseGeneric(
-        TestCase{"d_mem:[0, 1000)|d_mem:[100, 200)", 1000, "[0, 100)|[1000, 1100)|[200, 1000)", "[0, 1000)"},
+        TestCase{
+            .seg_data = "d_mem:[0, 1000)|d_mem:[100, 200)",
+            .expected_size = 1000,
+            .expected_row_id = "[0, 100)|[1000, 1100)|[200, 1000)",
+            .expected_handle = "[0, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -329,7 +329,11 @@ try
         NotExistRowID); // d_mem:[0, 1000) + d_mem:[-100, 0)
     std::iota(excepted_base_versions.begin() + 1100, excepted_base_versions.end(), 0); // d_mem:[0, 100)
     runTestCaseGeneric(
-        TestCase{"d_mem:[0, 1000)|d_mem:[-100, 100)", 1100, "[1000, 1200)|[100, 1000)", "[-100, 1000)"},
+        TestCase{
+            .seg_data = "d_mem:[0, 1000)|d_mem:[-100, 100)",
+            .expected_size = 1100,
+            .expected_row_id = "[1000, 1200)|[100, 1000)",
+            .expected_handle = "[-100, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -341,7 +345,14 @@ try
     std::vector<RowID> excepted_base_versions(2000);
     std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
     std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 0); // d_mem_del:[0, 1000)
-    runTestCaseGeneric(TestCase{"d_mem:[0, 1000)|d_mem_del:[0, 1000)", 0, "", ""}, __LINE__, excepted_base_versions);
+    runTestCaseGeneric(
+        TestCase{
+            .seg_data = "d_mem:[0, 1000)|d_mem_del:[0, 1000)",
+            .expected_size = 0,
+            .expected_row_id = "",
+            .expected_handle = ""},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
@@ -352,7 +363,11 @@ try
     std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
     std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 100); // d_mem_del:[100, 200)
     runTestCaseGeneric(
-        TestCase{"d_mem:[0, 1000)|d_mem_del:[100, 200)", 900, "[0, 100)|[200, 1000)", "[0, 100)|[200, 1000)"},
+        TestCase{
+            .seg_data = "d_mem:[0, 1000)|d_mem_del:[100, 200)",
+            .expected_size = 900,
+            .expected_row_id = "[0, 100)|[200, 1000)",
+            .expected_handle = "[0, 100)|[200, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -368,7 +383,11 @@ try
         NotExistRowID); // d_mem:[0, 1000) + d_mem:[-100, 0)
     std::iota(excepted_base_versions.begin() + 1100, excepted_base_versions.end(), 0); // d_mem_del:[0, 100)
     runTestCaseGeneric(
-        TestCase{"d_mem:[0, 1000)|d_mem_del:[-100, 100)", 900, "[100, 1000)", "[100, 1000)"},
+        TestCase{
+            .seg_data = "d_mem:[0, 1000)|d_mem_del:[-100, 100)",
+            .expected_size = 900,
+            .expected_row_id = "[100, 1000)",
+            .expected_handle = "[100, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -388,7 +407,11 @@ try
         excepted_base_versions.end(),
         NotExistRowID); // d_mem:[500, 1000)
     runTestCaseGeneric(
-        TestCase{"d_tiny:[100, 500)|d_mem:[200, 1000)", 900, "[0, 100)|[400, 1200)", "[100, 1000)"},
+        TestCase{
+            .seg_data = "d_tiny:[100, 500)|d_mem:[200, 1000)",
+            .expected_size = 900,
+            .expected_row_id = "[0, 100)|[400, 1200)",
+            .expected_handle = "[100, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -409,10 +432,10 @@ try
         NotExistRowID); // d_mem:[0, 100)
     runTestCaseGeneric(
         TestCase{
-            "d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)",
-            400,
-            "[500, 600)|[0, 100)|[200, 400)",
-            "[0, 200)|[300, 500)"},
+            .seg_data = "d_tiny:[100, 500)|d_tiny_del:[200, 300)|d_mem:[0, 100)",
+            .expected_size = 400,
+            .expected_row_id = "[500, 600)|[0, 100)|[200, 400)",
+            .expected_handle = "[0, 200)|[300, 500)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -430,10 +453,10 @@ try
         NotExistRowID); // d_mem:[250, 290)
     runTestCaseGeneric(
         TestCase{
-            "d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)",
-            390,
-            "[0, 140)|[400, 450)|[200, 400)",
-            "[100, 290)|[300, 500)"},
+            .seg_data = "d_tiny:[100, 500)|d_dr:[250, 300)|d_mem:[240, 290)",
+            .expected_size = 390,
+            .expected_row_id = "[0, 140)|[400, 450)|[200, 400)",
+            .expected_handle = "[100, 290)|[300, 500)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -455,10 +478,10 @@ try
     std::iota(excepted_base_versions.begin() + 400 + 250 + 500, excepted_base_versions.end(), 140); // d_mem:[240, 290)
     runTestCaseGeneric(
         TestCase{
-            "d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)",
-            900,
-            "[0, 140)|[1150, 1200)|[440, 1150)",
-            "[100, 1000)"},
+            .seg_data = "d_tiny:[100, 500)|d_big:[250, 1000)|d_mem:[240, 290)",
+            .expected_size = 900,
+            .expected_row_id = "[0, 140)|[1150, 1200)|[440, 1150)",
+            .expected_handle = "[100, 1000)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -468,7 +491,14 @@ TEST_P(SegmentBitmapFilterTest, Stable1)
 try
 {
     std::vector<RowID> excepted_base_versions{};
-    runTestCaseGeneric(TestCase{"s:[0, 1024)", 1024, "[0, 1024)", "[0, 1024)"}, __LINE__, excepted_base_versions);
+    runTestCaseGeneric(
+        TestCase{
+            .seg_data = "s:[0, 1024)",
+            .expected_size = 1024,
+            .expected_row_id = "[0, 1024)",
+            .expected_handle = "[0, 1024)"},
+        __LINE__,
+        excepted_base_versions);
 }
 CATCH
 
@@ -477,7 +507,11 @@ try
 {
     std::vector<RowID> excepted_base_versions{};
     runTestCaseGeneric(
-        TestCase{"s:[0, 1024)|d_dr:[0, 1023)", 1, "[1023, 1024)", "[1023, 1024)"},
+        TestCase{
+            .seg_data = "s:[0, 1024)|d_dr:[0, 1023)",
+            .expected_size = 1,
+            .expected_row_id = "[1023, 1024)",
+            .expected_handle = "[1023, 1024)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -491,10 +525,10 @@ try
     std::iota(excepted_base_versions.begin(), excepted_base_versions.end(), 300); // s:[300, 310)
     runTestCaseGeneric(
         TestCase{
-            "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)",
-            886,
-            "[0, 128)|[256, 300)|[310, 1024)",
-            "[0, 128)|[256, 300)|[310, 1024)"},
+            .seg_data = "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)",
+            .expected_size = 886,
+            .expected_row_id = "[0, 128)|[256, 300)|[310, 1024)",
+            .expected_handle = "[0, 128)|[256, 300)|[310, 1024)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -512,10 +546,10 @@ try
     std::iota(excepted_base_versions.begin() + 10 + 55, excepted_base_versions.end(), 298); // d_mem:[298, 305)
     runTestCaseGeneric(
         TestCase{
-            "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
-            946,
-            "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
-            "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"},
+            .seg_data = "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
+            .expected_size = 946,
+            .expected_row_id = "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
+            .expected_handle = "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -536,10 +570,10 @@ try
     read_ranges.emplace_back(buildRowKeyRange(555, 666, is_common_handle));
     runTestCaseGeneric(
         TestCase{
-            "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
-            136,
-            "[1056, 1078)|[1091, 1094)|[555, 666)",
-            "[222, 244)|[300, 303)|[555, 666)"},
+            .seg_data = "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
+            .expected_size = 136,
+            .expected_row_id = "[1056, 1078)|[1091, 1094)|[555, 666)",
+            .expected_handle = "[222, 244)|[300, 303)|[555, 666)"},
         __LINE__,
         excepted_base_versions);
 }
@@ -557,10 +591,10 @@ try
     std::iota(excepted_base_versions.begin() + 10 + 55, excepted_base_versions.end(), 298); // d_mem:[298, 305)
     runTestCaseGeneric(
         TestCase{
-            "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
-            946,
-            "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
-            "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"},
+            .seg_data = "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
+            .expected_size = 946,
+            .expected_row_id = "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
+            .expected_handle = "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"},
         __LINE__,
         excepted_base_versions);
 
@@ -590,7 +624,6 @@ try
     auto left_row_id = getSegmentRowId(SEG_ID, {});
     const auto & left_r = toColumnVectorData<UInt32>(left_row_id);
     auto expected_left_row_id = genSequence<UInt32>("[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 512)");
-    ASSERT_EQ(expected_left_row_id.size(), left_r.size());
     ASSERT_TRUE(sequenceEqual(expected_left_row_id, left_r));
 
     checkHandle(*new_seg_id, "[512, 1024)", __LINE__);
@@ -598,7 +631,6 @@ try
     auto right_row_id = getSegmentRowId(*new_seg_id, {});
     const auto & right_r = toColumnVectorData<UInt32>(right_row_id);
     auto expected_right_row_id = genSequence<UInt32>("[512, 1024)");
-    ASSERT_EQ(expected_right_row_id.size(), right_r.size());
     ASSERT_TRUE(sequenceEqual(expected_right_row_id, right_r));
 }
 CATCH
@@ -725,7 +757,6 @@ try
     auto left_row_id = getSegmentRowId(SEG_ID, {});
     const auto & left_r = toColumnVectorData<UInt32>(left_row_id);
     auto expected_left_row_id = genSequence<UInt32>("[0, 25000)");
-    ASSERT_EQ(expected_left_row_id.size(), left_r.size());
     ASSERT_TRUE(sequenceEqual(expected_left_row_id, left_r));
 
     checkHandle(*new_seg_id, "[25000, 50000)", __LINE__);
@@ -733,7 +764,6 @@ try
     auto right_row_id = getSegmentRowId(*new_seg_id, {});
     const auto & right_r = toColumnVectorData<UInt32>(right_row_id);
     auto expected_right_row_id = genSequence<UInt32>("[25000, 50000)");
-    ASSERT_EQ(expected_right_row_id.size(), right_r.size());
     ASSERT_TRUE(sequenceEqual(expected_right_row_id, right_r));
 }
 CATCH
@@ -745,11 +775,11 @@ try
     // Packs in rowkey_range: [270, 280)|[280, 290)|[290, 300)
     runTestCaseGeneric(
         TestCase{
-            /*seg_data*/ "d_big:[250, 1000):pack_size_10",
-            /*expected_size*/ 20,
-            /*expected_row_id*/ "[5, 25)",
-            /*expected_handle*/ "[275, 295)",
-            /*rowkey_range*/ std::pair<Int64, Int64>{275, 295}},
+            .seg_data = "d_big:[250, 1000):pack_size_10",
+            .expected_size = 20,
+            .expected_row_id = "[5, 25)",
+            .expected_handle = "[275, 295)",
+            .rowkey_range = std::pair<Int64, Int64>{275, 295}},
         __LINE__,
         std::vector<RowID>(30, NotExistRowID));
 
@@ -773,10 +803,10 @@ try
 {
     runTestCaseGeneric(
         TestCase{
-            /*seg_data*/ "s:[250, 1000):pack_size_10",
-            /*expected_size*/ 750,
-            /*expected_row_id*/ "[0, 750)",
-            /*expected_handle*/ "[250, 1000)"},
+            .seg_data = "s:[250, 1000):pack_size_10",
+            .expected_size = 750,
+            .expected_row_id = "[0, 750)",
+            .expected_handle = "[250, 1000)"},
         __LINE__,
         {});
 
@@ -820,10 +850,12 @@ try
 
     runTestCaseGeneric(
         TestCase{
-            "d_mem:[-9223372036854775808, -9223372036854775800)|d_mem:[9223372036854775800, 9223372036854775807]",
-            16,
-            "[0, 16)",
-            "[-9223372036854775808, -9223372036854775800)|[9223372036854775800, 9223372036854775807]"},
+            .seg_data
+            = "d_mem:[-9223372036854775808, -9223372036854775800)|d_mem:[9223372036854775800, 9223372036854775807]",
+            .expected_size = 16,
+            .expected_row_id = "[0, 16)",
+            .expected_handle
+            = "[-9223372036854775808, -9223372036854775800)|[9223372036854775800, 9223372036854775807]"},
         __LINE__,
         std::vector<RowID>(16, NotExistRowID));
 
@@ -874,10 +906,10 @@ try
 {
     runTestCaseGeneric(
         TestCase{
-            /*seg_data*/ "s:[250, 1000):pack_size_50",
-            /*expected_size*/ 750,
-            /*expected_row_id*/ "[0, 750)",
-            /*expected_handle*/ "[250, 1000)"},
+            .seg_data = "s:[250, 1000):pack_size_50",
+            .expected_size = 750,
+            .expected_row_id = "[0, 750)",
+            .expected_handle = "[250, 1000)"},
         __LINE__,
         {});
 
@@ -909,11 +941,11 @@ try
 {
     runTestCaseGeneric(
         TestCase{
-            /*seg_data*/ "d_big:[250, 1000):pack_size_50",
-            /*expected_size*/ 500,
-            /*expected_row_id*/ "[38, 538)",
-            /*expected_handle*/ "[388, 888)",
-            /*segment_range*/ std::pair{388, 888}},
+            .seg_data = "d_big:[250, 1000):pack_size_50",
+            .expected_size = 500,
+            .expected_row_id = "[38, 538)",
+            .expected_handle = "[388, 888)",
+            .rowkey_range = std::pair{388, 888}},
         __LINE__,
         std::vector<RowID>(550, NotExistRowID));
 
@@ -968,10 +1000,30 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange)
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange1)
 try
 {
-    // TODO: Add test case for delete range.
+    runTestCaseGeneric(
+        TestCase{
+            .seg_data = "s:[10, 500):pack_size_10|d_dr:[5, 73)",
+            .expected_size = 427,
+            .expected_row_id = "[63, 490)",
+            .expected_handle = "[73, 500)",
+        },
+        __LINE__,
+        {});
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto bitmap_filter = seg->buildBitmapFilter(
+        *dm_context,
+        snap,
+        {seg->getRowKeyRange()},
+        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
+        std::numeric_limits<UInt64>::max(),
+        DEFAULT_BLOCK_SIZE,
+        use_version_chain);
+    String expect_result(490, '0');
+    std::fill(expect_result.begin() + 73 - 10, expect_result.end(), '1');
+    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
 }
 CATCH
 
