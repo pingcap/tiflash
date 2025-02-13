@@ -22,16 +22,6 @@
 namespace DB
 {
 
-struct CFKeyHasher
-{
-    size_t operator()(const std::pair<HandleID, Timestamp> & k) const noexcept
-    {
-        const static Timestamp mask = std::numeric_limits<Timestamp>::max() << 40 >> 40;
-        size_t res = k.first << 24 | (k.second & mask);
-        return res;
-    }
-};
-
 struct RegionWriteCFDataTrait
 {
     using DecodedWriteCFValue = RecordKVFormat::InnerDecodedWriteCFValue;
@@ -110,9 +100,8 @@ struct RegionLockCFDataTrait
     {
         auto key = std::make_shared<const TiKVKey>(std::move(key_));
         auto value = std::make_shared<const TiKVValue>(std::move(value_));
-        return {
-            {key, std::string_view(key->data(), key->dataSize())},
-            Value{key, value, std::make_shared<const DecodedLockCFValue>(key, value)}};
+        auto lo = std::make_shared<const DecodedLockCFValue>(key, value);
+        return {{key, std::string_view(key->data(), key->dataSize())}, Value{key, value, std::move(lo)}};
     }
 };
 

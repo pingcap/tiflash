@@ -154,7 +154,7 @@ TableID createDBAndTable(String db_name, String table_name)
         StorageDeltaMergePtr storage_ptr = std::static_pointer_cast<StorageDeltaMerge>(storage);
         table_id = storage_ptr->getTableInfo().id;
 
-        EXPECT_EQ(storage->getName(), MutableSupport::delta_tree_storage_name);
+        EXPECT_EQ(storage->getName(), MutSup::delta_tree_storage_name);
         EXPECT_EQ(storage->getTableName(), table_name);
 
         auto managed_storage = std::dynamic_pointer_cast<IManageableStorage>(storage);

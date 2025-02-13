@@ -149,7 +149,7 @@ public:
 
     TableInfo getTableInfo(const String & name);
     TableInfo getTableInfoForDeltaMerge(const String & name);
-    DM::ColumnDefines getStoreColumnDefines(Int64 table_id);
+    DM::ColumnDefinesPtr getStoreColumnDefines(Int64 table_id);
 
     size_t getTableScanConcurrencyHint(const TiDBTableScan & table_scan);
 

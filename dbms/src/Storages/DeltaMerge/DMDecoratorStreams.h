@@ -40,7 +40,7 @@ public:
         , log(Logger::get(tracing_id))
     {
         children.emplace_back(input);
-        delete_col_pos = input->getHeader().getPositionByName(TAG_COLUMN_NAME);
+        delete_col_pos = input->getHeader().getPositionByName(MutSup::delmark_column_name);
     }
     ~DMDeleteFilterBlockInputStream() override
     {

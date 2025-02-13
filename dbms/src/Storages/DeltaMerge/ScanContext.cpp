@@ -139,7 +139,6 @@ String ScanContext::toJson() const
     json->set("mvcc_input_rows", mvcc_input_rows.load());
     json->set("mvcc_input_bytes", mvcc_input_bytes.load());
     json->set("mvcc_skip_rows", mvcc_input_rows.load() - mvcc_output_rows.load());
-    json->set("late_materialization_skip_rows", late_materialization_skip_rows.load());
 
     json->set("learner_read_time", fmt::format("{:.3f}ms", learner_read_ns.load() / NS_TO_MS_SCALE));
     json->set("create_snapshot_time", fmt::format("{:.3f}ms", create_snapshot_time_ns.load() / NS_TO_MS_SCALE));

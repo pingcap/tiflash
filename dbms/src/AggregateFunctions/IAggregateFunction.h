@@ -96,6 +96,14 @@ public:
     virtual void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena) const
         = 0;
 
+    /// The purpose of this function is the opposite of `add` function, only used in window function.
+    virtual void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena * arena)
+        const
+        = 0;
+
+    // Only used in window aggregation functions
+    virtual void reset(AggregateDataPtr __restrict) const = 0;
+
     /// Merges state (on which place points to) with other state of current aggregation function.
     virtual void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena * arena) const = 0;
 
@@ -370,6 +378,13 @@ public:
             static_cast<const Derived *>(this)->add(place + place_offset, columns, i, arena);
         }
     }
+
+    void decrease(AggregateDataPtr __restrict, const IColumn **, const size_t, Arena *) const override
+    {
+        throw Exception("decrease function is not implemented yet");
+    }
+
+    void reset(AggregateDataPtr __restrict) const override { throw Exception("reset function is not implemented yet"); }
 };
 
 namespace _IAggregateFunctionImpl

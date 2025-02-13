@@ -21,21 +21,20 @@
 
 namespace DB::FailPoints
 {
-extern const char force_not_support_vector_index[];
+extern const char force_not_support_local_index[];
 } // namespace DB::FailPoints
 namespace DB::DM
 {
 
-bool isVectorIndexSupported(const LoggerPtr & logger)
+bool isLocalIndexSupported(const LoggerPtr & logger)
 {
-    // Vector Index requires a specific storage format to work.
     if ((STORAGE_FORMAT_CURRENT.identifier > 0 && STORAGE_FORMAT_CURRENT.identifier < 6)
         || STORAGE_FORMAT_CURRENT.identifier == 100)
     {
         LOG_ERROR(
             logger,
-            "The current storage format is {}, which does not support building vector index. TiFlash will "
-            "write data without vector index.",
+            "The current storage format is {}, which does not support building columnar index "
+            "like vector index or full text index. TiFlash will write data without index.",
             STORAGE_FORMAT_CURRENT.identifier);
         return false;
     }
@@ -52,7 +51,7 @@ ColumnID getVectorIndxColumnID(
         return EmptyColumnID;
 
     // Vector Index requires a specific storage format to work.
-    if (unlikely(!isVectorIndexSupported(logger)))
+    if (unlikely(!isLocalIndexSupported(logger)))
         return EmptyColumnID;
 
     if (idx_info.idx_cols.size() != 1)
@@ -89,6 +88,50 @@ LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const
     return generateLocalIndexInfos(nullptr, table_info, logger).new_local_index_infos;
 }
 
+namespace
+{
+LocalIndexInfosChangeset nothingChanged(const std::unordered_map<IndexID, size_t> & original_local_index_id_map)
+{
+    std::vector<IndexID> all_indexes;
+    all_indexes.reserve(original_local_index_id_map.size());
+    for (const auto & it : original_local_index_id_map)
+        all_indexes.emplace_back(it.first);
+    size_t end_offset = all_indexes.size();
+    return LocalIndexInfosChangeset{
+        .new_local_index_infos = nullptr,
+        .all_indexes = std::move(all_indexes),
+        .added_indexes_offset = end_offset,
+        .dropped_indexes_offset = end_offset,
+    };
+}
+LocalIndexInfosChangeset getChangeset(
+    LocalIndexInfosPtr && new_index_infos,
+    const std::unordered_map<IndexID, size_t> & original_local_index_id_map,
+    const std::vector<IndexID> & newly_added,
+    const std::vector<IndexID> & newly_dropped)
+{
+    std::vector<IndexID> all_indexes;
+    all_indexes.reserve(original_local_index_id_map.size() + newly_added.size() + newly_dropped.size());
+    for (const auto & it : original_local_index_id_map)
+        all_indexes.emplace_back(it.first);
+
+    const size_t added_begin_offset = all_indexes.size();
+    for (const auto & id : newly_added)
+        all_indexes.emplace_back(id);
+
+    const size_t dropped_begin_offset = all_indexes.size();
+    for (const auto & id : newly_dropped)
+        all_indexes.emplace_back(id);
+
+    return LocalIndexInfosChangeset{
+        .new_local_index_infos = std::move(new_index_infos),
+        .all_indexes = std::move(all_indexes),
+        .added_indexes_offset = added_begin_offset,
+        .dropped_indexes_offset = dropped_begin_offset,
+    };
+}
+} // namespace
+
 LocalIndexInfosChangeset generateLocalIndexInfos(
     const LocalIndexInfosSnapshot & existing_indexes,
     const TiDB::TableInfo & new_table_info,
@@ -98,8 +141,8 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
     {
         // If the storage format does not support vector index, always return an empty
         // index_info. Meaning we should drop all indexes
-        bool is_storage_format_support = isVectorIndexSupported(logger);
-        fiu_do_on(FailPoints::force_not_support_vector_index, { is_storage_format_support = false; });
+        bool is_storage_format_support = isLocalIndexSupported(logger);
+        fiu_do_on(FailPoints::force_not_support_local_index, { is_storage_format_support = false; });
         if (!is_storage_format_support)
             return LocalIndexInfosChangeset{
                 .new_local_index_infos = new_index_infos,
@@ -125,7 +168,7 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
 
     for (const auto & idx : new_table_info.index_infos)
     {
-        if (!idx.vector_index)
+        if (!idx.hasColumnarIndex())
             continue;
 
         const auto column_id = getVectorIndxColumnID(new_table_info, idx, logger);
@@ -138,10 +181,11 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
             {
                 // create a new index
                 new_index_infos->emplace_back(LocalIndexInfo{
-                    .type = IndexType::Vector,
+                    .kind = idx.columnarIndexKind(),
                     .index_id = idx.id,
                     .column_id = column_id,
-                    .index_definition = idx.vector_index,
+                    // Only one of the below will be set
+                    .def_vector_index = idx.vector_index,
                 });
                 newly_added.emplace_back(idx.id);
                 index_ids_in_new_table.emplace(idx.id);
@@ -175,52 +219,47 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
 
     if (newly_added.empty() && newly_dropped.empty())
     {
-        auto get_logging = [&]() -> String {
-            FmtBuffer buf;
-            buf.append("keep=[");
-            buf.joinStr(
-                original_local_index_id_map.begin(),
-                original_local_index_id_map.end(),
-                [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id.first); },
-                ",");
-            buf.append("]");
-            return buf.toString();
-        };
-        LOG_DEBUG(logger, "Local index info does not changed, {}", get_logging());
-        return LocalIndexInfosChangeset{
-            .new_local_index_infos = nullptr,
-        };
+        return nothingChanged(original_local_index_id_map);
     }
 
-    auto get_changed_logging = [&]() -> String {
-        FmtBuffer buf;
-        buf.append("keep=[");
+    return getChangeset(std::move(new_index_infos), original_local_index_id_map, newly_added, newly_dropped);
+}
+
+String LocalIndexInfosChangeset::toString() const
+{
+    FmtBuffer buf;
+    buf.append("keep=[");
+    auto keep_indexes = keepIndexes();
+    buf.joinStr(
+        keep_indexes.begin(),
+        keep_indexes.end(),
+        [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
+        ",");
+    buf.append("]");
+
+    auto added_indexes = addedIndexes();
+    if (new_local_index_infos != nullptr || !added_indexes.empty())
+    {
+        buf.append(" added=[");
         buf.joinStr(
-            original_local_index_id_map.begin(),
-            original_local_index_id_map.end(),
-            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id.first); },
-            ",");
-        buf.append("] added=[");
-        buf.joinStr(
-            newly_added.begin(),
-            newly_added.end(),
-            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
-            ",");
-        buf.append("] dropped=[");
-        buf.joinStr(
-            newly_dropped.begin(),
-            newly_dropped.end(),
+            added_indexes.begin(),
+            added_indexes.end(),
             [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
             ",");
         buf.append("]");
-        return buf.toString();
-    };
-    LOG_INFO(logger, "Local index info generated, {}", get_changed_logging());
-
-    return LocalIndexInfosChangeset{
-        .new_local_index_infos = new_index_infos,
-        .dropped_indexes = std::move(newly_dropped),
-    };
+    }
+    auto dropped_indexes = droppedIndexes();
+    if (new_local_index_infos != nullptr || !dropped_indexes.empty())
+    {
+        buf.append(" dropped=[");
+        buf.joinStr(
+            dropped_indexes.begin(),
+            dropped_indexes.end(),
+            [](const auto & id, FmtBuffer & fb) { fb.fmtAppend("index_id={}", id); },
+            ",");
+        buf.append("]");
+    }
+    return buf.toString();
 }
 
 } // namespace DB::DM

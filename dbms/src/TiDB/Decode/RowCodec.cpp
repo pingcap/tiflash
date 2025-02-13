@@ -334,7 +334,7 @@ bool appendRowToBlock(
 {
     const ColumnInfos & column_infos = schema_snapshot->column_infos;
     // when pk is handle, we need skip pk column when decoding value
-    ColumnID pk_handle_id = InvalidColumnID;
+    ColumnID pk_handle_id = MutSup::invalid_col_id;
     if (schema_snapshot->pk_is_handle)
     {
         pk_handle_id = schema_snapshot->pk_column_ids[0];

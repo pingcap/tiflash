@@ -38,7 +38,7 @@ private:
     const ANNQueryInfoPtr ann_query_info;
     const BitmapFilterView valid_rows;
     // Global vector index cache
-    const VectorIndexCachePtr vec_index_cache;
+    const LocalIndexCachePtr vec_index_cache;
     const ColumnDefine vec_cd;
     const ColumnDefinesPtr rest_col_defs;
 
@@ -69,7 +69,7 @@ public:
         , data_provider(data_provider_)
         , ann_query_info(ann_query_info_)
         , valid_rows(std::move(valid_rows_))
-        , vec_index_cache(context_.global_context.getVectorIndexCache())
+        , vec_index_cache(context_.global_context.getLocalIndexCache())
         , vec_cd(std::move(vec_cd_))
         , rest_col_defs(rest_col_defs_)
         , column_files(reader.snapshot->getColumnFiles())
@@ -92,24 +92,13 @@ public:
     String getName() const override { return "ColumnFileSetWithVectorIndex"; }
     Block getHeader() const override { return header; }
 
-    Block read() override
-    {
-        FilterPtr filter = nullptr;
-        return read(filter, false);
-    }
-
-    // When all rows in block are not filtered out,
-    // `res_filter` will be set to null.
-    // The caller needs to do handle this situation.
-    Block read(FilterPtr & res_filter, bool return_filter) override;
+    Block read() override;
 
     std::vector<VectorIndexViewer::SearchResult> load() override;
 
     void setSelectedRows(const std::span<const UInt32> & selected_rows) override;
 
 private:
-    Block readImpl(FilterPtr & res_filter);
-
     Block readOtherColumns();
 
     void toNextFile(size_t current_file_index, size_t current_file_rows);

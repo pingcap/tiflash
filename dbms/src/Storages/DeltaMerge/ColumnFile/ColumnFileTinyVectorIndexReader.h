@@ -16,8 +16,8 @@
 
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
+#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
-#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
 
 
 namespace DB::DM
@@ -35,8 +35,8 @@ private:
     const BitmapFilterView valid_rows;
     // Note: ColumnDefine comes from read path does not have vector_index fields.
     const ColumnDefine vec_cd;
-    // Global vector index cache
-    const VectorIndexCachePtr vec_index_cache;
+    // Global local index cache
+    const LocalIndexCachePtr local_index_cache;
     LoggerPtr log;
 
     // Performance statistics
@@ -62,27 +62,23 @@ public:
         const ANNQueryInfoPtr & ann_query_info_,
         const BitmapFilterView && valid_rows_,
         const ColumnDefine & vec_cd_,
-        const VectorIndexCachePtr & vec_index_cache_)
+        const LocalIndexCachePtr & local_index_cache_)
         : tiny_file(tiny_file_)
         , data_provider(data_provider_)
         , ann_query_info(ann_query_info_)
         , valid_rows(std::move(valid_rows_))
         , vec_cd(vec_cd_)
-        , vec_index_cache(vec_index_cache_)
+        , local_index_cache(local_index_cache_)
         , log(Logger::get())
     {}
 
     ~ColumnFileTinyVectorIndexReader();
 
-    // Read vector column data and set filter.
-    // The column will be as same as as the rows of the tiny file,
-    // but only the rows in selected_rows will be filled,
-    // others will be filled with default values.
+    // Read vector column data with the specified rowids.
     void read(
         MutableColumnPtr & vec_column,
         const std::span<const VectorIndexViewer::Key> & read_rowids,
-        size_t rowid_start_offset,
-        size_t read_rows);
+        size_t rowid_start_offset);
 
     // Load vector index and search results.
     // Return the rowids of the selected rows.

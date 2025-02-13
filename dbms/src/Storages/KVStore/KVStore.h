@@ -145,7 +145,7 @@ public:
     FileUsageStatistics getFileUsageStatistics() const;
     // Proxy will validate and refit the config items from the toml file.
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
-    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
+    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value) const;
     static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const { return joint_memory_allocation_map; }
     void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
@@ -230,6 +230,7 @@ public: // Raft Snapshot
     size_t getOngoingPrehandleSubtaskCount() const;
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     size_t getMaxParallelPrehandleSize() const;
+    size_t getMaxPrehandleSubtaskSize() const;
 
 public: // Raft Read
     void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }
@@ -289,10 +290,15 @@ private:
         DM::FileConvertJobType,
         TMTContext & tmt);
 
+    // Note that if there are committed rows in `new_region`, those rows will be left to
+    // the in-memory `RegionData` but not flushed into the IStorage layer after calling
+    // `checkAndApplyPreHandledSnapshot`.
+    // `PreHandle` should take care of the committed rows and only leave uncommitted
+    // key-values in the `new_region`.
     template <typename RegionPtrWrap>
-    void checkAndApplyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt);
     template <typename RegionPtrWrap>
-    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
+    void onSnapshot(const RegionPtrWrap & new_region, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
     RegionPtr handleIngestSSTByDTFile(
         const RegionPtr & region,
@@ -374,9 +380,6 @@ private:
 
     mutable std::mutex task_mutex;
 
-    // raft_cmd_res stores the result of applying raft cmd. It must be protected by task_mutex.
-    std::unique_ptr<RaftCommandResult> raft_cmd_res;
-
     LoggerPtr log;
 
     std::atomic<UInt64> region_compact_log_min_rows;
@@ -429,9 +432,9 @@ class KVStoreTaskLock : private boost::noncopyable
 
 void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
 void WaitCheckRegionReadyImpl(
-    const TMTContext &,
     KVStore & kvstore,
     const std::atomic_size_t &,
+    UInt64 read_index_timeout,
     double,
     double,
     double);

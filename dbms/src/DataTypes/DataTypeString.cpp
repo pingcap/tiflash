@@ -24,6 +24,8 @@
 #include <IO/WriteHelpers.h>
 #include <Storages/FormatVersion.h>
 
+#include <magic_enum.hpp>
+
 #if __SSE2__
 #include <emmintrin.h>
 #endif
@@ -439,6 +441,12 @@ void deserializeBinaryBulkV2(IColumn & column, ReadBuffer & offsets_stream, Read
     deserializeCharsBinary(chars, chars_stream, bytes);
 }
 
+DataTypeString::SerdesFormat getDefaultByStorageFormat(StorageFormatVersion current)
+{
+    const bool is_legacy_format = current.identifier < 8 || (current.identifier >= 100 && current.identifier < 103);
+    return is_legacy_format ? DataTypeString::SerdesFormat::SizePrefix
+                            : DataTypeString::SerdesFormat::SeparateSizeAndChars;
+}
 } // namespace
 
 void DataTypeString::enumerateStreams(const StreamCallback & callback, SubstreamPath & path) const
@@ -489,27 +497,13 @@ void DataTypeString::deserializeBinaryBulkWithMultipleStreams(
     }
 }
 
-static DataTypeString::SerdesFormat getDefaultByStorageFormat(StorageFormatVersion current)
-{
-    if (current.identifier < 8 || (current.identifier >= 100 && current.identifier < 103))
-    {
-        return DataTypeString::SerdesFormat::SizePrefix;
-    }
-    return DataTypeString::SerdesFormat::SeparateSizeAndChars;
-}
-
 DataTypeString::DataTypeString(SerdesFormat serdes_fmt_)
     : serdes_fmt((serdes_fmt_ != SerdesFormat::None) ? serdes_fmt_ : getDefaultByStorageFormat(STORAGE_FORMAT_CURRENT))
 {}
 
 String DataTypeString::getDefaultName()
 {
-    if (STORAGE_FORMAT_CURRENT.identifier < 8
-        || (STORAGE_FORMAT_CURRENT.identifier >= 100 && STORAGE_FORMAT_CURRENT.identifier < 103))
-    {
-        return LegacyName;
-    }
-    return NameV2;
+    return getDefaultByStorageFormat(STORAGE_FORMAT_CURRENT) == SerdesFormat::SizePrefix ? LegacyName : NameV2;
 }
 
 String DataTypeString::getNullableDefaultName()
@@ -517,4 +511,14 @@ String DataTypeString::getNullableDefaultName()
     return fmt::format("Nullable({})", getDefaultName());
 }
 
+std::span<const std::pair<String, DataTypePtr>> DataTypeString::getTiDBPkColumnStringNameAndTypes()
+{
+    static const auto name_and_types = std::array{
+        std::make_pair(NameV2, DataTypeFactory::instance().getOrSet(NameV2)),
+        std::make_pair(LegacyName, DataTypeFactory::instance().getOrSet(LegacyName)),
+    };
+    // Minus one for ignoring SerdesFormat::None.
+    static_assert(magic_enum::enum_count<SerdesFormat>() - 1 == name_and_types.size());
+    return name_and_types;
+}
 } // namespace DB

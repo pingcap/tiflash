@@ -137,12 +137,11 @@ SegmentReadTask::SegmentReadTask(
                 {
                     for (const auto & index_info : *index_infos)
                     {
-                        if (index_info.vector_index)
-                        {
-                            remote_page_ids.emplace_back(index_info.index_page_id);
-                            remote_page_sizes.emplace_back(index_info.vector_index->index_bytes());
-                            ++count;
-                        }
+                        RUNTIME_CHECK(index_info.has_index_page_id());
+                        RUNTIME_CHECK(index_info.index_props().has_kind());
+                        remote_page_ids.emplace_back(index_info.index_page_id());
+                        remote_page_sizes.emplace_back(index_info.index_props().file_size());
+                        ++count;
                     }
                 }
             }
@@ -260,7 +259,7 @@ void SegmentReadTask::initColumnFileDataProvider(const Remote::RNLocalPageCacheG
 void SegmentReadTask::initInputStream(
     const ColumnDefines & columns_to_read,
     UInt64 start_ts,
-    const PushDownFilterPtr & push_down_filter,
+    const PushDownExecutorPtr & push_down_executor,
     ReadMode read_mode,
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
@@ -268,7 +267,7 @@ void SegmentReadTask::initInputStream(
     if (likely(doInitInputStreamWithErrorFallback(
             columns_to_read,
             start_ts,
-            push_down_filter,
+            push_down_executor,
             read_mode,
             expected_block_size,
             enable_delta_index_error_fallback)))
@@ -283,20 +282,20 @@ void SegmentReadTask::initInputStream(
     {
         cache->setDeltaIndex(read_snapshot->delta->getSharedDeltaIndex());
     }
-    doInitInputStream(columns_to_read, start_ts, push_down_filter, read_mode, expected_block_size);
+    doInitInputStream(columns_to_read, start_ts, push_down_executor, read_mode, expected_block_size);
 }
 
 bool SegmentReadTask::doInitInputStreamWithErrorFallback(
     const ColumnDefines & columns_to_read,
     UInt64 start_ts,
-    const PushDownFilterPtr & push_down_filter,
+    const PushDownExecutorPtr & push_down_executor,
     ReadMode read_mode,
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
 {
     try
     {
-        doInitInputStream(columns_to_read, start_ts, push_down_filter, read_mode, expected_block_size);
+        doInitInputStream(columns_to_read, start_ts, push_down_executor, read_mode, expected_block_size);
         return true;
     }
     catch (const Exception & e)
@@ -316,7 +315,7 @@ bool SegmentReadTask::doInitInputStreamWithErrorFallback(
 void SegmentReadTask::doInitInputStream(
     const ColumnDefines & columns_to_read,
     UInt64 start_ts,
-    const PushDownFilterPtr & push_down_filter,
+    const PushDownExecutorPtr & push_down_executor,
     ReadMode read_mode,
     size_t expected_block_size)
 {
@@ -333,7 +332,7 @@ void SegmentReadTask::doInitInputStream(
         columns_to_read,
         read_snapshot,
         ranges,
-        push_down_filter,
+        push_down_executor,
         start_ts,
         expected_block_size);
 }
@@ -521,7 +520,7 @@ void SegmentReadTask::checkMemTableSet(const ColumnFileSetSnapshotPtr & mem_tabl
 void SegmentReadTask::checkMemTableSetReady() const
 {
     const auto & mem_table_snap = read_snapshot->delta->getMemTableSetSnapshot();
-    for (auto & cf : mem_table_snap->getColumnFiles())
+    for (const auto & cf : mem_table_snap->getColumnFiles())
     {
         if (auto * in_mem_cf = cf->tryToInMemoryFile(); in_mem_cf)
         {

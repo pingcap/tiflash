@@ -20,7 +20,8 @@
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
-#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndexViewer.h>
+#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/VectorIndex.h>
@@ -39,14 +40,13 @@ public:
     using ProceedCheckFn = std::function<bool()>;
 
 public:
-    static VectorIndexBuilderPtr create(IndexID index_id, const TiDB::VectorIndexDefinitionPtr & definition);
+    static VectorIndexBuilderPtr create(const TiDB::VectorIndexDefinitionPtr & definition);
 
     static bool isSupportedType(const IDataType & type);
 
 public:
-    explicit VectorIndexBuilder(IndexID index_id_, const TiDB::VectorIndexDefinitionPtr & definition_)
-        : index_id(index_id_)
-        , definition(definition_)
+    explicit VectorIndexBuilder(const TiDB::VectorIndexDefinitionPtr & definition_)
+        : definition(definition_)
     {}
 
     virtual ~VectorIndexBuilder() = default;
@@ -61,13 +61,12 @@ public:
     virtual void saveToBuffer(WriteBuffer & write_buf) const = 0;
 
 public:
-    const IndexID index_id;
     const TiDB::VectorIndexDefinitionPtr definition;
 };
 
 /// Views a VectorIndex file.
 /// It may nor may not read the whole content of the file into memory.
-class VectorIndexViewer
+class VectorIndexViewer : public LocalIndexViewer
 {
 public:
     /// The key is the row's offset in the DMFile.
@@ -85,15 +84,15 @@ public:
     using RowFilter = BitmapFilterView;
 
 public:
-    static VectorIndexViewerPtr view(const dtpb::VectorIndexFileProps & file_props, std::string_view path);
-    static VectorIndexViewerPtr load(const dtpb::VectorIndexFileProps & file_props, ReadBuffer & buf);
+    static VectorIndexViewerPtr view(const dtpb::IndexFilePropsV2Vector & file_props, std::string_view path);
+    static VectorIndexViewerPtr load(const dtpb::IndexFilePropsV2Vector & file_props, ReadBuffer & buf);
 
 public:
-    explicit VectorIndexViewer(const dtpb::VectorIndexFileProps & file_props_)
+    explicit VectorIndexViewer(const dtpb::IndexFilePropsV2Vector & file_props_)
         : file_props(file_props_)
     {}
 
-    virtual ~VectorIndexViewer() = default;
+    ~VectorIndexViewer() override = default;
 
     // Invalid rows in `valid_rows` will be discared when applying the search
     virtual std::vector<SearchResult> search(const ANNQueryInfoPtr & queryInfo, const RowFilter & valid_rows) const = 0;
@@ -104,7 +103,7 @@ public:
     virtual void get(Key key, std::vector<Float32> & out) const = 0;
 
 public:
-    const dtpb::VectorIndexFileProps file_props;
+    const dtpb::IndexFilePropsV2Vector file_props;
 };
 
 } // namespace DB::DM

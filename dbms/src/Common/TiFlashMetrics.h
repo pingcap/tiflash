@@ -400,7 +400,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_failed_other, {{"type", "failed_other"}}),                                                                             \
       F(type_failed_cancel, {{"type", "failed_cancel"}}),                                                                           \
       F(type_failed_no_suitable, {{"type", "failed_no_suitable"}}),                                                                 \
-      F(type_failed_timeout, {{"type", "failed_timeout"}}),                                                                         \
+      F(type_failed_no_candidate, {{"type", "failed_no_candidate"}}),                                                               \
       F(type_failed_baddata, {{"type", "failed_baddata"}}),                                                                         \
       F(type_failed_repeated, {{"type", "failed_repeated"}}),                                                                       \
       F(type_failed_build_chkpt, {{"type", "failed_build_chkpt"}}),                                                                 \
@@ -459,10 +459,13 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Total number of keys processed in some types of Raft commands",                                                              \
       Counter,                                                                                                                      \
       F(type_write_put, {"type", "write_put"}),                                                                                     \
+      F(type_write_remove, {"type", "write_remove"}),                                                                               \
       F(type_lock_put, {"type", "lock_put"}),                                                                                       \
       F(type_default_put, {"type", "default_put"}),                                                                                 \
       F(type_write_del, {"type", "write_del"}),                                                                                     \
       F(type_lock_del, {"type", "lock_del"}),                                                                                       \
+      F(type_pessimistic_lock_put, {"type", "pessimistic_lock_put"}),                                                               \
+      F(type_lock_replaced, {"type", "lock_replaced"}),                                                                             \
       F(type_default_del, {"type", "default_del"}),                                                                                 \
       F(type_apply_snapshot, {"type", "apply_snapshot"}),                                                                           \
       F(type_apply_snapshot_default, {"type", "apply_snapshot_default"}),                                                           \
@@ -573,6 +576,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_tikv_server_issue, {{"type", "tikv_server_issue"}}),                                                                   \
       F(type_tikv_lock, {{"type", "tikv_lock"}}),                                                                                   \
       F(type_other, {{"type", "other"}}))                                                                                           \
+    M(tiflash_raft_classes_count,                                                                                                   \
+      "Raft classes counter",                                                                                                       \
+      Gauge,                                                                                                                        \
+      F(type_region, {{"type", "region"}}),                                                                                         \
+      F(type_fully_decoded_lockcf, {{"type", "fully_decoded_lockcf"}}))                                                             \
     /* required by DBaaS */                                                                                                         \
     M(tiflash_server_info,                                                                                                          \
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \
@@ -853,6 +861,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Gauge,                                                                                                                        \
       F(type_build, {"type", "build"}),                                                                                             \
       F(type_view, {"type", "view"}))                                                                                               \
+    M(tiflash_vector_index_build_count,                                                                                             \
+      "Vector index build count",                                                                                                   \
+      Counter,                                                                                                                      \
+      F(type_stable, {"type", "stable"}),                                                                                           \
+      F(type_delta, {"type", "delta"}))                                                                                             \
     M(tiflash_vector_index_active_instances,                                                                                        \
       "Active Vector index instances",                                                                                              \
       Gauge,                                                                                                                        \

@@ -27,17 +27,10 @@
 #include <Storages/KVStore/Region.h>
 #include <common/logger_useful.h>
 
-#include <condition_variable>
 #include <functional>
 #include <mutex>
-#include <optional>
 #include <variant>
 #include <vector>
-
-namespace TiDB
-{
-struct TableInfo;
-};
 
 namespace DB
 {
@@ -53,7 +46,6 @@ class Block;
 struct MockTiDBTable;
 class RegionRangeKeys;
 class RegionTaskLock;
-struct RegionPtrWithBlock;
 struct RegionPtrWithSnapshotFiles;
 class RegionScanFilter;
 using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
@@ -89,8 +81,6 @@ public:
         RegionID region_id;
         std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
         bool pause_flush = false;
-        Int64 cache_bytes = 0;
-        Timepoint last_flush_time = Clock::now();
     };
 
     using InternalRegions = std::unordered_map<RegionID, InternalRegion>;
@@ -101,7 +91,7 @@ public:
             : table_id(table_id_)
         {}
         TableID table_id;
-        InternalRegions regions;
+        InternalRegions internal_regions;
     };
 
     explicit RegionTable(Context & context_);
@@ -120,12 +110,15 @@ public:
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
     // The original name for this function is tryFlushRegion.
-    RegionDataReadInfoList tryWriteBlockByRegion(const RegionPtrWithBlock & region);
+    RegionDataReadInfoList tryWriteBlockByRegion(const RegionPtr & region);
 
     void handleInternalRegionsByTable(
         KeyspaceID keyspace_id,
         TableID table_id,
         std::function<void(const InternalRegions &)> && callback) const;
+    void handleInternalRegionsByKeyspace(
+        KeyspaceID keyspace_id,
+        std::function<void(const TableID table_id, const InternalRegions &)> && callback) const;
 
     std::vector<RegionID> getRegionIdsByTable(KeyspaceID keyspace_id, TableID table_id) const;
     std::vector<std::pair<RegionID, RegionPtr>> getRegionsByTable(KeyspaceID keyspace_id, TableID table_id) const;
@@ -136,7 +129,7 @@ public:
     /// Note that table schema must be keep unchanged throughout the process of read then write, we take good care of the lock.
     static DM::WriteResult writeCommittedByRegion(
         Context & context,
-        const RegionPtrWithBlock & region,
+        const RegionPtr & region,
         RegionDataReadInfoList & data_list_to_remove,
         const LoggerPtr & log,
         bool lock_region = true);
@@ -159,7 +152,7 @@ public:
 public:
     // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
     // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
-    // self_safe_ts is the safe_ts in TiFlah learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
+    // self_safe_ts is the safe_ts in TiFlash learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
     struct SafeTsEntry
     {
         explicit SafeTsEntry(UInt64 leader_safe_ts, UInt64 self_safe_ts)
@@ -190,6 +183,8 @@ private:
     InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
     InternalRegion & insertRegion(Table & table, const Region & region);
     InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
+    void addTableToIndex(KeyspaceID keyspace_id, TableID table_id);
+    void removeTableFromIndex(KeyspaceID keyspace_id, TableID table_id);
 
 private:
     using TableMap = std::unordered_map<KeyspaceTableID, Table, boost::hash<KeyspaceTableID>>;
@@ -197,6 +192,10 @@ private:
 
     using RegionInfoMap = std::unordered_map<RegionID, KeyspaceTableID>;
     RegionInfoMap regions;
+
+    using KeyspaceIndex = std::unordered_map<KeyspaceID, std::unordered_set<TableID>, boost::hash<KeyspaceID>>;
+    KeyspaceIndex keyspace_index;
+
     SafeTsMap safe_ts_map;
 
     Context * const context;
@@ -208,61 +207,7 @@ private:
 };
 
 
-// Block cache of region data with schema version.
-struct RegionPreDecodeBlockData
-{
-    Block block;
-    Int64 schema_version;
-    RegionDataReadInfoList data_list_read; // if schema version changed, use kv data to rebuild block cache
-
-    RegionPreDecodeBlockData(Block && block_, Int64 schema_version_, RegionDataReadInfoList && data_list_read_)
-        : block(std::move(block_))
-        , schema_version(schema_version_)
-        , data_list_read(std::move(data_list_read_))
-    {}
-    DISALLOW_COPY(RegionPreDecodeBlockData);
-    void toString(std::stringstream & ss) const
-    {
-        ss << " {";
-        ss << " schema_version: " << schema_version;
-        ss << ", data_list size: " << data_list_read.size();
-        ss << ", block row: " << block.rows() << " col: " << block.columns() << " bytes: " << block.bytes();
-        ss << " }";
-    }
-};
-
-// A wrap of RegionPtr, could try to use its block cache while writing region data to storage.
-struct RegionPtrWithBlock
-{
-    using Base = RegionPtr;
-    using CachePtr = std::unique_ptr<RegionPreDecodeBlockData>;
-
-    RegionPtrWithBlock(const Base & base_)
-        : base(base_)
-        , pre_decode_cache(nullptr)
-    {}
-
-    /// to be compatible with usage as RegionPtr.
-    Base::element_type * operator->() const { return base.operator->(); }
-    const Base::element_type & operator*() const { return base.operator*(); }
-
-    /// make it could be cast into RegionPtr implicitly.
-    operator const Base &() const { return base; }
-
-    const Base & base;
-    CachePtr pre_decode_cache;
-
-private:
-    friend struct MockRaftCommand;
-    /// Can accept const ref of RegionPtr without cache
-    RegionPtrWithBlock(const Base & base_, CachePtr cache)
-        : base(base_)
-        , pre_decode_cache(std::move(cache))
-    {}
-};
-
-
-// A wrap of RegionPtr, with snapshot files directory waitting to be ingested
+// A wrap of RegionPtr, with snapshot files directory waiting to be ingested
 struct RegionPtrWithSnapshotFiles
 {
     using Base = RegionPtr;

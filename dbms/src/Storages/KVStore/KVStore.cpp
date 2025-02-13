@@ -57,7 +57,6 @@ KVStore::KVStore(Context & context)
     : region_persister(
         context.getSharedContextDisagg()->isDisaggregatedComputeMode() ? nullptr
                                                                        : std::make_unique<RegionPersister>(context))
-    , raft_cmd_res(std::make_unique<RaftCommandResult>())
     , log(Logger::get())
     , region_compact_log_min_rows(40 * 1024)
     , region_compact_log_min_bytes(32 * 1024 * 1024)
@@ -363,7 +362,7 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         LOG_INFO(log, "region_id={} not found, might be removed already", region_id);
         return;
     }
-    LOG_INFO(log, "Handle destroy {}", region->toString());
+    LOG_INFO(log, "Handle destroy {}, refCount {}", region->toString(), region.use_count());
     region->setPendingRemove();
     removeRegion(
         region_id,
@@ -465,38 +464,10 @@ size_t KVStore::getOngoingPrehandleSubtaskCount() const
     return std::max(0, prehandling_trace.ongoing_prehandle_subtask_count.load());
 }
 
-static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
-{
-    for (const auto & peer : region.peers())
-    {
-        if (peer.id() == peer_id)
-        {
-            return peer;
-        }
-    }
-
-    throw Exception(
-        ErrorCodes::LOGICAL_ERROR,
-        "{}: peer not found in region, peer_id={} region_id={}",
-        __PRETTY_FUNCTION__,
-        peer_id,
-        region.id());
-}
-
 // Generate a temporary region pointer by the given meta
 RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
 {
-    auto meta = ({
-        auto peer = findPeer(region, peer_id);
-        raft_serverpb::RaftApplyState apply_state;
-        {
-            apply_state.set_applied_index(index);
-            apply_state.mutable_truncated_state()->set_index(index);
-            apply_state.mutable_truncated_state()->set_term(term);
-        }
-        RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
-    });
-
+    auto meta = RegionMeta::genFromMetaRegion(std::move(region), peer_id, index, term);
     return std::make_shared<Region>(std::move(meta), proxy_helper);
 }
 
@@ -506,7 +477,7 @@ RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
 }
 
 
-void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfoType type, uint64_t value)
+void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfoType type, uint64_t value) const
 {
     joint_memory_allocation_map->reportThreadAllocInfoForProxy(v, type, value);
 }

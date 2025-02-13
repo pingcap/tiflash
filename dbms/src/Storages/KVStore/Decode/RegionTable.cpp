@@ -54,6 +54,7 @@ RegionTable::Table & RegionTable::getOrCreateTable(const KeyspaceID keyspace_id,
     {
         // Load persisted info.
         it = tables.emplace(ks_table_id, table_id).first;
+        addTableToIndex(keyspace_id, table_id);
         LOG_INFO(log, "get new table, keyspace={} table_id={}", keyspace_id, table_id);
     }
     return it->second;
@@ -71,7 +72,7 @@ RegionTable::InternalRegion & RegionTable::insertRegion(
     const RegionID region_id)
 {
     auto keyspace_id = region_range_keys.getKeyspaceID();
-    auto & table_regions = table.regions;
+    auto & table_regions = table.internal_regions;
     // Insert table mapping.
     // todo check if region_range_keys.mapped_table_id == table.table_id ??
     auto [it, ok] = table_regions.emplace(region_id, InternalRegion(region_id, region_range_keys.rawKeys()));
@@ -90,7 +91,7 @@ RegionTable::InternalRegion & RegionTable::insertRegion(
 
 RegionTable::InternalRegion & RegionTable::doGetInternalRegion(KeyspaceTableID ks_table_id, DB::RegionID region_id)
 {
-    return tables.find(ks_table_id)->second.regions.find(region_id)->second;
+    return tables.find(ks_table_id)->second.internal_regions.find(region_id)->second;
 }
 
 RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const Region & region)
@@ -98,7 +99,7 @@ RegionTable::InternalRegion & RegionTable::getOrInsertRegion(const Region & regi
     auto keyspace_id = region.getKeyspaceID();
     auto table_id = region.getMappedTableID();
     auto & table = getOrCreateTable(keyspace_id, table_id);
-    auto & table_regions = table.regions;
+    auto & table_regions = table.internal_regions;
     if (auto it = table_regions.find(region.id()); it != table_regions.end())
         return it->second;
 
@@ -137,7 +138,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
     auto & table = it->second;
 
     // Remove from region list.
-    for (const auto & region_info : table.regions)
+    for (const auto & region_info : table.internal_regions)
     {
         regions.erase(region_info.first);
         {
@@ -148,6 +149,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
 
     // Remove from table map.
     tables.erase(it);
+    removeTableFromIndex(keyspace_id, table_id);
 
     LOG_INFO(log, "remove table from RegionTable success, keyspace={} table_id={}", keyspace_id, table_id);
 }
@@ -155,8 +157,7 @@ void RegionTable::removeTable(KeyspaceID keyspace_id, TableID table_id)
 void RegionTable::updateRegion(const Region & region)
 {
     std::lock_guard lock(mutex);
-    auto & internal_region = getOrInsertRegion(region);
-    internal_region.cache_bytes = region.dataSize();
+    getOrInsertRegion(region);
 }
 
 namespace
@@ -220,7 +221,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
 
         ks_table_id = it->second;
         auto & table = tables.find(ks_table_id)->second;
-        auto internal_region_it = table.regions.find(region_id);
+        auto internal_region_it = table.internal_regions.find(region_id);
         handle_range = internal_region_it->second.range_in_table;
 
         regions.erase(it);
@@ -228,8 +229,8 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
             std::unique_lock write_lock(rw_lock);
             safe_ts_map.erase(region_id);
         }
-        table.regions.erase(internal_region_it);
-        if (table.regions.empty())
+        table.internal_regions.erase(internal_region_it);
+        if (table.internal_regions.empty())
         {
             tables.erase(ks_table_id);
         }
@@ -250,7 +251,7 @@ void RegionTable::removeRegion(const RegionID region_id, bool remove_data, const
     }
 }
 
-RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtrWithBlock & region)
+RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtr & region)
 {
     const RegionID region_id = region->id();
 
@@ -308,9 +309,6 @@ RegionDataReadInfoList RegionTable::tryWriteBlockByRegion(const RegionPtrWithBlo
 
     func_update_region([&](InternalRegion & internal_region) -> bool {
         internal_region.pause_flush = false;
-        internal_region.cache_bytes = region->dataSize();
-
-        internal_region.last_flush_time = Clock::now();
         return true;
     });
 
@@ -329,7 +327,23 @@ void RegionTable::handleInternalRegionsByTable(
 
     if (auto it = tables.find(KeyspaceTableID{keyspace_id, table_id}); it != tables.end())
     {
-        callback(it->second.regions);
+        callback(it->second.internal_regions);
+    }
+}
+
+void RegionTable::handleInternalRegionsByKeyspace(
+    KeyspaceID keyspace_id,
+    std::function<void(const TableID table_id, const InternalRegions &)> && callback) const
+{
+    std::lock_guard lock(mutex);
+    auto table_set = keyspace_index.find(keyspace_id);
+    if (table_set != keyspace_index.end())
+    {
+        for (auto table_id : table_set->second)
+        {
+            if (auto it = tables.find(KeyspaceTableID{keyspace_id, table_id}); it != tables.end())
+                callback(table_id, it->second.internal_regions);
+        }
     }
 }
 
@@ -348,8 +362,8 @@ std::vector<RegionID> RegionTable::getRegionIdsByTable(KeyspaceID keyspace_id, T
         unlikely(iter != tables.end()))
     {
         std::vector<RegionID> ret_regions;
-        ret_regions.reserve(iter->second.regions.size());
-        for (const auto & r : iter->second.regions)
+        ret_regions.reserve(iter->second.internal_regions.size());
+        for (const auto & r : iter->second.internal_regions)
         {
             ret_regions.emplace_back(r.first);
         }
@@ -380,7 +394,6 @@ void RegionTable::shrinkRegionRange(const Region & region)
     std::lock_guard lock(mutex);
     auto & internal_region = getOrInsertRegion(region);
     internal_region.range_in_table = region.getRange()->rawKeys();
-    internal_region.cache_bytes = region.dataSize();
 }
 
 void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeKeys & region_range_keys)
@@ -432,6 +445,29 @@ void RegionTable::extendRegionRange(const RegionID region_id, const RegionRangeK
         auto & table = getOrCreateTable(keyspace_id, table_id);
         insertRegion(table, region_range_keys, region_id);
         LOG_INFO(log, "insert internal region, keyspace={} table_id={} region_id={}", keyspace_id, table_id, region_id);
+    }
+}
+
+void RegionTable::addTableToIndex(KeyspaceID keyspace_id, TableID table_id)
+{
+    auto it = keyspace_index.find(keyspace_id);
+    if (it == keyspace_index.end())
+    {
+        keyspace_index.emplace(keyspace_id, std::unordered_set<TableID>{table_id});
+    }
+    else
+    {
+        it->second.insert(table_id);
+    }
+}
+void RegionTable::removeTableFromIndex(KeyspaceID keyspace_id, TableID table_id)
+{
+    auto it = keyspace_index.find(keyspace_id);
+    if (it != keyspace_index.end())
+    {
+        it->second.erase(table_id);
+        if (it->second.empty())
+            keyspace_index.erase(it);
     }
 }
 

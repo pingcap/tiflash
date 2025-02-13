@@ -217,8 +217,8 @@ private:
         {
             // In some cases like Segment::getSplitPointSlow, only handle column in block.
             if (block.columns() < 2 //
-                || block.getByPosition(0).column_id != EXTRA_HANDLE_COLUMN_ID //
-                || block.getByPosition(1).column_id != VERSION_COLUMN_ID)
+                || block.getByPosition(0).column_id != MutSup::extra_handle_id //
+                || block.getByPosition(1).column_id != MutSup::version_col_id)
                 return;
 
             ++num_read;

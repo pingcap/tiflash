@@ -118,9 +118,9 @@ uint64_t DTWorkload::updateBlock(Block & block, uint64_t key)
     auto ts = ts_gen->get();
     {
         auto & cd = (*table_info->columns)[1];
-        if (cd.id != VERSION_COLUMN_ID)
+        if (cd.id != MutSup::version_col_id)
         {
-            LOG_ERROR(log, "Column id not match: {} but {} is required", cd.id, VERSION_COLUMN_ID);
+            LOG_ERROR(log, "Column id not match: {} but {} is required", cd.id, MutSup::version_col_id);
             throw std::invalid_argument("Column id not match");
         }
 
