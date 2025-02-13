@@ -21,10 +21,6 @@ namespace DB::DM::tests
 
 namespace
 {
-<<<<<<< HEAD
-// "[a, b)" => std::pair{a, b}
-=======
->>>>>>> 973f2914ce (ci)
 template <typename T>
 std::tuple<T, T, bool> parseRange(String & str_range)
 {
@@ -110,6 +106,15 @@ void check(const std::vector<SegDataUnit> & seg_data_units)
     }
     // If stable exists, it should be the first one.
     RUNTIME_CHECK(stable_units.empty() || (stable_units.size() == 1 && stable_units[0] == 0));
+}
+
+template <typename T>
+std::vector<T> genSequence(T begin, T end, bool including_right_boundary)
+{
+    auto size = end - begin + including_right_boundary;
+    std::vector<T> v(size);
+    std::iota(v.begin(), v.end(), begin);
+    return v;
 }
 
 template <typename T>
