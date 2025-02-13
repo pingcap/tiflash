@@ -307,18 +307,16 @@ void WaitCheckRegionReadyImpl(
         total_regions_cnt);
 }
 
-void WaitCheckRegionReady(
-    const TMTContext & tmt,
-    KVStore & kvstore,
-    const std::atomic_size_t & terminate_signals_counter)
+void WaitCheckRegionReady(KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter)
 {
+    const auto & config = kvstore.getConfigRef();
     // wait interval to check region ready, not recommended to modify only if for testing
-    auto wait_region_ready_timeout_sec = static_cast<double>(tmt.waitRegionReadyTimeout());
-    const auto wait_region_ready_tick = tmt.waitRegionReadyTick();
+    auto wait_region_ready_timeout_sec = static_cast<double>(config.waitRegionReadyTimeout());
+    const auto wait_region_ready_tick = config.waitRegionReadyTick();
     // default tick in TiKV is about 2s (without hibernate-region)
     const double min_wait_tick_time = 0 == wait_region_ready_tick ? 2.5 : static_cast<double>(wait_region_ready_tick);
     const double max_wait_tick_time = 0 == wait_region_ready_tick ? 20.0 : wait_region_ready_timeout_sec;
-    auto read_index_timeout = tmt.batchReadIndexTimeout();
+    auto read_index_timeout = config.batchReadIndexTimeout();
 
     return WaitCheckRegionReadyImpl(
         kvstore,
