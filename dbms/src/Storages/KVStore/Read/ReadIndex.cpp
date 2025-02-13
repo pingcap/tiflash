@@ -149,7 +149,7 @@ void WaitCheckRegionReadyImpl(
         [&remain_regions](RegionID region_id, const RegionPtr &) { remain_regions.emplace(region_id); });
     const size_t total_regions_cnt = remain_regions.size();
 
-    // The regions fall behind Region leaders' commit index from TiKV. A map of {RegionID -> AppliedIndex}
+    // The regions fall behind Region leaders' commit index from TiKV. A map of {RegionID -> CommitIndex}
     std::unordered_map<RegionID, uint64_t> regions_to_check;
     // part of time for waiting shall be assigned to fetch the latest commit index from TiKV
     static constexpr double BATCH_READ_INDEX_TIME_RATE = 0.2;
