@@ -427,7 +427,9 @@ protected:
     Grower grower;
     ResizeCallback resize_callback;
 
+#ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
     mutable size_t collisions = 0;
+#endif
 
     /// Find a cell with the same key or an empty cell, starting from the specified position and further along the collision resolution chain.
     size_t ALWAYS_INLINE findCell(const Key & x, size_t hash_value, size_t place_value) const
@@ -435,7 +437,9 @@ protected:
         while (!buf[place_value].isZero(*this) && !buf[place_value].keyEquals(x, hash_value, *this))
         {
             place_value = grower.next(place_value);
+#ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
             ++collisions;
+#endif
         }
 
         return place_value;
@@ -448,7 +452,9 @@ protected:
         while (!buf[place_value].isZero(*this))
         {
             place_value = grower.next(place_value);
+#ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
             ++collisions;
+#endif
         }
 
         return place_value;
@@ -1321,7 +1327,9 @@ public:
         return ptr - buf + 1;
     }
 
+#ifdef DBMS_HASH_MAP_COUNT_COLLISIONS
     size_t getCollisions() const { return collisions; }
+#endif
 };
 
 template <typename HashTableType>

@@ -32,7 +32,6 @@ public:
 
     static constexpr bool is_string_hash_map = true;
     static constexpr bool is_two_level = true;
-    size_t getCollisions() const { return 0; }
 
     // TODO: currently hashing contains redundant computations when doing distributed or external aggregations
     size_t hash(const Key & x) const

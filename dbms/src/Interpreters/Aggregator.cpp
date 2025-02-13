@@ -2348,19 +2348,13 @@ MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
     if (unlikely(data_variants.empty()))
         throw Exception("Empty data passed to Aggregator::mergeAndConvertToBlocks.", ErrorCodes::EMPTY_DATA_PASSED);
 
+    LOG_TRACE(log, "Merging aggregated data");
+
     ManyAggregatedDataVariants non_empty_data;
     non_empty_data.reserve(data_variants.size());
-    size_t total_collisions = 0;
     for (auto & data : data_variants)
-    {
         if (!data->empty())
-        {
             non_empty_data.push_back(data);
-            total_collisions += data->getCollisions();
-        }
-    }
-
-    LOG_TRACE(log, "Merging aggregated data, collisions: {}", total_collisions);
 
     if (non_empty_data.empty())
         return nullptr;
