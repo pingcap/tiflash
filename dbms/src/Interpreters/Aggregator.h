@@ -949,6 +949,31 @@ struct AggregatedDataVariants : private boost::noncopyable
     void init(Type variants_type);
 
     /// Number of rows (different keys).
+    size_t getCollisions() const
+    {
+        switch (type)
+        {
+        case Type::EMPTY:
+            return 0;
+        case Type::without_key:
+            return 0;
+
+#define M(NAME, IS_TWO_LEVEL)                                                                              \
+    case Type::NAME:                                                                                       \
+    {                                                                                                      \
+        const auto * ptr = reinterpret_cast<const AggregationMethodName(NAME) *>(aggregation_method_impl); \
+        return ptr->data.getCollisions();                                                                           \
+    }
+
+            APPLY_FOR_AGGREGATED_VARIANTS(M)
+#undef M
+
+        default:
+            throw Exception("Unknown aggregated data variant.", ErrorCodes::UNKNOWN_AGGREGATED_DATA_VARIANT);
+        }
+    }
+
+    /// Number of rows (different keys).
     size_t size() const
     {
         switch (type)

@@ -87,6 +87,7 @@ public:
 
     static constexpr bool is_string_hash_map = false;
     static constexpr bool is_two_level = false;
+    size_t getCollisions() const { return 0; }
 
     class Reader final : private Cell::State
     {
