@@ -203,16 +203,14 @@ private:
             const auto end_row = block_number == end.block ? end.row : block.rows;
             auto * columns = ws.argument_columns.data();
 
-            for (auto row = start_row; row < end_row; ++row)
+            if constexpr (is_add)
             {
-                if constexpr (is_add)
-                {
-                    agg_func->add(buf, columns, row, nullptr);
-                }
-                else
-                {
+                agg_func->addBatchSinglePlace(start_row, end_row - start_row, buf, columns, nullptr);
+            }
+            else
+            {
+                for (auto row = start_row; row < end_row; ++row)
                     agg_func->decrease(buf, columns, row, nullptr);
-                }
             }
         }
     }
