@@ -1395,7 +1395,7 @@ void WindowTransformAction::tryCalculate()
         while (current_row < partition_end)
         {
             // if window does not contain rank or dense rank function, we can ignore judging peers
-            if (!has_rank_or_dense_rank)
+            if (has_rank_or_dense_rank)
             {
                 // peer_group_last save the row before current_row
                 if (!arePeers(peer_group_last, current_row))
