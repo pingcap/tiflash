@@ -912,7 +912,14 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_data_sharing_hit, {"type", "data_sharing_hit"}),                                                                       \
       F(type_data_sharing_miss, {"type", "data_sharing_miss"}),                                                                     \
       F(type_extra_column_hit, {"type", "extra_column_hit"}),                                                                       \
-      F(type_extra_column_miss, {"type", "extra_column_miss"}))
+      F(type_extra_column_miss, {"type", "extra_column_miss"}))                                                                     \
+    M(tiflash_network_transmission_bytes,                                                                                           \
+      "Total network transmission bytes",                                                                                           \
+      Counter,                                                                                                                      \
+      F(type_sent_total, {"type", "hash_original"}),                                                                                \
+      F(type_sent_cross_zone, {"type", "hash_none_compression_remote"}),                                                            \
+      F(type_received_total, {"type", "hash_none_compression_local"}),                                                              \
+      F(type_received_cross_zone, {"type", "hash_lz4_compression"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]
