@@ -158,7 +158,6 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
     }
     opt.paths = options["paths"].as<std::vector<std::string>>();
     auto mode_int = options["mode"].as<int>();
-    LOG_INFO(DB::Logger::get(), "!!!!!! dsdsdsfAAd {}", mode_int);
     opt.page_id = options["page_id"].as<UInt64>();
     opt.blob_id = options["blob_id"].as<BlobFileId>();
     opt.blob_offset = options["blob_offset"].as<BlobFileOffset>();
@@ -254,7 +253,6 @@ public:
     {
         try
         {
-            LOG_INFO(DB::Logger::get(), "!!!!! run.");
             if (options.is_imitative)
             {
                 auto context = Context::createGlobal();
@@ -369,7 +367,6 @@ private:
             {
                 if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
                 {
-                    LOG_INFO(DB::Logger::get(), "!!!!! fdfde.");
                     fmt::println("{}", getAllRegionInfo(mvcc_table_directory));
                 }
                 else
@@ -388,8 +385,12 @@ private:
             {
                 if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
                 {
-                    if (KVSTORE_NAMESPACE_ID != opts.namespace_id) {
-                        LOG_WARNING(DB::Logger::get(), "A valid KVStore namespace should with namespace id {}", KVSTORE_NAMESPACE_ID);
+                    if (KVSTORE_NAMESPACE_ID != opts.namespace_id)
+                    {
+                        LOG_WARNING(
+                            DB::Logger::get(),
+                            "A valid KVStore namespace should with namespace id {}",
+                            KVSTORE_NAMESPACE_ID);
                     }
                     WriteBatch wb(opts.namespace_id);
                     wb.delPage(opts.page_id);
@@ -563,7 +564,6 @@ private:
             // Only show the given page_id
             if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
             {
-                LOG_INFO(DB::Logger::get(), "!!!!! u128u128u128");
                 if (internal_id.low == page_id && internal_id.high == ns_id)
                 {
                     directory_info.append(page_info(internal_id, versioned_entries, ""));
@@ -572,7 +572,6 @@ private:
             }
             else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
             {
-                LOG_INFO(DB::Logger::get(), "!!!!! universaluniversaluniversal");
                 RUNTIME_CHECK_MSG(
                     storage_type == StorageType::Log || storage_type == StorageType::Data
                         || storage_type == StorageType::Meta || storage_type == StorageType::KVStore,
@@ -792,7 +791,6 @@ private:
         if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
         {
             const auto & page_internal_id = buildV3Id(ns_id, page_id);
-            LOG_INFO(DB::Logger::get(), "!!!!! fdfdf {} {} {}", page_id, ns_id, page_internal_id);
             return check(page_internal_id);
         }
         else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
