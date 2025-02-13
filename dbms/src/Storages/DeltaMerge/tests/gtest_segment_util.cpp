@@ -19,6 +19,8 @@
 namespace DB::DM::tests
 {
 
+namespace
+{
 // "[a, b)" => std::pair{a, b}
 template <typename T>
 std::pair<T, T> parseRange(String & str_range)
@@ -98,21 +100,6 @@ void check(const std::vector<SegDataUnit> & seg_data_units)
     RUNTIME_CHECK(mem_units == expected_mem_units, expected_mem_units, mem_units);
 }
 
-std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
-{
-    std::vector<String> str_seg_data_units;
-    boost::split(str_seg_data_units, seg_data, boost::is_any_of("|"));
-    RUNTIME_CHECK(!str_seg_data_units.empty(), seg_data);
-    std::vector<SegDataUnit> seg_data_units;
-    seg_data_units.reserve(str_seg_data_units.size());
-    for (auto & s : str_seg_data_units)
-    {
-        seg_data_units.emplace_back(parseSegDataUnit(s));
-    }
-    check(seg_data_units);
-    return seg_data_units;
-}
-
 template <typename T>
 std::vector<T> genSequence(T begin, T end)
 {
@@ -133,6 +120,22 @@ std::vector<T> genSequence(const std::vector<std::pair<T, T>> & ranges)
     }
     return res;
 }
+} // namespace
+
+std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
+{
+    std::vector<String> str_seg_data_units;
+    boost::split(str_seg_data_units, seg_data, boost::is_any_of("|"));
+    RUNTIME_CHECK(!str_seg_data_units.empty(), seg_data);
+    std::vector<SegDataUnit> seg_data_units;
+    seg_data_units.reserve(str_seg_data_units.size());
+    for (auto & s : str_seg_data_units)
+    {
+        seg_data_units.emplace_back(parseSegDataUnit(s));
+    }
+    check(seg_data_units);
+    return seg_data_units;
+}
 
 template <typename T>
 std::vector<T> genSequence(std::string_view str_ranges)
@@ -141,28 +144,6 @@ std::vector<T> genSequence(std::string_view str_ranges)
     return genSequence(vector_ranges);
 }
 
-template <typename E, typename A>
-::testing::AssertionResult sequenceEqual(const E * expected, const A * actual, size_t size)
-{
-    for (size_t i = 0; i < size; i++)
-    {
-        if (expected[i] != actual[i])
-        {
-            return ::testing::AssertionFailure() << fmt::format(
-                       "Value at index {} mismatch: expected {} vs actual {}. expected => {} actual => {}",
-                       i,
-                       expected[i],
-                       actual[i],
-                       std::vector<E>(expected, expected + size),
-                       std::vector<A>(actual, actual + size));
-        }
-    }
-    return ::testing::AssertionSuccess();
-}
-
 template std::vector<Int64> genSequence(std::string_view str_ranges);
 template std::vector<UInt32> genSequence(std::string_view str_ranges);
-template ::testing::AssertionResult sequenceEqual(const UInt32 * expected, const UInt32 * actual, size_t size);
-template ::testing::AssertionResult sequenceEqual(const Int64 * expected, const Int64 * actual, size_t size);
-
 } // namespace DB::DM::tests
