@@ -425,6 +425,10 @@ struct IntHash32<T, salt, std::enable_if_t<!is_fit_register<T>, void>>
     }
 };
 
+// MagicHash is a new set of hash functions for int types (int32/int64/int128/int256),
+// which utilize specific magic numbers ported from different libraries for hashing.
+// It's slower than HashCRC32 but produce more uniformly distributed results,
+// leading to fewer collisions in hash tables.
 inline uint64_t umul128(uint64_t v, uint64_t kmul, uint64_t * high)
 {
     DB::Int128 res = static_cast<DB::Int128>(v) * static_cast<DB::Int128>(kmul);
@@ -435,7 +439,7 @@ inline uint64_t umul128(uint64_t v, uint64_t kmul, uint64_t * high)
 template <typename T>
 inline void hash_combine(uint64_t & seed, const T & val)
 {
-    // from: https://github.com/HowardHinnant/hash_append/issues/7#issuecomment-629414712
+    // Constant ported from https://github.com/HowardHinnant/hash_append/issues/7#issuecomment-629414712
     seed ^= std::hash<T>{}(val) + 0x9e3779b97f4a7c15LLU + (seed << 12) + (seed >> 4);
 }
 
@@ -475,17 +479,17 @@ inline uint64_t hash_uint256(uint64_t seed, const DB::UInt256 & v)
 }
 
 template <size_t n>
-struct HashWithMixSeedHelper
+struct MagicHashHelper
 {
     static inline size_t operator()(size_t);
 };
 
 template <>
-struct HashWithMixSeedHelper<4>
+struct MagicHashHelper<4>
 {
     static inline size_t operator()(size_t v)
     {
-        // from: https://github.com/aappleby/smhasher/blob/0ff96f7835817a27d0487325b6c16033e2992eb5/src/MurmurHash3.cpp#L102
+        // Constant kmul is ported from https://github.com/aappleby/smhasher/blob/0ff96f7835817a27d0487325b6c16033e2992eb5/src/MurmurHash3.cpp#L102
         static constexpr uint64_t kmul = 0xcc9e2d51UL;
         uint64_t mul = v * kmul;
         return static_cast<size_t>(mul ^ (mul >> 32u));
@@ -493,11 +497,11 @@ struct HashWithMixSeedHelper<4>
 };
 
 template <>
-struct HashWithMixSeedHelper<8>
+struct MagicHashHelper<8>
 {
     static inline size_t operator()(size_t v)
     {
-        // from: https://github.com/martinus/robin-hood-hashing/blob/b21730713f4b5296bec411917c46919f7b38b178/src/include/robin_hood.h#L735
+        // Constant kmul is ported from https://github.com/martinus/robin-hood-hashing/blob/b21730713f4b5296bec411917c46919f7b38b178/src/include/robin_hood.h#L735
         static constexpr uint64_t kmul = 0xde5fb9d2630458e9ULL;
         uint64_t high = 0;
         uint64_t low = umul128(v, kmul, &high);
@@ -506,46 +510,43 @@ struct HashWithMixSeedHelper<8>
 };
 
 template <typename T>
-struct HashWithMixSeed
+struct MagicHash
 {
-    static size_t operator()(const T & v)
-    {
-        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(std::hash<T>()(v));
-    }
+    static size_t operator()(const T & v) { return MagicHashHelper<sizeof(size_t)>::operator()(std::hash<T>()(v)); }
 };
 
 template <>
-struct HashWithMixSeed<DB::Int128>
+struct MagicHash<DB::Int128>
 {
     static size_t operator()(const DB::Int128 & v)
     {
-        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_int128(0, v));
+        return MagicHashHelper<sizeof(size_t)>::operator()(hash_int128(0, v));
     }
 };
 
 template <>
-struct HashWithMixSeed<DB::UInt128>
+struct MagicHash<DB::UInt128>
 {
     static inline size_t operator()(const DB::UInt128 & v)
     {
-        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_uint128(0, v));
+        return MagicHashHelper<sizeof(size_t)>::operator()(hash_uint128(0, v));
     }
 };
 
 template <>
-struct HashWithMixSeed<DB::Int256>
+struct MagicHash<DB::Int256>
 {
     static inline size_t operator()(const DB::Int256 & v)
     {
-        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_int256(0, v));
+        return MagicHashHelper<sizeof(size_t)>::operator()(hash_int256(0, v));
     }
 };
 
 template <>
-struct HashWithMixSeed<DB::UInt256>
+struct MagicHash<DB::UInt256>
 {
     static inline size_t operator()(const DB::UInt256 & v)
     {
-        return HashWithMixSeedHelper<sizeof(size_t)>::operator()(hash_uint256(0, v));
+        return MagicHashHelper<sizeof(size_t)>::operator()(hash_uint256(0, v));
     }
 };

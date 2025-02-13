@@ -40,6 +40,7 @@ extern const char exception_during_mpp_non_root_task_run[];
 extern const char exception_during_mpp_root_task_run[];
 extern const char exception_during_query_run[];
 extern const char force_agg_prefetch[];
+extern const char force_magic_hash[];
 } // namespace FailPoints
 
 namespace tests
@@ -1845,6 +1846,7 @@ try
         auto_pass_through_test_data.nullable_medium_ndv_tbl_name,
     };
     FailPointHelper::enableFailPoint(FailPoints::force_agg_prefetch);
+    FailPointHelper::enableFailPoint(FailPoints::force_magic_hash);
     for (const auto & tbl_name : workloads)
     {
         const String db_name = auto_pass_through_test_data.db_name;
@@ -1871,6 +1873,7 @@ try
         WRAP_FOR_SERVER_TEST_END
     }
     FailPointHelper::disableFailPoint(FailPoints::force_agg_prefetch);
+    FailPointHelper::disableFailPoint(FailPoints::force_magic_hash);
 }
 CATCH
 

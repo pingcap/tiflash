@@ -26,6 +26,7 @@ namespace FailPoints
 extern const char force_agg_on_partial_block[];
 extern const char force_agg_prefetch[];
 extern const char force_agg_two_level_hash_table_before_merge[];
+extern const char force_magic_hash[];
 } // namespace FailPoints
 namespace tests
 {
@@ -247,11 +248,13 @@ public:
         {                                                                              \
             FailPointHelper::enableFailPoint(FailPoints::force_agg_on_partial_block);  \
             FailPointHelper::enableFailPoint(FailPoints::force_agg_prefetch);          \
+            FailPointHelper::enableFailPoint(FailPoints::force_magic_hash);            \
         }                                                                              \
         else                                                                           \
         {                                                                              \
             FailPointHelper::disableFailPoint(FailPoints::force_agg_on_partial_block); \
             FailPointHelper::disableFailPoint(FailPoints::force_agg_prefetch);         \
+            FailPointHelper::disableFailPoint(FailPoints::force_magic_hash);           \
         }
 
 #define WRAP_FOR_AGG_FAILPOINTS_END }

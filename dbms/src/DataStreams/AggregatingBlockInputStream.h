@@ -41,7 +41,13 @@ public:
         const RegisterOperatorSpillContext & register_operator_spill_context)
         : log(Logger::get(req_id))
         , params(params_)
-        , aggregator(params, req_id, 1, register_operator_spill_context)
+        , aggregator(
+              params,
+              req_id,
+              1,
+              register_operator_spill_context,
+              /*is_auto_pass_through=*/false,
+              params.use_magic_hash)
         , final(final_)
     {
         children.push_back(input);

@@ -27,7 +27,13 @@ void AggregateContext::initBuild(
     max_threads = max_threads_;
     empty_result_for_aggregation_by_empty_set = params.empty_result_for_aggregation_by_empty_set;
     keys_size = params.keys_size;
-    aggregator = std::make_unique<Aggregator>(params, log->identifier(), max_threads, register_operator_spill_context);
+    aggregator = std::make_unique<Aggregator>(
+        params,
+        log->identifier(),
+        max_threads,
+        register_operator_spill_context,
+        /*is_auto_pass_through=*/false,
+        params.use_magic_hash);
     aggregator->setCancellationHook(is_cancelled);
     aggregator->initThresholdByAggregatedDataVariantsSize(max_threads);
     many_data.reserve(max_threads);
