@@ -133,7 +133,7 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             const std::atomic_size_t terminate_signals_counter{};
             std::thread t([&]() {
                 notifier.wake();
-                WaitCheckRegionReadyImpl(ctx.getTMTContext(), kvs, terminate_signals_counter, 1 / 1000.0, 20, 20 * 60);
+                WaitCheckRegionReadyImpl(kvs, terminate_signals_counter, 10 * 1000, 1 / 1000.0, 20, 20 * 60);
             });
             SCOPE_EXIT({
                 t.join();
@@ -162,13 +162,7 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             const std::atomic_size_t terminate_signals_counter{};
             std::thread t([&]() {
                 notifier.wake();
-                WaitCheckRegionReadyImpl(
-                    ctx.getTMTContext(),
-                    kvs,
-                    terminate_signals_counter,
-                    1 / 1000.0,
-                    2 / 1000.0,
-                    5 / 1000.0);
+                WaitCheckRegionReadyImpl(kvs, terminate_signals_counter, 10 * 1000, 1 / 1000.0, 2 / 1000.0, 5 / 1000.0);
             });
             SCOPE_EXIT({ t.join(); });
             ASSERT_EQ(notifier.blockedWaitFor(std::chrono::milliseconds(1000 * 3600)), AsyncNotifier::Status::Normal);

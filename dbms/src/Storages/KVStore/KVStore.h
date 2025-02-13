@@ -145,7 +145,7 @@ public:
     FileUsageStatistics getFileUsageStatistics() const;
     // Proxy will validate and refit the config items from the toml file.
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
-    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
+    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value) const;
     static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const { return joint_memory_allocation_map; }
     void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
@@ -444,9 +444,9 @@ class KVStoreTaskLock : private boost::noncopyable
 
 void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
 void WaitCheckRegionReadyImpl(
-    const TMTContext &,
     KVStore & kvstore,
     const std::atomic_size_t &,
+    UInt64 read_index_timeout,
     double,
     double,
     double);

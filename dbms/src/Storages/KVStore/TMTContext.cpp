@@ -40,9 +40,9 @@
 namespace DB
 {
 // default batch-read-index timeout is 10_000ms.
-extern const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS = 10 * 1000;
+const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS = 10 * 1000;
 // default wait-index timeout is 5 * 60_000ms.
-extern const uint64_t DEFAULT_WAIT_INDEX_TIMEOUT_MS = 5 * 60 * 1000;
+const uint64_t DEFAULT_WAIT_INDEX_TIMEOUT_MS = 5 * 60 * 1000;
 
 const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
 
@@ -161,6 +161,7 @@ TMTContext::TMTContext(
     , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
     , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
     , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
+    , wait_region_ready_tick(0)
     , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
     , raftproxy_config(raft_config)
 {
@@ -421,6 +422,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
     static constexpr const char * EAGER_GC_LOG_GAP = "flash.eager_gc_log_gap";
     static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
     static constexpr const char * WAIT_INDEX_TIMEOUT_MS = "flash.wait_index_timeout_ms";
+    static constexpr const char * WAIT_REGION_READY_TICK = "flash.wait_region_ready_tick";
     static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";
     static constexpr const char * READ_INDEX_WORKER_TICK_MS = "flash.read_index_worker_tick_ms";
 
@@ -434,6 +436,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
         batch_read_index_timeout_ms
             = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
         wait_index_timeout_ms = config.getUInt64(WAIT_INDEX_TIMEOUT_MS, DEFAULT_WAIT_INDEX_TIMEOUT_MS);
+        wait_region_ready_tick = config.getUInt64(WAIT_REGION_READY_TICK, 0);
         wait_region_ready_timeout_sec = ({
             int64_t t = config.getInt64(WAIT_REGION_READY_TIMEOUT_SEC, /*20min*/ DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC);
             t = t >= 0 ? t : std::numeric_limits<int64_t>::max(); // set -1 to wait infinitely
@@ -489,6 +492,10 @@ UInt64 TMTContext::waitIndexTimeout() const
 void TMTContext::debugSetWaitIndexTimeout(UInt64 timeout)
 {
     return wait_index_timeout_ms.store(timeout, std::memory_order_relaxed);
+}
+Int64 TMTContext::waitRegionReadyTick() const
+{
+    return wait_region_ready_tick.load(std::memory_order_relaxed);
 }
 Int64 TMTContext::waitRegionReadyTimeout() const
 {

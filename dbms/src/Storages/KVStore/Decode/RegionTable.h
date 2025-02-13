@@ -190,7 +190,7 @@ private:
 };
 
 
-// A wrap of RegionPtr, with snapshot files directory waitting to be ingested
+// A wrap of RegionPtr, with snapshot files directory waiting to be ingested
 struct RegionPtrWithSnapshotFiles
 {
     using Base = RegionPtr;

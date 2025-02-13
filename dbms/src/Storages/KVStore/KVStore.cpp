@@ -489,7 +489,7 @@ RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
 }
 
 
-void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfoType type, uint64_t value)
+void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfoType type, uint64_t value) const
 {
     joint_memory_allocation_map->reportThreadAllocInfoForProxy(v, type, value);
 }

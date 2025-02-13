@@ -35,16 +35,6 @@ RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
     }
 }
 
-const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & RegionRangeKeys::rawKeys() const
-{
-    return raw;
-}
-
-const RegionRangeKeys::RegionRange & RegionRangeKeys::comparableKeys() const
-{
-    return ori;
-}
-
 RegionRangeKeys::RegionRange RegionRangeKeys::makeComparableKeys(TiKVKey && start_key, TiKVKey && end_key)
 {
     return std::make_pair(
