@@ -46,9 +46,11 @@ void fillTiExecutionSummary(
     {
         GET_METRIC(tiflash_network_transmission_bytes, type_sent_cross_zone).Increment(current.inter_zone_send_bytes);
         GET_METRIC(tiflash_network_transmission_bytes, type_sent_total).Increment(current.inter_zone_send_bytes);
+        GET_METRIC(tiflash_network_transmission_bytes, type_sent_total).Increment(current.inner_zone_send_bytes);
         GET_METRIC(tiflash_network_transmission_bytes, type_received_cross_zone)
             .Increment(current.inter_zone_receive_bytes);
         GET_METRIC(tiflash_network_transmission_bytes, type_received_total).Increment(current.inter_zone_receive_bytes);
+        GET_METRIC(tiflash_network_transmission_bytes, type_received_total).Increment(current.inner_zone_receive_bytes);
     }
     RUNTIME_CHECK(current.ru_consumption.SerializeToString(execution_summary->mutable_ru_consumption()));
 
