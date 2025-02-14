@@ -194,7 +194,7 @@ Block SSTFilesToBlockInputStream::read()
             BaseBuffView key = write_cf_reader->keyView();
             BaseBuffView value = write_cf_reader->valueView();
             auto tikv_key = TiKVKey(key.data, key.len);
-            region->insert(ColumnFamilyType::Write, std::move(tikv_key), TiKVValue(value.data, value.len));
+            region->insertFromSnap(tmt, ColumnFamilyType::Write, std::move(tikv_key), TiKVValue(value.data, value.len));
             ++process_keys.write_cf;
             process_keys.write_cf_bytes += (key.len + value.len);
             if (process_keys.write_cf % opts.expected_size == 0)
@@ -277,7 +277,12 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
             BaseBuffView key = reader->keyView();
             BaseBuffView value = reader->valueView();
             // TODO: use doInsert to avoid locking
-            region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len), DupCheck::AllowSame);
+            region->insertFromSnap(
+                tmt,
+                cf,
+                TiKVKey(key.data, key.len),
+                TiKVValue(value.data, value.len),
+                DupCheck::AllowSame);
             (*p_process_keys) += 1;
             (*p_process_keys_bytes) += (key.len + value.len);
             reader->next();
@@ -337,7 +342,7 @@ void SSTFilesToBlockInputStream::loadCFDataFromSST(
                 BaseBuffView key = reader->keyView();
                 BaseBuffView value = reader->valueView();
                 // TODO: use doInsert to avoid locking
-                region->insert(cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
+                region->insertFromSnap(tmt, cf, TiKVKey(key.data, key.len), TiKVValue(value.data, value.len));
                 (*p_process_keys) += 1;
                 (*p_process_keys_bytes) += (key.len + value.len);
                 if (*p_process_keys == process_keys_offset_end)

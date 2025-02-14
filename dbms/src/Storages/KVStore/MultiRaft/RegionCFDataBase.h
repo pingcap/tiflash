@@ -52,6 +52,10 @@ struct RegionDataMemDiff
         payload -= other.payload;
         decoded -= other.decoded;
     }
+
+    Type total() const { return payload + decoded; }
+
+    size_t totalSize() const { return payload + decoded; }
 };
 
 enum class DupCheck

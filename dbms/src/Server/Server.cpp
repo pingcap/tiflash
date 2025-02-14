@@ -955,7 +955,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// Create TMTContext
         auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
-        proxy_machine.initKVStore(global_context->getTMTContext(), store_ident);
+        proxy_machine.initKVStore(
+            global_context->getTMTContext(),
+            store_ident,
+            settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity));
 
         global_context->getTMTContext().reloadConfig(config());
         // setup the kv cluster for disagg compute node fetching config

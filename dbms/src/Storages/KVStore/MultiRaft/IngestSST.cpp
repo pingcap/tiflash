@@ -107,13 +107,13 @@ RegionPtr KVStore::handleIngestSSTByDTFile(
     if (index <= region->appliedIndex())
         return nullptr;
 
-    // Create a tmp region to store uncommitted data
+    // Create a tmp region to store uncommitted data, the uncommitted data will be merged from `tmp_region` to the existing region. So here ignore the region_table.
     RegionPtr tmp_region;
     {
         auto meta_region = region->cloneMetaRegion();
         auto meta_snap = region->dumpRegionMetaSnapshot();
         auto peer_id = meta_snap.peer.id();
-        tmp_region = genRegionPtr(std::move(meta_region), peer_id, index, term);
+        tmp_region = genRegionPtr(std::move(meta_region), peer_id, index, term, std::nullopt);
     }
 
     // Decode the KV pairs in ingesting SST into DTFiles

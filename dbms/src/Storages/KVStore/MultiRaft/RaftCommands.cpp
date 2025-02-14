@@ -199,7 +199,7 @@ RegionID RegionRaftCommandDelegate::execCommitMerge(
             : source_region_meta_delegate.regionState().getRegion().end_key();
 
         region_table.extendRegionRange(
-            id(),
+            *this,
             RegionRangeKeys(TiKVKey::copyFrom(new_start_key), TiKVKey::copyFrom(new_end_key)));
     }
 
@@ -473,6 +473,11 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             handle_write_cmd_func();
         }
 
+        if (default_put_key_count + lock_put_key_count > 0)
+        {
+            maybeWarnMemoryLimitByTable(tmt, "put");
+        }
+
         // If transfer-leader happened during ingest-sst, there might be illegal data.
         if (0 != cmds.len)
         {
@@ -508,6 +513,10 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
                     index,
                     fmt::join(entry_infos.begin(), entry_infos.end(), ":"));
                 e.rethrow();
+            }
+            if (!data_list_to_remove.empty())
+            {
+                resetWarnMemoryLimitByTable();
             }
         }
 

@@ -266,7 +266,7 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
                 // update region_table first is safe, because the core rule is established: the range in RegionTable
                 // is always >= range in KVStore.
                 for (const auto & new_region : split_regions)
-                    region_table.updateRegion(*new_region);
+                    region_table.addRegion(*new_region);
                 region_table.shrinkRegionRange(curr_region);
             }
 

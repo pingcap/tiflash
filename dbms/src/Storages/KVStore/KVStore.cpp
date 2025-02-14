@@ -265,6 +265,8 @@ void KVStore::removeRegion(
     {
         auto manage_lock = genRegionMgrWriteLock(task_lock);
         auto it = manage_lock.regions.find(region_id);
+        // Disregister from region table size.
+        it->second->resetRegionTableCtx();
         manage_lock.index.remove(
             it->second->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(),
             region_id); // remove index
@@ -443,11 +445,21 @@ size_t KVStore::getOngoingPrehandleSubtaskCount() const
     return std::max(0, prehandling_trace.ongoing_prehandle_subtask_count.load());
 }
 
-// Generate a temporary region pointer by the given meta
-RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
+// The only way that to create a region associated to a piece of data, even if it is not going to be inserted in to KVStore.
+RegionPtr KVStore::genRegionPtr(
+    metapb::Region && region,
+    UInt64 peer_id,
+    UInt64 index,
+    UInt64 term,
+    std::optional<std::reference_wrapper<RegionTable>> region_table)
 {
     auto meta = RegionMeta::genFromMetaRegion(std::move(region), peer_id, index, term);
-    return std::make_shared<Region>(std::move(meta), proxy_helper);
+    auto new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
+    if (region_table)
+    {
+        region_table.value().get().addPrehandlingRegion(*new_region);
+    }
+    return new_region;
 }
 
 RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const

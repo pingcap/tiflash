@@ -183,7 +183,7 @@ void MockRaftStoreProxy::debugAddRegions(
             auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
             lock.regions.emplace(region_ids[i], region);
             lock.index.add(region);
-            tmt.getRegionTable().updateRegion(*region);
+            tmt.getRegionTable().addRegion(*region);
         }
     }
 }
@@ -601,7 +601,7 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
     uint64_t index,
     uint64_t term,
     std::optional<uint64_t> deadline_index,
-    bool cancel_after_prehandle)
+    std::optional<std::function<void()>> cancel_after_prehandle)
 {
     auto old_kv_region = kvs.getRegion(region_id);
     RUNTIME_CHECK(old_kv_region != nullptr);
@@ -628,7 +628,7 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
     uint64_t index,
     uint64_t term,
     std::optional<uint64_t> deadline_index,
-    bool cancel_after_prehandle)
+    std::optional<std::function<void()>> cancel_after_prehandle)
 {
     auto region = getRegion(region_id);
     RUNTIME_CHECK(region != nullptr);
@@ -640,10 +640,10 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
         term = region->getLatestCommitTerm();
     }
 
-    auto new_kv_region = kvs.genRegionPtr(std::move(region_meta), peer_id, index, term);
     // The new entry is committed on Proxy's side.
     region->updateCommitIndex(index);
-    new_kv_region->setApplied(index, term);
+    // Would set `applied_index` in genRegionPtr.
+    auto new_kv_region = kvs.genRegionPtr(std::move(region_meta), peer_id, index, term, tmt.getRegionTable());
 
     std::vector<SSTView> ssts;
     for (auto & cf : cfs)
@@ -663,6 +663,7 @@ std::tuple<RegionPtr, PrehandleResult> MockRaftStoreProxy::snapshot(
         auto rg = RegionPtrWithSnapshotFiles{new_kv_region, std::vector(prehandle_result.ingest_ids)};
         if (cancel_after_prehandle)
         {
+            cancel_after_prehandle.value()();
             kvs.releasePreHandledSnapshot(rg, tmt);
             return std::make_tuple(kvs.getRegion(region_id), prehandle_result);
         }

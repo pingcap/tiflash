@@ -276,7 +276,10 @@ struct ProxyStateMachine
         }
     }
 
-    void initKVStore(TMTContext & tmt_context, std::optional<raft_serverpb::StoreIdent> & store_ident)
+    void initKVStore(
+        TMTContext & tmt_context,
+        std::optional<raft_serverpb::StoreIdent> & store_ident,
+        size_t memory_limit)
     {
         if (store_ident)
         {
@@ -288,6 +291,7 @@ struct ProxyStateMachine
             store_meta.set_id(store_ident->store_id());
             store_meta.set_node_state(metapb::NodeState::Preparing);
             kvstore->setStore(store_meta);
+            kvstore->setKVStoreMemoryLimit(memory_limit);
         }
     }
 

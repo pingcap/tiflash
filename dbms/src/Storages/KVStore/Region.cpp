@@ -28,6 +28,8 @@
 #include <ext/scope_guard.h>
 #include <memory>
 
+extern std::atomic<Int64> real_rss;
+
 namespace DB
 {
 RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIter & write_it)
@@ -56,15 +58,22 @@ LockInfoPtr Region::getLockInfo(const RegionLockReadQuery & query) const
     return data.getLockInfo(query);
 }
 
-void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+void Region::insertDebug(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    insert(NameToCF(cf), std::move(key), std::move(value), mode);
+    std::unique_lock<std::shared_mutex> lock(mutex);
+    doInsert(NameToCF(cf), std::move(key), std::move(value), mode);
 }
 
-void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
+void Region::insertFromSnap(TMTContext & tmt, const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+{
+    insertFromSnap(tmt, NameToCF(cf), std::move(key), std::move(value), mode);
+}
+
+void Region::insertFromSnap(TMTContext & tmt, ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     doInsert(type, std::move(key), std::move(value), mode);
+    maybeWarnMemoryLimitByTable(tmt, "snapshot");
 }
 
 RegionDataMemDiff Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
@@ -182,6 +191,11 @@ raft_serverpb::PeerState Region::peerState() const
 size_t Region::dataSize() const
 {
     return data.dataSize();
+}
+
+size_t Region::totalSize() const
+{
+    return data.totalSize() + sizeof(RegionMeta);
 }
 
 size_t Region::writeCFCount() const
@@ -385,6 +399,50 @@ void Region::observeLearnerReadEvent(Timestamp read_tso) const
 Timestamp Region::getLastObservedReadTso() const
 {
     return last_observed_read_tso.load();
+}
+
+void Region::setRegionTableCtx(RegionTableCtxPtr ctx) const
+{
+    data.setRegionTableCtx(ctx);
+}
+
+void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
+{
+    // If there are data flow in, we will check if the memory is exhaused.
+    auto limit = tmt.getKVStore()->getKVStoreMemoryLimit();
+    auto current = real_rss.load();
+    /// Region management such as split/merge doesn't change the memory consumed by a table in KVStore.
+    /// The only cases memory is reduced in a table is removing regions, applying snaps and commiting txns.
+    /// The only cases memory is increased in a table is inserting kv pairs and applying snaps.
+    /// So, we only print once for a table, until one memory reduce event will happen.
+    if unlikely (limit > 0 && current > 0 && static_cast<size_t>(current) >= limit)
+    {
+        auto table_size = getRegionTableSize();
+        if (table_size > 0.5 * current)
+        {
+            if (!setRegionTableWarned(true))
+            {
+                // If it is the first time.
+#ifdef DBMS_PUBLIC_GTEST
+                tmt.getKVStore()->debug_memory_limit_warning_count++;
+#endif
+                LOG_INFO(
+                    log,
+                    "Memory limit exceeded, current={} limit={} table_id={} keyspace_id={} region_id={} from={}",
+                    current,
+                    limit,
+                    mapped_table_id,
+                    keyspace_id,
+                    id(),
+                    from);
+            }
+        }
+    }
+}
+
+void Region::resetWarnMemoryLimitByTable() const
+{
+    setRegionTableWarned(false);
 }
 
 } // namespace DB

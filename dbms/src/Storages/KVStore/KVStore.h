@@ -157,8 +157,15 @@ public: // Region Management
     RegionPtr getRegion(RegionID region_id) const;
     RegionMap getRegionsByRangeOverlap(const RegionRange & range) const;
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
-    RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
+    RegionPtr genRegionPtr(
+        metapb::Region && region,
+        UInt64 peer_id,
+        UInt64 index,
+        UInt64 term,
+        std::optional<std::reference_wrapper<RegionTable>> region_table);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
+    void setKVStoreMemoryLimit(size_t s) { maximum_kvstore_memory = s; }
+    size_t getKVStoreMemoryLimit() const { return maximum_kvstore_memory; }
 
 public: // Raft Read and Write
     EngineStoreApplyRes handleAdminRaftCmd(
@@ -417,6 +424,11 @@ private:
     ProxyConfigSummary proxy_config_summary;
 
     JointThreadInfoJeallocMapPtr joint_memory_allocation_map;
+    size_t maximum_kvstore_memory = 0;
+
+#ifdef DBMS_PUBLIC_GTEST
+    std::atomic<size_t> debug_memory_limit_warning_count = 0;
+#endif
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore
