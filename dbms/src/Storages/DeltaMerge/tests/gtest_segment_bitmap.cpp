@@ -49,16 +49,16 @@ protected:
     ColumnPtr hold_handle;
     RowKeyRanges read_ranges;
 
-    void setRowKeyRange(Int64 begin, Int64 end)
+    void setRowKeyRange(Int64 begin, Int64 end, bool including_right_boundary)
     {
         auto itr = segments.find(SEG_ID);
         RUNTIME_CHECK(itr != segments.end(), SEG_ID);
-        itr->second->rowkey_range = buildRowKeyRange(begin, end, is_common_handle);
+        itr->second->rowkey_range = buildRowKeyRange(begin, end, is_common_handle, including_right_boundary);
     }
 
     void writeSegmentGeneric(
         std::string_view seg_data,
-        std::optional<std::pair<Int64, Int64>> rowkey_range = std::nullopt)
+        std::optional<std::tuple<Int64, Int64, bool>> rowkey_range = std::nullopt)
     {
         if (is_common_handle)
             writeSegment<String>(seg_data, rowkey_range);
@@ -84,10 +84,13 @@ protected:
     template <typename HandleType>
     std::pair<const PaddedPODArray<UInt32> *, const std::optional<ColumnView<HandleType>>> writeSegment(
         std::string_view seg_data,
-        std::optional<std::pair<Int64, Int64>> rowkey_range = std::nullopt)
+        std::optional<std::tuple<Int64, Int64, bool>> rowkey_range = std::nullopt)
     {
         if (rowkey_range)
-            setRowKeyRange(rowkey_range->first, rowkey_range->second);
+        {
+            const auto & [left, right, including_right_boundary] = *rowkey_range;
+            setRowKeyRange(left, right, including_right_boundary);
+        }
         auto seg_data_units = parseSegData(seg_data);
         for (const auto & unit : seg_data_units)
         {
@@ -171,7 +174,7 @@ protected:
         size_t expected_size;
         std::string expected_row_id;
         std::string expected_handle;
-        std::optional<std::pair<Int64, Int64>> rowkey_range;
+        std::optional<std::tuple<Int64, Int64, bool>> rowkey_range;
     };
 
     inline static constexpr bool use_version_chain = true;
@@ -836,7 +839,7 @@ try
             .expected_size = 20,
             .expected_row_id = "[5, 25)",
             .expected_handle = "[275, 295)",
-            .rowkey_range = std::pair<Int64, Int64>{275, 295}},
+            .rowkey_range = std::tuple<Int64, Int64, bool>{275, 295, false}},
         __LINE__,
         std::vector<RowID>(30, NotExistRowID));
 
@@ -873,7 +876,7 @@ try
     }
 
     // For Stable, all packs of DMFile will be considered in BitmapFilter.
-    setRowKeyRange(275, 295); // Shrinking range
+    setRowKeyRange(275, 295, false); // Shrinking range
     auto [seg, snap] = getSegmentForRead(SEG_ID);
     auto bitmap_filter = seg->buildBitmapFilter(
         *dm_context,
@@ -956,7 +959,7 @@ CATCH
 TEST_P(SegmentBitmapFilterTest, RowKeyFilter_CFBig)
 try
 {
-    writeSegmentGeneric("d_big:[250, 1000):pack_size_50", std::pair{388, 888});
+    writeSegmentGeneric("d_big:[250, 1000):pack_size_50", std::tuple{388, 888, false});
     verifyVersionChain(
         VerifyVersionChainOption{
             .seg_id = SEG_ID,
@@ -1074,6 +1077,40 @@ try
 
     writeSegmentGeneric(
         "s:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, 9223372036854775807]");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "1111111111111111111111111111111111111111111111111111110000000000000000000000000000000000000"
+                           "00000000000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange8)
+try
+{
+    if (is_common_handle)
+        return;
+
+    writeSegmentGeneric("d_big:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, "
+                        "9223372036854775807)");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "1111111111111111111111111111111111111111111111111111110000000000000000000000000000000000000"
+                           "00000000000000001",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange9)
+try
+{
+    if (is_common_handle)
+        return;
+
+    writeSegmentGeneric("d_big:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, "
+                        "9223372036854775807]");
     verifyVersionChain(VerifyVersionChainOption{
         .seg_id = SEG_ID,
         .caller_line = __LINE__,
