@@ -178,6 +178,52 @@ public:
                 {{"key", TiDB::TP::TypeLong}, {"value", TiDB::TP::TypeString}},
                 {toNullableVec<Int32>("key", key), toNullableVec<String>("value", value)});
         }
+
+        // For TestMagicHash and SplitAggOutputWithSpecialGroupKey.
+        {
+            size_t unique_rows = 3000;
+            tbl_agg_table_with_special_key_unique_rows = unique_rows;
+            DB::MockColumnInfoVec table_column_infos{
+                {"key_8", TiDB::TP::TypeTiny, false},
+                {"key_16", TiDB::TP::TypeShort, false},
+                {"key_16_1", TiDB::TP::TypeShort, false},
+                {"key_16_2", TiDB::TP::TypeShort, false},
+                {"key_16_3", TiDB::TP::TypeShort, false},
+                {"key_32", TiDB::TP::TypeLong, false},
+                {"key_64", TiDB::TP::TypeLongLong, false},
+                {"key_64_1", TiDB::TP::TypeLongLong, false},
+                {"key_64_2", TiDB::TP::TypeLongLong, false},
+                {"key_64_3", TiDB::TP::TypeLongLong, false},
+                {"key_string_1", TiDB::TP::TypeString, false},
+                {"key_string_2", TiDB::TP::TypeString, false},
+                {"key_decimal256", TiDB::TP::TypeString, false},
+                {"key_64_nullable", TiDB::TP::TypeLongLong, true},
+                {"value", TiDB::TP::TypeLong, false}};
+            ColumnsWithTypeAndName table_column_data;
+            for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos))
+            {
+                ColumnGeneratorOpts opts{
+                    unique_rows,
+                    getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+                    RANDOM,
+                    column_info.name};
+                table_column_data.push_back(ColumnGenerator::instance().generate(opts));
+            }
+            for (auto & table_column : table_column_data)
+            {
+                table_column.column->assumeMutable()->insertRangeFrom(*table_column.column, 0, unique_rows / 2);
+            }
+            ColumnWithTypeAndName shuffle_column
+                = ColumnGenerator::instance().generate({unique_rows + unique_rows / 2, "UInt64", RANDOM});
+            IColumn::Permutation perm;
+            shuffle_column.column->getPermutation(false, 0, -1, perm);
+            for (auto & column : table_column_data)
+            {
+                column.column = column.column->permute(perm, 0);
+            }
+
+            context.addMockTable("test_db", "agg_table_with_special_key", table_column_infos, table_column_data);
+        }
     }
 
     std::shared_ptr<tipb::DAGRequest> buildDAGRequest(
@@ -238,6 +284,8 @@ public:
     ColumnWithNullableString col_country{"russia", "korea", "usa", "usa", "usa", "china", "china", "china", "china"};
     ColumnWithNullableFloat64 col_salary{1000.1, 1300.2, 0.3, {}, -200.4, 900.5, -999.6, 2000.7, -300.8};
     ColumnWithUInt64 col_pr{1, 2, 0, 3290124, 968933, 3125, 31236, 4327, 80000};
+
+    size_t tbl_agg_table_with_special_key_unique_rows = 0;
 };
 
 #define WRAP_FOR_AGG_FAILPOINTS_START                                                  \
@@ -821,41 +869,6 @@ CATCH
 TEST_F(AggExecutorTestRunner, SplitAggOutputWithSpecialGroupKey)
 try
 {
-    /// prepare data
-    size_t unique_rows = 3000;
-    DB::MockColumnInfoVec table_column_infos{
-        {"key_8", TiDB::TP::TypeTiny, false},
-        {"key_16", TiDB::TP::TypeShort, false},
-        {"key_32", TiDB::TP::TypeLong, false},
-        {"key_64", TiDB::TP::TypeLongLong, false},
-        {"key_string_1", TiDB::TP::TypeString, false},
-        {"key_string_2", TiDB::TP::TypeString, false},
-        {"value", TiDB::TP::TypeLong, false}};
-    ColumnsWithTypeAndName table_column_data;
-    for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos))
-    {
-        ColumnGeneratorOpts opts{
-            unique_rows,
-            getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
-            RANDOM,
-            column_info.name};
-        table_column_data.push_back(ColumnGenerator::instance().generate(opts));
-    }
-    for (auto & table_column : table_column_data)
-    {
-        table_column.column->assumeMutable()->insertRangeFrom(*table_column.column, 0, unique_rows / 2);
-    }
-    ColumnWithTypeAndName shuffle_column
-        = ColumnGenerator::instance().generate({unique_rows + unique_rows / 2, "UInt64", RANDOM});
-    IColumn::Permutation perm;
-    shuffle_column.column->getPermutation(false, 0, -1, perm);
-    for (auto & column : table_column_data)
-    {
-        column.column = column.column->permute(perm, 0);
-    }
-
-    context.addMockTable("test_db", "agg_table_with_special_key", table_column_infos, table_column_data);
-
     std::vector<size_t> max_block_sizes{1, 8, DEFAULT_BLOCK_SIZE};
     std::vector<size_t> concurrences{1, 8};
     // 0: use one level
@@ -890,7 +903,9 @@ try
             /// use one level, no block split, no spill as the reference
             context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
             context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
-            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(unique_rows * 2)));
+            context.context->setSetting(
+                "max_block_size",
+                Field(static_cast<UInt64>(tbl_agg_table_with_special_key_unique_rows * 2)));
             auto reference = executeStreams(request);
             if (current_collator->isCI())
             {
@@ -1247,6 +1262,81 @@ try
         WRAP_FOR_AGG_FAILPOINTS_START
         executeAndAssertColumnsEqual(gen_request(exchange_concurrency), baseline);
         WRAP_FOR_AGG_FAILPOINTS_END
+    }
+}
+CATCH
+
+TEST_F(AggExecutorTestRunner, TestMagicHash)
+try
+{
+    std::vector<size_t> max_block_sizes{1, 8, DEFAULT_BLOCK_SIZE};
+    std::vector<size_t> concurrences{1, 8};
+    // 0: use one level
+    // 1: use two level
+    std::vector<UInt64> two_level_thresholds{0, 1};
+    // To cover all 8 methods.
+    std::vector<std::vector<String>> group_by_keys{
+        // key_int32
+        {"key_32"},
+        // key_int64
+        {"key_64"},
+        // key_int256
+        {"key_decimal256"},
+        // keys32
+        {"key_16", "key_16_1"},
+        // keys64
+        {"key_16", "key_16_1", "key_16_2", "key_16_3"},
+        // keys128
+        {"key_64", "key_64_1"},
+        // keys256
+        {"key_64", "key_64_1", "key_64_2", "key_64_3"},
+        // nullable_keys128
+        {"key_16", "key_64_nullable"},
+        // nullable_keys256
+        {"key_64", "key_64_nullable"},
+    };
+    for (const auto & keys : group_by_keys)
+    {
+        MockAstVec key_vec;
+        for (const auto & key : keys)
+            key_vec.push_back(col(key));
+        auto request = context.scan("test_db", "agg_table_with_special_key")
+                           .aggregation({Max(col("value"))}, key_vec)
+                           .build(context);
+        /// use one level, no block split, no spill as the reference
+        context.context->setSetting("group_by_two_level_threshold_bytes", Field(static_cast<UInt64>(0)));
+        context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
+        context.context->setSetting(
+            "max_block_size",
+            Field(static_cast<UInt64>(tbl_agg_table_with_special_key_unique_rows * 2)));
+        FailPointHelper::disableFailPoint(FailPoints::force_magic_hash);
+        auto reference = executeStreams(request);
+
+        for (auto two_level_threshold : two_level_thresholds)
+        {
+            for (auto block_size : max_block_sizes)
+            {
+                for (auto concurrency : concurrences)
+                {
+                    context.context->setSetting(
+                        "group_by_two_level_threshold",
+                        Field(static_cast<UInt64>(two_level_threshold)));
+                    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+                    WRAP_FOR_AGG_FAILPOINTS_START
+                    FailPointHelper::enableFailPoint(FailPoints::force_magic_hash);
+                    auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
+                    for (auto & block : blocks)
+                    {
+                        block.checkNumberOfRows();
+                        ASSERT(block.rows() <= block_size);
+                    }
+                    ASSERT_TRUE(
+                        columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
+                    WRAP_FOR_AGG_FAILPOINTS_END
+                    FailPointHelper::disableFailPoint(FailPoints::force_magic_hash);
+                }
+            }
+        }
     }
 }
 CATCH
