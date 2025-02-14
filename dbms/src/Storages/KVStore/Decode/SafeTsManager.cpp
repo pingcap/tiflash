@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/KVStore/Decode/SafeTsMgr.h>
+#include <Storages/KVStore/Decode/SafeTsManager.h>
 
 namespace DB
 {
-bool SafeTsMgr::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts)
+bool SafeTsManager::isSafeTSLag(RegionID region_id, SafeTS * leader_safe_ts, SafeTS * self_safe_ts)
 {
     {
         std::shared_lock lock(rw_lock);
@@ -38,7 +38,7 @@ bool SafeTsMgr::isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * 
         && ((*leader_safe_ts >> TsoPhysicalShiftBits) - (*self_safe_ts >> TsoPhysicalShiftBits) > SafeTsDiffThreshold);
 }
 
-UInt64 SafeTsMgr::getSelfSafeTS(UInt64 region_id) const
+UInt64 SafeTsManager::getSelfSafeTS(RegionID region_id) const
 {
     std::shared_lock lock(rw_lock);
     auto it = safe_ts_map.find(region_id);
@@ -49,7 +49,7 @@ UInt64 SafeTsMgr::getSelfSafeTS(UInt64 region_id) const
     return it->second->self_safe_ts.load(std::memory_order_relaxed);
 }
 
-void SafeTsMgr::updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts)
+void SafeTsManager::updateSafeTS(RegionID region_id, SafeTS leader_safe_ts, SafeTS self_safe_ts)
 {
     {
         std::shared_lock lock(rw_lock);

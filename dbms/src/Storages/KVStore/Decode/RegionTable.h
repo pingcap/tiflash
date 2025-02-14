@@ -22,7 +22,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/Decode/RegionTable_fwd.h>
-#include <Storages/KVStore/Decode/SafeTsMgr.h>
+#include <Storages/KVStore/Decode/SafeTsManager.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
@@ -154,8 +154,8 @@ public:
     size_t getTableRegionSize(KeyspaceID keyspace_id, TableID table_id) const;
     void debugClearTableRegionSize(KeyspaceID keyspace_id, TableID table_id);
 
-    SafeTsMgr & safeTsMgr() { return safe_ts_mgr; }
-    const SafeTsMgr & safeTsMgr() const { return safe_ts_mgr; }
+    SafeTsManager & safeTsMgr() { return safe_ts_mgr; }
+    const SafeTsManager & safeTsMgr() const { return safe_ts_mgr; }
 
 
 private:
@@ -182,7 +182,7 @@ private:
 
     Context * const context;
 
-    SafeTsMgr safe_ts_mgr;
+    SafeTsManager safe_ts_mgr;
 
     mutable std::mutex mutex;
 
