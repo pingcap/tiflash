@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <AggregateFunctions/IAggregateFunction.h>
+#include <Common/AlignedBuffer.h>
 #include <Core/ColumnNumbers.h>
 #include <Core/Field.h>
 #include <Core/Types.h>
@@ -52,9 +54,19 @@ using WindowFunctionPtr = std::shared_ptr<IWindowFunction>;
 // Runtime data for computing one window function.
 struct WindowFunctionWorkspace
 {
-    // TODO add aggregation function
     WindowFunctionPtr window_function = nullptr;
+    AggregateFunctionPtr aggregate_function;
+
+    // Will not be initialized for a pure window function.
+    mutable AlignedBuffer aggregate_function_state;
+
+    // Argument columns. Be careful, this is a per-block cache.
+    std::vector<const IColumn *> argument_columns;
+
+    UInt64 cached_block_number = std::numeric_limits<UInt64>::max();
 
     ColumnNumbers arguments;
+
+    UInt64 idx;
 };
 } // namespace DB
