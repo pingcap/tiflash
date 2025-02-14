@@ -1056,15 +1056,23 @@ RowKeyRange SegmentTestBasic::buildRowKeyRange(
     bool is_common_handle,
     bool including_right_boundary)
 {
-    if (is_common_handle)
-    {
-        HandleRange range(begin, end);
-        return RowKeyRange::fromHandleRange(range, is_common_handle);
-    }
-
     // `including_right_boundary` is for creating range like [begin, std::numeric_limits<Int64>::max()) or [begin, std::numeric_limits<Int64>::max()]
     if (including_right_boundary)
         RUNTIME_CHECK(end == std::numeric_limits<Int64>::max());
+
+    if (is_common_handle)
+    {
+        auto create_rowkey_value = [](Int64 v) {
+            WriteBufferFromOwnString ss;
+            DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
+            DB::EncodeInt64(v, ss);
+            return std::make_shared<String>(ss.releaseStr());
+        };
+        auto left = RowKeyValue{is_common_handle, create_rowkey_value(begin)};
+        auto right = including_right_boundary ? RowKeyValue::COMMON_HANDLE_MAX_KEY
+                                              : RowKeyValue{is_common_handle, create_rowkey_value(end)};
+        return RowKeyRange{left, right, is_common_handle, 1};
+    }
 
     auto left = RowKeyValue::fromHandle(begin);
     auto right = including_right_boundary ? RowKeyValue::INT_HANDLE_MAX_KEY : RowKeyValue::fromHandle(end);
