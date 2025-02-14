@@ -99,6 +99,7 @@ struct DMContext : private boost::noncopyable
     const bool read_stable_only;
     const bool enable_relevant_place;
     const bool enable_skippable_place;
+    const bool enable_bitmap_filter_skip_pack;
 
     String tracing_id;
 
