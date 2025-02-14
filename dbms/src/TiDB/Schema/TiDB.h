@@ -249,6 +249,7 @@ enum class ColumnarIndexKind
 {
     // Leave 0 intentionally for InvalidValues
     Vector = 1,
+    Inverted = 2,
 };
 
 struct IndexInfo

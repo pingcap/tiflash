@@ -30,6 +30,9 @@ using LocalIndexBuilderPtr = std::shared_ptr<LocalIndexBuilder>;
 class LocalIndexCache;
 using LocalIndexCachePtr = std::shared_ptr<LocalIndexCache>;
 
+class InvertedIndexViewer;
+using InvertedIndexViewerPtr = std::shared_ptr<InvertedIndexViewer>;
+
 using ANNQueryInfoPtr = std::shared_ptr<tipb::ANNQueryInfo>;
 
 class VectorIndexBuilder;
