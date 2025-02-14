@@ -56,12 +56,14 @@ protected:
         itr->second->rowkey_range = buildRowKeyRange(begin, end, is_common_handle);
     }
 
-    void writeSegmentGeneric(std::string_view seg_data)
+    void writeSegmentGeneric(
+        std::string_view seg_data,
+        std::optional<std::pair<Int64, Int64>> rowkey_range = std::nullopt)
     {
         if (is_common_handle)
-            writeSegment<String>(seg_data);
+            writeSegment<String>(seg_data, rowkey_range);
         else
-            writeSegment<Int64>(seg_data);
+            writeSegment<Int64>(seg_data, rowkey_range);
     }
 
     /*
@@ -199,7 +201,11 @@ protected:
             ASSERT_TRUE(sequenceEqual(expected_handle, *handle)) << info;
         }
 
-        verifyVersionChain(SEG_ID, caller_line, expected_base_versions);
+        verifyVersionChain(VerifyVersionChainOption{
+            .seg_id = SEG_ID,
+            .caller_line = caller_line,
+            .expected_base_versions = expected_base_versions,
+        });
     }
 
     auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
@@ -214,36 +220,48 @@ protected:
         return results;
     }
 
-    void verifyVersionChain(
-        const PageIdU64 seg_id,
-        int caller_line,
-        const std::vector<RowID> & excepted_base_versions,
-        const UInt64 read_ts = max_read_ts)
+    struct VerifyVersionChainOption
     {
-        auto info = fmt::format("caller_line={}", caller_line);
-        auto [seg, snap] = getSegmentForRead(seg_id);
-        auto actual_base_versions = std::visit(
-            [&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); },
-            seg->version_chain);
-        ASSERT_EQ(excepted_base_versions.size(), actual_base_versions->size()) << info;
-        for (size_t i = 0; i < excepted_base_versions.size(); ++i)
-            ASSERT_EQ(excepted_base_versions[i], (*actual_base_versions)[i]) << fmt::format("i={}, {}", i, info);
+        const PageIdU64 seg_id;
+        const int caller_line; // For debug
+        const UInt64 read_ts = std::numeric_limits<UInt64>::max();
+        const std::optional<std::vector<RowID>> expected_base_versions;
+        const std::optional<RowKeyRanges> read_ranges;
+    };
+    void verifyVersionChain(const VerifyVersionChainOption & opt)
+    {
+        auto info = fmt::format("caller_line={}", opt.caller_line);
+        auto [seg, snap] = getSegmentForRead(opt.seg_id);
 
+        if (opt.expected_base_versions)
+        {
+            const auto & expected_base_versions = *(opt.expected_base_versions);
+            auto actual_base_versions = std::visit(
+                [&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); },
+                seg->version_chain);
+            ASSERT_EQ(expected_base_versions.size(), actual_base_versions->size()) << info;
+            for (size_t i = 0; i < expected_base_versions.size(); ++i)
+                ASSERT_EQ(expected_base_versions[i], (*actual_base_versions)[i]) << fmt::format("i={}, {}", i, info);
+        }
+
+        const auto read_ranges = Segment::shrinkRowKeyRanges(
+            seg->getRowKeyRange(),
+            opt.read_ranges.value_or(RowKeyRanges{seg->getRowKeyRange()}));
         auto bitmap_filter_version_chain = seg->buildBitmapFilter(
             *dm_context,
             snap,
-            {seg->getRowKeyRange()},
-            loadPackFilterResults(snap, {seg->getRowKeyRange()}),
-            read_ts,
+            read_ranges,
+            loadPackFilterResults(snap, read_ranges),
+            opt.read_ts,
             DEFAULT_BLOCK_SIZE,
             use_version_chain);
 
         auto bitmap_filter_delta_index = seg->buildBitmapFilter(
             *dm_context,
             snap,
-            {seg->getRowKeyRange()},
-            loadPackFilterResults(snap, {seg->getRowKeyRange()}),
-            read_ts,
+            read_ranges,
+            loadPackFilterResults(snap, read_ranges),
+            opt.read_ts,
             DEFAULT_BLOCK_SIZE,
             !use_version_chain);
 
@@ -604,7 +622,11 @@ try
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
     // segment_range: [-inf, 512)
     // "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)"
-    verifyVersionChain(SEG_ID, __LINE__, excepted_base_versions);
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_base_versions = excepted_base_versions,
+    });
     // segment_range: [512, +inf)
     // "s:[0, 1024)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)"
     std::vector<RowID> other_excepted_base_versions(10 + 55 + 7);
@@ -617,7 +639,11 @@ try
         other_excepted_base_versions.begin() + 10 + 55,
         other_excepted_base_versions.end(),
         298); // d_mem:[298, 305)
-    verifyVersionChain(*new_seg_id, __LINE__, other_excepted_base_versions);
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = *new_seg_id,
+        .caller_line = __LINE__,
+        .expected_base_versions = other_excepted_base_versions,
+    });
 
     checkHandle(SEG_ID, "[0, 128)|[200, 255)|[256, 305)|[310, 512)", __LINE__);
 
@@ -654,7 +680,10 @@ TEST_P(SegmentBitmapFilterTest, CleanStable)
     std::string expect_result;
     expect_result.append(std::string(25000, '1'));
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
-    verifyVersionChain(SEG_ID, __LINE__, {});
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_base_versions = std::vector<RowID>{}});
 }
 
 TEST_P(SegmentBitmapFilterTest, NotCleanStable)
@@ -682,7 +711,10 @@ TEST_P(SegmentBitmapFilterTest, NotCleanStable)
         }
         expect_result.append(std::string(5000, '1'));
         ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
-        verifyVersionChain(SEG_ID, __LINE__, {});
+        verifyVersionChain(VerifyVersionChainOption{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .expected_base_versions = std::vector<RowID>{}});
     }
     {
         // Stale read
@@ -703,7 +735,13 @@ TEST_P(SegmentBitmapFilterTest, NotCleanStable)
         }
         expect_result.append(std::string(5000, '0'));
         ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
-        verifyVersionChain(SEG_ID, __LINE__, {}, 1);
+
+        verifyVersionChain(VerifyVersionChainOption{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ts = 1,
+            .expected_base_versions = std::vector<RowID>{},
+        });
     }
 }
 
@@ -731,7 +769,10 @@ TEST_P(SegmentBitmapFilterTest, StableRange)
     expect_result.append(std::string(40000, '1'));
     ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
 
-    verifyVersionChain(SEG_ID, __LINE__, {});
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_base_versions = std::vector<RowID>{}});
 }
 
 TEST_P(SegmentBitmapFilterTest, StableLogicalSplit)
@@ -749,8 +790,15 @@ try
     ASSERT_TRUE(new_seg_id.has_value());
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
 
-    verifyVersionChain(SEG_ID, __LINE__, {});
-    verifyVersionChain(*new_seg_id, __LINE__, {});
+
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_base_versions = std::vector<RowID>{}});
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = *new_seg_id,
+        .caller_line = __LINE__,
+        .expected_base_versions = std::vector<RowID>{}});
 
     checkHandle(SEG_ID, "[0, 25000)", __LINE__);
 
@@ -848,19 +896,8 @@ try
     if (is_common_handle)
         return;
 
-    runTestCaseGeneric(
-        TestCase{
-            .seg_data
-            = "d_mem:[-9223372036854775808, -9223372036854775800)|d_mem:[9223372036854775800, 9223372036854775807]",
-            .expected_size = 16,
-            .expected_row_id = "[0, 16)",
-            .expected_handle
-            = "[-9223372036854775808, -9223372036854775800)|[9223372036854775800, 9223372036854775807]"},
-        __LINE__,
-        std::vector<RowID>(16, NotExistRowID));
-
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-
+    writeSegmentGeneric("d_mem:[-9223372036854775808, -9223372036854775800):shuffle|d_mem:[9223372036854775800, "
+                        "9223372036854775807]:shuffle");
     {
         RowKeyRanges ranges = {RowKeyRange{
             RowKeyValue::fromHandle(std::numeric_limits<Int64>::min()),
@@ -869,34 +906,22 @@ try
             1}};
         ASSERT_TRUE(ranges[0].isStartInfinite());
         ASSERT_FALSE(ranges[0].isEndInfinite());
-
-        //RowKeyRanges ranges = {RowKeyRange::newAll(is_common_handle, 1)};
-        auto bitmap_filter = seg->buildBitmapFilter(
-            *dm_context,
-            snap,
-            ranges,
-            loadPackFilterResults(snap, ranges),
-            max_read_ts,
-            DEFAULT_BLOCK_SIZE,
-            use_version_chain);
-
-        ASSERT_EQ(bitmap_filter->toDebugString(), "1111111111111110");
+        verifyVersionChain(VerifyVersionChainOption{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ranges = ranges,
+        });
     }
 
     {
         RowKeyRanges ranges = {RowKeyRange::newAll(is_common_handle, 1)};
         ASSERT_TRUE(ranges[0].isStartInfinite());
         ASSERT_TRUE(ranges[0].isEndInfinite());
-        auto bitmap_filter = seg->buildBitmapFilter(
-            *dm_context,
-            snap,
-            ranges,
-            loadPackFilterResults(snap, ranges),
-            max_read_ts,
-            DEFAULT_BLOCK_SIZE,
-            use_version_chain);
-
-        ASSERT_EQ(bitmap_filter->toDebugString(), "1111111111111111");
+        verifyVersionChain(VerifyVersionChainOption{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ranges = ranges,
+        });
     }
 }
 CATCH
@@ -904,72 +929,36 @@ CATCH
 TEST_P(SegmentBitmapFilterTest, RowKeyFilter_Stable)
 try
 {
-    runTestCaseGeneric(
-        TestCase{
-            .seg_data = "s:[250, 1000):pack_size_50",
-            .expected_size = 750,
-            .expected_row_id = "[0, 750)",
-            .expected_handle = "[250, 1000)"},
-        __LINE__,
-        {});
-
-    RowKeyRanges read_ranges = {
-        buildRowKeyRange(318, 520, is_common_handle),
-        buildRowKeyRange(618, 737, is_common_handle),
-        buildRowKeyRange(918, 998, is_common_handle),
-    };
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-    auto bitmap_filter = seg->buildBitmapFilter(
-        *dm_context,
-        snap,
-        read_ranges,
-        loadPackFilterResults(snap, read_ranges),
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE,
-        use_version_chain);
-
-    String expect_result(750, '0');
-    std::fill(expect_result.begin() + 318 - 250, expect_result.begin() + 520 - 250, '1');
-    std::fill(expect_result.begin() + 618 - 250, expect_result.begin() + 737 - 250, '1');
-    std::fill(expect_result.begin() + 918 - 250, expect_result.begin() + 998 - 250, '1');
-    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+    writeSegmentGeneric("s:[250, 1000):pack_size_50");
+    verifyVersionChain(
+        VerifyVersionChainOption {
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ranges = RowKeyRanges{
+                buildRowKeyRange(318, 520, is_common_handle),
+                buildRowKeyRange(618, 737, is_common_handle),
+                buildRowKeyRange(918, 998, is_common_handle),
+            },
+        }
+    );
 }
 CATCH
 
 TEST_P(SegmentBitmapFilterTest, RowKeyFilter_CFBig)
 try
 {
-    runTestCaseGeneric(
-        TestCase{
-            .seg_data = "d_big:[250, 1000):pack_size_50",
-            .expected_size = 500,
-            .expected_row_id = "[38, 538)",
-            .expected_handle = "[388, 888)",
-            .rowkey_range = std::pair{388, 888}},
-        __LINE__,
-        std::vector<RowID>(550, NotExistRowID));
-
-    RowKeyRanges read_ranges = {
-        buildRowKeyRange(318, 520, is_common_handle),
-        buildRowKeyRange(618, 737, is_common_handle),
-        buildRowKeyRange(818, 998, is_common_handle),
-    };
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-    read_ranges = Segment::shrinkRowKeyRanges(seg->rowkey_range, read_ranges);
-    auto bitmap_filter = seg->buildBitmapFilter(
-        *dm_context,
-        snap,
-        read_ranges,
-        loadPackFilterResults(snap, read_ranges),
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE,
-        use_version_chain);
-
-    String expect_result(550, '0');
-    std::fill(expect_result.begin() + 388 - 350, expect_result.begin() + 520 - 350, '1');
-    std::fill(expect_result.begin() + 618 - 350, expect_result.begin() + 737 - 350, '1');
-    std::fill(expect_result.begin() + 818 - 350, expect_result.begin() + 888 - 350, '1');
-    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+    writeSegmentGeneric("d_big:[250, 1000):pack_size_50", std::pair{388, 888});
+    verifyVersionChain(
+        VerifyVersionChainOption{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ranges = RowKeyRanges{
+                buildRowKeyRange(318, 520, is_common_handle),
+                buildRowKeyRange(618, 737, is_common_handle),
+                buildRowKeyRange(818, 998, is_common_handle),
+            },
+        }
+    );
 }
 CATCH
 
@@ -977,54 +966,80 @@ TEST_P(SegmentBitmapFilterTest, RowKeyFilter_CFTinyOrMem)
 try
 {
     writeSegmentGeneric("d_mem:[115, 277):shuffle|d_tiny:[140, 250):shuffle");
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-    const auto read_ranges = RowKeyRanges{buildRowKeyRange(120, 260, is_common_handle)};
-    auto bitmap_filter_version_chain = seg->buildBitmapFilter(
-        *dm_context,
-        snap,
-        read_ranges,
-        loadPackFilterResults(snap, read_ranges),
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE,
-        use_version_chain);
-    auto bitmap_filter_delta_index = seg->buildBitmapFilter(
-        *dm_context,
-        snap,
-        read_ranges,
-        loadPackFilterResults(snap, read_ranges),
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE,
-        !use_version_chain);
-    // The result is random, because the shuffle is random.
-    ASSERT_EQ(bitmap_filter_delta_index->toDebugString(), bitmap_filter_version_chain->toDebugString());
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ranges = RowKeyRanges{buildRowKeyRange(120, 260, is_common_handle)}});
 }
 CATCH
 
 TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange1)
 try
 {
-    runTestCaseGeneric(
-        TestCase{
-            .seg_data = "s:[10, 500):pack_size_10|d_dr:[5, 73)",
-            .expected_size = 427,
-            .expected_row_id = "[63, 490)",
-            .expected_handle = "[73, 500)",
-        },
-        __LINE__,
-        {});
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-    auto bitmap_filter = seg->buildBitmapFilter(
-        *dm_context,
-        snap,
-        {seg->getRowKeyRange()},
-        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE,
-        use_version_chain);
-    String expect_result(490, '0');
-    std::fill(expect_result.begin() + 73 - 10, expect_result.end(), '1');
-    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+    writeSegmentGeneric("s:[10, 500):pack_size_10|d_dr:[5, 73)");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
 }
 CATCH
+
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange2)
+try
+{
+    writeSegmentGeneric("s:[10, 500):pack_size_10|d_dr:[5, 73)|d_tiny:[60, 83):shuffle");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange3)
+try
+{
+    writeSegmentGeneric("s:[10, 500):pack_size_10|d_dr:[5, 73)|d_tiny:[60, 83):shuffle|d_dr:[70, 100)");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+}
+CATCH
+/*
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_Int64Boundary)
+try
+{
+    if (is_common_handle)
+        return;
+
+    writeSegmentGeneric(
+        "d_mem:[-9223372036854775808, -9223372036854775800):shuffle|d_mem:[9223372036854775800, 9223372036854775807]:shuffle");
+    {
+        RowKeyRanges ranges = {RowKeyRange{
+            RowKeyValue::fromHandle(std::numeric_limits<Int64>::min()),
+            RowKeyValue::fromHandle(std::numeric_limits<Int64>::max()),
+            is_common_handle,
+            1}};
+        ASSERT_TRUE(ranges[0].isStartInfinite());
+        ASSERT_FALSE(ranges[0].isEndInfinite());
+        verifyVersionChain(VerifyVersionChainOption{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ranges = ranges,
+        });
+    }
+
+    {
+        RowKeyRanges ranges = {RowKeyRange::newAll(is_common_handle, 1)};
+        ASSERT_TRUE(ranges[0].isStartInfinite());
+        ASSERT_TRUE(ranges[0].isEndInfinite());
+        verifyVersionChain(VerifyVersionChainOption{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ranges = ranges,
+        });
+    }
+}
+CATCH*/
 
 } // namespace DB::DM::tests
