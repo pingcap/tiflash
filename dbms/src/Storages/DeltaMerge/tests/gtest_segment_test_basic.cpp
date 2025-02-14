@@ -1046,10 +1046,25 @@ Block mergeSegmentRowIds(std::vector<Block> && blocks)
     return accumulated_block;
 }
 
-RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end, bool is_common_handle)
+RowKeyRange SegmentTestBasic::buildRowKeyRange(
+    Int64 begin,
+    Int64 end,
+    bool is_common_handle,
+    bool including_right_boundary)
 {
-    HandleRange range(begin, end);
-    return RowKeyRange::fromHandleRange(range, is_common_handle);
+    if (is_common_handle)
+    {
+        HandleRange range(begin, end);
+        return RowKeyRange::fromHandleRange(range, is_common_handle);
+    }
+
+    // `including_right_boundary` is for creating range like [begin, std::numeric_limits<Int64>::max()) or [begin, std::numeric_limits<Int64>::max()]
+    if (including_right_boundary)
+        RUNTIME_CHECK(end == std::numeric_limits<Int64>::max());
+
+    auto left = RowKeyValue::fromHandle(begin);
+    auto right = including_right_boundary ? RowKeyValue::INT_HANDLE_MAX_KEY : RowKeyValue::fromHandle(end);
+    return RowKeyRange{left, right, is_common_handle, 1};
 }
 
 std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(PageIdU64 segment_id)
@@ -1119,9 +1134,14 @@ ColumnPtr SegmentTestBasic::getSegmentHandle(PageIdU64 segment_id, const RowKeyR
     }
 }
 
-void SegmentTestBasic::writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end, bool is_common_handle)
+void SegmentTestBasic::writeSegmentWithDeleteRange(
+    PageIdU64 segment_id,
+    Int64 begin,
+    Int64 end,
+    bool is_common_handle,
+    bool including_right_boundary)
 {
-    auto range = buildRowKeyRange(begin, end, is_common_handle);
+    auto range = buildRowKeyRange(begin, end, is_common_handle, including_right_boundary);
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
     RUNTIME_CHECK(segment->write(*dm_context, range));

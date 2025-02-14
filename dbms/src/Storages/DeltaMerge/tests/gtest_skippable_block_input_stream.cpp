@@ -295,7 +295,12 @@ protected:
         }
         else if (type == "d_dr")
         {
-            SegmentTestBasic::writeSegmentWithDeleteRange(SEG_ID, begin, end, /*is_common_handle*/ false);
+            SegmentTestBasic::writeSegmentWithDeleteRange(
+                SEG_ID,
+                begin,
+                end,
+                /*is_common_handle*/ false,
+                including_right_boundary);
         }
         else if (type == "s")
         {
