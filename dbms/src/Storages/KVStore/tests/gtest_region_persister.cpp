@@ -688,7 +688,6 @@ TEST_P(RegionPersisterTest, LargeRegion)
 try
 {
     auto ctx = TiFlashTestEnv::getGlobalContext();
-    auto & tmt = ctx.getTMTContext();
 
     RegionManager region_manager;
     const TableID table_id = 100;
@@ -715,14 +714,9 @@ try
                     break;
                 }
                 TiKVKey key = RecordKVFormat::genKey(table_id, handle_id, tso++);
-                region->insertFromSnap(tmt, "default", TiKVKey::copyFrom(key), TiKVValue(large_value.data()));
-                region
-                    ->insertFromSnap(tmt, "write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
-                region->insertFromSnap(
-                    tmt,
-                    "lock",
-                    TiKVKey::copyFrom(key),
-                    RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+                region->insertDebug("default", TiKVKey::copyFrom(key), TiKVValue(large_value.data()));
+                region->insertDebug("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
+                region->insertDebug("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
                 handle_id += 1;
             }
             return region;

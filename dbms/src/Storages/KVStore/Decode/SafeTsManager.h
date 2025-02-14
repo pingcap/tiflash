@@ -21,9 +21,7 @@
 #include <common/logger_useful.h>
 #include <common/types.h>
 
-#include <functional>
 #include <mutex>
-#include <vector>
 
 namespace DB
 {
@@ -40,32 +38,32 @@ enum : TsoShiftBits
     TsoPhysicalShiftBits = 18,
 };
 
-struct SafeTsMgr
+struct SafeTsManager
 {
     // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
     // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
-    // self_safe_ts is the safe_ts in TiFlah learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
+    // self_safe_ts is the safe_ts in TiFlash learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
     struct SafeTsEntry
     {
-        explicit SafeTsEntry(UInt64 leader_safe_ts, UInt64 self_safe_ts)
+        explicit SafeTsEntry(SafeTS leader_safe_ts, SafeTS self_safe_ts)
             : leader_safe_ts(leader_safe_ts)
             , self_safe_ts(self_safe_ts)
         {}
-        std::atomic<UInt64> leader_safe_ts;
-        std::atomic<UInt64> self_safe_ts;
+        std::atomic<SafeTS> leader_safe_ts;
+        std::atomic<SafeTS> self_safe_ts;
     };
     using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
     using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
 
-    void updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts);
+    void updateSafeTS(RegionID region_id, SafeTS leader_safe_ts, SafeTS self_safe_ts);
 
     // unit: ms. If safe_ts diff is larger than 2min, we think the data synchronization progress is far behind the leader.
-    static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
-    bool isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts);
+    static const SafeTS SafeTsDiffThreshold = 2 * 60 * 1000;
+    bool isSafeTSLag(RegionID region_id, SafeTS * leader_safe_ts, SafeTS * self_safe_ts);
 
-    UInt64 getSelfSafeTS(UInt64 region_id) const;
+    UInt64 getSelfSafeTS(RegionID region_id) const;
 
-    void remove(UInt64 region_id)
+    void remove(RegionID region_id)
     {
         std::unique_lock write_lock(rw_lock);
         safe_ts_map.erase(region_id);
