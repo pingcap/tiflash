@@ -98,12 +98,10 @@
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
-#include <sys/resource.h>
 
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
-#include <thread>
 
 #ifdef FIU_ENABLE
 #include <fiu.h>
@@ -457,33 +455,6 @@ void loadBlockList(
 #endif
 }
 
-void setOpenFileLimit(std::optional<UInt64> new_limit, const LoggerPtr & log)
-{
-    rlimit rlim{};
-    if (getrlimit(RLIMIT_NOFILE, &rlim))
-        throw Poco::Exception("Cannot getrlimit");
-
-    if (rlim.rlim_cur == rlim.rlim_max)
-    {
-        LOG_INFO(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
-    }
-    else
-    {
-        rlim_t old = rlim.rlim_cur;
-        rlim.rlim_cur = new_limit.value_or(rlim.rlim_max);
-        int rc = setrlimit(RLIMIT_NOFILE, &rlim);
-        if (rc != 0)
-            LOG_WARNING(
-                log,
-                "Cannot set max number of file descriptors to {}"
-                ". Try to specify max_open_files according to your system limits. error: {}",
-                rlim.rlim_cur,
-                strerror(errno));
-        else
-            LOG_INFO(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
-    }
-}
-
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
@@ -738,14 +709,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     /// Try to increase limit on number of open files.
-    if (config().hasProperty("max_open_files"))
-    {
-        setOpenFileLimit(config().getUInt("max_open_files"), log);
-    }
-    else
-    {
-        setOpenFileLimit(std::nullopt, log);
-    }
+    setOpenFileLimit(config().getUInt("max_open_files", 0), log);
 
     static ServerErrorHandler error_handler;
     Poco::ErrorHandler::set(&error_handler);
