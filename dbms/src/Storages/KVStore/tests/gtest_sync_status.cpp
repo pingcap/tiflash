@@ -24,6 +24,7 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/File.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/Decode/SafeTsManager.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -195,7 +196,7 @@ void makeRegionsLag(size_t lag_num)
     {
         tmt.getRegionTable().safeTsMgr().updateSafeTS(
             i,
-            (SafeTsMgr::SafeTsDiffThreshold + 1) << TsoPhysicalShiftBits,
+            (SafeTsManager::SafeTsDiffThreshold + 1) << TsoPhysicalShiftBits,
             0);
     }
 }
