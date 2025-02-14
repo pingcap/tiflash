@@ -19,6 +19,7 @@
 #include <Common/DynamicThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/MemoryAllocTrace.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
@@ -107,6 +108,7 @@
 #include <fiu.h>
 #endif
 
+std::atomic<UInt64> tranquil_time_rss;
 
 namespace CurrentMetrics
 {
@@ -955,10 +957,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// Create TMTContext
         auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
-        proxy_machine.initKVStore(
-            global_context->getTMTContext(),
-            store_ident,
-            settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity));
+
+        // Must be executed before restore data.
+        // Get the memory usage of tranquil time.
+        auto [resident_set, cur_proc_num_threads, cur_virt_size] = process_mem_usage();
+        UNUSED(cur_proc_num_threads);
+        UNUSED(cur_virt_size);
+        tranquil_time_rss = static_cast<Int64>(resident_set);
+
+        auto limit = settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity);
+        LOG_INFO(
+            log,
+            "Global memory status: computed_limit {} tranquil_time_rss {}, cur_virt_size {}, capacity {}",
+            limit,
+            tranquil_time_rss,
+            cur_virt_size,
+            server_info.memory_info.capacity);
+        if (limit == 0)
+            limit = server_info.memory_info.capacity * 0.8;
+        proxy_machine.initKVStore(global_context->getTMTContext(), store_ident, limit);
 
         global_context->getTMTContext().reloadConfig(config());
         // setup the kv cluster for disagg compute node fetching config

@@ -29,6 +29,7 @@
 #include <memory>
 
 extern std::atomic<Int64> real_rss;
+extern std::atomic<UInt64> tranquil_time_rss;
 
 namespace DB
 {
@@ -410,15 +411,18 @@ void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
 {
     // If there are data flow in, we will check if the memory is exhaused.
     auto limit = tmt.getKVStore()->getKVStoreMemoryLimit();
-    auto current = real_rss.load();
+    size_t current = real_rss.load() > 0 ? real_rss.load() : 0;
+    if likely (limit == 0 || current == 0)
+        return;
     /// Region management such as split/merge doesn't change the memory consumed by a table in KVStore.
     /// The only cases memory is reduced in a table is removing regions, applying snaps and commiting txns.
     /// The only cases memory is increased in a table is inserting kv pairs and applying snaps.
     /// So, we only print once for a table, until one memory reduce event will happen.
-    if unlikely (limit > 0 && current > 0 && static_cast<size_t>(current) >= limit)
+    if unlikely (current >= limit * 0.9)
     {
         auto table_size = getRegionTableSize();
-        if (table_size > 0.5 * current)
+        auto grown_memory = current > tranquil_time_rss ? current - tranquil_time_rss : 0;
+        if (grown_memory && table_size > grown_memory * 0.3)
         {
             if (!setRegionTableWarned(true))
             {
@@ -428,9 +432,12 @@ void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
 #endif
                 LOG_INFO(
                     log,
-                    "Memory limit exceeded, current={} limit={} table_id={} keyspace_id={} region_id={} from={}",
+                    "Memory limit exceeded, current={} limit={} limit_size={} table_size={} table_id={} keyspace_id={} "
+                    "region_id={} from={}",
                     current,
                     limit,
+                    grown_memory * 0.3,
+                    table_size,
                     mapped_table_id,
                     keyspace_id,
                     id(),
