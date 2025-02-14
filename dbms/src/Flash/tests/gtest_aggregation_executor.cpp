@@ -1310,6 +1310,7 @@ try
             "max_block_size",
             Field(static_cast<UInt64>(tbl_agg_table_with_special_key_unique_rows * 2)));
         FailPointHelper::disableFailPoint(FailPoints::force_magic_hash);
+        context.context->setSetting("hashagg_use_magic_hash", Field(static_cast<UInt64>(0)));
         auto reference = executeStreams(request);
 
         for (auto two_level_threshold : two_level_thresholds)
@@ -1323,7 +1324,7 @@ try
                         Field(static_cast<UInt64>(two_level_threshold)));
                     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
                     WRAP_FOR_AGG_FAILPOINTS_START
-                    FailPointHelper::enableFailPoint(FailPoints::force_magic_hash);
+                    context.context->setSetting("hashagg_use_magic_hash", Field(static_cast<UInt64>(1)));
                     auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
                     for (auto & block : blocks)
                     {
@@ -1333,7 +1334,7 @@ try
                     ASSERT_TRUE(
                         columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
                     WRAP_FOR_AGG_FAILPOINTS_END
-                    FailPointHelper::disableFailPoint(FailPoints::force_magic_hash);
+                    context.context->setSetting("hashagg_use_magic_hash", Field(static_cast<UInt64>(0)));
                 }
             }
         }
