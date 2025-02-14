@@ -1089,8 +1089,7 @@ void WindowTransformAction::advanceFrameStart()
         break;
     case WindowFrame::BoundaryType::Current:
     {
-        frame_start = current_row;
-        frame_started = true;
+        advanceFrameStartCurrentRow();
         break;
     }
     case WindowFrame::BoundaryType::Offset:
@@ -1165,13 +1164,83 @@ bool WindowTransformAction::arePeers(const RowNumber & peer_group_last_row, cons
     }
 }
 
+void WindowTransformAction::advanceFrameStartCurrentRow()
+{
+    if (window_description.frame.type == WindowFrame::FrameType::Ranges)
+    {
+        if unlikely (current_row == partition_start)
+        {
+            frame_start = current_row;
+        }
+        else
+        {
+            RowNumber prev_row = getPreviousRowNumber(current_row);
+            if (arePeers(prev_row, current_row))
+            {
+                frame_start = prev_frame_start;
+            }
+            else
+            {
+                frame_start = current_row;
+            }
+        }
+    }
+    else
+    {
+        frame_start = current_row;
+    }
+    frame_started = true;
+}
+
+void WindowTransformAction::advanceRangeFrameEndCurrentRowShortcut()
+{
+    if unlikely (current_row == partition_start)
+        return;
+
+    auto prev_row = getPreviousRowNumber(current_row);
+    if (arePeers(prev_row, current_row))
+    {
+        frame_end = prev_frame_end;
+        frame_ended = true;
+    }
+}
+
 void WindowTransformAction::advanceFrameEndCurrentRow()
 {
-    assert(frame_end.block == partition_end.block || frame_end.block + 1 == partition_end.block);
+    if (window_description.frame.type == WindowFrame::FrameType::Ranges)
+    {
+        advanceRangeFrameEndCurrentRowShortcut();
+        if (!frame_ended)
+        {
+            RowNumber tmp = current_row;
+            advanceRowNumber(tmp);
+            while (tmp < partition_end)
+            {
+                if (arePeers(tmp, current_row))
+                {
+                    advanceRowNumber(tmp);
+                    continue;
+                }
+                break;
+            }
 
-    frame_end = current_row;
-    advanceRowNumber(frame_end);
-    frame_ended = true;
+            if ((tmp < partition_end) || partition_ended)
+            {
+                frame_end = tmp;
+                frame_ended = true;
+            }
+            else
+            {
+                frame_ended = false;
+            }
+        }
+    }
+    else
+    {
+        frame_end = current_row;
+        frame_ended = true;
+        advanceRowNumber(frame_end);
+    }
 }
 
 void WindowTransformAction::advanceFrameEnd()
