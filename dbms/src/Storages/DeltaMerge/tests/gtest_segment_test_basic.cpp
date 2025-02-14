@@ -553,7 +553,7 @@ BlockInputStreamPtr SegmentTestBasic::getIngestDTFileInputStream(
         rows_per_block = std::min(rows_per_block, write_rows - written);
         std::optional<Int64> start;
         if (start_at)
-            start.emplace(*start_at + written);
+            start.emplace(*start_at + written); // Caller should make sure not overflow here.
 
         if (check_range)
         {
@@ -562,9 +562,13 @@ BlockInputStreamPtr SegmentTestBasic::getIngestDTFileInputStream(
         }
         else
         {
-            auto start_key = start ? *start : 0;
-            auto end_key = start_key + rows_per_block;
-            auto block = prepareWriteBlock(start_key, end_key);
+            Int64 start_key = start.value_or(0);
+            bool overflow = std::numeric_limits<Int64>::max() - static_cast<Int64>(rows_per_block) < start_key;
+            Int64 end_key = overflow ? std::numeric_limits<Int64>::max() : start_key + rows_per_block;
+            // if overflow, write [start_key, end_key]
+            // if not overflow, write [start_key, end_key)
+            rows_per_block += overflow;
+            auto block = prepareWriteBlock(start_key, end_key, /*is_deleted*/ false, overflow);
             streams.push_back(std::make_shared<OneBlockInputStream>(std::move(block)));
         }
     }
