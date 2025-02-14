@@ -1120,4 +1120,42 @@ try
 }
 CATCH
 
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange10)
+try
+{
+    if (is_common_handle)
+        return;
+
+    writeSegmentGeneric(
+        "d_big:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, "
+        "9223372036854775807)",
+        std::tuple{9223372036854775715, 9223372036854775807, false});
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "000001111111111111111111111111111111111111110000000000000000000000000000000000000"
+                           "00000000000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange11)
+try
+{
+    if (is_common_handle)
+        return;
+
+    writeSegmentGeneric(
+        "d_big:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, "
+        "9223372036854775807)",
+        std::tuple{9223372036854775715, 9223372036854775807, true});
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "000001111111111111111111111111111111111111110000000000000000000000000000000000000"
+                           "00000000000000001",
+    });
+}
+CATCH
+
 } // namespace DB::DM::tests
