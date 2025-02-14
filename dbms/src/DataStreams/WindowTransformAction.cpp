@@ -1351,11 +1351,13 @@ void WindowTransformAction::updateAggregationState()
             append_add = true;
     }
 
-    bool check_need_decrease = checkIfNeedDecrease();
+    bool check_need_decrease = false;
+    if constexpr (need_decrease)
+        check_need_decrease = checkIfNeedDecrease();
     for (auto & ws : aggregation_workspaces)
     {
         RowNumber start = frame_start;
-        if (need_decrease && check_need_decrease)
+        if (check_need_decrease)
         {
             decreaseAggregationState(ws, prev_frame_start, frame_start);
             start = prev_frame_end;
