@@ -1207,8 +1207,6 @@ void WindowTransformAction::advanceRangeFrameEndCurrentRowShortcut()
 
 void WindowTransformAction::advanceFrameEndCurrentRow()
 {
-    assert(frame_end.block == partition_end.block || frame_end.block + 1 == partition_end.block);
-
     if (window_description.frame.type == WindowFrame::FrameType::Ranges)
     {
         advanceRangeFrameEndCurrentRowShortcut();
@@ -1226,7 +1224,7 @@ void WindowTransformAction::advanceFrameEndCurrentRow()
                 break;
             }
 
-            if (tmp < partition_end)
+            if ((tmp < partition_end) || partition_ended)
             {
                 frame_end = tmp;
                 frame_ended = true;
