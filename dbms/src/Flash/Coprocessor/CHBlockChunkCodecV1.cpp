@@ -16,6 +16,7 @@
 
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <DataTypes/DataTypeString.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Compression/CompressionCodecFactory.h>
@@ -26,7 +27,7 @@
 
 namespace DB
 {
-size_t ApproxBlockHeaderBytes(const Block & block)
+static size_t ApproxBlockHeaderBytes(const Block & block)
 {
     size_t size = 8 + 8; /// to hold some length of structures, such as column number, row number...
     size_t columns = block.columns();
@@ -41,7 +42,7 @@ size_t ApproxBlockHeaderBytes(const Block & block)
     return size;
 }
 
-void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows)
+void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows, MPPDataPacketVersion packet_version)
 {
     size_t columns = header.columns();
     writeVarUInt(columns, ostr);
@@ -51,7 +52,8 @@ void EncodeHeader(WriteBuffer & ostr, const Block & header, size_t rows)
     {
         const ColumnWithTypeAndName & column = header.safeGetByPosition(i);
         writeStringBinary(column.name, ostr);
-        writeStringBinary(column.type->getName(), ostr);
+        const auto & ser_type = CodecUtils::convertDataTypeByPacketVersion(*column.type, packet_version);
+        writeStringBinary(ser_type.getName(), ostr);
     }
 }
 
@@ -79,19 +81,12 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
             String type_name;
             readBinary(type_name, istr);
             if (header)
-            {
                 CodecUtils::checkDataTypeName(
                     "CHBlockChunkCodecV1",
                     i,
                     header.getByPosition(i).type->getName(),
                     type_name);
-                column.type = header.getByPosition(i).type;
-            }
-            else
-            {
-                const auto & data_type_factory = DataTypeFactory::instance();
-                column.type = data_type_factory.get(type_name);
-            }
+            column.type = DataTypeFactory::instance().get(type_name); // Respect the type name from encoder
         }
         res.insert(std::move(column));
     }
@@ -309,7 +304,9 @@ struct CHBlockChunkCodecV1Impl
         {
             auto && col_type_name = inner.header.getByPosition(col_index);
             auto && column_ptr = toColumnPtr(std::forward<ColumnsHolder>(columns_holder), col_index);
-            WriteColumnData(*col_type_name.type, column_ptr, *ostr_ptr, 0, 0);
+            const auto & ser_type
+                = CodecUtils::convertDataTypeByPacketVersion(*col_type_name.type, inner.packet_version);
+            CHBlockChunkCodec::WriteColumnData(ser_type, column_ptr, *ostr_ptr, 0, 0);
         }
 
         inner.encoded_rows += rows;
@@ -413,7 +410,7 @@ struct CHBlockChunkCodecV1Impl
         }
 
         // Encode header
-        EncodeHeader(*ostr_ptr, inner.header, rows);
+        EncodeHeader(*ostr_ptr, inner.header, rows, inner.packet_version);
         // Encode column data
         encodeColumn(std::forward<VecColumns>(batch_columns), ostr_ptr);
 
@@ -433,9 +430,10 @@ struct CHBlockChunkCodecV1Impl
     }
 };
 
-CHBlockChunkCodecV1::CHBlockChunkCodecV1(const Block & header_)
+CHBlockChunkCodecV1::CHBlockChunkCodecV1(const Block & header_, MPPDataPacketVersion packet_version_)
     : header(header_)
     , header_size(ApproxBlockHeaderBytes(header))
+    , packet_version(packet_version_)
 {}
 
 static void checkSchema(const Block & header, const Block & block)

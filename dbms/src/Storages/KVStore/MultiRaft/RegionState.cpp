@@ -136,49 +136,12 @@ bool computeMappedTableID(const DecodedTiKVKey & key, TableID & table_id)
     return false;
 }
 
-RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
-    : ori(RegionRangeKeys::makeComparableKeys(std::move(start_key), std::move(end_key)))
-    , raw(std::make_shared<DecodedTiKVKey>(
-              ori.first.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.first.key)),
-          std::make_shared<DecodedTiKVKey>(
-              ori.second.key.empty() ? DecodedTiKVKey() : RecordKVFormat::decodeTiKVKey(ori.second.key)))
-{
-    keyspace_id = raw.first->getKeyspaceID();
-    if (!computeMappedTableID(*raw.first, mapped_table_id) || ori.first.compare(ori.second) >= 0)
-    {
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Illegal region range, should not happen, start_key={} end_key={}",
-            ori.first.key.toDebugString(),
-            ori.second.key.toDebugString());
-    }
-}
-
-TableID RegionRangeKeys::getMappedTableID() const
-{
-    return mapped_table_id;
-}
-
-KeyspaceID RegionRangeKeys::getKeyspaceID() const
-{
-    return keyspace_id;
-}
-
-const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & RegionRangeKeys::rawKeys() const
-{
-    return raw;
-}
 
 HandleRange<HandleID> getHandleRangeByTable(
     const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys,
     TableID table_id)
 {
     return TiKVRange::getHandleRangeByTable(*rawKeys.first, *rawKeys.second, table_id);
-}
-
-const RegionRangeKeys::RegionRange & RegionRangeKeys::comparableKeys() const
-{
-    return ori;
 }
 
 template <bool is_start>
@@ -190,18 +153,6 @@ TiKVRangeKey TiKVRangeKey::makeTiKVRangeKey(TiKVKey && key)
 
 template TiKVRangeKey TiKVRangeKey::makeTiKVRangeKey<true>(TiKVKey &&);
 template TiKVRangeKey TiKVRangeKey::makeTiKVRangeKey<false>(TiKVKey &&);
-
-RegionRangeKeys::RegionRange RegionRangeKeys::makeComparableKeys(TiKVKey && start_key, TiKVKey && end_key)
-{
-    return std::make_pair(
-        TiKVRangeKey::makeTiKVRangeKey<true>(std::move(start_key)),
-        TiKVRangeKey::makeTiKVRangeKey<false>(std::move(end_key)));
-}
-
-RegionRangeKeys::RegionRange RegionRangeKeys::cloneRange(const RegionRange & from)
-{
-    return std::make_pair(from.first.copy(), from.second.copy());
-}
 
 std::string TiKVRangeKey::toDebugString() const
 {

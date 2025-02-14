@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/File/DMFileVectorIndexReader.h>
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream_fwd.h>
-#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
 
 
@@ -60,7 +60,7 @@ public:
         DMFileReader && reader,
         ColumnDefine && vec_cd,
         const ScanContextPtr & scan_context,
-        const VectorIndexCachePtr & vec_index_cache,
+        const LocalIndexCachePtr & local_index_cache,
         const BitmapFilterView & valid_rows,
         const String & tracing_id)
     {
@@ -71,7 +71,7 @@ public:
             std::move(reader),
             std::move(vec_cd),
             scan_context,
-            vec_index_cache,
+            local_index_cache,
             valid_rows,
             tracing_id);
     }
@@ -83,28 +83,14 @@ public:
         DMFileReader && reader_,
         ColumnDefine && vec_cd_,
         const ScanContextPtr & scan_context_,
-        const VectorIndexCachePtr & vec_index_cache_,
+        const LocalIndexCachePtr & local_index_cache_,
         const BitmapFilterView & valid_rows_,
         const String & tracing_id);
 
     ~DMFileWithVectorIndexBlockInputStream() override;
 
 public:
-    Block read() override
-    {
-        FilterPtr filter = nullptr;
-        return read(filter, false);
-    }
-
-    // When all rows in block are not filtered out,
-    // `res_filter` will be set to null.
-    // The caller needs to do handle this situation.
-    Block read(FilterPtr & res_filter, bool return_filter) override;
-
-    // When all rows in block are not filtered out,
-    // `res_filter` will be set to null.
-    // The caller needs to do handle this situation.
-    Block readImpl(FilterPtr & res_filter);
+    Block read() override;
 
     String getName() const override { return "DMFileWithVectorIndex"; }
 
@@ -115,24 +101,11 @@ public:
     void setSelectedRows(const std::span<const UInt32> & selected_rows) override;
 
 private:
-    // Only used in readByIndexReader()
-    size_t index_reader_next_pack_id = 0;
-    // Only used in readByIndexReader()
-    size_t index_reader_next_row_id = 0;
-
-    // Read data totally from the VectorColumnFromIndexReader. This is used
-    // when there is no other column to read.
-    std::tuple<Block, size_t> readByIndexReader();
-
-    // Read data from other columns first, then read from VectorColumnFromIndexReader. This is used
-    // when there are other columns to read.
-    std::tuple<Block, size_t> readByFollowingOtherColumns();
-
     // Load vector index and update sorted_results.
     void internalLoad();
 
-    // Update the RSResult according to the sorted_results.
-    void updateRSResult();
+    // Update the read_block_infos according to the sorted_results.
+    void updateReadBlockInfos();
 
 private:
     const LoggerPtr log;

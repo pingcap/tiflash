@@ -12,15 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileVectorIndexReader.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/FileCachePerf.h>
-
 
 namespace DB::ErrorCodes
 {
@@ -65,12 +65,14 @@ void DMFileVectorIndexReader::loadVectorIndex()
     // Check vector index exists on the column
     auto vector_index = dmfile->getLocalIndex(col_id, index_id);
     RUNTIME_CHECK(vector_index.has_value(), col_id, index_id);
-    perf_stat.index_size = vector_index->index_bytes();
+    RUNTIME_CHECK(vector_index->index_props().kind() == dtpb::IndexFileKind::VECTOR_INDEX);
+    RUNTIME_CHECK(vector_index->index_props().has_vector_index());
+    perf_stat.index_size = vector_index->index_props().file_size();
 
     // If local file is invalidated, cache is not valid anymore. So we
     // need to ensure file exists on local fs first.
     const auto index_file_path = index_id > 0 //
-        ? dmfile->vectorIndexPath(index_id) //
+        ? dmfile->localIndexPath(index_id, TiDB::ColumnarIndexKind::Vector) //
         : dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
     String local_index_file_path;
     if (auto s3_file_name = S3::S3FilenameView::fromKeyWithPrefix(index_file_path); s3_file_name.isValid())
@@ -88,7 +90,9 @@ void DMFileVectorIndexReader::loadVectorIndex()
         {
             try
             {
-                if (auto file_guard = file_cache->downloadFileForLocalRead(s3_file_name, vector_index->index_bytes());
+                if (auto file_guard = file_cache->downloadFileForLocalRead( //
+                        s3_file_name,
+                        vector_index->index_props().file_size());
                     file_guard)
                 {
                     local_index_file_path = file_guard->getLocalFileName();
@@ -122,17 +126,22 @@ void DMFileVectorIndexReader::loadVectorIndex()
 
     auto load_from_file = [&]() {
         perf_stat.has_load_from_file = true;
-        return VectorIndexViewer::view(*vector_index, local_index_file_path);
+        return VectorIndexViewer::view(vector_index->index_props().vector_index(), local_index_file_path);
     };
 
     Stopwatch watch;
-    if (vec_index_cache)
+    if (local_index_cache)
+    {
         // Note: must use local_index_file_path as the cache key, because cache
         // will check whether file is still valid and try to remove memory references
         // when file is dropped.
-        vec_index = vec_index_cache->getOrSet(local_index_file_path, load_from_file);
+        auto local_index = local_index_cache->getOrSet(local_index_file_path, load_from_file);
+        vec_index = std::dynamic_pointer_cast<VectorIndexViewer>(local_index);
+    }
     else
+    {
         vec_index = load_from_file();
+    }
 
     perf_stat.duration_load_index += watch.elapsedSeconds();
     RUNTIME_CHECK(vec_index != nullptr);
@@ -198,33 +207,19 @@ std::vector<VectorIndexViewer::SearchResult> DMFileVectorIndexReader::loadVector
 
 void DMFileVectorIndexReader::read(
     MutableColumnPtr & vec_column,
-    const std::span<const VectorIndexViewer::Key> & selected_rows,
-    size_t start_offset,
-    size_t column_size)
+    const std::span<const VectorIndexViewer::Key> & selected_rows)
 {
     Stopwatch watch;
     RUNTIME_CHECK(loaded);
 
-    vec_column->reserve(column_size);
+    vec_column->reserve(selected_rows.size());
     std::vector<Float32> value;
-    size_t current_rowid = start_offset;
     for (auto rowid : selected_rows)
     {
         vec_index->get(rowid, value);
-        if (rowid > current_rowid)
-        {
-            UInt32 nulls = rowid - current_rowid;
-            // Insert [] if column is Not Null, or NULL if column is Nullable
-            vec_column->insertManyDefaults(nulls);
-        }
         vec_column->insertData(reinterpret_cast<const char *>(value.data()), value.size() * sizeof(Float32));
-        current_rowid = rowid + 1;
     }
-    if (current_rowid < start_offset + column_size)
-    {
-        UInt32 nulls = column_size + start_offset - current_rowid;
-        vec_column->insertManyDefaults(nulls);
-    }
+
     perf_stat.duration_read_vec_column += watch.elapsedSeconds();
 }
 

@@ -495,6 +495,36 @@ RegionMeta::RegionMeta(metapb::Peer peer_, metapb::Region region, raft_serverpb:
     region_state.setRegion(std::move(region));
 }
 
+static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
+{
+    for (const auto & peer : region.peers())
+    {
+        if (peer.id() == peer_id)
+        {
+            return peer;
+        }
+    }
+
+    throw Exception(
+        ErrorCodes::LOGICAL_ERROR,
+        "{}: peer not found in region, peer_id={} region_id={}",
+        __PRETTY_FUNCTION__,
+        peer_id,
+        region.id());
+}
+
+RegionMeta RegionMeta::genFromMetaRegion(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
+{
+    auto peer = findPeer(region, peer_id);
+    raft_serverpb::RaftApplyState apply_state;
+    {
+        apply_state.set_applied_index(index);
+        apply_state.mutable_truncated_state()->set_index(index);
+        apply_state.mutable_truncated_state()->set_term(term);
+    }
+    return RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
+}
+
 metapb::Region RegionMeta::cloneMetaRegion() const
 {
     std::lock_guard lock(mutex);

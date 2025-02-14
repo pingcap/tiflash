@@ -50,7 +50,7 @@ public:
 private:
     void set(std::span<const UInt32> row_ids, const FilterPtr & f);
 
-    std::vector<UInt8> filter;
+    IColumn::Filter filter;
     bool all_match;
 };
 

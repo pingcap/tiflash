@@ -216,9 +216,9 @@ EngineStoreApplyRes KVStore::handleAdminRaftCmd(
             curr_region.orphanKeysInfo().advanceAppliedIndex(index);
         }
 
+        RaftCommandResult result;
         curr_region.makeRaftCommandDelegate(task_lock)
-            .handleAdminRaftCmd(request, response, index, term, *this, region_table, *raft_cmd_res);
-        RaftCommandResult & result = *raft_cmd_res;
+            .handleAdminRaftCmd(request, response, index, term, *this, region_table, result);
 
         // After region split / merge, try to flush it
         const auto try_to_flush_region = [&tmt](const RegionPtr & region) {

@@ -25,7 +25,6 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsVector.h>
 #include <Functions/IFunction.h>
 #include <TiDB/Decode/Vector.h>
 

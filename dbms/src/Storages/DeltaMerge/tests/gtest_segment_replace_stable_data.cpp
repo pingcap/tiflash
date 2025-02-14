@@ -100,8 +100,8 @@ protected:
                 .disagg_ctx = dm_context->global_context.getSharedContextDisagg(),
             });
             auto & column_stats = new_dm_file->meta->getColumnStats();
-            RUNTIME_CHECK(column_stats.find(::DB::TiDBPkColumnID) != column_stats.end());
-            column_stats[::DB::TiDBPkColumnID].additional_data_for_test = pk_additiona_data;
+            RUNTIME_CHECK(column_stats.find(MutSup::extra_handle_id) != column_stats.end());
+            column_stats[MutSup::extra_handle_id].additional_data_for_test = pk_additiona_data;
 
             new_dm_file->meta->bumpMetaVersion({});
             iw->finalize();
@@ -156,9 +156,9 @@ protected:
 
         auto file = files[0];
         auto column_stats = file->meta->getColumnStats();
-        RUNTIME_CHECK(column_stats.find(::DB::TiDBPkColumnID) != column_stats.end());
+        RUNTIME_CHECK(column_stats.find(MutSup::extra_handle_id) != column_stats.end());
 
-        auto meta_value = column_stats[::DB::TiDBPkColumnID].additional_data_for_test;
+        auto meta_value = column_stats[MutSup::extra_handle_id].additional_data_for_test;
 
         // Read again using a fresh DMFile restore, to ensure that this value is
         // indeed persisted.
@@ -172,8 +172,8 @@ protected:
         RUNTIME_CHECK(file2 != nullptr);
 
         column_stats = file2->meta->getColumnStats();
-        RUNTIME_CHECK(column_stats.find(::DB::TiDBPkColumnID) != column_stats.end());
-        RUNTIME_CHECK(column_stats[::DB::TiDBPkColumnID].additional_data_for_test == meta_value);
+        RUNTIME_CHECK(column_stats.find(MutSup::extra_handle_id) != column_stats.end());
+        RUNTIME_CHECK(column_stats[MutSup::extra_handle_id].additional_data_for_test == meta_value);
 
         return meta_value;
     }
@@ -189,10 +189,9 @@ protected:
     inline void assertPK(PageIdU64 segment_id, std::string_view expected_sequence)
     {
         auto left_handle = getSegmentHandle(segment_id, {});
-        const auto * left_r = toColumnVectorDataPtr<Int64>(left_handle);
+        const auto & left_r = toColumnVectorData<Int64>(left_handle);
         auto expected_left_handle = genSequence<Int64>(expected_sequence);
-        ASSERT_EQ(expected_left_handle.size(), left_r->size());
-        ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_r->data(), left_r->size()));
+        ASSERT_TRUE(sequenceEqual(expected_left_handle, left_r));
     }
 
 private:
@@ -451,7 +450,7 @@ public:
         }
 
         auto & global_context = TiFlashTestEnv::getGlobalContext();
-        // global_context.dropVectorIndexCache();
+        // global_context.dropLocalIndexCache();
         global_context.getSharedContextDisagg()->remote_data_store = nullptr;
         global_context.setPageStorageRunMode(orig_mode);
 
@@ -570,8 +569,8 @@ try
             .disagg_ctx = wn_dm_context->global_context.getSharedContextDisagg(),
         });
         auto & column_stats = new_dm_file->meta->getColumnStats();
-        RUNTIME_CHECK(column_stats.find(::DB::TiDBPkColumnID) != column_stats.end());
-        column_stats[::DB::TiDBPkColumnID].additional_data_for_test = "tiflash_foo";
+        RUNTIME_CHECK(column_stats.find(MutSup::extra_handle_id) != column_stats.end());
+        column_stats[MutSup::extra_handle_id].additional_data_for_test = "tiflash_foo";
 
         new_dm_file->meta->bumpMetaVersion({});
         iw->finalize();
@@ -588,7 +587,7 @@ try
         auto cn_files = snapshot->stable->getDMFiles();
         ASSERT_EQ(1, cn_files.size());
         ASSERT_EQ(0, cn_files[0]->metaVersion());
-        ASSERT_STREQ("", cn_files[0]->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+        ASSERT_STREQ("", cn_files[0]->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
     }
 
     // Read meta v1 in CN
@@ -600,7 +599,7 @@ try
         ASSERT_EQ(1, cn_files[0]->metaVersion());
         ASSERT_STREQ(
             "tiflash_foo",
-            cn_files[0]->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+            cn_files[0]->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
     }
 
     // Read meta v0 again in CN
@@ -610,7 +609,7 @@ try
         auto cn_files = snapshot->stable->getDMFiles();
         ASSERT_EQ(1, cn_files.size());
         ASSERT_EQ(0, cn_files[0]->metaVersion());
-        ASSERT_STREQ("", cn_files[0]->meta->getColumnStats()[::DB::TiDBPkColumnID].additional_data_for_test.c_str());
+        ASSERT_STREQ("", cn_files[0]->meta->getColumnStats()[MutSup::extra_handle_id].additional_data_for_test.c_str());
     }
 }
 CATCH

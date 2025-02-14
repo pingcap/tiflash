@@ -443,7 +443,7 @@ void executePushedDownFilter(
     DAGPipeline & pipeline)
 {
     auto [before_where, filter_column_name, project_after_where]
-        = analyzer.buildPushDownFilter(filter_conditions.conditions, true);
+        = analyzer.buildPushDownExecutor(filter_conditions.conditions, true);
 
     for (auto & stream : pipeline.streams)
     {
@@ -464,7 +464,7 @@ void executePushedDownFilter(
     LoggerPtr log)
 {
     auto [before_where, filter_column_name, project_after_where]
-        = analyzer.buildPushDownFilter(filter_conditions.conditions, true);
+        = analyzer.buildPushDownExecutor(filter_conditions.conditions, true);
 
     auto input_header = group_builder.getCurrentHeader();
     for (size_t i = 0; i < group_builder.concurrency(); ++i)

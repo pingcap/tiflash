@@ -126,15 +126,13 @@ std::tuple<WaitIndexStatus, double> Region::waitIndex(
 }
 
 void WaitCheckRegionReadyImpl(
-    const TMTContext & tmt,
     KVStore & kvstore,
     const std::atomic_size_t & terminate_signals_counter,
+    UInt64 read_index_timeout,
     double wait_tick_time,
     double max_wait_tick_time,
     double get_wait_region_ready_timeout_sec)
 {
-    // part of time for waiting shall be assigned to batch-read-index
-    static constexpr double BATCH_READ_INDEX_TIME_RATE = 0.2;
     auto log = Logger::get(__FUNCTION__);
 
     LOG_INFO(
@@ -144,13 +142,17 @@ void WaitCheckRegionReadyImpl(
         max_wait_tick_time,
         get_wait_region_ready_timeout_sec);
 
-    std::unordered_set<RegionID> remain_regions;
-    std::unordered_map<RegionID, uint64_t> regions_to_check;
     Stopwatch region_check_watch;
+
+    std::unordered_set<RegionID> remain_regions;
     kvstore.traverseRegions(
         [&remain_regions](RegionID region_id, const RegionPtr &) { remain_regions.emplace(region_id); });
     const size_t total_regions_cnt = remain_regions.size();
 
+    // The regions fall behind Region leaders' commit index from TiKV. A map of {RegionID -> CommitIndex}
+    std::unordered_map<RegionID, uint64_t> regions_to_check;
+    // part of time for waiting shall be assigned to fetch the latest commit index from TiKV
+    static constexpr double BATCH_READ_INDEX_TIME_RATE = 0.2;
     while (region_check_watch.elapsedSeconds() < get_wait_region_ready_timeout_sec * BATCH_READ_INDEX_TIME_RATE
            && terminate_signals_counter.load(std::memory_order_relaxed) == 0)
     {
@@ -172,7 +174,7 @@ void WaitCheckRegionReadyImpl(
         }
 
         // Record the latest commit index in TiKV
-        auto read_index_res = kvstore.batchReadIndex(batch_read_index_req, tmt.batchReadIndexTimeout());
+        auto read_index_res = kvstore.batchReadIndex(batch_read_index_req, read_index_timeout);
         for (auto && [resp, region_id] : read_index_res)
         {
             bool need_retry = resp.read_index() == 0;
@@ -183,10 +185,11 @@ void WaitCheckRegionReadyImpl(
                     need_retry = false;
                 LOG_DEBUG(
                     log,
-                    "neglect error, region_id={} not_found={} epoch_not_match={}",
+                    "neglect error, region_id={} not_found={} epoch_not_match={} region_error={}",
                     region_id,
                     region_error.has_region_not_found(),
-                    region_error.has_epoch_not_match());
+                    region_error.has_epoch_not_match(),
+                    region_error.DebugString());
             }
             if (!need_retry)
             {
@@ -230,7 +233,7 @@ void WaitCheckRegionReadyImpl(
             buffer.toString());
     }
 
-    // Wait untill all region has catch up with TiKV or timeout happen
+    // Wait until all region in `regions_to_check` has catch up with TiKV or timeout happen
     do
     {
         for (auto it = regions_to_check.begin(); it != regions_to_check.end(); /**/)
@@ -304,23 +307,21 @@ void WaitCheckRegionReadyImpl(
         total_regions_cnt);
 }
 
-void WaitCheckRegionReady(
-    const TMTContext & tmt,
-    KVStore & kvstore,
-    const std::atomic_size_t & terminate_signals_counter)
+void WaitCheckRegionReady(KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter)
 {
-    // wait interval to check region ready, not recommended to modify only if for tesing
-    // TODO: Move this hidden config to TMTContext
-    auto wait_region_ready_tick = tmt.getContext().getConfigRef().getUInt64("flash.wait_region_ready_tick", 0);
-    auto wait_region_ready_timeout_sec = static_cast<double>(tmt.waitRegionReadyTimeout());
+    const auto & config = kvstore.getConfigRef();
+    // wait interval to check region ready, not recommended to modify only if for testing
+    auto wait_region_ready_timeout_sec = static_cast<double>(config.waitRegionReadyTimeout());
+    const auto wait_region_ready_tick = config.waitRegionReadyTick();
+    // default tick in TiKV is about 2s (without hibernate-region)
+    const double min_wait_tick_time = 0 == wait_region_ready_tick ? 2.5 : static_cast<double>(wait_region_ready_tick);
     const double max_wait_tick_time = 0 == wait_region_ready_tick ? 20.0 : wait_region_ready_timeout_sec;
-    double min_wait_tick_time = 0 == wait_region_ready_tick
-        ? 2.5
-        : static_cast<double>(wait_region_ready_tick); // default tick in TiKV is about 2s (without hibernate-region)
+    auto read_index_timeout = config.batchReadIndexTimeout();
+
     return WaitCheckRegionReadyImpl(
-        tmt,
         kvstore,
         terminate_signals_counter,
+        read_index_timeout,
         min_wait_tick_time,
         max_wait_tick_time,
         wait_region_ready_timeout_sec);

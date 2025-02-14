@@ -16,7 +16,9 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndexCache_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 
 namespace DB::DM
@@ -29,8 +31,8 @@ private:
     const ANNQueryInfoPtr & ann_query_info;
     const BitmapFilterView valid_rows;
     const ScanContextPtr & scan_context;
-    // Global vector index cache
-    const VectorIndexCachePtr vec_index_cache;
+    // Global local index cache
+    const LocalIndexCachePtr local_index_cache;
 
     // Performance statistics
     struct PerfStat
@@ -59,27 +61,19 @@ public:
         const DMFilePtr & dmfile_,
         const BitmapFilterView & valid_rows_,
         const ScanContextPtr & scan_context_,
-        const VectorIndexCachePtr & vec_index_cache_)
+        const LocalIndexCachePtr & local_index_cache_)
         : dmfile(dmfile_)
         , ann_query_info(ann_query_info_)
         , valid_rows(valid_rows_)
         , scan_context(scan_context_)
-        , vec_index_cache(vec_index_cache_)
+        , local_index_cache(local_index_cache_)
         , perf_stat()
     {}
 
     ~DMFileVectorIndexReader();
 
-    // Read vector column data and set filter.
-    // The column will be as same as as the rows of the tiny file,
-    // but only the rows in sorted_results will be filled,
-    // others will be filled with default values.
-    // return the real number of rows read.
-    void read(
-        MutableColumnPtr & vec_column,
-        const std::span<const VectorIndexViewer::Key> & selected_rows,
-        size_t start_offset,
-        size_t column_size);
+    // Read vector column data with the specified rowids.
+    void read(MutableColumnPtr & vec_column, const std::span<const VectorIndexViewer::Key> & selected_rows);
 
     // Load vector index and search results.
     // Return the rowids of the selected rows.

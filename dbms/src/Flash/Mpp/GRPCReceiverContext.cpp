@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/GRPCCompletionQueuePool.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <fmt/core.h>
 #include <grpcpp/completion_queue.h>
 
@@ -104,7 +105,9 @@ GRPCReceiverContext::GRPCReceiverContext(
     , task_manager(std::move(task_manager_))
     , enable_local_tunnel(enable_local_tunnel_)
     , enable_async_grpc(enable_async_grpc_)
-{}
+{
+    conn_type_vec.resize(exchange_receiver_meta.encoded_task_meta_size(), ConnectionProfileInfo::Local);
+}
 
 ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
 {
@@ -120,6 +123,19 @@ ExchangeRecvRequest GRPCReceiverContext::makeRequest(int index) const
     req.recv_task_id = task_meta.task_id();
     req.req.set_allocated_receiver_meta(new mpp::TaskMeta(task_meta)); // NOLINT
     req.req.set_allocated_sender_meta(sender_task.release()); // NOLINT
+
+    bool valid_zone_flag
+        = exchange_receiver_meta.same_zone_flag_size() == exchange_receiver_meta.encoded_task_meta_size();
+    if likely (valid_zone_flag)
+    {
+        conn_type_vec[index] = ConnectionProfileInfo::inferConnectionType(
+            req.is_local,
+            exchange_receiver_meta.same_zone_flag().Get(index));
+    }
+    else
+    {
+        conn_type_vec[index] = ConnectionProfileInfo::inferConnectionType(req.is_local, true);
+    }
     return req;
 }
 

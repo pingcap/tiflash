@@ -153,7 +153,7 @@ protected:
                 {
                     ASSERT_EQ(column_element.column->size(), rows);
                 }
-                if (column_element.name == EXTRA_HANDLE_COLUMN_NAME)
+                if (column_element.name == MutSup::extra_handle_column_name)
                 {
                     if (decoding_schema->is_common_handle)
                     {
@@ -165,11 +165,11 @@ protected:
                         ASSERT_FIELD_EQ((*column_element.column)[row], Field(handle_value)) << gen_error_log();
                     }
                 }
-                else if (column_element.name == VERSION_COLUMN_NAME)
+                else if (column_element.name == MutSup::version_column_name)
                 {
                     ASSERT_FIELD_EQ((*column_element.column)[row], Field(version_value)) << gen_error_log();
                 }
-                else if (column_element.name == TAG_COLUMN_NAME)
+                else if (column_element.name == MutSup::delmark_column_name)
                 {
                     ASSERT_FIELD_EQ((*column_element.column)[row], Field(NearestFieldType<UInt8>::Type(del_mark_value)))
                         << gen_error_log();
@@ -312,7 +312,7 @@ String bytesFromHexString(std::string_view hex_str)
 
 TEST_F(RegionBlockReaderTest, PKIsNotHandle)
 {
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     ASSERT_EQ(table_info.is_common_handle, false);
     ASSERT_EQ(table_info.pk_is_handle, false);
     ASSERT_FALSE(table_info.getColumnInfo(2).hasPriKeyFlag());
@@ -350,27 +350,27 @@ TEST_F(RegionBlockReaderTest, CommonHandle)
 
 TEST_F(RegionBlockReaderTest, MissingColumnRowV2)
 {
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
-    auto new_table_info = getTableInfoWithMoreColumns({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto new_table_info = getTableInfoWithMoreColumns({MutSup::extra_handle_id}, false);
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, false));
 }
 
 TEST_F(RegionBlockReaderTest, MissingColumnRowV1)
 {
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
-    auto new_table_info = getTableInfoWithMoreColumns({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto new_table_info = getTableInfoWithMoreColumns({MutSup::extra_handle_id}, false);
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, false));
 }
 
 TEST_F(RegionBlockReaderTest, ExtraColumnRowV2)
 {
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
-    auto new_table_info = getTableInfoWithLessColumns({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto new_table_info = getTableInfoWithLessColumns({MutSup::extra_handle_id}, false);
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
     ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
@@ -378,9 +378,9 @@ TEST_F(RegionBlockReaderTest, ExtraColumnRowV2)
 
 TEST_F(RegionBlockReaderTest, ExtraColumnRowV1)
 {
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
-    auto new_table_info = getTableInfoWithLessColumns({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto new_table_info = getTableInfoWithLessColumns({MutSup::extra_handle_id}, false);
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
     ASSERT_TRUE(decodeAndCheckColumns(new_decoding_schema, true));
@@ -388,9 +388,9 @@ TEST_F(RegionBlockReaderTest, ExtraColumnRowV1)
 
 TEST_F(RegionBlockReaderTest, OverflowColumnRowV2)
 {
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
-    auto new_table_info = getTableInfoWithMoreNarrowIntType({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto new_table_info = getTableInfoWithMoreNarrowIntType({MutSup::extra_handle_id}, false);
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
     ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
@@ -401,9 +401,9 @@ TEST_F(RegionBlockReaderTest, OverflowColumnRowV2)
 
 TEST_F(RegionBlockReaderTest, OverflowColumnRowV1)
 {
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
-    auto new_table_info = getTableInfoWithMoreNarrowIntType({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto new_table_info = getTableInfoWithMoreNarrowIntType({MutSup::extra_handle_id}, false);
     auto new_decoding_schema = getDecodingStorageSchemaSnapshot(new_table_info);
     ASSERT_FALSE(decodeAndCheckColumns(new_decoding_schema, false));
     ASSERT_ANY_THROW(decodeAndCheckColumns(new_decoding_schema, true));
@@ -415,12 +415,12 @@ TEST_F(RegionBlockReaderTest, OverflowColumnRowV1)
 TEST_F(RegionBlockReaderTest, InvalidNULLRowV2)
 try
 {
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     ASSERT_FALSE(table_info.getColumnInfo(11).hasNotNullFlag()); // col 11 is nullable
 
     encodeColumns(table_info, fields, RowEncodeVersion::RowV2);
 
-    auto new_table_info = getTableInfoFieldsForInvalidNULLTest({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto new_table_info = getTableInfoFieldsForInvalidNULLTest({MutSup::extra_handle_id}, false);
     invalid_null_column_ids.emplace(11);
     ASSERT_TRUE(new_table_info.getColumnInfo(11).hasNotNullFlag()); // col 11 is not null
 
@@ -432,10 +432,10 @@ CATCH
 
 TEST_F(RegionBlockReaderTest, InvalidNULLRowV1)
 {
-    auto [table_info, fields] = getNormalTableInfoFields({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto [table_info, fields] = getNormalTableInfoFields({MutSup::extra_handle_id}, false);
     encodeColumns(table_info, fields, RowEncodeVersion::RowV1);
 
-    auto new_table_info = getTableInfoFieldsForInvalidNULLTest({EXTRA_HANDLE_COLUMN_ID}, false);
+    auto new_table_info = getTableInfoFieldsForInvalidNULLTest({MutSup::extra_handle_id}, false);
     invalid_null_column_ids.emplace(11);
     ASSERT_TRUE(new_table_info.getColumnInfo(11).hasNotNullFlag()); // col 11 is not null
 

@@ -21,7 +21,7 @@ namespace DB
 Block AddExtraTableIDColumnTransformAction::buildHeader(const Block & inner_header_, int extra_table_id_index)
 {
     auto header = inner_header_.cloneEmpty();
-    if (extra_table_id_index != InvalidColumnID)
+    if (extra_table_id_index != MutSup::invalid_col_id)
     {
         const auto & extra_table_id_col_define = DM::getExtraTableIDColumnDefine();
         ColumnWithTypeAndName col{
@@ -67,7 +67,7 @@ bool AddExtraTableIDColumnTransformAction::transform(Block & block, TableID phys
     if (unlikely(!block))
         return true;
 
-    if (extra_table_id_index != InvalidColumnID)
+    if (extra_table_id_index != MutSup::invalid_col_id)
     {
         const auto & extra_table_id_col_define = DM::getExtraTableIDColumnDefine();
         ColumnWithTypeAndName col{

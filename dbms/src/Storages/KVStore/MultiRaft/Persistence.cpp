@@ -22,10 +22,6 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <common/likely.h>
 
-#include <mutex>
-#include <tuple>
-#include <variant>
-
 namespace DB
 {
 void KVStore::persistRegion(
@@ -156,7 +152,7 @@ bool KVStore::canFlushRegionDataImpl(
     UInt64 index,
     UInt64 term,
     UInt64 truncated_index,
-    UInt64 truncated_term)
+    UInt64 truncated_term) const
 {
     if (curr_region_ptr == nullptr)
     {
@@ -168,19 +164,19 @@ bool KVStore::canFlushRegionDataImpl(
     auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
 
     // flush caused by rows
-    if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed))
+    if (rows >= config.regionComactLogMinRows())
     {
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_rowcount).Increment(1);
         can_flush = true;
     }
     // flush caused by bytes
-    if (size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
+    if (size_bytes >= config.regionComactLogMinBytes())
     {
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_size).Increment(1);
         can_flush = true;
     }
     // flush caused by gap
-    auto gap_threshold = region_compact_log_gap.load();
+    auto gap_threshold = config.regionComactLogGap();
     const auto last_restart_log_applied = curr_region.lastRestartLogApplied();
     if (last_restart_log_applied + gap_threshold > index)
     {
@@ -191,6 +187,7 @@ bool KVStore::canFlushRegionDataImpl(
     const auto current_applied_gap = index > last_compact_log_applied ? index - last_compact_log_applied : 0;
 
     // TODO We will use truncated_index once Proxy/TiKV supports.
+    // They are always 0 currently.
     // When a Region is newly created in TiFlash, last_compact_log_applied is 0, we don't trigger immediately.
     if (last_compact_log_applied == 0)
     {
@@ -205,12 +202,15 @@ bool KVStore::canFlushRegionDataImpl(
 
     LOG_DEBUG(
         log,
-        "{} approx mem cache info: rows {}, bytes {}, gap {}/{}",
+        "{} approx mem cache info: rows {}, bytes {}, gap {}/{}, data_summary: {}, applied_(index): {}/{}",
         curr_region.toString(false),
         rows,
         size_bytes,
         current_applied_gap,
-        gap_threshold);
+        gap_threshold,
+        curr_region.getData().summary(),
+        curr_region.appliedIndex(),
+        index);
 
     if (can_flush && flush_if_possible)
     {

@@ -16,11 +16,14 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
+
+
 using namespace std::chrono_literals;
 using namespace DB::tests;
 
@@ -170,12 +173,24 @@ protected:
         {
             ASSERT_EQ(test_case.expected_size, row_id->size());
             auto expected_row_id = genSequence<UInt32>(test_case.expected_row_id);
-            ASSERT_TRUE(sequenceEqual(expected_row_id.data(), row_id->data(), test_case.expected_size));
+            ASSERT_TRUE(sequenceEqual(expected_row_id, *row_id));
 
             ASSERT_EQ(test_case.expected_size, handle->size());
             auto expected_handle = genSequence<Int64>(test_case.expected_handle);
-            ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size));
+            ASSERT_TRUE(sequenceEqual(expected_handle, *handle));
         }
+    }
+
+    auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
+    {
+        DMFilePackFilterResults results;
+        results.reserve(snap->stable->getDMFiles().size());
+        for (const auto & file : snap->stable->getDMFiles())
+        {
+            auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
+            results.push_back(pack_filter);
+        }
+        return results;
     }
 };
 
@@ -334,28 +349,24 @@ try
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
 
     auto left_handle = getSegmentHandle(SEG_ID, {});
-    const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
+    const auto & left_h = toColumnVectorData<Int64>(left_handle);
     auto expected_left_handle = genSequence<Int64>("[0, 128)|[200, 255)|[256, 305)|[310, 512)");
-    ASSERT_EQ(expected_left_handle.size(), left_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_h->data(), left_h->size()));
+    ASSERT_TRUE(sequenceEqual(expected_left_handle, left_h));
 
     auto left_row_id = getSegmentRowId(SEG_ID, {});
-    const auto * left_r = toColumnVectorDataPtr<UInt32>(left_row_id);
+    const auto & left_r = toColumnVectorData<UInt32>(left_row_id);
     auto expected_left_row_id = genSequence<UInt32>("[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 512)");
-    ASSERT_EQ(expected_left_row_id.size(), left_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_row_id.data(), left_r->data(), left_r->size()));
+    ASSERT_TRUE(sequenceEqual(expected_left_row_id, left_r));
 
     auto right_handle = getSegmentHandle(*new_seg_id, {});
-    const auto * right_h = toColumnVectorDataPtr<Int64>(right_handle);
+    const auto & right_h = toColumnVectorData<Int64>(right_handle);
     auto expected_right_handle = genSequence<Int64>("[512, 1024)");
-    ASSERT_EQ(expected_right_handle.size(), right_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_handle.data(), right_h->data(), right_h->size()));
+    ASSERT_TRUE(sequenceEqual(expected_right_handle, right_h));
 
     auto right_row_id = getSegmentRowId(*new_seg_id, {});
-    const auto * right_r = toColumnVectorDataPtr<UInt32>(right_row_id);
+    const auto & right_r = toColumnVectorData<UInt32>(right_row_id);
     auto expected_right_row_id = genSequence<UInt32>("[512, 1024)");
-    ASSERT_EQ(expected_right_row_id.size(), right_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
+    ASSERT_TRUE(sequenceEqual(expected_right_row_id, right_r));
 }
 CATCH
 
@@ -371,7 +382,7 @@ TEST_F(SegmentBitmapFilterTest, CleanStable)
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        EMPTY_RS_OPERATOR,
+        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);
@@ -393,7 +404,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
-            EMPTY_RS_OPERATOR,
+            loadPackFilterResults(snap, {seg->getRowKeyRange()}),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         ASSERT_NE(bitmap_filter, nullptr);
@@ -413,7 +424,7 @@ TEST_F(SegmentBitmapFilterTest, NotCleanStable)
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
-            EMPTY_RS_OPERATOR,
+            loadPackFilterResults(snap, {seg->getRowKeyRange()}),
             1,
             DEFAULT_BLOCK_SIZE);
         ASSERT_NE(bitmap_filter, nullptr);
@@ -437,11 +448,12 @@ TEST_F(SegmentBitmapFilterTest, StableRange)
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
     ASSERT_EQ(seg->getStable()->getRows(), 50000);
 
+    auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(10000, 50000)}; // [10000, 50000)
     auto bitmap_filter = seg->buildBitmapFilterStableOnly(
         *dm_context,
         snap,
-        {buildRowKeyRange(10000, 50000)}, // [10000, 50000)
-        EMPTY_RS_OPERATOR,
+        ranges,
+        loadPackFilterResults(snap, ranges),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_NE(bitmap_filter, nullptr);
@@ -468,28 +480,24 @@ try
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
 
     auto left_handle = getSegmentHandle(SEG_ID, {});
-    const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
+    const auto & left_h = toColumnVectorData<Int64>(left_handle);
     auto expected_left_handle = genSequence<Int64>("[0, 25000)");
-    ASSERT_EQ(expected_left_handle.size(), left_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_h->data(), left_h->size()));
+    ASSERT_TRUE(sequenceEqual(expected_left_handle, left_h));
 
     auto left_row_id = getSegmentRowId(SEG_ID, {});
-    const auto * left_r = toColumnVectorDataPtr<UInt32>(left_row_id);
+    const auto & left_r = toColumnVectorData<UInt32>(left_row_id);
     auto expected_left_row_id = genSequence<UInt32>("[0, 25000)");
-    ASSERT_EQ(expected_left_row_id.size(), left_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_row_id.data(), left_r->data(), left_r->size()));
+    ASSERT_TRUE(sequenceEqual(expected_left_row_id, left_r));
 
     auto right_handle = getSegmentHandle(*new_seg_id, {});
-    const auto * right_h = toColumnVectorDataPtr<Int64>(right_handle);
+    const auto & right_h = toColumnVectorData<Int64>(right_handle);
     auto expected_right_handle = genSequence<Int64>("[25000, 50000)");
-    ASSERT_EQ(expected_right_handle.size(), right_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_handle.data(), right_h->data(), right_h->size()));
+    ASSERT_TRUE(sequenceEqual(expected_right_handle, right_h));
 
     auto right_row_id = getSegmentRowId(*new_seg_id, {});
-    const auto * right_r = toColumnVectorDataPtr<UInt32>(right_row_id);
+    const auto & right_r = toColumnVectorData<UInt32>(right_row_id);
     auto expected_right_row_id = genSequence<UInt32>("[25000, 50000)");
-    ASSERT_EQ(expected_right_row_id.size(), right_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
+    ASSERT_TRUE(sequenceEqual(expected_right_row_id, right_r));
 }
 CATCH
 
@@ -510,7 +518,7 @@ try
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        nullptr,
+        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_EQ(bitmap_filter->size(), 30);
@@ -540,7 +548,7 @@ try
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
-        nullptr,
+        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
         std::numeric_limits<UInt64>::max(),
         DEFAULT_BLOCK_SIZE);
     ASSERT_EQ(bitmap_filter->size(), 750);

@@ -148,7 +148,7 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
         bool null_as_false = false);
 
-    std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
+    std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownExecutor(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
         bool null_as_false = false);
 

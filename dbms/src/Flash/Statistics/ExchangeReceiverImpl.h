@@ -20,9 +20,10 @@
 
 namespace DB
 {
-struct ExchangeReceiveDetail : public ConnectionProfileInfo
+struct ExchangeReceiveDetail
 {
     Int64 receiver_source_task_id;
+    ConnectionProfileInfo conn_profile_info;
 
     explicit ExchangeReceiveDetail(Int64 receiver_source_task_id_)
         : receiver_source_task_id(receiver_source_task_id_)

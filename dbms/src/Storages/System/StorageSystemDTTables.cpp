@@ -135,7 +135,7 @@ BlockInputStreams StorageSystemDTTables::read(
         {
             const auto & table_name = it->name();
             auto & storage = it->table();
-            if (storage->getName() != MutableSupport::delta_tree_storage_name)
+            if (storage->getName() != MutSup::delta_tree_storage_name)
                 continue;
 
             auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);

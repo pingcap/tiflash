@@ -50,7 +50,7 @@ try
     {
         // test CompactLog
         auto region = kvs.getRegion(1);
-        kvs.setRegionCompactLogConfig(1000, 1000, 0, 512);
+        kvs.debugGetConfigMut().debugSetCompactLogConfig(1000, 1000, 0, 512);
 
         raft_cmdpb::AdminRequest request;
         request.mutable_compact_log();
@@ -133,7 +133,7 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             const std::atomic_size_t terminate_signals_counter{};
             std::thread t([&]() {
                 notifier.wake();
-                WaitCheckRegionReadyImpl(ctx.getTMTContext(), kvs, terminate_signals_counter, 1 / 1000.0, 20, 20 * 60);
+                WaitCheckRegionReadyImpl(kvs, terminate_signals_counter, 10 * 1000, 1 / 1000.0, 20, 20 * 60);
             });
             SCOPE_EXIT({
                 t.join();
@@ -162,13 +162,7 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             const std::atomic_size_t terminate_signals_counter{};
             std::thread t([&]() {
                 notifier.wake();
-                WaitCheckRegionReadyImpl(
-                    ctx.getTMTContext(),
-                    kvs,
-                    terminate_signals_counter,
-                    1 / 1000.0,
-                    2 / 1000.0,
-                    5 / 1000.0);
+                WaitCheckRegionReadyImpl(kvs, terminate_signals_counter, 10 * 1000, 1 / 1000.0, 2 / 1000.0, 5 / 1000.0);
             });
             SCOPE_EXIT({ t.join(); });
             ASSERT_EQ(notifier.blockedWaitFor(std::chrono::milliseconds(1000 * 3600)), AsyncNotifier::Status::Normal);
@@ -356,7 +350,7 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     RegionID region_id2 = 7;
     auto source_region = kvs.getRegion(region_id);
     auto old_epoch = source_region->getMeta().getMetaRegion().region_epoch();
-    const auto & ori_source_range = source_region->getRange()->comparableKeys();
+    auto ori_source_range = RegionRangeKeys::cloneRange(source_region->getRange()->comparableKeys());
     RegionRangeKeys::RegionRange new_source_range = RegionRangeKeys::makeComparableKeys( //
         RecordKVFormat::genKey(table_id, 5),
         RecordKVFormat::genKey(table_id, 10));
@@ -608,7 +602,7 @@ void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContex
 
 TEST_F(RegionKVStoreOldTest, RegionReadWrite)
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     TableID table_id = 100;
     KVStore & kvs = getKVS();
     UInt64 region_id = 1;
@@ -643,7 +637,7 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         region->insert(
             "lock",
             RecordKVFormat::genKey(table_id, 3),
-            RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
+            RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20, nullptr, 5));
         region->insert("default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         region->insert(
             "write",
@@ -656,8 +650,26 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
             auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_NE(lock, nullptr);
-            auto k = lock->intoLockInfo();
-            ASSERT_EQ(k->lock_version(), 3);
+            ASSERT_EQ(lock->lock_version(), 3);
+        }
+        {
+            // There is a lock, and could be bypassed.
+            std::unordered_set<UInt64> bypass = {3};
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({100, &bypass});
+            ASSERT_EQ(lock, nullptr);
+        }
+        {
+            // There is no lock.
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({2, nullptr});
+            ASSERT_EQ(lock, nullptr);
+        }
+        {
+            // The read ts is smaller than min_commit_ts, so this txn is not visible.
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({4, nullptr});
+            ASSERT_EQ(lock, nullptr);
         }
         {
             // The record is committed since there is a write record.
@@ -669,6 +681,30 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         ASSERT_EQ(0, region->writeCFCount());
         {
             region->remove("lock", RecordKVFormat::genKey(table_id, 3));
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({100, nullptr});
+            ASSERT_EQ(lock, nullptr);
+        }
+        region->clearAllData();
+    }
+    {
+        region->insert(
+            "lock",
+            RecordKVFormat::genKey(table_id, 3),
+            RecordKVFormat::encodeLockCfValue(RecordKVFormat::LockType::Lock, "PK", 3, 20, nullptr, 5));
+        {
+            auto iter = region->createCommittedScanner(true, true);
+            auto lock = iter.getLockInfo({100, nullptr});
+            ASSERT_EQ(lock, nullptr);
+        }
+        region->clearAllData();
+    }
+    {
+        region->insert(
+            "lock",
+            RecordKVFormat::genKey(table_id, 3),
+            RecordKVFormat::encodeLockCfValue(RecordKVFormat::LockType::Pessimistic, "PK", 3, 20, nullptr, 5));
+        {
             auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_EQ(lock, nullptr);

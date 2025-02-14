@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
+#include <Storages/KVStore/KVStoreConfig.h>
 #include <Storages/KVStore/MultiRaft/Disagg/RaftLogManager.h>
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
@@ -145,7 +146,7 @@ public:
     FileUsageStatistics getFileUsageStatistics() const;
     // Proxy will validate and refit the config items from the toml file.
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
-    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
+    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value) const;
     static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const { return joint_memory_allocation_map; }
     void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
@@ -181,6 +182,14 @@ public: // Raft Read and Write
         TMTContext & tmt,
         DM::WriteResult & write_result);
 
+public: // Configs
+    void reloadConfig(const Poco::Util::AbstractConfiguration & config_file) { config.reloadConfig(config_file, log); }
+    const KVStoreConfig & getConfigRef() const { return config; }
+    UInt64 getRaftLogEagerGCRows() const { return config.regionEagerGCLogGap(); }
+
+    // debug only
+    KVStoreConfig & debugGetConfigMut() { return config; }
+
 public: // Flush
     static bool tryFlushRegionCacheInStorage(
         TMTContext & tmt,
@@ -197,8 +206,6 @@ public: // Flush
         UInt64 term,
         uint64_t truncated_index,
         uint64_t truncated_term);
-    void setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap);
-    UInt64 getRaftLogEagerGCRows() const { return region_eager_gc_log_gap.load(); }
     // TODO(proactive flush)
     // void proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background);
     void notifyCompactLog(
@@ -230,6 +237,7 @@ public: // Raft Snapshot
     size_t getOngoingPrehandleSubtaskCount() const;
     EngineStoreApplyRes handleIngestSST(UInt64 region_id, SSTViewVec, UInt64 index, UInt64 term, TMTContext & tmt);
     size_t getMaxParallelPrehandleSize() const;
+    size_t getMaxPrehandleSubtaskSize() const;
 
 public: // Raft Read
     void addReadIndexEvent(Int64 f) { read_index_event_flag += f; }
@@ -289,10 +297,15 @@ private:
         DM::FileConvertJobType,
         TMTContext & tmt);
 
+    // Note that if there are committed rows in `new_region`, those rows will be left to
+    // the in-memory `RegionData` but not flushed into the IStorage layer after calling
+    // `checkAndApplyPreHandledSnapshot`.
+    // `PreHandle` should take care of the committed rows and only leave uncommitted
+    // key-values in the `new_region`.
     template <typename RegionPtrWrap>
-    void checkAndApplyPreHandledSnapshot(const RegionPtrWrap &, TMTContext & tmt);
+    void checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt);
     template <typename RegionPtrWrap>
-    void onSnapshot(const RegionPtrWrap &, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
+    void onSnapshot(const RegionPtrWrap & new_region, RegionPtr old_region, UInt64 old_region_index, TMTContext & tmt);
 
     RegionPtr handleIngestSSTByDTFile(
         const RegionPtr & region,
@@ -341,7 +354,7 @@ private:
         UInt64 index,
         UInt64 term,
         UInt64 truncated_index,
-        UInt64 truncated_term);
+        UInt64 truncated_term) const;
 
     bool forceFlushRegionDataImpl(
         Region & curr_region,
@@ -374,20 +387,9 @@ private:
 
     mutable std::mutex task_mutex;
 
-    // raft_cmd_res stores the result of applying raft cmd. It must be protected by task_mutex.
-    std::unique_ptr<RaftCommandResult> raft_cmd_res;
-
     LoggerPtr log;
 
-    std::atomic<UInt64> region_compact_log_min_rows;
-    std::atomic<UInt64> region_compact_log_min_bytes;
-    std::atomic<UInt64> region_compact_log_gap;
-    // `region_eager_gc_log_gap` is checked after each write command applied,
-    // It should be large enough to avoid unnecessary flushes and also not
-    // too large to control the memory when there are down peers.
-    // The 99% of passive flush is 512, so we use it as default value.
-    // 0 means eager gc is disabled.
-    std::atomic<UInt64> region_eager_gc_log_gap;
+    KVStoreConfig config;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;
@@ -427,11 +429,11 @@ class KVStoreTaskLock : private boost::noncopyable
     std::lock_guard<std::mutex> lock;
 };
 
-void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
+void WaitCheckRegionReady(KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
 void WaitCheckRegionReadyImpl(
-    const TMTContext &,
     KVStore & kvstore,
     const std::atomic_size_t &,
+    UInt64 read_index_timeout,
     double,
     double,
     double);

@@ -54,10 +54,10 @@ std::unique_ptr<DAGResponseWriter> buildMPPExchangeWriter(
     }
     else
     {
-        auto mpp_version = dag_context.getMPPTaskMeta().mpp_version();
-        auto data_codec_version = mpp_version == MppVersionV0 ? MPPDataPacketV0 : MPPDataPacketV1;
-        auto chosen_batch_send_min_limit
-            = mpp_version == MppVersionV0 ? batch_send_min_limit : batch_send_min_limit_compression;
+        const auto mpp_version = static_cast<MppVersion>(dag_context.getMPPTaskMeta().mpp_version());
+        const auto data_codec_version = GetMPPDataPacketVersion(mpp_version);
+        const auto chosen_batch_send_min_limit
+            = mpp_version == MppVersion::MppVersionV0 ? batch_send_min_limit : batch_send_min_limit_compression;
 
         if (exchange_type == tipb::ExchangeType::Hash)
         {

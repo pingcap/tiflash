@@ -392,6 +392,7 @@ private:
                             "A valid KVStore namespace should with namespace id {}",
                             KVSTORE_NAMESPACE_ID);
                     }
+                    LOG_INFO(DB::Logger::get(), "Remove region, region_id={}", opts.page_id);
                     WriteBatch wb(opts.namespace_id);
                     wb.delPage(opts.page_id);
                     ps.write(std::move(wb));

@@ -54,7 +54,7 @@ struct SetMethodString
 
     Data data;
 
-    using State = ColumnsHashing::HashMethodString<typename Data::value_type, VoidMapped, true, false>;
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, VoidMapped, false>;
 };
 
 template <typename TData, bool padding>
@@ -77,7 +77,7 @@ struct SetMethodFixedString
 
     Data data;
 
-    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, VoidMapped, true, false>;
+    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, VoidMapped, false>;
 };
 
 namespace set_impl

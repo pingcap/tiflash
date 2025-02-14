@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include <Common/nocopyable.h>
+#include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeEnum.h>
+#include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeString.h>
 #include <Storages/DeltaMerge/workload/Options.h>
 #include <Storages/DeltaMerge/workload/TableGenerator.h>
@@ -104,7 +106,7 @@ public:
             columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/true));
             break;
         case PkType::PkIsHandleInt64:
-            columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, EXTRA_HANDLE_COLUMN_INT_TYPE});
+            columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, MutSup::getExtraHandleColumnIntType()});
             break;
         case PkType::PkIsHandleInt32:
             columns->emplace_back(ColumnDefine{2, PK_NAME_PK_IS_HANDLE, DataTypeFactory::instance().get("Int32")});

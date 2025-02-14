@@ -41,7 +41,6 @@
 #include <Operators/NullSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
-#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -544,46 +543,43 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 // compare the columns in table_scan with the columns in storages, to check if the current schema is satisified this query.
 // column.name are always empty from table_scan, and column name is not necessary in read process, so we don't need compare the name here.
 std::tuple<bool, String> compareColumns(
-    const TiDBTableScan & table_scan,
-    const DM::ColumnDefines & cur_columns,
+    ColumnID logical_table_id,
+    const TiDB::ColumnInfos & table_scan_columns,
+    const TiDB::ColumnInfos & cur_columns,
     const DAGContext & dag_context,
     const LoggerPtr & log)
 {
-    const auto & columns = table_scan.getColumns();
-    std::unordered_map<ColumnID, DM::ColumnDefine> column_id_map;
+    std::unordered_map<ColumnID, const TiDB::ColumnInfo *> column_id_map;
     for (const auto & column : cur_columns)
-    {
-        column_id_map[column.id] = column;
-    }
+        column_id_map[column.id] = &column;
 
-    for (const auto & column : columns)
+    for (const auto & column : table_scan_columns)
     {
-        // Exclude virtual columns, including EXTRA_HANDLE_COLUMN_ID, VERSION_COLUMN_ID,TAG_COLUMN_ID,EXTRA_TABLE_ID_COLUMN_ID
+        // Exclude virtual columns, including MutSup::extra_handle_id, MutSup::version_col_id,MutSup::delmark_col_id,MutSup::extra_table_id_col_id
         if (column.id < 0)
-        {
             continue;
-        }
+
         auto iter = column_id_map.find(column.id);
         if (iter == column_id_map.end())
         {
             String error_message = fmt::format(
                 "the column in the query is not found in current columns, keyspace={} table_id={} column_id={}",
                 dag_context.getKeyspaceID(),
-                table_scan.getLogicalTableID(),
+                logical_table_id,
                 column.id);
             LOG_WARNING(log, error_message);
             return std::make_tuple(false, error_message);
         }
 
-        if (getDataTypeByColumnInfo(column)->getName() != iter->second.type->getName())
+        if (getDataTypeByColumnInfo(column)->getName() != getDataTypeByColumnInfo(*iter->second)->getName())
         {
             String error_message = fmt::format(
                 "the column data type in the query is not the same as the current column, keyspace={} table_id={} "
                 "column_id={} column_type={} query_column_type={}",
                 dag_context.getKeyspaceID(),
-                table_scan.getLogicalTableID(),
+                logical_table_id,
                 column.id,
-                iter->second.type->getName(),
+                getDataTypeByColumnInfo(*iter->second)->getName(),
                 getDataTypeByColumnInfo(column)->getName());
             LOG_WARNING(log, error_message);
             return std::make_tuple(false, error_message);
@@ -740,7 +736,19 @@ CoprocessorReaderPtr DAGStorageInterpreter::buildCoprocessorReader(const std::ve
         : concurrent_num * 4;
     bool enable_cop_stream = context.getSettingsRef().enable_cop_stream_for_remote_read;
     UInt64 cop_timeout = context.getSettingsRef().cop_timeout_for_remote_read;
-
+    String store_zone_label;
+    auto kv_store = tmt.getKVStore();
+    if likely (kv_store)
+    {
+        for (int i = 0; i < kv_store->getStoreMeta().labels_size(); ++i)
+        {
+            if (kv_store->getStoreMeta().labels().at(i).key() == "zone")
+            {
+                store_zone_label = kv_store->getStoreMeta().labels().at(i).value();
+                break;
+            }
+        }
+    }
     auto coprocessor_reader = std::make_shared<CoprocessorReader>(
         schema,
         cluster,
@@ -751,7 +759,8 @@ CoprocessorReaderPtr DAGStorageInterpreter::buildCoprocessorReader(const std::ve
         queue_size,
         cop_timeout,
         tiflash_label_filter,
-        log->identifier());
+        log->identifier(),
+        store_zone_label);
     context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
 
     return coprocessor_reader;
@@ -1359,8 +1368,12 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
         auto lock = table_store->lockStructureForShare(context.getCurrentQueryId());
 
         // check the columns in table_scan and table_store, to check whether we need to sync table schema.
-        auto [are_columns_matched, error_message]
-            = compareColumns(table_scan, table_store->getStoreColumnDefines(), dagContext(), log);
+        auto [are_columns_matched, error_message] = compareColumns(
+            table_scan.getLogicalTableID(),
+            table_scan.getColumns(),
+            table_store->getTableInfo().columns,
+            dagContext(),
+            log);
 
         if (are_columns_matched)
         {
@@ -1377,6 +1390,26 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
 
         // let caller sync schema
         return {nullptr, {}};
+    };
+
+    // Check whether the schema of all tables are the same.
+    // Only check column names is enough since we will check other properties in compareColumns.
+    auto check_storages_schema_same = [&](const std::vector<ManageableStoragePtr> & table_storages) -> bool {
+        if (table_storages.size() <= 1)
+            return true;
+        auto table_columns = table_storages[0]->getTableInfo().columns;
+        for (size_t i = 1; i < table_storages.size(); ++i)
+        {
+            const auto & columns = table_storages[i]->getTableInfo().columns;
+            if (columns.size() != table_columns.size())
+                return false;
+            for (size_t j = 0; j < columns.size(); ++j)
+            {
+                if (columns[j].name != table_columns[j].name)
+                    return false;
+            }
+        }
+        return true;
     };
 
     auto get_and_lock_storages = [&](bool schema_synced)
@@ -1421,6 +1454,16 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             }
         }
 
+        if (!check_storages_schema_same(table_storages))
+        {
+            // Since we can not know which table's schema is newer, we need to sync all tables' schema.
+            need_sync_table_ids.clear();
+            need_sync_table_ids.append_range(table_scan.getPhysicalTableIDs());
+            need_sync_table_ids.push_back(logical_table_id);
+            table_storages.clear();
+            table_locks.clear();
+        }
+
         if (need_sync_table_ids.empty())
             return {table_storages, table_locks, need_sync_table_ids};
         // If we need to syncSchemas, we cannot hold the lock of tables.
@@ -1438,20 +1481,24 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             log,
             "Table schema sync done, keyspace={} table_id={} cost={} ms",
             keyspace_id,
-            logical_table_id,
+            table_id,
             schema_sync_cost);
     };
 
-    /// Try get storage and lock once.
-    auto [storages, locks, need_sync_table_ids] = get_and_lock_storages(false);
-    if (need_sync_table_ids.empty())
-    {
-        LOG_DEBUG(log, "OK, no syncing required.");
-    }
-    else
-    /// If first try failed, sync schema and try again.
-    {
-        LOG_INFO(log, "not OK, syncing schemas.");
+    auto sync_schema_for_needed = [&](bool schema_synced) {
+        auto [storages, locks, need_sync_table_ids] = get_and_lock_storages(schema_synced);
+        if (need_sync_table_ids.empty())
+        {
+            for (size_t i = 0; i < storages.size(); ++i)
+            {
+                auto const table_id = storages[i]->getTableInfo().id;
+                storages_with_lock[table_id] = {std::move(storages[i]), std::move(locks[i])};
+            }
+            LOG_DEBUG(log, "OK, no syncing required.");
+            return true;
+        }
+
+        LOG_INFO(log, "not OK, syncing schemas for keyspace={} table_ids={}", keyspace_id, need_sync_table_ids);
 
         auto start_time = Clock::now();
         for (auto & table_id : need_sync_table_ids)
@@ -1462,28 +1509,36 @@ std::unordered_map<TableID, DAGStorageInterpreter::StorageWithStructureLock> DAG
             = std::chrono::duration_cast<std::chrono::milliseconds>(Clock::now() - start_time).count();
 
         LOG_INFO(log, "syncing schemas done, time cost = {} ms.", schema_sync_cost);
+        return false;
+    };
 
+    // sync schema
+    bool success = sync_schema_for_needed(false);
+    // if failed, try again.
+    success = success || sync_schema_for_needed(true);
+    // if failed, try again.
+    // This used to handle the rename partition table column case.
+    // Example: We have a partition table named `t1` with 2 partitions `p1` and `p2`.
+    // `t1` and `p1` have the same old schema, but `p2` does not have schema.
+    // Then we rename `c1` to `c2` in `t1`, and query `t1` with `p1` and `p2`.
+    // In this case, we need to sync schema for `p2` first.
+    // Then we can get the schema of `p2` and `t1` are different, and we need to sync schema for `t1`, `p1` and `p2`.
+    // Last, call `sync_schema_for_needed` again to make sure all tables' schema are synced.
+    // Q & A: Why not sync all tables' schema at the first time?
+    // For example, we have another partition table named `t2` with 2 partitions `p3` and `p4`.
+    // `t2`, `p3` and `p4` have the same schema, but then `p4` is truncated and send a query to `t2`.
+    // Since storage of `p4` is dropped, and we will try to sync schema for `t2`, `p3` and `p4`.
+    // But `p4` does not exist in `t2`'s schema, so we will get an exception "Table doesn't exist".
+    success = success || sync_schema_for_needed(true);
+    RUNTIME_CHECK_MSG(success, "Failed to sync schema for all tables.");
 
-        std::tie(storages, locks, need_sync_table_ids) = get_and_lock_storages(true);
-        if (need_sync_table_ids.empty())
-        {
-            LOG_DEBUG(log, "OK after syncing.");
-        }
-        else
-            throw TiFlashException("Shouldn't reach here", Errors::Coprocessor::Internal);
-    }
-    for (size_t i = 0; i < storages.size(); ++i)
-    {
-        auto const table_id = storages[i]->getTableInfo().id;
-        storages_with_lock[table_id] = {std::move(storages[i]), std::move(locks[i])};
-    }
     return storages_with_lock;
 }
 
 std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableScan()
 {
     // Get handle column name.
-    String handle_column_name = MutableSupport::tidb_pk_column_name;
+    String handle_column_name = MutSup::extra_handle_column_name;
     if (auto pk_handle_col = storage_for_logical_table->getTableInfo().getPKHandleColumn())
         handle_column_name = pk_handle_col->get().name;
 
@@ -1505,10 +1560,10 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
         }
         // Column ID -1 return the handle column
         String name;
-        if (cid == TiDBPkColumnID)
+        if (cid == MutSup::extra_handle_id)
             name = handle_column_name;
-        else if (cid == ExtraTableIDColumnID)
-            name = MutableSupport::extra_table_id_column_name;
+        else if (cid == MutSup::extra_table_id_col_id)
+            name = MutSup::extra_table_id_column_name;
         else
             name = storage_for_logical_table->getTableInfo().getColumnName(cid);
         required_columns_tmp.emplace_back(std::move(name));

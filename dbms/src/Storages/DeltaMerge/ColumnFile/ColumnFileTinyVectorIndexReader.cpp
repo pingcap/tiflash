@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/EventRecorder.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyVectorIndexReader.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
-
 
 namespace DB::DM
 {
@@ -27,32 +27,18 @@ namespace DB::DM
 void ColumnFileTinyVectorIndexReader::read(
     MutableColumnPtr & vec_column,
     const std::span<const VectorIndexViewer::Key> & read_rowids,
-    size_t rowid_start_offset,
-    size_t read_rows)
+    size_t rowid_start_offset)
 {
     RUNTIME_CHECK(loaded);
 
     Stopwatch watch;
-    vec_column->reserve(read_rows);
+    vec_column->reserve(read_rowids.size());
     std::vector<Float32> value;
-    size_t current_rowid = rowid_start_offset;
     for (const auto & rowid : read_rowids)
     {
         // Each ColomnFileTiny has its own vector index, rowid_start_offset is the offset of the ColmnFilePersistSet.
         vec_index->get(rowid - rowid_start_offset, value);
-        if (rowid > current_rowid)
-        {
-            UInt32 nulls = rowid - current_rowid;
-            // Insert [] if column is Not Null, or NULL if column is Nullable
-            vec_column->insertManyDefaults(nulls);
-        }
         vec_column->insertData(reinterpret_cast<const char *>(value.data()), value.size() * sizeof(Float32));
-        current_rowid = rowid + 1;
-    }
-    if (current_rowid < rowid_start_offset + read_rows)
-    {
-        UInt32 nulls = rowid_start_offset + read_rows - current_rowid;
-        vec_column->insertManyDefaults(nulls);
     }
 
     perf_stat.returned_rows = read_rowids.size();
@@ -83,28 +69,26 @@ void ColumnFileTinyVectorIndexReader::loadVectorIndex()
     auto index_id = ann_query_info->index_id();
     const auto index_info_iter
         = std::find_if(index_infos->cbegin(), index_infos->cend(), [index_id](const auto & info) {
-              if (!info.vector_index)
-                  return false;
-              return info.vector_index->index_id() == index_id;
+              return info.index_props().index_id() == index_id;
           });
     if (index_info_iter == index_infos->cend())
         return;
-    auto vector_index = index_info_iter->vector_index;
-    if (!vector_index)
+    if (!index_info_iter->index_props().has_vector_index())
         return;
-    auto index_page_id = index_info_iter->index_page_id;
+    auto index_page_id = index_info_iter->index_page_id();
     auto load_from_page_storage = [&]() {
         perf_stat.load_from_cache = false;
         std::vector<size_t> index_fields = {0};
         auto index_page = data_provider->readTinyData(index_page_id, index_fields);
         ReadBufferFromOwnString read_buf(index_page.data);
         CompressedReadBuffer compressed(read_buf);
-        return VectorIndexViewer::load(*vector_index, compressed);
+        return VectorIndexViewer::load(index_info_iter->index_props().vector_index(), compressed);
     };
-    if (vec_index_cache)
+    if (local_index_cache)
     {
-        const auto key = fmt::format("{}{}", VectorIndexCache::COLUMNFILETINY_INDEX_NAME_PREFIX, index_page_id);
-        vec_index = vec_index_cache->getOrSet(key, load_from_page_storage);
+        const auto key = fmt::format("{}{}", LocalIndexCache::COLUMNFILETINY_INDEX_NAME_PREFIX, index_page_id);
+        auto local_index = local_index_cache->getOrSet(key, load_from_page_storage);
+        vec_index = std::dynamic_pointer_cast<VectorIndexViewer>(local_index);
     }
     else
         vec_index = load_from_page_storage();

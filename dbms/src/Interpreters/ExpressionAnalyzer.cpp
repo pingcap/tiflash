@@ -524,7 +524,7 @@ void ExpressionAnalyzer::analyzeAggregation()
         {
             NameSet unique_keys;
             ASTs & group_asts = select_query->group_expression_list->children;
-            for (ssize_t i = 0; i < ssize_t(group_asts.size()); ++i)
+            for (ssize_t i = 0; i < static_cast<ssize_t>(group_asts.size()); ++i)
             {
                 ssize_t size = group_asts.size();
                 getRootActions(group_asts[i], true, false, temp_actions);
@@ -1037,7 +1037,7 @@ void ExpressionAnalyzer::normalizeTreeImpl(
             if (storage && select_query && !select_query->raw_for_mutable)
             {
                 // LOG_DEBUG(&Poco::Logger::get("ExpressionAnalyzer"), "Filter hidden columns for mutable table.");
-                filtered_names = MutableSupport::instance().hiddenColumns(storage->getName());
+                filtered_names = MutSup::instance().hiddenColumns(storage->getName());
             }
         }
 
@@ -1392,7 +1392,7 @@ void ExpressionAnalyzer::optimizeGroupBy()
         }
 
         select_query->group_expression_list = std::make_shared<ASTExpressionList>();
-        select_query->group_expression_list->children.emplace_back(std::make_shared<ASTLiteral>(UInt64(unused_column)));
+        select_query->group_expression_list->children.emplace_back(std::make_shared<ASTLiteral>(unused_column));
     }
 }
 

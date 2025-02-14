@@ -29,7 +29,7 @@ class VectorIndexHNSWBuilder : public VectorIndexBuilder
 public:
     static tipb::VectorIndexKind kind();
 
-    explicit VectorIndexHNSWBuilder(IndexID index_id_, const TiDB::VectorIndexDefinitionPtr & definition_);
+    explicit VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinitionPtr & definition_);
 
     ~VectorIndexHNSWBuilder() override;
 
@@ -49,12 +49,12 @@ private:
 class VectorIndexHNSWViewer : public VectorIndexViewer
 {
 public:
-    static VectorIndexViewerPtr view(const dtpb::VectorIndexFileProps & props, std::string_view path);
-    static VectorIndexViewerPtr load(const dtpb::VectorIndexFileProps & file_props, ReadBuffer & buf);
+    static VectorIndexViewerPtr view(const dtpb::IndexFilePropsV2Vector & props, std::string_view path);
+    static VectorIndexViewerPtr load(const dtpb::IndexFilePropsV2Vector & file_props, ReadBuffer & buf);
 
     static tipb::VectorIndexKind kind();
 
-    explicit VectorIndexHNSWViewer(const dtpb::VectorIndexFileProps & props);
+    explicit VectorIndexHNSWViewer(const dtpb::IndexFilePropsV2Vector & props);
 
     ~VectorIndexHNSWViewer() override;
 

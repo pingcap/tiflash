@@ -61,7 +61,7 @@ RNWorkers::RNWorkers(
         .concurrency = prepare_streams_concurrency,
         .columns_to_read = options.columns_to_read,
         .start_ts = options.start_ts,
-        .push_down_filter = options.push_down_filter,
+        .push_down_executor = options.push_down_executor,
         .read_mode = options.read_mode,
     });
 
