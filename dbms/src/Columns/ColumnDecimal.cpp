@@ -140,8 +140,10 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 }
 
 template <typename T>
-void ColumnDecimal<T>::countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &)
-    const
+void ColumnDecimal<T>::countSerializeByteSizeForCmp(
+    PaddedPODArray<size_t> & byte_size,
+    const NullMap * /* nullmap */,
+    const TiDB::TiDBCollatorPtr &) const
 {
     countSerializeByteSizeImpl<true>(byte_size);
 }
@@ -156,6 +158,7 @@ template <typename T>
 void ColumnDecimal<T>::countSerializeByteSizeForCmpColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
+    const NullMap * /* nullmap */,
     const TiDB::TiDBCollatorPtr &) const
 {
     countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets);

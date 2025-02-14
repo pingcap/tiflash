@@ -496,29 +496,65 @@ void ColumnString::getPermutationWithCollationImpl(
 
 void ColumnString::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
     if likely (collator != nullptr)
     {
         if (collator->maxBytesForOneChar() > 1)
-            countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/true>(byte_size, collator);
+        {
+            if (nullmap != nullptr)
+                countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/true, /*has_nullmap=*/true>(
+                    byte_size,
+                    nullmap,
+                    collator);
+            else
+                countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/true, /*has_nullmap=*/false>(
+                    byte_size,
+                    nullptr,
+                    collator);
+        }
         else
-            countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/false>(byte_size, collator);
+        {
+            if (nullmap != nullptr)
+                countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/false, /*has_nullmap=*/true>(
+                    byte_size,
+                    nullmap,
+                    collator);
+            else
+                countSerializeByteSizeImpl</*has_collator=*/true, /*count_code_points=*/false, /*has_nullmap=*/false>(
+                    byte_size,
+                    nullptr,
+                    collator);
+        }
     }
     else
     {
-        countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, nullptr);
+        if (nullmap != nullptr)
+            countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false, /*has_nullmap=*/true>(
+                byte_size,
+                nullmap,
+                nullptr);
+        else
+            countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false, /*has_nullmap=*/false>(
+                byte_size,
+                nullptr,
+                nullptr);
     }
 }
 
 void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false>(byte_size, nullptr);
+    countSerializeByteSizeImpl</*has_collator=*/false, /*count_code_points=*/false, /*has_nullmap=*/false>(
+        byte_size,
+        nullptr,
+        nullptr);
 }
 
-template <bool has_collator, bool count_code_points>
+template <bool has_collator, bool count_code_points, bool has_nullmap>
 void ColumnString::countSerializeByteSizeImpl(
     PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
@@ -543,6 +579,14 @@ void ColumnString::countSerializeByteSizeImpl(
         for (size_t i = 0; i < size; ++i)
         {
             assert(sizeAt(i) > 0);
+            if constexpr (has_nullmap)
+            {
+                if (DB::isNullAt(*nullmap, i))
+                {
+                    byte_size[i] += sizeof(UInt32) + 1;
+                    continue;
+                }
+            }
             if constexpr (count_code_points)
             {
                 const auto num_char = UTF8::countCodePoints(&chars[offsetAt(i)], sizeAt(i) - 1);
@@ -559,34 +603,67 @@ void ColumnString::countSerializeByteSizeImpl(
     {
         size_t size = byte_size.size();
         for (size_t i = 0; i < size; ++i)
+        {
+            if constexpr (has_nullmap)
+            {
+                if (DB::isNullAt(*nullmap, i))
+                {
+                    byte_size[i] += sizeof(UInt32) + 1;
+                    continue;
+                }
+            }
             byte_size[i] += sizeof(UInt32) + sizeAt(i);
+        }
     }
 }
 
 void ColumnString::countSerializeByteSizeForCmpColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
     if likely (collator != nullptr)
     {
         if (collator->maxBytesForOneChar() > 1)
-            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/true>(
-                byte_size,
-                array_offsets,
-                collator);
+        {
+            if (nullmap != nullptr)
+                countSerializeByteSizeForColumnArrayImpl<
+                    /*has_collator=*/true,
+                    /*count_code_points=*/true,
+                    /*has_nullmap=*/true>(byte_size, array_offsets, nullmap, collator);
+            else
+                countSerializeByteSizeForColumnArrayImpl<
+                    /*has_collator=*/true,
+                    /*count_code_points=*/true,
+                    /*has_nullmap=*/false>(byte_size, array_offsets, nullptr, collator);
+        }
         else
-            countSerializeByteSizeForColumnArrayImpl</*has_collator=*/true, /*count_code_points=*/false>(
-                byte_size,
-                array_offsets,
-                collator);
+        {
+            if (nullmap != nullptr)
+                countSerializeByteSizeForColumnArrayImpl<
+                    /*has_collator=*/true,
+                    /*count_code_points=*/false,
+                    /*has_nullmap=*/true>(byte_size, array_offsets, nullmap, collator);
+            else
+                countSerializeByteSizeForColumnArrayImpl<
+                    /*has_collator=*/true,
+                    /*count_code_points=*/false,
+                    /*has_nullmap=*/false>(byte_size, array_offsets, nullptr, collator);
+        }
     }
     else
     {
-        countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(
-            byte_size,
-            array_offsets,
-            nullptr);
+        if (nullmap != nullptr)
+            countSerializeByteSizeForColumnArrayImpl<
+                /*has_collator=*/false,
+                /*count_code_points=*/false,
+                /*has_nullmap=*/true>(byte_size, array_offsets, nullmap, nullptr);
+        else
+            countSerializeByteSizeForColumnArrayImpl<
+                /*has_collator=*/false,
+                /*count_code_points=*/false,
+                /*has_nullmap=*/false>(byte_size, array_offsets, nullptr, nullptr);
     }
 }
 
@@ -594,16 +671,17 @@ void ColumnString::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
-    countSerializeByteSizeForColumnArrayImpl</*has_collator=*/false, /*count_code_points=*/false>(
-        byte_size,
-        array_offsets,
-        nullptr);
+    countSerializeByteSizeForColumnArrayImpl<
+        /*has_collator=*/false,
+        /*count_code_points=*/false,
+        /*has_nullmap=*/false>(byte_size, array_offsets, nullptr, nullptr);
 }
 
-template <bool has_collator, bool count_code_points>
+template <bool has_collator, bool count_code_points, bool has_nullmap>
 void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
     RUNTIME_CHECK_MSG(
@@ -636,6 +714,11 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         const auto max_bytes_one_char = collator->maxBytesForOneChar();
         for (size_t i = 0; i < size; ++i)
         {
+            if constexpr (has_nullmap)
+            {
+                if (DB::isNullAt(*nullmap, i))
+                    continue;
+            }
             const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
             assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
             if constexpr (count_code_points)
@@ -662,8 +745,15 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     {
         size_t size = array_offsets.size();
         for (size_t i = 0; i < size; ++i)
+        {
+            if constexpr (has_nullmap)
+            {
+                if (DB::isNullAt(*nullmap, i))
+                    continue;
+            }
             byte_size[i] += sizeof(UInt32) * (array_offsets[i] - array_offsets[i - 1]) + offsetAt(array_offsets[i])
                 - offsetAt(array_offsets[i - 1]);
+        }
     }
 }
 

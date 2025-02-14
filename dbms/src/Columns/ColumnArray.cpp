@@ -220,19 +220,22 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
 
 void ColumnArray::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    countSerializeByteSizeImpl<true>(byte_size, collator);
+    countSerializeByteSizeImpl<true>(byte_size, nullmap, collator);
 }
 
 void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeImpl<false>(byte_size, nullptr);
+    countSerializeByteSizeImpl<false>(byte_size, nullptr, nullptr);
 }
 
 template <bool compare_semantics>
-void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
-    const
+void ColumnArray::countSerializeByteSizeImpl(
+    PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
@@ -252,7 +255,7 @@ void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size,
         byte_size[i] += sizeof(UInt32);
 
     if constexpr (compare_semantics)
-        getData().countSerializeByteSizeForCmpColumnArray(byte_size, getOffsets(), collator);
+        getData().countSerializeByteSizeForCmpColumnArray(byte_size, getOffsets(), nullmap, collator);
     else
         getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets());
 }

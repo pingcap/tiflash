@@ -45,7 +45,10 @@ private:
     ColumnArray(const ColumnArray &) = default;
 
     template <bool compare_semantics>
-    void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const;
+    void countSerializeByteSizeImpl(
+        PaddedPODArray<size_t> & byte_size,
+        const NullMap * nullmap,
+        const TiDB::TiDBCollatorPtr & collator) const;
 
     template <bool has_null, bool compare_semantics, bool has_nullmap>
     void serializeToPosImpl(
@@ -97,13 +100,16 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
-        const override;
+    void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & byte_size,
+        const NullMap * /*nullmap*/,
+        const TiDB::TiDBCollatorPtr & collator) const override;
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const IColumn::Offsets & /* array_offsets */,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & /* collator */) const override
     {
         throw Exception(

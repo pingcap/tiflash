@@ -107,12 +107,16 @@ private:
         }
     }
 
-    template <bool has_collator, bool count_code_points>
-    void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator) const;
-    template <bool has_collator, bool count_code_points>
+    template <bool has_collator, bool count_code_points, bool has_nullmap>
+    void countSerializeByteSizeImpl(
+        PaddedPODArray<size_t> & byte_size,
+        const NullMap * nullmap,
+        const TiDB::TiDBCollatorPtr & collator) const;
+    template <bool has_collator, bool count_code_points, bool has_nullmap>
     void countSerializeByteSizeForColumnArrayImpl(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
+        const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator) const;
 
     template <bool has_null, bool has_collator, bool has_nullmap>
@@ -301,13 +305,16 @@ public:
         return pos + string_size;
     }
 
-    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
-        const override;
+    void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & byte_size,
+        const NullMap * nullmap,
+        const TiDB::TiDBCollatorPtr & collator) const override;
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
 
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
+        const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator) const override;
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,

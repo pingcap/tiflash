@@ -167,6 +167,7 @@ public:
 
     void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & /* byte_size */,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & /* collator */) const override
     {
         throw Exception(
@@ -180,6 +181,7 @@ public:
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const IColumn::Offsets & /* offsets */,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & /* collator */) const override
     {
         throw Exception(

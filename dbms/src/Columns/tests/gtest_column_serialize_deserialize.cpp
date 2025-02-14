@@ -41,7 +41,7 @@ public:
         if (!compare_semantics)
             column_ptr->countSerializeByteSize(byte_size);
         else
-            column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
+            column_ptr->countSerializeByteSizeForCmp(byte_size, nullptr, collator);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
             ASSERT_EQ(byte_size[i], i + result_byte_size[i]);
@@ -62,7 +62,7 @@ public:
         if (!compare_semantics)
             column_array->countSerializeByteSize(byte_size);
         else
-            column_array->countSerializeByteSizeForCmp(byte_size, collator);
+            column_array->countSerializeByteSizeForCmp(byte_size, nullptr, collator);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
             ASSERT_EQ(byte_size[i], sizeof(UInt32) + i + result_byte_size[i]);
@@ -324,7 +324,7 @@ public:
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
-        column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
+        column_ptr->countSerializeByteSizeForCmp(byte_size, nullptr, collator);
         size_t total_size = 0;
         for (const auto size : byte_size)
             total_size += size;

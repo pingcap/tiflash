@@ -121,8 +121,10 @@ public:
 
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
-    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
-        const override
+    void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & byte_size,
+        const NullMap * /*nullmap*/,
+        const TiDB::TiDBCollatorPtr & collator) const override
     {
         // collator->sortKey() will change the string length, which may exceeds n.
         RUNTIME_CHECK_MSG(
@@ -139,6 +141,7 @@ public:
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & collator) const override
     {
         RUNTIME_CHECK_MSG(

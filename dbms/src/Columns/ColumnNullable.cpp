@@ -284,10 +284,11 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, con
 
 void ColumnNullable::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    getNullMapColumn().countSerializeByteSizeForCmp(byte_size, collator);
-    getNestedColumn().countSerializeByteSizeForCmp(byte_size, collator);
+    getNullMapColumn().countSerializeByteSizeForCmp(byte_size, nullmap, collator);
+    getNestedColumn().countSerializeByteSizeForCmp(byte_size, nullmap, collator);
 }
 void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
@@ -298,10 +299,11 @@ void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) 
 void ColumnNullable::countSerializeByteSizeForCmpColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    getNullMapColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, collator);
-    getNestedColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, collator);
+    getNullMapColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, nullmap, collator);
+    getNestedColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, nullmap, collator);
 }
 void ColumnNullable::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,

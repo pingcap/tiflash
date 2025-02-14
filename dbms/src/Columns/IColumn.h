@@ -248,6 +248,7 @@ public:
     /// The byte_size.size() must be equal to the column size.
     virtual void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & /* byte_size */,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & /* collator */) const
         = 0;
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
@@ -258,6 +259,7 @@ public:
     virtual void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const Offsets & /* array_offsets */,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & /* collator */) const
         = 0;
     virtual void countSerializeByteSizeForColumnArray(

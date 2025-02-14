@@ -328,7 +328,10 @@ public:
         return pos + sizeof(T);
     }
 
-    void countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &) const override
+    void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & byte_size,
+        const NullMap * /*nullmap*/,
+        const TiDB::TiDBCollatorPtr &) const override
     {
         countSerializeByteSize(byte_size);
     }
@@ -337,6 +340,7 @@ public:
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr &) const override
     {
         countSerializeByteSizeForColumnArray(byte_size, array_offsets);
