@@ -24,6 +24,7 @@
 
 #include <ext/scope_guard.h>
 
+
 namespace DB::ErrorCodes
 {
 extern const int ABORTED;
@@ -402,26 +403,24 @@ void InvertedIndexMemoryViewer<T>::load(ReadBuffer & read_buf, size_t index_size
 }
 
 template <typename T>
-std::vector<typename InvertedIndexMemoryViewer<T>::RowID> InvertedIndexMemoryViewer<T>::search(const Key & key) const
+void InvertedIndexMemoryViewer<T>::search(BitmapFilterPtr & bitmap_filter, const Key & key) const
 {
     T real_key = key;
     auto it = index.find(real_key);
-    return it == index.end() ? std::vector<RowID>{} : it->second;
+    if (it != index.end())
+        bitmap_filter->set(it->second, nullptr);
 }
 
 template <typename T>
-std::vector<typename InvertedIndexMemoryViewer<T>::RowID> InvertedIndexMemoryViewer<T>::searchRange(
-    const Key & begin,
-    const Key & end) const
+void InvertedIndexMemoryViewer<T>::searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end)
+    const
 {
     T real_begin = begin;
     T real_end = end;
-    std::vector<RowID> result;
     auto index_begin = index.lower_bound(real_begin);
     auto index_end = index.lower_bound(real_end);
     for (auto it = index_begin; it != index_end; ++it)
-        result.insert(result.end(), it->second.begin(), it->second.end());
-    return result;
+        bitmap_filter->set(it->second, nullptr);
 }
 
 template <typename T>
@@ -463,30 +462,28 @@ InvertedIndex::Block<T> InvertedIndexFileViewer<T>::readBlock(ReadBufferFromFile
 }
 
 template <typename T>
-std::vector<typename InvertedIndexFileViewer<T>::RowID> InvertedIndexFileViewer<T>::search(const Key & key) const
+void InvertedIndexFileViewer<T>::search(BitmapFilterPtr & bitmap_filter, const Key & key) const
 {
     T real_key = key;
     auto it = std::find_if(meta.begin(), meta.end(), [&](const auto & entry) {
         return entry.min <= real_key && entry.max >= real_key;
     });
     if (it == meta.end())
-        return std::vector<RowID>{};
+        return;
 
     ReadBufferFromFile file_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
     const auto block = readBlock(file_buf, it->offset, it->size);
     auto block_it
         = std::find_if(block.begin(), block.end(), [&](const auto & entry) { return entry.value == real_key; });
-    return block_it == block.end() ? std::vector<RowID>{} : block_it->row_ids;
+    if (block_it != block.end())
+        bitmap_filter->set(block_it->row_ids, nullptr);
 }
 
 template <typename T>
-std::vector<typename InvertedIndexFileViewer<T>::RowID> InvertedIndexFileViewer<T>::searchRange(
-    const Key & begin,
-    const Key & end) const
+void InvertedIndexFileViewer<T>::searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const
 {
     T real_begin = begin;
     T real_end = end;
-    std::vector<RowID> result;
     // max < begin
     auto meta_begin = std::lower_bound(meta.begin(), meta.end(), real_begin, [](const auto & entry, const auto & key) {
         return entry.max < key;
@@ -508,12 +505,11 @@ std::vector<typename InvertedIndexFileViewer<T>::RowID> InvertedIndexFileViewer<
         {
             auto [value, row_ids] = *block_it;
             if (value >= real_begin && value < real_end)
-                result.insert(result.end(), row_ids.begin(), row_ids.end());
+                bitmap_filter->set(row_ids, nullptr);
             else if (value >= real_end)
                 break;
         }
     }
-    return result;
 }
 
 template class InvertedIndexBuilder<UInt8>;

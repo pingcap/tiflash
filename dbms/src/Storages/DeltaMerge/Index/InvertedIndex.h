@@ -21,6 +21,7 @@
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <Poco/File.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Index/LocalIndexBuilder.h>
 #include <Storages/DeltaMerge/Index/LocalIndexViewer.h>
 
@@ -107,8 +108,6 @@ class InvertedIndexViewer : public LocalIndexViewer
 {
 public:
     using Key = UInt64;
-    using RowID = InvertedIndex::RowID;
-    using RowIDs = std::vector<RowID>;
 
 public:
     explicit InvertedIndexViewer() = default;
@@ -117,9 +116,9 @@ public:
     static InvertedIndexViewerPtr view(TypeIndex type_id, std::string_view path);
     static InvertedIndexViewerPtr view(TypeIndex type_id, ReadBuffer & buf, size_t index_size);
 
-    virtual RowIDs search(const Key & key) const = 0;
+    virtual void search(BitmapFilterPtr & bitmap_filter, const Key & key) const = 0;
     // [begin, end)
-    virtual RowIDs searchRange(const Key & begin, const Key & end) const = 0;
+    virtual void searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const = 0;
 };
 
 /// Views a InvertedIndex file by loading it into memory.
@@ -141,11 +140,11 @@ public:
 
     ~InvertedIndexMemoryViewer() override = default;
 
-    RowIDs search(const Key & key) const override;
-    RowIDs searchRange(const Key & begin, const Key & end) const override;
+    void search(BitmapFilterPtr & bitmap_filter, const Key & key) const override;
+    void searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const override;
 
 private:
-    std::map<T, RowIDs> index; // set by load
+    std::map<T, std::vector<InvertedIndex::RowID>> index; // set by load
 };
 
 /// Views a InvertedIndex file by reading it from disk.
@@ -168,8 +167,8 @@ public:
 
     ~InvertedIndexFileViewer() override = default;
 
-    RowIDs search(const Key & key) const override;
-    RowIDs searchRange(const Key & begin, const Key & end) const override;
+    void search(BitmapFilterPtr & bitmap_filter, const Key & key) const override;
+    void searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const override;
 
 private:
     String path;

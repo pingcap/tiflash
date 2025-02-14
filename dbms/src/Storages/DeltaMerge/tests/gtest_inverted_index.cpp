@@ -38,46 +38,50 @@ public:
         LocalIndexInfo index_info{
             0,
             0,
-            std::make_shared<TiDB::InvertedIndexDefinition>(std::is_signed_v<T>, sizeof(T))};
+            std::make_shared<TiDB::InvertedIndexDefinition>(std::is_signed_v<T>, sizeof(T)),
+        };
         InvertedIndexBuilder<T> builder(index_info);
-        {
-            auto col = DB::tests::createColumn<T>({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}).column;
-            auto del_mark_col = DB::tests::createColumn<UInt8>({0, 1, 0, 1, 0, 1, 0, 1, 0, 1}).column;
-            const auto * del_mark = static_cast<const ColumnVector<UInt8> *>(del_mark_col.get());
-            builder.addBlock(*col, del_mark, []() { return true; });
-        }
-        {
-            auto col = DB::tests::createColumn<T>({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}).column;
-            auto del_mark_col = DB::tests::createColumn<UInt8>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0}).column;
-            const auto * del_mark = static_cast<const ColumnVector<UInt8> *>(del_mark_col.get());
-            builder.addBlock(*col, del_mark, []() { return true; });
-        }
-        {
-            auto col = DB::tests::createColumn<T>({1, 2, 2, 2, 3, 3, 3, 4, 4, 4}).column;
-            auto del_mark_col = DB::tests::createColumn<UInt8>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0}).column;
-            const auto * del_mark = static_cast<const ColumnVector<UInt8> *>(del_mark_col.get());
-            builder.addBlock(*col, del_mark, []() { return true; });
-        }
+        auto write_block =
+            [&builder](DB::tests::InferredDataVector<T> && values, DB::tests::InferredDataVector<UInt8> && del_marks) {
+                auto col = DB::tests::createColumn<T>(std::move(values)).column;
+                auto del_mark_col = DB::tests::createColumn<UInt8>(std::move(del_marks)).column;
+                const auto * del_mark = static_cast<const ColumnVector<UInt8> *>(del_mark_col.get());
+                builder.addBlock(*col, del_mark, []() { return true; });
+            };
+        write_block({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1});
+        write_block({1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+        write_block({1, 2, 2, 2, 3, 3, 3, 4, 4, 4}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
         builder.saveToFile(IndexFileName);
     }
 
     static void search(const InvertedIndexViewerPtr & viewer)
     {
-        ASSERT_EQ(viewer->search(1).size(), 3);
-        ASSERT_EQ(viewer->search(2).size(), 4);
-        ASSERT_EQ(viewer->search(3).size(), 5);
-        ASSERT_EQ(viewer->search(4).size(), 4);
-        ASSERT_EQ(viewer->search(5).size(), 2);
-        ASSERT_EQ(viewer->search(6).size(), 1);
-        ASSERT_EQ(viewer->search(7).size(), 2);
-        ASSERT_EQ(viewer->search(8).size(), 1);
-        ASSERT_EQ(viewer->search(9).size(), 2);
-        ASSERT_EQ(viewer->search(10).size(), 1);
-        ASSERT_EQ(viewer->search(11).size(), 0);
-        ASSERT_EQ(viewer->searchRange(1, 3).size(), 7);
-        ASSERT_EQ(viewer->searchRange(2, 4).size(), 9);
-        ASSERT_EQ(viewer->searchRange(10, 11).size(), 1);
-        ASSERT_EQ(viewer->searchRange(1, 12).size(), 25);
+        auto v_search = [&viewer](const UInt32 key, const String & expected) {
+            auto bitmap_filter = std::make_shared<BitmapFilter>(30, false);
+            viewer->search(bitmap_filter, key);
+            ASSERT_EQ(bitmap_filter->toDebugString(), expected);
+        };
+        v_search(1, "100000000010000000001000000000");
+        v_search(2, "000000000001000000000111000000");
+        v_search(3, "001000000000100000000000111000");
+        v_search(4, "000000000000010000000000000111");
+        v_search(5, "000010000000001000000000000000");
+        v_search(6, "000000000000000100000000000000");
+        v_search(7, "000000100000000010000000000000");
+        v_search(8, "000000000000000001000000000000");
+        v_search(9, "000000001000000000100000000000");
+        v_search(10, "000000000000000000010000000000");
+        v_search(11, "000000000000000000000000000000");
+
+        auto v_search_range = [&viewer](const UInt32 start, const UInt32 end, const String & expected) {
+            auto bitmap_filter = std::make_shared<BitmapFilter>(30, false);
+            viewer->searchRange(bitmap_filter, start, end);
+            ASSERT_EQ(bitmap_filter->toDebugString(), expected);
+        };
+        v_search_range(1, 3, "100000000011000000001111000000");
+        v_search_range(2, 4, "001000000001100000000111111000");
+        v_search_range(10, 11, "000000000000000000010000000000");
+        v_search_range(1, 12, "101010101011111111111111111111");
     }
 
     static void memorySearch()
