@@ -137,15 +137,6 @@ public:
     bool checkTerminated(std::memory_order = std::memory_order_seq_cst) const;
     bool checkRunning(std::memory_order = std::memory_order_seq_cst) const;
 
-    UInt64 batchReadIndexTimeout() const;
-    // timeout for wait index (ms). "0" means wait infinitely
-    UInt64 waitIndexTimeout() const;
-    void debugSetWaitIndexTimeout(UInt64 timeout);
-    uint64_t readIndexWorkerTick() const;
-
-    Int64 waitRegionReadyTick() const;
-    Int64 waitRegionReadyTimeout() const;
-
     Etcd::ClientPtr getEtcdClient() const { return etcd_client; }
     void initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper);
 
@@ -171,13 +162,6 @@ private:
     const std::unordered_set<std::string> ignore_databases;
     std::shared_ptr<TiDBSchemaSyncerManager> schema_sync_manager;
     MPPTaskManagerPtr mpp_task_manager;
-
-    std::atomic_uint64_t batch_read_index_timeout_ms;
-    std::atomic_uint64_t wait_index_timeout_ms;
-    std::atomic_uint64_t read_index_worker_tick_ms;
-
-    std::atomic_uint64_t wait_region_ready_tick;
-    std::atomic_int64_t wait_region_ready_timeout_sec;
 
     TiFlashRaftConfig raftproxy_config;
 };
