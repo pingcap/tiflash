@@ -935,7 +935,8 @@ void InterpreterSelectQuery::executeAggregation(
         settings.max_bytes_before_external_group_by,
         false,
         spill_config,
-        settings.max_block_size);
+        settings.max_block_size,
+        false);
 
     /// If there are several sources, then we perform parallel aggregation
     if (pipeline.streams.size() > 1)
@@ -1023,7 +1024,8 @@ void InterpreterSelectQuery::executeMergeAggregated(Pipeline & pipeline, bool fi
             settings.max_spilled_rows_per_file,
             settings.max_spilled_bytes_per_file,
             context.getFileProvider()),
-        settings.max_block_size);
+        settings.max_block_size,
+        false);
 
     pipeline.firstStream() = std::make_shared<MergingAggregatedMemoryEfficientBlockInputStream>(
         pipeline.streams,
