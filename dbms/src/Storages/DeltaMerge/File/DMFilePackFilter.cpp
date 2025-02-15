@@ -318,6 +318,7 @@ std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFileP
     // We need to read these packs and do RowKey filter and MVCC filter for them.
     DMFilePackFilterResults new_pack_filter_results;
     new_pack_filter_results.reserve(dmfiles.size());
+    RUNTIME_CHECK(pack_filter_results.size() == dmfiles.size());
 
     // The offset of the first row in the current range.
     size_t offset = 0;
@@ -401,6 +402,7 @@ std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::R
     // We need to read these packs and do RowKey filter and MVCC filter for them.
     DMFilePackFilterResults new_pack_filter_results;
     new_pack_filter_results.reserve(dmfiles.size());
+    RUNTIME_CHECK(pack_filter_results.size() == dmfiles.size());
 
     // The offset of the first row in the current range.
     size_t range_offset = 0;
