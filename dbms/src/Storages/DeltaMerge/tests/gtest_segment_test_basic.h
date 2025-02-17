@@ -73,6 +73,7 @@ public:
      * When begin_key is specified, new rows will be written from specified key. Otherwise, new rows may be
      * written randomly in the segment range.
      */
+    void writeToCache(PageIdU64 segment_id, UInt64 write_rows, Int64 start_at, bool shuffle, std::optional<UInt64> ts);
     void writeSegment(
         PageIdU64 segment_id,
         UInt64 write_rows = 100,

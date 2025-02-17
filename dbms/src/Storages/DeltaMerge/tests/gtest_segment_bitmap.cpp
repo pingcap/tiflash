@@ -116,7 +116,7 @@ protected:
         const auto write_count = end - begin + including_right_boundary;
         if (type == "d_mem")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
+            SegmentTestBasic::writeToCache(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
         }
         else if (type == "d_mem_del")
         {
@@ -165,6 +165,10 @@ protected:
         else if (type == "compact_delta")
         {
             SegmentTestBasic::compactSegmentDelta(SEG_ID);
+        }
+        else if (type == "flush_cache")
+        {
+            SegmentTestBasic::flushSegmentCache(SEG_ID);
         }
         else
         {
@@ -1158,6 +1162,47 @@ try
 }
 CATCH
 
+TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta0)
+try
+{
+    writeSegmentGeneric("d_mem:[0, 10):shuffle:ts_1|d_mem:[3, 13):shuffle:ts_2|d_mem:[6, 16):shuffle:ts_3");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+
+    auto get_base_versions = [&](bool flushed) {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        auto cfs = snap->delta->getColumnFiles();
+        RUNTIME_CHECK(cfs.size() == 1, cfs.size());
+        if (flushed)
+            RUNTIME_CHECK(cfs[0]->isTinyFile(), cfs[0]->toString());
+        else
+            RUNTIME_CHECK(cfs[0]->isInMemoryFile(), cfs[0]->toString());
+        return std::visit(
+            [&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); },
+            seg->version_chain);
+    };
+    auto base_ver1 = get_base_versions(false);
+    writeSegmentGeneric("flush_cache"); // Flush never sort data when flush
+    auto base_ver2 = get_base_versions(true);
+    ASSERT_EQ(*base_ver1, *base_ver2);
+    ASSERT_EQ(base_ver1.get(), base_ver2.get());
+}
+CATCH
+
+
 TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta1)
 try
 {
@@ -1178,9 +1223,62 @@ try
         .read_ts = 1,
     });
 
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFiles().size(), 3);
+    }
+    writeSegmentGeneric("compact_delta");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFiles().size(), 1);
+    }
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+
     SetUp();
 
     writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny:[3, 13):ts_2|d_tiny:[6, 16):ts_3");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "111000000011100000001111111111",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "111000000011111111110000000000",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "111111111100000000000000000000",
+    });
+
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFiles().size(), 3);
+    }
+    writeSegmentGeneric("compact_delta");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFiles().size(), 1);
+    }
     verifyVersionChain(VerifyVersionChainOption{
         .seg_id = SEG_ID,
         .caller_line = __LINE__,
