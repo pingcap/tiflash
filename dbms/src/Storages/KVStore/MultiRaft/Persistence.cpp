@@ -222,7 +222,7 @@ bool KVStore::canFlushRegionDataImpl(
         LOG_INFO(
             log,
             "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {}"
-            " gap {}/{} table_size {} table_id={} keyspace_id={}",
+            " gap {}/{} table_in_mem_size={} table_id={} keyspace={}",
             curr_region.toString(false),
             index,
             term,
