@@ -287,8 +287,10 @@ void ColumnNullable::countSerializeByteSizeForCmp(
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    getNullMapColumn().countSerializeByteSizeForCmp(byte_size, nullmap, collator);
-    getNestedColumn().countSerializeByteSizeForCmp(byte_size, nullmap, collator);
+    // Nested ColumnNullable like ColumnNullable(ColumnArray(ColumnNullable(ColumnXXX))) not support.
+    RUNTIME_CHECK_MSG(!nullmap, "countSerializeByteSizeForCmp cannot handle nested nullable");
+    getNullMapColumn().countSerializeByteSizeForCmp(byte_size, nullptr, collator);
+    getNestedColumn().countSerializeByteSizeForCmp(byte_size, &getNullMapData(), collator);
 }
 void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
@@ -297,13 +299,15 @@ void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) 
 }
 
 void ColumnNullable::countSerializeByteSizeForCmpColumnArray(
-    PaddedPODArray<size_t> & byte_size,
-    const IColumn::Offsets & array_offsets,
-    const NullMap * nullmap,
-    const TiDB::TiDBCollatorPtr & collator) const
+    PaddedPODArray<size_t> &,
+    const IColumn::Offsets &,
+    const NullMap *,
+    const TiDB::TiDBCollatorPtr &) const
 {
-    getNullMapColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, nullmap, collator);
-    getNestedColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, nullmap, collator);
+    // Unable to handle ColumnArray(ColumnNullable(ColumnXXX)).
+    throw Exception(
+        "countSerializeByteSizeForCmpColumnArray cannot handle ColumnArray(" + getName() + ")",
+        ErrorCodes::NOT_IMPLEMENTED);
 }
 void ColumnNullable::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,

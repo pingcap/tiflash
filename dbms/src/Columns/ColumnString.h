@@ -107,12 +107,12 @@ private:
         }
     }
 
-    template <bool has_collator, bool count_code_points, bool has_nullmap>
+    template <bool need_decode_collator, bool has_nullmap>
     void countSerializeByteSizeImpl(
         PaddedPODArray<size_t> & byte_size,
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator) const;
-    template <bool has_collator, bool count_code_points, bool has_nullmap>
+    template <bool need_decode_collator, bool has_nullmap>
     void countSerializeByteSizeForColumnArrayImpl(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
