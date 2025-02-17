@@ -29,7 +29,7 @@
 #include <memory>
 
 extern std::atomic<Int64> real_rss;
-extern std::atomic<UInt64> tranquil_time_rss;
+std::atomic<UInt64> tranquil_time_rss;
 
 namespace DB
 {

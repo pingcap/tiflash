@@ -108,7 +108,7 @@
 #include <fiu.h>
 #endif
 
-std::atomic<UInt64> tranquil_time_rss;
+extern std::atomic<UInt64> tranquil_time_rss;
 
 namespace CurrentMetrics
 {
