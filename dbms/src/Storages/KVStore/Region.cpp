@@ -422,7 +422,7 @@ void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
     {
         auto table_size = getRegionTableSize();
         auto grown_memory = current > tranquil_time_rss ? current - tranquil_time_rss : 0;
-        if (grown_memory && table_size > grown_memory * 0.3)
+        if (grown_memory && table_size > grown_memory * 0.15)
         {
             if (!setRegionTableWarned(true))
             {
