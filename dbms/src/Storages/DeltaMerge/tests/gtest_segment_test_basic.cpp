@@ -324,6 +324,18 @@ void SegmentTestBasic::flushSegmentCache(PageIdU64 segment_id)
     operation_statistics["flush"]++;
 }
 
+void SegmentTestBasic::compactSegmentDelta(PageIdU64 segment_id)
+{
+    LOG_INFO(logger_op, "compactSegmentDelta, segment_id={}", segment_id);
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments[segment_id];
+    size_t segment_row_num = getSegmentRowNum(segment_id);
+    segment->compactDelta(*dm_context);
+    EXPECT_EQ(getSegmentRowNum(segment_id), segment_row_num);
+    operation_statistics["compact"]++;
+}
+
 std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageIdU64 segment_id) const
 {
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
@@ -365,17 +377,20 @@ Block SegmentTestBasic::prepareWriteBlockImpl(
     Int64 start_key,
     Int64 end_key,
     bool is_deleted,
-    bool including_right_boundary)
+    bool including_right_boundary,
+    std::optional<UInt64> ts)
 {
     RUNTIME_CHECK(start_key <= end_key, start_key, end_key);
     if (end_key == start_key && !including_right_boundary)
         return Block{};
-    version++;
+
+    UInt64 v = ts.value_or(version + 1);
+    version = std::max(v, version + 1); // Increase version
     return DMTestEnv::prepareSimpleWriteBlock(
         start_key, //
         end_key,
         false,
-        version,
+        v,
         DMTestEnv::pk_name,
         MutSup::extra_handle_id,
         options.is_common_handle ? MutSup::getExtraHandleColumnStringType() : MutSup::getExtraHandleColumnIntType(),
@@ -391,9 +406,10 @@ Block SegmentTestBasic::prepareWriteBlock(
     Int64 start_key,
     Int64 end_key,
     bool is_deleted,
-    bool including_right_boundary)
+    bool including_right_boundary,
+    std::optional<UInt64> ts)
 {
-    return prepareWriteBlockImpl(start_key, end_key, is_deleted, including_right_boundary);
+    return prepareWriteBlockImpl(start_key, end_key, is_deleted, including_right_boundary, ts);
 }
 
 Block sortvstackBlocks(std::vector<Block> && blocks)
@@ -412,7 +428,8 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
     PageIdU64 segment_id,
     UInt64 total_write_rows,
     std::optional<Int64> write_start_key,
-    bool is_deleted)
+    bool is_deleted,
+    std::optional<UInt64> ts)
 {
     RUNTIME_CHECK(0 < total_write_rows && total_write_rows < std::numeric_limits<Int64>::max());
 
@@ -480,7 +497,7 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
         Int64 write_end_key_this_round = *write_start_key + static_cast<Int64>(write_rows_this_round);
         RUNTIME_CHECK(write_end_key_this_round <= segment_end_key);
         Block block
-            = prepareWriteBlock(*write_start_key, write_end_key_this_round, is_deleted, including_right_boundary);
+            = prepareWriteBlock(*write_start_key, write_end_key_this_round, is_deleted, including_right_boundary, ts);
         blocks.emplace_back(block);
         remaining_rows -= write_rows_this_round + including_right_boundary;
 
@@ -501,7 +518,8 @@ void SegmentTestBasic::writeSegment(
     PageIdU64 segment_id,
     UInt64 write_rows,
     std::optional<Int64> start_at,
-    bool shuffle)
+    bool shuffle,
+    std::optional<UInt64> ts)
 {
     LOG_INFO(logger_op, "writeSegment, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -520,7 +538,7 @@ void SegmentTestBasic::writeSegment(
         start_key,
         end_key);
 
-    auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
+    auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false, ts);
 
     if (shuffle)
     {

@@ -67,6 +67,7 @@ public:
     void mergeSegment(const std::vector<PageIdU64> & segments, bool check_rows = true);
     void mergeSegmentDelta(PageIdU64 segment_id, bool check_rows = true);
     void flushSegmentCache(PageIdU64 segment_id);
+    void compactSegmentDelta(PageIdU64 segment_id);
 
     /**
      * When begin_key is specified, new rows will be written from specified key. Otherwise, new rows may be
@@ -76,7 +77,8 @@ public:
         PageIdU64 segment_id,
         UInt64 write_rows = 100,
         std::optional<Int64> start_at = std::nullopt,
-        bool shuffle = false);
+        bool shuffle = false,
+        std::optional<UInt64> ts = std::nullopt);
     void ingestDTFileIntoDelta(
         PageIdU64 segment_id,
         UInt64 write_rows = 100,
@@ -116,12 +118,14 @@ public:
         Int64 start_key,
         Int64 end_key,
         bool is_deleted = false,
-        bool including_right_boundary = false);
+        bool including_right_boundary = false,
+        std::optional<UInt64> ts = std::nullopt);
     Block prepareWriteBlockInSegmentRange(
         PageIdU64 segment_id,
         UInt64 total_write_rows,
         std::optional<Int64> write_start_key = std::nullopt,
-        bool is_deleted = false);
+        bool is_deleted = false,
+        std::optional<UInt64> ts = std::nullopt);
 
     size_t getSegmentRowNumWithoutMVCC(PageIdU64 segment_id);
     size_t getSegmentRowNum(PageIdU64 segment_id);
@@ -173,7 +177,12 @@ protected:
 
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
-    virtual Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted, bool including_right_boundary);
+    virtual Block prepareWriteBlockImpl(
+        Int64 start_key,
+        Int64 end_key,
+        bool is_deleted,
+        bool including_right_boundary,
+        std::optional<UInt64> ts);
 
     virtual void prepareColumns(const ColumnDefinesPtr &) {}
 
