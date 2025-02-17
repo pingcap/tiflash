@@ -171,8 +171,7 @@ public:
 
     static UInt64 getAutoValue()
     {
-        static auto res = getNumberOfLogicalCPUCores();
-        return res;
+        return getNumberOfLogicalCPUCores();
     }
 
     UInt64 get() const { return value; }
