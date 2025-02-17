@@ -965,17 +965,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
         UNUSED(cur_virt_size);
         tranquil_time_rss = static_cast<Int64>(resident_set);
 
-        auto limit = settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity);
+        auto kvs_watermark = settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity);
+        if (kvs_watermark == 0)
+            kvs_watermark = server_info.memory_info.capacity * 0.8;
         LOG_INFO(
             log,
-            "Global memory status: computed_limit {} tranquil_time_rss {}, cur_virt_size {}, capacity {}",
+            "Global memory status: kvstore_high_watermark={} tranquil_time_rss={} cur_virt_size={} capacity={}",
             limit,
             tranquil_time_rss,
             cur_virt_size,
             server_info.memory_info.capacity);
-        if (limit == 0)
-            limit = server_info.memory_info.capacity * 0.8;
-        proxy_machine.initKVStore(global_context->getTMTContext(), store_ident, limit);
+
+        proxy_machine.initKVStore(global_context->getTMTContext(), store_ident, kvs_watermark);
 
         global_context->getTMTContext().reloadConfig(config());
         // setup the kv cluster for disagg compute node fetching config
