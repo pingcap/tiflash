@@ -22,10 +22,6 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <common/likely.h>
 
-#include <mutex>
-#include <tuple>
-#include <variant>
-
 namespace DB
 {
 void KVStore::persistRegion(
@@ -156,7 +152,7 @@ bool KVStore::canFlushRegionDataImpl(
     UInt64 index,
     UInt64 term,
     UInt64 truncated_index,
-    UInt64 truncated_term)
+    UInt64 truncated_term) const
 {
     if (curr_region_ptr == nullptr)
     {
@@ -168,19 +164,19 @@ bool KVStore::canFlushRegionDataImpl(
     auto [rows, size_bytes] = curr_region.getApproxMemCacheInfo();
 
     // flush caused by rows
-    if (rows >= region_compact_log_min_rows.load(std::memory_order_relaxed))
+    if (rows >= config.regionComactLogMinRows())
     {
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_rowcount).Increment(1);
         can_flush = true;
     }
     // flush caused by bytes
-    if (size_bytes >= region_compact_log_min_bytes.load(std::memory_order_relaxed))
+    if (size_bytes >= config.regionComactLogMinBytes())
     {
         GET_METRIC(tiflash_raft_raft_events_count, type_flush_size).Increment(1);
         can_flush = true;
     }
     // flush caused by gap
-    auto gap_threshold = region_compact_log_gap.load();
+    auto gap_threshold = config.regionComactLogGap();
     const auto last_restart_log_applied = curr_region.lastRestartLogApplied();
     if (last_restart_log_applied + gap_threshold > index)
     {

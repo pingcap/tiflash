@@ -158,7 +158,7 @@ try
             auto [indexc, termc]
                 = proxy_instance->adminCommand(region_id, std::move(req), std::move(res), std::nullopt);
             // Reject compact log.
-            kvs.setRegionCompactLogConfig(10000000, 10000000, 10000000, 0);
+            kvs.debugGetConfigMut().debugSetCompactLogConfig(10000000, 10000000, 10000000, 0);
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, indexc);
             ASSERT_EQ(kvr1->lastCompactLogApplied(), 5);
         }
@@ -393,7 +393,7 @@ try
             EngineStoreApplyRes::None);
 
         {
-            kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+            kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
             request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
             ASSERT_EQ(
                 kvs.handleAdminRaftCmd(std::move(request), std::move(response2), region_id, 26, 6, ctx.getTMTContext()),
@@ -625,7 +625,7 @@ try
     ctx.getTMTContext().debugSetKVStore(kvstore);
     initStorages();
 
-    ctx.getTMTContext().debugSetWaitIndexTimeout(1);
+    kvs.debugGetConfigMut().debugSetWaitIndexTimeout(1);
 
     startReadIndexUtils(ctx);
     SCOPE_EXIT({ stopReadIndexUtils(); });

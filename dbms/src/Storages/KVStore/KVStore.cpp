@@ -36,7 +36,6 @@
 
 #include <mutex>
 #include <tuple>
-#include <variant>
 
 namespace DB
 {
@@ -58,10 +57,6 @@ KVStore::KVStore(Context & context)
         context.getSharedContextDisagg()->isDisaggregatedComputeMode() ? nullptr
                                                                        : std::make_unique<RegionPersister>(context))
     , log(Logger::get())
-    , region_compact_log_min_rows(40 * 1024)
-    , region_compact_log_min_bytes(32 * 1024 * 1024)
-    , region_compact_log_gap(200)
-    , region_eager_gc_log_gap(512)
     // Eager RaftLog GC is only enabled under UniPS
     , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
 {
@@ -316,7 +311,7 @@ bool KVStore::tryRegisterEagerRaftLogGCTask(const RegionPtr & region, RegionTask
 {
     if (!eager_raft_log_gc_enabled)
         return false;
-    const UInt64 threshold = region_eager_gc_log_gap.load();
+    const UInt64 threshold = config.regionEagerGCLogGap();
     if (threshold == 0) // disabled
         return false;
 
@@ -372,22 +367,6 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         tmt.getRegionTable(),
         task_lock,
         region_manager.genRegionTaskLock(region_id));
-}
-
-void KVStore::setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap)
-{
-    region_compact_log_min_rows = rows;
-    region_compact_log_min_bytes = bytes;
-    region_compact_log_gap = gap;
-    region_eager_gc_log_gap = eager_gc_gap;
-
-    LOG_INFO(
-        log,
-        "Region compact log thresholds, rows={} bytes={} gap={} eager_gc_gap={}",
-        rows,
-        bytes,
-        gap,
-        eager_gc_gap);
 }
 
 void KVStore::setStore(metapb::Store store_)

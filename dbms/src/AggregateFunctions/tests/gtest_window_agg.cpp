@@ -34,8 +34,6 @@
 
 #include <random>
 
-#include "AggregateFunctions/AggregateFunctionNull.h"
-
 namespace DB
 {
 namespace tests

@@ -352,14 +352,12 @@ struct ProxyStateMachine
         if (proxy_conf.getReadIndexRunnerCount() > 0)
         {
             auto & kvstore_ptr = tmt_context.getKVStore();
+            auto worker_tick = kvstore_ptr->getConfigRef().readIndexWorkerTick();
             kvstore_ptr->initReadIndexWorkers(
-                [&]() {
-                    // get from tmt context
-                    return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
-                },
+                [worker_tick]() { return std::chrono::milliseconds(worker_tick); },
                 /*running thread count*/ proxy_conf.getReadIndexRunnerCount());
             tmt_context.getKVStore()->asyncRunReadIndexWorkers();
-            WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
+            WaitCheckRegionReady(*kvstore_ptr, terminate_signals_counter);
         }
     }
 

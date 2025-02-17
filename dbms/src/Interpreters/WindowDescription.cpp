@@ -81,6 +81,30 @@ void WindowDescription::fillArgColumnNumbers()
     }
 }
 
+void WindowDescription::initNeedDecrease(bool has_agg)
+{
+    if (!has_agg)
+    {
+        need_decrease = false;
+        return;
+    }
+
+    need_decrease = true;
+
+    if (frame.begin_type == WindowFrame::BoundaryType::Unbounded)
+    {
+        need_decrease = false;
+        return;
+    }
+
+    if (frame.type == WindowFrame::FrameType::Rows)
+    {
+        if ((frame.begin_offset == 0 && frame.end_offset == 0)
+            || (frame.begin_preceding == frame.end_preceding && frame.begin_offset == frame.end_offset))
+            need_decrease = false;
+    }
+}
+
 String frameTypeToString(const WindowFrame::FrameType & type)
 {
     switch (type)

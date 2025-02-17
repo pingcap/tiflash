@@ -52,12 +52,13 @@ LearnerReadSnapshot doLearnerRead(
     const bool is_wn_disagg_read = context.getDAGContext() ? context.getDAGContext()->is_disaggregated_task : false;
 
     auto & tmt = context.getTMTContext();
+    const auto & config = tmt.getKVStore()->getConfigRef();
     LearnerReadWorker worker(mvcc_query_info, tmt, for_batch_cop, is_wn_disagg_read, log);
     LearnerReadSnapshot regions_snapshot = worker.buildRegionsSnapshot();
     const auto & [start_time, end_time] = worker.waitUntilDataAvailable( //
         regions_snapshot,
-        tmt.batchReadIndexTimeout(),
-        tmt.waitIndexTimeout());
+        config.batchReadIndexTimeout(),
+        config.waitIndexTimeout());
 
     if (auto * dag_context = context.getDAGContext())
     {
