@@ -21,6 +21,8 @@
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/ServerInfo.h>
 #include <Storages/FormatVersion.h>
+#include <Common/setThreadName.h>
+#include <Server/ServerInfo.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -34,6 +36,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_set_proxy_state_machine_cpu_cores[];
+} // namespace FailPoints
 
 extern "C" {
 void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
@@ -85,6 +91,10 @@ struct TiFlashProxyConfig
             settings.max_memory_usage_for_all_queries.get());
     }
 
+    static TiFlashProxyConfig genForTest() {
+        return TiFlashProxyConfig{};
+    }
+
     std::vector<const char *> getArgs() const
     {
         std::vector<const char *> args;
@@ -101,8 +111,11 @@ struct TiFlashProxyConfig
     bool isProxyRunnable() const { return is_proxy_runnable; }
 
     size_t getReadIndexRunnerCount() const { return read_index_runner_count; }
-
+    
 private:
+    TiFlashProxyConfig() {
+        // For test, bootstrap no proxy.
+    }
     // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
     void addExtraArgs(const std::string & k, const std::string & v) { val_map["--" + k] = v; }
 
@@ -438,18 +451,28 @@ struct ProxyStateMachine
 
     EngineStoreServerWrap * getEngineStoreServerWrap() { return &tiflash_instance_wrap; }
 
-    void getServerInfo(ServerInfo & server_info)
+    void getServerInfo(ServerInfo & server_info, Settings & settings)
     {
         /// get CPU/memory/disk info of this server
         diagnosticspb::ServerInfoRequest request;
         diagnosticspb::ServerInfoResponse response;
         request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
         std::string req = request.SerializeAsString();
+#ifndef DBMS_PUBLIC_GTEST
+        // In tests, no proxy is provided, and Server is not linked to.
         ffi_get_server_info_from_proxy(reinterpret_cast<intptr_t>(&helper), strIntoView(&req), &response);
         server_info.parseSysInfo(response);
+        LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
+#endif
+        fiu_do_on(FailPoints::force_set_proxy_state_machine_cpu_cores, {
+            server_info.cpu_info.logical_cores = 12345;
+        }); // Mock a GC safe
         setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
         computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
-        LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
+        if (settings.max_threads.get() != getNumberOfLogicalCPUCores()) {
+            LOG_INFO(log, "Reset max_threads to {}", getNumberOfLogicalCPUCores());
+            settings.max_threads.set(getNumberOfLogicalCPUCores());
+        }
     }
 
 private:
