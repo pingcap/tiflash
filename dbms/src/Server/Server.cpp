@@ -295,7 +295,7 @@ struct TiFlashProxyConfig
                 }
             }
         };
-        
+
         set_func(settings.max_memory_usage_for_all_queries.get());
 
         args.push_back("TiFlash Proxy");
