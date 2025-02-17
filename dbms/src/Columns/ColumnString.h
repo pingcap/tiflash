@@ -156,7 +156,6 @@ private:
         const NullMap * nullmap) const;
 
     void deserializeAndInsertFromPosImpl(PaddedPODArray<char *> & pos, bool use_nt_align_buffer);
-    template <bool compare_semantics>
     void deserializeAndInsertFromPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,

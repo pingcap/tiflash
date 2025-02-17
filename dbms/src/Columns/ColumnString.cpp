@@ -706,84 +706,100 @@ void ColumnString::serializeToPosForCmp(
 {
     if (has_null)
     {
-        if (nullmap != nullptr)
+        if (checkNeedDecodeCollatorForCmp(collator))
         {
-            if likely (collator != nullptr)
-                serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+            if (nullmap != nullptr)
+            {
+                serializeToPosImplType</*has_null=*/true, /*need_decode_collator=*/true, /*has_nullmap=*/true>(
                     pos,
                     start,
                     length,
                     collator,
                     sort_key_container,
                     nullmap);
+            }
             else
-                serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/true>(
+            {
+                serializeToPosImplType</*has_null=*/true, /*need_decode_collator=*/true, /*has_nullmap=*/false>(
                     pos,
                     start,
                     length,
-                    nullptr,
-                    nullptr,
-                    nullmap);
+                    collator,
+                    sort_key_container,
+                    nullptr);
+            }
         }
         else
         {
-            if likely (collator != nullptr)
-                serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+            if (nullmap != nullptr)
+            {
+                serializeToPosImplType</*has_null=*/true, /*need_decode_collator=*/false, /*has_nullmap=*/true>(
                     pos,
                     start,
                     length,
-                    collator,
-                    sort_key_container,
-                    nullptr);
+                    nullptr,
+                    nullptr,
+                    nullmap);
+            }
             else
-                serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            {
+                serializeToPosImplType</*has_null=*/true, /*need_decode_collator=*/false, /*has_nullmap=*/false>(
                     pos,
                     start,
                     length,
                     nullptr,
                     nullptr,
                     nullptr);
+            }
         }
     }
     else
     {
-        if (nullmap != nullptr)
+        if (checkNeedDecodeCollatorForCmp(collator))
         {
-            if likely (collator != nullptr)
-                serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+            if (nullmap != nullptr)
+            {
+                serializeToPosImplType</*has_null=*/false, /*need_decode_collator=*/true, /*has_nullmap=*/true>(
                     pos,
                     start,
                     length,
                     collator,
                     sort_key_container,
                     nullmap);
+            }
             else
-                serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/true>(
+            {
+                serializeToPosImplType</*has_null=*/false, /*need_decode_collator=*/true, /*has_nullmap=*/false>(
                     pos,
                     start,
                     length,
-                    nullptr,
-                    nullptr,
-                    nullmap);
+                    collator,
+                    sort_key_container,
+                    nullptr);
+            }
         }
         else
         {
-            if likely (collator != nullptr)
-                serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+            if (nullmap != nullptr)
+            {
+                serializeToPosImplType</*has_null=*/false, /*need_decode_collator=*/false, /*has_nullmap=*/true>(
                     pos,
                     start,
                     length,
-                    collator,
-                    sort_key_container,
-                    nullptr);
+                    nullptr,
+                    nullptr,
+                    nullmap);
+            }
             else
-                serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            {
+                serializeToPosImplType</*has_null=*/false, /*need_decode_collator=*/false, /*has_nullmap=*/false>(
                     pos,
                     start,
                     length,
                     nullptr,
                     nullptr,
                     nullptr);
+            }
         }
     }
 }
@@ -791,7 +807,7 @@ void ColumnString::serializeToPosForCmp(
 void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+        serializeToPosImplType</*has_null=*/true, /*need_decode_collator=*/false, /*has_nullmap=*/false>(
             pos,
             start,
             length,
@@ -799,7 +815,7 @@ void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, si
             nullptr,
             nullptr);
     else
-        serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+        serializeToPosImplType</*has_null=*/false, /*need_decode_collator=*/false, /*has_nullmap=*/false>(
             pos,
             start,
             length,
@@ -808,7 +824,7 @@ void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, si
             nullptr);
 }
 
-template <bool has_null, bool compare_semantics, bool has_nullmap>
+template <bool has_null, bool need_decode_collator, bool has_nullmap>
 void ColumnString::serializeToPosImplType(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -817,14 +833,14 @@ void ColumnString::serializeToPosImplType(
     String * sort_key_container,
     const NullMap * nullmap) const
 {
-    if constexpr (compare_semantics)
+    if constexpr (need_decode_collator)
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
 #define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                     \
     case (COLLATOR_ID):                                                          \
     {                                                                            \
-        serializeToPosImpl<has_null, compare_semantics, IMPL_TYPE, has_nullmap>( \
+        serializeToPosImpl<has_null, need_decode_collator, IMPL_TYPE, has_nullmap>( \
             pos,                                                                 \
             start,                                                               \
             length,                                                              \
@@ -846,18 +862,17 @@ void ColumnString::serializeToPosImplType(
     }
     else
     {
-        assert(!nullmap);
-        serializeToPosImpl<has_null, compare_semantics, TiDB::ITiDBCollator, false>(
+        serializeToPosImpl<has_null, need_decode_collator, TiDB::ITiDBCollator, has_nullmap>(
             pos,
             start,
             length,
             collator,
             sort_key_container,
-            nullptr);
+            nullmap);
     }
 }
 
-template <bool has_null, bool compare_semantics, typename DerivedCollator, bool has_nullmap>
+template <bool has_null, bool need_decode_collator, typename DerivedCollator, bool has_nullmap>
 void ColumnString::serializeToPosImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -882,17 +897,18 @@ void ColumnString::serializeToPosImpl(
                 continue;
         }
 
-        if constexpr (compare_semantics)
+        if constexpr (has_nullmap)
         {
-            if constexpr (has_nullmap)
+            if (DB::isNullAt(*nullmap, start + i))
             {
-                if (DB::isNullAt(*nullmap, start + i))
-                {
-                    tiflash_compiler_builtin_memcpy(pos[i], &col_str_def_val.mem[0], sizeof(col_str_def_val.mem));
-                    pos[i] += sizeof(col_str_def_val.mem);
-                    continue;
-                }
+                tiflash_compiler_builtin_memcpy(pos[i], &col_str_def_val.mem[0], sizeof(col_str_def_val.mem));
+                pos[i] += sizeof(col_str_def_val.mem);
+                continue;
             }
+        }
+
+        if constexpr (need_decode_collator)
+        {
             UInt32 str_size = sizeAt(start + i);
             const void * src = &chars[offsetAt(start + i)];
             auto sort_key
@@ -932,60 +948,76 @@ void ColumnString::serializeToPosForCmpColumnArray(
 {
     if (has_null)
     {
-        if (nullmap != nullptr)
+        if (checkNeedDecodeCollatorForCmp(collator))
         {
-            if likely (collator != nullptr)
+            if (nullmap != nullptr)
+            {
                 serializeToPosForColumnArrayImplType<
                     /*has_null=*/true,
-                    /*compare_semantics=*/true,
+                    /*need_decode_collator=*/true,
                     /*has_nullmap=*/true>(pos, start, length, array_offsets, collator, sort_key_container, nullmap);
+            }
             else
+            {
                 serializeToPosForColumnArrayImplType<
                     /*has_null=*/true,
-                    /*compare_semantics=*/false,
-                    /*has_nullmap=*/true>(pos, start, length, array_offsets, nullptr, nullptr, nullmap);
+                    /*need_decode_collator=*/true,
+                    /*has_nullmap=*/false>(pos, start, length, array_offsets, collator, sort_key_container, nullptr);
+            }
         }
         else
         {
-            if likely (collator != nullptr)
+            if (nullmap != nullptr)
+            {
                 serializeToPosForColumnArrayImplType<
                     /*has_null=*/true,
-                    /*compare_semantics=*/true,
-                    /*has_nullmap=*/false>(pos, start, length, array_offsets, collator, sort_key_container, nullptr);
+                    /*need_decode_collator=*/false,
+                    /*has_nullmap=*/true>(pos, start, length, array_offsets, nullptr, nullptr, nullmap);
+            }
             else
+            {
                 serializeToPosForColumnArrayImplType<
                     /*has_null=*/true,
-                    /*compare_semantics=*/false,
+                    /*need_decode_collator=*/false,
                     /*has_nullmap=*/false>(pos, start, length, array_offsets, nullptr, nullptr, nullptr);
+            }
         }
     }
     else
     {
-        if (nullmap != nullptr)
+        if (checkNeedDecodeCollatorForCmp(collator))
         {
-            if likely (collator != nullptr)
+            if (nullmap != nullptr)
+            {
                 serializeToPosForColumnArrayImplType<
                     /*has_null=*/false,
-                    /*compare_semantics=*/true,
+                    /*need_decode_collator=*/true,
                     /*has_nullmap=*/true>(pos, start, length, array_offsets, collator, sort_key_container, nullmap);
+            }
             else
+            {
                 serializeToPosForColumnArrayImplType<
                     /*has_null=*/false,
-                    /*compare_semantics=*/false,
-                    /*has_nullmap=*/true>(pos, start, length, array_offsets, nullptr, nullptr, nullmap);
+                    /*need_decode_collator=*/true,
+                    /*has_nullmap=*/false>(pos, start, length, array_offsets, collator, sort_key_container, nullptr);
+            }
         }
         else
         {
-            if likely (collator != nullptr)
+            if (nullmap != nullptr)
+            {
                 serializeToPosForColumnArrayImplType<
                     /*has_null=*/false,
-                    /*compare_semantics=*/true,
-                    /*has_nullmap=*/false>(pos, start, length, array_offsets, collator, sort_key_container, nullptr);
+                    /*need_decode_collator=*/false,
+                    /*has_nullmap=*/true>(pos, start, length, array_offsets, nullptr, nullptr, nullmap);
+            }
             else
+            {
                 serializeToPosForColumnArrayImplType<
                     /*has_null=*/false,
-                    /*compare_semantics=*/false,
+                    /*need_decode_collator=*/false,
                     /*has_nullmap=*/false>(pos, start, length, array_offsets, nullptr, nullptr, nullptr);
+            }
         }
     }
 }
@@ -998,7 +1030,7 @@ void ColumnString::serializeToPosForColumnArray(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+        serializeToPosForColumnArrayImplType</*has_null=*/true, /*need_decode_collator=*/false, /*has_nullmap=*/false>(
             pos,
             start,
             length,
@@ -1007,7 +1039,7 @@ void ColumnString::serializeToPosForColumnArray(
             nullptr,
             nullptr);
     else
-        serializeToPosForColumnArrayImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+        serializeToPosForColumnArrayImplType</*has_null=*/false, /*need_decode_collator=*/false, /*has_nullmap=*/false>(
             pos,
             start,
             length,
@@ -1017,7 +1049,7 @@ void ColumnString::serializeToPosForColumnArray(
             nullptr);
 }
 
-template <bool has_null, bool compare_semantics, bool has_nullmap>
+template <bool has_null, bool need_decode_collator, bool has_nullmap>
 void ColumnString::serializeToPosForColumnArrayImplType(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -1027,14 +1059,14 @@ void ColumnString::serializeToPosForColumnArrayImplType(
     String * sort_key_container,
     const NullMap * nullmap) const
 {
-    if constexpr (compare_semantics)
+    if constexpr (need_decode_collator)
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
 #define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                   \
     case (COLLATOR_ID):                                                                        \
     {                                                                                          \
-        serializeToPosForColumnArrayImpl<has_null, compare_semantics, IMPL_TYPE, has_nullmap>( \
+        serializeToPosForColumnArrayImpl<has_null, need_decode_collator, IMPL_TYPE, has_nullmap>( \
             pos,                                                                               \
             start,                                                                             \
             length,                                                                            \
@@ -1057,18 +1089,18 @@ void ColumnString::serializeToPosForColumnArrayImplType(
     }
     else
     {
-        serializeToPosForColumnArrayImpl<has_null, compare_semantics, TiDB::ITiDBCollator, false>(
+        serializeToPosForColumnArrayImpl<has_null, need_decode_collator, TiDB::ITiDBCollator, has_nullmap>(
             pos,
             start,
             length,
             array_offsets,
             collator,
             sort_key_container,
-            nullptr);
+            nullmap);
     }
 }
 
-template <bool has_null, bool compare_semantics, typename DerivedCollator, bool has_nullmap>
+template <bool has_null, bool need_decode_collator, typename DerivedCollator, bool has_nullmap>
 void ColumnString::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -1104,13 +1136,13 @@ void ColumnString::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
-        if constexpr (compare_semantics)
+        if constexpr (has_nullmap)
         {
-            if constexpr (has_nullmap)
-            {
-                if (DB::isNullAt(*nullmap, start + i))
-                    continue;
-            }
+            if (DB::isNullAt(*nullmap, start + i))
+                continue;
+        }
+        if constexpr (need_decode_collator)
+        {
             for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
             {
                 UInt32 str_size = sizeAt(j);
@@ -1130,7 +1162,6 @@ void ColumnString::serializeToPosForColumnArrayImpl(
         }
         else
         {
-            static_assert(!has_nullmap);
             for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
             {
                 UInt32 str_size = sizeAt(j);
@@ -1268,7 +1299,7 @@ void ColumnString::deserializeForCmpAndInsertFromPosColumnArray(
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer)
 {
-    deserializeAndInsertFromPosForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
+    deserializeAndInsertFromPosForColumnArrayImpl(pos, array_offsets, use_nt_align_buffer);
 }
 
 void ColumnString::deserializeAndInsertFromPosForColumnArray(
@@ -1276,10 +1307,9 @@ void ColumnString::deserializeAndInsertFromPosForColumnArray(
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer)
 {
-    deserializeAndInsertFromPosForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
+    deserializeAndInsertFromPosForColumnArrayImpl(pos, array_offsets, use_nt_align_buffer);
 }
 
-template <bool compare_semantics>
 void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
@@ -1304,42 +1334,20 @@ void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
 
     size_t size = pos.size();
     size_t char_size = chars.size();
-    if constexpr (compare_semantics)
+    for (size_t i = 0; i < size; ++i)
     {
-        for (size_t i = 0; i < size; ++i)
+        size_t prev_char_size = char_size;
+        for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
         {
-            for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
-            {
-                UInt32 str_size;
-                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
-                pos[i] += sizeof(UInt32);
-
-                chars.resize(char_size + str_size);
-                memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
-
-                char_size += str_size;
-                offsets[j] = char_size;
-                pos[i] += str_size;
-            }
+            UInt32 str_size;
+            tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+            pos[i] += sizeof(UInt32);
+            char_size += str_size;
+            offsets[j] = char_size;
         }
-    }
-    else
-    {
-        for (size_t i = 0; i < size; ++i)
-        {
-            size_t prev_char_size = char_size;
-            for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
-            {
-                UInt32 str_size;
-                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
-                pos[i] += sizeof(UInt32);
-                char_size += str_size;
-                offsets[j] = char_size;
-            }
-            chars.resize(char_size);
-            memcpySmallAllowReadWriteOverflow15(&chars[prev_char_size], pos[i], char_size - prev_char_size);
-            pos[i] += char_size - prev_char_size;
-        }
+        chars.resize(char_size);
+        memcpySmallAllowReadWriteOverflow15(&chars[prev_char_size], pos[i], char_size - prev_char_size);
+        pos[i] += char_size - prev_char_size;
     }
 }
 
