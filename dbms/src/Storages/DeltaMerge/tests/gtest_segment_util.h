@@ -27,6 +27,7 @@ struct SegDataUnit
     std::tuple<Int64, Int64, bool> range; // {left, right, including_right_boundary}
     std::optional<size_t> pack_size; // For DMFile
     bool shuffle = false; // For ColumnFileTiny and ColumnFileMemory
+    std::optional<UInt64> ts;
 };
 
 std::vector<SegDataUnit> parseSegData(std::string_view seg_data);

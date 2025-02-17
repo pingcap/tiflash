@@ -55,29 +55,47 @@ SegDataUnit parseSegDataUnit(String & s)
     boost::algorithm::trim(s);
     std::vector<String> values;
     boost::split(values, s, boost::is_any_of(":"));
+    RUNTIME_CHECK(!values.empty(), s);
     for (auto & v : values)
         boost::algorithm::trim(v);
+
+    if (values.size() == 1)
+    {
+        const std::unordered_set<String> commands = {"compact_delta", "merge_delta"};
+        RUNTIME_CHECK(commands.contains(values[0]), s);
+        return SegDataUnit{.type = values[0]};
+    }
+
     RUNTIME_CHECK(values.size() >= 2, s, values);
     SegDataUnit unit;
     unit.type = values[0];
     unit.range = parseRange<Int64>(values[1]);
     for (size_t i = 2; i < values.size(); i++)
     {
+        const auto & v = values[i];
         // Pack size for DMFile
         std::string_view attr_pack_size_prefix{"pack_size_"};
-        if (values[i].starts_with(attr_pack_size_prefix))
+        if (v.starts_with(attr_pack_size_prefix))
         {
-            RUNTIME_CHECK(unit.type == "d_big" || unit.type == "s", s, unit.type);
-            unit.pack_size = std::stoul(values[i].substr(attr_pack_size_prefix.size()));
+            RUNTIME_CHECK(unit.type == "d_big" || unit.type == "s", s, v, unit.type);
+            unit.pack_size = std::stoul(v.substr(attr_pack_size_prefix.size()));
             continue;
         }
 
         // Make data in ColumnFileTiny or ColumnFileMem unsorted.
         std::string_view attr_shuffle{"shuffle"};
-        if (values[i] == attr_shuffle)
+        if (v == attr_shuffle)
         {
-            RUNTIME_CHECK(unit.type == "d_mem" || unit.type == "d_tiny", s, unit.type);
+            RUNTIME_CHECK(unit.type == "d_mem" || unit.type == "d_tiny", s, v, unit.type);
             unit.shuffle = true;
+            continue;
+        }
+
+        std::string_view attr_timestamp_prefix{"ts_"};
+        if (v.starts_with(attr_timestamp_prefix))
+        {
+            RUNTIME_CHECK(unit.type == "d_mem" || unit.type == "d_tiny", s, v, unit.type);
+            unit.ts = std::stoul(v.substr(attr_timestamp_prefix.size()));
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: {} is unsupported", s, values[i]);

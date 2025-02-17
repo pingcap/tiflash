@@ -116,7 +116,7 @@ protected:
         const auto write_count = end - begin + including_right_boundary;
         if (type == "d_mem")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
         }
         else if (type == "d_mem_del")
         {
@@ -124,7 +124,7 @@ protected:
         }
         else if (type == "d_tiny")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
             SegmentTestBasic::flushSegmentCache(SEG_ID);
         }
         else if (type == "d_tiny_del")
@@ -161,6 +161,10 @@ protected:
                 ASSERT_EQ(dm_context->stable_pack_rows, *(unit.pack_size));
             }
             SegmentTestBasic::mergeSegmentDelta(SEG_ID);
+        }
+        else if (type == "compact_delta")
+        {
+            SegmentTestBasic::compactSegmentDelta(SEG_ID);
         }
         else
         {
@@ -1020,6 +1024,17 @@ TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange4)
 try
 {
     writeSegmentGeneric(
+        "d_mem:[-9223372036854775808, -9223372036854775800):shuffle|d_mem:[9223372036854775800, "
+        "9223372036854775807]:shuffle|"
+        "d_dr:[-9223372036854775808, -9223372036854775804)|d_dr:[9223372036854775804, 9223372036854775807)");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+
+    SetUp();
+
+    writeSegmentGeneric(
         "d_mem:[-9223372036854775808, -9223372036854775800)|d_mem:[9223372036854775800, 9223372036854775807]|"
         "d_dr:[-9223372036854775808, -9223372036854775804)|d_dr:[9223372036854775804, 9223372036854775807)");
     verifyVersionChain(VerifyVersionChainOption{
@@ -1033,6 +1048,17 @@ CATCH
 TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange5)
 try
 {
+    writeSegmentGeneric(
+        "d_mem:[-9223372036854775808, -9223372036854775800):shuffle|d_mem:[9223372036854775800, "
+        "9223372036854775807]:shuffle|"
+        "d_dr:[-9223372036854775808, -9223372036854775804)|d_dr:[9223372036854775804, 9223372036854775807]");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+
+    SetUp();
+
     writeSegmentGeneric(
         "d_mem:[-9223372036854775808, -9223372036854775800)|d_mem:[9223372036854775800, 9223372036854775807]|"
         "d_dr:[-9223372036854775808, -9223372036854775804)|d_dr:[9223372036854775804, 9223372036854775807]");
@@ -1128,6 +1154,50 @@ try
         .caller_line = __LINE__,
         .expected_bitmap = "000001111111111111111111111111111111111111110000000000000000000000000000000000000"
                            "00000000000000001",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta1)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+
+    SetUp();
+
+    writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny:[3, 13):ts_2|d_tiny:[6, 16):ts_3");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "111000000011100000001111111111",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "111000000011111111110000000000",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "111111111100000000000000000000",
     });
 }
 CATCH
