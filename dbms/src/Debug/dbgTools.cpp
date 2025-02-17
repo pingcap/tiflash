@@ -45,6 +45,21 @@ namespace RegionBench
 {
 using TiDB::ColumnInfo;
 
+metapb::Region createMetaRegion(TableID table_id, RegionID region_id, HandleID start, HandleID end, UInt64 peer_id)
+{
+    metapb::Region meta;
+    meta.set_id(region_id);
+
+    TiKVKey start_key = RecordKVFormat::genKey(table_id, start);
+    TiKVKey end_key = RecordKVFormat::genKey(table_id, end);
+
+    meta.set_start_key(start_key.getStr());
+    meta.set_end_key(end_key.getStr());
+    auto * peer = meta.add_peers();
+    peer->set_id(peer_id);
+    return meta;
+}
+
 RegionPtr createRegion(
     TableID table_id,
     RegionID region_id,
@@ -52,17 +67,10 @@ RegionPtr createRegion(
     const HandleID & end,
     std::optional<uint64_t> index_)
 {
-    metapb::Region region;
+    // peer_id is a fake number here
+    auto meta_region = createMetaRegion(table_id, region_id, start, end, 1000);
     metapb::Peer peer;
-    region.set_id(region_id);
-
-    TiKVKey start_key = RecordKVFormat::genKey(table_id, start);
-    TiKVKey end_key = RecordKVFormat::genKey(table_id, end);
-
-    region.set_start_key(start_key.getStr());
-    region.set_end_key(end_key.getStr());
-
-    RegionMeta region_meta(std::move(peer), std::move(region), initialApplyState());
+    RegionMeta region_meta(std::move(peer), std::move(meta_region), initialApplyState());
     uint64_t index = MockTiKV::instance().getRaftIndex(region_id);
     if (index_)
         index = *index_;
