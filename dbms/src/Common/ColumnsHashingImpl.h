@@ -141,6 +141,12 @@ public:
     }
 
     template <typename KeyHolder, typename Data>
+    ALWAYS_INLINE inline EmplaceResult emplaceKey(Data & data, KeyHolder && key_holder)
+    {
+        return emplaceImpl(key_holder, data);
+    }
+
+    template <typename KeyHolder, typename Data>
     ALWAYS_INLINE inline EmplaceResult emplaceKey(Data & data, KeyHolder && key_holder, size_t hashval)
     {
         return emplaceImpl(key_holder, data, hashval);
@@ -154,6 +160,12 @@ public:
         std::vector<String> & sort_key_containers)
     {
         auto key_holder = static_cast<Derived &>(*this).getKeyHolder(row, &pool, sort_key_containers);
+        return findKeyImpl(keyHolderGetKey(key_holder), data);
+    }
+
+    template <typename KeyHolder, typename Data>
+    ALWAYS_INLINE inline FindResult findKey(Data & data, KeyHolder && key_holder)
+    {
         return findKeyImpl(keyHolderGetKey(key_holder), data);
     }
 
