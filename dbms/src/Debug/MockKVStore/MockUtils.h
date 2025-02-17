@@ -31,8 +31,8 @@ inline metapb::Peer createPeer(UInt64 id, bool)
 
 inline metapb::Region createRegionInfo(
     UInt64 id,
-    const std::string start_key,
-    const std::string end_key,
+    const std::string & start_key,
+    const std::string & end_key,
     std::optional<metapb::RegionEpoch> maybe_epoch = std::nullopt,
     std::optional<std::vector<metapb::Peer>> maybe_peers = std::nullopt)
 {
