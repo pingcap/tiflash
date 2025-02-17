@@ -212,7 +212,7 @@ StringRef GeneralCICollator::convertImpl(
     else
         v = std::string_view(s, length);
 
-    const auto max_bytes_one_char = maxBytesForOneChar();
+    const auto max_bytes_one_char = sortKeyReservedSpaceMultipler();
     if (length * max_bytes_one_char > container.size())
         container.resize(length * max_bytes_one_char);
     size_t offset = 0;
@@ -378,7 +378,7 @@ StringRef UCACICollator<T, padding>::convertImpl(
     else
         v = std::string_view(s, length);
 
-    const auto max_bytes_one_char = maxBytesForOneChar();
+    const auto max_bytes_one_char = sortKeyReservedSpaceMultipler();
     if (length * max_bytes_one_char > container.size())
         container.resize(length * max_bytes_one_char);
     size_t offset = 0;

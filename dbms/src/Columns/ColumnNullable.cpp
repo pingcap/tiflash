@@ -284,10 +284,13 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, con
 
 void ColumnNullable::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    getNullMapColumn().countSerializeByteSizeForCmp(byte_size, collator);
-    getNestedColumn().countSerializeByteSizeForCmp(byte_size, collator);
+    // Nested ColumnNullable like ColumnNullable(ColumnArray(ColumnNullable(ColumnXXX))) not support.
+    RUNTIME_CHECK_MSG(!nullmap, "countSerializeByteSizeForCmp cannot handle nested nullable");
+    getNullMapColumn().countSerializeByteSizeForCmp(byte_size, nullptr, collator);
+    getNestedColumn().countSerializeByteSizeForCmp(byte_size, &getNullMapData(), collator);
 }
 void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
@@ -296,12 +299,15 @@ void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) 
 }
 
 void ColumnNullable::countSerializeByteSizeForCmpColumnArray(
-    PaddedPODArray<size_t> & byte_size,
-    const IColumn::Offsets & array_offsets,
-    const TiDB::TiDBCollatorPtr & collator) const
+    PaddedPODArray<size_t> &,
+    const IColumn::Offsets &,
+    const NullMap *,
+    const TiDB::TiDBCollatorPtr &) const
 {
-    getNullMapColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, collator);
-    getNestedColumn().countSerializeByteSizeForCmpColumnArray(byte_size, array_offsets, collator);
+    // Unable to handle ColumnArray(ColumnNullable(ColumnXXX)).
+    throw Exception(
+        "countSerializeByteSizeForCmpColumnArray cannot handle ColumnArray(" + getName() + ")",
+        ErrorCodes::NOT_IMPLEMENTED);
 }
 void ColumnNullable::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
@@ -316,12 +322,17 @@ void ColumnNullable::serializeToPosForCmp(
     size_t start,
     size_t length,
     bool has_null,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
-    getNullMapColumn().serializeToPosForCmp(pos, start, length, has_null, collator, sort_key_container);
-    getNestedColumn().serializeToPosForCmp(pos, start, length, has_null, collator, sort_key_container);
+    // Nested ColumnNullable like ColumnNullable(ColumnArray(ColumnNullable(ColumnXXX))) not support.
+    RUNTIME_CHECK_MSG(!nullmap, "serializeToPosForCmp cannot handle nested nullable");
+    getNullMapColumn().serializeToPosForCmp(pos, start, length, has_null, nullptr, collator, sort_key_container);
+    getNestedColumn()
+        .serializeToPosForCmp(pos, start, length, has_null, &getNullMapData(), collator, sort_key_container);
 }
+
 void ColumnNullable::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     getNullMapColumn().serializeToPos(pos, start, length, has_null);
@@ -329,18 +340,21 @@ void ColumnNullable::serializeToPos(PaddedPODArray<char *> & pos, size_t start, 
 }
 
 void ColumnNullable::serializeToPosForCmpColumnArray(
-    PaddedPODArray<char *> & pos,
-    size_t start,
-    size_t length,
-    bool has_null,
-    const IColumn::Offsets & array_offsets,
-    const TiDB::TiDBCollatorPtr & collator,
-    String * sort_key_container) const
+    PaddedPODArray<char *> & /* pos */,
+    size_t /* start */,
+    size_t /* length */,
+    bool /* has_null */,
+    const NullMap * /* nullmap */,
+    const IColumn::Offsets & /* array_offsets */,
+    const TiDB::TiDBCollatorPtr & /* collator */,
+    String * /* sort_key_container */) const
 {
-    getNullMapColumn()
-        .serializeToPosForCmpColumnArray(pos, start, length, has_null, array_offsets, collator, sort_key_container);
-    getNestedColumn()
-        .serializeToPosForCmpColumnArray(pos, start, length, has_null, array_offsets, collator, sort_key_container);
+    // Unable to handle ColumnArray(ColumnNullable(ColumnXXX)). Because the pos vector corresponds to the rows of ColumnArray,
+    // while ColumnNullable::nullmap corresponds to the rows of ColumnNullable.
+    // This means it's not easy to correctly serialize the row in ColumnNullable to the corresponding position in pos.
+    throw Exception(
+        "serializeToPosForCmpColumnArray cannot handle ColumnArray(" + getName() + ")",
+        ErrorCodes::NOT_IMPLEMENTED);
 }
 void ColumnNullable::serializeToPosForColumnArray(
     PaddedPODArray<char *> & pos,
