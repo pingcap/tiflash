@@ -317,7 +317,7 @@ private:
         }
 
         // Other display mode need to restore ps instance
-        auto display = [](auto &, auto & mvcc_table_directory, auto & blob_store, const ControlOptions & opts) {
+        auto display = [](auto & ps, auto & mvcc_table_directory, auto & blob_store, const ControlOptions & opts) {
             switch (opts.mode)
             {
             case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
