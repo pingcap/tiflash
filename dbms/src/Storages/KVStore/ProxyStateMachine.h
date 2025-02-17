@@ -475,7 +475,7 @@ struct ProxyStateMachine
         if (global_settings.max_threads.is_auto && global_settings.max_threads.get() != getNumberOfLogicalCPUCores())
         {
             // now it should set the max_threads value according to the new logical cores
-            global_settings.max_threads.setAuto(); 
+            global_settings.max_threads.setAuto();
             LOG_INFO(
                 log,
                 "Reset max_threads, max_threads={} logical_cores={}",
