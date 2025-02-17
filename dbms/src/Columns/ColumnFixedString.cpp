@@ -162,15 +162,26 @@ void ColumnFixedString::serializeToPosForCmp(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
+    bool has_null,
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator,
     String *) const
 {
     RUNTIME_CHECK_MSG(!collator, "{} doesn't support serializeToPosForCmp when collator is not null", getName());
-    if (nullmap != nullptr)
-        serializeToPosImpl<false, true>(pos, start, length, nullmap);
+    if (has_null)
+    {
+        if (nullmap != nullptr)
+            serializeToPosImpl<true, true>(pos, start, length, nullmap);
+        else
+            serializeToPosImpl<true, false>(pos, start, length, nullptr);
+    }
     else
-        serializeToPosImpl<false, false>(pos, start, length, nullptr);
+    {
+        if (nullmap != nullptr)
+            serializeToPosImpl<false, true>(pos, start, length, nullmap);
+        else
+            serializeToPosImpl<false, false>(pos, start, length, nullptr);
+    }
 }
 
 void ColumnFixedString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
@@ -191,7 +202,6 @@ void ColumnFixedString::serializeToPosImpl(
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
-    static_assert(!(has_null && has_nullmap));
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     for (size_t i = 0; i < length; ++i)
@@ -219,6 +229,7 @@ void ColumnFixedString::serializeToPosForCmpColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
+    bool has_null,
     const NullMap * nullmap,
     const IColumn::Offsets & array_offsets,
     const TiDB::TiDBCollatorPtr & collator,
@@ -228,10 +239,20 @@ void ColumnFixedString::serializeToPosForCmpColumnArray(
         !collator,
         "{} doesn't support serializeToPosForCmpColumnArray when collator is not null",
         getName());
-    if (nullmap != nullptr)
-        serializeToPosForColumnArrayImpl<false, true>(pos, start, length, array_offsets, nullmap);
+    if (has_null)
+    {
+        if (nullmap != nullptr)
+            serializeToPosForColumnArrayImpl<true, true>(pos, start, length, array_offsets, nullmap);
+        else
+            serializeToPosForColumnArrayImpl<true, false>(pos, start, length, array_offsets, nullptr);
+    }
     else
-        serializeToPosForColumnArrayImpl<false, false>(pos, start, length, array_offsets, nullptr);
+    {
+        if (nullmap != nullptr)
+            serializeToPosForColumnArrayImpl<false, true>(pos, start, length, array_offsets, nullmap);
+        else
+            serializeToPosForColumnArrayImpl<false, false>(pos, start, length, array_offsets, nullptr);
+    }
 }
 
 void ColumnFixedString::serializeToPosForColumnArray(
@@ -268,7 +289,6 @@ void ColumnFixedString::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
-    static_assert(!(has_null && has_nullmap));
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
 
     for (size_t i = 0; i < length; ++i)

@@ -264,26 +264,49 @@ void ColumnArray::serializeToPosForCmp(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
+    bool has_null,
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
-    if (nullmap != nullptr)
-        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-            pos,
-            start,
-            length,
-            collator,
-            sort_key_container,
-            nullmap);
+    if (has_null)
+    {
+        if (nullmap != nullptr)
+            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                    pos,
+                    start,
+                    length,
+                    collator,
+                    sort_key_container,
+                    nullmap);
+        else
+            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                    pos,
+                    start,
+                    length,
+                    collator,
+                    sort_key_container,
+                    nullptr);
+    }
     else
-        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-            pos,
-            start,
-            length,
-            collator,
-            sort_key_container,
-            nullptr);
+    {
+        if (nullmap != nullptr)
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                    pos,
+                    start,
+                    length,
+                    collator,
+                    sort_key_container,
+                    nullmap);
+        else
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                    pos,
+                    start,
+                    length,
+                    collator,
+                    sort_key_container,
+                    nullptr);
+    }
 }
 
 void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
@@ -318,7 +341,6 @@ void ColumnArray::serializeToPosImpl(
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
-    static_assert(!(has_null && has_nullmap));
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     /// countSerializeByteSize has already checked that the size of one element is not greater than UINT32_MAX
@@ -342,7 +364,7 @@ void ColumnArray::serializeToPosImpl(
 
     if constexpr (compare_semantics)
         getData()
-            .serializeToPosForCmpColumnArray(pos, start, length, nullmap, getOffsets(), collator, sort_key_container);
+            .serializeToPosForCmpColumnArray(pos, start, length, has_null, nullmap, getOffsets(), collator, sort_key_container);
     else
         getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
 }

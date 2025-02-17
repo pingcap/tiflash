@@ -230,22 +230,41 @@ void ColumnDecimal<T>::serializeToPosForCmp(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
+    bool has_null,
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr &,
     String *) const
 {
-    if (nullmap != nullptr)
-        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-            pos,
-            start,
-            length,
-            nullmap);
+    if (has_null)
+    {
+        if (nullmap != nullptr)
+            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                    pos,
+                    start,
+                    length,
+                    nullmap);
+        else
+            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                    pos,
+                    start,
+                    length,
+                    nullptr);
+    }
     else
-        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-            pos,
-            start,
-            length,
-            nullptr);
+    {
+        if (nullmap != nullptr)
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                    pos,
+                    start,
+                    length,
+                    nullmap);
+        else
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                    pos,
+                    start,
+                    length,
+                    nullptr);
+    }
 }
 
 template <typename T>
@@ -270,25 +289,46 @@ void ColumnDecimal<T>::serializeToPosForCmpColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
+    bool has_null,
     const NullMap * nullmap,
     const IColumn::Offsets & array_offsets,
     const TiDB::TiDBCollatorPtr &,
     String *) const
 {
-    if (nullmap != nullptr)
-        serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-            pos,
-            start,
-            length,
-            array_offsets,
-            nullmap);
+    if (has_null)
+    {
+        if (nullmap != nullptr)
+            serializeToPosForColumnArrayImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                    pos,
+                    start,
+                    length,
+                    array_offsets,
+                    nullmap);
+        else
+            serializeToPosForColumnArrayImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                    pos,
+                    start,
+                    length,
+                    array_offsets,
+                    nullptr);
+    }
     else
-        serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-            pos,
-            start,
-            length,
-            array_offsets,
-            nullptr);
+    {
+        if (nullmap != nullptr)
+            serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                    pos,
+                    start,
+                    length,
+                    array_offsets,
+                    nullmap);
+        else
+            serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                    pos,
+                    start,
+                    length,
+                    array_offsets,
+                    nullptr);
+    }
 }
 
 template <typename T>
@@ -326,7 +366,6 @@ void ColumnDecimal<T>::serializeToPosImpl(
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
-    static_assert(!(has_null && has_nullmap));
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     static constexpr T def_val{};
@@ -378,7 +417,6 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
-    static_assert(!(has_null && has_nullmap));
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
 
     for (size_t i = 0; i < length; ++i)

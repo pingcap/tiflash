@@ -130,12 +130,13 @@ public:
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
+        bool has_null,
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const override
     {
         for (const auto & column : columns)
-            column->serializeToPosForCmp(pos, start, length, nullmap, collator, sort_key_container);
+            column->serializeToPosForCmp(pos, start, length, has_null, nullmap, collator, sort_key_container);
     }
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override
     {
@@ -147,6 +148,7 @@ public:
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
+        bool has_null,
         const NullMap * nullmap,
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr & collator,
@@ -157,6 +159,7 @@ public:
                 pos,
                 start,
                 length,
+                has_null,
                 nullmap,
                 array_offsets,
                 collator,

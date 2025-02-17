@@ -201,6 +201,7 @@ public:
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
+        bool /* has_null */,
         const NullMap * /* nullmap */,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /* sort_key_container */) const override
@@ -219,6 +220,7 @@ public:
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
+        bool /* has_null */,
         const NullMap * /* nullmap */,
         const IColumn::Offsets & /* offsets */,
         const TiDB::TiDBCollatorPtr & /* collator */,

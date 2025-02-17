@@ -339,7 +339,7 @@ public:
         PaddedPODArray<char *> ori_pos;
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        column_ptr->serializeToPosForCmp(pos, 0, byte_size.size() / 2, nullptr, collator, sort_key_container);
+        column_ptr->serializeToPosForCmp(pos, 0, byte_size.size() / 2, false, nullptr, collator, sort_key_container);
 
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
@@ -360,6 +360,7 @@ public:
             pos,
             byte_size.size() / 2,
             byte_size.size() - byte_size.size() / 2,
+            false,
             nullptr,
             collator,
             sort_key_container);
@@ -377,7 +378,7 @@ public:
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
 
-        column_ptr->serializeToPosForCmp(pos, 0, byte_size.size(), nullptr, collator, sort_key_container);
+        column_ptr->serializeToPosForCmp(pos, 0, byte_size.size(), false, nullptr, collator, sort_key_container);
         new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
 
         if (use_nt_align_buffer)
