@@ -305,6 +305,8 @@ struct TiFlashProxyConfig
         }
         is_proxy_runnable = true;
     }
+
+    void addExtraArgs(const std::string & k, const std::string & v) { val_map["--" + k] = v; }
 };
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
