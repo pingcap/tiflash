@@ -274,10 +274,8 @@ void KVStore::onSnapshot(
 
     // 2. Dump data to RegionTable.
     {
-        const auto range = new_region_wrap->getRange();
         auto & region_table = tmt.getRegionTable();
-        // extend region to make sure data won't be removed.
-        region_table.extendRegionRange(region_id, *range);
+        region_table.replaceRegion(old_region, new_region_wrap.base);
     }
 
     // Register the new Region.

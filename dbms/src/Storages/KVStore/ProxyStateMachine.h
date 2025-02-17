@@ -276,19 +276,24 @@ struct ProxyStateMachine
         }
     }
 
-    void initKVStore(TMTContext & tmt_context, std::optional<raft_serverpb::StoreIdent> & store_ident)
+    void initKVStore(
+        TMTContext & tmt_context,
+        std::optional<raft_serverpb::StoreIdent> & store_ident,
+        size_t memory_limit)
     {
+        auto kvstore = tmt_context.getKVStore();
         if (store_ident)
         {
             // Many service would depends on `store_id` when disagg is enabled.
             // setup the store_id restored from store_ident ASAP
             // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-            auto kvstore = tmt_context.getKVStore();
             metapb::Store store_meta;
             store_meta.set_id(store_ident->store_id());
             store_meta.set_node_state(metapb::NodeState::Preparing);
             kvstore->setStore(store_meta);
         }
+        kvstore->setKVStoreMemoryLimit(memory_limit);
+        LOG_INFO(log, "Set KVStore memory limit {}", memory_limit);
     }
 
     /// Restore TMTContext, including KVStore and RegionTable.

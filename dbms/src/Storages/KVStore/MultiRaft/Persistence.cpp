@@ -218,14 +218,17 @@ bool KVStore::canFlushRegionDataImpl(
         LOG_INFO(
             log,
             "{} flush region due to tryFlushRegionData, index {} term {} truncated_index {} truncated_term {}"
-            " gap {}/{}",
+            " gap {}/{} table_in_mem_size={} table_id={} keyspace={}",
             curr_region.toString(false),
             index,
             term,
             truncated_index,
             truncated_term,
             current_applied_gap,
-            gap_threshold);
+            gap_threshold,
+            curr_region_ptr->getRegionTableSize(),
+            curr_region_ptr->getMappedTableID(),
+            curr_region_ptr->getKeyspaceID());
         GET_METRIC(tiflash_raft_region_flush_bytes, type_flushed).Observe(size_bytes);
         return forceFlushRegionDataImpl(curr_region, try_until_succeed, tmt, region_task_lock, index, term);
     }
