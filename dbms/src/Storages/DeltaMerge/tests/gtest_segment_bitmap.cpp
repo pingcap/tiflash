@@ -170,6 +170,10 @@ protected:
         {
             SegmentTestBasic::flushSegmentCache(SEG_ID);
         }
+        else if (type == "merge_delta")
+        {
+            SegmentTestBasic::mergeSegmentDelta(SEG_ID);
+        }
         else
         {
             RUNTIME_CHECK(false, type);
@@ -1162,7 +1166,32 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta0)
+TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta)
+try
+{
+    writeSegmentGeneric("d_mem:[0, 1):ts_1|d_mem:[0, 1):ts_2|d_mem:[0, 1):ts_3");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "001",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "010",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "100",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta_Flush)
 try
 {
     writeSegmentGeneric("d_mem:[0, 10):shuffle:ts_1|d_mem:[3, 13):shuffle:ts_2|d_mem:[6, 16):shuffle:ts_3");
@@ -1202,8 +1231,7 @@ try
 }
 CATCH
 
-
-TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta1)
+TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta_Compact)
 try
 {
     writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3");
@@ -1296,6 +1324,37 @@ try
         .caller_line = __LINE__,
         .read_ts = 1,
         .expected_bitmap = "111111111100000000000000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, VersionFilter_Stable)
+try
+{
+    writeSegmentGeneric(
+        "d_tiny:[0, 10):shuffle:ts_1|d_tiny:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3|merge_delta");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFileCount(), 0);
+    }
+
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "111010101001001001001010101111",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "111010101010010010010101010000",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "111101010100100100100000000000",
     });
 }
 CATCH
