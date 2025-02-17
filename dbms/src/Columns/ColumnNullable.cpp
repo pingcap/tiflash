@@ -325,7 +325,8 @@ void ColumnNullable::serializeToPosForCmp(
     // Nested ColumnNullable like ColumnNullable(ColumnArray(ColumnNullable(ColumnXXX))) not support.
     RUNTIME_CHECK_MSG(!nullmap, "serializeToPosForCmp cannot handle nested nullable");
     getNullMapColumn().serializeToPosForCmp(pos, start, length, has_null, nullptr, collator, sort_key_container);
-    getNestedColumn().serializeToPosForCmp(pos, start, length, has_null, &getNullMapData(), collator, sort_key_container);
+    getNestedColumn()
+        .serializeToPosForCmp(pos, start, length, has_null, &getNullMapData(), collator, sort_key_container);
 }
 
 void ColumnNullable::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const

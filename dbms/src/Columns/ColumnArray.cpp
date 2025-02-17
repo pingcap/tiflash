@@ -273,39 +273,39 @@ void ColumnArray::serializeToPosForCmp(
     {
         if (nullmap != nullptr)
             serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                    pos,
-                    start,
-                    length,
-                    collator,
-                    sort_key_container,
-                    nullmap);
+                pos,
+                start,
+                length,
+                collator,
+                sort_key_container,
+                nullmap);
         else
             serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                    pos,
-                    start,
-                    length,
-                    collator,
-                    sort_key_container,
-                    nullptr);
+                pos,
+                start,
+                length,
+                collator,
+                sort_key_container,
+                nullptr);
     }
     else
     {
         if (nullmap != nullptr)
             serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                    pos,
-                    start,
-                    length,
-                    collator,
-                    sort_key_container,
-                    nullmap);
+                pos,
+                start,
+                length,
+                collator,
+                sort_key_container,
+                nullmap);
         else
             serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                    pos,
-                    start,
-                    length,
-                    collator,
-                    sort_key_container,
-                    nullptr);
+                pos,
+                start,
+                length,
+                collator,
+                sort_key_container,
+                nullptr);
     }
 }
 
@@ -363,8 +363,15 @@ void ColumnArray::serializeToPosImpl(
     }
 
     if constexpr (compare_semantics)
-        getData()
-            .serializeToPosForCmpColumnArray(pos, start, length, has_null, nullmap, getOffsets(), collator, sort_key_container);
+        getData().serializeToPosForCmpColumnArray(
+            pos,
+            start,
+            length,
+            has_null,
+            nullmap,
+            getOffsets(),
+            collator,
+            sort_key_container);
     else
         getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
 }

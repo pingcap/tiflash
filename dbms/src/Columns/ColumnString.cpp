@@ -772,39 +772,39 @@ void ColumnString::serializeToPosForCmp(
         {
             if likely (collator != nullptr)
                 serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                        pos,
-                        start,
-                        length,
-                        collator,
-                        sort_key_container,
-                        nullmap);
+                    pos,
+                    start,
+                    length,
+                    collator,
+                    sort_key_container,
+                    nullmap);
             else
                 serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/true>(
-                        pos,
-                        start,
-                        length,
-                        nullptr,
-                        nullptr,
-                        nullmap);
+                    pos,
+                    start,
+                    length,
+                    nullptr,
+                    nullptr,
+                    nullmap);
         }
         else
         {
             if likely (collator != nullptr)
                 serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                        pos,
-                        start,
-                        length,
-                        collator,
-                        sort_key_container,
-                        nullptr);
+                    pos,
+                    start,
+                    length,
+                    collator,
+                    sort_key_container,
+                    nullptr);
             else
                 serializeToPosImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
-                        pos,
-                        start,
-                        length,
-                        nullptr,
-                        nullptr,
-                        nullptr);
+                    pos,
+                    start,
+                    length,
+                    nullptr,
+                    nullptr,
+                    nullptr);
         }
     }
     else
@@ -813,39 +813,39 @@ void ColumnString::serializeToPosForCmp(
         {
             if likely (collator != nullptr)
                 serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                        pos,
-                        start,
-                        length,
-                        collator,
-                        sort_key_container,
-                        nullmap);
+                    pos,
+                    start,
+                    length,
+                    collator,
+                    sort_key_container,
+                    nullmap);
             else
                 serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/true>(
-                        pos,
-                        start,
-                        length,
-                        nullptr,
-                        nullptr,
-                        nullmap);
+                    pos,
+                    start,
+                    length,
+                    nullptr,
+                    nullptr,
+                    nullmap);
         }
         else
         {
             if likely (collator != nullptr)
                 serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                        pos,
-                        start,
-                        length,
-                        collator,
-                        sort_key_container,
-                        nullptr);
+                    pos,
+                    start,
+                    length,
+                    collator,
+                    sort_key_container,
+                    nullptr);
             else
                 serializeToPosImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
-                        pos,
-                        start,
-                        length,
-                        nullptr,
-                        nullptr,
-                        nullptr);
+                    pos,
+                    start,
+                    length,
+                    nullptr,
+                    nullptr,
+                    nullptr);
         }
     }
 }
@@ -997,35 +997,23 @@ void ColumnString::serializeToPosForCmpColumnArray(
         if (nullmap != nullptr)
         {
             if likely (collator != nullptr)
-                serializeToPosForColumnArrayImplType</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                        pos,
-                        start,
-                        length,
-                        array_offsets,
-                        collator,
-                        sort_key_container,
-                        nullmap);
+                serializeToPosForColumnArrayImplType<
+                    /*has_null=*/true,
+                    /*compare_semantics=*/true,
+                    /*has_nullmap=*/true>(pos, start, length, array_offsets, collator, sort_key_container, nullmap);
             else
-                serializeToPosForColumnArrayImplType</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/true>(
-                        pos,
-                        start,
-                        length,
-                        array_offsets,
-                        nullptr,
-                        nullptr,
-                        nullmap);
+                serializeToPosForColumnArrayImplType<
+                    /*has_null=*/true,
+                    /*compare_semantics=*/false,
+                    /*has_nullmap=*/true>(pos, start, length, array_offsets, nullptr, nullptr, nullmap);
         }
         else
         {
             if likely (collator != nullptr)
-                serializeToPosForColumnArrayImplType</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                        pos,
-                        start,
-                        length,
-                        array_offsets,
-                        collator,
-                        sort_key_container,
-                        nullptr);
+                serializeToPosForColumnArrayImplType<
+                    /*has_null=*/true,
+                    /*compare_semantics=*/true,
+                    /*has_nullmap=*/false>(pos, start, length, array_offsets, collator, sort_key_container, nullptr);
             else
                 serializeToPosForColumnArrayImplType<
                     /*has_null=*/true,
@@ -1038,35 +1026,23 @@ void ColumnString::serializeToPosForCmpColumnArray(
         if (nullmap != nullptr)
         {
             if likely (collator != nullptr)
-                serializeToPosForColumnArrayImplType</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                        pos,
-                        start,
-                        length,
-                        array_offsets,
-                        collator,
-                        sort_key_container,
-                        nullmap);
+                serializeToPosForColumnArrayImplType<
+                    /*has_null=*/false,
+                    /*compare_semantics=*/true,
+                    /*has_nullmap=*/true>(pos, start, length, array_offsets, collator, sort_key_container, nullmap);
             else
-                serializeToPosForColumnArrayImplType</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/true>(
-                        pos,
-                        start,
-                        length,
-                        array_offsets,
-                        nullptr,
-                        nullptr,
-                        nullmap);
+                serializeToPosForColumnArrayImplType<
+                    /*has_null=*/false,
+                    /*compare_semantics=*/false,
+                    /*has_nullmap=*/true>(pos, start, length, array_offsets, nullptr, nullptr, nullmap);
         }
         else
         {
             if likely (collator != nullptr)
-                serializeToPosForColumnArrayImplType</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                        pos,
-                        start,
-                        length,
-                        array_offsets,
-                        collator,
-                        sort_key_container,
-                        nullptr);
+                serializeToPosForColumnArrayImplType<
+                    /*has_null=*/false,
+                    /*compare_semantics=*/true,
+                    /*has_nullmap=*/false>(pos, start, length, array_offsets, collator, sort_key_container, nullptr);
             else
                 serializeToPosForColumnArrayImplType<
                     /*has_null=*/false,

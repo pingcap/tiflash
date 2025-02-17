@@ -239,31 +239,31 @@ void ColumnDecimal<T>::serializeToPosForCmp(
     {
         if (nullmap != nullptr)
             serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                    pos,
-                    start,
-                    length,
-                    nullmap);
+                pos,
+                start,
+                length,
+                nullmap);
         else
             serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                    pos,
-                    start,
-                    length,
-                    nullptr);
+                pos,
+                start,
+                length,
+                nullptr);
     }
     else
     {
         if (nullmap != nullptr)
             serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                    pos,
-                    start,
-                    length,
-                    nullmap);
+                pos,
+                start,
+                length,
+                nullmap);
         else
             serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                    pos,
-                    start,
-                    length,
-                    nullptr);
+                pos,
+                start,
+                length,
+                nullptr);
     }
 }
 
@@ -299,35 +299,35 @@ void ColumnDecimal<T>::serializeToPosForCmpColumnArray(
     {
         if (nullmap != nullptr)
             serializeToPosForColumnArrayImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                    pos,
-                    start,
-                    length,
-                    array_offsets,
-                    nullmap);
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullmap);
         else
             serializeToPosForColumnArrayImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                    pos,
-                    start,
-                    length,
-                    array_offsets,
-                    nullptr);
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullptr);
     }
     else
     {
         if (nullmap != nullptr)
             serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
-                    pos,
-                    start,
-                    length,
-                    array_offsets,
-                    nullmap);
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullmap);
         else
             serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
-                    pos,
-                    start,
-                    length,
-                    array_offsets,
-                    nullptr);
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullptr);
     }
 }
 
