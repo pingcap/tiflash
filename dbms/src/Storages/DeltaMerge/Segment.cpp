@@ -2806,7 +2806,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
 {
     const auto & stable_snap = segment_snap->stable;
     auto delta_snap = delta_reader->getDeltaSnap();
-    // Try to clone from the sahred delta index, if it fails to reuse the shared delta index,
+    // Try to clone from the shared delta index, if it fails to reuse the shared delta index,
     // it will return an empty delta index and we should place it in the following branch.
     auto my_delta_index = delta_snap->getSharedDeltaIndex()->tryClone(delta_snap->getRows(), delta_snap->getDeletes());
     auto my_delta_tree = my_delta_index->getDeltaTree();

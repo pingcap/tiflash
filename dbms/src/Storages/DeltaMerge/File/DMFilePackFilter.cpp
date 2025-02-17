@@ -467,7 +467,7 @@ std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::R
                 // If `current_offset == sid`, the delta row following this sid row might have the same
                 // RowKey. The pack also can not be skipped because delta merge and MVCC filter is necessary.
                 // TODO: It might be possible to use a minmax index to compare the RowKey of the
-                // current sid row with the RowKey of the delta row.
+                // current sid row with the RowKey of the following delta row.
                 continue;
             }
 
