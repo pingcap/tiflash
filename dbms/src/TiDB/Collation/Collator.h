@@ -233,10 +233,7 @@ public:
         // Hence, it returns 1 here.
         return 1;
     }
-    bool isTrivialCollator() const override
-    {
-        return !padding;
-    }
+    bool isTrivialCollator() const override { return !padding; }
 
 private:
     const std::string name = padding ? "BinaryPadding" : "Binary";
@@ -316,10 +313,7 @@ public:
         // Every char have 8 uint16 at most.
         return 8 * sizeof(uint16_t);
     }
-    bool isTrivialCollator() const override
-    {
-        return false;
-    }
+    bool isTrivialCollator() const override { return false; }
 
 private:
     const std::string name = "UnicodeCI";
@@ -384,10 +378,7 @@ public:
 
     size_t sortKeyReservedSpaceMultipler() const override { return sizeof(WeightType); }
 
-    bool isTrivialCollator() const override
-    {
-        return false;
-    }
+    bool isTrivialCollator() const override { return false; }
 
 private:
     const std::string name = "GeneralCI";

@@ -839,17 +839,17 @@ void ColumnString::serializeToPosImplType(
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
-#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                     \
-    case (COLLATOR_ID):                                                          \
-    {                                                                            \
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                        \
+    case (COLLATOR_ID):                                                             \
+    {                                                                               \
         serializeToPosImpl<has_null, need_decode_collator, IMPL_TYPE, has_nullmap>( \
-            pos,                                                                 \
-            start,                                                               \
-            length,                                                              \
-            collator,                                                            \
-            sort_key_container,                                                  \
-            nullmap);                                                            \
-        break;                                                                   \
+            pos,                                                                    \
+            start,                                                                  \
+            length,                                                                 \
+            collator,                                                               \
+            sort_key_container,                                                     \
+            nullmap);                                                               \
+        break;                                                                      \
     }
 
         switch (collator->getCollatorId())
@@ -1065,18 +1065,18 @@ void ColumnString::serializeToPosForColumnArrayImplType(
     {
         RUNTIME_CHECK(collator && sort_key_container);
 
-#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                   \
-    case (COLLATOR_ID):                                                                        \
-    {                                                                                          \
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                      \
+    case (COLLATOR_ID):                                                                           \
+    {                                                                                             \
         serializeToPosForColumnArrayImpl<has_null, need_decode_collator, IMPL_TYPE, has_nullmap>( \
-            pos,                                                                               \
-            start,                                                                             \
-            length,                                                                            \
-            array_offsets,                                                                     \
-            collator,                                                                          \
-            sort_key_container,                                                                \
-            nullmap);                                                                          \
-        break;                                                                                 \
+            pos,                                                                                  \
+            start,                                                                                \
+            length,                                                                               \
+            array_offsets,                                                                        \
+            collator,                                                                             \
+            sort_key_container,                                                                   \
+            nullmap);                                                                             \
+        break;                                                                                    \
     }
 
         switch (collator->getCollatorId())
