@@ -15,7 +15,7 @@
 #include <Common/Stopwatch.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Functions/FunctionHelpers.h>
-#include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
@@ -56,11 +56,11 @@ void serializeBlock(const Block<T> & meta, WriteBuffer & write_buf)
 }
 
 template <typename T>
-void deserializeBlock(Block<T> & meta, ReadBuffer & read_buf)
+Block<T> deserializeBlock(ReadBuffer & read_buf)
 {
     UInt32 size;
     readIntBinary(size, read_buf);
-    meta.resize(size);
+    Block<T> meta(size);
     for (auto & entry : meta)
     {
         auto & [value, row_ids] = entry;
@@ -71,6 +71,7 @@ void deserializeBlock(Block<T> & meta, ReadBuffer & read_buf)
         for (auto & row_id : row_ids)
             readVarUInt(row_id, read_buf); // row_ids
     }
+    return meta;
 }
 
 // Get the size of the block in bytes. But it is not accurate, because the size of the row_ids is variable.
@@ -377,23 +378,18 @@ void InvertedIndexMemoryViewer<T>::load(ReadBuffer & read_buf, size_t index_size
     UInt32 meta_size = *reinterpret_cast<const UInt32 *>(buf.data() + data_size);
 
     // 4. read meta
-    std::string_view buffer(buf.data(), buf.size());
+    ReadBufferFromMemory buffer(buf.data() + data_size - meta_size, meta_size);
     InvertedIndex::Meta<T> meta;
     data_size = data_size - meta_size;
-    {
-        ReadBufferFromString rbuf(buffer.substr(data_size, meta_size));
-        InvertedIndex::deserializeMeta(meta, rbuf);
-    }
+    InvertedIndex::deserializeMeta(meta, buffer);
 
     // 5. read blocks & build index
-    ReadBufferFromString rbuf(buffer.substr(0, data_size));
+    buffer = ReadBufferFromMemory(buf.data(), data_size);
     for (const auto meta_entry : meta)
     {
-        std::vector<char> block_data(meta_entry.size);
-        rbuf.readBig(block_data.data(), meta_entry.size);
-        ReadBufferFromString block_buf(block_data);
-        InvertedIndex::Block<T> block;
-        InvertedIndex::deserializeBlock(block, block_buf);
+        auto count = buffer.count();
+        auto block = InvertedIndex::deserializeBlock<T>(buffer);
+        RUNTIME_CHECK(buffer.count() - count == meta_entry.size);
         for (const auto & block_entry : block)
         {
             auto [value, row_ids] = block_entry;
@@ -441,24 +437,15 @@ void InvertedIndexFileViewer<T>::loadMeta(ReadBuffer & read_buf, size_t index_si
 
     // 4. read meta
     data_size = data_size - meta_size;
-    std::string_view buffer(buf.data() + data_size, meta_size);
-    {
-        ReadBufferFromString rbuf(buffer);
-        InvertedIndex::deserializeMeta(meta, rbuf);
-    }
+    ReadBufferFromMemory buffer(buf.data() + data_size, meta_size);
+    InvertedIndex::deserializeMeta(meta, buffer);
 }
 
 template <typename T>
-InvertedIndex::Block<T> InvertedIndexFileViewer<T>::readBlock(ReadBufferFromFile & file_buf, UInt32 offset, UInt32 size)
-    const
+InvertedIndex::Block<T> InvertedIndexFileViewer<T>::readBlock(ReadBufferFromFile & file_buf, UInt32 offset) const
 {
     file_buf.seek(offset, SEEK_SET);
-    std::vector<char> block_data(size);
-    RUNTIME_CHECK(file_buf.readBig(block_data.data(), size) == size);
-    ReadBufferFromString block_buf(block_data);
-    InvertedIndex::Block<T> block;
-    InvertedIndex::deserializeBlock(block, block_buf);
-    return block;
+    return InvertedIndex::deserializeBlock<T>(file_buf);
 }
 
 template <typename T>
@@ -471,8 +458,7 @@ void InvertedIndexFileViewer<T>::search(BitmapFilterPtr & bitmap_filter, const K
     if (it == meta.end())
         return;
 
-    ReadBufferFromFile file_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-    const auto block = readBlock(file_buf, it->offset, it->size);
+    const auto block = readBlock(file_buf, it->offset);
     auto block_it
         = std::find_if(block.begin(), block.end(), [&](const auto & entry) { return entry.value == real_key; });
     if (block_it != block.end())
@@ -493,10 +479,9 @@ void InvertedIndexFileViewer<T>::searchRange(BitmapFilterPtr & bitmap_filter, co
         return entry.min < key;
     });
 
-    ReadBufferFromFile file_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
     for (auto it = meta_begin; it != meta_end; ++it)
     {
-        const auto block = readBlock(file_buf, it->offset, it->size);
+        const auto block = readBlock(file_buf, it->offset);
         auto block_begin
             = std::lower_bound(block.begin(), block.end(), real_begin, [](const auto & entry, const auto & key) {
                   return entry.value < key;

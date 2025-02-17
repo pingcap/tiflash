@@ -135,9 +135,9 @@ InvertedIndexViewerPtr DMFileInvertedIndexReader::loadInvertedIndex(const Column
     auto type_id = dmfile->getColumnStat(col_id).type->getTypeId();
     auto load_from_file = [&]() {
         perf_stat.has_load_from_file = true;
-        ReadBufferFromFile read_buf(local_index_file_path);
-        return InvertedIndexViewer::view(type_id, read_buf, index_props.file_size());
-        // return InvertedIndexViewer::view(type_id, local_index_file_path);
+        // ReadBufferFromFile read_buf(local_index_file_path);
+        // return InvertedIndexViewer::view(type_id, read_buf, index_props.file_size());
+        return InvertedIndexViewer::view(type_id, local_index_file_path);
     };
 
     Stopwatch watch;

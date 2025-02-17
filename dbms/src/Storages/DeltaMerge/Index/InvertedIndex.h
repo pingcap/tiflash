@@ -44,8 +44,8 @@ namespace InvertedIndex
 using RowID = UInt32;
 using RowIDs = std::vector<RowID>;
 
-// A block is a minimal unit of IO, it will be as small as possible, but >= 4KB.
-static constexpr size_t BlockSize = 4 * 1024; // 4 KB
+// A block is a minimal unit of IO, it will be as small as possible, but >= 64KB.
+static constexpr size_t BlockSize = 64 * 1024; // 64 KB
 
 // <value, row_ids>
 template <typename T>
@@ -155,11 +155,12 @@ class InvertedIndexFileViewer : public InvertedIndexViewer
 private:
     void loadMeta(ReadBuffer & buf, size_t index_size);
 
-    InvertedIndex::Block<T> readBlock(ReadBufferFromFile & file_buf, UInt32 offset, UInt32 size) const;
+    InvertedIndex::Block<T> readBlock(ReadBufferFromFile & file_buf, UInt32 offset) const;
 
 public:
     explicit InvertedIndexFileViewer(std::string_view path)
         : path(path)
+        , file_buf(path.data(), DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY)
     {
         ReadBufferFromFile buffer(path.data());
         loadMeta(buffer, Poco::File(path.data()).getSize());
@@ -172,6 +173,7 @@ public:
 
 private:
     String path;
+    mutable ReadBufferFromFile file_buf;
     InvertedIndex::Meta<T> meta; // set by loadMeta
 };
 
