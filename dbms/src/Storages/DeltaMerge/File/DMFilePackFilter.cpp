@@ -433,7 +433,7 @@ std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::R
             if (!pack_res[pack_id].isUse())
                 continue;
 
-            // Find the first delta_index_it whose sid > prev_offset
+            // Find the first `delta_index_it` whose sid > prev_offset
             auto new_it = std::upper_bound(
                 delta_index_it,
                 delta_index_end,
@@ -447,7 +447,7 @@ std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::R
                 delta_index_it = new_it;
             }
             sid = delta_index_it != delta_index_end ? delta_index_it->getSid() : std::numeric_limits<UInt64>::max();
-            // Since delta_index_it is the first element with sid > prev_offset,
+            // Since `delta_index_it` is the first element with sid > prev_offset,
             // the preceding element’s sid (prev_sid) must be <= prev_offset.
             RUNTIME_CHECK(prev_offset >= prev_sid);
             // Note: If `prev_offset == prev_sid`, the RowKey of the delta row preceding `prev_sid`
@@ -482,6 +482,9 @@ std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::R
                     // The sid range of the pack is fully covered by the delete sid range, it means that
                     // every row in this pack has been deleted. In this case, the pack can be safely skipped.
                     skipped_del_ranges.emplace_back(prev_offset, pack_stat.rows);
+                    if unlikely (!new_pack_filter)
+                        new_pack_filter = std::make_shared<DMFilePackFilterResult>(*pack_filter);
+                    new_pack_filter->pack_res[pack_id] = RSResult::None;
                     continue;
                 }
                 if (prev_offset < prev_sid + prev_delete_count)
