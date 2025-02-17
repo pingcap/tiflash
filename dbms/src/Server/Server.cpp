@@ -868,10 +868,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
-    /// Load global settings from default_profile and system_profile.
-    /// It internally depends on UserConfig::parseSettings.
-    global_context->setDefaultProfiles(config());
-
     TiFlashProxyConfig proxy_conf(config(), settings);
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
@@ -1102,6 +1098,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
+    /// Load global settings from default_profile and system_profile.
+    /// It internally depends on UserConfig::parseSettings.
+    global_context->setDefaultProfiles(config());
     LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
 
     ///
