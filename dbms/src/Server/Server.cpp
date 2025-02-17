@@ -89,6 +89,7 @@
 #include <ext/scope_guard.h>
 #include <limits>
 #include <memory>
+#include <variant>
 
 #if Poco_NetSSL_FOUND
 #include <Common/grpcpp.h>
