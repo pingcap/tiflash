@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/KVStore/ProxyStateMachine.h>
-#include <Interpreters/Settings.h>
-#include <TestUtils/TiFlashTestBasic.h>
 #include <Common/FailPoint.h>
+#include <Interpreters/Settings.h>
+#include <Storages/KVStore/ProxyStateMachine.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 // TODO: Move ServerInfo into KVStore, to make it more conhensive.
 namespace DB
@@ -25,17 +25,29 @@ namespace FailPoints
 extern const char force_set_proxy_state_machine_cpu_cores[];
 } // namespace FailPoints
 
-namespace tests {
+namespace tests
+{
 TEST(ProxyStateMachineTest, SetLogicalCores)
 {
     {
         FailPointHelper::enableFailPoint(FailPoints::force_set_proxy_state_machine_cpu_cores);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_proxy_state_machine_cpu_cores); });
         Settings settings;
         ServerInfo server_info;
         ProxyStateMachine proxy_machine{DB::Logger::get(), TiFlashProxyConfig::genForTest()};
         proxy_machine.getServerInfo(server_info, settings);
-        FailPointHelper::disableFailPoint(FailPoints::force_set_proxy_state_machine_cpu_cores);
         ASSERT_EQ(settings.max_threads.get(), 12345);
+    }
+    {
+        // If user explicitly set `max_threads`, then `getServerInfo` won't overwrite the value
+        FailPointHelper::enableFailPoint(FailPoints::force_set_proxy_state_machine_cpu_cores);
+        SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_proxy_state_machine_cpu_cores); });
+        Settings settings;
+        settings.max_threads.set(8);
+        ServerInfo server_info;
+        ProxyStateMachine proxy_machine{DB::Logger::get(), TiFlashProxyConfig::genForTest()};
+        proxy_machine.getServerInfo(server_info, settings);
+        ASSERT_EQ(settings.max_threads.get(), 8);
     }
     {
         Settings settings;
@@ -45,5 +57,5 @@ TEST(ProxyStateMachineTest, SetLogicalCores)
         ASSERT_EQ(settings.max_threads.get(), std::thread::hardware_concurrency());
     }
 }
-}
-}
+} // namespace tests
+} // namespace DB
