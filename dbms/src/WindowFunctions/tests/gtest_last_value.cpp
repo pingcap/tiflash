@@ -20,8 +20,6 @@
 #include <tipb/executor.pb.h>
 
 #include <optional>
-#include <utility>
-
 
 namespace DB::tests
 {
