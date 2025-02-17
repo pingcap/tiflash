@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/KVStore/ProxyStateMachine.h>
-#include <Interpreters/Settings.h>
-#include <TestUtils/TiFlashTestBasic.h>
 #include <Common/FailPoint.h>
+#include <Interpreters/Settings.h>
+#include <Storages/KVStore/ProxyStateMachine.h>
+#include <TestUtils/TiFlashTestBasic.h>
 
 namespace DB
 {
@@ -24,7 +24,8 @@ namespace FailPoints
 extern const char force_set_proxy_state_machine_cpu_cores[];
 } // namespace FailPoints
 
-namespace tests {
+namespace tests
+{
 TEST(ProxyStateMachineTest, SetLogicalCores)
 {
     {
@@ -44,5 +45,5 @@ TEST(ProxyStateMachineTest, SetLogicalCores)
         ASSERT_EQ(settings.max_threads.get(), std::thread::hardware_concurrency());
     }
 }
-}
-}
+} // namespace tests
+} // namespace DB
