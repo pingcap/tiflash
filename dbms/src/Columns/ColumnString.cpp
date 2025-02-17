@@ -42,10 +42,9 @@ struct ColumnStringDefaultValue
     {
         UInt32 str_size = 1;
         tiflash_compiler_builtin_memcpy(&mem[0], &str_size, sizeof(str_size));
+        mem[sizeof(UInt32)] = 0;
     }
 };
-
-static ColumnStringDefaultValue col_str_def_val;
 
 MutableColumnPtr ColumnString::cloneResized(size_t to_size) const
 {
@@ -499,7 +498,7 @@ void ColumnString::countSerializeByteSizeForCmp(
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    // For bin padding, skip consider collator so we can skip counting code points, which may be slow.
+    // Skip decoding collator for bin collaotr so we can avoid counting code points, which may be slow.
     if (collator != nullptr && collator->sortKeyReservedSpaceMultipler() > 1)
     {
         if (nullmap != nullptr)
@@ -889,6 +888,7 @@ void ColumnString::serializeToPosImpl(
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     /// To avoid virtual function call of sortKey().
+    static ColumnStringDefaultValue col_str_def_val;
     const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
     /// countSerializeByteSizeImpl has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
