@@ -244,7 +244,7 @@ struct TiFlashProxyConfig
     const String engine_label = "engine-label";
     const String engine_label_value = "tiflash";
 
-    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
+    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config, const Settings & settings)
     {
         if (!config.has(config_prefix))
             return;
@@ -272,6 +272,29 @@ struct TiFlashProxyConfig
                 val_map.emplace("--" + k, std::move(v));
             }
         }
+
+        // Set the proxy's memory by size or ratio
+        std::visit(
+            [&](auto && arg) {
+                using T = std::decay_t<decltype(arg)>;
+                if constexpr (std::is_same_v<T, UInt64>)
+                {
+                    if (arg != 0)
+                    {
+                        LOG_INFO(log, "Limit proxy's memory, size={}", arg);
+                        addExtraArgs("memory-limit-size", std::to_string(arg));
+                    }
+                }
+                else if constexpr (std::is_same_v<T, double>)
+                {
+                    if (arg > 0 && arg <= 1.0)
+                    {
+                        LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
+                        addExtraArgs("memory-limit-ratio", std::to_string(arg));
+                    }
+                }
+            },
+            settings.max_memory_usage_for_all_queries.get());
 
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
@@ -835,7 +858,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
-    TiFlashProxyConfig proxy_conf(config());
+    /** Context contains all that query execution is dependent:
+      *  settings, available functions, data types, aggregate functions, databases...
+      */
+    global_context = std::make_unique<Context>(Context::createGlobal());
+    global_context->setGlobalContext(*global_context);
+    global_context->setApplicationType(Context::ApplicationType::SERVER);
+
+    /// Initialize users config reloader.
+    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
+
+    /// Load global settings from default_profile and system_profile.
+    /// It internally depends on UserConfig::parseSettings.
+    global_context->setDefaultProfiles(config());
+
+    TiFlashProxyConfig proxy_conf(config(), settings);
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
@@ -898,12 +935,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
-    /** Context contains all that query execution is dependent:
-      *  settings, available functions, data types, aggregate functions, databases...
-      */
-    global_context = std::make_unique<Context>(Context::createGlobal());
-    global_context->setGlobalContext(*global_context);
-    global_context->setApplicationType(Context::ApplicationType::SERVER);
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
@@ -1071,12 +1102,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
-    /// Initialize users config reloader.
-    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
-
-    /// Load global settings from default_profile and system_profile.
-    /// It internally depends on UserConfig::parseSettings.
-    global_context->setDefaultProfiles(config());
     LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
 
     ///
