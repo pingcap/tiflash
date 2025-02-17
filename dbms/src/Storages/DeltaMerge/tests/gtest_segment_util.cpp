@@ -49,6 +49,8 @@ std::vector<std::tuple<T, T, bool>> parseRanges(std::string_view str_ranges)
     return vector_ranges;
 }
 
+const std::unordered_set<String> segment_commands = {"flush_cache", "compact_delta", "merge_delta"};
+
 // "type:[a, b)" => SegDataUnit
 SegDataUnit parseSegDataUnit(String & s)
 {
@@ -61,8 +63,7 @@ SegDataUnit parseSegDataUnit(String & s)
 
     if (values.size() == 1)
     {
-        const std::unordered_set<String> commands = {"compact_delta", "merge_delta"};
-        RUNTIME_CHECK(commands.contains(values[0]), s);
+        RUNTIME_CHECK(segment_commands.contains(values[0]), s);
         return SegDataUnit{.type = values[0]};
     }
 
@@ -111,6 +112,9 @@ void check(const std::vector<SegDataUnit> & seg_data_units)
     for (size_t i = 0; i < seg_data_units.size(); i++)
     {
         const auto & type = seg_data_units[i].type;
+        if (segment_commands.contains(type))
+            continue;
+
         if (type == "s")
         {
             stable_units.emplace_back(i);
