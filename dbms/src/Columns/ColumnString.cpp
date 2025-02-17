@@ -494,18 +494,12 @@ void ColumnString::getPermutationWithCollationImpl(
     }
 }
 
-inline bool checkNeedDecodeCollatorForCmp(const TiDB::TiDBCollatorPtr & collator)
-{
-    return collator != nullptr
-        && (collator->maxBytesForOneChar() > 1 || (collator->maxBytesForOneChar() == 1 && collator->isPaddingBinary()));
-}
-
 void ColumnString::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    if (checkNeedDecodeCollatorForCmp(collator))
+    if (collator != nullptr && collator->maxBytesForOneChar() > 1)
     {
         if (nullmap != nullptr)
             countSerializeByteSizeImpl</*need_decode_collator=*/true, /*has_nullmap=*/true>(
@@ -596,7 +590,7 @@ void ColumnString::countSerializeByteSizeForCmpColumnArray(
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    if (checkNeedDecodeCollatorForCmp(collator))
+    if (collator != nullptr && collator->maxBytesForOneChar() > 1)
     {
         if (nullmap != nullptr)
             countSerializeByteSizeForColumnArrayImpl<
@@ -704,9 +698,11 @@ void ColumnString::serializeToPosForCmp(
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
+    const bool need_decode_collator = collator != nullptr
+                && (collator->maxBytesForOneChar() > 1 || (collator->maxBytesForOneChar() == 1 && collator->isPaddingBinary()));
     if (has_null)
     {
-        if (checkNeedDecodeCollatorForCmp(collator))
+        if (need_decode_collator)
         {
             if (nullmap != nullptr)
             {
@@ -755,7 +751,7 @@ void ColumnString::serializeToPosForCmp(
     }
     else
     {
-        if (checkNeedDecodeCollatorForCmp(collator))
+        if (need_decode_collator)
         {
             if (nullmap != nullptr)
             {
@@ -946,9 +942,11 @@ void ColumnString::serializeToPosForCmpColumnArray(
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
+    const bool need_decode_collator = collator != nullptr
+                && (collator->maxBytesForOneChar() > 1 || (collator->maxBytesForOneChar() == 1 && collator->isPaddingBinary()));
     if (has_null)
     {
-        if (checkNeedDecodeCollatorForCmp(collator))
+        if (need_decode_collator)
         {
             if (nullmap != nullptr)
             {
@@ -985,7 +983,7 @@ void ColumnString::serializeToPosForCmpColumnArray(
     }
     else
     {
-        if (checkNeedDecodeCollatorForCmp(collator))
+        if (need_decode_collator)
         {
             if (nullmap != nullptr)
             {
@@ -1299,7 +1297,7 @@ void ColumnString::deserializeForCmpAndInsertFromPosColumnArray(
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer)
 {
-    deserializeAndInsertFromPosForColumnArrayImpl(pos, array_offsets, use_nt_align_buffer);
+    deserializeAndInsertFromPosForColumnArrayImpl<true>(pos, array_offsets, use_nt_align_buffer);
 }
 
 void ColumnString::deserializeAndInsertFromPosForColumnArray(
@@ -1307,9 +1305,10 @@ void ColumnString::deserializeAndInsertFromPosForColumnArray(
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer)
 {
-    deserializeAndInsertFromPosForColumnArrayImpl(pos, array_offsets, use_nt_align_buffer);
+    deserializeAndInsertFromPosForColumnArrayImpl<false>(pos, array_offsets, use_nt_align_buffer);
 }
 
+template <bool compare_semantics>
 void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
@@ -1334,20 +1333,42 @@ void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
 
     size_t size = pos.size();
     size_t char_size = chars.size();
-    for (size_t i = 0; i < size; ++i)
+    if constexpr (compare_semantics)
     {
-        size_t prev_char_size = char_size;
-        for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
+        for (size_t i = 0; i < size; ++i)
         {
-            UInt32 str_size;
-            tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
-            pos[i] += sizeof(UInt32);
-            char_size += str_size;
-            offsets[j] = char_size;
+            for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
+            {
+                UInt32 str_size;
+                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+                pos[i] += sizeof(UInt32);
+
+                chars.resize(char_size + str_size);
+                memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
+
+                char_size += str_size;
+                offsets[j] = char_size;
+                pos[i] += str_size;
+            }
         }
-        chars.resize(char_size);
-        memcpySmallAllowReadWriteOverflow15(&chars[prev_char_size], pos[i], char_size - prev_char_size);
-        pos[i] += char_size - prev_char_size;
+    }
+    else
+    {
+        for (size_t i = 0; i < size; ++i)
+        {
+            size_t prev_char_size = char_size;
+            for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
+            {
+                UInt32 str_size;
+                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+                pos[i] += sizeof(UInt32);
+                char_size += str_size;
+                offsets[j] = char_size;
+            }
+            chars.resize(char_size);
+            memcpySmallAllowReadWriteOverflow15(&chars[prev_char_size], pos[i], char_size - prev_char_size);
+            pos[i] += char_size - prev_char_size;
+        }
     }
 }
 
