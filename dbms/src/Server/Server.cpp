@@ -276,27 +276,27 @@ struct TiFlashProxyConfig
         }
 
         // Set the proxy's memory by size or ratio
-        std::visit(
-            [&](auto && arg) {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, UInt64>)
+        auto set_func = [&](auto && arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, UInt64>)
+            {
+                if (arg != 0)
                 {
-                    if (arg != 0)
-                    {
-                        LOG_INFO(log, "Limit proxy's memory, size={}", arg);
-                        addExtraArgs("memory-limit-size", std::to_string(arg));
-                    }
+                    LOG_INFO(log, "Limit proxy's memory, size={}", arg);
+                    addExtraArgs("memory-limit-size", std::to_string(arg));
                 }
-                else if constexpr (std::is_same_v<T, double>)
+            }
+            else if constexpr (std::is_same_v<T, double>)
+            {
+                if (arg > 0 && arg <= 1.0)
                 {
-                    if (arg > 0 && arg <= 1.0)
-                    {
-                        LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
-                        addExtraArgs("memory-limit-ratio", std::to_string(arg));
-                    }
+                    LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
+                    addExtraArgs("memory-limit-ratio", std::to_string(arg));
                 }
-            },
-            settings.max_memory_usage_for_all_queries.get());
+            }
+        };
+        
+        set_func(settings.max_memory_usage_for_all_queries.get());
 
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
