@@ -412,7 +412,7 @@ void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
     // If there are data flow in, we will check if the memory is exhaused.
     auto limit = tmt.getKVStore()->getKVStoreMemoryLimit();
     size_t current = real_rss.load() > 0 ? real_rss.load() : 0;
-    if likely (limit == 0 || current == 0)
+    if unlikely (limit == 0 || current == 0)
         return;
     /// Region management such as split/merge doesn't change the memory consumed by a table in KVStore.
     /// The only cases memory is reduced in a table is removing regions, applying snaps and commiting txns.
