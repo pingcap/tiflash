@@ -21,27 +21,26 @@ namespace DB::DM::tests
 
 namespace
 {
-// "[a, b)" => std::pair{a, b}
 template <typename T>
-std::pair<T, T> parseRange(String & str_range)
+std::tuple<T, T, bool> parseRange(String & str_range)
 {
     boost::algorithm::trim(str_range);
-    RUNTIME_CHECK(str_range.front() == '[' && str_range.back() == ')', str_range);
+    RUNTIME_CHECK(str_range.front() == '[' && (str_range.back() == ')' || str_range.back() == ']'), str_range);
     std::vector<String> values;
-    str_range = str_range.substr(1, str_range.size() - 2);
-    boost::split(values, str_range, boost::is_any_of(","));
-    RUNTIME_CHECK(values.size() == 2, str_range);
-    return {static_cast<T>(std::stol(values[0])), static_cast<T>(std::stol(values[1]))};
+    const auto left_right = str_range.substr(1, str_range.size() - 2);
+    boost::split(values, left_right, boost::is_any_of(","));
+    RUNTIME_CHECK(values.size() == 2, left_right);
+    return {static_cast<T>(std::stol(values[0])), static_cast<T>(std::stol(values[1])), str_range.back() == ']'};
 }
 
 // "[a, b)|[c, d)" => [std::pair{a, b}, std::pair{c, d}]
 template <typename T>
-std::vector<std::pair<T, T>> parseRanges(std::string_view str_ranges)
+std::vector<std::tuple<T, T, bool>> parseRanges(std::string_view str_ranges)
 {
     std::vector<String> ranges;
     boost::split(ranges, str_ranges, boost::is_any_of("|"));
     RUNTIME_CHECK(!ranges.empty(), str_ranges);
-    std::vector<std::pair<T, T>> vector_ranges;
+    std::vector<std::tuple<T, T, bool>> vector_ranges;
     vector_ranges.reserve(ranges.size());
     for (auto & r : ranges)
     {
@@ -50,29 +49,59 @@ std::vector<std::pair<T, T>> parseRanges(std::string_view str_ranges)
     return vector_ranges;
 }
 
+const std::unordered_set<String> segment_commands = {"flush_cache", "compact_delta", "merge_delta"};
+
 // "type:[a, b)" => SegDataUnit
 SegDataUnit parseSegDataUnit(String & s)
 {
     boost::algorithm::trim(s);
     std::vector<String> values;
     boost::split(values, s, boost::is_any_of(":"));
-    if (values.size() == 2)
+    RUNTIME_CHECK(!values.empty(), s);
+    for (auto & v : values)
+        boost::algorithm::trim(v);
+
+    if (values.size() == 1)
     {
-        return SegDataUnit{
-            .type = boost::algorithm::trim_copy(values[0]),
-            .range = parseRange<Int64>(values[1]),
-        };
+        RUNTIME_CHECK(segment_commands.contains(values[0]), s);
+        return SegDataUnit{.type = values[0]};
     }
-    else if (values.size() == 3)
+
+    RUNTIME_CHECK(values.size() >= 2, s, values);
+    SegDataUnit unit;
+    unit.type = values[0];
+    unit.range = parseRange<Int64>(values[1]);
+    for (size_t i = 2; i < values.size(); i++)
     {
-        RUNTIME_CHECK(values[0] == "d_big" || values[0] == "s", s);
-        return SegDataUnit{
-            .type = boost::algorithm::trim_copy(values[0]),
-            .range = parseRange<Int64>(values[1]),
-            .pack_size = std::stoul(values[2]),
-        };
+        const auto & v = values[i];
+        // Pack size for DMFile
+        std::string_view attr_pack_size_prefix{"pack_size_"};
+        if (v.starts_with(attr_pack_size_prefix))
+        {
+            RUNTIME_CHECK(unit.type == "d_big" || unit.type == "s", s, v, unit.type);
+            unit.pack_size = std::stoul(v.substr(attr_pack_size_prefix.size()));
+            continue;
+        }
+
+        // Make data in ColumnFileTiny or ColumnFileMem unsorted.
+        std::string_view attr_shuffle{"shuffle"};
+        if (v == attr_shuffle)
+        {
+            RUNTIME_CHECK(unit.type == "d_mem" || unit.type == "d_tiny", s, v, unit.type);
+            unit.shuffle = true;
+            continue;
+        }
+
+        std::string_view attr_timestamp_prefix{"ts_"};
+        if (v.starts_with(attr_timestamp_prefix))
+        {
+            RUNTIME_CHECK(unit.type == "d_mem" || unit.type == "d_tiny", s, v, unit.type);
+            unit.ts = std::stoul(v.substr(attr_timestamp_prefix.size()));
+            continue;
+        }
+        RUNTIME_CHECK_MSG(false, "{}: {} is unsupported", s, values[i]);
     }
-    RUNTIME_CHECK_MSG(false, "parseSegDataUnit failed: {}", s);
+    return unit;
 }
 
 void check(const std::vector<SegDataUnit> & seg_data_units)
@@ -83,6 +112,9 @@ void check(const std::vector<SegDataUnit> & seg_data_units)
     for (size_t i = 0; i < seg_data_units.size(); i++)
     {
         const auto & type = seg_data_units[i].type;
+        if (segment_commands.contains(type))
+            continue;
+
         if (type == "s")
         {
             stable_units.emplace_back(i);
@@ -91,31 +123,29 @@ void check(const std::vector<SegDataUnit> & seg_data_units)
         {
             mem_units.emplace_back(i);
         }
-        auto [begin, end] = seg_data_units[i].range;
-        RUNTIME_CHECK(begin < end, begin, end);
+        auto [begin, end, including_right_boundary] = seg_data_units[i].range;
+        RUNTIME_CHECK(end - begin + including_right_boundary > 0, begin, end, including_right_boundary);
     }
+    // If stable exists, it should be the first one.
     RUNTIME_CHECK(stable_units.empty() || (stable_units.size() == 1 && stable_units[0] == 0));
-    std::vector<size_t> expected_mem_units(mem_units.size());
-    std::iota(expected_mem_units.begin(), expected_mem_units.end(), seg_data_units.size() - mem_units.size());
-    RUNTIME_CHECK(mem_units == expected_mem_units, expected_mem_units, mem_units);
 }
 
 template <typename T>
-std::vector<T> genSequence(T begin, T end)
+std::vector<T> genSequence(T begin, T end, bool including_right_boundary)
 {
-    auto size = end - begin;
+    auto size = end - begin + including_right_boundary;
     std::vector<T> v(size);
     std::iota(v.begin(), v.end(), begin);
     return v;
 }
 
 template <typename T>
-std::vector<T> genSequence(const std::vector<std::pair<T, T>> & ranges)
+std::vector<T> genSequence(const std::vector<std::tuple<T, T, bool>> & ranges)
 {
     std::vector<T> res;
-    for (auto [begin, end] : ranges)
+    for (auto [begin, end, including_right_boundary] : ranges)
     {
-        auto v = genSequence(begin, end);
+        auto v = genSequence(begin, end, including_right_boundary);
         res.insert(res.end(), v.begin(), v.end());
     }
     return res;

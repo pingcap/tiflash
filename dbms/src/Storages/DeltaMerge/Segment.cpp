@@ -53,6 +53,7 @@
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
+#include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/dtpb/segment.pb.h>
 #include <Storages/KVStore/KVStore.h>
@@ -296,6 +297,7 @@ Segment::Segment( //
     , stable(stable_)
     , parent_log(parent_log_)
     , log(parent_log_->getChild(fmt::format("segment_id={} epoch={}", segment_id, epoch)))
+    , version_chain(createVersionChain(is_common_handle))
 {
     if (delta != nullptr)
         delta->resetLogger(log);
@@ -3078,10 +3080,22 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
-    size_t expected_block_size)
+    size_t expected_block_size,
+    bool use_version_chain)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
+    if (use_version_chain)
+    {
+        return ::DB::DM::buildBitmapFilter(
+            dm_context,
+            *segment_snap,
+            read_ranges,
+            pack_filter_results,
+            start_ts,
+            version_chain);
+    }
+
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
         return buildBitmapFilterStableOnly(
@@ -3452,16 +3466,21 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         dm_context.tracing_id);
 }
 
-RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const
+RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRange & target_range, const RowKeyRanges & read_ranges)
 {
     RowKeyRanges real_ranges;
     for (const auto & read_range : read_ranges)
     {
-        auto real_range = rowkey_range.shrink(read_range);
+        auto real_range = target_range.shrink(read_range);
         if (!real_range.none())
             real_ranges.emplace_back(std::move(real_range));
     }
     return real_ranges;
+}
+
+RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const
+{
+    return shrinkRowKeyRanges(rowkey_range, read_ranges);
 }
 
 static bool hasCacheableColumn(const ColumnDefines & columns)
@@ -3488,7 +3507,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         read_ranges,
         pack_filter_results,
         start_ts,
-        build_bitmap_filter_block_rows);
+        build_bitmap_filter_block_rows,
+        dm_context.global_context.getSettingsRef().enable_version_chain);
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
     if (!hasCacheableColumn(columns_to_read))
