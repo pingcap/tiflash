@@ -48,6 +48,7 @@
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/IDAsPathUpgrader.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/Settings.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Net/HTTPServer.h>
@@ -89,6 +90,7 @@
 #include <ext/scope_guard.h>
 #include <limits>
 #include <memory>
+#include <variant>
 
 #if Poco_NetSSL_FOUND
 #include <Common/grpcpp.h>
@@ -244,7 +246,7 @@ struct TiFlashProxyConfig
     const String engine_label = "engine-label";
     const String engine_label_value = "tiflash";
 
-    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config)
+    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config, LoggerPtr log, const Settings & settings)
     {
         if (!config.has(config_prefix))
             return;
@@ -273,6 +275,29 @@ struct TiFlashProxyConfig
             }
         }
 
+        // Set the proxy's memory by size or ratio
+        auto set_func = [&](auto && arg) {
+            using T = std::decay_t<decltype(arg)>;
+            if constexpr (std::is_same_v<T, UInt64>)
+            {
+                if (arg != 0)
+                {
+                    LOG_INFO(log, "Limit proxy's memory, size={}", arg);
+                    addExtraArgs("memory-limit-size", std::to_string(arg));
+                }
+            }
+            else if constexpr (std::is_same_v<T, double>)
+            {
+                if (arg > 0 && arg <= 1.0)
+                {
+                    LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
+                    addExtraArgs("memory-limit-ratio", std::to_string(arg));
+                }
+            }
+        };
+
+        set_func(settings.max_memory_usage_for_all_queries.get());
+
         args.push_back("TiFlash Proxy");
         for (const auto & v : val_map)
         {
@@ -281,6 +306,8 @@ struct TiFlashProxyConfig
         }
         is_proxy_runnable = true;
     }
+
+    void addExtraArgs(const std::string & k, const std::string & v) { val_map["--" + k] = v; }
 };
 
 const std::string TiFlashProxyConfig::config_prefix = "flash.proxy";
@@ -835,7 +862,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
-    TiFlashProxyConfig proxy_conf(config());
+    /** Context contains all that query execution is dependent:
+      *  settings, available functions, data types, aggregate functions, databases...
+      */
+    global_context = std::make_unique<Context>(Context::createGlobal());
+    global_context->setGlobalContext(*global_context);
+    global_context->setApplicationType(Context::ApplicationType::SERVER);
+
+    /// Initialize users config reloader.
+    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
+
+    Settings & settings = global_context->getSettingsRef();
+    TiFlashProxyConfig proxy_conf(config(), log, settings);
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
@@ -898,12 +936,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
-    /** Context contains all that query execution is dependent:
-      *  settings, available functions, data types, aggregate functions, databases...
-      */
-    global_context = std::make_unique<Context>(Context::createGlobal());
-    global_context->setGlobalContext(*global_context);
-    global_context->setApplicationType(Context::ApplicationType::SERVER);
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
@@ -1071,9 +1103,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
-    /// Initialize users config reloader.
-    auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
-
     /// Load global settings from default_profile and system_profile.
     /// It internally depends on UserConfig::parseSettings.
     global_context->setDefaultProfiles(config());
@@ -1084,7 +1113,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     ///
 
     /// Initialize the background & blockable background thread pool.
-    Settings & settings = global_context->getSettingsRef();
     LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
