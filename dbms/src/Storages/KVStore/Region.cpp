@@ -436,7 +436,7 @@ void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
                     "region_id={} from={}",
                     current,
                     limit,
-                    grown_memory * 0.3,
+                    grown_memory * 0.15,
                     table_size,
                     mapped_table_id,
                     keyspace_id,
