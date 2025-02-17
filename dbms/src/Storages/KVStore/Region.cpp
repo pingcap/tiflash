@@ -422,7 +422,9 @@ void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
     {
         auto table_size = getRegionTableSize();
         auto grown_memory = current > tranquil_time_rss ? current - tranquil_time_rss : 0;
-        if (grown_memory && table_size > grown_memory * 0.15)
+        // 15% of the total non-tranquil-time memory, but not exceed 10GB.
+        auto table_memory_limit = std::min(grown_memory * 0.15, 10 * 1024 * 1024 * 1024);
+        if (grown_memory && table_size > table_memory_limit)
         {
             if (!setRegionTableWarned(true))
             {
@@ -432,11 +434,11 @@ void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
 #endif
                 LOG_INFO(
                     log,
-                    "Memory limit exceeded, current={} limit={} limit_size={} table_size={} table_id={} keyspace_id={} "
+                    "Memory limit exceeded, current={} limit={} table_limit={} table_size={} table_id={} keyspace_id={} "
                     "region_id={} from={}",
                     current,
                     limit,
-                    grown_memory * 0.15,
+                    table_memory_limit,
                     table_size,
                     mapped_table_id,
                     keyspace_id,
