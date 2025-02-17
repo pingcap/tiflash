@@ -722,7 +722,10 @@ protected:
         byte_size.resize_fill_zero(key_columns[0]->size());
         RUNTIME_CHECK(!byte_size.empty());
         for (size_t i = 0; i < key_columns.size(); ++i)
-            key_columns[i]->countSerializeByteSizeForCmp(byte_size, nullptr, collators.empty() ? nullptr : collators[i]);
+            key_columns[i]->countSerializeByteSizeForCmp(
+                byte_size,
+                nullptr,
+                collators.empty() ? nullptr : collators[i]);
     }
 
     size_t prepareNextBatch(
