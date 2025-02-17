@@ -244,7 +244,7 @@ struct TiFlashProxyConfig
     const String engine_label = "engine-label";
     const String engine_label_value = "tiflash";
 
-    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config, const Settings & settings)
+    explicit TiFlashProxyConfig(Poco::Util::LayeredConfiguration & config, LoggerPtr log, const Settings & settings)
     {
         if (!config.has(config_prefix))
             return;
@@ -868,7 +868,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
-    TiFlashProxyConfig proxy_conf(config(), settings);
+    TiFlashProxyConfig proxy_conf(config(), log, settings);
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
         &tiflash_instance_wrap);
