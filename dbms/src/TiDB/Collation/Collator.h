@@ -101,7 +101,9 @@ public:
         = 0;
     virtual StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const = 0;
     virtual StringRef sortKey(const char * s, size_t length, std::string & container) const = 0;
-    virtual size_t maxBytesForOneChar() const = 0;
+    // For sort key, a n * length mem will be reserved to decode collator.
+    // This method returns n.
+    virtual size_t sortKeyReservedSpaceMultipler() const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
     int32_t getCollatorId() const { return collator_id; }
     CollatorType getCollatorType() const { return collator_type; }
@@ -223,7 +225,7 @@ public:
 
     std::unique_ptr<IPattern> pattern() const override;
 
-    size_t maxBytesForOneChar() const override
+    size_t sortKeyReservedSpaceMultipler() const override
     {
         // BinCollator only trims trailing spaces,
         // so it does not increase the space required after decoding.
@@ -304,7 +306,7 @@ public:
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<UCACICollator>>(); }
 
-    size_t maxBytesForOneChar() const override
+    size_t sortKeyReservedSpaceMultipler() const override
     {
         // Every char have 8 uint16 at most.
         return 8 * sizeof(uint16_t);
@@ -371,7 +373,7 @@ public:
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
 
-    size_t maxBytesForOneChar() const override { return sizeof(WeightType); }
+    size_t sortKeyReservedSpaceMultipler() const override { return sizeof(WeightType); }
 
 private:
     const std::string name = "GeneralCI";
