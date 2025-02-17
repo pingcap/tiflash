@@ -1113,7 +1113,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     ///
 
     /// Initialize the background & blockable background thread pool.
-    Settings & settings = global_context->getSettingsRef();
     LOG_INFO(log, "Background & Blockable Background pool size: {}", settings.background_pool_size);
     auto & bg_pool = global_context->initializeBackgroundPool(settings.background_pool_size);
     auto & blockable_bg_pool = global_context->initializeBlockableBackgroundPool(settings.background_pool_size);
