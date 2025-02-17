@@ -234,7 +234,8 @@ private:
         const String & window_func_name,
         WindowDescription & window_description,
         NamesAndTypes & source_columns,
-        NamesAndTypes & window_columns);
+        NamesAndTypes & window_columns,
+        bool is_agg);
 
     void fillArgumentDetail(
         const ExpressionActionsPtr & actions,

@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Core/DecimalComparison.h>
 #include <DataStreams/WindowTransformAction.h>
 
@@ -229,6 +230,7 @@ WindowTransformAction::WindowTransformAction(
     const String & req_id)
     : log(Logger::get(req_id))
     , window_description(window_description_)
+    , first_processed(true)
 {
     output_header = input_header;
     for (const auto & add_column : window_description_.add_columns)
@@ -265,17 +267,56 @@ void WindowTransformAction::initialPartitionAndOrderColumnIndices()
 
 void WindowTransformAction::initialWorkspaces()
 {
-    // Initialize window function workspaces.
-    workspaces.reserve(window_description.window_functions_descriptions.size());
+    const auto workspace_num = window_description.window_functions_descriptions.size();
+    window_workspaces.reserve(workspace_num);
+    aggregation_workspaces.reserve(workspace_num);
+    return_types.reserve(workspace_num);
 
-    for (const auto & window_function_description : window_description.window_functions_descriptions)
+    for (size_t i = 0; i < workspace_num; i++)
     {
+        const auto & desc = window_description.window_functions_descriptions[i];
         WindowFunctionWorkspace workspace;
-        workspace.window_function = window_function_description.window_function;
-        workspace.arguments = window_function_description.arguments;
-        workspaces.push_back(std::move(workspace));
+        workspace.idx = i;
+        workspace.window_function = desc.window_function;
+        workspace.arguments = desc.arguments;
+        if (workspace.window_function == nullptr)
+        {
+            initialAggregateFunction(workspace, desc);
+            return_types.push_back(workspace.aggregate_function->getReturnType());
+            aggregation_workspaces.push_back(std::move(workspace));
+        }
+        else
+        {
+            return_types.push_back(workspace.window_function->getReturnType());
+            window_workspaces.push_back(std::move(workspace));
+        }
     }
-    only_have_row_number = onlyHaveRowNumber();
+
+    has_rank_or_dense_rank = false;
+    for (const auto & workspace : window_workspaces)
+    {
+        if (workspace.window_function->getName() == "rank" || workspace.window_function->getName() == "dense_rank")
+        {
+            has_rank_or_dense_rank = true;
+            break;
+        }
+    }
+}
+
+void WindowTransformAction::initialAggregateFunction(
+    WindowFunctionWorkspace & workspace,
+    const WindowFunctionDescription & window_function_description)
+{
+    has_agg = true;
+
+    workspace.argument_columns.assign(workspace.arguments.size(), nullptr);
+    workspace.aggregate_function = window_function_description.aggregate_function;
+    const auto & aggregate_function = workspace.aggregate_function;
+    if (aggregate_function->allocatesMemoryInArena())
+        throw Exception("arena is not supported now");
+
+    workspace.aggregate_function_state.reset(aggregate_function->sizeOfData(), aggregate_function->alignOfData());
+    aggregate_function->create(workspace.aggregate_function_state.data());
 }
 
 // Judge whether current_partition_row is end row of partition in current block
@@ -1169,10 +1210,18 @@ void WindowTransformAction::writeOutCurrentRow()
     assert(current_row < partition_end);
     assert(current_row.block >= first_block_number);
 
-    for (size_t wi = 0; wi < workspaces.size(); ++wi)
+    for (auto & ws : window_workspaces)
     {
-        auto & ws = workspaces[wi];
-        ws.window_function->windowInsertResultInto(*this, wi, ws.arguments);
+        ws.window_function->windowInsertResultInto(*this, ws.idx, ws.arguments);
+    }
+
+    for (auto & ws : aggregation_workspaces)
+    {
+        const auto & block = blockAt(current_row);
+        IColumn * result_column = block.output_columns[ws.idx].get();
+        const auto * agg_func = ws.aggregate_function.get();
+        auto * buf = ws.aggregate_function_state.data();
+        agg_func->insertResultInto(buf, *result_column, nullptr);
     }
 }
 
@@ -1204,16 +1253,6 @@ Block WindowTransformAction::tryGetOutputBlock()
         return output_block;
     }
     return {};
-}
-
-bool WindowTransformAction::onlyHaveRowNumber()
-{
-    for (const auto & workspace : workspaces)
-    {
-        if (workspace.window_function->getName() != "row_number")
-            return false;
-    }
-    return true;
 }
 
 void WindowTransformAction::releaseAlreadyOutputWindowBlock()
@@ -1256,15 +1295,85 @@ void WindowTransformAction::appendBlock(Block & current_block)
     auto & window_block = window_blocks.back();
     window_block.rows = current_block.rows();
 
-    // Initialize output columns and add new columns to output block.
-    for (auto & ws : workspaces)
+    for (const auto & return_type : return_types)
     {
-        MutableColumnPtr res = ws.window_function->getReturnType()->createColumn();
+        MutableColumnPtr res = return_type->createColumn();
         res->reserve(window_block.rows);
         window_block.output_columns.push_back(std::move(res));
     }
 
     window_block.input_columns = current_block.getColumns();
+}
+
+bool WindowTransformAction::checkIfNeedDecrease()
+{
+    if (first_processed)
+        return false;
+
+    if (prev_frame_end <= frame_start)
+        return false;
+
+    // added row refers to the rows that have been added in the previous frame
+    UInt64 add_row_num = distance(prev_frame_end, frame_start);
+    UInt64 decrease_row_num = distance(frame_start, prev_frame_start);
+
+    // We always choose the operation that need less steps.
+    // Suppose add_row_num is 10 and decrease_row_num is 5,
+    // we need to loop 10 times for add and if we choose to decrease,
+    // we will need to loop for only 5 times.
+    return add_row_num > decrease_row_num;
+}
+
+// Update the aggregation states after the frame has changed.
+template <bool need_decrease>
+void WindowTransformAction::updateAggregationState()
+{
+    if (!has_agg)
+        return;
+
+    assert(frame_started);
+    assert(frame_ended);
+    assert(frame_start <= frame_end);
+    assert(prev_frame_start <= prev_frame_end);
+    assert(prev_frame_start <= frame_start);
+    assert(prev_frame_end <= frame_end);
+    assert(partition_start <= frame_start);
+    assert(frame_end <= partition_end);
+
+    bool append_add = false;
+
+    if (!first_processed)
+    {
+        if ((prev_frame_start == frame_start) && (prev_frame_end == frame_end))
+            return;
+
+        if (prev_frame_start == frame_start)
+            append_add = true;
+    }
+
+    bool check_need_decrease = false;
+    if constexpr (need_decrease)
+        check_need_decrease = checkIfNeedDecrease();
+    for (auto & ws : aggregation_workspaces)
+    {
+        RowNumber start = frame_start;
+        if (check_need_decrease)
+        {
+            decreaseAggregationState(ws, prev_frame_start, frame_start);
+            start = prev_frame_end;
+        }
+        else
+        {
+            if (append_add)
+                start = prev_frame_end;
+            else
+                ws.aggregate_function->reset(ws.aggregate_function_state.data());
+        }
+
+        addAggregationState(ws, start, frame_end);
+    }
+
+    first_processed = false;
 }
 
 void WindowTransformAction::tryCalculate()
@@ -1286,11 +1395,10 @@ void WindowTransformAction::tryCalculate()
             assert(input_is_finished);
         }
 
-
         while (current_row < partition_end)
         {
-            // if window only have row_number function, we can ignore judging peers
-            if (!only_have_row_number)
+            // if window does not contain rank or dense rank function, we can ignore judging peers
+            if (has_rank_or_dense_rank)
             {
                 // peer_group_last save the row before current_row
                 if (!arePeers(peer_group_last, current_row))
@@ -1328,6 +1436,11 @@ void WindowTransformAction::tryCalculate()
             // not after end.
             assert(frame_started);
             assert(frame_ended);
+
+            if (window_description.need_decrease)
+                updateAggregationState<true>();
+            else
+                updateAggregationState<false>();
 
             // Write out the results.
             // TODO execute the window function by block instead of row.
@@ -1377,7 +1490,8 @@ void WindowTransformAction::tryCalculate()
         frame_start = partition_start;
         frame_end = partition_start;
         prev_frame_start = partition_start;
-        prev_frame_end = partition_end;
+        prev_frame_end = partition_start;
+        first_processed = true;
         assert(current_row == partition_start);
         current_row_number = 1;
         peer_group_last = partition_start;
