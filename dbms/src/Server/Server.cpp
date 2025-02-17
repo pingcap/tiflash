@@ -48,6 +48,7 @@
 #include <Interpreters/AsynchronousMetrics.h>
 #include <Interpreters/IDAsPathUpgrader.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/Settings.h>
 #include <Interpreters/loadMetadata.h>
 #include <Poco/DirectoryIterator.h>
 #include <Poco/Net/HTTPServer.h>
@@ -871,6 +872,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
+    Settings & settings = global_context->getSettingsRef();
     TiFlashProxyConfig proxy_conf(config(), log, settings);
     EngineStoreServerWrap tiflash_instance_wrap{};
     auto helper = GetEngineStoreServerHelper(
