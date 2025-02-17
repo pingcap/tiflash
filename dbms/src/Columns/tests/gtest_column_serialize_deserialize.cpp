@@ -769,23 +769,23 @@ try
         collator_utf8_bin);
     testCountSerializeByteSize(
         col_string,
-        {4 + 8 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 + 2 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 + 4 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 + 3 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 + 6 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 + 5 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
+        {4 + 8 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 2 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 4 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 3 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 6 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 5 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
          4 + 0 + 1},
         true,
         collator_utf8_general_ci);
     testCountSerializeByteSize(
         col_string,
-        {4 + 8 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 + 2 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 + 4 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 + 3 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 + 6 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 + 5 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
+        {4 + 8 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 2 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 4 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 3 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 6 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 5 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
          4 + 0 + 1},
         true,
         collator_utf8_unicode_ci);
@@ -794,25 +794,25 @@ try
     testCountSerializeByteSizeForColumnArray(
         col_string,
         col_offset,
-        {4 + 8 * collator_utf8_bin->maxBytesForOneChar() + 1,
-         4 * 3 + (6 + 12 + 9) * collator_utf8_bin->maxBytesForOneChar() + 1 * 3,
-         4 * 3 + (12 + 11) * collator_utf8_bin->maxBytesForOneChar() + 1 * 3},
+        {4 + 8 * collator_utf8_bin->sortKeyReservedSpaceMultipler() + 1,
+         4 * 3 + (6 + 12 + 9) * collator_utf8_bin->sortKeyReservedSpaceMultipler() + 1 * 3,
+         4 * 3 + (12 + 11) * collator_utf8_bin->sortKeyReservedSpaceMultipler() + 1 * 3},
         true,
         collator_utf8_bin);
     testCountSerializeByteSizeForColumnArray(
         col_string,
         col_offset,
-        {4 + 8 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 * 3 + (2 + 4 + 3) * collator_utf8_general_ci->maxBytesForOneChar() + 1 * 3,
-         4 * 3 + (6 + 5) * collator_utf8_general_ci->maxBytesForOneChar() + 1 * 3},
+        {4 + 8 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 * 3 + (2 + 4 + 3) * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1 * 3,
+         4 * 3 + (6 + 5) * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1 * 3},
         true,
         collator_utf8_general_ci);
     testCountSerializeByteSizeForColumnArray(
         col_string,
         col_offset,
-        {4 + 8 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 * 3 + (2 + 4 + 3) * collator_utf8_unicode_ci->maxBytesForOneChar() + 1 * 3,
-         4 * 3 + (6 + 5) * collator_utf8_unicode_ci->maxBytesForOneChar() + 1 * 3},
+        {4 + 8 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 * 3 + (2 + 4 + 3) * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1 * 3,
+         4 * 3 + (6 + 5) * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1 * 3},
         true,
         collator_utf8_unicode_ci);
 

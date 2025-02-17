@@ -499,7 +499,8 @@ void ColumnString::countSerializeByteSizeForCmp(
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    if (collator != nullptr && collator->maxBytesForOneChar() > 1)
+    // For bin padding, skip consider collator so we can skip counting code points, which may be slow.
+    if (collator != nullptr && collator->sortKeyReservedSpaceMultipler() > 1)
     {
         if (nullmap != nullptr)
             countSerializeByteSizeImpl</*need_decode_collator=*/true, /*has_nullmap=*/true>(
@@ -556,7 +557,7 @@ void ColumnString::countSerializeByteSizeImpl(
     if constexpr (need_decode_collator)
     {
         RUNTIME_CHECK(collator);
-        max_bytes_one_char = collator->maxBytesForOneChar();
+        max_bytes_one_char = collator->sortKeyReservedSpaceMultipler();
     }
 
     for (size_t i = 0; i < size; ++i)
@@ -590,7 +591,8 @@ void ColumnString::countSerializeByteSizeForCmpColumnArray(
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    if (collator != nullptr && collator->maxBytesForOneChar() > 1)
+    // For bin padding, skip consider collator so we can skip counting code points, which may be slow.
+    if (collator != nullptr && collator->sortKeyReservedSpaceMultipler() > 1)
     {
         if (nullmap != nullptr)
             countSerializeByteSizeForColumnArrayImpl<
@@ -657,7 +659,7 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     if constexpr (need_decode_collator)
     {
         RUNTIME_CHECK(collator);
-        max_bytes_one_char = collator->maxBytesForOneChar();
+        max_bytes_one_char = collator->sortKeyReservedSpaceMultipler();
     }
 
     for (size_t i = 0; i < size; ++i)
@@ -689,6 +691,12 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
     }
 }
 
+inline bool needDecodeCollatorForCmp(const TiDB::TiDBCollatorPtr & collator)
+{
+    // For now, only non-padding bin is trivial.
+    return collator != nullptr && !collator->isTrivialCollator();
+}
+
 void ColumnString::serializeToPosForCmp(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -698,11 +706,9 @@ void ColumnString::serializeToPosForCmp(
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
-    const bool need_decode_collator = collator != nullptr
-                && (collator->maxBytesForOneChar() > 1 || (collator->maxBytesForOneChar() == 1 && collator->isPaddingBinary()));
     if (has_null)
     {
-        if (need_decode_collator)
+        if (needDecodeCollatorForCmp(collator))
         {
             if (nullmap != nullptr)
             {
@@ -751,7 +757,7 @@ void ColumnString::serializeToPosForCmp(
     }
     else
     {
-        if (need_decode_collator)
+        if (needDecodeCollatorForCmp(collator))
         {
             if (nullmap != nullptr)
             {
@@ -942,11 +948,9 @@ void ColumnString::serializeToPosForCmpColumnArray(
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
-    const bool need_decode_collator = collator != nullptr
-                && (collator->maxBytesForOneChar() > 1 || (collator->maxBytesForOneChar() == 1 && collator->isPaddingBinary()));
     if (has_null)
     {
-        if (need_decode_collator)
+        if (needDecodeCollatorForCmp(collator))
         {
             if (nullmap != nullptr)
             {
@@ -983,7 +987,7 @@ void ColumnString::serializeToPosForCmpColumnArray(
     }
     else
     {
-        if (need_decode_collator)
+        if (needDecodeCollatorForCmp(collator))
         {
             if (nullmap != nullptr)
             {

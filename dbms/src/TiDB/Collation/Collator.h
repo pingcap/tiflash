@@ -104,6 +104,7 @@ public:
     // For sort key, a n * length mem will be reserved to decode collator.
     // This method returns n.
     virtual size_t sortKeyReservedSpaceMultipler() const = 0;
+    virtual bool isTrivialCollator() const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
     int32_t getCollatorId() const { return collator_id; }
     CollatorType getCollatorType() const { return collator_type; }
@@ -232,6 +233,10 @@ public:
         // Hence, it returns 1 here.
         return 1;
     }
+    bool isTrivialCollator() const override
+    {
+        return !padding;
+    }
 
 private:
     const std::string name = padding ? "BinaryPadding" : "Binary";
@@ -311,6 +316,10 @@ public:
         // Every char have 8 uint16 at most.
         return 8 * sizeof(uint16_t);
     }
+    bool isTrivialCollator() const override
+    {
+        return false;
+    }
 
 private:
     const std::string name = "UnicodeCI";
@@ -374,6 +383,11 @@ public:
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
 
     size_t sortKeyReservedSpaceMultipler() const override { return sizeof(WeightType); }
+
+    bool isTrivialCollator() const override
+    {
+        return false;
+    }
 
 private:
     const std::string name = "GeneralCI";
