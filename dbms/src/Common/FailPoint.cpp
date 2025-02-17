@@ -123,7 +123,8 @@ namespace DB
     M(force_agg_two_level_hash_table_before_merge)           \
     M(force_thread_0_no_agg_spill)                           \
     M(force_checkpoint_dump_throw_datafile)                  \
-    M(force_semi_join_time_exceed)
+    M(force_semi_join_time_exceed)                           \
+    M(force_set_proxy_state_machine_cpu_cores)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M)    \
     M(pause_with_alter_locks_acquired)            \

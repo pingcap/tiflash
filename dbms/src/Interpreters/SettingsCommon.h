@@ -169,11 +169,7 @@ public:
         is_auto = true;
     }
 
-    static UInt64 getAutoValue()
-    {
-        static auto res = getNumberOfLogicalCPUCores();
-        return res;
-    }
+    static UInt64 getAutoValue() { return getNumberOfLogicalCPUCores(); }
 
     UInt64 get() const { return value; }
 
