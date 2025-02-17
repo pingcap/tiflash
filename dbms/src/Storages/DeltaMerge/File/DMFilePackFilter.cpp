@@ -408,6 +408,7 @@ std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::R
     size_t range_offset = 0;
     // The number of rows in the current range.
     size_t range_rows = 0;
+
     UInt32 prev_offset = 0;
     UInt32 current_offset = 0;
     UInt64 prev_sid = 0;
@@ -427,30 +428,35 @@ std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::R
         for (size_t pack_id = 0; pack_id < pack_stats.size(); ++pack_id)
         {
             const auto & pack_stat = pack_stats[pack_id];
-            while (delta_index_it != delta_index_end && current_offset >= delta_index_it.getSid())
-            {
-                prev_sid = delta_index_it.getSid();
-                prev_delete_count = delta_index_it.isDelete() ? delta_index_it.getCount() : 0;
-                ++delta_index_it;
-                // Just a sanity check: `prev_sid + prev_delete_count <= sid`.
-                RUNTIME_CHECK(
-                    delta_index_it == delta_index_end || prev_sid + prev_delete_count <= delta_index_it.getSid());
-            }
-
             prev_offset = current_offset;
             current_offset += pack_stat.rows;
             if (!pack_res[pack_id].isUse())
                 continue;
 
-            sid = delta_index_it != delta_index_end ? delta_index_it.getSid() : std::numeric_limits<UInt64>::max();
-            // The sid range of the pack: (prev_offset, current_offset].
-            // The continuously sorted sid range in delta index: (prev_sid, sid].
-            // Due to the above code(while loop), `prev_offset >= prev_sid` can be guaranteed.
+            // Find the first delta_index_it whose sid > prev_offset
+            auto new_it = std::upper_bound(
+                delta_index_it,
+                delta_index_end,
+                prev_offset,
+                [](UInt32 val, const DeltaIndexCompacted::Entry & e) { return val < e.getSid(); });
+            if (new_it != delta_index_it)
+            {
+                auto prev_it = std::prev(new_it);
+                prev_sid = prev_it->getSid();
+                prev_delete_count = prev_it->isDelete() ? prev_it->getCount() : 0;
+                delta_index_it = new_it;
+            }
+            sid = delta_index_it != delta_index_end ? delta_index_it->getSid() : std::numeric_limits<UInt64>::max();
+            // Since delta_index_it is the first element with sid > prev_offset,
+            // the preceding element’s sid (prev_sid) must be <= prev_offset.
             RUNTIME_CHECK(prev_offset >= prev_sid);
             // Note: If `prev_offset == prev_sid`, the RowKey of the delta row preceding `prev_sid`
             // must be smaller than the RowKey of `prev_sid`. This is because for the same RowKey,
             // the version in the delta data will always be greater than the version in the stable data.
             // Therefore, the RowKey in the preceding row will definitely be smaller than the RowKey of `prev_sid`.
+
+            // The sid range of the pack: (prev_offset, current_offset].
+            // The continuously sorted sid range in delta index: (prev_sid, sid].
 
             // Now check the right boundary of this pack(i.e. current_offset)
             if (current_offset >= sid)
