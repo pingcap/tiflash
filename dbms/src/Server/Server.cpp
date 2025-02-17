@@ -960,7 +960,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         // Must be executed before restore data.
         // Get the memory usage of tranquil time.
-        auto resident_set = std::get<0>(process_mem_usage());
+        auto [resident_set, cur_proc_num_threads, cur_virt_size] = process_mem_usage();
+        UNUSED(cur_proc_num_threads);
         tranquil_time_rss = static_cast<Int64>(resident_set);
 
         auto kvs_watermark = settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity);
@@ -969,7 +970,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(
             log,
             "Global memory status: kvstore_high_watermark={} tranquil_time_rss={} cur_virt_size={} capacity={}",
-            limit,
+            kvs_watermark,
             tranquil_time_rss,
             cur_virt_size,
             server_info.memory_info.capacity);
