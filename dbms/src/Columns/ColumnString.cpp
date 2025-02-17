@@ -888,7 +888,7 @@ void ColumnString::serializeToPosImpl(
     RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     /// To avoid virtual function call of sortKey().
-    static ColumnStringDefaultValue col_str_def_val;
+    static const ColumnStringDefaultValue col_str_def_val;
     const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
     /// countSerializeByteSizeImpl has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
