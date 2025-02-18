@@ -46,10 +46,13 @@ inline void getServerInfoFromProxy(
     TiFlashRaftProxyHelper * helper,
     Settings & global_settings)
 {
+    LOG_INFO(log, "!!!!! getServerInfoFromProxy 1");
     /// get CPU/memory/disk info of this server
     diagnosticspb::ServerInfoRequest request;
     diagnosticspb::ServerInfoResponse response;
+    LOG_INFO(log, "!!!!! getServerInfoFromProxy 2");
     request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
+    LOG_INFO(log, "!!!!! getServerInfoFromProxy 3");
     std::string req = request.SerializeAsString();
 #ifndef DBMS_PUBLIC_GTEST
     // In tests, no proxy is provided, and Server is not linked to.
