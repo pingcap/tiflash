@@ -43,7 +43,7 @@ extern const char force_set_proxy_state_machine_cpu_cores[];
 inline void getServerInfoFromProxy(
     LoggerPtr log,
     ServerInfo & server_info,
-    TiFlashRaftProxyHelper * helper,
+    EngineStoreServerHelper * helper,
     Settings & global_settings)
 {
     LOG_INFO(log, "!!!!! getServerInfoFromProxy 1");
