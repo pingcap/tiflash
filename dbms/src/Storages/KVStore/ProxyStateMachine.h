@@ -52,11 +52,14 @@ inline void getServerInfoFromProxy(
     diagnosticspb::ServerInfoResponse response;
     LOG_INFO(log, "!!!!! getServerInfoFromProxy 2");
     request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
-    LOG_INFO(log, "!!!!! getServerInfoFromProxy 3");
+    LOG_INFO(log, "!!!!! getServerInfoFromProxy 3 INFO {}", helper);
     std::string req = request.SerializeAsString();
+    LOG_INFO(log, "!!!!! getServerInfoFromProxy 4");
 #ifndef DBMS_PUBLIC_GTEST
     // In tests, no proxy is provided, and Server is not linked to.
+    LOG_INFO(log, "!!!!! getServerInfoFromProxy 5");
     ffi_get_server_info_from_proxy(reinterpret_cast<intptr_t>(&helper), strIntoView(&req), &response);
+    LOG_INFO(log, "!!!!! getServerInfoFromProxy 6");
     server_info.parseSysInfo(response);
     LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
 #else
