@@ -58,6 +58,7 @@
 #include <aws/s3/model/MetadataDirective.h>
 #include <aws/s3/model/PutBucketLifecycleConfigurationRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
+#include <aws/s3/model/Rule.h>
 #include <aws/s3/model/Tag.h>
 #include <aws/s3/model/TaggingDirective.h>
 #include <aws/sts/STSClient.h>
@@ -163,6 +164,7 @@ private:
 namespace DB::FailPoints
 {
 extern const char force_set_mocked_s3_object_mtime[];
+extern const char force_set_lifecycle_resp[];
 } // namespace DB::FailPoints
 namespace DB::S3
 {
@@ -799,6 +801,14 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 
         auto res = outcome.GetResultWithOwnership();
         old_rules = res.GetRules();
+        fiu_do_on(FailPoints::force_set_lifecycle_resp, {
+            if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_lifecycle_resp); v)
+            {
+                auto rules = std::any_cast<std::vector<Aws::S3::Model::LifecycleRule>>(*v);
+                old_rules = rules;
+            }
+        });
+
         static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
         for (const auto & rule : old_rules)
         {
