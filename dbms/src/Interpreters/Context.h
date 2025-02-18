@@ -577,6 +577,7 @@ private:
 
     void checkIsConfigLoaded() const;
 
+private:
     bool is_config_loaded = false; /// Is configuration loaded from toml file.
 };
 
