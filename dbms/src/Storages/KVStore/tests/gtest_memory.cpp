@@ -14,6 +14,7 @@
 
 #include <Common/MemoryTracker.h>
 #include <Debug/MockKVStore/MockSSTGenerator.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/MockTiDB.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
@@ -274,11 +275,8 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                createPeer(region_id + 1, true),
-                createRegionInfo(
-                    region_id2,
-                    RecordKVFormat::genKey(table_id, 12050),
-                    RecordKVFormat::genKey(table_id, 12099)),
+                RegionBench::createPeer(region_id + 1, true),
+                RegionBench::createMetaRegion(region_id2, table_id, 12050, 12099),
                 initialApplyState()));
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
@@ -321,11 +319,8 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                createPeer(region_id + 1, true),
-                createRegionInfo(
-                    region_id2,
-                    RecordKVFormat::genKey(table_id, 13150),
-                    RecordKVFormat::genKey(table_id, 13199)),
+                RegionBench::createPeer(region_id + 1, true),
+                RegionBench::createMetaRegion(region_id2, table_id, 13150, 13199),
                 initialApplyState()));
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
@@ -534,7 +529,6 @@ try
     }
 }
 CATCH
-
 
 #if USE_JEMALLOC // following tests depends on jemalloc
 TEST(FFIJemallocTest, JemallocThread)

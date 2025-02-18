@@ -14,13 +14,13 @@
 
 #include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/Decode/SSTFilesToDTFilesOutputStream.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -41,7 +41,7 @@ class SSTFilesToDTFilesOutputStreamTest : public DB::base::TiFlashStorageTestBas
 public:
     void SetUp() override
     {
-        mock_region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 1000));
+        mock_region = RegionBench::makeRegionForTable(1, table_id, 0, 1000);
 
         TiFlashStorageTestBasic::SetUp();
         setupStorage();
@@ -50,13 +50,13 @@ public:
     void TearDown() override
     {
         storage->drop();
-        db_context->getTMTContext().getStorages().remove(NullspaceID, /* table id */ 100);
+        db_context->getTMTContext().getStorages().remove(NullspaceID, table_id);
     }
 
     void setupStorage()
     {
         auto columns = DM::tests::DMTestEnv::getDefaultTableColumns(pk_type);
-        auto table_info = DM::tests::DMTestEnv::getMinimalTableInfo(/* table id */ 100, pk_type);
+        auto table_info = DM::tests::DMTestEnv::getMinimalTableInfo(table_id, pk_type);
         auto astptr = DM::tests::DMTestEnv::getPrimaryKeyExpr("test_table", pk_type);
 
         storage = StorageDeltaMerge::create(
@@ -103,6 +103,7 @@ public:
     }
 
 protected:
+    TableID table_id = 100;
     StorageDeltaMergePtr storage;
     RegionPtr mock_region;
     DMTestEnv::PkType pk_type = DMTestEnv::PkType::HiddenTiDBRowID;

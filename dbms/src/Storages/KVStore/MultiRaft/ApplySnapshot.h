@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Storages/KVStore/Region.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/KVStore/Region.h>
 
 namespace DB
 {

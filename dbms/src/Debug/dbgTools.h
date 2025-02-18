@@ -41,25 +41,6 @@ class TMTContext;
 
 namespace DB::RegionBench
 {
-RegionPtr createRegion(
-    TableID table_id,
-    RegionID region_id,
-    const HandleID & start,
-    const HandleID & end,
-    std::optional<uint64_t> index = std::nullopt);
-
-Regions createRegions(
-    TableID table_id,
-    size_t region_num,
-    size_t key_num_each_region,
-    HandleID handle_begin,
-    RegionID new_region_id_begin);
-
-RegionPtr createRegion(
-    const TiDB::TableInfo & table_info,
-    RegionID region_id,
-    std::vector<Field> & start_keys,
-    std::vector<Field> & end_keys);
 
 void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
 
