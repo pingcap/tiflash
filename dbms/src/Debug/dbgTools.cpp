@@ -47,24 +47,6 @@ namespace RegionBench
 using TiDB::ColumnInfo;
 
 
-RegionPtr createRegion(
-    TableID table_id,
-    RegionID region_id,
-    const HandleID & start,
-    const HandleID & end,
-    std::optional<uint64_t> index_)
-{
-    // peer_id is a fake number here
-    auto meta_region = createMetaRegion(region_id, table_id, start, end);
-    metapb::Peer peer;
-    RegionMeta region_meta(std::move(peer), std::move(meta_region), initialApplyState());
-    uint64_t index = MockTiKV::instance().getRaftIndex(region_id);
-    if (index_)
-        index = *index_;
-    region_meta.setApplied(index, RAFT_INIT_LOG_TERM);
-    return makeRegion(std::move(region_meta));
-}
-
 Regions createRegions(
     TableID table_id,
     size_t region_num,
@@ -76,27 +58,11 @@ Regions createRegions(
     for (RegionID region_id = new_region_id_begin; region_id < static_cast<RegionID>(new_region_id_begin + region_num);
          ++region_id, handle_begin += key_num_each_region)
     {
-        auto ptr = createRegion(table_id, region_id, handle_begin, handle_begin + key_num_each_region);
+        auto ptr
+            = MockTiKV::instance().createRegion(table_id, region_id, handle_begin, handle_begin + key_num_each_region);
         regions.push_back(ptr);
     }
     return regions;
-}
-
-RegionPtr createRegionCommonHandle(
-    const TiDB::TableInfo & table_info,
-    RegionID region_id,
-    std::vector<Field> & start_keys,
-    std::vector<Field> & end_keys)
-{
-    metapb::Region region = createMetaRegionCommonHandle(
-        region_id,
-        RecordKVFormat::genKey(table_info, start_keys),
-        RecordKVFormat::genKey(table_info, end_keys));
-
-    metapb::Peer peer;
-    RegionMeta region_meta(std::move(peer), std::move(region), initialApplyState());
-    region_meta.setApplied(MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM);
-    return RegionBench::makeRegion(std::move(region_meta));
 }
 
 void setupPutRequest(raft_cmdpb::Request * req, const std::string & cf, const TiKVKey & key, const TiKVValue & value)

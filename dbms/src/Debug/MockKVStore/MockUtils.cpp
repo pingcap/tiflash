@@ -86,7 +86,11 @@ RegionPtr makeRegion(RegionMeta && meta)
     return std::make_shared<Region>(std::move(meta), nullptr);
 }
 
-RegionPtr makeRegion(UInt64 id, std::string start_key, std::string end_key, const TiFlashRaftProxyHelper * proxy_helper)
+RegionPtr makeRegionForRange(
+    UInt64 id,
+    std::string start_key,
+    std::string end_key,
+    const TiFlashRaftProxyHelper * proxy_helper)
 {
     return std::make_shared<Region>(
         RegionMeta(
@@ -96,6 +100,19 @@ RegionPtr makeRegion(UInt64 id, std::string start_key, std::string end_key, cons
         proxy_helper);
 }
 
+RegionPtr makeRegionForTable(
+    UInt64 region_id,
+    TableID table_id,
+    HandleID start,
+    HandleID end,
+    const TiFlashRaftProxyHelper * proxy_helper)
+{
+    return makeRegionForRange(
+        region_id,
+        RecordKVFormat::genKey(table_id, start).toString(),
+        RecordKVFormat::genKey(table_id, end).toString(),
+        proxy_helper);
+}
 
 // Generates a lock value which fills all fields, only for test use.
 TiKVValue encodeFullLockCfValue(

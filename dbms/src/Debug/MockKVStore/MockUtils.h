@@ -37,7 +37,14 @@ metapb::Region createMetaRegionCommonHandle( //
     std::optional<metapb::RegionEpoch> maybe_epoch = std::nullopt,
     std::optional<std::vector<metapb::Peer>> maybe_peers = std::nullopt);
 
-RegionPtr makeRegion(
+RegionPtr makeRegionForTable(
+    UInt64 region_id,
+    TableID table_id,
+    HandleID start,
+    HandleID end,
+    const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+
+RegionPtr makeRegionForRange(
     UInt64 id,
     std::string start_key,
     std::string end_key,

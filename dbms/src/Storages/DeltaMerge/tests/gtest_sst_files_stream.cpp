@@ -41,7 +41,7 @@ class SSTFilesToDTFilesOutputStreamTest : public DB::base::TiFlashStorageTestBas
 public:
     void SetUp() override
     {
-        mock_region = makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 1000));
+        mock_region = RegionBench::makeRegionForTable(1, 1, 0, 1000);
 
         TiFlashStorageTestBasic::SetUp();
         setupStorage();

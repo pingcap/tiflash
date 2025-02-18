@@ -24,6 +24,8 @@
 #include <TestUtils/TiFlashTestEnv.h>
 #include <kvproto/kvrpcpb.pb.h>
 
+#include "Debug/MockKVStore/MockUtils.h"
+
 namespace DB::tests
 {
 class LearnerReadTest : public ::testing::Test
@@ -76,34 +78,23 @@ try
 
     const TableID table_id = 100;
 
+    using RegionBench::makeRegionForTable;
     LearnerReadSnapshot snapshot{
         {
             region_id_200,
-            RegionLearnerReadSnapshot(makeRegion(
-                region_id_200,
-                RecordKVFormat::genKey(table_id, 0),
-                RecordKVFormat::genKey(table_id, 10000))),
+            RegionLearnerReadSnapshot(makeRegionForTable(region_id_200, table_id, 0, 10000)),
         },
         {
             region_id_201,
-            RegionLearnerReadSnapshot(makeRegion(
-                region_id_201,
-                RecordKVFormat::genKey(table_id, 10000),
-                RecordKVFormat::genKey(table_id, 20000))),
+            RegionLearnerReadSnapshot(makeRegionForTable(region_id_201, table_id, 10000, 20000)),
         },
         {
             region_id_202,
-            RegionLearnerReadSnapshot(makeRegion(
-                region_id_202,
-                RecordKVFormat::genKey(table_id, 20000),
-                RecordKVFormat::genKey(table_id, 30000))),
+            RegionLearnerReadSnapshot(makeRegionForTable(region_id_202, table_id, 20000, 30000)),
         },
         {
             region_id_203,
-            RegionLearnerReadSnapshot(makeRegion(
-                region_id_203,
-                RecordKVFormat::genKey(table_id, 30000),
-                RecordKVFormat::genKey(table_id, 40000))),
+            RegionLearnerReadSnapshot(makeRegionForTable(region_id_203, table_id, 30000, 40000)),
         },
     };
 

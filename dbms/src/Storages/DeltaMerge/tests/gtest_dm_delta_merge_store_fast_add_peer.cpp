@@ -390,9 +390,7 @@ try
         db_context->getSettingsRef(),
         RowKeyRange::newAll(false, 1),
         checkpoint_info);
-    auto start = RecordKVFormat::genKey(table_id, 0);
-    auto end = RecordKVFormat::genKey(table_id, 10);
-    RegionPtr dummy_region = tests::makeRegion(checkpoint_info->region_id, start, end, nullptr);
+    RegionPtr dummy_region = RegionBench::makeRegionForTable(checkpoint_info->region_id, table_id, 0, 10, nullptr);
     store->ingestSegmentsFromCheckpointInfo(
         *db_context,
         db_context->getSettingsRef(),
@@ -523,9 +521,7 @@ try
             db_context->getSettingsRef(),
             RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)),
             checkpoint_info);
-        auto start = RecordKVFormat::genKey(table_id, 0);
-        auto end = RecordKVFormat::genKey(table_id, 10);
-        RegionPtr dummy_region = tests::makeRegion(checkpoint_info->region_id, start, end, nullptr);
+        RegionPtr dummy_region = RegionBench::makeRegionForTable(checkpoint_info->region_id, table_id, 0, 10, nullptr);
         store->ingestSegmentsFromCheckpointInfo(
             *db_context,
             db_context->getSettingsRef(),
@@ -548,9 +544,7 @@ try
             db_context->getSettingsRef(),
             RowKeyRange::fromHandleRange(HandleRange(num_rows_write / 2, num_rows_write)),
             checkpoint_info);
-        auto start = RecordKVFormat::genKey(table_id, 0);
-        auto end = RecordKVFormat::genKey(table_id, 10);
-        RegionPtr dummy_region = tests::makeRegion(checkpoint_info->region_id, start, end, nullptr);
+        RegionPtr dummy_region = RegionBench::makeRegionForTable(checkpoint_info->region_id, table_id, 0, 10, nullptr);
         store->ingestSegmentsFromCheckpointInfo(
             *db_context,
             db_context->getSettingsRef(),

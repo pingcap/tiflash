@@ -180,7 +180,11 @@ void MockRaftStoreProxy::debugAddRegions(
         auto lock = kvs.genRegionMgrWriteLock(task_lock); // Region mgr lock
         for (int i = 0; i < n; ++i)
         {
-            auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
+            auto region = RegionBench::makeRegionForRange(
+                region_ids[i],
+                ranges[i].first,
+                ranges[i].second,
+                kvs.getProxyHelper());
             lock.regions.emplace(region_ids[i], region);
             lock.index.add(region);
             tmt.getRegionTable().addRegion(*region);

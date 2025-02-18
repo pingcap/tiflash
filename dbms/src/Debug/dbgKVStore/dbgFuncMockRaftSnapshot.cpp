@@ -81,7 +81,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
     {
         auto start = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value));
         auto end = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value));
-        region = RegionBench::createRegion(table_id, region_id, start, end);
+        region = MockTiKV::instance().createRegion(table_id, region_id, start, end);
     }
     else
     {
@@ -102,7 +102,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
             TiDB::DatumBumpy end_datum = TiDB::DatumBumpy(end_field, column_info.tp);
             end_keys.emplace_back(end_datum.field());
         }
-        region = RegionBench::createRegionCommonHandle(table_info, region_id, start_keys, end_keys);
+        region = MockTiKV::instance().createRegionCommonHandle(table_info, region_id, start_keys, end_keys);
     }
 
     auto args_begin = args.begin() + 3 + handle_column_size * 2;
@@ -595,8 +595,8 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(
 
     // We may call this function mutiple time to mock some situation, try to reuse the region in `GLOBAL_REGION_MAP`
     // so that we can collect uncommitted data.
-    UInt64 index = MockTiKV::instance().getRaftIndex(region_id) + 1;
-    RegionPtr new_region = RegionBench::createRegion(table->id(), region_id, start_handle, end_handle + 10000, index);
+    RegionPtr new_region = MockTiKV::instance().createRegion(table->id(), region_id, start_handle, end_handle + 10000);
+    UInt64 index = new_region->appliedIndex() + 1;
 
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
     RegionMockTest mock_test(kvstore.get(), new_region);
@@ -698,11 +698,11 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(
 
     // We may call this function mutiple time to mock some situation, try to reuse the region in `GLOBAL_REGION_MAP`
     // so that we can collect uncommitted data.
-    UInt64 index = MockTiKV::instance().getRaftIndex(region_id) + 1;
     UInt64 region_start_handle = handles[0];
     UInt64 region_end_handle = handles.back() + 10000;
     RegionPtr new_region
-        = RegionBench::createRegion(table->id(), region_id, region_start_handle, region_end_handle, index);
+        = MockTiKV::instance().createRegion(table->id(), region_id, region_start_handle, region_end_handle);
+    UInt64 index = new_region->appliedIndex() + 1;
 
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
     RegionMockTest mock_test(kvstore.get(), new_region);

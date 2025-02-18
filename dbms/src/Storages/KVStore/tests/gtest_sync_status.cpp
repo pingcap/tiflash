@@ -183,8 +183,7 @@ void createRegions(size_t region_num, TableID table_id)
     auto & tmt = TiFlashTestEnv::getContext()->getTMTContext();
     for (size_t i = 0; i < region_num; i++)
     {
-        auto region
-            = makeRegion(i, RecordKVFormat::genKey(table_id, i), RecordKVFormat::genKey(table_id, i + region_num + 10));
+        auto region = RegionBench::makeRegionForTable(i, table_id, i, i + region_num + 10);
         tmt.getRegionTable().shrinkRegionRange(*region);
     }
 }
