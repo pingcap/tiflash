@@ -1137,7 +1137,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     LOG_INFO(log, "!!!!! getServerInfoFromProxy 0");
-    getServerInfoFromProxy(log, server_info, tiflash_instance_wrap.proxy_helper, settings);
+    getServerInfoFromProxy(log, server_info, &helper, settings);
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
