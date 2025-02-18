@@ -1136,6 +1136,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     /// get CPU/memory/disk info of this server
+<<<<<<< HEAD
     diagnosticspb::ServerInfoRequest request;
     diagnosticspb::ServerInfoResponse response;
     request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
@@ -1145,6 +1146,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
     setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
     computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
     LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
+=======
+    proxy_machine.getServerInfo(server_info, settings);
+>>>>>>> ab5a5178cc (Fix the incorrect value of the max thread size (#9881))
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
