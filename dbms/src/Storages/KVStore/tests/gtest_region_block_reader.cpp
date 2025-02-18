@@ -14,6 +14,7 @@
 
 #include <Common/hex.h>
 #include <Core/Field.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
@@ -22,7 +23,6 @@
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/DatumCodec.h>

@@ -33,4 +33,21 @@ RegionPtr MockTiKV::createRegionCommonHandle(
     region_meta.setApplied(index, RAFT_INIT_LOG_TERM);
     return RegionBench::makeRegion(std::move(region_meta));
 }
+
+Regions MockTiKV::createRegions(
+    TableID table_id,
+    size_t region_num,
+    size_t key_num_each_region,
+    HandleID handle_begin,
+    RegionID new_region_id_begin)
+{
+    Regions regions;
+    for (RegionID region_id = new_region_id_begin; region_id < static_cast<RegionID>(new_region_id_begin + region_num);
+         ++region_id, handle_begin += key_num_each_region)
+    {
+        auto ptr = createRegion(table_id, region_id, handle_begin, handle_begin + key_num_each_region);
+        regions.push_back(ptr);
+    }
+    return regions;
+}
 } // namespace DB

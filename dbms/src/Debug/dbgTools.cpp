@@ -47,24 +47,6 @@ namespace RegionBench
 using TiDB::ColumnInfo;
 
 
-Regions createRegions(
-    TableID table_id,
-    size_t region_num,
-    size_t key_num_each_region,
-    HandleID handle_begin,
-    RegionID new_region_id_begin)
-{
-    Regions regions;
-    for (RegionID region_id = new_region_id_begin; region_id < static_cast<RegionID>(new_region_id_begin + region_num);
-         ++region_id, handle_begin += key_num_each_region)
-    {
-        auto ptr
-            = MockTiKV::instance().createRegion(table_id, region_id, handle_begin, handle_begin + key_num_each_region);
-        regions.push_back(ptr);
-    }
-    return regions;
-}
-
 void setupPutRequest(raft_cmdpb::Request * req, const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
     req->set_cmd_type(raft_cmdpb::CmdType::Put);
@@ -535,8 +517,12 @@ void concurrentBatchInsert(
 
 
     auto debug_kvstore = RegionBench::DebugKVStore(*tmt.getKVStore());
-    Regions regions
-        = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
+    Regions regions = MockTiKV::instance().createRegions( //
+        table_info.id,
+        concurrent_num,
+        key_num_each_region,
+        handle_begin,
+        curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
         debug_kvstore.onSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, {}}, nullptr, 0, tmt);
 

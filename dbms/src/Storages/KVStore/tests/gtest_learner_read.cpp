@@ -12,19 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/LearnerReadWorker.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <kvproto/kvrpcpb.pb.h>
-
-#include "Debug/MockKVStore/MockUtils.h"
 
 namespace DB::tests
 {

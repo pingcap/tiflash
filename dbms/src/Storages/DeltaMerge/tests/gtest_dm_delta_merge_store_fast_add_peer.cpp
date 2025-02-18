@@ -16,6 +16,7 @@
 #include <Common/FailPoint.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -32,7 +33,6 @@
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>

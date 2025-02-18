@@ -26,7 +26,6 @@
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -72,13 +71,14 @@ static ::testing::AssertionResult RegionCompare(
 #define ASSERT_REGION_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::RegionCompare, val1, val2)
 
 
+using namespace RegionBench;
 namespace
 {
 RegionMeta createRegionMeta(UInt64 id, DB::TableID table_id)
 {
     auto meta = RegionBench::createMetaRegion(id, table_id, 0, 300);
     return RegionMeta(
-        /*peer=*/createPeer(31, true),
+        /*peer=*/RegionBench::createPeer(31, true),
         /*region=*/meta,
         /*apply_state_=*/initialApplyState());
 }
@@ -162,7 +162,7 @@ public:
 TEST_F(RegionSeriTest, peer)
 try
 {
-    auto peer = createPeer(100, true);
+    auto peer = RegionBench::createPeer(100, true);
     const auto path = dir_path + "/peer.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
     auto size = writeBinary2(peer, write_buf);
@@ -179,6 +179,12 @@ CATCH
 TEST_F(RegionSeriTest, RegionInfo)
 try
 {
+    {
+        // Test create RegionMeta.
+        RegionMeta meta(createPeer(2, true), RegionBench::createMetaRegion(666, 0, 0, 1000), initialApplyState());
+        ASSERT_EQ(meta.peerId(), 2);
+    }
+
     auto region_info = RegionBench::createMetaRegion(233, 66, 0, 200);
     const auto path = dir_path + "/region_info.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
@@ -295,7 +301,7 @@ try
             *region_state.mutable_merge_state()->mutable_target()
                 = RegionBench::createMetaRegion(1111, table_id, 300, 400);
         }
-        region = makeRegion(RegionMeta(createPeer(31, true), apply_state, 5, region_state));
+        region = makeRegion(RegionMeta(RegionBench::createPeer(31, true), apply_state, 5, region_state));
     }
 
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);

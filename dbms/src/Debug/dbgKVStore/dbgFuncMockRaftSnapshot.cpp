@@ -19,6 +19,7 @@
 #include <Common/typeid_cast.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
 #include <Debug/MockKVStore/MockTiKV.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgKVStore/dbgFuncRegion.h>
@@ -43,7 +44,6 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
 
@@ -213,11 +213,8 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
 
     TMTContext & tmt = context.getTMTContext();
 
-    metapb::Region region_info;
-
     TiKVKey start_key;
     TiKVKey end_key;
-    region_info.set_id(region_id);
     if (table_info.is_common_handle)
     {
         // Get start key and end key form multiple column if it is clustered_index.
@@ -247,10 +244,13 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         start_key = RecordKVFormat::genKey(table_id, start);
         end_key = RecordKVFormat::genKey(table_id, end);
     }
-    region_info.set_start_key(start_key.toString());
-    region_info.set_end_key(end_key.toString());
-    *region_info.add_peers() = tests::createPeer(1, true);
-    *region_info.add_peers() = tests::createPeer(2, true);
+    metapb::Region region_info = RegionBench::createMetaRegionCommonHandle(
+        region_id,
+        start_key.toString(),
+        end_key.toString(),
+        std::nullopt,
+        std::vector<metapb::Peer>{RegionBench::createPeer(1, true), RegionBench::createPeer(2, true)});
+
     auto peer_id = 1;
     auto start_decoded_key = RecordKVFormat::decodeTiKVKey(start_key);
     auto end_decoded_key = RecordKVFormat::decodeTiKVKey(end_key);

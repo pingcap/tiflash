@@ -280,7 +280,7 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                createPeer(region_id + 1, true),
+                RegionBench::createPeer(region_id + 1, true),
                 RegionBench::createMetaRegion(region_id2, table_id, 12050, 12099),
                 initialApplyState()));
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));
@@ -324,7 +324,7 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                createPeer(region_id + 1, true),
+                RegionBench::createPeer(region_id + 1, true),
                 RegionBench::createMetaRegion(region_id2, table_id, 13150, 13199),
                 initialApplyState()));
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));

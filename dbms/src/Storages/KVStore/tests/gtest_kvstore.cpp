@@ -625,12 +625,6 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
             std::make_pair(RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 1000))));
     auto region = kvs.getRegion(region_id);
     {
-        // Test create RegionMeta.
-        auto meta
-            = RegionMeta(createPeer(2, true), RegionBench::createMetaRegion(666, 0, 0, 1000), initialApplyState());
-        ASSERT_EQ(meta.peerId(), 2);
-    }
-    {
         // Test GenRegionReadIndexReq.
         ASSERT_TRUE(region->checkIndex(5));
         auto start_ts = 199;
