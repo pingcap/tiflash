@@ -21,9 +21,6 @@
 UInt16 getNumberOfLogicalCPUCores();
 UInt16 getNumberOfPhysicalCPUCores();
 
-// We should call this function before Context has been created,
-// which will call `getNumberOfLogicalCPUCores`, or we can not
-// set cpu cores any more.
 void setNumberOfLogicalCPUCores(UInt16 number_of_logical_cpu_cores_);
 
 void computeAndSetNumberOfPhysicalCPUCores(
