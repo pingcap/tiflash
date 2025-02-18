@@ -84,6 +84,7 @@
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/ProxyStateMachine.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -1072,6 +1073,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
       *  settings, available functions, data types, aggregate functions, databases...
       */
     global_context = Context::createGlobal();
+    global_context->setApplicationType(Context::ApplicationType::SERVER);
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
@@ -1139,20 +1141,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "tiflash proxy thread is joined");
     });
 
-    /// get CPU/memory/disk info of this server
-<<<<<<< HEAD
-    diagnosticspb::ServerInfoRequest request;
-    diagnosticspb::ServerInfoResponse response;
-    request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
-    std::string req = request.SerializeAsString();
-    ffi_get_server_info_from_proxy(reinterpret_cast<intptr_t>(&helper), strIntoView(&req), &response);
-    server_info.parseSysInfo(response);
-    setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
-    computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
-    LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
-=======
-    proxy_machine.getServerInfo(server_info, settings);
->>>>>>> ab5a5178cc (Fix the incorrect value of the max thread size (#9881))
+    if (proxy_config.is_proxy_runnable)
+    {
+        /// get CPU/memory/disk info of this server
+        getServerInfoFromProxy(log, server_info, &helper, settings);
+    }
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
@@ -1166,7 +1159,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // Reset the `tiflash_instance_wrap.tmt` before `global_context` get released, or it will be a dangling pointer
         tiflash_instance_wrap.tmt = nullptr;
     });
-    global_context->setApplicationType(Context::ApplicationType::SERVER);
     global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
     global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
