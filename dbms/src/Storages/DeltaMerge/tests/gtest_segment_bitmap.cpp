@@ -1564,7 +1564,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, CommonHandle_EqualHashValue)
+TEST_P(SegmentBitmapFilterTest, NewHandleIndex_EqualHashValue)
 try
 {
     if (!is_common_handle)
@@ -1619,6 +1619,45 @@ try
         .expected_bitmap = "111111000000000011111111111111",
     });
     check_new_handle_to_row_ids();
+
+    writeSegmentGeneric("d_dr:[5, 15)");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_base_versions = expected_base_versions,
+        .expected_bitmap = "111110000000000011110000000001",
+    });
+
+    //d_tiny:[0, 10):ts_1|d_tiny:[10, 20):ts_2|d_tiny:[6, 16):ts_3|d_dr:[5, 15)
+    {
+        ASSERT_EQ(version_chain.new_handle_to_row_ids.handle_to_row_id.size(), 10);
+        for (Int64 i = 0; i < 10; ++i)
+        {
+            auto [begin, end] = version_chain.new_handle_to_row_ids.handle_to_row_id.equal_range(i);
+            ASSERT_EQ(std::distance(begin, end), 1);
+            if (i < 5)
+                ASSERT_EQ(begin->second, i);
+            else
+                ASSERT_EQ(begin->second, i + 10);
+        }
+
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        std::optional<DeltaValueReader> delta_reader = DeltaValueReader{
+            *dm_context,
+            snap->delta,
+            getHandleColumnDefinesPtr<String>(),
+            /*range*/ {},
+            ReadTag::MVCC};
+        for (Int64 i = 0; i < 20; ++i)
+        {
+            auto row_id
+                = version_chain.new_handle_to_row_ids.find(genMockCommonHandle(i, 1), delta_reader, /*stable_rows*/ 0);
+            if (5 <= i && i < 15)
+                ASSERT_FALSE(row_id.has_value()) << *row_id;
+            else
+                ASSERT_EQ(row_id, i) << *row_id;
+        }
+    }
 }
 CATCH
 } // namespace DB::DM::tests

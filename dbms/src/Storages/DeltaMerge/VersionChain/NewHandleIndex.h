@@ -26,7 +26,7 @@ namespace DB::DM
 {
 namespace tests
 {
-class SegmentBitmapFilterTest_CommonHandle_EqualHashValue_Test;
+class SegmentBitmapFilterTest_NewHandleIndex_EqualHashValue_Test;
 } // namespace tests
 
 template <typename T>
@@ -157,7 +157,7 @@ public:
 
 private:
 #ifdef DBMS_PUBLIC_GTEST
-    friend class tests::SegmentBitmapFilterTest_CommonHandle_EqualHashValue_Test;
+    friend class tests::SegmentBitmapFilterTest_NewHandleIndex_EqualHashValue_Test;
     std::function<Int64(std::string_view)> hasher = [](std::string_view s) {
         static absl::Hash<std::string_view> h;
         return h(s);
