@@ -248,10 +248,23 @@ protected:
         const std::optional<std::vector<RowID>> expected_base_versions;
         const std::optional<RowKeyRanges> read_ranges;
         const std::optional<String> expected_bitmap;
+
+        String toDebugString() const
+        {
+            // Size of expected_base_versions maybe large.
+            return fmt::format(
+                "seg_id={}, caller_line={}, read_ts={}, read_ranges={}, expected_bitmap={}",
+                seg_id,
+                caller_line,
+                read_ts,
+                read_ranges,
+                expected_bitmap);
+        }
     };
+
     void verifyVersionChain(const VerifyVersionChainOption & opt)
     {
-        auto info = fmt::format("caller_line={}", opt.caller_line);
+        auto info = opt.toDebugString();
         auto [seg, snap] = getSegmentForRead(opt.seg_id);
 
         if (opt.expected_base_versions)
@@ -287,7 +300,8 @@ protected:
             !use_version_chain);
 
         if (opt.expected_bitmap)
-            ASSERT_EQ(bitmap_filter_version_chain->toDebugString(), *(opt.expected_bitmap)) << info;
+            ASSERT_EQ(bitmap_filter_version_chain->toDebugString(), *(opt.expected_bitmap))
+                << fmt::format("{}, bitmap_filter_delta_index={}", info, bitmap_filter_delta_index->toDebugString());
 
         ASSERT_EQ(bitmap_filter_delta_index->toDebugString(), bitmap_filter_version_chain->toDebugString()) << info;
     }
@@ -1039,9 +1053,12 @@ try
         .seg_id = SEG_ID,
         .caller_line = __LINE__,
     });
+}
+CATCH
 
-    SetUp();
-
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange4_1)
+try
+{
     writeSegmentGeneric(
         "d_mem:[-9223372036854775808, -9223372036854775800)|d_mem:[9223372036854775800, 9223372036854775807]|"
         "d_dr:[-9223372036854775808, -9223372036854775804)|d_dr:[9223372036854775804, 9223372036854775807)");
@@ -1064,9 +1081,12 @@ try
         .seg_id = SEG_ID,
         .caller_line = __LINE__,
     });
+}
+CATCH
 
-    SetUp();
-
+TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange5_1)
+try
+{
     writeSegmentGeneric(
         "d_mem:[-9223372036854775808, -9223372036854775800)|d_mem:[9223372036854775800, 9223372036854775807]|"
         "d_dr:[-9223372036854775808, -9223372036854775804)|d_dr:[9223372036854775804, 9223372036854775807]");
@@ -1275,9 +1295,12 @@ try
         .caller_line = __LINE__,
         .read_ts = 1,
     });
+}
+CATCH
 
-    SetUp();
-
+TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta_Compact_1)
+try
+{
     writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny:[3, 13):ts_2|d_tiny:[6, 16):ts_3");
     verifyVersionChain(VerifyVersionChainOption{
         .seg_id = SEG_ID,
@@ -1423,7 +1446,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, VersionFilter2)
+TEST_P(SegmentBitmapFilterTest, DeleteMarkFilter2)
 try
 {
     writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny_del:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3");
@@ -1442,10 +1465,14 @@ try
         .caller_line = __LINE__,
         .read_ts = 1,
     });
+}
+CATCH
 
-    SetUp();
-
+TEST_P(SegmentBitmapFilterTest, DeleteMarkFilter2_1)
+try
+{
     writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny_del:[3, 13):ts_2|d_tiny:[6, 16):ts_3");
+
     verifyVersionChain(VerifyVersionChainOption{
         .seg_id = SEG_ID,
         .caller_line = __LINE__,
@@ -1498,7 +1525,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, VersionFilter4)
+TEST_P(SegmentBitmapFilterTest, DeleteMarkFilter4)
 try
 {
     writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny_del:[3, 13):shuffle:ts_2|d_tiny:[6, "

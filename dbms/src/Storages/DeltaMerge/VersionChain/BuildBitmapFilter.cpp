@@ -17,7 +17,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
-#include <Storages/DeltaMerge/VersionChain/DeletedFilter.h>
+#include <Storages/DeltaMerge/VersionChain/DeleteMarkFilter.h>
 #include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
 #include <Storages/DeltaMerge/VersionChain/VersionFilter.h>
 
@@ -54,7 +54,7 @@ BitmapFilterPtr buildBitmapFilter(
     auto version_filtered_out_rows
         = buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
     LOG_DEBUG(snapshot.log, "bitmap_filter2={}", bitmap_filter->toDebugString());
-    auto delete_filtered_out_rows = buildDeletedFilter(dm_context, snapshot, filter);
+    auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, filter);
     LOG_DEBUG(snapshot.log, "bitmap_filter3={}", bitmap_filter->toDebugString());
 
     // rowkey_filtered_out_rows + version_filtered_out_rows + delete_filtered_out_rows

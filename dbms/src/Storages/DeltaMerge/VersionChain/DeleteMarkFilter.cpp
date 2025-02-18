@@ -19,11 +19,11 @@
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-#include <Storages/DeltaMerge/VersionChain/DeletedFilter.h>
+#include <Storages/DeltaMerge/VersionChain/DeleteMarkFilter.h>
 
 namespace DB::DM
 {
-UInt32 buildDeletedFilterBlock(
+UInt32 buildDeleteMarkFilterBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
     const ColumnFile & cf,
@@ -53,7 +53,7 @@ UInt32 buildDeletedFilterBlock(
     return filtered_out_rows;
 }
 
-UInt32 buildDeletedFilterDMFile(
+UInt32 buildDeleteMarkFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range,
@@ -112,26 +112,26 @@ UInt32 buildDeletedFilterDMFile(
     return filtered_out_rows;
 }
 
-UInt32 buildDeletedFilterColumnFileBig(
+UInt32 buildDeleteMarkFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const ssize_t start_row_id,
     IColumn::Filter & filter)
 {
-    return buildDeletedFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), start_row_id, filter);
+    return buildDeleteMarkFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), start_row_id, filter);
 }
 
-UInt32 buildDeletedFilterStable(
+UInt32 buildDeleteMarkFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
     IColumn::Filter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-    return buildDeletedFilterDMFile(dm_context, dmfiles[0], std::nullopt, 0, filter);
+    return buildDeleteMarkFilterDMFile(dm_context, dmfiles[0], std::nullopt, 0, filter);
 }
 
-UInt32 buildDeletedFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, IColumn::Filter & filter)
+UInt32 buildDeleteMarkFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, IColumn::Filter & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -142,7 +142,7 @@ UInt32 buildDeletedFilter(const DMContext & dm_context, const SegmentSnapshot & 
     const auto & data_provider = delta.getDataProvider();
     assert(filter.size() == total_rows);
 
-    auto filtered_out_rows = buildDeletedFilterStable(dm_context, stable, filter);
+    auto filtered_out_rows = buildDeleteMarkFilterStable(dm_context, stable, filter);
     auto read_rows = stable_rows;
     for (const auto & cf : cfs)
     {
@@ -156,13 +156,13 @@ UInt32 buildDeletedFilter(const DMContext & dm_context, const SegmentSnapshot & 
         // TODO: add deleted_rows in tiny file
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            filtered_out_rows += buildDeletedFilterBlock(dm_context, data_provider, *cf, start_row_id, filter);
+            filtered_out_rows += buildDeleteMarkFilterBlock(dm_context, data_provider, *cf, start_row_id, filter);
             continue;
         }
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            filtered_out_rows += buildDeletedFilterColumnFileBig(dm_context, *cf_big, start_row_id, filter);
+            filtered_out_rows += buildDeleteMarkFilterColumnFileBig(dm_context, *cf_big, start_row_id, filter);
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
