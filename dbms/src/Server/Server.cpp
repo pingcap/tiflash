@@ -872,6 +872,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
+    /// Load global settings from default_profile and system_profile.
+    /// It internally depends on UserConfig::parseSettings.
+    global_context->setDefaultProfiles(config());
+    LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
+
     Settings & settings = global_context->getSettingsRef();
     TiFlashProxyConfig proxy_conf(config(), log, settings);
     EngineStoreServerWrap tiflash_instance_wrap{};
@@ -1103,10 +1108,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /// Init TiFlash metrics.
     global_context->initializeTiFlashMetrics();
 
-    /// Load global settings from default_profile and system_profile.
-    /// It internally depends on UserConfig::parseSettings.
-    global_context->setDefaultProfiles(config());
-    LOG_INFO(log, "Loaded global settings from default_profile and system_profile.");
 
     ///
     /// The config value in global settings can only be used from here because we just loaded it from config file.
