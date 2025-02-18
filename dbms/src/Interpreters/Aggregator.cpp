@@ -505,14 +505,6 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
     {
         switch (method)
         {
-        case AggregatedDataVariants::Type::key32:
-            return AggregatedDataVariants::Type::key32_magic_hash;
-        case AggregatedDataVariants::Type::key64:
-            return AggregatedDataVariants::Type::key64_magic_hash;
-        case AggregatedDataVariants::Type::keys32:
-            return AggregatedDataVariants::Type::keys32_magic_hash;
-        case AggregatedDataVariants::Type::keys64:
-            return AggregatedDataVariants::Type::keys64_magic_hash;
         case AggregatedDataVariants::Type::keys128:
             return AggregatedDataVariants::Type::keys128_magic_hash;
         case AggregatedDataVariants::Type::keys256:

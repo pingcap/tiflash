@@ -1276,16 +1276,8 @@ try
     std::vector<UInt64> two_level_thresholds{0, 1};
     // To cover all 8 methods.
     std::vector<std::vector<String>> group_by_keys{
-        // key_int32
-        {"key_32"},
-        // key_int64
-        {"key_64"},
         // key_int256
         {"key_decimal256"},
-        // keys32
-        {"key_16", "key_16_1"},
-        // keys64
-        {"key_16", "key_16_1", "key_16_2", "key_16_3"},
         // keys128
         {"key_64", "key_64_1"},
         // keys256

@@ -79,8 +79,6 @@ using AggregatedDataWithUInt16Key = FixedImplicitZeroHashMap<UInt16, AggregateDa
 
 using AggregatedDataWithUInt32Key = HashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64Key = HashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
-using AggregatedDataWithUInt32KeyMagicHash = HashMap<UInt32, AggregateDataPtr, MagicHash<UInt32>>;
-using AggregatedDataWithUInt64KeyMagicHash = HashMap<UInt64, AggregateDataPtr, MagicHash<UInt64>>;
 
 using AggregatedDataWithShortStringKey = StringHashMap<AggregateDataPtr>;
 using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDataPtr>;
@@ -95,8 +93,6 @@ using AggregatedDataWithKeys256MagicHash = HashMap<UInt256, AggregateDataPtr, Ma
 
 using AggregatedDataWithUInt32KeyTwoLevel = TwoLevelHashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
-using AggregatedDataWithUInt32KeyMagicHashTwoLevel = TwoLevelHashMap<UInt32, AggregateDataPtr, MagicHash<UInt32>>;
-using AggregatedDataWithUInt64KeyMagicHashTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, MagicHash<UInt64>>;
 
 using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
 using AggregatedDataWithInt256KeyMagicHashTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, MagicHash<Int256>>;
@@ -806,25 +802,13 @@ struct AggregatedDataVariants : private boost::noncopyable
     using AggregationMethod_keys256_hash64 = AggregationMethodKeysFixed<AggregatedDataWithKeys256Hash64>;
     using AggregationMethod_serialized_hash64 = AggregationMethodSerialized<AggregatedDataWithStringKeyHash64>;
 
-    using AggregationMethod_key32_magic_hash = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyMagicHash>;
-    using AggregationMethod_key64_magic_hash = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyMagicHash>;
     using AggregationMethod_key_int256_magic_hash
         = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyMagicHash>;
-    using AggregationMethod_keys32_magic_hash = AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyMagicHash>;
-    using AggregationMethod_keys64_magic_hash = AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyMagicHash>;
     using AggregationMethod_keys128_magic_hash = AggregationMethodKeysFixed<AggregatedDataWithKeys128MagicHash>;
     using AggregationMethod_keys256_magic_hash = AggregationMethodKeysFixed<AggregatedDataWithKeys256MagicHash>;
 
-    using AggregationMethod_key32_magic_hash_two_level
-        = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyMagicHashTwoLevel>;
-    using AggregationMethod_key64_magic_hash_two_level
-        = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyMagicHashTwoLevel>;
     using AggregationMethod_key_int256_magic_hash_two_level
         = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyMagicHashTwoLevel>;
-    using AggregationMethod_keys32_magic_hash_two_level
-        = AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyMagicHashTwoLevel>;
-    using AggregationMethod_keys64_magic_hash_two_level
-        = AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyMagicHashTwoLevel>;
     using AggregationMethod_keys128_magic_hash_two_level
         = AggregationMethodKeysFixed<AggregatedDataWithKeys128MagicHashTwoLevel>;
     using AggregationMethod_keys256_magic_hash_two_level
@@ -952,20 +936,12 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(two_keys_strbinpadding_strbinpadding_two_level, true) \
     M(one_key_strbin_two_level, true)                       \
     M(one_key_strbinpadding_two_level, true)                \
-    M(key32_magic_hash, false)                              \
-    M(key64_magic_hash, false)                              \
-    M(keys32_magic_hash, false)                             \
-    M(keys64_magic_hash, false)                             \
     M(keys128_magic_hash, false)                            \
     M(keys256_magic_hash, false)                            \
     M(key_int256_magic_hash, false)                         \
     M(nullable_keys128_magic_hash, false)                   \
     M(nullable_keys256_magic_hash, false)                   \
-    M(key32_magic_hash_two_level, true)                     \
-    M(key64_magic_hash_two_level, true)                     \
     M(key_int256_magic_hash_two_level, true)                \
-    M(keys32_magic_hash_two_level, true)                    \
-    M(keys64_magic_hash_two_level, true)                    \
     M(keys128_magic_hash_two_level, true)                   \
     M(keys256_magic_hash_two_level, true)                   \
     M(nullable_keys128_magic_hash_two_level, true)          \
@@ -1123,11 +1099,7 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(two_keys_strbinpadding_strbinpadding)            \
     M(one_key_strbin)                                  \
     M(one_key_strbinpadding)                           \
-    M(key32_magic_hash)                                \
-    M(key64_magic_hash)                                \
     M(key_int256_magic_hash)                           \
-    M(keys32_magic_hash)                               \
-    M(keys64_magic_hash)                               \
     M(keys128_magic_hash)                              \
     M(keys256_magic_hash)                              \
     M(nullable_keys128_magic_hash)                     \
@@ -1194,11 +1166,7 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(two_keys_strbinpadding_strbinpadding_two_level) \
     M(one_key_strbin_two_level)                       \
     M(one_key_strbinpadding_two_level)                \
-    M(key32_magic_hash_two_level)                     \
-    M(key64_magic_hash_two_level)                     \
     M(key_int256_magic_hash_two_level)                \
-    M(keys32_magic_hash_two_level)                    \
-    M(keys64_magic_hash_two_level)                    \
     M(keys128_magic_hash_two_level)                   \
     M(keys256_magic_hash_two_level)                   \
     M(nullable_keys128_magic_hash_two_level)          \
