@@ -1074,6 +1074,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
       */
     global_context = Context::createGlobal();
     global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
+    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
@@ -1156,8 +1158,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // Reset the `tiflash_instance_wrap.tmt` before `global_context` get released, or it will be a dangling pointer
         tiflash_instance_wrap.tmt = nullptr;
     });
-    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
-    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     /// Init File Provider
     bool enable_encryption = false;
