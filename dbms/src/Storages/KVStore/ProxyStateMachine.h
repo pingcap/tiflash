@@ -52,7 +52,7 @@ inline void getServerInfoFromProxy(
     diagnosticspb::ServerInfoResponse response;
     LOG_INFO(log, "!!!!! getServerInfoFromProxy 2");
     request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
-    LOG_INFO(log, "!!!!! getServerInfoFromProxy 3 {}", (int)helper);
+    LOG_INFO(log, "!!!!! getServerInfoFromProxy 3 {}", (uint64_t)helper);
     std::string req = request.SerializeAsString();
     LOG_INFO(log, "!!!!! getServerInfoFromProxy 4");
 #ifndef DBMS_PUBLIC_GTEST
