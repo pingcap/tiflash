@@ -1398,4 +1398,143 @@ try
 }
 CATCH
 
+TEST_P(SegmentBitmapFilterTest, DeleteMarkFilter1)
+try
+{
+    writeSegmentGeneric("d_mem:[0, 1):ts_1|d_mem_del:[0, 1):ts_2|d_mem:[0, 1):ts_3");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "001",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "000",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "100",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, VersionFilter2)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny_del:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+
+    SetUp();
+
+    writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny_del:[3, 13):ts_2|d_tiny:[6, 16):ts_3");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "111000000000000000001111111111",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "111000000000000000000000000000",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "111111111100000000000000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteMarkFilter3)
+try
+{
+    writeSegmentGeneric(
+        "d_tiny:[0, 10):shuffle:ts_1|d_tiny_del:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3|merge_delta");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFileCount(), 0);
+    }
+
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "111000000001001001001010101111",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "111000000000000000000000000000",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "111101010100100100100000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, VersionFilter4)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny_del:[3, 13):shuffle:ts_2|d_tiny:[6, "
+                        "16):shuffle:ts_3|merge_delta|d_mem:[2, 7):ts_4");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        auto cfs = snap->delta->getColumnFiles();
+        ASSERT_EQ(cfs.size(), 1);
+        ASSERT_TRUE(cfs[0]->isInMemoryFile()) << cfs[0]->toString();
+    }
+
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 4,
+        .expected_bitmap = "11000000000000100100101010111111111",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "11100000000100100100101010111100000",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "11100000000000000000000000000000000",
+    });
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "11110101010010010010000000000000000",
+    });
+}
+CATCH
+
 } // namespace DB::DM::tests

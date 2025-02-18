@@ -67,6 +67,8 @@ SegDataUnit parseSegDataUnit(String & s)
         return SegDataUnit{.type = values[0]};
     }
 
+    static const std::unordered_set<String> delta_small_data_types = {"d_mem", "d_mem_del", "d_tiny", "d_tiny_del"};
+
     RUNTIME_CHECK(values.size() >= 2, s, values);
     SegDataUnit unit;
     unit.type = values[0];
@@ -87,7 +89,7 @@ SegDataUnit parseSegDataUnit(String & s)
         std::string_view attr_shuffle{"shuffle"};
         if (v == attr_shuffle)
         {
-            RUNTIME_CHECK(unit.type == "d_mem" || unit.type == "d_tiny", s, v, unit.type);
+            RUNTIME_CHECK(delta_small_data_types.contains(unit.type), s, v, unit.type, delta_small_data_types);
             unit.shuffle = true;
             continue;
         }
@@ -95,7 +97,7 @@ SegDataUnit parseSegDataUnit(String & s)
         std::string_view attr_timestamp_prefix{"ts_"};
         if (v.starts_with(attr_timestamp_prefix))
         {
-            RUNTIME_CHECK(unit.type == "d_mem" || unit.type == "d_tiny", s, v, unit.type);
+            RUNTIME_CHECK(delta_small_data_types.contains(unit.type), s, v, unit.type, delta_small_data_types);
             unit.ts = std::stoul(v.substr(attr_timestamp_prefix.size()));
             continue;
         }
