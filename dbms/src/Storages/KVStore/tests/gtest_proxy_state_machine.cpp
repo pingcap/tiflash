@@ -35,7 +35,7 @@ TEST(ProxyStateMachineTest, SetLogicalCores)
         Settings settings;
         ServerInfo server_info;
         ProxyStateMachine proxy_machine{DB::Logger::get(), TiFlashProxyConfig::genForTest()};
-        proxy_machine.getServerInfo(server_info, settings);
+        getServerInfoFromProxy(server_info, nullptr, settings);
         ASSERT_EQ(settings.max_threads.get(), 12345);
     }
     {
@@ -46,14 +46,14 @@ TEST(ProxyStateMachineTest, SetLogicalCores)
         settings.max_threads.set(8);
         ServerInfo server_info;
         ProxyStateMachine proxy_machine{DB::Logger::get(), TiFlashProxyConfig::genForTest()};
-        proxy_machine.getServerInfo(server_info, settings);
+        getServerInfoFromProxy(server_info, nullptr, settings);
         ASSERT_EQ(settings.max_threads.get(), 8);
     }
     {
         Settings settings;
         ServerInfo server_info;
         ProxyStateMachine proxy_machine{DB::Logger::get(), TiFlashProxyConfig::genForTest()};
-        proxy_machine.getServerInfo(server_info, settings);
+        getServerInfoFromProxy(server_info, nullptr, settings);
         ASSERT_EQ(settings.max_threads.get(), std::thread::hardware_concurrency());
     }
 }
