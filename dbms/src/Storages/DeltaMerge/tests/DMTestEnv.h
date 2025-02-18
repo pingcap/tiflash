@@ -112,6 +112,14 @@ inline String genMockCommonHandle(Int64 value, size_t rowkey_column_size)
     return ss.releaseStr();
 }
 
+inline Int64 decodeMockCommonHandle(const String & s)
+{
+    size_t cursor = 0;
+    auto flag = ::DB::DecodeUInt<UInt8>(cursor, s);
+    RUNTIME_CHECK(flag == static_cast<UInt8>(TiDB::CodecFlagInt), flag);
+    return ::DB::DecodeInt64(cursor, s);
+}
+
 class DMTestEnv
 {
 public:

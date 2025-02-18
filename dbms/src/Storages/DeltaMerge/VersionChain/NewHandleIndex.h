@@ -24,6 +24,10 @@
 
 namespace DB::DM
 {
+namespace tests
+{
+class SegmentBitmapFilterTest_CommonHandle_EqualHashValue_Test;
+} // namespace tests
 
 template <typename T>
 class NewHandleIndex
@@ -152,7 +156,15 @@ public:
     }
 
 private:
+#ifdef DBMS_PUBLIC_GTEST
+    friend class tests::SegmentBitmapFilterTest_CommonHandle_EqualHashValue_Test;
+    std::function<Int64(std::string_view)> hasher = [](std::string_view s) {
+        static absl::Hash<std::string_view> h;
+        return h(s);
+    };
+#else
     absl::Hash<std::string_view> hasher;
+#endif
     absl::btree_multimap<Int64, RowID> handle_to_row_id;
 };
 

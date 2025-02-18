@@ -1564,4 +1564,61 @@ try
 }
 CATCH
 
+TEST_P(SegmentBitmapFilterTest, CommonHandle_EqualHashValue)
+try
+{
+    if (!is_common_handle)
+        return;
+
+    // Increase the probability of hash conflicts
+    auto & version_chain = std::get<VersionChain<String>>(getSegmentForRead(SEG_ID).first->version_chain);
+    version_chain.new_handle_to_row_ids.hasher = [](std::string_view s) {
+        auto i = decodeMockCommonHandle(String(s));
+        return i % 10;
+    };
+
+    writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny:[10, 20):ts_2");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "11111111111111111111",
+    });
+
+    auto check_new_handle_to_row_ids = [&]() {
+        ASSERT_EQ(version_chain.new_handle_to_row_ids.handle_to_row_id.size(), 20);
+        for (Int64 i = 0; i < 10; ++i)
+        {
+            auto [begin, end] = version_chain.new_handle_to_row_ids.handle_to_row_id.equal_range(i);
+            ASSERT_EQ(std::distance(begin, end), 2);
+        }
+
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        std::optional<DeltaValueReader> delta_reader = DeltaValueReader{
+            *dm_context,
+            snap->delta,
+            getHandleColumnDefinesPtr<String>(),
+            /*range*/ {},
+            ReadTag::MVCC};
+        for (Int64 i = 0; i < 20; ++i)
+        {
+            auto row_id
+                = version_chain.new_handle_to_row_ids.find(genMockCommonHandle(i, 1), delta_reader, /*stable_rows*/ 0);
+            ASSERT_EQ(row_id, i);
+        }
+    };
+    check_new_handle_to_row_ids();
+
+    writeSegmentGeneric("d_tiny:[6, 16):ts_3");
+    std::vector<RowID> expected_base_versions(30);
+    std::fill(expected_base_versions.begin(), expected_base_versions.begin() + 20, NotExistRowID);
+    std::iota(expected_base_versions.begin() + 20, expected_base_versions.end(), 6);
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_base_versions = expected_base_versions,
+        .expected_bitmap = "111111000000000011111111111111",
+    });
+    check_new_handle_to_row_ids();
+}
+CATCH
 } // namespace DB::DM::tests

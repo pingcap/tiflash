@@ -31,6 +31,11 @@ using ColumnFiles = std::vector<ColumnFilePtr>;
 class ColumnFileBig;
 class ColumnFileDeleteRange;
 
+namespace tests
+{
+class SegmentBitmapFilterTest_CommonHandle_EqualHashValue_Test;
+} // namespace tests
+
 template <ExtraHandleType HandleType>
 class VersionChain
 {
@@ -104,6 +109,8 @@ private:
     std::optional<DeltaValueReader> createDeltaValueReaderIfCommonHandle(
         const DMContext & dm_context,
         const DeltaSnapshotPtr & delta_snap);
+
+    friend class tests::SegmentBitmapFilterTest_CommonHandle_EqualHashValue_Test;
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
