@@ -466,6 +466,7 @@ inline uint64_t hash_int256(uint64_t seed, const DB::Int256 & v)
     {
         hash_combine(seed, backend_value.limbs()[i]);
     }
+    hash_combine(seed, backend_value.sign());
     return seed;
 }
 
