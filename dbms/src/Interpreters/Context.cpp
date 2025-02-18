@@ -347,7 +347,7 @@ std::unique_ptr<Context> Context::createGlobal(
     res->shared->ctx_disagg = SharedContextDisagg::create(*res);
     if (disagg_opt)
     {
-        res->shared->ctx_disagg->disaggregated_mode = disagg_opt->disagg_mode;
+        res->shared->ctx_disagg->disaggregated_mode = disagg_opt->mode;
         res->shared->ctx_disagg->use_autoscaler = disagg_opt->use_autoscaler;
     }
     res->quota = std::make_shared<QuotaForIntervals>();
