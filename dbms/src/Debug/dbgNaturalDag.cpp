@@ -29,6 +29,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
+#include "Debug/MockKVStore/MockUtils.h"
 
 namespace DB
 {
@@ -223,11 +224,9 @@ void NaturalDag::buildTables(Context & context)
         schema_syncer->syncSchemas(context, NullspaceID);
         for (auto & region : table.regions)
         {
-            metapb::Region region_pb;
+            auto region_pb = RegionBench::createMetaRegionCommonHandle(region.id, region.start.getStr(), region.end.getStr());
+
             metapb::Peer peer;
-            region_pb.set_id(region.id);
-            region_pb.set_start_key(region.start.getStr());
-            region_pb.set_end_key(region.end.getStr());
             RegionMeta region_meta(std::move(peer), std::move(region_pb), initialApplyState());
             auto raft_index = RAFT_INIT_LOG_INDEX;
             region_meta.setApplied(raft_index, RAFT_INIT_LOG_TERM);

@@ -628,10 +628,8 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
     auto region = kvs.getRegion(region_id);
     {
         // Test create RegionMeta.
-        auto meta = RegionMeta(
-            createPeer(2, true),
-            createRegionInfo(666, RecordKVFormat::genKey(0, 0), RecordKVFormat::genKey(0, 1000)),
-            initialApplyState());
+        auto meta
+            = RegionMeta(createPeer(2, true), RegionBench::createMetaRegion(666, 0, 0, 1000), initialApplyState());
         ASSERT_EQ(meta.peerId(), 2);
     }
     {
@@ -1714,30 +1712,31 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
     }
     // Test region range with merge.
     {
+        using RegionBench::createMetaRegionCommonHandle;
         {
             // Compute `source_at_left` by region range.
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createRegionInfo(1, "x", ""),
-                    createRegionInfo(1000, "", "x"))
+                    createMetaRegionCommonHandle(1, "x", ""),
+                    createMetaRegionCommonHandle(1000, "", "x"))
                     .source_at_left,
                 false);
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createRegionInfo(1, "", "x"),
-                    createRegionInfo(1000, "x", ""))
+                    createMetaRegionCommonHandle(1, "", "x"),
+                    createMetaRegionCommonHandle(1000, "x", ""))
                     .source_at_left,
                 true);
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createRegionInfo(1, "x", "y"),
-                    createRegionInfo(1000, "y", "z"))
+                    createMetaRegionCommonHandle(1, "x", "y"),
+                    createMetaRegionCommonHandle(1000, "y", "z"))
                     .source_at_left,
                 true);
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createRegionInfo(1, "y", "z"),
-                    createRegionInfo(1000, "x", "y"))
+                    createMetaRegionCommonHandle(1, "y", "z"),
+                    createMetaRegionCommonHandle(1000, "x", "y"))
                     .source_at_left,
                 false);
         }

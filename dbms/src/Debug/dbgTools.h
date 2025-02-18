@@ -41,12 +41,6 @@ class TMTContext;
 
 namespace DB::RegionBench
 {
-metapb::Region createMetaRegion( //
-    TableID table_id,
-    RegionID region_id,
-    HandleID start,
-    HandleID end,
-    UInt64 peer_id);
 
 RegionPtr createRegion(
     TableID table_id,
@@ -62,7 +56,7 @@ Regions createRegions(
     HandleID handle_begin,
     RegionID new_region_id_begin);
 
-RegionPtr createRegion(
+RegionPtr createRegionCommonHandle(
     const TiDB::TableInfo & table_info,
     RegionID region_id,
     std::vector<Field> & start_keys,

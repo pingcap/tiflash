@@ -102,7 +102,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
             TiDB::DatumBumpy end_datum = TiDB::DatumBumpy(end_field, column_info.tp);
             end_keys.emplace_back(end_datum.field());
         }
-        region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
+        region = RegionBench::createRegionCommonHandle(table_info, region_id, start_keys, end_keys);
     }
 
     auto args_begin = args.begin() + 3 + handle_column_size * 2;

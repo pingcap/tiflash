@@ -80,7 +80,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         }
 
         TMTContext & tmt = context.getTMTContext();
-        RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
+        RegionPtr region = RegionBench::createRegionCommonHandle(table_info, region_id, start_keys, end_keys);
         tmt.getKVStore()
             ->onSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, {}}, nullptr, 0, tmt);
 
