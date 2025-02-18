@@ -62,6 +62,7 @@ struct RegionMetaSnapshot
 class RegionMeta
 {
 public:
+    // For deserialize from buffer
     RegionMeta(
         metapb::Peer peer_,
         raft_serverpb::RaftApplyState apply_state_,
