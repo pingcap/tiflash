@@ -461,9 +461,9 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
 
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
-    LOG_INFO(log, "Create ClientConfiguration start");
+    LOG_DEBUG(log, "Create ClientConfiguration start");
     Aws::Client::ClientConfiguration cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
-    LOG_INFO(log, "Create ClientConfiguration end");
+    LOG_DEBUG(log, "Create ClientConfiguration end");
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
     cfg.connectTimeoutMs = config_.connection_timeout_ms;
@@ -485,7 +485,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*userVirtualAddressing*/ use_virtual_addressing);
-        LOG_DEBUG(log, "Create S3Client end");
+        LOG_INFO(log, "Create S3Client end");
         return cli;
     }
     else
@@ -502,7 +502,7 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*useVirtualAddressing*/ use_virtual_addressing);
-        LOG_DEBUG(log, "Create S3Client with given credentials end");
+        LOG_INFO(log, "Create S3Client with given credentials end");
         return cli;
     }
 }
