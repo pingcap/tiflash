@@ -17,7 +17,6 @@
 #include <DataStreams/ConvertingBlockInputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
-#include <DataStreams/PushingToViewsBlockOutputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <IO/Buffer/ConcatReadBuffer.h>
@@ -28,6 +27,7 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Storages/IStorage.h>
 #include <Storages/MutableSupport.h>
 #include <TableFunctions/TableFunctionFactory.h>
 
@@ -117,14 +117,6 @@ BlockIO InterpreterInsertQuery::execute()
 
     /// We create a pipeline of several streams, into which we will write data.
     BlockOutputStreamPtr out;
-
-    out = std::make_shared<PushingToViewsBlockOutputStream>(
-        query.database,
-        query.table,
-        table,
-        context,
-        query_ptr,
-        query.no_destination);
 
     out = std::make_shared<AddingDefaultBlockOutputStream>(
         out,
