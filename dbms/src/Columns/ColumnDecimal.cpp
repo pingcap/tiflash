@@ -379,8 +379,18 @@ void ColumnDecimal<T>::serializeToPosImpl(
         if constexpr (has_nullmap)
         {
             if (DB::isNullAt(*nullmap, start + i))
-                pos[i] = serializeDecimal256Helper(pos[i], def_val);
-            continue;
+            {
+                if constexpr (compare_semantics && is_Decimal256)
+                {
+                    pos[i] = serializeDecimal256Helper(pos[i], def_val);
+                }
+                else
+                {
+                    tiflash_compiler_builtin_memcpy(pos[i], &def_val, sizeof(T));
+                    pos[i] += sizeof(T);
+                }
+                continue;
+            }
         }
 
         if constexpr (compare_semantics && is_Decimal256)

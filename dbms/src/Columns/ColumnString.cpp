@@ -498,7 +498,7 @@ void ColumnString::countSerializeByteSizeForCmp(
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    // Skip decoding collator for bin collaotr so we can avoid counting code points, which may be slow.
+    // Skip decoding collator for bin collator so we can avoid counting code points, which may be slow.
     if (collator != nullptr && collator->sortKeyReservedSpaceMultipler() > 1)
     {
         if (nullmap != nullptr)
@@ -692,7 +692,7 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
 
 inline bool needDecodeCollatorForCmp(const TiDB::TiDBCollatorPtr & collator)
 {
-    // For now, only non-padding bin is trivial.
+    // For now, only non-padding bin collator is trivial.
     return collator != nullptr && !collator->isTrivialCollator();
 }
 
