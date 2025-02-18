@@ -472,8 +472,8 @@ HttpRequestRes HandleHttpRequestStatsTableMemory(
     boost::split(query_parts, query, boost::is_any_of("/"));
 
     auto status = HttpRequestStatus::Ok;
-
-    if (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table")
+    
+    if (query_parts.size() < 4 || query_parts[0] != "keyspace" || query_parts[2] != "table")
     {
         LOG_ERROR(log, "invalid StatsTableMemory request: {}", query);
         status = HttpRequestStatus::ErrorParam;
@@ -481,15 +481,8 @@ HttpRequestRes HandleHttpRequestStatsTableMemory(
 
     try
     {
-        if (query_parts.size() == 4)
-        {
-            keyspace_id = std::stoll(query_parts[1]);
-            table_id = std::stoll(query_parts[3]);
-        }
-        else
-        {
-            table_id = std::stoll(query_parts[0]);
-        }
+        keyspace_id = std::stoll(query_parts[1]);
+        table_id = std::stoll(query_parts[3]);
     }
     catch (...)
     {
@@ -532,7 +525,7 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/remote/owner/resign", HandleHttpRequestRemoteOwnerResign},
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
     {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
-    {"/tiflash/stats/table/memory", HandleHttpRequestStatsTableMemory},
+    {"/tiflash/stats/table/memory/", HandleHttpRequestStatsTableMemory},
 };
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
