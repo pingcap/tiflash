@@ -585,7 +585,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     SCOPE_EXIT({ proxy_machine.waitProxyStopped(); });
 
     /// get CPU/memory/disk info of this server
-    proxy_machine.getServerInfo(server_info);
+    proxy_machine.getServerInfo(server_info, settings);
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
