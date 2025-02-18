@@ -555,7 +555,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
       */
-    global_context = Context::createGlobal(Context::ApplicationType::SERVER);
+    global_context = Context::createGlobal(
+        Context::ApplicationType::SERVER,
+        Context::DisaggOptions{disaggregated_mode, use_autoscaler});
+
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
@@ -590,9 +593,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
-
-    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
-    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     // Must init this before KVStore.
     global_context->initializeJointThreadInfoJeallocMap();

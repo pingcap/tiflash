@@ -202,11 +202,20 @@ public:
         LOCAL /// clickhouse-local
     };
 
+    struct DisaggOptions
+    {
+        DisaggregatedMode disagg_mode = DisaggregatedMode::None;
+        bool use_autoscaler = false;
+    };
+
     /// Create initial Context with ContextShared and etc.
     static std::unique_ptr<Context> createGlobal(
         std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory,
-        ApplicationType app_type);
-    static std::unique_ptr<Context> createGlobal(ApplicationType app_type);
+        ApplicationType app_type,
+        const std::optional<DisaggOptions> & disagg_opt);
+    static std::unique_ptr<Context> createGlobal(
+        ApplicationType app_type,
+        const std::optional<DisaggOptions> & disagg_opt = std::nullopt);
 
     ~Context();
 

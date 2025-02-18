@@ -337,21 +337,29 @@ Context::Context() = default;
 
 std::unique_ptr<Context> Context::createGlobal(
     std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory,
-    ApplicationType app_type)
+    ApplicationType app_type,
+    const std::optional<DisaggOptions> & disagg_opt)
 {
     std::unique_ptr<Context> res(new Context());
     res->setGlobalContext(*res);
     res->runtime_components_factory = runtime_components_factory;
     res->shared = std::make_shared<ContextShared>(runtime_components_factory, app_type);
     res->shared->ctx_disagg = SharedContextDisagg::create(*res);
+    if (disagg_opt)
+    {
+        res->shared->ctx_disagg->disaggregated_mode = disagg_opt->disagg_mode;
+        res->shared->ctx_disagg->use_autoscaler = disagg_opt->use_autoscaler;
+    }
     res->quota = std::make_shared<QuotaForIntervals>();
     res->timezone_info.init();
     return res;
 }
 
-std::unique_ptr<Context> Context::createGlobal(ApplicationType app_type)
+std::unique_ptr<Context> Context::createGlobal(
+    ApplicationType app_type,
+    const std::optional<DisaggOptions> & disagg_opt)
 {
-    return createGlobal(std::make_unique<RuntimeComponentsFactory>(), app_type);
+    return createGlobal(std::make_unique<RuntimeComponentsFactory>(), app_type, disagg_opt);
 }
 
 Context::~Context()
