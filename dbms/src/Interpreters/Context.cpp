@@ -227,9 +227,12 @@ struct ContextShared
 
     std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
 
-    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
+    ContextShared(
+        std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_,
+        Context::ApplicationType app_type)
         : runtime_components_factory(std::move(runtime_components_factory_))
         , storage_run_mode(PageStorageRunMode::ONLY_V3)
+        , application_type(app_type)
     {
         /// TODO: make it singleton (?)
 #ifndef MULTIPLE_CONTEXT_GTEST
@@ -332,21 +335,23 @@ private:
 Context::Context() = default;
 
 
-std::unique_ptr<Context> Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
+std::unique_ptr<Context> Context::createGlobal(
+    std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory,
+    ApplicationType app_type)
 {
     std::unique_ptr<Context> res(new Context());
     res->setGlobalContext(*res);
     res->runtime_components_factory = runtime_components_factory;
-    res->shared = std::make_shared<ContextShared>(runtime_components_factory);
+    res->shared = std::make_shared<ContextShared>(runtime_components_factory, app_type);
     res->shared->ctx_disagg = SharedContextDisagg::create(*res);
     res->quota = std::make_shared<QuotaForIntervals>();
     res->timezone_info.init();
     return res;
 }
 
-std::unique_ptr<Context> Context::createGlobal()
+std::unique_ptr<Context> Context::createGlobal(ApplicationType app_type)
 {
-    return createGlobal(std::make_unique<RuntimeComponentsFactory>());
+    return createGlobal(std::make_unique<RuntimeComponentsFactory>(), app_type);
 }
 
 Context::~Context()
@@ -2040,18 +2045,6 @@ void Context::shutdown()
 {
     system_logs.reset();
     shared->shutdown();
-}
-
-
-Context::ApplicationType Context::getApplicationType() const
-{
-    return shared->application_type;
-}
-
-void Context::setApplicationType(ApplicationType type)
-{
-    /// Lock isn't required, you should set it at start
-    shared->application_type = type;
 }
 
 void Context::setDefaultProfiles()
