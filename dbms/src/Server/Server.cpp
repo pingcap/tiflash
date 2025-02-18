@@ -1141,11 +1141,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "tiflash proxy thread is joined");
     });
 
-    if (proxy_config.is_proxy_runnable)
-    {
-        /// get CPU/memory/disk info of this server
-        getServerInfoFromProxy(log, server_info, &helper, settings);
-    }
+    /// get CPU/memory/disk info of this server
+    getServerInfoFromProxy(log, server_info, &helper, settings);
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
