@@ -35,7 +35,7 @@ public:
         std::vector<Field> & start_keys,
         std::vector<Field> & end_keys);
 
-    UInt64 getRaftIndex(RegionID region_id)
+    UInt64 getNextRaftIndex(RegionID region_id)
     {
         std::lock_guard lock(mutex);
         auto it = raft_index.find(region_id);

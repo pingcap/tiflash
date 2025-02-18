@@ -160,7 +160,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
                 std::move(commit_key),
                 std::move(commit_value));
         }
-        MockTiKV::instance().getRaftIndex(region_id);
+        MockTiKV::instance().getNextRaftIndex(region_id);
     }
     return region;
 }
@@ -261,7 +261,7 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         std::move(region_info),
         peer_id,
         SSTViewVec{nullptr, 0},
-        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getNextRaftIndex(region_id),
         RAFT_INIT_LOG_TERM,
         std::nullopt,
         tmt);
@@ -474,7 +474,7 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
         kvstore->handleIngestSST(
             region_id,
             SSTViewVec{sst_views.data(), sst_views.size()},
-            MockTiKV::instance().getRaftIndex(region_id),
+            MockTiKV::instance().getNextRaftIndex(region_id),
             MockTiKV::instance().getRaftTerm(region_id),
             tmt);
     }
@@ -489,7 +489,7 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
         kvstore->handleIngestSST(
             region_id,
             SSTViewVec{sst_views.data(), sst_views.size()},
-            MockTiKV::instance().getRaftIndex(region_id),
+            MockTiKV::instance().getNextRaftIndex(region_id),
             MockTiKV::instance().getRaftTerm(region_id),
             tmt);
     }

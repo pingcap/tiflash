@@ -348,7 +348,7 @@ void insert( //
         *tmt.getKVStore(),
         std::move(request),
         region_id,
-        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getNextRaftIndex(region_id),
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
 }
@@ -372,7 +372,7 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
         *tmt.getKVStore(),
         std::move(request),
         region_id,
-        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getNextRaftIndex(region_id),
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
 }
@@ -504,7 +504,7 @@ void batchInsert(
             *tmt.getKVStore(),
             std::move(request),
             region->id(),
-            MockTiKV::instance().getRaftIndex(region->id()),
+            MockTiKV::instance().getNextRaftIndex(region->id()),
             MockTiKV::instance().getRaftTerm(region->id()),
             tmt);
     }

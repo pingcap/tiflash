@@ -233,8 +233,7 @@ void NaturalDag::buildTables(Context & context)
             RegionPtr region_ptr = RegionBench::makeRegion(std::move(region_meta));
             tmt.getKVStore()->onSnapshot<RegionPtrWithSnapshotFiles>(region_ptr, nullptr, 0, tmt);
 
-            auto & pairs = region.pairs;
-            for (auto & pair : pairs)
+            for (auto & pair : region.pairs)
             {
                 UInt64 prewrite_ts = pd_client->getTS();
                 UInt64 commit_ts = pd_client->getTS();
@@ -244,7 +243,7 @@ void NaturalDag::buildTables(Context & context)
                     *tmt.getKVStore(),
                     std::move(request),
                     region.id,
-                    MockTiKV::instance().getRaftIndex(region.id),
+                    MockTiKV::instance().getNextRaftIndex(region.id),
                     MockTiKV::instance().getRaftTerm(region.id),
                     tmt);
             }
