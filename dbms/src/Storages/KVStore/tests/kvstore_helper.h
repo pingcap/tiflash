@@ -19,6 +19,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
@@ -32,7 +33,6 @@
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
