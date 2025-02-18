@@ -1135,7 +1135,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         proxy_runner.join();
         LOG_INFO(log, "tiflash proxy thread is joined");
     });
-    
+
     getServerInfoFromProxy(log, server_info, tiflash_instance_wrap.proxy_helper, settings);
 
     grpc_log = Logger::get("grpc");

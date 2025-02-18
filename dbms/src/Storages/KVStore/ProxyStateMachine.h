@@ -40,7 +40,11 @@ namespace FailPoints
 extern const char force_set_proxy_state_machine_cpu_cores[];
 } // namespace FailPoints
 
-inline void getServerInfoFromProxy(LoggerPtr log, ServerInfo & server_info, TiFlashRaftProxyHelper * helper, Settings & global_settings)
+inline void getServerInfoFromProxy(
+    LoggerPtr log,
+    ServerInfo & server_info,
+    TiFlashRaftProxyHelper * helper,
+    Settings & global_settings)
 {
     /// get CPU/memory/disk info of this server
     diagnosticspb::ServerInfoRequest request;
@@ -76,5 +80,3 @@ inline void getServerInfoFromProxy(LoggerPtr log, ServerInfo & server_info, TiFl
     }
 }
 } // namespace DB
-
-
