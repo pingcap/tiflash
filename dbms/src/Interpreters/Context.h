@@ -167,6 +167,7 @@ private:
 
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;
+    bool is_config_loaded = false; /// Is configuration loaded from toml file.
 
     enum TestMode
     {
@@ -582,8 +583,6 @@ private:
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
 
     void checkIsConfigLoaded() const;
-
-    bool is_config_loaded = false; /// Is configuration loaded from toml file.
 };
 
 
