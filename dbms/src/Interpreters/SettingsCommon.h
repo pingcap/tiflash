@@ -164,11 +164,15 @@ public:
         is_auto = true;
     }
 
+<<<<<<< HEAD
     static UInt64 getAutoValue()
     {
         static auto res = getNumberOfPhysicalCPUCores();
         return res;
     }
+=======
+    static UInt64 getAutoValue() { return getNumberOfLogicalCPUCores(); }
+>>>>>>> ab5a5178cc (Fix the incorrect value of the max thread size (#9881))
 
     UInt64 get() const
     {
