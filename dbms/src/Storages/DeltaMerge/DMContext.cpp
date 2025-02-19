@@ -66,7 +66,6 @@ DMContext::DMContext(
     , read_stable_only(settings.dt_read_stable_only)
     , enable_relevant_place(settings.dt_enable_relevant_place)
     , enable_skippable_place(settings.dt_enable_skippable_place)
-    , enable_bitmap_filter_skip_pack(settings.dt_enable_bitmap_filter_skip_pack)
     , tracing_id(tracing_id_)
     , scan_context(scan_context_ ? scan_context_ : std::make_shared<ScanContext>())
 {}

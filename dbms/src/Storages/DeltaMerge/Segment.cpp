@@ -3126,18 +3126,15 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     std::vector<DMFilePackFilter::Range> skipped_ranges;
     std::vector<DMFilePackFilter::Range> skipped_del_ranges;
     DMFilePackFilterResults new_pack_filter_results;
-    if (dm_context.enable_bitmap_filter_skip_pack)
-    {
-        const auto & dmfiles = segment_snap->stable->getDMFiles();
-        std::tie(skipped_ranges, skipped_del_ranges, new_pack_filter_results)
-            = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
-                dm_context,
-                dmfiles,
-                pack_filter_results,
-                start_ts,
-                read_info.index_begin,
-                read_info.index_end);
-    }
+    const auto & dmfiles = segment_snap->stable->getDMFiles();
+    std::tie(skipped_ranges, skipped_del_ranges, new_pack_filter_results)
+        = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
+            dm_context,
+            dmfiles,
+            pack_filter_results,
+            start_ts,
+            read_info.index_begin,
+            read_info.index_end);
 
     BlockInputStreamPtr stream = getPlacedStream(
         dm_context,
