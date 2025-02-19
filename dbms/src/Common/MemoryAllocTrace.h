@@ -14,9 +14,13 @@
 
 #pragma once
 
+#include <common/types.h>
+
 #include <tuple>
 
 namespace DB
 {
 std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr();
+bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size);
+std::tuple<UInt64, Int64, UInt64> process_mem_usage();
 } // namespace DB

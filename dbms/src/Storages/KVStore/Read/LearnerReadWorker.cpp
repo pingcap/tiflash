@@ -125,7 +125,7 @@ std::vector<kvrpcpb::ReadIndexRequest> LearnerReadWorker::buildBatchReadIndexReq
         const RegionID region_id = region_to_query.region_id;
         // don't stale read in test scenarios.
         bool can_stale_read = mvcc_query_info.start_ts != std::numeric_limits<uint64_t>::max()
-            && start_ts <= region_table.getSelfSafeTS(region_id);
+            && start_ts <= region_table.safeTsMgr().getSelfSafeTS(region_id);
         if (can_stale_read)
         {
             batch_read_index_result.emplace(region_id, kvrpcpb::ReadIndexResponse());

@@ -173,11 +173,11 @@ protected:
         {
             ASSERT_EQ(test_case.expected_size, row_id->size());
             auto expected_row_id = genSequence<UInt32>(test_case.expected_row_id);
-            ASSERT_TRUE(sequenceEqual(expected_row_id.data(), row_id->data(), test_case.expected_size));
+            ASSERT_TRUE(sequenceEqual(expected_row_id, *row_id));
 
             ASSERT_EQ(test_case.expected_size, handle->size());
             auto expected_handle = genSequence<Int64>(test_case.expected_handle);
-            ASSERT_TRUE(sequenceEqual(expected_handle.data(), handle->data(), test_case.expected_size));
+            ASSERT_TRUE(sequenceEqual(expected_handle, *handle));
         }
     }
 
@@ -349,28 +349,24 @@ try
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
 
     auto left_handle = getSegmentHandle(SEG_ID, {});
-    const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
+    const auto & left_h = toColumnVectorData<Int64>(left_handle);
     auto expected_left_handle = genSequence<Int64>("[0, 128)|[200, 255)|[256, 305)|[310, 512)");
-    ASSERT_EQ(expected_left_handle.size(), left_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_h->data(), left_h->size()));
+    ASSERT_TRUE(sequenceEqual(expected_left_handle, left_h));
 
     auto left_row_id = getSegmentRowId(SEG_ID, {});
-    const auto * left_r = toColumnVectorDataPtr<UInt32>(left_row_id);
+    const auto & left_r = toColumnVectorData<UInt32>(left_row_id);
     auto expected_left_row_id = genSequence<UInt32>("[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 512)");
-    ASSERT_EQ(expected_left_row_id.size(), left_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_row_id.data(), left_r->data(), left_r->size()));
+    ASSERT_TRUE(sequenceEqual(expected_left_row_id, left_r));
 
     auto right_handle = getSegmentHandle(*new_seg_id, {});
-    const auto * right_h = toColumnVectorDataPtr<Int64>(right_handle);
+    const auto & right_h = toColumnVectorData<Int64>(right_handle);
     auto expected_right_handle = genSequence<Int64>("[512, 1024)");
-    ASSERT_EQ(expected_right_handle.size(), right_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_handle.data(), right_h->data(), right_h->size()));
+    ASSERT_TRUE(sequenceEqual(expected_right_handle, right_h));
 
     auto right_row_id = getSegmentRowId(*new_seg_id, {});
-    const auto * right_r = toColumnVectorDataPtr<UInt32>(right_row_id);
+    const auto & right_r = toColumnVectorData<UInt32>(right_row_id);
     auto expected_right_row_id = genSequence<UInt32>("[512, 1024)");
-    ASSERT_EQ(expected_right_row_id.size(), right_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
+    ASSERT_TRUE(sequenceEqual(expected_right_row_id, right_r));
 }
 CATCH
 
@@ -484,28 +480,24 @@ try
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
 
     auto left_handle = getSegmentHandle(SEG_ID, {});
-    const auto * left_h = toColumnVectorDataPtr<Int64>(left_handle);
+    const auto & left_h = toColumnVectorData<Int64>(left_handle);
     auto expected_left_handle = genSequence<Int64>("[0, 25000)");
-    ASSERT_EQ(expected_left_handle.size(), left_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_h->data(), left_h->size()));
+    ASSERT_TRUE(sequenceEqual(expected_left_handle, left_h));
 
     auto left_row_id = getSegmentRowId(SEG_ID, {});
-    const auto * left_r = toColumnVectorDataPtr<UInt32>(left_row_id);
+    const auto & left_r = toColumnVectorData<UInt32>(left_row_id);
     auto expected_left_row_id = genSequence<UInt32>("[0, 25000)");
-    ASSERT_EQ(expected_left_row_id.size(), left_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_left_row_id.data(), left_r->data(), left_r->size()));
+    ASSERT_TRUE(sequenceEqual(expected_left_row_id, left_r));
 
     auto right_handle = getSegmentHandle(*new_seg_id, {});
-    const auto * right_h = toColumnVectorDataPtr<Int64>(right_handle);
+    const auto & right_h = toColumnVectorData<Int64>(right_handle);
     auto expected_right_handle = genSequence<Int64>("[25000, 50000)");
-    ASSERT_EQ(expected_right_handle.size(), right_h->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_handle.data(), right_h->data(), right_h->size()));
+    ASSERT_TRUE(sequenceEqual(expected_right_handle, right_h));
 
     auto right_row_id = getSegmentRowId(*new_seg_id, {});
-    const auto * right_r = toColumnVectorDataPtr<UInt32>(right_row_id);
+    const auto & right_r = toColumnVectorData<UInt32>(right_row_id);
     auto expected_right_row_id = genSequence<UInt32>("[25000, 50000)");
-    ASSERT_EQ(expected_right_row_id.size(), right_r->size());
-    ASSERT_TRUE(sequenceEqual(expected_right_row_id.data(), right_r->data(), right_r->size()));
+    ASSERT_TRUE(sequenceEqual(expected_right_row_id, right_r));
 }
 CATCH
 

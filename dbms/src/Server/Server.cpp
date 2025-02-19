@@ -19,6 +19,7 @@
 #include <Common/DynamicThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/MemoryAllocTrace.h>
 #include <Common/RedactHelpers.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
@@ -98,17 +99,16 @@
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
-#include <sys/resource.h>
 
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
-#include <thread>
 
 #ifdef FIU_ENABLE
 #include <fiu.h>
 #endif
 
+extern std::atomic<UInt64> tranquil_time_rss;
 
 namespace CurrentMetrics
 {
@@ -457,33 +457,6 @@ void loadBlockList(
 #endif
 }
 
-void setOpenFileLimit(std::optional<UInt64> new_limit, const LoggerPtr & log)
-{
-    rlimit rlim{};
-    if (getrlimit(RLIMIT_NOFILE, &rlim))
-        throw Poco::Exception("Cannot getrlimit");
-
-    if (rlim.rlim_cur == rlim.rlim_max)
-    {
-        LOG_INFO(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
-    }
-    else
-    {
-        rlim_t old = rlim.rlim_cur;
-        rlim.rlim_cur = new_limit.value_or(rlim.rlim_max);
-        int rc = setrlimit(RLIMIT_NOFILE, &rlim);
-        if (rc != 0)
-            LOG_WARNING(
-                log,
-                "Cannot set max number of file descriptors to {}"
-                ". Try to specify max_open_files according to your system limits. error: {}",
-                rlim.rlim_cur,
-                strerror(errno));
-        else
-            LOG_INFO(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
-    }
-}
-
 int Server::main(const std::vector<std::string> & /*args*/)
 {
     setThreadName("TiFlashMain");
@@ -508,12 +481,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerTableFunctions();
     registerStorages();
 
-    const auto disaggregated_mode = getDisaggregatedMode(config());
-    const auto use_autoscaler = useAutoScaler(config());
+    const auto disagg_opt = DisaggOptions::parseFromConfig(config());
 
     // Later we may create thread pool from GlobalThreadPool
     // init it before other components
-    initThreadPool(disaggregated_mode);
+    initThreadPool(disagg_opt.mode);
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
@@ -530,7 +502,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         storage_config.s3_config.enable(/*check_requirements*/ true, log);
     }
-    else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
+    else if (disagg_opt.mode == DisaggregatedMode::Compute && disagg_opt.use_autoscaler)
     {
         // compute node with auto scaler, the requirements will be initted later.
         storage_config.s3_config.enable(/*check_requirements*/ false, log);
@@ -568,7 +540,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // sanitize check for disagg mode
     if (storage_config.s3_config.isS3Enabled())
     {
-        if (disaggregated_mode == DisaggregatedMode::None)
+        if (disagg_opt.mode == DisaggregatedMode::None)
         {
             const String message = "'flash.disaggregated_mode' must be set when S3 is enabled!";
             LOG_ERROR(log, message);
@@ -582,7 +554,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
       */
-    global_context = Context::createGlobal();
+    global_context = Context::createGlobal(Context::ApplicationType::SERVER, disagg_opt);
+
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
@@ -599,8 +572,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Init Proxy's config
     TiFlashProxyConfig proxy_conf( //
         config(),
-        disaggregated_mode,
-        use_autoscaler,
+        disagg_opt.mode,
+        disagg_opt.use_autoscaler,
         STORAGE_FORMAT_CURRENT,
         settings,
         log);
@@ -612,15 +585,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     SCOPE_EXIT({ proxy_machine.waitProxyStopped(); });
 
     /// get CPU/memory/disk info of this server
-    proxy_machine.getServerInfo(server_info);
+    proxy_machine.getServerInfo(server_info, settings);
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
-
-    global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
-    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     // Must init this before KVStore.
     global_context->initializeJointThreadInfoJeallocMap();
@@ -667,7 +636,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         log,
         "disaggregated_mode={} use_autoscaler={} enable_s3={}",
         magic_enum::enum_name(global_context->getSharedContextDisagg()->disaggregated_mode),
-        use_autoscaler,
+        disagg_opt.use_autoscaler,
         storage_config.s3_config.isS3Enabled());
 
     if (storage_config.s3_config.isS3Enabled())
@@ -738,14 +707,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     /// Try to increase limit on number of open files.
-    if (config().hasProperty("max_open_files"))
-    {
-        setOpenFileLimit(config().getUInt("max_open_files"), log);
-    }
-    else
-    {
-        setOpenFileLimit(std::nullopt, log);
-    }
+    setOpenFileLimit(config().getUInt("max_open_files", 0), log);
 
     static ServerErrorHandler error_handler;
     Poco::ErrorHandler::set(&error_handler);
@@ -836,7 +798,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::optional<raft_serverpb::StoreIdent> store_ident;
     // Only when this node is disagg compute node and autoscaler is enabled, we don't need the WriteNodePageStorage instance
     // Disagg compute node without autoscaler still need this instance for proxy's data
-    if (!(is_disagg_compute_mode && use_autoscaler))
+    if (!(is_disagg_compute_mode && disagg_opt.use_autoscaler))
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
         if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
@@ -991,7 +953,25 @@ int Server::main(const std::vector<std::string> & /*args*/)
         /// Create TMTContext
         auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
-        proxy_machine.initKVStore(global_context->getTMTContext(), store_ident);
+
+        // Must be executed before restore data.
+        // Get the memory usage of tranquil time.
+        auto [resident_set, cur_proc_num_threads, cur_virt_size] = process_mem_usage();
+        UNUSED(cur_proc_num_threads);
+        tranquil_time_rss = static_cast<Int64>(resident_set);
+
+        auto kvs_watermark = settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity);
+        if (kvs_watermark == 0)
+            kvs_watermark = server_info.memory_info.capacity * 0.8;
+        LOG_INFO(
+            log,
+            "Global memory status: kvstore_high_watermark={} tranquil_time_rss={} cur_virt_size={} capacity={}",
+            kvs_watermark,
+            tranquil_time_rss,
+            cur_virt_size,
+            server_info.memory_info.capacity);
+
+        proxy_machine.initKVStore(global_context->getTMTContext(), store_ident, kvs_watermark);
 
         global_context->getTMTContext().reloadConfig(config());
         // setup the kv cluster for disagg compute node fetching config
@@ -1227,7 +1207,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // And we want to make sure LAC is cleanedup.
             // The effects are there will be no resource control during [lac.safeStop(), FlashGrpcServer destruct done],
             // but it's basically ok, that duration is small(normally 100-200ms).
-            if (is_disagg_compute_mode && use_autoscaler && LocalAdmissionController::global_instance)
+            if (is_disagg_compute_mode && disagg_opt.use_autoscaler && LocalAdmissionController::global_instance)
                 LocalAdmissionController::global_instance->safeStop();
         });
 

@@ -581,7 +581,7 @@ void concurrentBatchInsert(
     Regions regions
         = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
-        debug_kvstore.onSnapshot<RegionPtrWithSnapshotFiles>(region, nullptr, 0, tmt);
+        debug_kvstore.onSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, {}}, nullptr, 0, tmt);
 
     std::list<std::thread> threads;
     for (Int64 i = 0; i < concurrent_num; i++, handle_begin += key_num_each_region)
@@ -784,7 +784,7 @@ void handleApplySnapshot(
     std::optional<uint64_t> deadline_index,
     TMTContext & tmt)
 {
-    auto new_region = kvstore.genRegionPtr(std::move(region), peer_id, index, term);
+    auto new_region = kvstore.genRegionPtr(std::move(region), peer_id, index, term, tmt.getRegionTable());
     auto prehandle_result = kvstore.preHandleSnapshotToFiles(new_region, snaps, index, term, deadline_index, tmt);
     kvstore.applyPreHandledSnapshot(
         RegionPtrWithSnapshotFiles{new_region, std::move(prehandle_result.ingest_ids)},

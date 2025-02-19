@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/FFI/JointThreadAllocInfo.h>
+#include <Storages/KVStore/KVStoreConfig.h>
 #include <Storages/KVStore/MultiRaft/Disagg/RaftLogManager.h>
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/KVStore/MultiRaft/RegionManager.h>
@@ -145,7 +146,7 @@ public:
     FileUsageStatistics getFileUsageStatistics() const;
     // Proxy will validate and refit the config items from the toml file.
     const ProxyConfigSummary & getProxyConfigSummay() const { return proxy_config_summary; }
-    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value);
+    void reportThreadAllocInfo(std::string_view, ReportThreadAllocateInfoType type, uint64_t value) const;
     static void reportThreadAllocBatch(std::string_view, ReportThreadAllocateInfoBatch data);
     JointThreadInfoJeallocMapPtr getJointThreadInfoJeallocMap() const { return joint_memory_allocation_map; }
     void fetchProxyConfig(const TiFlashRaftProxyHelper * proxy_helper);
@@ -156,8 +157,15 @@ public: // Region Management
     RegionPtr getRegion(RegionID region_id) const;
     RegionMap getRegionsByRangeOverlap(const RegionRange & range) const;
     void traverseRegions(std::function<void(RegionID, const RegionPtr &)> && callback) const;
-    RegionPtr genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term);
+    RegionPtr genRegionPtr(
+        metapb::Region && region,
+        UInt64 peer_id,
+        UInt64 index,
+        UInt64 term,
+        std::optional<std::reference_wrapper<RegionTable>> region_table);
     void handleDestroy(UInt64 region_id, TMTContext & tmt);
+    void setKVStoreMemoryLimit(size_t s) { maximum_kvstore_memory = s; }
+    size_t getKVStoreMemoryLimit() const { return maximum_kvstore_memory; }
 
 public: // Raft Read and Write
     EngineStoreApplyRes handleAdminRaftCmd(
@@ -181,6 +189,14 @@ public: // Raft Read and Write
         TMTContext & tmt,
         DM::WriteResult & write_result);
 
+public: // Configs
+    void reloadConfig(const Poco::Util::AbstractConfiguration & config_file) { config.reloadConfig(config_file, log); }
+    const KVStoreConfig & getConfigRef() const { return config; }
+    UInt64 getRaftLogEagerGCRows() const { return config.regionEagerGCLogGap(); }
+
+    // debug only
+    KVStoreConfig & debugGetConfigMut() { return config; }
+
 public: // Flush
     static bool tryFlushRegionCacheInStorage(
         TMTContext & tmt,
@@ -197,8 +213,6 @@ public: // Flush
         UInt64 term,
         uint64_t truncated_index,
         uint64_t truncated_term);
-    void setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap);
-    UInt64 getRaftLogEagerGCRows() const { return region_eager_gc_log_gap.load(); }
     // TODO(proactive flush)
     // void proactiveFlushCacheAndRegion(TMTContext & tmt, const DM::RowKeyRange & rowkey_range, KeyspaceID keyspace_id, TableID table_id, bool is_background);
     void notifyCompactLog(
@@ -347,7 +361,7 @@ private:
         UInt64 index,
         UInt64 term,
         UInt64 truncated_index,
-        UInt64 truncated_term);
+        UInt64 truncated_term) const;
 
     bool forceFlushRegionDataImpl(
         Region & curr_region,
@@ -382,15 +396,7 @@ private:
 
     LoggerPtr log;
 
-    std::atomic<UInt64> region_compact_log_min_rows;
-    std::atomic<UInt64> region_compact_log_min_bytes;
-    std::atomic<UInt64> region_compact_log_gap;
-    // `region_eager_gc_log_gap` is checked after each write command applied,
-    // It should be large enough to avoid unnecessary flushes and also not
-    // too large to control the memory when there are down peers.
-    // The 99% of passive flush is 512, so we use it as default value.
-    // 0 means eager gc is disabled.
-    std::atomic<UInt64> region_eager_gc_log_gap;
+    KVStoreConfig config;
 
     mutable std::mutex bg_gc_region_data_mutex;
     std::list<RegionDataReadInfoList> bg_gc_region_data;
@@ -418,6 +424,11 @@ private:
     ProxyConfigSummary proxy_config_summary;
 
     JointThreadInfoJeallocMapPtr joint_memory_allocation_map;
+    size_t maximum_kvstore_memory = 0;
+
+#ifdef DBMS_PUBLIC_GTEST
+    std::atomic<size_t> debug_memory_limit_warning_count = 0;
+#endif
 };
 
 /// Encapsulation of lock guard of task mutex in KVStore
@@ -430,11 +441,11 @@ class KVStoreTaskLock : private boost::noncopyable
     std::lock_guard<std::mutex> lock;
 };
 
-void WaitCheckRegionReady(const TMTContext &, KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
+void WaitCheckRegionReady(KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter);
 void WaitCheckRegionReadyImpl(
-    const TMTContext &,
     KVStore & kvstore,
     const std::atomic_size_t &,
+    UInt64 read_index_timeout,
     double,
     double,
     double);

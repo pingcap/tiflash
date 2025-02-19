@@ -189,10 +189,9 @@ protected:
     inline void assertPK(PageIdU64 segment_id, std::string_view expected_sequence)
     {
         auto left_handle = getSegmentHandle(segment_id, {});
-        const auto * left_r = toColumnVectorDataPtr<Int64>(left_handle);
+        const auto & left_r = toColumnVectorData<Int64>(left_handle);
         auto expected_left_handle = genSequence<Int64>(expected_sequence);
-        ASSERT_EQ(expected_left_handle.size(), left_r->size());
-        ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_r->data(), left_r->size()));
+        ASSERT_TRUE(sequenceEqual(expected_left_handle, left_r));
     }
 
 private:

@@ -50,8 +50,6 @@ const std::string ColumnFamilyName::Lock = "lock";
 const std::string ColumnFamilyName::Default = "default";
 const std::string ColumnFamilyName::Write = "write";
 
-extern const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS;
-
 ColumnFamilyType NameToCF(const std::string & cf)
 {
     if (cf.empty() || cf == ColumnFamilyName::Default)
@@ -680,11 +678,10 @@ RawCppPtr PreHandleSnapshot(
         CHECK_PARSE_PB_BUFF(region, region_buff.data, region_buff.len);
         auto & tmt = *server->tmt;
         auto & kvstore = tmt.getKVStore();
-        auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term);
+        auto new_region = kvstore->genRegionPtr(std::move(region), peer_id, index, term, tmt.getRegionTable());
 
 #ifndef NDEBUG
         {
-            auto & kvstore = server->tmt->getKVStore();
             auto state = kvstore->getProxyHelper()->getRegionLocalState(new_region->id());
             assert(state.state() == raft_serverpb::PeerState::Applying);
         }
@@ -999,7 +996,7 @@ void HandleSafeTSUpdate(
     {
         RUNTIME_CHECK(server->tmt != nullptr);
         RegionTable & region_table = server->tmt->getRegionTable();
-        region_table.updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
+        region_table.safeTsMgr().updateSafeTS(region_id, leader_safe_ts, self_safe_ts);
     }
     catch (...)
     {

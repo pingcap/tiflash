@@ -133,7 +133,7 @@ private:
 
     bool has_vertical_output_suffix = false; /// Is \G present at the end of the query string?
 
-    std::unique_ptr<Context> context = Context::createGlobal();
+    std::unique_ptr<Context> context = Context::createGlobal(Context::ApplicationType::CLIENT);
 
     /// Buffer that reads from stdin in batch mode.
     ReadBufferFromFileDescriptor std_in{STDIN_FILENO};
@@ -241,8 +241,6 @@ private:
             auto loaded_config = config_processor.loadConfig();
             config().add(loaded_config.configuration);
         }
-
-        context->setApplicationType(Context::ApplicationType::CLIENT);
 
         /// settings and limits could be specified in config file, but passed settings has higher priority
 #define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION)               \

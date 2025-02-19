@@ -15,9 +15,15 @@
 #pragma once
 
 #include <Common/Logger_fwd.h>
+#include <common/types.h>
 
 namespace DB
 {
 void setupAllocator(const LoggerPtr & log);
 void setupSIMD(const LoggerPtr & log);
+
+// Try to increase limit on number of open files.
+// If `new_limit == 0`, skip setting open file limit.
+void setOpenFileLimit(UInt64 new_limit, const LoggerPtr & log);
+
 } // namespace DB

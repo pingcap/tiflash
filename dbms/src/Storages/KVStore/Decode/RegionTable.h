@@ -21,6 +21,8 @@
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
+#include <Storages/KVStore/Decode/RegionTable_fwd.h>
+#include <Storages/KVStore/Decode/SafeTsManager.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
@@ -54,18 +56,6 @@ using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
 struct CheckpointIngestInfo;
 using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 
-using SafeTS = UInt64;
-enum : SafeTS
-{
-    InvalidSafeTS = std::numeric_limits<UInt64>::max(),
-};
-
-using TsoShiftBits = UInt64;
-enum : TsoShiftBits
-{
-    TsoPhysicalShiftBits = 18,
-};
-
 class RegionTable : private boost::noncopyable
 {
 public:
@@ -78,14 +68,9 @@ public:
             , range_in_table(range_in_table_)
         {}
 
-        void updateRegionCacheBytes(size_t);
-
         RegionID region_id;
         std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> range_in_table;
         bool pause_flush = false;
-
-    private:
-        Int64 cache_bytes = 0;
     };
 
     using InternalRegions = std::unordered_map<RegionID, InternalRegion>;
@@ -94,23 +79,35 @@ public:
     {
         explicit Table(const TableID table_id_)
             : table_id(table_id_)
+            , ctx(createRegionTableCtx())
         {}
         TableID table_id;
-        InternalRegions regions;
+        InternalRegions internal_regions;
+        RegionTableCtxPtr ctx;
     };
 
     explicit RegionTable(Context & context_);
+
+    // Iterate over all regions in KVStore, and add them to RegionTable.
     void restore();
 
-    void updateRegion(const Region & region);
+    // When a region is added to region table, happens when split and restore.
+    void addRegion(const Region & region);
+
+    // Most of the regions are scheduled to TiFlash by a raft snapshot.
+    void addPrehandlingRegion(const Region & region);
+
+    // When a reigon is removed out of TiFlash.
+    void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
+
+    // Used by apply snapshot.
+    void replaceRegion(const RegionPtr & old_region, const RegionPtr & new_region);
 
     /// This functional only shrink the table range of this region_id
     void shrinkRegionRange(const Region & region);
 
     /// extend range for possible InternalRegion or add one.
-    void extendRegionRange(RegionID region_id, const RegionRangeKeys & region_range_keys);
-
-    void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
+    void extendRegionRange(const Region & region, const RegionRangeKeys & region_range_keys);
 
     // Protects writeBlockByRegionAndFlush and ensures it's executed by only one thread at the same time.
     // Only one thread can do this at the same time.
@@ -154,29 +151,12 @@ public:
 
     void clear();
 
-public:
-    // safe ts is maintained by check_leader RPC (https://github.com/tikv/tikv/blob/1ea26a2ac8761af356cc5c0825eb89a0b8fc9749/components/resolved_ts/src/advance.rs#L262),
-    // leader_safe_ts is the safe_ts in leader, leader will send <applied_index, safe_ts> to learner to advance safe_ts of learner, and TiFlash will record the safe_ts into safe_ts_map in check_leader RPC.
-    // self_safe_ts is the safe_ts in TiFlah learner. When TiFlash proxy receive <applied_index, safe_ts> from leader, TiFlash will update safe_ts_map when TiFlash has applied the raft log to applied_index.
-    struct SafeTsEntry
-    {
-        explicit SafeTsEntry(UInt64 leader_safe_ts, UInt64 self_safe_ts)
-            : leader_safe_ts(leader_safe_ts)
-            , self_safe_ts(self_safe_ts)
-        {}
-        std::atomic<UInt64> leader_safe_ts;
-        std::atomic<UInt64> self_safe_ts;
-    };
-    using SafeTsEntryPtr = std::unique_ptr<SafeTsEntry>;
-    using SafeTsMap = std::unordered_map<RegionID, SafeTsEntryPtr>;
+    size_t getTableRegionSize(KeyspaceID keyspace_id, TableID table_id) const;
+    void debugClearTableRegionSize(KeyspaceID keyspace_id, TableID table_id);
 
-    void updateSafeTS(UInt64 region_id, UInt64 leader_safe_ts, UInt64 self_safe_ts);
+    SafeTsManager & safeTsMgr() { return safe_ts_mgr; }
+    const SafeTsManager & safeTsMgr() const { return safe_ts_mgr; }
 
-    // unit: ms. If safe_ts diff is larger than 2min, we think the data synchronization progress is far behind the leader.
-    static const UInt64 SafeTsDiffThreshold = 2 * 60 * 1000;
-    bool isSafeTSLag(UInt64 region_id, UInt64 * leader_safe_ts, UInt64 * self_safe_ts);
-
-    UInt64 getSelfSafeTS(UInt64 region_id) const;
 
 private:
     friend class MockTiDB;
@@ -185,8 +165,7 @@ private:
     Table & getOrCreateTable(KeyspaceID keyspace_id, TableID table_id);
     void removeTable(KeyspaceID keyspace_id, TableID table_id);
     InternalRegion & getOrInsertRegion(const Region & region);
-    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, RegionID region_id);
-    InternalRegion & insertRegion(Table & table, const Region & region);
+    InternalRegion & insertRegion(Table & table, const RegionRangeKeys & region_range_keys, const Region & region);
     InternalRegion & doGetInternalRegion(KeyspaceTableID ks_table_id, RegionID region_id);
     void addTableToIndex(KeyspaceID keyspace_id, TableID table_id);
     void removeTableFromIndex(KeyspaceID keyspace_id, TableID table_id);
@@ -196,23 +175,22 @@ private:
     TableMap tables;
 
     using RegionInfoMap = std::unordered_map<RegionID, KeyspaceTableID>;
-    RegionInfoMap regions;
+    RegionInfoMap region_infos;
 
     using KeyspaceIndex = std::unordered_map<KeyspaceID, std::unordered_set<TableID>, boost::hash<KeyspaceID>>;
     KeyspaceIndex keyspace_index;
 
-    SafeTsMap safe_ts_map;
-
     Context * const context;
 
+    SafeTsManager safe_ts_mgr;
+
     mutable std::mutex mutex;
-    mutable std::shared_mutex rw_lock;
 
     LoggerPtr log;
 };
 
 
-// A wrap of RegionPtr, with snapshot files directory waitting to be ingested
+// A wrap of RegionPtr, with snapshot files directory waiting to be ingested
 struct RegionPtrWithSnapshotFiles
 {
     using Base = RegionPtr;

@@ -46,7 +46,7 @@ try
             ASSERT_EQ(r1->getPersistedAppliedIndex(), applied_index + 1);
             ASSERT_EQ(kvr1->appliedIndex(), applied_index + 1);
 
-            kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+            kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
             auto && [request, response] = MockRaftStoreProxy::composeCompactLog(r1, index);
             auto && [index2, term2] = proxy_instance->adminCommand(region_id, std::move(request), std::move(response));
             // In tryFlushRegionData we will call handleWriteRaftCmd, which will already cause an advance.
