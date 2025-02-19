@@ -230,9 +230,12 @@ struct ContextShared
 
     std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
 
-    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
+    ContextShared(
+        std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_,
+        Context::ApplicationType app_type)
         : runtime_components_factory(std::move(runtime_components_factory_))
         , storage_run_mode(PageStorageRunMode::ONLY_V3)
+        , application_type(app_type)
     {
         /// TODO: make it singleton (?)
 #ifndef MULTIPLE_CONTEXT_GTEST
@@ -335,21 +338,31 @@ private:
 Context::Context() = default;
 
 
-std::unique_ptr<Context> Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
+std::unique_ptr<Context> Context::createGlobal(
+    std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory,
+    ApplicationType app_type,
+    const std::optional<DisaggOptions> & disagg_opt)
 {
     std::unique_ptr<Context> res(new Context());
     res->setGlobalContext(*res);
     res->runtime_components_factory = runtime_components_factory;
-    res->shared = std::make_shared<ContextShared>(runtime_components_factory);
+    res->shared = std::make_shared<ContextShared>(runtime_components_factory, app_type);
     res->shared->ctx_disagg = SharedContextDisagg::create(*res);
+    if (disagg_opt)
+    {
+        res->shared->ctx_disagg->disaggregated_mode = disagg_opt->mode;
+        res->shared->ctx_disagg->use_autoscaler = disagg_opt->use_autoscaler;
+    }
     res->quota = std::make_shared<QuotaForIntervals>();
     res->timezone_info.init();
     return res;
 }
 
-std::unique_ptr<Context> Context::createGlobal()
+std::unique_ptr<Context> Context::createGlobal(
+    ApplicationType app_type,
+    const std::optional<DisaggOptions> & disagg_opt)
 {
-    return createGlobal(std::make_unique<RuntimeComponentsFactory>());
+    return createGlobal(std::make_unique<RuntimeComponentsFactory>(), app_type, disagg_opt);
 }
 
 Context::~Context()
@@ -2071,6 +2084,7 @@ void Context::shutdown()
     shared->shutdown();
 }
 
+<<<<<<< HEAD
 
 Context::ApplicationType Context::getApplicationType() const
 {
@@ -2084,6 +2098,9 @@ void Context::setApplicationType(ApplicationType type)
 }
 
 void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)
+=======
+void Context::setDefaultProfiles()
+>>>>>>> 29624d57c6 (*: Set ApplicationType and disagg param when GlobalContext created (#9886))
 {
     shared->default_profile_name = config.getString("default_profile", "default");
     shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
