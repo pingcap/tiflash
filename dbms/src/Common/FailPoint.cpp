@@ -74,7 +74,8 @@ namespace DB
     M(force_local_index_task_memory_limit_exceeded)               \
     M(exception_build_local_index_for_file)                       \
     M(force_not_support_local_index)                              \
-    M(sync_schema_request_failure)
+    M(sync_schema_request_failure)                                \
+    M(force_set_lifecycle_resp)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \

@@ -12,11 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/FailPoint.h>
+#include <Common/Logger.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/ListObjectsV2Request.h>
 #include <gtest/gtest.h>
+
+#include <ext/scope_guard.h>
+
+namespace DB::FailPoints
+{
+extern const char force_set_lifecycle_resp[];
+} // namespace DB::FailPoints
 
 namespace DB::S3::tests
 {
@@ -38,6 +47,76 @@ TEST_F(S3ClientTest, LifecycleRule)
 try
 {
     ASSERT_TRUE(ensureLifecycleRuleExist(*client, 1));
+
+    // Only run following failpoint test for mock client
+    if (!DB::tests::TiFlashTestEnv::isMockedS3Client())
+        return;
+    auto log = Logger::get();
+    {
+        LOG_INFO(log, "checking with mock result 1");
+        std::vector<Aws::S3::Model::Tag> filter_tags{
+            Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true"),
+        };
+        std::vector<Aws::S3::Model::LifecycleRule> rules{
+            Aws::S3::Model::LifecycleRule()
+                .WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
+                .WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithAnd(
+                    Aws::S3::Model::LifecycleRuleAndOperator().WithPrefix("").WithTags(filter_tags)))
+                .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(1))
+                .WithID("tiflashgc"),
+        };
+        FailPointHelper::enableFailPoint(FailPoints::force_set_lifecycle_resp, rules);
+        SCOPE_EXIT(FailPointHelper::disableFailPoint(FailPoints::force_set_lifecycle_resp));
+
+        ASSERT_TRUE(ensureLifecycleRuleExist(*client, 1));
+    }
+    {
+        LOG_INFO(log, "checking with mock result 2");
+        std::vector<Aws::S3::Model::LifecycleRule> rules{
+            Aws::S3::Model::LifecycleRule()
+                .WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
+                .WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithTag(
+                    Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true")))
+                .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(1))
+                .WithID("tiflashgc"),
+        };
+        FailPointHelper::enableFailPoint(FailPoints::force_set_lifecycle_resp, rules);
+        SCOPE_EXIT(FailPointHelper::disableFailPoint(FailPoints::force_set_lifecycle_resp));
+
+        ASSERT_TRUE(ensureLifecycleRuleExist(*client, 1));
+    }
+    {
+        LOG_INFO(log, "checking with mock result 3");
+        std::vector<Aws::S3::Model::LifecycleRule> rules{
+            Aws::S3::Model::LifecycleRule()
+                // disabled
+                .WithStatus(Aws::S3::Model::ExpirationStatus::Disabled)
+                .WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithTag(
+                    Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true")))
+                .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(1))
+                .WithID("tiflashgc"),
+        };
+        FailPointHelper::enableFailPoint(FailPoints::force_set_lifecycle_resp, rules);
+        SCOPE_EXIT(FailPointHelper::disableFailPoint(FailPoints::force_set_lifecycle_resp));
+
+        ASSERT_TRUE(ensureLifecycleRuleExist(*client, 1));
+    }
+    {
+        LOG_INFO(log, "checking with mock result 4");
+        std::vector<Aws::S3::Model::LifecycleRule> rules{
+            Aws::S3::Model::LifecycleRule()
+                .WithStatus(Aws::S3::Model::ExpirationStatus::Disabled)
+                .WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithTag(
+                    // not the tiflash_deleted tag
+                    Aws::S3::Model::Tag().WithKey("tikv").WithValue("true")))
+                .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(1))
+                .WithID("tiflashgc"),
+        };
+        FailPointHelper::enableFailPoint(FailPoints::force_set_lifecycle_resp, rules);
+        SCOPE_EXIT(FailPointHelper::disableFailPoint(FailPoints::force_set_lifecycle_resp));
+
+        ASSERT_TRUE(ensureLifecycleRuleExist(*client, 1));
+    }
 }
 CATCH
 

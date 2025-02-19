@@ -43,6 +43,7 @@ struct StorageS3Config
     String bucket;
     String access_key_id;
     String secret_access_key;
+    String session_token;
     UInt64 max_connections = 4096;
     UInt64 connection_timeout_ms = 1000;
     UInt64 request_timeout_ms = 30000;

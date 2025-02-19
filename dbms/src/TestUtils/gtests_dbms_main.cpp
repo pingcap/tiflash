@@ -90,6 +90,7 @@ int main(int argc, char ** argv)
     const auto s3_poco_client = Poco::Environment::get("S3_POCO_CLIENT", "true");
     const auto access_key_id = Poco::Environment::get("AWS_ACCESS_KEY_ID", "");
     const auto secret_access_key = Poco::Environment::get("AWS_SECRET_ACCESS_KEY", "");
+    const auto session_token = Poco::Environment::get("AWS_SESSION_TOKEN", "");
     const auto mock_s3 = Poco::Environment::get("MOCK_S3", "true"); // In unit-tests, use MockS3Client by default.
     auto s3config = DB::StorageS3Config{
         .verbose = s3_verbose == "true",
@@ -98,6 +99,7 @@ int main(int argc, char ** argv)
         .bucket = s3_bucket,
         .access_key_id = access_key_id,
         .secret_access_key = secret_access_key,
+        .session_token = session_token,
         .root = s3_root,
     };
     Poco::Environment::set("AWS_EC2_METADATA_DISABLED", "true"); // disable to speedup testing
