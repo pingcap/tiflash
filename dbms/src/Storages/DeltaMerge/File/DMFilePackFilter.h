@@ -111,6 +111,8 @@ public:
             : offset(offset_)
             , rows(rows_)
         {}
+
+        bool operator==(const Range &) const = default;
     };
     /**
     * @brief For all the packs in `pack_filter_results`, if all the rows in the pack

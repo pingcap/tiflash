@@ -55,7 +55,7 @@ protected:
     `seg_data`: s:[a, b)|d_tiny:[a, b)|d_tiny_del:[a, b)|d_big:[a, b)|d_dr:[a, b)|d_mem:[a, b)|d_mem_del
     - s: stable
     - d_tiny: delta ColumnFileTiny
-    - d_del_tiny: delta ColumnFileTiny with delete flag
+    - d_tiny_del: delta ColumnFileTiny with delete flag
     - d_big: delta ColumnFileBig
     - d_dr: delta delete range
 
@@ -564,5 +564,200 @@ try
         "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
 }
 CATCH
+
+TEST_F(SegmentBitmapFilterTest, testSkipPackStableOnly)
+{
+    std::string expect_result;
+    expect_result.append(std::string(200, '0'));
+    expect_result.append(std::string(300, '1'));
+    for (size_t i = 0; i < 500; i++)
+        expect_result.append(std::string("01"));
+    expect_result.append(std::string(500, '1'));
+    expect_result.append(std::string(500, '0'));
+    for (size_t pack_rows : {1, 2, 10, 100, 8192})
+    {
+        db_context->getSettingsRef().dt_segment_stable_pack_rows = pack_rows;
+        db_context->getGlobalContext().getSettingsRef().dt_segment_stable_pack_rows = pack_rows;
+        reloadDMContext();
+
+        version = 0;
+        writeSegment("d_mem:[0, 1000)|d_mem:[500, 1500)|d_mem:[1500, 2000)");
+        mergeSegmentDelta(SEG_ID, true);
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(seg->getDelta()->getRows(), 0);
+        ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
+        ASSERT_EQ(seg->getStable()->getRows(), 2500);
+
+        auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(200, 2000)};
+        auto pack_filter_results = loadPackFilterResults(snap, ranges);
+
+        if (pack_rows == 1)
+        {
+            ASSERT_EQ(version, 3);
+            const auto & dmfiles = snap->stable->getDMFiles();
+            auto [skipped_ranges, new_pack_filter_results]
+                = DMFilePackFilter::getSkippedRangeAndFilterForBitmapStableOnly(
+                    *dm_context,
+                    dmfiles,
+                    pack_filter_results,
+                    2);
+            // [200, 500), [1500, 2000)
+            ASSERT_EQ(skipped_ranges.size(), 2);
+            ASSERT_EQ(skipped_ranges[0], DMFilePackFilter::Range(200, 300));
+            ASSERT_EQ(skipped_ranges[1], DMFilePackFilter::Range(1500, 500));
+            ASSERT_EQ(new_pack_filter_results.size(), 1);
+            const auto & pack_res = new_pack_filter_results[0]->getPackRes();
+            ASSERT_EQ(pack_res.size(), 2000);
+            // [0, 200) is not in range, [200, 500) is skipped.
+            for (size_t i = 0; i < 500; ++i)
+                ASSERT_EQ(pack_res[i], RSResult::None);
+            // Not clean
+            for (size_t i = 500; i < 1000; ++i)
+                ASSERT_EQ(pack_res[i], RSResult::Some);
+            for (size_t i = 1000; i < 1500; ++i)
+                ASSERT_EQ(pack_res[i], RSResult::None);
+            // min version > start_ts
+            for (size_t i = 1500; i < 2000; ++i)
+                ASSERT_EQ(pack_res[i], RSResult::Some);
+        }
+
+        auto bitmap_filter
+            = seg->buildBitmapFilterStableOnly(*dm_context, snap, ranges, pack_filter_results, 2, DEFAULT_BLOCK_SIZE);
+
+        ASSERT_EQ(expect_result, bitmap_filter->toDebugString());
+
+        deleteRangeSegment(SEG_ID);
+    }
+}
+
+TEST_F(SegmentBitmapFilterTest, testSkipPackNormal)
+{
+    std::string expect_result;
+    expect_result.append(std::string(50, '0'));
+    expect_result.append(std::string(450, '1'));
+    for (size_t i = 0; i < 500; i++)
+        expect_result.append(std::string("01"));
+    expect_result.append(std::string(1000, '1'));
+    expect_result.append(std::string(16, '1'));
+
+    expect_result[99] = '0';
+    expect_result[200] = '0';
+    for (size_t i = 301; i < 315; ++i)
+        expect_result[i] = '0';
+    for (size_t i = 355; i < 370; ++i)
+        expect_result[i] = '0';
+    for (size_t i = 409; i < 481; ++i)
+        expect_result[i] = '0';
+
+    for (size_t pack_rows : {1, 2, 10, 100, 8192})
+    {
+        db_context->getSettingsRef().dt_segment_stable_pack_rows = pack_rows;
+        db_context->getGlobalContext().getSettingsRef().dt_segment_stable_pack_rows = pack_rows;
+        reloadDMContext();
+
+        version = 0;
+        writeSegment("d_mem:[0, 1000)|d_mem:[500, 1500)|d_mem:[1500, 2000)");
+        mergeSegmentDelta(SEG_ID, true);
+        writeSegment("d_tiny:[99, 100)|d_dr:[355, 370)|d_dr:[409, 481)|d_mem:[200, 201)|d_mem:[301, 315)");
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(seg->getDelta()->getRows(), 16);
+        ASSERT_EQ(seg->getDelta()->getDeletes(), 2);
+        ASSERT_EQ(seg->getStable()->getRows(), 2500);
+
+        auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(50, 2000)};
+        auto pack_filter_results = loadPackFilterResults(snap, ranges);
+        UInt64 start_ts = 6;
+        if (pack_rows == 10)
+        {
+            ASSERT_EQ(version, 6);
+            const auto & dmfiles = snap->stable->getDMFiles();
+            ColumnDefines columns_to_read{
+                getExtraHandleColumnDefine(seg->is_common_handle),
+            };
+            auto read_info = seg->getReadInfo(*dm_context, columns_to_read, snap, ranges, ReadTag::MVCC, start_ts);
+            auto [skipped_ranges, skipped_del_ranges, new_pack_filter_results]
+                = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
+                    *dm_context,
+                    dmfiles,
+                    pack_filter_results,
+                    start_ts,
+                    read_info.index_begin,
+                    read_info.index_end);
+
+            std::vector<std::tuple<size_t, size_t, bool>> skip_ranges_result = {
+                // [50, 90)
+                {50, 40, false},
+                // Due to changing 99, [90, 100) pack can not be skipped.
+                // However, [100, 110) pack also can not be skipped because there is a preceding delta row,
+                // which can be optimized further if we can identify whether the rowkeys are the same.
+                // [110, 200)
+                {110, 90, false},
+                // Due to changing 200, [200, 210) pack can not be skipped.
+                // [210, 300)
+                {210, 90, false},
+                // Due to changing [301, 315), [300, 310) and [310, 320) packs can not be skipped.
+                // [320, 350)
+                {320, 30, false},
+                // Due to deleting [355, 370), [350, 360) pack can not be skipped.
+                // [360, 370) pack can be skipped due to be totally deleted.
+                {360, 10, true},
+                // [370, 400)
+                {370, 30, false},
+                // Due to deleting [409, 481), [400, 410) and [480, 490) packs can not be skipped.
+                // Packs between [410, 480) can be skipped due to be totally deleted.
+                {410, 70, true},
+                // [490, 500)
+                {490, 10, false},
+                // [1500, 2500)
+                {1500, 1000, false},
+            };
+
+            size_t skipped_ranges_idx = 0;
+            size_t skipped_del_ranges_idx = 0;
+            const auto & pack_res = new_pack_filter_results[0]->getPackRes();
+            ASSERT_EQ(pack_filter_results.size(), 1);
+            ASSERT_EQ(pack_res.size(), 250);
+            std::vector<UInt8> flag(250);
+            for (auto [offset, limit, is_delete] : skip_ranges_result)
+            {
+                if (is_delete)
+                    ASSERT_EQ(skipped_del_ranges.at(skipped_del_ranges_idx++), DMFilePackFilter::Range(offset, limit));
+                else
+                    ASSERT_EQ(skipped_ranges.at(skipped_ranges_idx++), DMFilePackFilter::Range(offset, limit));
+
+                for (size_t i = 0; i < limit; i += 10)
+                {
+                    size_t pack_id = (offset + i) / 10;
+                    ASSERT_EQ(pack_res.at(pack_id), RSResult::None);
+                    flag[pack_id] = 1;
+                }
+            }
+            ASSERT_EQ(skipped_ranges_idx, skipped_ranges.size());
+            ASSERT_EQ(skipped_del_ranges_idx, skipped_del_ranges.size());
+            // Check if other pack results are the same as the original pack results
+            ASSERT_EQ(new_pack_filter_results.size(), 1);
+            const auto & original_pack_res = pack_filter_results[0]->getPackRes();
+            ASSERT_EQ(original_pack_res.size(), 250);
+            for (size_t i = 0; i < 250; ++i)
+            {
+                if (flag[i])
+                    continue;
+                ASSERT_EQ(original_pack_res[i], pack_res[i]);
+            }
+        }
+
+        auto bitmap_filter = seg->buildBitmapFilterNormal(
+            *dm_context,
+            snap,
+            ranges,
+            pack_filter_results,
+            start_ts,
+            DEFAULT_BLOCK_SIZE);
+
+        ASSERT_EQ(expect_result, bitmap_filter->toDebugString());
+
+        deleteRangeSegment(SEG_ID);
+    }
+}
 
 } // namespace DB::DM::tests
