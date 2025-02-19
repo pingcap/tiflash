@@ -909,10 +909,10 @@ void ColumnString::serializeToPosImpl(
             }
         }
 
+        UInt32 str_size = sizeAt(start + i);
+        const void * src = &chars[offsetAt(start + i)];
         if constexpr (need_decode_collator)
         {
-            UInt32 str_size = sizeAt(start + i);
-            const void * src = &chars[offsetAt(start + i)];
             auto sort_key
                 = derived_collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
             // For terminating zero.
@@ -927,9 +927,6 @@ void ColumnString::serializeToPosImpl(
         }
         else
         {
-            UInt32 str_size = sizeAt(start + i);
-            const void * src = &chars[offsetAt(start + i)];
-
             tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
             pos[i] += sizeof(UInt32);
             inline_memcpy(pos[i], src, str_size);
@@ -1147,10 +1144,10 @@ void ColumnString::serializeToPosForColumnArrayImpl(
         {
             for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
             {
+                UInt32 str_size = sizeAt(j);
+                const void * src = &chars[offsetAt(j)];
                 if constexpr (need_decode_collator)
                 {
-                    UInt32 str_size = sizeAt(j);
-                    const void * src = &chars[offsetAt(j)];
                     auto sort_key = derived_collator->sortKey(
                         reinterpret_cast<const char *>(src),
                         str_size - 1,
@@ -1167,9 +1164,6 @@ void ColumnString::serializeToPosForColumnArrayImpl(
                 }
                 else
                 {
-                    UInt32 str_size = sizeAt(j);
-                    const void * src = &chars[offsetAt(j)];
-
                     tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
                     pos[i] += sizeof(UInt32);
                     inline_memcpy(pos[i], src, str_size);
