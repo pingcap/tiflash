@@ -17,6 +17,7 @@
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Decode/RegionTable_fwd.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
@@ -133,8 +134,19 @@ public: // Simple Read and Write
     Region() = delete;
     ~Region();
 
-    void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
-    void insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    void insertDebug(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    void insertFromSnap(
+        TMTContext & tmt,
+        ColumnFamilyType type,
+        TiKVKey && key,
+        TiKVValue && value,
+        DupCheck mode = DupCheck::Deny);
+    void insertFromSnap(
+        TMTContext & tmt,
+        const std::string & cf,
+        TiKVKey && key,
+        TiKVValue && value,
+        DupCheck mode = DupCheck::Deny);
     void remove(const std::string & cf, const TiKVKey & key);
 
     // Directly drop all data in this Region object.
@@ -165,6 +177,8 @@ public: // Stats
 
     // Payload size in RegionData, show how much data flows in/out of the Region.
     size_t dataSize() const;
+    // How much memory the Region consumes.
+    size_t totalSize() const;
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
@@ -228,6 +242,17 @@ public: // Stats
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
 
+    // Bind a region to a RegionTable. It could not be bound to another table any more.
+    // All memory changes to this region would reflect to the binded table.
+    void setRegionTableCtx(RegionTableCtxPtr ctx) const;
+    RegionTableCtxPtr getRegionTableCtx() const { return data.getRegionTableCtx(); }
+    RegionTableCtxPtr resetRegionTableCtx() const { return data.resetRegionTableCtx(); }
+    size_t getRegionTableSize() const { return data.getRegionTableSize(); }
+    bool getRegionTableWarned() const { return data.getRegionTableWarned(); }
+    bool setRegionTableWarned(bool desired) const { return data.setRegionTableWarned(desired); }
+    void resetWarnMemoryLimitByTable() const;
+    void maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from);
+
 public: // Raft Read and Write
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
     CommittedRemover createCommittedRemover(bool use_lock = true);
@@ -278,6 +303,7 @@ private:
     friend class tests::RegionKVStoreTest;
     friend struct RegionBench::DebugRegion;
 
+private:
     // Private methods no need to lock mutex, normally
 
     // Returns the size of data change(inc or dec)

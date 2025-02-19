@@ -58,6 +58,8 @@
 #include <aws/s3/model/MetadataDirective.h>
 #include <aws/s3/model/PutBucketLifecycleConfigurationRequest.h>
 #include <aws/s3/model/PutObjectRequest.h>
+#include <aws/s3/model/Rule.h>
+#include <aws/s3/model/Tag.h>
 #include <aws/s3/model/TaggingDirective.h>
 #include <aws/sts/STSClient.h>
 #include <aws/sts/STSServiceClientModel.h>
@@ -162,6 +164,7 @@ private:
 namespace DB::FailPoints
 {
 extern const char force_set_mocked_s3_object_mtime[];
+extern const char force_set_lifecycle_resp[];
 } // namespace DB::FailPoints
 namespace DB::S3
 {
@@ -460,9 +463,9 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
 
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {
-    LOG_INFO(log, "Create ClientConfiguration start");
+    LOG_DEBUG(log, "Create ClientConfiguration start");
     Aws::Client::ClientConfiguration cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
-    LOG_INFO(log, "Create ClientConfiguration end");
+    LOG_DEBUG(log, "Create ClientConfiguration end");
     cfg.maxConnections = config_.max_connections;
     cfg.requestTimeoutMs = config_.request_timeout_ms;
     cfg.connectTimeoutMs = config_.connection_timeout_ms;
@@ -484,19 +487,24 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*userVirtualAddressing*/ use_virtual_addressing);
-        LOG_DEBUG(log, "Create S3Client end");
+        LOG_INFO(log, "Create S3Client end");
         return cli;
     }
     else
     {
         Aws::Auth::AWSCredentials cred(config_.access_key_id, config_.secret_access_key);
-        LOG_DEBUG(log, "Create S3Client start");
+        if (!config_.session_token.empty())
+            cred.SetSessionToken(config_.session_token);
+        LOG_DEBUG(
+            log,
+            "Create S3Client with given credentials start, has_session_token={}",
+            !config_.session_token.empty());
         auto cli = std::make_unique<Aws::S3::S3Client>(
             cred,
             cfg,
             Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
             /*useVirtualAddressing*/ use_virtual_addressing);
-        LOG_DEBUG(log, "Create S3Client end");
+        LOG_INFO(log, "Create S3Client with given credentials end");
         return cli;
     }
 }
@@ -784,9 +792,8 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 
             LOG_WARNING(
                 client.log,
-                "GetBucketLifecycle fail, please check the bucket lifecycle configuration or create the lifecycle rule "
-                "manually"
-                ", bucket={} {}",
+                "GetBucketLifecycle fail, please check the bucket lifecycle configuration or create the lifecycle rule"
+                " manually, bucket={} {}",
                 client.bucket(),
                 S3ErrorMessage(error));
             return false;
@@ -794,26 +801,56 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 
         auto res = outcome.GetResultWithOwnership();
         old_rules = res.GetRules();
+        fiu_do_on(FailPoints::force_set_lifecycle_resp, {
+            if (auto v = FailPointHelper::getFailPointVal(FailPoints::force_set_lifecycle_resp); v)
+            {
+                auto rules = std::any_cast<std::vector<Aws::S3::Model::LifecycleRule>>(*v);
+                old_rules = rules;
+            }
+        });
+
         static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
         for (const auto & rule : old_rules)
         {
             const auto & filt = rule.GetFilter();
+
+            std::optional<Aws::S3::Model::Tag> tag;
             if (!filt.AndHasBeenSet())
             {
-                continue;
+                // For AWS S3, filt.AndHasBeenSet() == false
+                tag = filt.GetTag();
             }
-            const auto & and_op = filt.GetAnd();
-            const auto & tags = and_op.GetTags();
-            if (tags.size() != 1 || !and_op.PrefixHasBeenSet() || !and_op.GetPrefix().empty())
+            else
             {
-                continue;
+                // For minio filt.AndHasBeenSet() == true
+                const auto & and_op = filt.GetAnd();
+                const auto & tags = and_op.GetTags();
+                if (tags.size() != 1 || !and_op.PrefixHasBeenSet() || !and_op.GetPrefix().empty())
+                {
+                    continue;
+                }
+                tag = tags[0];
             }
-
-            const auto & tag = tags[0];
-            if (rule.GetStatus() == Aws::S3::Model::ExpirationStatus::Enabled && tag.GetKey() == "tiflash_deleted"
-                && tag.GetValue() == "true")
+            if (!tag)
+                continue;
+            if (tag->GetKey() == "tiflash_deleted" && tag->GetValue() == "true")
             {
-                lifecycle_rule_has_been_set = true;
+                if (rule.GetStatus() == Aws::S3::Model::ExpirationStatus::Enabled)
+                {
+                    lifecycle_rule_has_been_set = true;
+                }
+                else
+                {
+                    LOG_WARNING(
+                        client.log,
+                        "The lifecycle rule is added but not enabled, please check the bucket lifecycle "
+                        "configuration or create the lifecycle rule manually, "
+                        "rule_id={} rule_status={} tag.key={} tag.value={}",
+                        rule.GetID(),
+                        Aws::S3::Model::ExpirationStatusMapper::GetNameForExpirationStatus(rule.GetStatus()),
+                        tag->GetKey(),
+                        tag->GetValue());
+                }
                 break;
             }
         }

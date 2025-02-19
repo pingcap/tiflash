@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,21 @@
 
 #pragma once
 
-#include <common/types.h>
-
-#include <tuple>
+#include <atomic>
+#include <memory>
 
 namespace DB
 {
-std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr();
-bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size);
-std::tuple<UInt64, Int64, UInt64> process_mem_usage();
+struct RegionTableCtx
+{
+    // KVStore size of all regions of this table, including the prehandling one.
+    // So, this size may be larger than the table's real size.
+    std::atomic_int64_t table_size;
+    std::atomic_bool warned;
+};
+using RegionTableCtxPtr = std::shared_ptr<RegionTableCtx>;
+inline RegionTableCtxPtr createRegionTableCtx()
+{
+    return std::make_shared<RegionTableCtx>(0, false);
+}
 } // namespace DB

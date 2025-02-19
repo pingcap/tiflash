@@ -38,6 +38,12 @@ void RegionData::recordMemChange(const RegionDataMemDiff & delta)
     {
         root_of_kvstore_mem_trackers->free(-delta.payload);
     }
+    // A region splits and merges, but its derived region all belong to the same table.
+    // So we can summarize here rather than `updateMemoryUsage`.
+    if (region_table_ctx)
+    {
+        region_table_ctx->table_size += delta.total();
+    }
 }
 
 void RegionData::updateMemoryUsage(const RegionDataMemDiff & delta)
@@ -79,7 +85,7 @@ RegionDataMemDiff RegionData::insert(ColumnFamilyType cf, TiKVKey && key, TiKVVa
     return delta;
 }
 
-void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
+RegionDataMemDiff RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
 {
     RegionDataMemDiff delta;
     switch (cf)
@@ -110,6 +116,7 @@ void RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
     }
     recordMemChange(delta);
     updateMemoryUsage(delta);
+    return delta;
 }
 
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & write_it)
@@ -281,6 +288,7 @@ size_t RegionData::totalSize() const
 
 void RegionData::assignRegionData(RegionData && rhs)
 {
+    auto size = rhs.resetRegionTableCtx();
     recordMemChange(RegionDataMemDiff{-cf_data_size.load(), -decoded_data_size.load()});
     resetMemoryUsage();
 
@@ -290,6 +298,7 @@ void RegionData::assignRegionData(RegionData && rhs)
     orphan_keys_info = std::move(rhs.orphan_keys_info);
 
     updateMemoryUsage(RegionDataMemDiff{rhs.cf_data_size.load(), rhs.decoded_data_size.load()});
+    setRegionTableCtx(size);
     rhs.resetMemoryUsage();
 }
 
@@ -400,6 +409,59 @@ size_t RegionData::tryCompactionFilter(Timestamp safe_point)
     updateMemoryUsage(delta);
     // No need to check default cf. Because tikv will gc default cf before write cf.
     return del_write;
+}
+
+void RegionData::setRegionTableCtx(RegionTableCtxPtr ctx) const
+{
+    region_table_ctx = ctx;
+    if (region_table_ctx)
+    {
+        region_table_ctx->table_size.fetch_add(dataSize());
+    }
+}
+
+RegionTableCtxPtr RegionData::getRegionTableCtx() const
+{
+    return region_table_ctx;
+}
+
+RegionTableCtxPtr RegionData::resetRegionTableCtx() const
+{
+    if (region_table_ctx)
+    {
+        region_table_ctx->table_size.fetch_sub(dataSize());
+    }
+    auto prev = region_table_ctx;
+    // The region no longer binds to a table.
+    region_table_ctx = nullptr;
+    return prev;
+}
+
+size_t RegionData::getRegionTableSize() const
+{
+    if (region_table_ctx)
+    {
+        return region_table_ctx->table_size;
+    }
+    return 0;
+}
+
+bool RegionData::getRegionTableWarned() const
+{
+    if (region_table_ctx)
+    {
+        return region_table_ctx->warned;
+    }
+    return false;
+}
+
+bool RegionData::setRegionTableWarned(bool desired) const
+{
+    if (region_table_ctx)
+    {
+        return region_table_ctx->warned.exchange(desired);
+    }
+    return false;
 }
 
 } // namespace DB
