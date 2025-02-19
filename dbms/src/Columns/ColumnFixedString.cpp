@@ -144,15 +144,15 @@ void ColumnFixedString::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte
 }
 
 void ColumnFixedString::countSerializeByteSizeForCmpColumnArray(
-        PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets,
-        const NullMap * nullmap,
-        const TiDB::TiDBCollatorPtr & collator) const
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     RUNTIME_CHECK_MSG(
-            !collator,
-            "{} doesn't support countSerializeByteSizeForCmpColumnArray when collator is not null",
-            getName());
+        !collator,
+        "{} doesn't support countSerializeByteSizeForCmpColumnArray when collator is not null",
+        getName());
     if (nullmap != nullptr)
         countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets, nullmap);
     else
@@ -160,8 +160,8 @@ void ColumnFixedString::countSerializeByteSizeForCmpColumnArray(
 }
 
 void ColumnFixedString::countSerializeByteSizeForColumnArray(
-        PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets) const
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
 {
     countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
 }

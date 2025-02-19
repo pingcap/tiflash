@@ -70,10 +70,10 @@ void ColumnVector<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size)
 
 template <typename T>
 void ColumnVector<T>::countSerializeByteSizeForCmpColumnArray(
-        PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets,
-        const NullMap * nullmap,
-        const TiDB::TiDBCollatorPtr &) const
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr &) const
 {
     if (nullmap != nullptr)
         countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets, nullmap);
@@ -83,8 +83,8 @@ void ColumnVector<T>::countSerializeByteSizeForCmpColumnArray(
 
 template <typename T>
 void ColumnVector<T>::countSerializeByteSizeForColumnArray(
-        PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets) const
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
 {
     countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
 }
@@ -108,7 +108,7 @@ void ColumnVector<T>::countSerializeByteSizeForColumnArrayImpl(
         if constexpr (has_nullmap)
         {
             if (DB::isNullAt(*nullmap, i))
-                    continue;
+                continue;
         }
         byte_size[i] += sizeof(T) * (array_offsets[i] - array_offsets[i - 1]);
     }
