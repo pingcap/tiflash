@@ -1601,22 +1601,39 @@ try
     {
         auto & version_chain = std::get<VersionChain<Int64>>(getSegmentForRead(SEG_ID).first->version_chain);
         ASSERT_EQ(version_chain.new_handle_to_row_ids.handle_to_row_id.size(), 16);
-        for (Int64 i = 0; i < 10; ++i)
+        for (Int64 i = 0; i < 16; ++i)
         {
             std::optional<DeltaValueReader> delta_reader;
             auto row_id = version_chain.new_handle_to_row_ids.find(i, delta_reader, /*stable_rows*/ 0);
-            ASSERT_EQ(row_id, i);
+            if (i < 10)
+                ASSERT_EQ(row_id, i);
+            else
+                ASSERT_EQ(row_id, i + 4);
         }
     }
-    /*
+
     writeSegmentGeneric("d_dr:[5, 15)");
     verifyVersionChain(VerifyVersionChainOption{
         .seg_id = SEG_ID,
         .caller_line = __LINE__,
         .expected_base_versions = expected_base_versions,
-        .expected_bitmap = "111110000000000011110000000001",
+        .expected_bitmap = "11111000000000000001",
     });
-*/
+    {
+        auto & version_chain = std::get<VersionChain<Int64>>(getSegmentForRead(SEG_ID).first->version_chain);
+        ASSERT_EQ(version_chain.new_handle_to_row_ids.handle_to_row_id.size(), 6);
+        for (Int64 i = 0; i < 16; ++i)
+        {
+            std::optional<DeltaValueReader> delta_reader;
+            auto row_id = version_chain.new_handle_to_row_ids.find(i, delta_reader, 0);
+            if (i < 5)
+                ASSERT_EQ(row_id, i) << fmt::format("row_id={}, i={}", row_id, i);
+            else if (5 <= i && i < 15)
+                ASSERT_FALSE(row_id.has_value()) << fmt::format("row_id={}, i={}", row_id, i);
+            else
+                ASSERT_EQ(row_id, i + 4) << fmt::format("row_id={}, i={}", row_id, i);
+        }
+    }
 }
 CATCH
 
