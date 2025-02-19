@@ -109,9 +109,8 @@ void TiFlashTestEnv::addGlobalContext(
     uint64_t bg_thread_count)
 {
     // set itself as global context
-    auto global_context = std::shared_ptr<Context>(DB::Context::createGlobal());
+    auto global_context = std::shared_ptr<Context>(DB::Context::createGlobal(DB::Context::ApplicationType::LOCAL));
     global_contexts.push_back(global_context);
-    global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
     global_context->setTemporaryPath(getTemporaryPath());
 
     global_context->initializeTiFlashMetrics();
