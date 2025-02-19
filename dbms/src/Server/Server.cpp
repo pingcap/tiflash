@@ -290,7 +290,10 @@ struct TiFlashProxyConfig
     // Return true if proxy need to be started, and `val_map` will be filled with the
     // proxy start params.
     // Return false if proxy is not need.
-    bool tryParseFromConfig(const Poco::Util::LayeredConfiguration & config, bool has_s3_config, const LoggerPtr & log)
+    bool tryParseFromConfig(
+        const Poco::Util::LayeredConfiguration & config,
+        [[maybe_unused]] bool has_s3_config,
+        const LoggerPtr & log)
     {
         // tiflash_compute doesn't need proxy.
         auto disaggregated_mode = getDisaggregatedMode(config);
@@ -325,8 +328,34 @@ struct TiFlashProxyConfig
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
+#if SERVERLESS_PROXY == 0
+            String extra_label;
+            if (disaggregated_mode == DisaggregatedMode::Storage)
+            {
+                // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
+                // to distinguish with the node under non-disagg mode
+                extra_label = fmt::format("engine_role={}", DISAGGREGATED_MODE_WRITE_ENGINE_ROLE);
+            }
+            else if (disaggregated_mode == DisaggregatedMode::Compute)
+            {
+                // For compute node, explicitly add a label with `exclusive=no-data` to avoid Region
+                // being placed to the compute node.
+                // Related logic in pd-server:
+                // https://github.com/tikv/pd/blob/v8.5.0/pkg/schedule/placement/label_constraint.go#L69-L95
+                extra_label = "exclusive=no-data";
+            }
+            if (args_map.contains("labels"))
+                extra_label = fmt::format("{},{}", args_map["labels"], extra_label);
+            // For non-disagg mode, no extra labels is required
+            if (!extra_label.empty())
+            {
+                args_map["labels"] = extra_label;
+            }
+#else
+            // Serverless proxy has not adapted with these changes yet.
             if (disaggregated_mode != DisaggregatedMode::Compute && has_s3_config)
                 args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
+#endif
 
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
