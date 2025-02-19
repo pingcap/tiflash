@@ -517,7 +517,6 @@ public:
 
     void shutdown();
 
-<<<<<<< HEAD
     enum class ApplicationType
     {
         SERVER, /// The program is run as clickhouse-server daemon (default behavior)
@@ -532,10 +531,6 @@ public:
     void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
     String getDefaultProfileName() const;
     String getSystemProfileName() const;
-=======
-    /// Sets default_profile, must be called once during the initialization
-    void setDefaultProfiles();
->>>>>>> 29624d57c6 (*: Set ApplicationType and disagg param when GlobalContext created (#9886))
 
     void setServerInfo(const ServerInfo & server_info);
     const std::optional<ServerInfo> & getServerInfo() const;
@@ -576,16 +571,6 @@ public:
 
     const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
     void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
-
-<<<<<<< HEAD
-    void mockConfigLoaded() { is_config_loaded = true; }
-=======
-    void initKeyspaceBlocklist(const std::unordered_set<KeyspaceID> & keyspace_ids);
-    bool isKeyspaceInBlocklist(KeyspaceID keyspace_id);
-    void initRegionBlocklist(const std::unordered_set<RegionID> & region_ids);
-    bool isRegionInBlocklist(RegionID region_id);
-    bool isRegionsContainsInBlocklist(const std::vector<RegionID> & regions);
->>>>>>> 29624d57c6 (*: Set ApplicationType and disagg param when GlobalContext created (#9886))
 
     bool initializeStoreIdBlockList(const String &);
     const std::unordered_set<uint64_t> * getStoreIdBlockList() const;

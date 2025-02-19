@@ -2084,23 +2084,7 @@ void Context::shutdown()
     shared->shutdown();
 }
 
-<<<<<<< HEAD
-
-Context::ApplicationType Context::getApplicationType() const
-{
-    return shared->application_type;
-}
-
-void Context::setApplicationType(ApplicationType type)
-{
-    /// Lock isn't required, you should set it at start
-    shared->application_type = type;
-}
-
 void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)
-=======
-void Context::setDefaultProfiles()
->>>>>>> 29624d57c6 (*: Set ApplicationType and disagg param when GlobalContext created (#9886))
 {
     shared->default_profile_name = config.getString("default_profile", "default");
     shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
