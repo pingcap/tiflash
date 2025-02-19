@@ -31,7 +31,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     Stopwatch sw_total;
     if (dmfile_or_delete_range_list.empty())
     {
-        // In theory, we can support stable composed of multiple disjoint dmfiles.
+        // In theory, we can support stable composed of multiple disjoint dmfiles in stable.
         // But it is not necessary for now. For simplicity, assume stable always has one DMFile.
         const auto & dmfiles = snapshot.stable->getDMFiles();
         RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
