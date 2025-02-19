@@ -3146,7 +3146,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
         read_info.index_end,
         expected_block_size,
         read_tag,
-        dm_context.enable_bitmap_filter_skip_pack ? new_pack_filter_results : pack_filter_results,
+        new_pack_filter_results,
         start_ts,
         true);
 
