@@ -198,6 +198,12 @@ private:
         : data{il}
     {}
 
+    template <bool has_nullmap>
+    void countSerializeByteSizeForColumnArrayImpl(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets,
+        const NullMap * nullmap) const;
+
     template <bool has_null, bool has_nullmap>
     void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const NullMap * nullmap) const;
 
@@ -340,11 +346,8 @@ public:
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
-        const NullMap * /*nullmap*/,
-        const TiDB::TiDBCollatorPtr &) const override
-    {
-        countSerializeByteSizeForColumnArray(byte_size, array_offsets);
-    }
+        const NullMap * nullmap,
+        const TiDB::TiDBCollatorPtr &) const override;
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;

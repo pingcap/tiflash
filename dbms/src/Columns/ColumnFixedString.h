@@ -56,9 +56,11 @@ private:
 
     void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const;
 
+    template <bool has_nullmap>
     void countSerializeByteSizeForColumnArrayImpl(
         PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets) const;
+        const IColumn::Offsets & array_offsets,
+        const NullMap * nullmap) const;
 
     template <bool has_null, bool has_nullmap>
     void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const NullMap * nullmap) const;
@@ -141,21 +143,11 @@ public:
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
-        const NullMap * /*nullmap*/,
-        const TiDB::TiDBCollatorPtr & collator) const override
-    {
-        RUNTIME_CHECK_MSG(
-            !collator,
-            "{} doesn't support countSerializeByteSizeForCmpColumnArray when collator is not null",
-            getName());
-        countSerializeByteSizeForColumnArrayImpl(byte_size, array_offsets);
-    }
+        const NullMap * nullmap,
+        const TiDB::TiDBCollatorPtr & collator) const override;
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets) const override
-    {
-        countSerializeByteSizeForColumnArrayImpl(byte_size, array_offsets);
-    }
+        const IColumn::Offsets & array_offsets) const override;
 
     void serializeToPosForCmp(
         PaddedPODArray<char *> & pos,

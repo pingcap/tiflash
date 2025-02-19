@@ -190,7 +190,7 @@ void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_
     {
         if constexpr (compare_semantics && is_Decimal256)
         {
-            if (has_nullmap)
+            if constexpr (has_nullmap)
             {
                 if (DB::isNullAt(*nullmap, i))
                 {
