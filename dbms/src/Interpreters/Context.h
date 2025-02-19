@@ -517,16 +517,6 @@ public:
 
     void shutdown();
 
-    enum class ApplicationType
-    {
-        SERVER, /// The program is run as clickhouse-server daemon (default behavior)
-        CLIENT, /// clickhouse-client
-        LOCAL /// clickhouse-local
-    };
-
-    ApplicationType getApplicationType() const;
-    void setApplicationType(ApplicationType type);
-
     /// Sets default_profile and system_profile, must be called once during the initialization
     void setDefaultProfiles(const Poco::Util::AbstractConfiguration & config);
     String getDefaultProfileName() const;
