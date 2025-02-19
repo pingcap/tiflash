@@ -1564,6 +1564,62 @@ try
 }
 CATCH
 
+TEST_P(SegmentBitmapFilterTest, NewHandleIndex)
+try
+{
+    if (is_common_handle)
+        return;
+
+    writeSegmentGeneric("d_tiny:[0, 10):ts_1");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "1111111111",
+    });
+    
+    {
+        auto & version_chain = std::get<VersionChain<Int64>>(getSegmentForRead(SEG_ID).first->version_chain);
+        ASSERT_EQ(version_chain.new_handle_to_row_ids.handle_to_row_id.size(), 10);
+        for (Int64 i = 0; i < 10; ++i)
+        {
+            std::optional<DeltaValueReader> delta_reader;
+            auto row_id = version_chain.new_handle_to_row_ids.find(i, delta_reader, /*stable_rows*/0);
+            ASSERT_EQ(row_id, i);
+        }
+    }  
+    writeSegmentGeneric("d_tiny:[6, 16):ts_2");
+    std::vector<RowID> expected_base_versions(20);
+    std::fill(expected_base_versions.begin(), expected_base_versions.begin() + 10, NotExistRowID);
+    std::iota(expected_base_versions.begin() + 10, expected_base_versions.begin() + 10 + 4, 6);
+    std::fill(expected_base_versions.begin() + 10 + 4, expected_base_versions.end(), NotExistRowID);
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_base_versions = expected_base_versions,
+        .expected_bitmap = "11111100001111111111",
+    });
+    {
+        auto & version_chain = std::get<VersionChain<Int64>>(getSegmentForRead(SEG_ID).first->version_chain);
+        ASSERT_EQ(version_chain.new_handle_to_row_ids.handle_to_row_id.size(), 16);
+        for (Int64 i = 0; i < 10; ++i)
+        {
+            std::optional<DeltaValueReader> delta_reader;
+            auto row_id = version_chain.new_handle_to_row_ids.find(i, delta_reader, /*stable_rows*/0);
+            ASSERT_EQ(row_id, i);
+        }
+    }
+/*
+    writeSegmentGeneric("d_dr:[5, 15)");
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_base_versions = expected_base_versions,
+        .expected_bitmap = "111110000000000011110000000001",
+    });
+*/
+}
+CATCH
+
 TEST_P(SegmentBitmapFilterTest, NewHandleIndex_CommonHandle)
 try
 {
