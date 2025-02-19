@@ -645,21 +645,21 @@ try
         testSerializeAndDeserialize(col_nullable_decimal_0, true, nullptr, nullptr);
     }
 
-    // ColumnNullable(ColumnDecimal128)
+    // ColumnNullable(ColumnDecimal32)
     {
-        auto col_nullable_decimal_1 = createNullableColumn<Decimal128>(
-                                          std::make_tuple(15, 5),
+        auto col_nullable_decimal_1 = createNullableColumn<Decimal32>(
+                                          std::make_tuple(9, 5),
                                           {
-                                              "1234567.333",
+                                              "1234.333",
                                               "-0.9999",
                                               "1000.100",
-                                              "9999999999.99999",
+                                              "999.9999",
                                           },
-                                          {1, 0, 1, 0})
+                                          {0, 1, 0, 1})
                                           .column;
-        testCountSerializeByteSize(col_nullable_decimal_1, {1 + 16, 1 + 16, 1 + 16, 1 + 16});
+        testCountSerializeByteSize(col_nullable_decimal_1, {1 + 4, 1 + 4, 1 + 4, 1 + 4});
         testSerializeAndDeserialize(col_nullable_decimal_1);
-        testCountSerializeByteSize(col_nullable_decimal_1, {1 + 16, 1 + 16, 1 + 16, 1 + 16}, true, nullptr);
+        testCountSerializeByteSize(col_nullable_decimal_1, {1 + 4, 1 + 4, 1 + 4, 1 + 4}, true, nullptr);
         testSerializeAndDeserialize(col_nullable_decimal_1, true, nullptr, nullptr);
     }
 
