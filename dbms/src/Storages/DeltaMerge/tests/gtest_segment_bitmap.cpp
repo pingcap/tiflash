@@ -1564,7 +1564,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, NewHandleIndex_EqualHashValue)
+TEST_P(SegmentBitmapFilterTest, NewHandleIndex_CommonHandle)
 try
 {
     if (!is_common_handle)
