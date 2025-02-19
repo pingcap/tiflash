@@ -84,9 +84,9 @@ public:
         ASSERT_TRUE(collator);
         String sort_key_container;
         ASSERT_EQ(result_col_ptr->size(), new_col_ptr->size());
-        // Special handling for ColumnTuple and ColumnArray.
         if (result_col_ptr->getFamilyName() == String("Nullable"))
         {
+            // check ColumnNullable(ColumnArray(XXX)).
             const auto & expected_nullable_inner_col
                 = checkAndGetColumn<ColumnNullable>(result_col_ptr.get())->getNestedColumnPtr();
             const auto & actual_nullable_inner_col
@@ -95,7 +95,6 @@ public:
             for (size_t i = 0; i < result_col_ptr->size(); ++i)
                 ASSERT_EQ(result_col_ptr->isNullAt(i), new_col_ptr->isNullAt(i));
 
-            // for now only support ColumnNullable(ColumnArray(XXX)).
             if (expected_nullable_inner_col->getFamilyName() == String("Array"))
             {
                 // get nested non-null rows from inner ColumnArray and compare.
@@ -126,6 +125,7 @@ public:
 
         if (result_col_ptr->getFamilyName() == String("Array"))
         {
+            // check ColumnArray(xxx) or ColumnArray(ColumnNullable(xxx)).
             size_t null_row_idx = 0;
             for (size_t i = 0; i < result_col_ptr->size(); ++i)
             {
@@ -158,6 +158,7 @@ public:
         }
         else if (result_col_ptr->getFamilyName() == String("Tuple"))
         {
+            // check ColumnTuple(xxx) or ColumnTuple(ColumnNullable(xxx)).
             // getDataAt() not impl for ColumnTuple
             ASSERT_EQ(result_col_ptr->size(), new_col_ptr->size());
             for (size_t i = 0; i < result_col_ptr->size(); ++i)
@@ -781,6 +782,13 @@ try
         testSerializeAndDeserialize(col_nullable_array_string);
         testCountSerializeByteSize(col_nullable_array_string, {1 + 4, 1 + 4 + 4 * 2 + 5, 1 + 4}, true, nullptr);
         testSerializeAndDeserialize(col_nullable_array_string, true, nullptr, nullptr);
+    }
+    // ColumnNullable(ColumnArray(ColumnString)) with utf8 char.
+    {
+        auto col_string = createColumn<String>({"你hello好世界！", "北京上海杭州 hangzhou", "欧元€", "abc里拉₤", "12法郎₣", "6"}).column;
+        auto col_array_string = ColumnArray::create(col_string, col_offsets);
+        auto col_nullable_array_string
+            = ColumnNullable::create(col_array_string, createColumn<UInt8>({1, 0, 1}).column);
         testSerializeAndDeserialize(col_nullable_array_string, true, collator_utf8_bin, &sort_key_container);
         testSerializeAndDeserialize(col_nullable_array_string, true, collator_utf8_general_ci, &sort_key_container);
         testSerializeAndDeserialize(col_nullable_array_string, true, collator_utf8_unicode_ci, &sort_key_container);
