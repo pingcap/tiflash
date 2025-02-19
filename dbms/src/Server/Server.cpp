@@ -289,7 +289,10 @@ struct TiFlashProxyConfig
     // Return true if proxy need to be started, and `val_map` will be filled with the
     // proxy start params.
     // Return false if proxy is not need.
-    bool tryParseFromConfig(const Poco::Util::LayeredConfiguration & config, bool has_s3_config, const LoggerPtr & log)
+    bool tryParseFromConfig(
+        const Poco::Util::LayeredConfiguration & config,
+        [[maybe_unused]] bool has_s3_config,
+        const LoggerPtr & log)
     {
         // tiflash_compute doesn't need proxy.
         auto disaggregated_mode = getDisaggregatedMode(config);
