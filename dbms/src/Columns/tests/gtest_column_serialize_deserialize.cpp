@@ -785,7 +785,9 @@ try
     }
     // ColumnNullable(ColumnArray(ColumnString)) with utf8 char.
     {
-        auto col_string = createColumn<String>({"你hello好世界！", "北京上海杭州 hangzhou", "欧元€", "abc里拉₤", "12法郎₣", "6"}).column;
+        auto col_string
+            = createColumn<String>({"你hello好世界！", "北京上海杭州 hangzhou", "欧元€", "abc里拉₤", "12法郎₣", "6"})
+                  .column;
         auto col_array_string = ColumnArray::create(col_string, col_offsets);
         auto col_nullable_array_string
             = ColumnNullable::create(col_array_string, createColumn<UInt8>({1, 0, 1}).column);
