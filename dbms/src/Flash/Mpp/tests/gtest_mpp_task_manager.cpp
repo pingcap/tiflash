@@ -31,8 +31,7 @@ class TestMPPTaskManager : public testing::Test
 public:
     TestMPPTaskManager()
     {
-        global_context = Context::createGlobal();
-        global_context->mockConfigLoaded();
+        global_context = Context::createGlobal(Context::ApplicationType::LOCAL);
         TiFlashRaftConfig raft_config;
         global_context->createTMTContext(raft_config, pingcap::ClusterConfig());
     }

@@ -255,7 +255,7 @@ public:
         {
             if (options.is_imitative)
             {
-                auto context = Context::createGlobal();
+                auto context = Context::createGlobal(Context::ApplicationType::LOCAL);
                 getPageStorageV3Info(*context, options);
             }
             else
