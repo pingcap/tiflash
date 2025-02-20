@@ -675,14 +675,13 @@ TEST_F(SegmentBitmapFilterTest, testSkipPackNormal)
                 getExtraHandleColumnDefine(seg->is_common_handle),
             };
             auto read_info = seg->getReadInfo(*dm_context, columns_to_read, snap, ranges, ReadTag::MVCC, start_ts);
-            auto [skipped_ranges, skipped_del_ranges, new_pack_filter_results]
-                = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
-                    *dm_context,
-                    dmfiles,
-                    pack_filter_results,
-                    start_ts,
-                    read_info.index_begin,
-                    read_info.index_end);
+            auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
+                *dm_context,
+                dmfiles,
+                pack_filter_results,
+                start_ts,
+                read_info.index_begin,
+                read_info.index_end);
 
             std::vector<std::tuple<size_t, size_t, bool>> skip_ranges_result = {
                 // [50, 90)
@@ -713,16 +712,13 @@ TEST_F(SegmentBitmapFilterTest, testSkipPackNormal)
             };
 
             size_t skipped_ranges_idx = 0;
-            size_t skipped_del_ranges_idx = 0;
             const auto & pack_res = new_pack_filter_results[0]->getPackRes();
             ASSERT_EQ(pack_filter_results.size(), 1);
             ASSERT_EQ(pack_res.size(), 250);
             std::vector<UInt8> flag(250);
             for (auto [offset, limit, is_delete] : skip_ranges_result)
             {
-                if (is_delete)
-                    ASSERT_EQ(skipped_del_ranges.at(skipped_del_ranges_idx++), DMFilePackFilter::Range(offset, limit));
-                else
+                if (!is_delete)
                     ASSERT_EQ(skipped_ranges.at(skipped_ranges_idx++), DMFilePackFilter::Range(offset, limit));
 
                 for (size_t i = 0; i < limit; i += 10)
@@ -733,7 +729,6 @@ TEST_F(SegmentBitmapFilterTest, testSkipPackNormal)
                 }
             }
             ASSERT_EQ(skipped_ranges_idx, skipped_ranges.size());
-            ASSERT_EQ(skipped_del_ranges_idx, skipped_del_ranges.size());
             // Check if other pack results are the same as the original pack results
             ASSERT_EQ(new_pack_filter_results.size(), 1);
             const auto & original_pack_res = pack_filter_results[0]->getPackRes();

@@ -3124,14 +3124,13 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, start_ts);
 
     const auto & dmfiles = segment_snap->stable->getDMFiles();
-    auto [skipped_ranges, skipped_del_ranges, new_pack_filter_results]
-        = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
-            dm_context,
-            dmfiles,
-            pack_filter_results,
-            start_ts,
-            read_info.index_begin,
-            read_info.index_end);
+    auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
+        dm_context,
+        dmfiles,
+        pack_filter_results,
+        start_ts,
+        read_info.index_begin,
+        read_info.index_end);
 
     BlockInputStreamPtr stream = getPlacedStream(
         dm_context,
@@ -3169,9 +3168,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     // Generate the bitmap according to the MVCC filter result
     bitmap_filter->set(stream);
     for (const auto & range : skipped_ranges)
-        bitmap_filter->set(range.offset, range.rows, true);
-    for (const auto & range : skipped_del_ranges)
-        bitmap_filter->set(range.offset, range.rows, false);
+        bitmap_filter->set(range.offset, range.rows);
     bitmap_filter->runOptimize();
 
     const auto elapse_ns = sw_total.elapsed();

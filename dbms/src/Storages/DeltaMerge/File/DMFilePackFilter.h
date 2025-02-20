@@ -134,15 +134,14 @@ public:
     * @brief For all the packs in `pack_filter_results`, if all the rows in the pack
     *        comply with RowKey filter and MVCC filter (by `start_ts`) requirements,
     *        and are continuously sorted in delta index, or are deleted, then we skip
-    *        reading the packs from disk and return the skipped ranges, skipped delete
-    *        ranges, and new PackFilterResults for building bitmap.
-    * @return <SkippedRanges, SkippedDelRanges, NewPackFilterResults>
+    *        reading the packs from disk and return the skipped ranges(not deleted), 
+    *        and new PackFilterResults for building bitmap.
+    * @return <SkippedRanges, NewPackFilterResults>
     *        - SkippedRanges: All the rows in the ranges that comply with the requirements.
-    *        - SkippedDelRanges: All the rows in the ranges that are deleted.
     *        - NewPackFilterResults: Those packs should be read from disk and go through
     *                                the delta merge, RowKey filter, and MVCC filter.
     */
-    static std::tuple<std::vector<Range>, std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmapNormal(
+    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmapNormal(
         const DMContext & dm_context,
         const DMFiles & dmfiles,
         const DMFilePackFilterResults & pack_filter_results,

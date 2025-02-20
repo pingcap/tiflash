@@ -369,7 +369,7 @@ std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFileP
     return {skipped_ranges, new_pack_filter_results};
 }
 
-std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFilePackFilter::
+std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFilePackFilter::
     getSkippedRangeAndFilterForBitmapNormal(
         const DMContext & dm_context,
         const DMFiles & dmfiles,
@@ -383,9 +383,6 @@ std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::R
     // just set corresponding positions in the bitmap to true.
     // So we record the offset and rows of these packs and merge continuous ranges.
     std::vector<Range> skipped_ranges;
-    // Packs that are deleted by delete_range.
-    // Need to set the corresponding position in the bitmap to false.
-    std::vector<Range> skipped_del_ranges;
     // Packs that some rows compliant with MVCC filter and RowKey filter requirements.
     // We need to read these packs and do RowKey filter and MVCC filter for them.
     DMFilePackFilterResults new_pack_filter_results;
@@ -475,12 +472,6 @@ std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::R
                         new_pack_filter = std::make_shared<DMFilePackFilterResult>(*pack_filter);
 
                     new_pack_filter->pack_res[pack_id] = RSResult::None;
-                    // When this pack is next to the previous deleted pack, we merge them.
-                    if (!skipped_del_ranges.empty()
-                        && skipped_del_ranges.back().offset + skipped_del_ranges.back().rows == prev_offset)
-                        skipped_del_ranges.back().rows += pack_stat.rows;
-                    else
-                        skipped_del_ranges.emplace_back(prev_offset, pack_stat.rows);
                     continue;
                 }
                 if (prev_offset < prev_sid + prev_delete_count)
@@ -520,7 +511,7 @@ std::tuple<std::vector<DMFilePackFilter::Range>, std::vector<DMFilePackFilter::R
             new_pack_filter_results.emplace_back(pack_filter);
     }
 
-    return {skipped_ranges, skipped_del_ranges, new_pack_filter_results};
+    return {skipped_ranges, new_pack_filter_results};
 }
 
 } // namespace DB::DM
