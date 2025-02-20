@@ -16,6 +16,7 @@
 
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilterResult.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
@@ -110,6 +111,8 @@ public:
             : offset(offset_)
             , rows(rows_)
         {}
+
+        bool operator==(const Range &) const = default;
     };
     /**
     * @brief For all the packs in `pack_filter_results`, if all the rows in the pack
@@ -121,11 +124,30 @@ public:
     *        - NewPackFilterResults: Those packs should be read from disk and go through the
     *                                RowKey filter and MVCC filter
     */
-    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmap(
+    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmapStableOnly(
         const DMContext & dm_context,
         const DMFiles & dmfiles,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts);
+
+    /**
+    * @brief For all the packs in `pack_filter_results`, if all the rows in the pack
+    *        comply with RowKey filter and MVCC filter (by `start_ts`) requirements,
+    *        and are continuously sorted in delta index, or are deleted, then we skip
+    *        reading the packs from disk and return the skipped ranges(not deleted), 
+    *        and new PackFilterResults for building bitmap.
+    * @return <SkippedRanges, NewPackFilterResults>
+    *        - SkippedRanges: All the rows in the ranges that comply with the requirements.
+    *        - NewPackFilterResults: Those packs should be read from disk and go through
+    *                                the delta merge, RowKey filter, and MVCC filter.
+    */
+    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmapNormal(
+        const DMContext & dm_context,
+        const DMFiles & dmfiles,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts,
+        const DeltaIndexIterator & delta_index_begin,
+        const DeltaIndexIterator & delta_index_end);
 
 private:
     DMFilePackFilter(

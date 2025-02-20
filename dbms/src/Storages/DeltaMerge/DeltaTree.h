@@ -732,34 +732,30 @@ class DTCompactedEntries
 public:
     struct Entry
     {
+        friend class DTCompactedEntries<M, F, S>;
+
+    public:
+        Entry(UInt64 sid_, bool is_insert_, UInt32 count_, UInt64 value_)
+            : sid(sid_)
+            , is_insert(is_insert_)
+            , count(count_)
+            , value(value_)
+        {}
+
+        UInt64 getSid() const { return sid; }
+        bool isInsert() const { return is_insert; }
+        bool isDelete() const { return !is_insert; }
+        UInt32 getCount() const { return count; }
+        UInt64 getValue() const { return value; }
+
+    private:
         UInt64 sid;
         bool is_insert;
         UInt32 count;
         UInt64 value;
     };
     using Entries = std::vector<Entry>;
-
-    struct Iterator
-    {
-        typename Entries::iterator it;
-
-        explicit Iterator(typename Entries::iterator it_)
-            : it(it_)
-        {}
-        bool operator==(const Iterator & rhs) const { return it == rhs.it; }
-        bool operator!=(const Iterator & rhs) const { return it != rhs.it; }
-        Iterator & operator++()
-        {
-            ++it;
-            return *this;
-        }
-
-        UInt64 getSid() const { return it->sid; }
-        bool isInsert() const { return it->is_insert; }
-        bool isDelete() const { return !it->is_insert; }
-        UInt32 getCount() const { return it->count; }
-        UInt64 getValue() const { return it->value; }
-    };
+    using Iterator = typename Entries::iterator;
 
 private:
     Entries entries;
@@ -783,14 +779,12 @@ public:
                     continue;
                 }
             }
-            Entry entry
-                = {.sid = it.getSid(), .is_insert = it.isInsert(), .count = it.getCount(), .value = it.getValue()};
-            entries.emplace_back(entry);
+            entries.emplace_back(it.getSid(), it.isInsert(), it.getCount(), it.getValue());
         }
     }
 
-    auto begin() { return Iterator(entries.begin()); }
-    auto end() { return Iterator(entries.end()); }
+    auto begin() { return entries.begin(); }
+    auto end() { return entries.end(); }
 };
 
 template <class ValueSpace, size_t M, size_t F, size_t S, typename Allocator>
