@@ -142,26 +142,32 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 template <typename T>
 void ColumnDecimal<T>::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
-    const NullMap * /* nullmap */,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr &) const
 {
-    countSerializeByteSizeImpl<true>(byte_size);
+    if (nullmap != nullptr)
+        countSerializeByteSizeImpl<true, true>(byte_size, nullmap);
+    else
+        countSerializeByteSizeImpl<true, false>(byte_size, nullptr);
 }
 
 template <typename T>
 void ColumnDecimal<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeImpl<false>(byte_size);
+    countSerializeByteSizeImpl<false, false>(byte_size, nullptr);
 }
 
 template <typename T>
 void ColumnDecimal<T>::countSerializeByteSizeForCmpColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
-    const NullMap * /* nullmap */,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr &) const
 {
-    countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets);
+    if (nullmap != nullptr)
+        countSerializeByteSizeForColumnArrayImpl<true, true>(byte_size, array_offsets, nullmap);
+    else
+        countSerializeByteSizeForColumnArrayImpl<true, false>(byte_size, array_offsets, nullptr);
 }
 
 template <typename T>
@@ -169,35 +175,44 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
-    countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets);
+    countSerializeByteSizeForColumnArrayImpl<false, false>(byte_size, array_offsets, nullptr);
 }
 
 template <typename T>
-template <bool compare_semantics>
-void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const
+template <bool compare_semantics, bool has_nullmap>
+void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
     size_t size = byte_size.size();
-    if constexpr (compare_semantics && is_Decimal256)
+    static constexpr T def_val{};
+    for (size_t i = 0; i < size; ++i)
     {
-        for (size_t i = 0; i < size; ++i)
+        if constexpr (compare_semantics && is_Decimal256)
         {
+            if constexpr (has_nullmap)
+            {
+                if (DB::isNullAt(*nullmap, i))
+                {
+                    byte_size[i] += getDecimal256BytesSize(def_val);
+                    continue;
+                }
+            }
             byte_size[i] += getDecimal256BytesSize(data[i]);
         }
-    }
-    else
-    {
-        for (size_t i = 0; i < size; ++i)
+        else
+        {
             byte_size[i] += sizeof(T);
+        }
     }
 }
 
 template <typename T>
-template <bool compare_semantics>
+template <bool compare_semantics, bool has_nullmap>
 void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
     PaddedPODArray<size_t> & byte_size,
-    const IColumn::Offsets & array_offsets) const
+    const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(
         byte_size.size() == array_offsets.size(),
@@ -205,10 +220,15 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
         byte_size.size(),
         array_offsets.size());
 
-    if constexpr (compare_semantics && is_Decimal256)
+    size_t size = array_offsets.size();
+    for (size_t i = 0; i < size; ++i)
     {
-        size_t size = array_offsets.size();
-        for (size_t i = 0; i < size; ++i)
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, i))
+                continue;
+        }
+        if constexpr (compare_semantics && is_Decimal256)
         {
             size_t cur_size = 0;
             for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
@@ -216,12 +236,10 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
 
             byte_size[i] += cur_size;
         }
-    }
-    else
-    {
-        size_t size = array_offsets.size();
-        for (size_t i = 0; i < size; ++i)
+        else
+        {
             byte_size[i] += sizeof(T) * (array_offsets[i] - array_offsets[i - 1]);
+        }
     }
 }
 
@@ -379,8 +397,18 @@ void ColumnDecimal<T>::serializeToPosImpl(
         if constexpr (has_nullmap)
         {
             if (DB::isNullAt(*nullmap, start + i))
-                pos[i] = serializeDecimal256Helper(pos[i], def_val);
-            continue;
+            {
+                if constexpr (compare_semantics && is_Decimal256)
+                {
+                    pos[i] = serializeDecimal256Helper(pos[i], def_val);
+                }
+                else
+                {
+                    tiflash_compiler_builtin_memcpy(pos[i], &def_val, sizeof(T));
+                    pos[i] += sizeof(T);
+                }
+                continue;
+            }
         }
 
         if constexpr (compare_semantics && is_Decimal256)
