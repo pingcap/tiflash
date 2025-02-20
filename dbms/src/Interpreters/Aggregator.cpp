@@ -1041,7 +1041,6 @@ void Aggregator::handleOneBatch(
             processed_rows = j;
         }
 
-        // todo rollback all to avoid wasting align.
         if constexpr (batch_get_key_holder)
             temp_batch_pool.rollback(batch_mem_size);
 
@@ -1886,10 +1885,9 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
         agg_keys_helper.initAggKeys(data.size(), key_columns);
     }
 
-    // For key_serialized, deserialize will be batch-wise if it's serialized batch-wise.
     PaddedPODArray<char *> key_places;
     if constexpr (batch_deserialize_key)
-        key_places.reserve(params.max_block_size);
+        key_places.reserve(data.size());
 
     // Doesn't prefetch agg data, because places[data.size()] is needed, which can be very large.
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
@@ -1897,7 +1895,8 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
         {
             if constexpr (batch_deserialize_key)
             {
-                // Assume key is StringRef, because only key_string and key_serialize can be batch-wise.
+                // Assume key is StringRef, because only key_serialize can be here.
+                static_assert(std::is_same_v<std::decay_t<decltype(key)>, StringRef>);
                 key_places.push_back(const_cast<char *>(key.data));
             }
             else
@@ -1987,7 +1986,6 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
 
     PaddedPODArray<char *> key_places;
-    // For key_serialized, deserialize will be batch-wise if it's serialized batch-wise.
     if constexpr (batch_deserialize_key)
         key_places.reserve(params.max_block_size);
 
@@ -1999,7 +1997,8 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
         {
             if constexpr (batch_deserialize_key)
             {
-                // Assume key is StringRef, because only key_string and key_serialize can be batch-wise.
+                // Assume key is StringRef, because only key_serialize can be here.
+                static_assert(std::is_same_v<std::decay_t<decltype(key)>, StringRef>);
                 key_places.push_back(const_cast<char *>(key.data));
             }
             else
@@ -2074,17 +2073,17 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
         agg_keys_helper.initAggKeys(data.size(), key_columns);
     }
 
-    // For key_serialized, deserialize will be batch-wise if it's serialized batch-wise.
     PaddedPODArray<char *> key_places;
     if constexpr (batch_deserialize_key)
-        key_places.reserve(params.max_block_size);
+        key_places.reserve(data.size());
 
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         if constexpr (!skip_convert_key)
         {
             if constexpr (batch_deserialize_key)
             {
-                // Assume key is StringRef.
+                // Assume key is StringRef, because only key_serialize can be here.
+                static_assert(std::is_same_v<std::decay_t<decltype(key)>, StringRef>);
                 key_places.push_back(const_cast<char *>(key.data));
             }
             else
@@ -2135,7 +2134,6 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
     }
 
     PaddedPODArray<char *> key_places;
-    // For key_serialized, deserialize will be batch-wise if it's serialized batch-wise.
     if constexpr (batch_deserialize_key)
         key_places.reserve(params.max_block_size);
 
@@ -2148,6 +2146,7 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
             if constexpr (batch_deserialize_key)
             {
                 // Assume key is StringRef, because only key_string and key_serialize can be batch-wise.
+                static_assert(std::is_same_v<std::decay_t<decltype(key)>, StringRef>);
                 key_places.push_back(const_cast<char *>(key.data));
             }
             else
@@ -2171,7 +2170,7 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
         {
             if constexpr (!skip_convert_key && batch_deserialize_key)
             {
-                method.insertKeyIntoColumnsBatch(key_places, key_columns_vec[++key_columns_vec_index]);
+                method.insertKeyIntoColumnsBatch(key_places, key_columns_vec[key_columns_vec_index]);
                 key_places.clear();
             }
 
@@ -2392,7 +2391,6 @@ BlocksList Aggregator::prepareBlocksAndFill(
     return res_list;
 }
 
-// todo check if ok
 BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const
 {
     size_t rows = 1;
