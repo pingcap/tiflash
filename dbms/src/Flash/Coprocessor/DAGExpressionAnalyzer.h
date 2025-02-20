@@ -244,6 +244,13 @@ private:
         DataTypes & arg_types,
         TiDB::TiDBCollators & arg_collators);
 
+    void fillArgumentDetailForAggFuncBitwise(
+        const ExpressionActionsPtr & actions,
+        const tipb::Expr & arg,
+        Names & arg_names,
+        DataTypes & arg_types,
+        TiDB::TiDBCollators & arg_collators);
+
     void makeExplicitSet(
         const tipb::Expr & expr,
         const Block & sample_block,
