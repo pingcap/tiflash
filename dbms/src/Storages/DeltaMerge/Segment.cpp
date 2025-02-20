@@ -3123,11 +3123,8 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     auto read_tag = ReadTag::MVCC;
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, start_ts);
 
-    std::vector<DMFilePackFilter::Range> skipped_ranges;
-    std::vector<DMFilePackFilter::Range> skipped_del_ranges;
-    DMFilePackFilterResults new_pack_filter_results;
     const auto & dmfiles = segment_snap->stable->getDMFiles();
-    std::tie(skipped_ranges, skipped_del_ranges, new_pack_filter_results)
+    auto [skipped_ranges, skipped_del_ranges, new_pack_filter_results]
         = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
             dm_context,
             dmfiles,
