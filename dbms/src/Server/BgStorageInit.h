@@ -27,7 +27,7 @@ struct BgStorageInitHolder
     bool need_join = false;
     std::unique_ptr<std::thread> init_thread;
 
-    void start(Context & global_context, const LoggerPtr & log, bool lazily_init_store, bool is_s3_enabled);
+    void start(Context & global_context, const LoggerPtr & log, bool lazily_init_store, bool concurrent_init_store, bool is_s3_enabled);
 
     // wait until finish if need
     void waitUntilFinish();

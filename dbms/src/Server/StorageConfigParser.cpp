@@ -257,8 +257,14 @@ void TiFlashStorageConfig::parseMisc(const String & storage_section, const Logge
     };
 
     lazily_init_store = get_bool_config_or_default("lazily_init_store", lazily_init_store);
+    concurrent_init_store = get_bool_config_or_default("concurrent_init_store", concurrent_init_store);
 
-    LOG_INFO(log, "format_version {} lazily_init_store {}", format_version, lazily_init_store);
+    LOG_INFO(
+        log,
+        "format_version={} lazily_init_store={} concurrent_init_store={}",
+        format_version,
+        lazily_init_store,
+        concurrent_init_store);
 }
 
 Strings TiFlashStorageConfig::getAllNormalPaths() const
