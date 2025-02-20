@@ -136,18 +136,14 @@ public:
         const LoggerPtr & log,
         bool lock_region = true);
 
-    /// Check transaction locks in region, and write committed data in it into storage engine if check passed. Otherwise throw an LockException.
-    /// The write logic is the same as #writeCommittedByRegion, with some extra checks about region version and conf_version.
-    using ResolveLocksAndWriteRegionRes = std::variant<LockInfoPtr, RegionException::RegionReadStatus>;
-    static ResolveLocksAndWriteRegionRes resolveLocksAndWriteRegion(
-        TMTContext & tmt,
+    /// Check region metas and get transaction locks in region.
+    static std::variant<LockInfoPtr, RegionException::RegionReadStatus> checkRegionAndGetLocks(
         const TableID table_id,
         const RegionPtr & region,
         const Timestamp start_ts,
         const std::unordered_set<UInt64> * bypass_lock_ts,
         RegionVersion region_version,
-        RegionVersion conf_version,
-        const LoggerPtr & log);
+        RegionVersion conf_version);
 
     void clear();
 
