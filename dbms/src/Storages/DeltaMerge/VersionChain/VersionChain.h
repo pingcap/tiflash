@@ -52,6 +52,15 @@ public:
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
 
+    void reset()
+    {
+        std::lock_guard lock(mtx);
+        replayed_rows_and_deletes = 0;
+        base_versions = std::make_shared<std::vector<RowID>>();
+        new_handle_to_row_ids = NewHandleIndex<HandleType>{};
+        dmfile_or_delete_range_list = std::vector<DMFileOrDeleteRange>{};
+    }
+
 #ifdef DBMS_PUBLIC_GTEST
     [[nodiscard]] auto getReplayedRows() const { return base_versions->size(); }
     [[nodiscard]] auto deepCopy() const { return VersionChain(*this); }
@@ -67,6 +76,10 @@ private:
     VersionChain & operator=(const VersionChain &) = delete;
     VersionChain(VersionChain &&) = delete;
     VersionChain & operator=(VersionChain &&) = delete;
+
+    [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshotImpl(
+        const DMContext & dm_context,
+        const SegmentSnapshot & snapshot);
 
     [[nodiscard]] UInt32 replayBlock(
         const DMContext & dm_context,

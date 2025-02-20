@@ -28,19 +28,6 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot)
 {
-    Stopwatch sw_total;
-    if (dmfile_or_delete_range_list.empty())
-    {
-        // In theory, we can support stable composed of multiple disjoint dmfiles in stable.
-        // But it is not necessary for now. For simplicity, assume stable always has one DMFile.
-        const auto & dmfiles = snapshot.stable->getDMFiles();
-        RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-        dmfile_or_delete_range_list.push_back(
-            DMFileHandleIndex<HandleType>{dm_context, dmfiles[0], /*start_row_id*/ 0, /*rowkey_range*/ std::nullopt});
-    }
-
-    const auto & stable = *(snapshot.stable);
-    const UInt32 stable_rows = stable.getDMFilesRows();
     const auto & delta = *(snapshot.delta);
     const UInt32 delta_rows = delta.getRows();
     const UInt32 delta_delete_ranges = delta.getDeletes();
@@ -49,6 +36,52 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     {
         RUNTIME_CHECK(base_versions->size() >= delta_rows, base_versions->size(), delta_rows);
         return base_versions;
+    }
+
+    try
+    {
+        return replaySnapshotImpl(dm_context, snapshot);
+    }
+    catch (DB::Exception & e)
+    {
+        reset();
+        LOG_ERROR(snapshot.log, "errmsg: {}", e.message());
+        throw;
+    }
+    catch (std::exception & e)
+    {
+        reset();
+        LOG_ERROR(snapshot.log, "errmsg: {}", e.what());
+        throw;
+    }
+    catch (...)
+    {
+        reset();
+        tryLogCurrentException(__PRETTY_FUNCTION__);
+        throw;
+    }
+}
+
+template <ExtraHandleType HandleType>
+std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapshotImpl(
+    const DMContext & dm_context,
+    const SegmentSnapshot & snapshot)
+{
+    Stopwatch sw_total;
+    const auto & stable = *(snapshot.stable);
+    const UInt32 stable_rows = stable.getDMFilesRows();
+    const auto & delta = *(snapshot.delta);
+    const UInt32 delta_rows = delta.getRows();
+    const UInt32 delta_delete_ranges = delta.getDeletes();
+
+    if (dmfile_or_delete_range_list.empty())
+    {
+        // In theory, we can support stable composed of multiple disjoint dmfiles in stable.
+        // But it is not necessary for now. For simplicity, assume stable always has one DMFile.
+        const auto & dmfiles = snapshot.stable->getDMFiles();
+        RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
+        dmfile_or_delete_range_list.push_back(
+            DMFileHandleIndex<HandleType>{dm_context, dmfiles[0], /*start_row_id*/ 0, /*rowkey_range*/ std::nullopt});
     }
 
     // base_versions may be shared for read, so copy for write here.
