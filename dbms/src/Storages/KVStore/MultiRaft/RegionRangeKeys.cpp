@@ -35,26 +35,6 @@ RegionRangeKeys::RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key)
     }
 }
 
-TableID RegionRangeKeys::getMappedTableID() const
-{
-    return mapped_table_id;
-}
-
-KeyspaceID RegionRangeKeys::getKeyspaceID() const
-{
-    return keyspace_id;
-}
-
-const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & RegionRangeKeys::rawKeys() const
-{
-    return raw;
-}
-
-const RegionRangeKeys::RegionRange & RegionRangeKeys::comparableKeys() const
-{
-    return ori;
-}
-
 RegionRangeKeys::RegionRange RegionRangeKeys::makeComparableKeys(TiKVKey && start_key, TiKVKey && end_key)
 {
     return std::make_pair(

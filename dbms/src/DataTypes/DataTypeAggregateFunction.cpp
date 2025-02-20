@@ -341,7 +341,7 @@ static DataTypePtr create(const ASTPtr & arguments)
         throw Exception("Logical error: empty name of aggregate function passed", ErrorCodes::LOGICAL_ERROR);
 
     /// This is for test usage only
-    auto context_ptr = Context::createGlobal();
+    auto context_ptr = Context::createGlobal(Context::ApplicationType::LOCAL);
     function = AggregateFunctionFactory::instance().get(*context_ptr, function_name, argument_types, params_row);
     return std::make_shared<DataTypeAggregateFunction>(function, argument_types, params_row);
 }

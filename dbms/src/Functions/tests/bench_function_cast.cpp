@@ -364,7 +364,6 @@ public:
         auto context = DB::tests::TiFlashTestEnv::getContext();        \
         auto dag_context_ptr = std::make_unique<DAGContext>(1024);     \
         UInt64 ori_flags = dag_context_ptr->getFlags();                \
-        dag_context_ptr->addFlag(TiDBSQLFlags::OVERFLOW_AS_WARNING);   \
         dag_context_ptr->addFlag(TiDBSQLFlags::TRUNCATE_AS_WARNING);   \
         dag_context_ptr->clearWarnings();                              \
         context->setDAGContext(dag_context_ptr.get());                 \

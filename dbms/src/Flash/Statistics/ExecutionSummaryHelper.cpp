@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Statistics/ExecutionSummaryHelper.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -23,7 +24,8 @@ void fillTiExecutionSummary(
     tipb::ExecutorExecutionSummary * execution_summary,
     ExecutionSummary & current,
     const String & executor_id,
-    bool force_fill_executor_id)
+    bool force_fill_executor_id,
+    bool local_task)
 {
     execution_summary->set_time_processed_ns(current.time_processed_ns);
     execution_summary->set_num_produced_rows(current.num_produced_rows);
@@ -40,6 +42,16 @@ void fillTiExecutionSummary(
     execution_summary->mutable_tiflash_network_summary()->set_inter_zone_send_bytes(current.inter_zone_send_bytes);
     execution_summary->mutable_tiflash_network_summary()->set_inter_zone_receive_bytes(
         current.inter_zone_receive_bytes);
+    if (local_task)
+    {
+        GET_METRIC(tiflash_network_transmission_bytes, type_sent_cross_zone).Increment(current.inter_zone_send_bytes);
+        GET_METRIC(tiflash_network_transmission_bytes, type_sent_total).Increment(current.inter_zone_send_bytes);
+        GET_METRIC(tiflash_network_transmission_bytes, type_sent_total).Increment(current.inner_zone_send_bytes);
+        GET_METRIC(tiflash_network_transmission_bytes, type_received_cross_zone)
+            .Increment(current.inter_zone_receive_bytes);
+        GET_METRIC(tiflash_network_transmission_bytes, type_received_total).Increment(current.inter_zone_receive_bytes);
+        GET_METRIC(tiflash_network_transmission_bytes, type_received_total).Increment(current.inner_zone_receive_bytes);
+    }
     RUNTIME_CHECK(current.ru_consumption.SerializeToString(execution_summary->mutable_ru_consumption()));
 
     // tree-based executors will have executor_id.

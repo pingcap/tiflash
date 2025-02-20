@@ -24,6 +24,7 @@
 #include <Parsers/parseQuery.h>
 #include <Poco/File.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/Decode/SafeTsManager.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -193,7 +194,10 @@ void makeRegionsLag(size_t lag_num)
     auto & tmt = TiFlashTestEnv::getContext()->getTMTContext();
     for (size_t i = 0; i < lag_num; i++)
     {
-        tmt.getRegionTable().updateSafeTS(i, (RegionTable::SafeTsDiffThreshold + 1) << TsoPhysicalShiftBits, 0);
+        tmt.getRegionTable().safeTsMgr().updateSafeTS(
+            i,
+            (SafeTsManager::SafeTsDiffThreshold + 1) << TsoPhysicalShiftBits,
+            0);
     }
 }
 

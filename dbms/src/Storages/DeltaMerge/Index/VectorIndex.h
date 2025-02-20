@@ -20,7 +20,8 @@
 #include <IO/Buffer/ReadBuffer.h>
 #include <IO/Buffer/WriteBuffer.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
-#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndexViewer.h>
+#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Schema/VectorIndex.h>
@@ -65,7 +66,7 @@ public:
 
 /// Views a VectorIndex file.
 /// It may nor may not read the whole content of the file into memory.
-class VectorIndexViewer
+class VectorIndexViewer : public LocalIndexViewer
 {
 public:
     /// The key is the row's offset in the DMFile.
@@ -91,7 +92,7 @@ public:
         : file_props(file_props_)
     {}
 
-    virtual ~VectorIndexViewer() = default;
+    ~VectorIndexViewer() override = default;
 
     // Invalid rows in `valid_rows` will be discared when applying the search
     virtual std::vector<SearchResult> search(const ANNQueryInfoPtr & queryInfo, const RowFilter & valid_rows) const = 0;

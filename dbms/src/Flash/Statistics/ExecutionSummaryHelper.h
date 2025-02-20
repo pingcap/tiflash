@@ -25,5 +25,6 @@ void fillTiExecutionSummary(
     tipb::ExecutorExecutionSummary * execution_summary,
     ExecutionSummary & current,
     const String & executor_id,
-    bool force_fill_executor_id);
+    bool force_fill_executor_id,
+    bool local_task = true);
 } // namespace DB

@@ -283,7 +283,7 @@ try
     // Write some data, and persist meta.
     auto [index, term]
         = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+    kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -406,7 +406,7 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
                 {WriteCmdType::Put, WriteCmdType::Put},
                 {ColumnFamilyType::Default, ColumnFamilyType::Write});
         }
-        kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+        kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
         if (opt.mock_add_new_peer)
         {
             *kvs.getRegion(id)->mutMeta().debugMutRegionState().getMutRegion().add_peers() = createPeer(peer_id, true);
@@ -647,7 +647,7 @@ try
     // Write some data, and persist meta.
     auto [index, term]
         = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+    kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -853,7 +853,7 @@ try
         11,
         11,
         std::nullopt,
-        false);
+        std::nullopt);
     eventuallyPredicate([&]() {
         return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
@@ -975,7 +975,7 @@ try
         10,
         10,
         std::nullopt,
-        false);
+        std::nullopt);
 
     std::mutex exe_mut;
     std::unique_lock exe_lock(exe_mut);
@@ -1059,7 +1059,7 @@ try
             0,
             0,
             std::nullopt,
-            false);
+            std::nullopt);
     }
     ASSERT_EQ(fap_context->tasks_trace->queryState(region_id), FAPAsyncTasks::TaskState::NotScheduled);
 

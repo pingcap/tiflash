@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/KVStore/Decode/RegionDataRead.h>
+#include <Storages/KVStore/Decode/RegionTable_fwd.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
 
@@ -39,7 +40,7 @@ public:
     using LockInfoPtr = std::unique_ptr<kvrpcpb::LockInfo>;
 
     RegionDataMemDiff insert(ColumnFamilyType cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
-    void remove(ColumnFamilyType cf, const TiKVKey & key);
+    RegionDataMemDiff remove(ColumnFamilyType cf, const TiKVKey & key);
 
     WriteCFIter removeDataByWriteIt(const WriteCFIter & write_it);
     std::optional<RegionDataReadInfo> readDataByWriteIt(
@@ -84,6 +85,13 @@ public:
     String summary() const;
     size_t tryCompactionFilter(Timestamp safe_point);
 
+    void setRegionTableCtx(RegionTableCtxPtr) const;
+    RegionTableCtxPtr getRegionTableCtx() const;
+    RegionTableCtxPtr resetRegionTableCtx() const;
+    size_t getRegionTableSize() const;
+    bool getRegionTableWarned() const;
+    bool setRegionTableWarned(bool) const;
+
     struct OrphanKeysInfo
     {
         // Protected by region task lock.
@@ -120,7 +128,7 @@ public:
 
 private:
     // The memory difference to the KVStore.
-    static void recordMemChange(const RegionDataMemDiff &);
+    void recordMemChange(const RegionDataMemDiff &);
     // The memory difference to this Region.
     void updateMemoryUsage(const RegionDataMemDiff &);
     void resetMemoryUsage();
@@ -138,6 +146,7 @@ private:
     std::atomic<Int64> cf_data_size = 0;
     // Size of decoded structures for convenient access, considered as amplification in memory.
     std::atomic<Int64> decoded_data_size = 0;
+    mutable RegionTableCtxPtr region_table_ctx;
 };
 
 } // namespace DB
