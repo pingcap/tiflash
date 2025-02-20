@@ -140,26 +140,34 @@ const char * ColumnDecimal<T>::deserializeAndInsertFromArena(const char * pos, c
 }
 
 template <typename T>
-void ColumnDecimal<T>::countSerializeByteSizeForCmp(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr &)
-    const
+void ColumnDecimal<T>::countSerializeByteSizeForCmp(
+    PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr &) const
 {
-    countSerializeByteSizeImpl<true>(byte_size);
+    if (nullmap != nullptr)
+        countSerializeByteSizeImpl<true, true>(byte_size, nullmap);
+    else
+        countSerializeByteSizeImpl<true, false>(byte_size, nullptr);
 }
 
 template <typename T>
 void ColumnDecimal<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeImpl<false>(byte_size);
+    countSerializeByteSizeImpl<false, false>(byte_size, nullptr);
 }
-
 
 template <typename T>
 void ColumnDecimal<T>::countSerializeByteSizeForCmpColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr &) const
 {
-    countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets);
+    if (nullmap != nullptr)
+        countSerializeByteSizeForColumnArrayImpl<true, true>(byte_size, array_offsets, nullmap);
+    else
+        countSerializeByteSizeForColumnArrayImpl<true, false>(byte_size, array_offsets, nullptr);
 }
 
 template <typename T>
@@ -167,9 +175,73 @@ void ColumnDecimal<T>::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
 {
-    countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets);
+    countSerializeByteSizeForColumnArrayImpl<false, false>(byte_size, array_offsets, nullptr);
 }
 
+template <typename T>
+template <bool compare_semantics, bool has_nullmap>
+void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const NullMap * nullmap) const
+{
+    RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
+
+    size_t size = byte_size.size();
+    static constexpr T def_val{};
+    for (size_t i = 0; i < size; ++i)
+    {
+        if constexpr (compare_semantics && is_Decimal256)
+        {
+            if constexpr (has_nullmap)
+            {
+                if (DB::isNullAt(*nullmap, i))
+                {
+                    byte_size[i] += getDecimal256BytesSize(def_val);
+                    continue;
+                }
+            }
+            byte_size[i] += getDecimal256BytesSize(data[i]);
+        }
+        else
+        {
+            byte_size[i] += sizeof(T);
+        }
+    }
+}
+
+template <typename T>
+template <bool compare_semantics, bool has_nullmap>
+void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap) const
+{
+    RUNTIME_CHECK_MSG(
+        byte_size.size() == array_offsets.size(),
+        "size of byte_size({}) != size of array_offsets({})",
+        byte_size.size(),
+        array_offsets.size());
+
+    size_t size = array_offsets.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, i))
+                continue;
+        }
+        if constexpr (compare_semantics && is_Decimal256)
+        {
+            size_t cur_size = 0;
+            for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+                cur_size += getDecimal256BytesSize(data[j]);
+
+            byte_size[i] += cur_size;
+        }
+        else
+        {
+            byte_size[i] += sizeof(T) * (array_offsets[i] - array_offsets[i - 1]);
+        }
+    }
+}
 
 template <typename T>
 void ColumnDecimal<T>::serializeToPosForCmp(
@@ -177,22 +249,57 @@ void ColumnDecimal<T>::serializeToPosForCmp(
     size_t start,
     size_t length,
     bool has_null,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr &,
     String *) const
 {
     if (has_null)
-        serializeToPosImpl</*has_null=*/true, /*for_compare=*/true>(pos, start, length);
+    {
+        if (nullmap != nullptr)
+            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                pos,
+                start,
+                length,
+                nullmap);
+        else
+            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                nullptr);
+    }
     else
-        serializeToPosImpl</*has_null=*/false, /*for_compare=*/true>(pos, start, length);
+    {
+        if (nullmap != nullptr)
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                pos,
+                start,
+                length,
+                nullmap);
+        else
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                nullptr);
+    }
 }
 
 template <typename T>
 void ColumnDecimal<T>::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl</*has_null=*/true, /*for_compare=*/false>(pos, start, length);
+        serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            nullptr);
     else
-        serializeToPosImpl</*has_null=*/false, /*for_compare=*/false>(pos, start, length);
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            nullptr);
 }
 
 template <typename T>
@@ -201,14 +308,45 @@ void ColumnDecimal<T>::serializeToPosForCmpColumnArray(
     size_t start,
     size_t length,
     bool has_null,
+    const NullMap * nullmap,
     const IColumn::Offsets & array_offsets,
     const TiDB::TiDBCollatorPtr &,
     String *) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImpl</*has_null=*/true, /*for_compare=*/true>(pos, start, length, array_offsets);
+    {
+        if (nullmap != nullptr)
+            serializeToPosForColumnArrayImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullmap);
+        else
+            serializeToPosForColumnArrayImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullptr);
+    }
     else
-        serializeToPosForColumnArrayImpl</*has_null=*/false, /*for_compare=*/true>(pos, start, length, array_offsets);
+    {
+        if (nullmap != nullptr)
+            serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullmap);
+        else
+            serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                array_offsets,
+                nullptr);
+    }
 }
 
 template <typename T>
@@ -220,9 +358,131 @@ void ColumnDecimal<T>::serializeToPosForColumnArray(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImpl</*has_null=*/true, /*for_compare=*/false>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            array_offsets,
+            nullptr);
     else
-        serializeToPosForColumnArrayImpl</*has_null=*/false, /*for_compare=*/false>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            array_offsets,
+            nullptr);
+}
+
+template <typename T>
+template <bool has_null, bool compare_semantics, bool has_nullmap>
+void ColumnDecimal<T>::serializeToPosImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const NullMap * nullmap) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
+
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
+
+    static constexpr T def_val{};
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, start + i))
+            {
+                if constexpr (compare_semantics && is_Decimal256)
+                {
+                    pos[i] = serializeDecimal256Helper(pos[i], def_val);
+                }
+                else
+                {
+                    tiflash_compiler_builtin_memcpy(pos[i], &def_val, sizeof(T));
+                    pos[i] += sizeof(T);
+                }
+                continue;
+            }
+        }
+
+        if constexpr (compare_semantics && is_Decimal256)
+        {
+            pos[i] = serializeDecimal256Helper(pos[i], data[start + i]);
+        }
+        else
+        {
+            tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
+            pos[i] += sizeof(T);
+        }
+    }
+}
+
+template <typename T>
+template <bool has_null, bool compare_semantics, bool has_nullmap>
+void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap) const
+{
+    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
+    RUNTIME_CHECK_MSG(
+        start + length <= array_offsets.size(),
+        "start({}) + length({}) > size of array_offsets({})",
+        start,
+        length,
+        array_offsets.size());
+    RUNTIME_CHECK_MSG(
+        array_offsets.empty() || array_offsets.back() == size(),
+        "The last array offset({}) doesn't match size of column({})",
+        array_offsets.back(),
+        size());
+
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
+
+    for (size_t i = 0; i < length; ++i)
+    {
+        if constexpr (has_null)
+        {
+            if (pos[i] == nullptr)
+                continue;
+        }
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, start + i))
+                continue;
+        }
+
+        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+        if constexpr (compare_semantics && is_Decimal256)
+        {
+            for (size_t j = 0; j < len; ++j)
+                pos[i] = serializeDecimal256Helper(pos[i], data[array_offsets[start + i - 1] + j]);
+        }
+        else
+        {
+            if (len <= 4)
+            {
+                for (size_t j = 0; j < len; ++j)
+                    tiflash_compiler_builtin_memcpy(
+                        pos[i] + j * sizeof(T),
+                        &data[array_offsets[start + i - 1] + j],
+                        sizeof(T));
+            }
+            else
+            {
+                inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+            }
+            pos[i] += len * sizeof(T);
+        }
+    }
 }
 
 template <typename T>
@@ -256,141 +516,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
 }
 
 template <typename T>
-template <bool for_compare>
-void ColumnDecimal<T>::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const
-{
-    RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
-
-    size_t size = byte_size.size();
-    if constexpr (for_compare && is_Decimal256)
-    {
-        for (size_t i = 0; i < size; ++i)
-        {
-            byte_size[i] += getDecimal256BytesSize(data[i]);
-        }
-    }
-    else
-    {
-        for (size_t i = 0; i < size; ++i)
-            byte_size[i] += sizeof(T);
-    }
-}
-
-template <typename T>
-template <bool for_compare>
-void ColumnDecimal<T>::countSerializeByteSizeForColumnArrayImpl(
-    PaddedPODArray<size_t> & byte_size,
-    const IColumn::Offsets & array_offsets) const
-{
-    RUNTIME_CHECK_MSG(
-        byte_size.size() == array_offsets.size(),
-        "size of byte_size({}) != size of array_offsets({})",
-        byte_size.size(),
-        array_offsets.size());
-
-    if constexpr (for_compare && is_Decimal256)
-    {
-        size_t size = array_offsets.size();
-        for (size_t i = 0; i < size; ++i)
-        {
-            size_t cur_size = 0;
-            for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
-                cur_size += getDecimal256BytesSize(data[j]);
-
-            byte_size[i] += cur_size;
-        }
-    }
-    else
-    {
-        size_t size = array_offsets.size();
-        for (size_t i = 0; i < size; ++i)
-            byte_size[i] += sizeof(T) * (array_offsets[i] - array_offsets[i - 1]);
-    }
-}
-
-template <typename T>
-template <bool has_null, bool for_compare>
-void ColumnDecimal<T>::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
-{
-    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
-    RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
-
-    for (size_t i = 0; i < length; ++i)
-    {
-        if constexpr (has_null)
-        {
-            if (pos[i] == nullptr)
-                continue;
-        }
-
-        if constexpr (for_compare && is_Decimal256)
-        {
-            pos[i] = serializeDecimal256Helper(pos[i], data[start + i]);
-        }
-        else
-        {
-            tiflash_compiler_builtin_memcpy(pos[i], &data[start + i], sizeof(T));
-            pos[i] += sizeof(T);
-        }
-    }
-}
-
-template <typename T>
-template <bool has_null, bool for_compare>
-void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
-    PaddedPODArray<char *> & pos,
-    size_t start,
-    size_t length,
-    const IColumn::Offsets & array_offsets) const
-{
-    RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
-    RUNTIME_CHECK_MSG(
-        start + length <= array_offsets.size(),
-        "start({}) + length({}) > size of array_offsets({})",
-        start,
-        length,
-        array_offsets.size());
-    RUNTIME_CHECK_MSG(
-        array_offsets.empty() || array_offsets.back() == size(),
-        "The last array offset({}) doesn't match size of column({})",
-        array_offsets.back(),
-        size());
-
-    for (size_t i = 0; i < length; ++i)
-    {
-        if constexpr (has_null)
-        {
-            if (pos[i] == nullptr)
-                continue;
-        }
-
-        size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
-        if constexpr (for_compare && is_Decimal256)
-        {
-            for (size_t j = 0; j < len; ++j)
-                pos[i] = serializeDecimal256Helper(pos[i], data[array_offsets[start + i - 1] + j]);
-        }
-        else
-        {
-            if (len <= 4)
-            {
-                for (size_t j = 0; j < len; ++j)
-                    tiflash_compiler_builtin_memcpy(
-                        pos[i] + j * sizeof(T),
-                        &data[array_offsets[start + i - 1] + j],
-                        sizeof(T));
-            }
-            else
-            {
-                inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
-            }
-            pos[i] += len * sizeof(T);
-        }
-    }
-}
-
-template <typename T>
-template <bool for_compare>
+template <bool compare_semantics>
 void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
     PaddedPODArray<char *> & pos,
     bool use_nt_align_buffer [[maybe_unused]])
@@ -400,7 +526,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
 
     // is_complex_decimal256 is true means Decimal256 is serialized by [bool, limb_count, n * limb].
     // NT optimization is not implemented for simplicity.
-    static const bool is_complex_decimal256 = (for_compare && is_Decimal256);
+    static const bool is_complex_decimal256 = (compare_semantics && is_Decimal256);
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
     if (use_nt_align_buffer)
@@ -498,7 +624,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosImpl(
 }
 
 template <typename T>
-template <bool for_compare>
+template <bool compare_semantics>
 void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
@@ -525,7 +651,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArrayImpl(
     for (size_t i = 0; i < size; ++i)
     {
         size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        if constexpr (for_compare && is_Decimal256)
+        if constexpr (compare_semantics && is_Decimal256)
         {
             for (size_t j = 0; j < len; ++j)
                 pos[i] = const_cast<char *>(
