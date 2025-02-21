@@ -5893,9 +5893,9 @@ private:
         const TiDBDecimalRoundInfo & info [[maybe_unused]])
     {
         if constexpr (IsDecimal<T>)
-            return TiDBDecimalRound<T, T>::eval(number, max_num_decimals, info);
+            return TiDBDecimalRound<T, T, /*is_tidb_truncate=*/false>::eval(number, max_num_decimals, info);
         else if constexpr (std::is_floating_point_v<T>)
-            return TiDBFloatingRound<T, Float64>::eval(number, max_num_decimals);
+            return TiDBFloatingRound<T, Float64, /*is_tidb_truncate=*/false>::eval(number, max_num_decimals);
         else
         {
             static_assert(std::is_integral_v<T>);

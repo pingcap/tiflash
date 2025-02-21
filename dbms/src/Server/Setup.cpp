@@ -17,6 +17,7 @@
 #include <common/config_common.h> // Included for `USE_JEMALLOC`/`USE_MIMALLOC`
 #include <common/logger_useful.h>
 #include <common/simd.h>
+#include <sys/resource.h>
 
 #if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
@@ -124,6 +125,8 @@ void setupAllocator([[maybe_unused]] const LoggerPtr & log)
         RUN_FAIL_RETURN(je_mallctl("background_thread", nullptr, nullptr, (void *)&new_b, sz_b));
         LOG_INFO(log, "Set jemalloc.background_thread {}", new_b);
     }
+#else
+    LOG_INFO(log, "Not using Jemalloc for TiFlash");
 #endif
 
 #if USE_MIMALLOC
@@ -190,5 +193,34 @@ void setupSIMD(const LoggerPtr & log)
 #ifdef TIFLASH_ENABLE_SVE_SUPPORT
     tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
+}
+
+void setOpenFileLimit(UInt64 new_limit, const LoggerPtr & log)
+{
+    if (new_limit == 0)
+        return;
+
+    rlimit rlim{};
+    if (getrlimit(RLIMIT_NOFILE, &rlim))
+        throw Poco::Exception("Cannot getrlimit");
+
+    if (rlim.rlim_cur == rlim.rlim_max)
+    {
+        LOG_INFO(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
+        return;
+    }
+
+    rlim_t old = rlim.rlim_cur;
+    rlim.rlim_cur = new_limit;
+    int rc = setrlimit(RLIMIT_NOFILE, &rlim);
+    if (rc != 0)
+        LOG_WARNING(
+            log,
+            "Cannot set max number of file descriptors to {}"
+            ". Try to specify max_open_files according to your system limits. error: {}",
+            rlim.rlim_cur,
+            strerror(errno));
+    else
+        LOG_INFO(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
 }
 } // namespace DB

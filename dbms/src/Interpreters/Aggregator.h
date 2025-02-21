@@ -83,20 +83,26 @@ using AggregatedDataWithShortStringKey = StringHashMap<AggregateDataPtr>;
 using AggregatedDataWithStringKey = HashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
 using AggregatedDataWithInt256Key = HashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
+using AggregatedDataWithInt256KeyMagicHash = HashMap<Int256, AggregateDataPtr, MagicHash<Int256>>;
 
 using AggregatedDataWithKeys128 = HashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
 using AggregatedDataWithKeys256 = HashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
+using AggregatedDataWithKeys128MagicHash = HashMap<UInt128, AggregateDataPtr, MagicHash<UInt128>>;
+using AggregatedDataWithKeys256MagicHash = HashMap<UInt256, AggregateDataPtr, MagicHash<UInt256>>;
 
 using AggregatedDataWithUInt32KeyTwoLevel = TwoLevelHashMap<UInt32, AggregateDataPtr, HashCRC32<UInt32>>;
 using AggregatedDataWithUInt64KeyTwoLevel = TwoLevelHashMap<UInt64, AggregateDataPtr, HashCRC32<UInt64>>;
 
 using AggregatedDataWithInt256KeyTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, HashCRC32<Int256>>;
+using AggregatedDataWithInt256KeyMagicHashTwoLevel = TwoLevelHashMap<Int256, AggregateDataPtr, MagicHash<Int256>>;
 
 using AggregatedDataWithShortStringKeyTwoLevel = TwoLevelStringHashMap<AggregateDataPtr>;
 using AggregatedDataWithStringKeyTwoLevel = TwoLevelHashMapWithSavedHash<StringRef, AggregateDataPtr>;
 
 using AggregatedDataWithKeys128TwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, HashCRC32<UInt128>>;
 using AggregatedDataWithKeys256TwoLevel = TwoLevelHashMap<UInt256, AggregateDataPtr, HashCRC32<UInt256>>;
+using AggregatedDataWithKeys128MagicHashTwoLevel = TwoLevelHashMap<UInt128, AggregateDataPtr, MagicHash<UInt128>>;
+using AggregatedDataWithKeys256MagicHashTwoLevel = TwoLevelHashMap<UInt256, AggregateDataPtr, MagicHash<UInt256>>;
 
 /** Variants with better hash function, using more than 32 bits for hash.
   * Using for merging phase of external aggregation, where number of keys may be far greater than 4 billion,
@@ -804,6 +810,18 @@ struct AggregatedDataVariants : private boost::noncopyable
     using AggregationMethod_keys256_hash64 = AggregationMethodKeysFixed<AggregatedDataWithKeys256Hash64>;
     using AggregationMethod_serialized_hash64 = AggregationMethodSerialized<AggregatedDataWithStringKeyHash64>;
 
+    using AggregationMethod_key_int256_magic_hash
+        = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyMagicHash>;
+    using AggregationMethod_keys128_magic_hash = AggregationMethodKeysFixed<AggregatedDataWithKeys128MagicHash>;
+    using AggregationMethod_keys256_magic_hash = AggregationMethodKeysFixed<AggregatedDataWithKeys256MagicHash>;
+
+    using AggregationMethod_key_int256_magic_hash_two_level
+        = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyMagicHashTwoLevel>;
+    using AggregationMethod_keys128_magic_hash_two_level
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys128MagicHashTwoLevel>;
+    using AggregationMethod_keys256_magic_hash_two_level
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys256MagicHashTwoLevel>;
+
     /// Support for nullable keys.
     using AggregationMethod_nullable_keys128 = AggregationMethodKeysFixed<AggregatedDataWithKeys128, true>;
     using AggregationMethod_nullable_keys256 = AggregationMethodKeysFixed<AggregatedDataWithKeys256, true>;
@@ -811,6 +829,15 @@ struct AggregatedDataVariants : private boost::noncopyable
         = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel, true>;
     using AggregationMethod_nullable_keys256_two_level
         = AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel, true>;
+
+    using AggregationMethod_nullable_keys128_magic_hash
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys128MagicHash, true>;
+    using AggregationMethod_nullable_keys256_magic_hash
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys256MagicHash, true>;
+    using AggregationMethod_nullable_keys128_magic_hash_two_level
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys128MagicHashTwoLevel, true>;
+    using AggregationMethod_nullable_keys256_magic_hash_two_level
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys256MagicHashTwoLevel, true>;
 
     // 2 keys
     using AggregationMethod_two_keys_num64_strbin = AggregationMethodFastPathTwoKeysNoCache<
@@ -916,7 +943,17 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(two_keys_strbinpadding_num64_two_level, true)         \
     M(two_keys_strbinpadding_strbinpadding_two_level, true) \
     M(one_key_strbin_two_level, true)                       \
-    M(one_key_strbinpadding_two_level, true)
+    M(one_key_strbinpadding_two_level, true)                \
+    M(keys128_magic_hash, false)                            \
+    M(keys256_magic_hash, false)                            \
+    M(key_int256_magic_hash, false)                         \
+    M(nullable_keys128_magic_hash, false)                   \
+    M(nullable_keys256_magic_hash, false)                   \
+    M(key_int256_magic_hash_two_level, true)                \
+    M(keys128_magic_hash_two_level, true)                   \
+    M(keys256_magic_hash_two_level, true)                   \
+    M(nullable_keys128_magic_hash_two_level, true)          \
+    M(nullable_keys256_magic_hash_two_level, true)
 
     enum class Type
     {
@@ -1069,7 +1106,12 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(two_keys_strbinpadding_num64)                    \
     M(two_keys_strbinpadding_strbinpadding)            \
     M(one_key_strbin)                                  \
-    M(one_key_strbinpadding)
+    M(one_key_strbinpadding)                           \
+    M(key_int256_magic_hash)                           \
+    M(keys128_magic_hash)                              \
+    M(keys256_magic_hash)                              \
+    M(nullable_keys128_magic_hash)                     \
+    M(nullable_keys256_magic_hash)
 
 
 #define APPLY_FOR_VARIANTS_NOT_CONVERTIBLE_TO_TWO_LEVEL(M) \
@@ -1131,7 +1173,12 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(two_keys_strbinpadding_num64_two_level)         \
     M(two_keys_strbinpadding_strbinpadding_two_level) \
     M(one_key_strbin_two_level)                       \
-    M(one_key_strbinpadding_two_level)
+    M(one_key_strbinpadding_two_level)                \
+    M(key_int256_magic_hash_two_level)                \
+    M(keys128_magic_hash_two_level)                   \
+    M(keys256_magic_hash_two_level)                   \
+    M(nullable_keys128_magic_hash_two_level)          \
+    M(nullable_keys256_magic_hash_two_level)
 };
 
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
@@ -1210,6 +1257,8 @@ public:
         UInt64 max_block_size;
         TiDB::TiDBCollators collators;
 
+        bool use_magic_hash;
+
         Params(
             const Block & src_header_,
             const ColumnNumbers & keys_,
@@ -1222,6 +1271,7 @@ public:
             bool empty_result_for_aggregation_by_empty_set_,
             const SpillConfig & spill_config_,
             UInt64 max_block_size_,
+            bool use_magic_hash_,
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
@@ -1234,6 +1284,7 @@ public:
             , spill_config(spill_config_)
             , max_block_size(max_block_size_)
             , collators(collators_)
+            , use_magic_hash(use_magic_hash_)
             , group_by_two_level_threshold(group_by_two_level_threshold_)
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
@@ -1276,7 +1327,8 @@ public:
         const String & req_id,
         size_t concurrency,
         const RegisterOperatorSpillContext & register_operator_spill_context,
-        bool is_auto_pass_through_ = false);
+        bool is_auto_pass_through_,
+        bool use_magic_hash_);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num);
@@ -1435,6 +1487,7 @@ protected:
     size_t group_by_two_level_threshold_bytes = 0;
 
     const bool is_auto_pass_through;
+    const bool use_magic_hash;
 
     /// For external aggregation.
     AggSpillContextPtr agg_spill_context;
@@ -1442,6 +1495,7 @@ protected:
 
     /** Select the aggregation method based on the number and types of keys. */
     AggregatedDataVariants::Type chooseAggregationMethod();
+    AggregatedDataVariants::Type chooseAggregationMethodInner();
 
     /** Create states of aggregate functions for one key.
       */

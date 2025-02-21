@@ -63,7 +63,7 @@ class TiFlashS3Client : public Aws::S3::S3Client
 {
 public:
     // Usually one tiflash instance only need access one bucket.
-    // Store the bucket name to simpilfy some param passing.
+    // Store the bucket name to simplify some param passing.
 
     TiFlashS3Client(const String & bucket_name_, const String & root_);
 

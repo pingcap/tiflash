@@ -42,8 +42,10 @@ try
     LocalIndexInfosPtr index_info = nullptr;
     // check the same
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto changeset = generateLocalIndexInfos(index_info, table_info, logger);
+        auto new_index_info = changeset.new_local_index_infos;
         ASSERT_EQ(new_index_info, nullptr);
+        LOG_INFO(logger, changeset.toString());
         // check again, nothing changed, return nullptr
         ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
 
@@ -121,7 +123,8 @@ try
 
     // check the different
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto changeset = generateLocalIndexInfos(index_info, table_info, logger);
+        auto new_index_info = changeset.new_local_index_infos;
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 1);
         const auto & idx = (*new_index_info)[0];
@@ -132,6 +135,11 @@ try
         ASSERT_EQ(expect_idx.vector_index->kind, idx.def_vector_index->kind);
         ASSERT_EQ(expect_idx.vector_index->dimension, idx.def_vector_index->dimension);
         ASSERT_EQ(expect_idx.vector_index->distance_metric, idx.def_vector_index->distance_metric);
+
+        ASSERT_EQ(0, changeset.keepIndexes().size());
+        ASSERT_EQ(1, changeset.addedIndexes().size());
+        ASSERT_EQ(0, changeset.droppedIndexes().size());
+        LOG_INFO(logger, changeset.toString());
 
         // check again, nothing changed, return nullptr
         ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
@@ -154,7 +162,8 @@ try
     }
     // check the different
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto changeset = generateLocalIndexInfos(index_info, table_info, logger);
+        auto new_index_info = changeset.new_local_index_infos;
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 2);
         const auto & idx0 = (*new_index_info)[0];
@@ -174,6 +183,11 @@ try
         ASSERT_EQ(expect_idx2.vector_index->dimension, idx1.def_vector_index->dimension);
         ASSERT_EQ(expect_idx2.vector_index->distance_metric, idx1.def_vector_index->distance_metric);
 
+        ASSERT_EQ(1, changeset.keepIndexes().size());
+        ASSERT_EQ(1, changeset.addedIndexes().size());
+        ASSERT_EQ(0, changeset.droppedIndexes().size());
+        LOG_INFO(logger, changeset.toString());
+
         // check again, nothing changed, return nullptr
         ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);
 
@@ -181,7 +195,7 @@ try
         index_info = new_index_info;
     }
 
-    // Remove the second vecotr index and add a new vector index to the TableInfo.
+    // Remove the second vector index and add a new vector index to the TableInfo.
     TiDB::IndexInfo expect_idx3;
     {
         // drop the second index
@@ -198,7 +212,8 @@ try
     }
     // check the different
     {
-        auto new_index_info = generateLocalIndexInfos(index_info, table_info, logger).new_local_index_infos;
+        auto changeset = generateLocalIndexInfos(index_info, table_info, logger);
+        auto new_index_info = changeset.new_local_index_infos;
         ASSERT_NE(new_index_info, nullptr);
         ASSERT_EQ(new_index_info->size(), 2);
         const auto & idx0 = (*new_index_info)[0];
@@ -217,6 +232,11 @@ try
         ASSERT_EQ(expect_idx3.vector_index->kind, idx1.def_vector_index->kind);
         ASSERT_EQ(expect_idx3.vector_index->dimension, idx1.def_vector_index->dimension);
         ASSERT_EQ(expect_idx3.vector_index->distance_metric, idx1.def_vector_index->distance_metric);
+
+        ASSERT_EQ(1, changeset.keepIndexes().size());
+        ASSERT_EQ(1, changeset.addedIndexes().size());
+        ASSERT_EQ(1, changeset.droppedIndexes().size());
+        LOG_INFO(logger, changeset.toString());
 
         // check again, nothing changed, return nullptr
         ASSERT_EQ(nullptr, generateLocalIndexInfos(new_index_info, table_info, logger).new_local_index_infos);

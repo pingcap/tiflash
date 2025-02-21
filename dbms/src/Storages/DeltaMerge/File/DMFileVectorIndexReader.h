@@ -16,6 +16,7 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/Index/VectorIndexCache_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -30,8 +31,8 @@ private:
     const ANNQueryInfoPtr & ann_query_info;
     const BitmapFilterView valid_rows;
     const ScanContextPtr & scan_context;
-    // Global vector index cache
-    const VectorIndexCachePtr vec_index_cache;
+    // Global local index cache
+    const LocalIndexCachePtr local_index_cache;
 
     // Performance statistics
     struct PerfStat
@@ -60,12 +61,12 @@ public:
         const DMFilePtr & dmfile_,
         const BitmapFilterView & valid_rows_,
         const ScanContextPtr & scan_context_,
-        const VectorIndexCachePtr & vec_index_cache_)
+        const LocalIndexCachePtr & local_index_cache_)
         : dmfile(dmfile_)
         , ann_query_info(ann_query_info_)
         , valid_rows(valid_rows_)
         , scan_context(scan_context_)
-        , vec_index_cache(vec_index_cache_)
+        , local_index_cache(local_index_cache_)
         , perf_stat()
     {}
 

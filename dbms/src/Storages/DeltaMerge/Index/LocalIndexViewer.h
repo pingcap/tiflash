@@ -14,17 +14,16 @@
 
 #pragma once
 
-#include <tipb/executor.pb.h>
-
 namespace DB::DM
 {
 
-using ANNQueryInfoPtr = std::shared_ptr<tipb::ANNQueryInfo>;
+/// Viewer for local index.
+class LocalIndexViewer
+{
+public:
+    explicit LocalIndexViewer() = default;
 
-class VectorIndexBuilder;
-using VectorIndexBuilderPtr = std::shared_ptr<VectorIndexBuilder>;
-
-class VectorIndexViewer;
-using VectorIndexViewerPtr = std::shared_ptr<VectorIndexViewer>;
+    virtual ~LocalIndexViewer() = default;
+};
 
 } // namespace DB::DM

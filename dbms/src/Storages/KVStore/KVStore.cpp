@@ -36,7 +36,6 @@
 
 #include <mutex>
 #include <tuple>
-#include <variant>
 
 namespace DB
 {
@@ -58,10 +57,6 @@ KVStore::KVStore(Context & context)
         context.getSharedContextDisagg()->isDisaggregatedComputeMode() ? nullptr
                                                                        : std::make_unique<RegionPersister>(context))
     , log(Logger::get())
-    , region_compact_log_min_rows(40 * 1024)
-    , region_compact_log_min_bytes(32 * 1024 * 1024)
-    , region_compact_log_gap(200)
-    , region_eager_gc_log_gap(512)
     // Eager RaftLog GC is only enabled under UniPS
     , eager_raft_log_gc_enabled(context.getPageStorageRunMode() == PageStorageRunMode::UNI_PS)
 {
@@ -270,6 +265,8 @@ void KVStore::removeRegion(
     {
         auto manage_lock = genRegionMgrWriteLock(task_lock);
         auto it = manage_lock.regions.find(region_id);
+        // Disregister from region table size.
+        it->second->resetRegionTableCtx();
         manage_lock.index.remove(
             it->second->makeRaftCommandDelegate(task_lock).getRange().comparableKeys(),
             region_id); // remove index
@@ -314,7 +311,7 @@ bool KVStore::tryRegisterEagerRaftLogGCTask(const RegionPtr & region, RegionTask
 {
     if (!eager_raft_log_gc_enabled)
         return false;
-    const UInt64 threshold = region_eager_gc_log_gap.load();
+    const UInt64 threshold = config.regionEagerGCLogGap();
     if (threshold == 0) // disabled
         return false;
 
@@ -370,22 +367,6 @@ void KVStore::handleDestroy(UInt64 region_id, TMTContext & tmt, const KVStoreTas
         tmt.getRegionTable(),
         task_lock,
         region_manager.genRegionTaskLock(region_id));
-}
-
-void KVStore::setRegionCompactLogConfig(UInt64 rows, UInt64 bytes, UInt64 gap, UInt64 eager_gc_gap)
-{
-    region_compact_log_min_rows = rows;
-    region_compact_log_min_bytes = bytes;
-    region_compact_log_gap = gap;
-    region_eager_gc_log_gap = eager_gc_gap;
-
-    LOG_INFO(
-        log,
-        "Region compact log thresholds, rows={} bytes={} gap={} eager_gc_gap={}",
-        rows,
-        bytes,
-        gap,
-        eager_gc_gap);
 }
 
 void KVStore::setStore(metapb::Store store_)
@@ -464,39 +445,21 @@ size_t KVStore::getOngoingPrehandleSubtaskCount() const
     return std::max(0, prehandling_trace.ongoing_prehandle_subtask_count.load());
 }
 
-static const metapb::Peer & findPeer(const metapb::Region & region, UInt64 peer_id)
+// The only way that to create a region associated to a piece of data, even if it is not going to be inserted in to KVStore.
+RegionPtr KVStore::genRegionPtr(
+    metapb::Region && region,
+    UInt64 peer_id,
+    UInt64 index,
+    UInt64 term,
+    std::optional<std::reference_wrapper<RegionTable>> region_table)
 {
-    for (const auto & peer : region.peers())
+    auto meta = RegionMeta::genFromMetaRegion(std::move(region), peer_id, index, term);
+    auto new_region = std::make_shared<Region>(std::move(meta), proxy_helper);
+    if (region_table)
     {
-        if (peer.id() == peer_id)
-        {
-            return peer;
-        }
+        region_table.value().get().addPrehandlingRegion(*new_region);
     }
-
-    throw Exception(
-        ErrorCodes::LOGICAL_ERROR,
-        "{}: peer not found in region, peer_id={} region_id={}",
-        __PRETTY_FUNCTION__,
-        peer_id,
-        region.id());
-}
-
-// Generate a temporary region pointer by the given meta
-RegionPtr KVStore::genRegionPtr(metapb::Region && region, UInt64 peer_id, UInt64 index, UInt64 term)
-{
-    auto meta = ({
-        auto peer = findPeer(region, peer_id);
-        raft_serverpb::RaftApplyState apply_state;
-        {
-            apply_state.set_applied_index(index);
-            apply_state.mutable_truncated_state()->set_index(index);
-            apply_state.mutable_truncated_state()->set_term(term);
-        }
-        RegionMeta(std::move(peer), std::move(region), std::move(apply_state));
-    });
-
-    return std::make_shared<Region>(std::move(meta), proxy_helper);
+    return new_region;
 }
 
 RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
@@ -505,7 +468,7 @@ RegionTaskLock KVStore::genRegionTaskLock(UInt64 region_id) const
 }
 
 
-void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfoType type, uint64_t value)
+void KVStore::reportThreadAllocInfo(std::string_view v, ReportThreadAllocateInfoType type, uint64_t value) const
 {
     joint_memory_allocation_map->reportThreadAllocInfoForProxy(v, type, value);
 }

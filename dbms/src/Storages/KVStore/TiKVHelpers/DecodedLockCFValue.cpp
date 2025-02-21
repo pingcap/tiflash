@@ -62,7 +62,11 @@ namespace RecordKVFormat
             {
             case SHORT_VALUE_PREFIX:
             {
+#if SERVERLESS_PROXY != 0
+                size_t str_len = readVarUInt(data, len);
+#else
                 size_t str_len = readUInt8(data, len);
+#endif
                 if (len < str_len)
                     throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
                 // no need short value

@@ -13,14 +13,14 @@
 // limitations under the License.
 
 #include <Poco/File.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 
 #include <mutex>
 
 namespace DB::DM
 {
 
-size_t VectorIndexCache::cleanOutdatedCacheEntries()
+size_t LocalIndexCache::cleanOutdatedCacheEntries()
 {
     size_t cleaned = 0;
 
@@ -45,7 +45,7 @@ size_t VectorIndexCache::cleanOutdatedCacheEntries()
         }
         else if (!Poco::File(file_path).exists())
         {
-            LOG_INFO(log, "Dropping in-memory Vector Index cache because on-disk file is dropped, file={}", file_path);
+            LOG_INFO(log, "Dropping in-memory Local Index cache because on-disk file is dropped, file={}", file_path);
             {
                 std::unique_lock lock(mu);
                 files_to_check.erase(file_path);
@@ -55,12 +55,12 @@ size_t VectorIndexCache::cleanOutdatedCacheEntries()
         }
     }
 
-    LOG_DEBUG(log, "Cleaned {} outdated Vector Index cache entries", cleaned);
+    LOG_DEBUG(log, "Cleaned {} outdated Local Index cache entries", cleaned);
 
     return cleaned;
 }
 
-void VectorIndexCache::cleanOutdatedLoop()
+void LocalIndexCache::cleanOutdatedLoop()
 {
     while (true)
     {
@@ -83,14 +83,14 @@ void VectorIndexCache::cleanOutdatedLoop()
     }
 }
 
-VectorIndexCache::VectorIndexCache(size_t max_entities)
+LocalIndexCache::LocalIndexCache(size_t max_entities)
     : cache(max_entities)
     , log(Logger::get())
 {
     cleaner_thread = std::thread([this] { cleanOutdatedLoop(); });
 }
 
-VectorIndexCache::~VectorIndexCache()
+LocalIndexCache::~LocalIndexCache()
 {
     is_shutting_down = true;
     shutdown_cv.notify_all();

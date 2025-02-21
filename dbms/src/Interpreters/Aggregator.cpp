@@ -44,6 +44,7 @@ extern const char random_aggregate_merge_failpoint[];
 extern const char force_agg_on_partial_block[];
 extern const char random_fail_in_resize_callback[];
 extern const char force_agg_prefetch[];
+extern const char force_magic_hash[];
 } // namespace FailPoints
 
 static constexpr size_t agg_prefetch_step = 16;
@@ -291,11 +292,13 @@ Aggregator::Aggregator(
     const String & req_id,
     size_t concurrency,
     const RegisterOperatorSpillContext & register_operator_spill_context,
-    bool is_auto_pass_through_)
+    bool is_auto_pass_through_,
+    bool use_magic_hash_)
     : params(params_)
     , log(Logger::get(req_id))
     , is_cancelled([]() { return false; })
     , is_auto_pass_through(is_auto_pass_through_)
+    , use_magic_hash(use_magic_hash_)
 {
     aggregate_functions.resize(params.aggregates_size);
     for (size_t i = 0; i < params.aggregates_size; ++i)
@@ -490,6 +493,36 @@ AggregatedDataVariants::Type ChooseAggregationMethodFastPath(
 }
 
 AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
+{
+    auto method = chooseAggregationMethodInner();
+#ifndef NDEBUG
+    bool tmp_use_magic_hash = this->use_magic_hash;
+    fiu_do_on(FailPoints::force_magic_hash, { tmp_use_magic_hash = true; });
+#else
+    const bool tmp_use_magic_hash = this->use_magic_hash;
+#endif
+    if (tmp_use_magic_hash)
+    {
+        switch (method)
+        {
+        case AggregatedDataVariants::Type::keys128:
+            return AggregatedDataVariants::Type::keys128_magic_hash;
+        case AggregatedDataVariants::Type::keys256:
+            return AggregatedDataVariants::Type::keys256_magic_hash;
+        case AggregatedDataVariants::Type::key_int256:
+            return AggregatedDataVariants::Type::key_int256_magic_hash;
+        case AggregatedDataVariants::Type::nullable_keys128:
+            return AggregatedDataVariants::Type::nullable_keys128_magic_hash;
+        case AggregatedDataVariants::Type::nullable_keys256:
+            return AggregatedDataVariants::Type::nullable_keys256_magic_hash;
+        default:
+            return method;
+        }
+    }
+    return method;
+}
+
+AggregatedDataVariants::Type Aggregator::chooseAggregationMethodInner()
 {
     /// If no keys. All aggregating to single row.
     if (params.keys_size == 0)

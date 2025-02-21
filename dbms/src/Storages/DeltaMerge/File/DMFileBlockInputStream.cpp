@@ -30,7 +30,7 @@ DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & con
     setCaches(
         global_context.getMarkCache(),
         global_context.getMinMaxIndexCache(),
-        global_context.getVectorIndexCache(),
+        global_context.getLocalIndexCache(),
         global_context.getColumnCacheLongTerm());
     // init from settings
     setFromSettings(context.getSettingsRef());
@@ -229,7 +229,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         std::move(rest_columns_reader),
         std::move(vec_column.value()),
         scan_context,
-        vector_index_cache,
+        local_index_cache,
         bitmap_filter.value(),
         tracing_id);
 

@@ -27,6 +27,7 @@
 #include <Interpreters/TimezoneInfo.h>
 #include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <common/MultiVersion.h>
 
 #include <chrono>
@@ -109,7 +110,7 @@ enum class PageStorageRunMode : UInt8;
 namespace DM
 {
 class MinMaxIndexCache;
-class VectorIndexCache;
+class LocalIndexCache;
 class ColumnCacheLongTerm;
 class DeltaIndexManager;
 class GlobalStoragePool;
@@ -166,6 +167,7 @@ private:
 
     UInt64 session_close_cycle = 0;
     bool session_is_used = false;
+    bool is_config_loaded = false; /// Is configuration loaded from toml file.
 
     enum TestMode
     {
@@ -194,9 +196,21 @@ private:
     Context();
 
 public:
+    enum class ApplicationType
+    {
+        SERVER, /// The program is run as clickhouse-server daemon (default behavior)
+        CLIENT, /// clickhouse-client
+        LOCAL /// clickhouse-local
+    };
+
     /// Create initial Context with ContextShared and etc.
-    static std::unique_ptr<Context> createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory);
-    static std::unique_ptr<Context> createGlobal();
+    static std::unique_ptr<Context> createGlobal(
+        std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory,
+        ApplicationType app_type,
+        const std::optional<DisaggOptions> & disagg_opt);
+    static std::unique_ptr<Context> createGlobal(
+        ApplicationType app_type,
+        const std::optional<DisaggOptions> & disagg_opt = std::nullopt);
 
     ~Context();
 
@@ -399,9 +413,9 @@ public:
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
 
-    void setVectorIndexCache(size_t cache_entities);
-    std::shared_ptr<DM::VectorIndexCache> getVectorIndexCache() const;
-    void dropVectorIndexCache() const;
+    void setLocalIndexCache(size_t cache_entities);
+    std::shared_ptr<DM::LocalIndexCache> getLocalIndexCache() const;
+    void dropLocalIndexCache() const;
 
     void setColumnCacheLongTerm(size_t cache_size_in_bytes);
     std::shared_ptr<DM::ColumnCacheLongTerm> getColumnCacheLongTerm() const;
@@ -500,16 +514,6 @@ public:
 
     void shutdown();
 
-    enum class ApplicationType
-    {
-        SERVER, /// The program is run as clickhouse-server daemon (default behavior)
-        CLIENT, /// clickhouse-client
-        LOCAL /// clickhouse-local
-    };
-
-    ApplicationType getApplicationType() const;
-    void setApplicationType(ApplicationType type);
-
     /// Sets default_profile, must be called once during the initialization
     void setDefaultProfiles();
 
@@ -549,7 +553,11 @@ public:
     const std::shared_ptr<DB::DM::SharedBlockSchemas> & getSharedBlockSchemas() const;
     void initializeSharedBlockSchemas(size_t shared_block_schemas_size);
 
-    void mockConfigLoaded() { is_config_loaded = true; }
+    void initKeyspaceBlocklist(const std::unordered_set<KeyspaceID> & keyspace_ids);
+    bool isKeyspaceInBlocklist(KeyspaceID keyspace_id);
+    void initRegionBlocklist(const std::unordered_set<RegionID> & region_ids);
+    bool isRegionInBlocklist(RegionID region_id);
+    bool isRegionsContainsInBlocklist(const std::vector<RegionID> & regions);
 
     bool initializeStoreIdBlockList(const String &);
     const std::unordered_set<uint64_t> * getStoreIdBlockList() const;
@@ -569,8 +577,6 @@ private:
     void scheduleCloseSession(const SessionKey & key, std::chrono::steady_clock::duration timeout);
 
     void checkIsConfigLoaded() const;
-
-    bool is_config_loaded = false; /// Is configuration loaded from toml file.
 };
 
 
