@@ -265,10 +265,18 @@ cmake --workflow --preset unit-tests-all
 Then, to run these unit tests:
 
 ```shell
-cd cmake-build-debug
-./dbms/gtests_dbms
-./libs/libdaemon/src/tests/gtests_libdaemon
-./libs/libcommon/src/tests/gtests_libcommon
+cmake-build-debug/dbms/gtests_dbms
+cmake-build-debug/libs/libdaemon/src/tests/gtests_libdaemon
+cmake-build-debug/libs/libcommon/src/tests/gtests_libcommon
+```
+
+Unit tests take time, because tests are run one by one. You can use our parallel test runner instead:
+
+```shell
+python3 tests/gtest_10x.py \
+  cmake-build-debug/dbms/gtests_dbms \
+  cmake-build-debug/libs/libdaemon/src/tests/gtests_libdaemon \
+  cmake-build-debug/libs/libcommon/src/tests/gtests_libcommon
 ```
 
 More usages are available via `./dbms/gtests_dbms --help`.
