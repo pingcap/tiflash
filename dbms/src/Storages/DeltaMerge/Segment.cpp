@@ -3497,7 +3497,6 @@ void Segment::checkMVCCBitmap(
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
     size_t expected_block_size,
-    bool use_version_chain,
     const BitmapFilter & bitmap_filter)
 {
     auto new_bitmap_filter = buildBitmapFilter(
@@ -3507,7 +3506,7 @@ void Segment::checkMVCCBitmap(
         pack_filter_results,
         start_ts,
         expected_block_size,
-        !use_version_chain);
+        /*enable_version_chain*/ false);
     if (*new_bitmap_filter == bitmap_filter)
         return;
 
@@ -3595,9 +3594,9 @@ void Segment::checkMVCCBitmap(
         if (new_bitmap_filter->get(i) != bitmap_filter.get(i))
         {
             std::string_view filter_by = "delemark";
-            if (bitmap_filter.rowkey_filter[i])
+            if (!bitmap_filter.rowkey_filter[i])
                 filter_by = "rowkey";
-            else if (bitmap_filter.version_filter[i])
+            else if (!bitmap_filter.version_filter[i])
                 filter_by = "version";
 
             LOG_ERROR(
@@ -3628,6 +3627,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
 {
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
 
+    const bool enable_version_chain = dm_context.global_context.getSettingsRef().enable_version_chain;
+    const bool verify_mvcc_bitmap = dm_context.global_context.getSettingsRef().dt_verify_mvcc_bitmap;
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
@@ -3635,9 +3636,9 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         pack_filter_results,
         start_ts,
         build_bitmap_filter_block_rows,
-        dm_context.global_context.getSettingsRef().enable_version_chain);
+        enable_version_chain);
 
-    if (dm_context.global_context.getSettingsRef().dt_verify_mvcc_bitmap)
+    if (enable_version_chain && verify_mvcc_bitmap)
     {
         checkMVCCBitmap(
             dm_context,
@@ -3646,7 +3647,6 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             pack_filter_results,
             start_ts,
             build_bitmap_filter_block_rows,
-            dm_context.global_context.getSettingsRef().enable_version_chain,
             *bitmap_filter);
     }
 

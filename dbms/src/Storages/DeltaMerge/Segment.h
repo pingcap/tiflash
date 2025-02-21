@@ -817,7 +817,6 @@ public:
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size,
-        bool use_version_chain,
         const BitmapFilter & bitmap_filter);
 
 #ifndef DBMS_PUBLIC_GTEST

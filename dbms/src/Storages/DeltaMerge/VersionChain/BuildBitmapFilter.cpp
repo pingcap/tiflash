@@ -32,6 +32,7 @@ BitmapFilterPtr buildBitmapFilter(
     const UInt64 read_ts,
     VersionChain<HandleType> & version_chain)
 {
+    RUNTIME_CHECK(pack_filter_results.size() == 1, pack_filter_results.size());
     const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -40,14 +41,13 @@ BitmapFilterPtr buildBitmapFilter(
     const UInt32 total_rows = delta_rows + stable_rows;
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, true);
 
-    RUNTIME_CHECK(pack_filter_results.size() == 1, pack_filter_results.size());
+    auto version_filtered_out_rows
+        = buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, *bitmap_filter);
+    bitmap_filter->saveVersionFilterForDebug(); // TODO: save when check mvcc bitmap enabled.
+
     auto rowkey_filtered_out_rows
         = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, pack_filter_results[0], *bitmap_filter);
     bitmap_filter->saveRowKeyFilterForDebug();
-
-    auto version_filtered_out_rows
-        = buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, *bitmap_filter);
-    bitmap_filter->saveVersionFilterForDebug();
 
     auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, *bitmap_filter);
 
