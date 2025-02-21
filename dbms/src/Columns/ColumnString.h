@@ -119,7 +119,7 @@ private:
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator) const;
 
-    template <bool has_null, bool has_collator, bool has_nullmap>
+    template <bool has_null, bool need_decode_collator, bool has_nullmap>
     void serializeToPosImplType(
         PaddedPODArray<char *> & pos,
         size_t start,
@@ -127,7 +127,7 @@ private:
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container,
         const NullMap * nullmap) const;
-    template <bool has_null, bool has_collator, typename DerivedCollator, bool has_nullmap>
+    template <bool has_null, bool need_decode_collator, typename DerivedCollator, bool has_nullmap>
     void serializeToPosImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
@@ -136,7 +136,7 @@ private:
         String * sort_key_container,
         const NullMap * nullmap) const;
 
-    template <bool compare_semantics, bool has_null, bool has_collator, bool has_nullmap>
+    template <bool compare_semantics, bool has_null, bool need_decode_collator, bool has_nullmap>
     void serializeToPosForColumnArrayImplType(
         PaddedPODArray<char *> & pos,
         size_t start,
@@ -145,7 +145,7 @@ private:
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container,
         const NullMap * nullmap) const;
-    template <bool compare_semantics, bool has_null, bool has_collator, typename DerivedCollator, bool has_nullmap>
+    template <bool compare_semantics, bool has_null, bool need_decode_collator, typename DerivedCollator, bool has_nullmap>
     void serializeToPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
