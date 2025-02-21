@@ -303,7 +303,7 @@ protected:
             ASSERT_EQ(bitmap_filter_version_chain->toDebugString(), *(opt.expected_bitmap))
                 << fmt::format("{}, bitmap_filter_delta_index={}", info, bitmap_filter_delta_index->toDebugString());
 
-        ASSERT_EQ(bitmap_filter_delta_index->toDebugString(), bitmap_filter_version_chain->toDebugString()) << info;
+        ASSERT_EQ(*bitmap_filter_delta_index, *bitmap_filter_version_chain) << info;
     }
 
     void checkHandle(PageIdU64 seg_id, std::string_view seq_ranges, int caller_line)
@@ -1731,6 +1731,45 @@ try
                 ASSERT_EQ(row_id, i) << *row_id;
         }
     }
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DupHandle)
+try
+{
+    auto verify = [&](SegmentPtr & seg, SegmentSnapshotPtr & snap) {
+        const auto read_ranges = RowKeyRanges{seg->getRowKeyRange()};
+        auto bitmap_filter_version_chain = seg->buildBitmapFilter(
+            *dm_context,
+            snap,
+            read_ranges,
+            loadPackFilterResults(snap, read_ranges),
+            max_read_ts,
+            DEFAULT_BLOCK_SIZE,
+            use_version_chain);
+        auto bitmap_filter_delta_index = seg->buildBitmapFilter(
+            *dm_context,
+            snap,
+            read_ranges,
+            loadPackFilterResults(snap, read_ranges),
+            max_read_ts,
+            DEFAULT_BLOCK_SIZE,
+            !use_version_chain);
+        ASSERT_EQ(*bitmap_filter_version_chain, *bitmap_filter_delta_index);
+    };
+
+    writeSegmentGeneric("d_tiny:[0, 128):ts_1|merge_delta|d_tiny:[50, 60):ts_2");
+    auto [seg1, snap1] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(snap1->delta->getRows(), 10);
+    ASSERT_EQ(snap1->stable->getRows(), 128);
+
+    writeSegmentGeneric("d_tiny:[50, 60):ts_2");
+    auto [seg2, snap2] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(snap2->delta->getRows(), 20);
+    ASSERT_EQ(snap2->stable->getRows(), 128);
+
+    verify(seg2, snap2);
+    verify(seg1, snap1);
 }
 CATCH
 } // namespace DB::DM::tests

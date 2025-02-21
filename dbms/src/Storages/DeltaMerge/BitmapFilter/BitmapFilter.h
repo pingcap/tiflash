@@ -48,6 +48,8 @@ public:
 
     IColumn::Filter & getFilter() { return filter; }
 
+    bool operator==(const BitmapFilter & other) const { return filter == other.filter && all_match == other.all_match; }
+
     friend class BitmapFilterView;
 
 private:
