@@ -23,6 +23,13 @@
 
 namespace DB::DM
 {
+thread_local std::vector<UInt32> * rowkey_filter_out_row_ids = nullptr;
+thread_local std::vector<UInt32> * delete_filter_out_row_ids = nullptr;
+
+thread_local std::vector<UInt32> * version_filter_out_invisiable_row_ids = nullptr;
+thread_local std::vector<std::pair<UInt32, UInt32>> * version_filter_out_too_old_row_ids = nullptr;
+thread_local std::vector<std::pair<UInt32, UInt32>> * version_filter_out_base_row_ids = nullptr;
+
 template <ExtraHandleType HandleType>
 BitmapFilterPtr buildBitmapFilter(
     const DMContext & dm_context,
@@ -33,12 +40,6 @@ BitmapFilterPtr buildBitmapFilter(
     VersionChain<HandleType> & version_chain)
 {
     const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
-    LOG_DEBUG(
-        snapshot.log,
-        "base_ver_snap={} is_common_handle={} read_ranges={}",
-        *base_ver_snap,
-        std::is_same_v<HandleType, String>,
-        read_ranges);
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
     const UInt32 delta_rows = delta.getRows();
@@ -46,16 +47,34 @@ BitmapFilterPtr buildBitmapFilter(
     const UInt32 total_rows = delta_rows + stable_rows;
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, true);
     auto & filter = bitmap_filter->getFilter();
+    rowkey_filter_out_row_ids = &bitmap_filter->rowkey_filter_out_row_ids;
+    delete_filter_out_row_ids = &bitmap_filter->delete_filter_out_row_ids;
+
+    version_filter_out_invisiable_row_ids = &bitmap_filter->version_filter_out_invisiable_row_ids;
+    version_filter_out_too_old_row_ids = &bitmap_filter->version_filter_out_too_old_row_ids;
+    version_filter_out_base_row_ids = &bitmap_filter->version_filter_out_base_row_ids;
 
     RUNTIME_CHECK(pack_filter_results.size() == 1, pack_filter_results.size());
     auto rowkey_filtered_out_rows
         = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, pack_filter_results[0], filter);
-    LOG_DEBUG(snapshot.log, "bitmap_filter1={}", bitmap_filter->toDebugString());
+    bitmap_filter->rowkey_filter.assign(filter);
     auto version_filtered_out_rows
         = buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
-    LOG_DEBUG(snapshot.log, "bitmap_filter2={}", bitmap_filter->toDebugString());
     auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, filter);
-    LOG_DEBUG(snapshot.log, "bitmap_filter3={}", bitmap_filter->toDebugString());
+
+    rowkey_filter_out_row_ids = nullptr;
+    delete_filter_out_row_ids = nullptr;
+
+    version_filter_out_invisiable_row_ids = nullptr;
+    version_filter_out_too_old_row_ids = nullptr;
+    version_filter_out_base_row_ids = nullptr;
+
+    LOG_INFO(
+        snapshot.log,
+        "rowkey_filtered_out_rows={}, version_filtered_out_rows={}, delete_filtered_out_rows={}",
+        rowkey_filtered_out_rows,
+        version_filtered_out_rows,
+        delete_filtered_out_rows);
 
     // rowkey_filtered_out_rows + version_filtered_out_rows + delete_filtered_out_rows
     // may greater than the number of rows that are filtered out.

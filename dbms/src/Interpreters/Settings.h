@@ -183,6 +183,7 @@ struct Settings
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingDouble, dt_page_gc_threshold_raft_data, 0.05, "Max valid rate of deciding to do a GC for BlobFile storing PageData in PageStorage")                                                                                        \
     M(SettingBool, enable_version_chain, true, "need restart process to take effect")                                                                                                                                                   \
+    M(SettingBool, dt_verify_mvcc_bitmap, true, "")                                                                                                                                                   \
     /* DeltaTree engine testing settings */\
     M(SettingUInt64, dt_insert_max_rows, 0, "[testing] Max rows of insert blocks when write into DeltaTree Engine. By default 0 means no limit.")                                                                                       \
     M(SettingBool, dt_raw_filter_range, true, "[unused] Do range filter or not when read data in raw mode in DeltaTree Engine.")                                                                                                        \

@@ -41,6 +41,7 @@ public:
 
     void runOptimize();
     void setAllMatch(bool all_match_) { all_match = all_match_; }
+    bool isAllMatch() const { return all_match; }
 
     String toDebugString() const;
     size_t count() const;
@@ -51,6 +52,14 @@ public:
     bool operator==(const BitmapFilter & other) const { return filter == other.filter && all_match == other.all_match; }
 
     friend class BitmapFilterView;
+
+    std::vector<UInt32> rowkey_filter_out_row_ids;
+    std::vector<UInt32> version_filter_out_invisiable_row_ids;
+    std::vector<std::pair<UInt32, UInt32>> version_filter_out_too_old_row_ids;
+    std::vector<std::pair<UInt32, UInt32>> version_filter_out_base_row_ids;
+    std::vector<UInt32> delete_filter_out_row_ids;
+
+    IColumn::Filter rowkey_filter;
 
 private:
     void set(std::span<const UInt32> row_ids, const FilterPtr & f);

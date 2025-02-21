@@ -24,6 +24,7 @@
 
 namespace DB::DM
 {
+extern thread_local std::vector<UInt32> * rowkey_filter_out_row_ids;
 namespace
 {
 template <ExtraHandleType HandleType>
@@ -46,6 +47,8 @@ UInt32 buildRowKeyFilterVector(
         {
             filter[i + start_row_id] = 0;
             ++filtered_out_rows;
+            if (rowkey_filter_out_row_ids)
+                rowkey_filter_out_row_ids->push_back(i + start_row_id);
         }
     }
     return filtered_out_rows;

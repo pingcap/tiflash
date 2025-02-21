@@ -24,6 +24,9 @@
 
 namespace DB::DM
 {
+extern thread_local std::vector<UInt32> * version_filter_out_invisiable_row_ids;
+extern thread_local std::vector<std::pair<UInt32, UInt32>> * version_filter_out_too_old_row_ids;
+extern thread_local std::vector<std::pair<UInt32, UInt32>> * version_filter_out_base_row_ids;
 UInt32 buildVersionFilterVector(
     const PaddedPODArray<UInt64> & versions,
     const UInt64 read_ts,
@@ -45,16 +48,20 @@ UInt32 buildVersionFilterVector(
         if (versions[i] > read_ts)
         {
             filter[row_id] = 0;
+            if (version_filter_out_invisiable_row_ids)
+                version_filter_out_invisiable_row_ids->push_back(row_id);
             ++filtered_out_rows;
             continue;
         }
 
         // Visible
         const auto base_row_id = base_ver_snap[row_id - stable_rows];
-        // Newer version has been chosen
+        // base_version is filtered-out, there is newer version has been chosen
         if (base_row_id != NotExistRowID && !filter[base_row_id])
         {
             filter[row_id] = 0;
+            if (version_filter_out_too_old_row_ids)
+                version_filter_out_too_old_row_ids->emplace_back(base_row_id, row_id);
             ++filtered_out_rows;
             continue;
         }
@@ -63,6 +70,8 @@ UInt32 buildVersionFilterVector(
         {
             ++filtered_out_rows;
             filter[base_row_id] = 0;
+            if (version_filter_out_base_row_ids)
+                version_filter_out_base_row_ids->emplace_back(base_row_id, row_id);
         }
     }
     return filtered_out_rows;

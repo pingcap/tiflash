@@ -152,7 +152,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
 
     LOG_INFO(
         snapshot.log,
-        "Snapshot={}, replays {} rows and {} deletes, cost={}ms",
+        "snapshot={}, replays {} rows and {} deletes, cost={}ms",
         snapshot.detailInfo(),
         curr_replayed_rows,
         curr_replayed_deletes,

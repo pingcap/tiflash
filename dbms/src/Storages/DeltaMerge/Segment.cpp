@@ -932,7 +932,7 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     return std::make_shared<SegmentSnapshot>(
         std::move(delta_snap),
         std::move(stable_snap),
-        Logger::get(dm_context.tracing_id));
+        Logger::get(fmt::format("{} seg_id={}", dm_context.tracing_id, segment_id)));
 }
 
 // The `read_ranges` must be included by `segment_rowkey_range`. Usually this step is
@@ -3206,6 +3206,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
             "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
+        bitmap_filter->runOptimize();
         return bitmap_filter;
     }
 
@@ -3246,6 +3247,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         use_packs,
         segment_snap->stable->getDMFilesRows(),
         elapse_ms);
+    bitmap_filter->runOptimize();
     return bitmap_filter;
 }
 
@@ -3488,6 +3490,166 @@ static bool hasCacheableColumn(const ColumnDefines & columns)
     return std::find_if(columns.begin(), columns.end(), DMFileReader::isCacheableColumn) != columns.end();
 }
 
+void Segment::checkMVCCBitmap(
+    const DMContext & dm_context,
+    const SegmentSnapshotPtr & segment_snap,
+    const RowKeyRanges & read_ranges,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    size_t expected_block_size,
+    bool use_version_chain,
+    const BitmapFilter & bitmap_filter)
+{
+    auto new_bitmap_filter = buildBitmapFilter(
+        dm_context,
+        segment_snap,
+        read_ranges,
+        pack_filter_results,
+        start_ts,
+        expected_block_size,
+        !use_version_chain);
+    if (*new_bitmap_filter == bitmap_filter)
+        return;
+
+    static std::mutex check_mtx;
+    static bool verify_failed = false;
+    std::lock_guard lock(check_mtx);  // To Avoid concurrent check that logs are mixed together.
+    if (verify_failed)
+    {
+        LOG_INFO(segment_snap->log, "Already verify failed, skip checkBitmapForTest");
+        return;
+    }
+    verify_failed = true;
+
+    if (new_bitmap_filter->size() != bitmap_filter.size())
+    {
+        LOG_ERROR(
+            segment_snap->log,
+            "Bitmap size not match, new_bitmap_filter_size={}, bitmap_filter_size={}, snapshot_rows={}",
+            new_bitmap_filter->size(),
+            bitmap_filter.size(),
+            segment_snap->getRows());
+        throw Exception("Bitmap size not match", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (new_bitmap_filter->isAllMatch() != bitmap_filter.isAllMatch())
+    {
+        LOG_ERROR(
+            segment_snap->log,
+            "Bitmap all match not match, new_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
+            new_bitmap_filter->isAllMatch(),
+            bitmap_filter.isAllMatch());
+        throw Exception("Bitmap all match not match", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    LOG_INFO(
+        segment_snap->log,
+        "new_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{}, stable={}, delta={}, "
+        "read_ranges={}, segment_range={}, rowkey_filter_outs={}, version_filter_outs={}/{}/{}, delete_filter_outs={}",
+        new_bitmap_filter->count(),
+        new_bitmap_filter->size(),
+        bitmap_filter.count(),
+        bitmap_filter.size(),
+        segment_snap->stable->getRows(),
+        segment_snap->delta->getRows(),
+        read_ranges,
+        rowkey_range,
+        bitmap_filter.rowkey_filter_out_row_ids.size(),
+        bitmap_filter.version_filter_out_invisiable_row_ids.size(),
+        bitmap_filter.version_filter_out_too_old_row_ids.size(),
+        bitmap_filter.version_filter_out_base_row_ids.size(),
+        bitmap_filter.delete_filter_out_row_ids.size());
+
+    const auto cds = ColumnDefines{
+        getExtraHandleColumnDefine(dm_context.is_common_handle),
+        getVersionColumnDefine(),
+        getTagColumnDefine(),
+    };
+    auto stream = getConcatSkippableBlockInputStream(
+        segment_snap,
+        dm_context,
+        cds,
+        /*read_ranges*/ {},
+        /*pack_filter_results*/ {},
+        start_ts,
+        expected_block_size,
+        ReadTag::Query);
+    Blocks blocks;
+    while (true)
+    {
+        auto block = stream->read();
+        if (!block)
+            break;
+        blocks.emplace_back(std::move(block));
+    }
+    auto block = vstackBlocks(std::move(blocks));
+    RUNTIME_CHECK_MSG(
+        block.rows() == bitmap_filter.size(),
+        "Block rows not match: block_rows={}, bitmap_size={}",
+        block.rows(),
+        bitmap_filter.size());
+    RUNTIME_CHECK(!dm_context.is_common_handle);
+    auto handle_col = block.getByName(MutSup::extra_handle_column_name).column;
+    auto version_col = block.getByName(MutSup::version_column_name).column;
+    auto delmark_col = block.getByName(MutSup::delmark_column_name).column;
+    const auto & handles = toColumnVectorData<Int64>(handle_col);
+    const auto & versions = toColumnVectorData<UInt64>(version_col);
+    const auto & delmarks = toColumnVectorData<UInt8>(delmark_col);
+    for (UInt32 i = 0; i < bitmap_filter.size(); ++i)
+    {
+        if (new_bitmap_filter->get(i) != bitmap_filter.get(i))
+        {
+            auto itr_rowkey = std::find(
+                bitmap_filter.rowkey_filter_out_row_ids.begin(),
+                bitmap_filter.rowkey_filter_out_row_ids.end(),
+                i);
+            auto itr_ver_invisible = std::find(
+                bitmap_filter.version_filter_out_invisiable_row_ids.begin(),
+                bitmap_filter.version_filter_out_invisiable_row_ids.end(),
+                i);
+            auto itr_ver_too_old = std::find_if(
+                bitmap_filter.version_filter_out_too_old_row_ids.begin(),
+                bitmap_filter.version_filter_out_too_old_row_ids.end(),
+                [i](const auto & pa) { return pa.second == i; });
+            auto itr_ver_base = std::find_if(
+                bitmap_filter.version_filter_out_base_row_ids.begin(),
+                bitmap_filter.version_filter_out_base_row_ids.end(),
+                [i](const auto & pa) { return pa.second == i; });
+            auto itr_delmark = std::find(
+                bitmap_filter.delete_filter_out_row_ids.begin(),
+                bitmap_filter.delete_filter_out_row_ids.end(),
+                i);
+
+            String filter_by;
+            if (itr_rowkey != bitmap_filter.rowkey_filter_out_row_ids.end())
+                filter_by += "rowkey, ";
+            if (itr_delmark != bitmap_filter.delete_filter_out_row_ids.end())
+                filter_by += "delmark, ";
+            if (itr_ver_invisible != bitmap_filter.version_filter_out_invisiable_row_ids.end())
+                filter_by += "version_invisible, ";
+            if (itr_ver_too_old != bitmap_filter.version_filter_out_too_old_row_ids.end())
+                filter_by += fmt::format(
+                    "version_too_old, base_version={}, rowkey_filter[{}]={}",
+                    itr_ver_too_old->first,
+                    itr_ver_too_old->first,
+                    bitmap_filter.rowkey_filter[itr_ver_too_old->first]);
+            if (itr_ver_base != bitmap_filter.version_filter_out_base_row_ids.end())
+                filter_by += "version_base, ";
+            LOG_ERROR(
+                segment_snap->log,
+                "{} {} {} {} {} {}, filter by {}",
+                i,
+                new_bitmap_filter->get(i),
+                bitmap_filter.get(i),
+                handles[i],
+                versions[i],
+                delmarks[i],
+                filter_by);
+        }
+    }
+    throw Exception("Bitmap not match", ErrorCodes::LOGICAL_ERROR);
+}
+
 BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
@@ -3509,6 +3671,19 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         start_ts,
         build_bitmap_filter_block_rows,
         dm_context.global_context.getSettingsRef().enable_version_chain);
+
+    if (dm_context.global_context.getSettingsRef().dt_verify_mvcc_bitmap)
+    {
+        checkMVCCBitmap(
+            dm_context,
+            segment_snap,
+            read_ranges,
+            pack_filter_results,
+            start_ts,
+            build_bitmap_filter_block_rows,
+            dm_context.global_context.getSettingsRef().enable_version_chain,
+            *bitmap_filter);
+    }
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
     if (!hasCacheableColumn(columns_to_read))
