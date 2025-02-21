@@ -3545,7 +3545,7 @@ void Segment::checkMVCCBitmap(
     LOG_INFO(
         segment_snap->log,
         "new_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{}, stable={}, delta={}, "
-        "read_ranges={}, segment_range={}, rowkey_filter_outs={}, version_filter_outs={}/{}/{}, delete_filter_outs={}",
+        "read_ranges={}, segment_range={}",
         new_bitmap_filter->count(),
         new_bitmap_filter->size(),
         bitmap_filter.count(),
@@ -3553,12 +3553,7 @@ void Segment::checkMVCCBitmap(
         segment_snap->stable->getRows(),
         segment_snap->delta->getRows(),
         read_ranges,
-        rowkey_range,
-        bitmap_filter.rowkey_filter_out_row_ids.size(),
-        bitmap_filter.version_filter_out_invisiable_row_ids.size(),
-        bitmap_filter.version_filter_out_too_old_row_ids.size(),
-        bitmap_filter.version_filter_out_base_row_ids.size(),
-        bitmap_filter.delete_filter_out_row_ids.size());
+        rowkey_range);
 
     const auto cds = ColumnDefines{
         getExtraHandleColumnDefine(dm_context.is_common_handle),
@@ -3599,42 +3594,12 @@ void Segment::checkMVCCBitmap(
     {
         if (new_bitmap_filter->get(i) != bitmap_filter.get(i))
         {
-            auto itr_rowkey = std::find(
-                bitmap_filter.rowkey_filter_out_row_ids.begin(),
-                bitmap_filter.rowkey_filter_out_row_ids.end(),
-                i);
-            auto itr_ver_invisible = std::find(
-                bitmap_filter.version_filter_out_invisiable_row_ids.begin(),
-                bitmap_filter.version_filter_out_invisiable_row_ids.end(),
-                i);
-            auto itr_ver_too_old = std::find_if(
-                bitmap_filter.version_filter_out_too_old_row_ids.begin(),
-                bitmap_filter.version_filter_out_too_old_row_ids.end(),
-                [i](const auto & pa) { return pa.second == i; });
-            auto itr_ver_base = std::find_if(
-                bitmap_filter.version_filter_out_base_row_ids.begin(),
-                bitmap_filter.version_filter_out_base_row_ids.end(),
-                [i](const auto & pa) { return pa.second == i; });
-            auto itr_delmark = std::find(
-                bitmap_filter.delete_filter_out_row_ids.begin(),
-                bitmap_filter.delete_filter_out_row_ids.end(),
-                i);
+            std::string_view filter_by = "delemark";
+            if (bitmap_filter.rowkey_filter[i])
+                filter_by = "rowkey";
+            else if (bitmap_filter.version_filter[i])
+                filter_by = "version";
 
-            String filter_by;
-            if (itr_rowkey != bitmap_filter.rowkey_filter_out_row_ids.end())
-                filter_by += "rowkey, ";
-            if (itr_delmark != bitmap_filter.delete_filter_out_row_ids.end())
-                filter_by += "delmark, ";
-            if (itr_ver_invisible != bitmap_filter.version_filter_out_invisiable_row_ids.end())
-                filter_by += "version_invisible, ";
-            if (itr_ver_too_old != bitmap_filter.version_filter_out_too_old_row_ids.end())
-                filter_by += fmt::format(
-                    "version_too_old, base_version={}, rowkey_filter[{}]={}",
-                    itr_ver_too_old->first,
-                    itr_ver_too_old->first,
-                    bitmap_filter.rowkey_filter[itr_ver_too_old->first]);
-            if (itr_ver_base != bitmap_filter.version_filter_out_base_row_ids.end())
-                filter_by += "version_base, ";
             LOG_ERROR(
                 segment_snap->log,
                 "{} {} {} {} {} {}, filter by {}",

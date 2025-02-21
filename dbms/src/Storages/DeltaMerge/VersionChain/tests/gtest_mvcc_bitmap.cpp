@@ -61,16 +61,18 @@ try
         std::numeric_limits<UInt64>::max(),
         version_chain);
 
-    const auto & filter1 = bitmap_filter1->getFilter();
-    const auto & filter2 = bitmap_filter2->getFilter();
-    RUNTIME_ASSERT(filter1.size() == filter2.size());
-    for (UInt32 i = 0; i < filter1.size(); ++i)
+    if (*bitmap_filter1 == *bitmap_filter2)
+        return;
+
+    ASSERT_EQ(bitmap_filter1->size(), bitmap_filter2->size());
+    ASSERT_EQ(bitmap_filter1->isAllMatch(), bitmap_filter2->isAllMatch());
+    for (UInt32 i = 0; i < bitmap_filter1->size(); ++i)
     {
-        ASSERT_EQ(filter1[i], filter2[i]) << fmt::format(
+        ASSERT_EQ(bitmap_filter1->get(i), bitmap_filter2->get(i)) << fmt::format(
             "i={}, filter1={}, filter2={}, write_load={}, delta_rows={}",
             i,
-            filter1[i],
-            filter2[i],
+            bitmap_filter1->get(i),
+            bitmap_filter2->get(i),
             magic_enum::enum_name(write_load),
             delta_rows);
     }

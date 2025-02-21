@@ -52,15 +52,11 @@ public:
 
     friend class BitmapFilterView;
 
-    std::vector<UInt32> rowkey_filter_out_row_ids;
-    std::vector<UInt32> version_filter_out_invisiable_row_ids;
-    std::vector<std::pair<UInt32, UInt32>> version_filter_out_too_old_row_ids;
-    std::vector<std::pair<UInt32, UInt32>> version_filter_out_base_row_ids;
-    std::vector<UInt32> delete_filter_out_row_ids;
+    void saveRowKeyFilterForDebug() { rowkey_filter.assign(filter); }
+    void saveVersionFilterForDebug() { version_filter.assign(filter); }
 
     IColumn::Filter rowkey_filter;
-
-    void saveRowKeyFilterForDebug() { rowkey_filter.assign(filter); }
+    IColumn::Filter version_filter;
 
 private:
     void set(std::span<const UInt32> row_ids, const FilterPtr & f);

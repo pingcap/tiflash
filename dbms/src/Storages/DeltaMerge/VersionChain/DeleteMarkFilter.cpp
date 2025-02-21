@@ -23,7 +23,6 @@
 
 namespace DB::DM
 {
-extern thread_local std::vector<UInt32> * delete_filter_out_row_ids;
 UInt32 buildDeleteMarkFilterBlock(
     const DMContext & dm_context,
     const IColumnFileDataProviderPtr & data_provider,
@@ -50,8 +49,6 @@ UInt32 buildDeleteMarkFilterBlock(
     {
         filter[start_row_id + i] = filter[start_row_id + i] && !deleteds[i];
         filtered_out_rows += deleteds[i];
-        if (delete_filter_out_row_ids && deleteds[i])
-            delete_filter_out_row_ids->push_back(start_row_id + i);
     }
     return filtered_out_rows;
 }
