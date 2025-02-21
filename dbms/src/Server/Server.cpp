@@ -867,6 +867,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 void syncSchemaWithTiDB(
     const TiFlashStorageConfig & storage_config,
     BgStorageInitHolder & bg_init_stores,
+    const std::atomic_size_t & terminate_signals_counter,
     const std::unique_ptr<Context> & global_context,
     const LoggerPtr & log)
 {
@@ -902,6 +903,7 @@ void syncSchemaWithTiDB(
     // queries.
     bg_init_stores.start( //
         *global_context,
+        terminate_signals_counter,
         log,
         storage_config.lazily_init_store,
         storage_config.concurrent_init_store,
@@ -1519,7 +1521,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // do not depend on `store_id`. Start sync schema before serving any requests.
             // For the node has not been bootstrapped, this stage will be postpone.
             // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-            syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+            syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
         }
     }
     // set default database for ch-client
@@ -1742,7 +1744,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     // Not disagg node done it before
                     // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
                     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-                    syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+                    syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
 

@@ -43,6 +43,7 @@ struct FuncInitStore
     const KeyspaceTableID ks_table_id;
     ManageableStoragePtr storage;
 
+    const std::atomic_size_t & terminated;
     std::atomic<Int64> & init_cnt;
     std::atomic<Int64> & err_cnt;
     const size_t total_count;
@@ -51,6 +52,16 @@ struct FuncInitStore
 
     void operator()()
     {
+        if (terminated.load() != 0)
+        {
+            LOG_INFO(
+                log,
+                "cancel init storage, shutting down, keyspace={} table_id={}",
+                ks_table_id.first,
+                ks_table_id.second);
+            return;
+        }
+
         try
         {
             bool init_done = storage->initStoreIfDataDirExist(nullptr);
@@ -81,7 +92,11 @@ struct FuncInitStore
     }
 };
 
-void doInitStores(Context & global_context, bool concurrent_init_store, const LoggerPtr & log)
+void doInitStores(
+    Context & global_context,
+    const std::atomic_size_t & terminated,
+    bool concurrent_init_store,
+    const LoggerPtr & log)
 {
     const auto storages = global_context.getTMTContext().getStorages().getAllStorage();
 
@@ -101,8 +116,15 @@ void doInitStores(Context & global_context, bool concurrent_init_store, const Lo
 
         for (const auto & [ks_tbl_id, storage] : storages)
         {
-            auto task
-                = FuncInitStore{ks_tbl_id, storage, init_cnt, err_cnt, total_count, &restore_segments_thread_pool, log};
+            auto task = FuncInitStore{
+                ks_tbl_id,
+                storage,
+                terminated,
+                init_cnt,
+                err_cnt,
+                total_count,
+                &restore_segments_thread_pool,
+                log};
 
             init_storages_wait_group->schedule(task);
         }
@@ -114,21 +136,28 @@ void doInitStores(Context & global_context, bool concurrent_init_store, const Lo
         for (const auto & [ks_tbl_id, storage] : storages)
         {
             // execute serially
-            FuncInitStore{ks_tbl_id, storage, init_cnt, err_cnt, total_count, nullptr, log}();
+            if (terminated.load() != 0)
+            {
+                LOG_INFO(log, "cancel init storage, shutting down");
+                break;
+            }
+            FuncInitStore{ks_tbl_id, storage, terminated, init_cnt, err_cnt, total_count, nullptr, log}();
         }
     }
 
     LOG_INFO(
         log,
-        "Storage inited finish. total_count={} init_count={} error_count={} datatype_fullname_count={}",
+        "Storage inited finish. total_count={} init_count={} error_count={} terminated={} datatype_fullname_count={}",
         total_count,
         init_cnt,
         err_cnt,
+        terminated.load(),
         DataTypeFactory::instance().getFullNameCacheSize());
 }
 
 void BgStorageInitHolder::start(
     Context & global_context,
+    const std::atomic_size_t & terminated,
     const LoggerPtr & log,
     bool lazily_init_store,
     bool concurrent_init_store,
@@ -144,7 +173,7 @@ void BgStorageInitHolder::start(
     {
         LOG_INFO(log, "Not lazily init store.");
         need_join = false;
-        doInitStores(global_context, concurrent_init_store, log);
+        doInitStores(global_context, terminated, concurrent_init_store, log);
     }
 
     LOG_INFO(log, "Lazily init store, concurrent_init_store={}", concurrent_init_store);
@@ -152,16 +181,16 @@ void BgStorageInitHolder::start(
     if (is_s3_enabled)
     {
         // If s3 enabled, we need to call `waitUntilFinish` before accepting read request later
-        init_thread = std::make_unique<std::thread>([&global_context, concurrent_init_store, &log] {
-            doInitStores(global_context, concurrent_init_store, log);
+        init_thread = std::make_unique<std::thread>([&global_context, &terminated, concurrent_init_store, &log] {
+            doInitStores(global_context, terminated, concurrent_init_store, log);
         });
         need_join = true;
     }
     else
     {
         // Otherwise, just detach the thread
-        init_thread = std::make_unique<std::thread>([&global_context, concurrent_init_store, &log] {
-            doInitStores(global_context, concurrent_init_store, log);
+        init_thread = std::make_unique<std::thread>([&global_context, &terminated, concurrent_init_store, &log] {
+            doInitStores(global_context, terminated, concurrent_init_store, log);
         });
         init_thread->detach();
         need_join = false;

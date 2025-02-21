@@ -29,6 +29,7 @@ struct BgStorageInitHolder
 
     void start(
         Context & global_context,
+        const std::atomic_size_t & terminated,
         const LoggerPtr & log,
         bool lazily_init_store,
         bool concurrent_init_store,
