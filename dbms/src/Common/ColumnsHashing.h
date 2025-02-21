@@ -153,7 +153,6 @@ protected:
     case (COLLATOR_ID):                                                                         \
     {                                                                                           \
         return prepareNextBatchType<IMPL_TYPE, true>(chars, offsets, cur_batch_size, collator); \
-        break;                                                                                  \
     }
 
             switch (collator->getCollatorId())
@@ -740,6 +739,7 @@ protected:
         if unlikely (cur_batch_size <= 0)
             return 0;
 
+        assert(batch_row_idx + cur_batch_size <= byte_size.size());
         size_t mem_size = 0;
         for (size_t i = batch_row_idx; i < batch_row_idx + cur_batch_size; ++i)
             mem_size += byte_size[i];

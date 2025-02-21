@@ -661,7 +661,9 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethodInner()
     if (params.keys_size == 1 && types_not_null[0]->isFixedString())
         return AggregatedDataVariants::Type::key_fixed_string;
 
-    // return ChooseAggregationMethodFastPath(params.keys_size, types_not_null, params.collators);
+    // ChooseAggregationMethodFastPath() was removed because key_serialized has already implemented batch-wise get key holder,
+    // which basically eliminates virtual function calls. As a result, methods for two-key types such as two_keys_num64_strbin
+    // and two_keys_strbin_strbin no longer have an advantage.
     return AggregatedDataVariants::Type::serialized;
 }
 
@@ -2178,7 +2180,7 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
         {
             if constexpr (batch_deserialize_key)
             {
-                // Assume key is StringRef, because only key_string and key_serialize can be batch-wise.
+                // Assume key is StringRef, because only key_serialize can be here.
                 static_assert(std::is_same_v<std::decay_t<decltype(key)>, StringRef>);
                 key_places.push_back(const_cast<char *>(key.data));
             }

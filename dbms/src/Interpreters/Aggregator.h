@@ -766,6 +766,9 @@ struct AggregatedDataVariants : private boost::noncopyable
       */
     AggregatedDataWithoutKey without_key = nullptr;
 
+    // When the group by key is inserted into the HashTable using the batch method,
+    // this flag is set to true, indicating that subsequent reads of the group by key from the HashTable should use the batch method for deserialization.
+    // This is done both for better performance and because currently, batch and non-batch methods are not compatible.
     bool batch_get_key_holder = false;
 
     using AggregationMethod_key8 = AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key, false>;
