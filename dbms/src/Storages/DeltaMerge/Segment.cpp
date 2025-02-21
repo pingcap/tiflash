@@ -3513,7 +3513,7 @@ void Segment::checkMVCCBitmap(
 
     static std::mutex check_mtx;
     static bool verify_failed = false;
-    std::lock_guard lock(check_mtx);  // To Avoid concurrent check that logs are mixed together.
+    std::lock_guard lock(check_mtx); // To Avoid concurrent check that logs are mixed together.
     if (verify_failed)
     {
         LOG_INFO(segment_snap->log, "Already verify failed, skip checkBitmapForTest");

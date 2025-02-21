@@ -29,7 +29,7 @@ UInt32 buildDeleteMarkFilterBlock(
     const IColumnFileDataProviderPtr & data_provider,
     const ColumnFile & cf,
     const UInt32 start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
     const auto rows = cf.getRows();
@@ -61,7 +61,7 @@ UInt32 buildDeleteMarkFilterDMFile(
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range,
     const ssize_t start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
     if (valid_handle_res.empty())
@@ -119,7 +119,7 @@ UInt32 buildDeleteMarkFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const ssize_t start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     return buildDeleteMarkFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), start_row_id, filter);
 }
@@ -127,14 +127,14 @@ UInt32 buildDeleteMarkFilterColumnFileBig(
 UInt32 buildDeleteMarkFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
     return buildDeleteMarkFilterDMFile(dm_context, dmfiles[0], std::nullopt, 0, filter);
 }
 
-UInt32 buildDeleteMarkFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, IColumn::Filter & filter)
+UInt32 buildDeleteMarkFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, BitmapFilter & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);

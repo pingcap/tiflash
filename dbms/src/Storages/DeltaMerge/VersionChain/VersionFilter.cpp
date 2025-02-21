@@ -33,7 +33,7 @@ UInt32 buildVersionFilterVector(
     const std::vector<RowID> & base_ver_snap,
     const UInt32 stable_rows,
     const UInt32 start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     UInt32 filtered_out_rows = 0;
     // Traverse data from new to old
@@ -85,7 +85,7 @@ UInt32 buildVersionFilterVector(
     const std::vector<RowID> & base_ver_snap,
     const UInt32 stable_rows,
     const UInt32 start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     static const auto version_cds_ptr = std::make_shared<ColumnDefines>(1, getVersionColumnDefine());
     auto cf_reader = cf.getReader(dm_context, data_provider, version_cds_ptr, ReadTag::MVCC);
@@ -130,7 +130,7 @@ template <ExtraHandleType HandleType>
     const std::optional<RowKeyRange> & segment_range,
     const UInt64 read_ts,
     const ssize_t start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
     if (valid_handle_res.empty())
@@ -216,7 +216,7 @@ template <ExtraHandleType HandleType>
                 const UInt32 base_row_id = itr - handles.begin() + pack_start_row_id;
                 if (!filter[base_row_id])
                 {
-                    std::fill_n(filter.begin() + base_row_id + 1, count - 1, 0);
+                    filter.set(base_row_id + 1, count - 1, 0);
                     filtered_out_rows += count - 1;
                     continue;
                 }
@@ -249,7 +249,7 @@ template <ExtraHandleType HandleType>
     const ColumnFileBig & cf_big,
     const UInt64 read_ts,
     const ssize_t start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     return buildVersionFilterDMFile<HandleType>(
         dm_context,
@@ -265,7 +265,7 @@ template <ExtraHandleType HandleType>
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
     const UInt64 read_ts,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
@@ -291,7 +291,7 @@ UInt32 buildVersionFilter(
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -360,12 +360,12 @@ template UInt32 buildVersionFilter<Int64>(
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
-    IColumn::Filter & filter);
+    BitmapFilter & filter);
 
 template UInt32 buildVersionFilter<String>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
-    IColumn::Filter & filter);
+    BitmapFilter & filter);
 } // namespace DB::DM

@@ -33,7 +33,7 @@ UInt32 buildRowKeyFilterVector(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     UInt32 filtered_out_rows = 0;
     for (UInt32 i = 0; i < handles.size(); ++i)
@@ -62,7 +62,7 @@ UInt32 buildRowKeyFilterBlock(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
     const UInt32 rows = cf.getRows();
@@ -90,7 +90,7 @@ UInt32 buildRowKeyFilterDMFile(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & stable_filter_res,
     const UInt32 start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
     if (unlikely(valid_handle_res.empty()))
@@ -133,7 +133,7 @@ UInt32 buildRowKeyFilterDMFile(
         const auto pack_id = valid_start_pack_id + i;
         if (!valid_handle_res[i].isUse())
         {
-            std::fill_n(filter.begin() + start_row_id + processed_rows, pack_stats[pack_id].rows, false);
+            filter.set(start_row_id + processed_rows, pack_stats[pack_id].rows, 0);
             filtered_out_rows += pack_stats[pack_id].rows;
         }
         else if (!valid_handle_res[i].allMatch())
@@ -179,7 +179,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     if (cf_big.getRows() == 0)
         return 0;
@@ -201,7 +201,7 @@ UInt32 buildRowKeyFilterStable(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
@@ -227,7 +227,7 @@ UInt32 buildRowKeyFilter(
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    IColumn::Filter & filter)
+    BitmapFilter & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -299,12 +299,12 @@ template UInt32 buildRowKeyFilter<Int64>(
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & filter_res,
-    IColumn::Filter & filter);
+    BitmapFilter & filter);
 
 template UInt32 buildRowKeyFilter<String>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & filter_res,
-    IColumn::Filter & filter);
+    BitmapFilter & filter);
 } // namespace DB::DM

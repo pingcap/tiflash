@@ -46,7 +46,7 @@ BitmapFilterPtr buildBitmapFilter(
     const UInt32 stable_rows = stable.getDMFilesRows();
     const UInt32 total_rows = delta_rows + stable_rows;
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, true);
-    auto & filter = bitmap_filter->getFilter();
+
     rowkey_filter_out_row_ids = &bitmap_filter->rowkey_filter_out_row_ids;
     delete_filter_out_row_ids = &bitmap_filter->delete_filter_out_row_ids;
 
@@ -56,11 +56,12 @@ BitmapFilterPtr buildBitmapFilter(
 
     RUNTIME_CHECK(pack_filter_results.size() == 1, pack_filter_results.size());
     auto rowkey_filtered_out_rows
-        = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, pack_filter_results[0], filter);
-    bitmap_filter->rowkey_filter.assign(filter);
+        = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, pack_filter_results[0], *bitmap_filter);
+    bitmap_filter->saveRowKeyFilterForDebug();
+
     auto version_filtered_out_rows
-        = buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, filter);
-    auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, filter);
+        = buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, *bitmap_filter);
+    auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, *bitmap_filter);
 
     rowkey_filter_out_row_ids = nullptr;
     delete_filter_out_row_ids = nullptr;

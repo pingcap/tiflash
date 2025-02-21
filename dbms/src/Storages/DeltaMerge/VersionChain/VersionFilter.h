@@ -28,5 +28,5 @@ UInt32 buildVersionFilter(
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
-    IColumn::Filter & filter);
+    BitmapFilter & filter);
 } // namespace DB::DM

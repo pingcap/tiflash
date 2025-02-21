@@ -47,9 +47,8 @@ public:
     size_t count() const;
     inline size_t size() const { return filter.size(); }
 
-    IColumn::Filter & getFilter() { return filter; }
-
     bool operator==(const BitmapFilter & other) const { return filter == other.filter && all_match == other.all_match; }
+    ALWAYS_INLINE auto & operator[](size_t n) { return filter[n]; }
 
     friend class BitmapFilterView;
 
@@ -60,6 +59,8 @@ public:
     std::vector<UInt32> delete_filter_out_row_ids;
 
     IColumn::Filter rowkey_filter;
+
+    void saveRowKeyFilterForDebug() { rowkey_filter.assign(filter); }
 
 private:
     void set(std::span<const UInt32> row_ids, const FilterPtr & f);

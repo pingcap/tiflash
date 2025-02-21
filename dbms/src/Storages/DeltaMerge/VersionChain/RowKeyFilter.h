@@ -32,5 +32,5 @@ UInt32 buildRowKeyFilter(
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    IColumn::Filter & filter);
+    BitmapFilter & filter);
 } // namespace DB::DM
