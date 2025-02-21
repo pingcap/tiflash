@@ -181,7 +181,10 @@ public:
         return readImpl(ns_id, page_field, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    void traverse(const TraversePageCallback & acceptor, SnapshotPtr snapshot = {}) { traverseImpl(acceptor, snapshot); }
+    void traverse(const TraversePageCallback & acceptor, SnapshotPtr snapshot = {})
+    {
+        traverseImpl(acceptor, snapshot);
+    }
 
     PageIdU64 getNormalPageId(
         NamespaceID ns_id,
@@ -315,10 +318,7 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const;
 
-    void traverse(
-        const TraversePageCallback & acceptor,
-        bool only_v2 = false,
-        bool only_v3 = false) const;
+    void traverse(const TraversePageCallback & acceptor, bool only_v2 = false, bool only_v3 = false) const;
 
 private:
     std::unique_ptr<PageReaderImpl> impl;

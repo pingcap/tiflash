@@ -861,6 +861,7 @@ void PageStorage::traverseImpl(const TraversePageCallback & acceptor, SnapshotPt
     }
 
     std::map<PageFileIdAndLevel, PageIds> file_and_pages;
+    size_t num_pages = 0;
     {
         auto * concrete_snapshot = toConcreteSnapshot(snapshot);
         auto valid_pages_ids = concrete_snapshot->version()->validPageIds();
@@ -873,6 +874,7 @@ void PageStorage::traverseImpl(const TraversePageCallback & acceptor, SnapshotPt
                     ErrorCodes::LOGICAL_ERROR);
             file_and_pages[page_entry->fileIdLevel()].emplace_back(page_id);
         }
+        num_pages += valid_pages_ids.size();
     }
 
     for (const auto & p : file_and_pages)
@@ -881,7 +883,7 @@ void PageStorage::traverseImpl(const TraversePageCallback & acceptor, SnapshotPt
         auto pages = readImpl(MAX_NAMESPACE_ID, p.second, nullptr, snapshot, true);
         for (const auto & id_page : pages)
         {
-            acceptor(id_page.second);
+            acceptor(id_page.second, num_pages);
         }
     }
 }

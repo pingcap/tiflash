@@ -80,8 +80,7 @@ public:
 
     virtual FileUsageStatistics getFileUsageStatistics() const = 0;
 
-    virtual void traverse(const TraversePageCallback & acceptor, bool only_v2, bool only_v3)
-        const = 0;
+    virtual void traverse(const TraversePageCallback & acceptor, bool only_v2, bool only_v3) const = 0;
 };
 
 
@@ -441,10 +440,11 @@ public:
     {
         auto snapshot = storage->getSnapshot(fmt::format("scan_{}", prefix));
         const auto page_ids = storage->page_directory->getAllPageIdsWithPrefix(prefix, snapshot);
+        const auto num_pages = page_ids.size();
         for (const auto & page_id : page_ids)
         {
             const auto page_id_and_entry = storage->page_directory->getByID(page_id, snapshot);
-            acceptor(storage->blob_store->read(page_id_and_entry));
+            acceptor(storage->blob_store->read(page_id_and_entry), num_pages);
         }
     }
 
@@ -831,7 +831,7 @@ void PageWriter::reloadSettings(const PageStorageConfig & new_config) const
             fmt::format("Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode)),
             ErrorCodes::LOGICAL_ERROR);
     }
-};
+}
 
 bool PageWriter::gc(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) const
 {

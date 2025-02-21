@@ -292,10 +292,11 @@ void PageStorageImpl::traverseImpl(const TraversePageCallback & acceptor, Snapsh
 
     // TODO: This could hold the read lock of `page_directory` for a long time
     const auto & page_ids = page_directory->getAllPageIds();
+    size_t total_pages = page_ids.size();
     for (const auto & valid_page : page_ids)
     {
         const auto & page_id_and_entry = page_directory->getByID(valid_page, snapshot);
-        acceptor(blob_store.read(page_id_and_entry));
+        acceptor(blob_store.read(page_id_and_entry), total_pages);
     }
 }
 
