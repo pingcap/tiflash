@@ -18,6 +18,7 @@
 #include <Server/BgStorageInit.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/Types.h>
 #include <common/logger_useful.h>
 
 #include <thread>
@@ -37,6 +38,49 @@ void BgStorageInitHolder::waitUntilFinish()
     // or has been detach
 }
 
+struct FuncInitStore
+{
+    const KeyspaceTableID ks_table_id;
+    ManageableStoragePtr storage;
+
+    std::atomic<Int64> & init_cnt;
+    std::atomic<Int64> & err_cnt;
+    const size_t total_count;
+    ThreadPool * restore_segments_thread_pool;
+    const LoggerPtr & log;
+
+    void operator()()
+    {
+        try
+        {
+            bool init_done = storage->initStoreIfDataDirExist(nullptr);
+            init_cnt += static_cast<Int64>(init_done);
+            LOG_INFO(
+                log,
+                "Storage inited done, keyspace={} table_id={} n_init={} n_err={} n_total={} datatype_fullname_count={}",
+                ks_table_id.first,
+                ks_table_id.second,
+                init_cnt.load(),
+                err_cnt.load(),
+                total_count,
+                DataTypeFactory::instance().getFullNameCacheSize());
+        }
+        catch (...)
+        {
+            err_cnt++;
+            tryLogCurrentException(
+                log,
+                fmt::format(
+                    "Storage inited fail, keyspace={} table_id={} n_init={} n_err={} n_total={}",
+                    ks_table_id.first,
+                    ks_table_id.second,
+                    init_cnt.load(),
+                    err_cnt.load(),
+                    total_count));
+        }
+    }
+};
+
 void doInitStores(Context & global_context, bool concurrent_init_store, const LoggerPtr & log)
 {
     const auto storages = global_context.getTMTContext().getStorages().getAllStorage();
@@ -46,68 +90,37 @@ void doInitStores(Context & global_context, bool concurrent_init_store, const Lo
     std::atomic<Int64> init_cnt = 0;
     std::atomic<Int64> err_cnt = 0;
 
-    auto init_stores_function = [&](const auto & ks_table_id, auto & storage, auto * restore_segments_thread_pool) {
-        // This will skip the init of storages that do not contain any data. TiFlash now sync the schema and
-        // create all tables regardless the table have define TiFlash replica or not, so there may be lots
-        // of empty tables in TiFlash.
-        // Note that we still need to init stores that contains data (defined by the stable dir of this storage
-        // is exist), or the data used size reported to PD is not correct.
-        const auto & [ks_id, table_id] = ks_table_id;
-        try
-        {
-            bool init_done = false;
-            if (concurrent_init_store)
-                init_done = storage->initStoreIfDataDirExist(restore_segments_thread_pool);
-            else
-                init_done = storage->initStoreIfDataDirExist(nullptr);
-            init_cnt += static_cast<Int64>(init_done);
-            LOG_INFO(
-                log,
-                "Storage inited done, keyspace={} table_id={} n_init={} n_err={} n_total={}",
-                ks_id,
-                table_id,
-                init_cnt.load(),
-                err_cnt.load(),
-                total_count);
-        }
-        catch (...)
-        {
-            err_cnt++;
-            tryLogCurrentException(
-                log,
-                fmt::format(
-                    "Storage inited fail, keyspace={} table_id={} n_init={} n_err={} n_total={}",
-                    ks_id,
-                    table_id,
-                    init_cnt.load(),
-                    err_cnt.load(),
-                    total_count));
-        }
-    };
-
-    size_t num_threads
-        = std::max(4UL, std::thread::hardware_concurrency()) * global_context.getSettingsRef().init_thread_count_scale;
-    auto init_storages_thread_pool = ThreadPool(num_threads, num_threads / 2, num_threads * 2);
-    auto init_storages_wait_group = init_storages_thread_pool.waitGroup();
-
-    auto restore_segments_thread_pool = ThreadPool(num_threads, num_threads / 2, num_threads * 2);
-
-    for (const auto & iter : storages)
+    if (concurrent_init_store)
     {
-        const auto & ks_table_id = iter.first;
-        const auto & storage = iter.second;
-        auto task = [&init_stores_function, &ks_table_id, &storage, &restore_segments_thread_pool] {
-            init_stores_function(ks_table_id, storage, &restore_segments_thread_pool);
-        };
+        size_t num_threads = std::max(4UL, std::thread::hardware_concurrency())
+            * global_context.getSettingsRef().init_thread_count_scale;
+        auto init_storages_thread_pool = ThreadPool(num_threads, num_threads / 2, num_threads * 2);
+        auto init_storages_wait_group = init_storages_thread_pool.waitGroup();
 
-        init_storages_wait_group->schedule(task);
+        auto restore_segments_thread_pool = ThreadPool(num_threads, num_threads / 2, num_threads * 2);
+
+        for (const auto & [ks_tbl_id, storage] : storages)
+        {
+            auto task
+                = FuncInitStore{ks_tbl_id, storage, init_cnt, err_cnt, total_count, &restore_segments_thread_pool, log};
+
+            init_storages_wait_group->schedule(task);
+        }
+
+        init_storages_wait_group->wait();
     }
-
-    init_storages_wait_group->wait();
+    else
+    {
+        for (const auto & [ks_tbl_id, storage] : storages)
+        {
+            // execute serially
+            FuncInitStore{ks_tbl_id, storage, init_cnt, err_cnt, total_count, nullptr, log}();
+        }
+    }
 
     LOG_INFO(
         log,
-        "Storage inited finish. [total_count={}] [init_count={}] [error_count={}] [datatype_fullname_count={}]",
+        "Storage inited finish. total_count={} init_count={} error_count={} datatype_fullname_count={}",
         total_count,
         init_cnt,
         err_cnt,
@@ -134,10 +147,11 @@ void BgStorageInitHolder::start(
         doInitStores(global_context, concurrent_init_store, log);
     }
 
-    LOG_INFO(log, "Lazily init store.");
+    LOG_INFO(log, "Lazily init store, concurrent_init_store={}", concurrent_init_store);
     // apply the inited in another thread to shorten the start time of TiFlash
     if (is_s3_enabled)
     {
+        // If s3 enabled, we need to call `waitUntilFinish` before accepting read request later
         init_thread = std::make_unique<std::thread>([&global_context, concurrent_init_store, &log] {
             doInitStores(global_context, concurrent_init_store, log);
         });
@@ -145,6 +159,7 @@ void BgStorageInitHolder::start(
     }
     else
     {
+        // Otherwise, just detach the thread
         init_thread = std::make_unique<std::thread>([&global_context, concurrent_init_store, &log] {
             doInitStores(global_context, concurrent_init_store, log);
         });
