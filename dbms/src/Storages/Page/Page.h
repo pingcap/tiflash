@@ -112,6 +112,9 @@ public:
 using Pages = std::vector<Page>;
 using PageMapU64 = std::map<PageIdU64, Page>;
 
+// Callback for traversing all pages
+using TraversePageCallback = std::function<void(const DB::Page & page)>;
+
 // Indicate the page size && offset in PageFile.
 struct PageEntry
 {

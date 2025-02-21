@@ -853,7 +853,7 @@ Page PageStorage::readImpl(
     return file_reader->read(field_info, read_limiter);
 }
 
-void PageStorage::traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
+void PageStorage::traverseImpl(const TraversePageCallback & acceptor, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {

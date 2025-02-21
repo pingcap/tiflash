@@ -283,7 +283,7 @@ Page PageStorageImpl::readImpl(
     throw Exception("Not support read single filed on V3", ErrorCodes::NOT_IMPLEMENTED);
 }
 
-void PageStorageImpl::traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot)
+void PageStorageImpl::traverseImpl(const TraversePageCallback & acceptor, SnapshotPtr snapshot)
 {
     if (!snapshot)
     {

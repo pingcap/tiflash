@@ -30,15 +30,9 @@
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
-#include <condition_variable>
 #include <functional>
 #include <memory>
-#include <optional>
-#include <queue>
 #include <set>
-#include <shared_mutex>
-#include <type_traits>
-#include <unordered_map>
 
 
 namespace DB
@@ -187,10 +181,7 @@ public:
         return readImpl(ns_id, page_field, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {})
-    {
-        traverseImpl(acceptor, snapshot);
-    }
+    void traverse(const TraversePageCallback & acceptor, SnapshotPtr snapshot = {}) { traverseImpl(acceptor, snapshot); }
 
     PageIdU64 getNormalPageId(
         NamespaceID ns_id,
@@ -256,7 +247,7 @@ protected:
         bool throw_on_not_exist)
         = 0;
 
-    virtual void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) = 0;
+    virtual void traverseImpl(const TraversePageCallback & acceptor, SnapshotPtr snapshot) = 0;
 
     virtual PageIdU64 getNormalPageIdImpl(
         NamespaceID ns_id,
@@ -325,7 +316,7 @@ public:
     FileUsageStatistics getFileUsageStatistics() const;
 
     void traverse(
-        const std::function<void(const DB::Page & page)> & acceptor,
+        const TraversePageCallback & acceptor,
         bool only_v2 = false,
         bool only_v3 = false) const;
 
