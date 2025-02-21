@@ -874,8 +874,13 @@ try
     // 0: use one level
     // 1: use two level
     std::vector<UInt64> two_level_thresholds{0, 1};
-    std::vector<Int64> collators{TiDB::ITiDBCollator::UTF8MB4_BIN, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI};
+    std::vector<Int64> collators{
+        TiDB::ITiDBCollator::UTF8MB4_BIN,
+        TiDB::ITiDBCollator::BINARY,
+        TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI};
     std::vector<std::vector<String>> group_by_keys{
+        /// fast path with one int and one string
+        {"key_64", "key_64_nullable", "key_string_1"},
         /// fast path with one int and one string
         {"key_64", "key_string_1"},
         /// fast path with two string

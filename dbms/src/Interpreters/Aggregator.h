@@ -722,7 +722,6 @@ struct AggregationMethodSerialized
 
     static void insertKeyIntoColumnsBatch(PaddedPODArray<char *> & key_places, std::vector<IColumn *> & key_columns)
     {
-        // todo: nt optimization
         for (auto * key_column : key_columns)
             key_column->deserializeForCmpAndInsertFromPos(key_places, false);
     }
