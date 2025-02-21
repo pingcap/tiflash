@@ -80,8 +80,11 @@ public:
 
     virtual FileUsageStatistics getFileUsageStatistics() const = 0;
 
-    virtual void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3)
-        const = 0;
+    virtual void traverse(
+        const std::function<void(const DB::Page & page, size_t num_total)> & acceptor,
+        bool only_v2,
+        bool only_v3) const
+        = 0;
 };
 
 
@@ -135,8 +138,10 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const override { return storage->getSnapshotsStat(); }
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool /*only_v2*/, bool /*only_v3*/)
-        const override
+    void traverse(
+        const std::function<void(const DB::Page & page, size_t num_total)> & acceptor,
+        bool /*only_v2*/,
+        bool /*only_v3*/) const override
     {
         storage->traverse(acceptor, nullptr);
     }
@@ -308,8 +313,10 @@ public:
 
     FileUsageStatistics getFileUsageStatistics() const override { return storage_v3->getFileUsageStatistics(); }
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3)
-        const override
+    void traverse(
+        const std::function<void(const DB::Page & page, size_t num_total)> & acceptor,
+        bool only_v2,
+        bool only_v3) const override
     {
         // Used by RegionPersister::restore
         // Must traverse storage_v3 before storage_v2
@@ -439,15 +446,18 @@ public:
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const override { return storage->getSnapshotsStat(); }
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, bool /*only_v2*/, bool /*only_v3*/)
-        const override
+    void traverse(
+        const std::function<void(const DB::Page & page, size_t num_total)> & acceptor,
+        bool /*only_v2*/,
+        bool /*only_v3*/) const override
     {
         auto snapshot = storage->getSnapshot(fmt::format("scan_{}", prefix));
         const auto page_ids = storage->page_directory->getAllPageIdsWithPrefix(prefix, snapshot);
+        size_t num_total = page_ids.size();
         for (const auto & page_id : page_ids)
         {
             const auto page_id_and_entry = storage->page_directory->getByID(page_id, snapshot);
-            acceptor(storage->blob_store->read(page_id_and_entry));
+            acceptor(storage->blob_store->read(page_id_and_entry), num_total);
         }
     }
 
@@ -588,7 +598,10 @@ FileUsageStatistics PageReader::getFileUsageStatistics() const
     return impl->getFileUsageStatistics();
 }
 
-void PageReader::traverse(const std::function<void(const DB::Page & page)> & acceptor, bool only_v2, bool only_v3) const
+void PageReader::traverse(
+    const std::function<void(const DB::Page & page, size_t num_total)> & acceptor,
+    bool only_v2,
+    bool only_v3) const
 {
     impl->traverse(acceptor, only_v2, only_v3);
 }
