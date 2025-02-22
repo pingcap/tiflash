@@ -789,7 +789,7 @@ try
 
     {
         size_t num_pages = 0;
-        page_storage->traverse([&num_pages](const DB::Page &) { num_pages += 1; });
+        page_storage->traverse([&num_pages](const DB::Page &, size_t) { num_pages += 1; });
         ASSERT_EQ(num_pages, 0);
     }
 
@@ -819,7 +819,7 @@ try
 
     {
         size_t num_pages = 0;
-        page_storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        page_storage->traverse([&num_pages](const Page &, size_t) { num_pages += 1; });
         ASSERT_EQ(num_pages, 1);
 
         auto page1 = page_storage->read(1);
@@ -875,7 +875,7 @@ try
 
     {
         size_t num_pages = 0;
-        page_storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        page_storage->traverse([&num_pages](const Page &, size_t) { num_pages += 1; });
         ASSERT_EQ(num_pages, 0);
     }
 
@@ -905,7 +905,7 @@ try
 
     {
         size_t num_pages = 0;
-        page_storage->traverse([&num_pages](const Page &) { num_pages += 1; });
+        page_storage->traverse([&num_pages](const Page &, size_t) { num_pages += 1; });
         ASSERT_EQ(num_pages, 1);
 
         auto page1 = page_storage->read(1);

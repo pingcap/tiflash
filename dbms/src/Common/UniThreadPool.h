@@ -321,10 +321,10 @@ public:
         }
     }
 
-    void schedule(std::function<void()> func)
+    void schedule(std::function<void()> && func)
     {
-        auto task = std::make_shared<std::packaged_task<void()>>(func);
-        thread_pool.scheduleOrThrowOnError([task] { (*task)(); });
+        auto task = std::make_shared<std::packaged_task<void()>>(std::move(func));
+        thread_pool.scheduleOrThrowOnError([t = task] { (*t)(); });
         futures.emplace_back(task->get_future());
     }
 
@@ -335,7 +335,7 @@ public:
         consumed = true;
 
         std::exception_ptr first_exception;
-        for (auto & future : futures)
+        for (auto && future : futures)
         {
             // ensure all futures finished
             try
@@ -361,6 +361,7 @@ public:
                 exc.rethrow();
             }
         }
+        futures.clear();
     }
 
 private:

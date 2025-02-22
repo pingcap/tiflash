@@ -152,7 +152,7 @@ void RegionPersister::forceTransformKVStoreV2toV3()
     assert(page_writer != nullptr);
 
     WriteBatch write_batch_del_v2{KVSTORE_NAMESPACE_ID};
-    auto meta_transform_acceptor = [&](const DB::Page & page) {
+    auto meta_transform_acceptor = [&](const DB::Page & page, size_t) {
         WriteBatch write_batch_transform{KVSTORE_NAMESPACE_ID};
         // Check pages have not contain field offset
         // Also get the tag of page_id
@@ -374,8 +374,24 @@ RegionMap RegionPersister::restore(
         LOG_INFO(log, "RegionPersister running. Current Run Mode is {}", magic_enum::enum_name(run_mode));
     }
 
+    static constexpr size_t PROGRESS_EACH_N_REGIONS = 512;
+    static constexpr size_t PROGRESS_EACH_N_SECONDS = 5;
+
     RegionMap regions;
-    auto acceptor = [&](const DB::Page & page) {
+    std::atomic<size_t> num_restored = 0;
+    AtomicStopwatch watch;
+    auto acceptor = [&](const DB::Page & page, size_t num_total) {
+        if (++num_restored % PROGRESS_EACH_N_REGIONS == 0 || watch.compareAndRestart(PROGRESS_EACH_N_SECONDS))
+        {
+            LOG_INFO(
+                log,
+                "Restoring regions, processed={} total={} pct={:.2f}%",
+                num_restored,
+                num_total,
+                num_restored * 100.0 / num_total);
+            watch.restart();
+        }
+
         // We will traverse the pages in V3 before traverse the pages in V2 When we used MIX MODE
         // If we found the page_id has been restored, just skip it.
         if (const auto it = regions.find(page.page_id); it != regions.end())

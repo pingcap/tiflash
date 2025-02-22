@@ -187,7 +187,9 @@ public:
         return readImpl(ns_id, page_field, read_limiter, snapshot, throw_on_not_exist);
     }
 
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot = {})
+    void traverse(
+        const std::function<void(const DB::Page & page, size_t num_total)> & acceptor,
+        SnapshotPtr snapshot = {})
     {
         traverseImpl(acceptor, snapshot);
     }
@@ -256,7 +258,10 @@ protected:
         bool throw_on_not_exist)
         = 0;
 
-    virtual void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) = 0;
+    virtual void traverseImpl(
+        const std::function<void(const DB::Page & page, size_t num_total)> & acceptor,
+        SnapshotPtr snapshot)
+        = 0;
 
     virtual PageIdU64 getNormalPageIdImpl(
         NamespaceID ns_id,
@@ -325,7 +330,7 @@ public:
     FileUsageStatistics getFileUsageStatistics() const;
 
     void traverse(
-        const std::function<void(const DB::Page & page)> & acceptor,
+        const std::function<void(const DB::Page & page, size_t num_total)> & acceptor,
         bool only_v2 = false,
         bool only_v3 = false) const;
 

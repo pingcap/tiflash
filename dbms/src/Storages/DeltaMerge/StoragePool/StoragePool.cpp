@@ -394,7 +394,7 @@ void StoragePool::forceTransformMetaV2toV3()
         nullptr);
 
     Pages pages_transform = {};
-    auto meta_transform_acceptor = [&](const DB::Page & page) {
+    auto meta_transform_acceptor = [&](const DB::Page & page, size_t) {
         pages_transform.emplace_back(page);
     };
 

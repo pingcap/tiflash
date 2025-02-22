@@ -135,7 +135,7 @@ void StressWorkload::initPageStorage(DB::PageStorageConfig & config, String path
 
     {
         size_t num_of_pages = 0;
-        ps->traverse([&num_of_pages](const DB::Page & page) {
+        ps->traverse([&num_of_pages](const DB::Page & page, size_t) {
             (void)page;
             num_of_pages++;
         });
