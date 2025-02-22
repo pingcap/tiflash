@@ -32,7 +32,6 @@ struct BgStorageInitHolder
         const std::atomic_size_t & terminated,
         const LoggerPtr & log,
         bool lazily_init_store,
-        bool concurrent_init_store,
         bool is_s3_enabled);
 
     // wait until finish if need

@@ -906,7 +906,6 @@ void syncSchemaWithTiDB(
         terminate_signals_counter,
         log,
         storage_config.lazily_init_store,
-        storage_config.concurrent_init_store,
         storage_config.s3_config.isS3Enabled());
 
     // init schema sync service with tidb

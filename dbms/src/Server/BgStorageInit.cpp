@@ -95,7 +95,6 @@ struct FuncInitStore
 void doInitStores(
     Context & global_context,
     const std::atomic_size_t & terminated,
-    bool concurrent_init_store,
     const LoggerPtr & log)
 {
     const auto storages = global_context.getTMTContext().getStorages().getAllStorage();
@@ -105,9 +104,9 @@ void doInitStores(
     std::atomic<Int64> init_cnt = 0;
     std::atomic<Int64> err_cnt = 0;
 
-    if (concurrent_init_store)
+    if (global_context.getSettingsRef().init_thread_count_scale > 0)
     {
-        size_t num_threads = std::max(4UL, std::thread::hardware_concurrency())
+        size_t num_threads = std::max(4UL, std::thread::hardware_concurrency()) //
             * global_context.getSettingsRef().init_thread_count_scale;
         auto init_storages_thread_pool = ThreadPool(num_threads, num_threads / 2, num_threads * 2);
         auto init_storages_wait_group = init_storages_thread_pool.waitGroup();
@@ -160,7 +159,6 @@ void BgStorageInitHolder::start(
     const std::atomic_size_t & terminated,
     const LoggerPtr & log,
     bool lazily_init_store,
-    bool concurrent_init_store,
     bool is_s3_enabled)
 {
     RUNTIME_CHECK_MSG(
@@ -173,24 +171,24 @@ void BgStorageInitHolder::start(
     {
         LOG_INFO(log, "Not lazily init store.");
         need_join = false;
-        doInitStores(global_context, terminated, concurrent_init_store, log);
+        doInitStores(global_context, terminated, log);
     }
 
-    LOG_INFO(log, "Lazily init store, concurrent_init_store={}", concurrent_init_store);
+    LOG_INFO(log, "Lazily init store");
     // apply the inited in another thread to shorten the start time of TiFlash
     if (is_s3_enabled)
     {
         // If s3 enabled, we need to call `waitUntilFinish` before accepting read request later
-        init_thread = std::make_unique<std::thread>([&global_context, &terminated, concurrent_init_store, &log] {
-            doInitStores(global_context, terminated, concurrent_init_store, log);
+        init_thread = std::make_unique<std::thread>([&global_context, &terminated, &log] {
+            doInitStores(global_context, terminated, log);
         });
         need_join = true;
     }
     else
     {
         // Otherwise, just detach the thread
-        init_thread = std::make_unique<std::thread>([&global_context, &terminated, concurrent_init_store, &log] {
-            doInitStores(global_context, terminated, concurrent_init_store, log);
+        init_thread = std::make_unique<std::thread>([&global_context, &terminated, &log] {
+            doInitStores(global_context, terminated, log);
         });
         init_thread->detach();
         need_join = false;
