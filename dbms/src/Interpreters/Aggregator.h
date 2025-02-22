@@ -1519,6 +1519,18 @@ protected:
 
     template <
         bool collect_hit_rate,
+        bool only_lookup,
+        bool enable_prefetch,
+        bool enable_batch_get_key_holder,
+        typename Method>
+    void executeImplInner(
+        Method & method,
+        AggregatedDataVariants & result,
+        AggProcessInfo & agg_process_info,
+        TiDB::TiDBCollators & collators) const;
+
+    template <
+        bool collect_hit_rate,
         bool only_loopup,
         bool enable_prefetch,
         bool batch_get_key_holder,

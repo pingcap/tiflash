@@ -44,6 +44,7 @@ extern const char random_aggregate_merge_failpoint[];
 extern const char force_agg_on_partial_block[];
 extern const char random_fail_in_resize_callback[];
 extern const char force_agg_prefetch[];
+extern const char disable_agg_batch_get_key_holder[];
 extern const char force_magic_hash[];
 } // namespace FailPoints
 
@@ -702,21 +703,81 @@ void NO_INLINE Aggregator::executeImpl(
     AggProcessInfo & agg_process_info,
     TiDB::TiDBCollators & collators) const
 {
-    auto * aggregates_pool = result.aggregates_pool;
-    typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
-
     // 2MB as prefetch threshold, because normally server L2 cache is 1MB.
     static constexpr size_t prefetch_threshold = (2 << 20);
 #ifndef NDEBUG
+    // In debug mode, failpoint disable_agg_batch_get_key_holder can be used.
     bool disable_prefetch = (method.data.getBufferSizeInBytes() < prefetch_threshold);
     fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
+
+    bool disable_batch_get_key_holder = false;
+    fiu_do_on(FailPoints::disable_agg_batch_get_key_holder, { disable_batch_get_key_holder = true; });
+
+    if (disable_batch_get_key_holder)
+    {
+        if (disable_prefetch)
+            executeImplInner<
+                collect_hit_rate,
+                only_lookup,
+                /*enable_prefetch=*/false,
+                /*enable_agg_batch_get_key_holder=*/false>(method, result, agg_process_info, collators);
+        else
+            executeImplInner<
+                collect_hit_rate,
+                only_lookup,
+                /*enable_prefetch=*/true,
+                /*enable_agg_batch_get_key_holder=*/false>(method, result, agg_process_info, collators);
+    }
+    else
+    {
+        if (disable_prefetch)
+            executeImplInner<
+                collect_hit_rate,
+                only_lookup,
+                /*enable_prefetch=*/false,
+                /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
+        else
+            executeImplInner<
+                collect_hit_rate,
+                only_lookup,
+                /*enable_prefetch=*/true,
+                /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
+    }
 #else
     const bool disable_prefetch = (method.data.getBufferSizeInBytes() < prefetch_threshold);
+    if (disable_prefetch)
+        executeImplInner<
+            collect_hit_rate,
+            only_lookup,
+            /*enable_prefetch=*/false,
+            /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
+    else
+        executeImplInner<
+            collect_hit_rate,
+            only_lookup,
+            /*enable_prefetch=*/true,
+            /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
 #endif
+}
+
+template <
+    bool collect_hit_rate,
+    bool only_lookup,
+    bool enable_prefetch,
+    bool enable_batch_get_key_holder,
+    typename Method>
+void Aggregator::executeImplInner(
+    Method & method,
+    AggregatedDataVariants & result,
+    AggProcessInfo & agg_process_info,
+    TiDB::TiDBCollators & collators) const
+{
+    auto * aggregates_pool = result.aggregates_pool;
+    typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
 
     // For key_serialized, memory allocation and key serialization will be batch-wise.
     // For key_string, collation decode will be batch-wise.
-    static constexpr bool batch_get_key_holder = Method::State::can_batch_get_key_holder;
+    static constexpr bool batch_get_key_holder = Method::State::can_batch_get_key_holder && enable_batch_get_key_holder;
     if constexpr (batch_get_key_holder)
     {
         state.initBatchHandler(agg_process_info.start_row, agg_mini_batch);
@@ -739,24 +800,11 @@ void NO_INLINE Aggregator::executeImpl(
     }
     else
     {
-        if (disable_prefetch)
-        {
-            executeImplBatch<
-                collect_hit_rate,
-                only_lookup,
-                /*enable_prefetch=*/false,
-                batch_get_key_holder,
-                KeyHolderType>(method, state, aggregates_pool, agg_process_info);
-        }
-        else
-        {
-            executeImplBatch<
-                collect_hit_rate,
-                only_lookup,
-                /*enable_prefetch=*/true,
-                batch_get_key_holder,
-                KeyHolderType>(method, state, aggregates_pool, agg_process_info);
-        }
+        executeImplBatch<collect_hit_rate, only_lookup, enable_prefetch, batch_get_key_holder, KeyHolderType>(
+            method,
+            state,
+            aggregates_pool,
+            agg_process_info);
     }
 }
 

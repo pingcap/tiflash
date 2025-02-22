@@ -27,6 +27,7 @@ extern const char force_agg_on_partial_block[];
 extern const char force_agg_prefetch[];
 extern const char force_agg_two_level_hash_table_before_merge[];
 extern const char force_magic_hash[];
+extern const char disable_agg_batch_get_key_holder[];
 } // namespace FailPoints
 namespace tests
 {
@@ -196,8 +197,9 @@ public:
                 {"key_64_3", TiDB::TP::TypeLongLong, false},
                 {"key_string_1", TiDB::TP::TypeString, false},
                 {"key_string_2", TiDB::TP::TypeString, false},
+                {"key_nullable_string", TiDB::TP::TypeString, true},
                 {"key_decimal256", TiDB::TP::TypeString, false},
-                {"key_64_nullable", TiDB::TP::TypeLongLong, true},
+                {"key_nullable_int64", TiDB::TP::TypeLongLong, true},
                 {"value", TiDB::TP::TypeLong, false}};
             ColumnsWithTypeAndName table_column_data;
             for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos))
@@ -877,10 +879,11 @@ try
     std::vector<Int64> collators{
         TiDB::ITiDBCollator::UTF8MB4_BIN,
         TiDB::ITiDBCollator::BINARY,
+        TiDB::ITiDBCollator::UTF8_UNICODE_CI,
         TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI};
     std::vector<std::vector<String>> group_by_keys{
         /// fast path with one int and one string
-        {"key_64", "key_64_nullable", "key_string_1"},
+        {"key_64", "key_nullable_int64", "key_string_1"},
         /// fast path with one int and one string
         {"key_64", "key_string_1"},
         /// fast path with two string
@@ -889,6 +892,10 @@ try
         {"key_string_1"},
         /// keys need to be shuffled
         {"key_8", "key_16", "key_32", "key_64"},
+        /// test nullable key_serialized(batch-wise)
+        {"key_nullable_string", "key_nullable_int64", "key_32"},
+        /// test nullable key_string(batch-wise)
+        {"key_nullable_string"},
     };
     for (auto collator_id : collators)
     {
@@ -911,7 +918,10 @@ try
             context.context->setSetting(
                 "max_block_size",
                 Field(static_cast<UInt64>(tbl_agg_table_with_special_key_unique_rows * 2)));
+            // Use non batch way to get reference.
+            FailPointHelper::enableFailPoint(FailPoints::disable_agg_batch_get_key_holder);
             auto reference = executeStreams(request);
+            FailPointHelper::disableFailPoint(FailPoints::disable_agg_batch_get_key_holder);
             if (current_collator->isCI())
             {
                 /// for ci collation, need to sort and compare the result manually
@@ -1288,9 +1298,9 @@ try
         // keys256
         {"key_64", "key_64_1", "key_64_2", "key_64_3"},
         // nullable_keys128
-        {"key_16", "key_64_nullable"},
+        {"key_16", "key_nullable_int64"},
         // nullable_keys256
-        {"key_64", "key_64_nullable"},
+        {"key_64", "key_nullable_int64"},
     };
     for (const auto & keys : group_by_keys)
     {
