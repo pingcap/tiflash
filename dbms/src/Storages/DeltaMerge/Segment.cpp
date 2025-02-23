@@ -3511,20 +3511,23 @@ void Segment::checkMVCCBitmap(
         return;
 
     static std::mutex check_mtx;
-    static bool verify_failed = false;
-    std::lock_guard lock(check_mtx); // To Avoid concurrent check that logs are mixed together.
-    if (verify_failed)
+    static bool check_failed = false;
+    // To Avoid concurrent check that logs are mixed together.
+    // Since this function is only used for test, we don't need to consider performance.
+    std::lock_guard lock(check_mtx);
+    if (check_failed)
     {
-        LOG_INFO(segment_snap->log, "Already verify failed, skip checkBitmapForTest");
+        LOG_ERROR(segment_snap->log, "{} failed, skip", __FUNCTION__);
         return;
     }
-    verify_failed = true;
+    check_failed = true;
 
     if (new_bitmap_filter->size() != bitmap_filter.size())
     {
         LOG_ERROR(
             segment_snap->log,
-            "Bitmap size not match, new_bitmap_filter_size={}, bitmap_filter_size={}, snapshot_rows={}",
+            "{} failed, bitmap size not match, new_bitmap_filter_size={}, bitmap_filter_size={}, snapshot_rows={}",
+            __FUNCTION__,
             new_bitmap_filter->size(),
             bitmap_filter.size(),
             segment_snap->getRows());
@@ -3535,16 +3538,18 @@ void Segment::checkMVCCBitmap(
     {
         LOG_ERROR(
             segment_snap->log,
-            "Bitmap all match not match, new_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
+            "{} failed, bitmap all match not match, new_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
+            __FUNCTION__,
             new_bitmap_filter->isAllMatch(),
             bitmap_filter.isAllMatch());
         throw Exception("Bitmap all match not match", ErrorCodes::LOGICAL_ERROR);
     }
 
-    LOG_INFO(
+    LOG_ERROR(
         segment_snap->log,
-        "new_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{}, stable={}, delta={}, "
+        "{} failed, new_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{}, stable={}, delta={}, "
         "read_ranges={}, segment_range={}",
+        __FUNCTION__,
         new_bitmap_filter->count(),
         new_bitmap_filter->size(),
         bitmap_filter.count(),
@@ -3582,7 +3587,7 @@ void Segment::checkMVCCBitmap(
         "Block rows not match: block_rows={}, bitmap_size={}",
         block.rows(),
         bitmap_filter.size());
-    RUNTIME_CHECK(!dm_context.is_common_handle);
+    RUNTIME_CHECK(!dm_context.is_common_handle); // TODO: support common handle
     auto handle_col = block.getByName(MutSup::extra_handle_column_name).column;
     auto version_col = block.getByName(MutSup::version_column_name).column;
     auto delmark_col = block.getByName(MutSup::delmark_column_name).column;
@@ -3638,7 +3643,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         build_bitmap_filter_block_rows,
         enable_version_chain);
 
-    if (enable_version_chain && verify_mvcc_bitmap)
+    if (unlikely(enable_version_chain && verify_mvcc_bitmap))
     {
         checkMVCCBitmap(
             dm_context,
