@@ -123,12 +123,14 @@ class History(dict[str, dict[str, int]]):
                 return History(json.load(f))
         except FileNotFoundError:
             print(
-                f"{Out.MSG_WARN}There is no run history file. Tests may be running slower than optimal."
+                f"{Out.MSG_WARN}There is no run history file. Tests may be running slower than optimal.",
+                flush=True,
             )
             return History()
         except json.JSONDecodeError:
             print(
-                f"{Out.MSG_WARN}Failed to read run history file. Tests may be running slower than optimal."
+                f"{Out.MSG_WARN}Failed to read run history file. Tests may be running slower than optimal.",
+                flush=True,
             )
             return History()
 
@@ -298,7 +300,8 @@ class ProcWatcher:
             # If any exception happens we cancel the current process
             # because this is not expected
             print(
-                f"{Out.MSG_ERROR}Meet Python exception when running test, a test will be aborted:{C.RESET}"
+                f"{Out.MSG_ERROR}Meet Python exception when running test, a test will be aborted:{C.RESET}",
+                flush=True,
             )
             traceback.print_exception(sys.exception(), chain=True, colorize=True)
         finally:
@@ -443,7 +446,10 @@ class ProcWatcher:
         self._on_test_run_finished(test_name)
         self._record_test_elapsed_history(test_name, allow_shorter=True)
         self.ctx.finished_tests += 1
-        print(f"{self._prefix()}{Out.OK}{test_name}{self._elapsed(s)}")
+        print(
+            f"{self._prefix()}{Out.OK}{test_name}{self._elapsed(s)}",
+            flush=True,
+        )
 
     def _on_test_fail(self, test_name: str):
         s = self.status[test_name]
@@ -485,7 +491,8 @@ class ProcWatcher:
         pattempt = f" [run#{s.n_runs}]" if s.n_runs > 1 else ""
         print(
             f"{self._prefix()}{plabel}{test_name}{self._elapsed(s, self.has_timed_out)}"
-            f"{psuppress}{pattempt}{pretry}"
+            f"{psuppress}{pattempt}{pretry}",
+            flush=True,
         )
 
         if should_retry:
@@ -578,7 +585,7 @@ async def find_tests(ctx: GlobalContext) -> list[TestCase]:
             if (tests_n - ctx.options.v.shard_index) % ctx.options.v.shard_count != 0:
                 continue
             if test_name in ctx.options.skip_tests:
-                print(f"        {Out.SKIPPED}{test_name}")
+                print(f"        {Out.SKIPPED}{test_name}", flush=True)
                 continue
 
             tests.append(
@@ -799,13 +806,15 @@ async def main():
     options.skip_tests = sync_read_test_list_file(
         options.v.skip_list,
         "./gtest_10x_skip.txt",
-        lambda n, path: print(f"{Out.MSG_WARN}Skip {n} tests listed in {path}"),
+        lambda n, path: print(
+            f"{Out.MSG_WARN}Skip {n} tests listed in {path}", flush=True
+        ),
     )
     options.suppress_tests = sync_read_test_list_file(
         options.v.suppress_list,
         "./gtest_10x_suppress.txt",
         lambda n, path: print(
-            f"{Out.MSG_WARN}Suppress {n} test failures listed in {path}"
+            f"{Out.MSG_WARN}Suppress {n} test failures listed in {path}", flush=True
         ),
     )
 
