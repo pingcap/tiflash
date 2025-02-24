@@ -31,7 +31,6 @@
 #include <common/logger_useful.h>
 #include <fiu.h>
 
-#include <chrono>
 #include <magic_enum.hpp>
 #include <memory>
 #include <thread>
@@ -404,12 +403,21 @@ RegionMap RegionPersister::restore(
         // If we found the page_id has been restored, just skip it.
         if (const auto it = regions.find(page.page_id); it != regions.end())
         {
-            LOG_INFO(log, "Already exist [page_id={}], skip it.", page.page_id);
+            LOG_INFO(log, "Region already exist, skip it, region_id={}", page.page_id);
             return;
         }
 
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-        auto region = Region::deserialize(buf, proxy_helper);
+        RegionPtr region;
+        try
+        {
+            region = Region::deserialize(buf, proxy_helper);
+        }
+        catch (DB::Exception & ex)
+        {
+            ex.addMessage(fmt::format("restoring region_id={}", page.page_id));
+            ex.rethrow();
+        }
         RUNTIME_CHECK_MSG(
             page.page_id == region->id(),
             "region_id and page_id not match! region_id={} page_id={}",
