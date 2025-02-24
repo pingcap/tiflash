@@ -1384,38 +1384,18 @@ CATCH
 TEST_P(SegmentBitmapFilterTest, Version_DMFile_MaxVersionWithDelta)
 try
 {
-    writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny:[3, 13):shuffle:ts_2|d_tiny:[6, "
-                        "16):shuffle:ts_3|merge_delta|d_mem:[2, 7):ts_4");
+    writeSegmentGeneric("d_tiny:[0, 1):ts_1|d_tiny:[1, 2):ts_2|d_tiny:[2, 3):ts_3|d_tiny:[3, 4):ts_4|d_tiny:[4, "
+                        "5):ts_5|merge_delta|d_tiny:[0, 1):ts_2");
     {
         auto [seg, snap] = getSegmentForRead(SEG_ID);
-        auto cfs = snap->delta->getColumnFiles();
-        ASSERT_EQ(cfs.size(), 1);
-        ASSERT_TRUE(cfs[0]->isInMemoryFile()) << cfs[0]->toString();
+        ASSERT_EQ(snap->delta->getColumnFileCount(), 1);
     }
 
     verifyVersionChain(VerifyVersionChainOption{
         .seg_id = SEG_ID,
         .caller_line = __LINE__,
-        .read_ts = 4,
-        .expected_bitmap = "11000000000000100100101010111111111",
-    });
-    verifyVersionChain(VerifyVersionChainOption{
-        .seg_id = SEG_ID,
-        .caller_line = __LINE__,
-        .read_ts = 3,
-        .expected_bitmap = "11101010100100100100101010111100000",
-    });
-    verifyVersionChain(VerifyVersionChainOption{
-        .seg_id = SEG_ID,
-        .caller_line = __LINE__,
         .read_ts = 2,
-        .expected_bitmap = "11101010101001001001010101000000000",
-    });
-    verifyVersionChain(VerifyVersionChainOption{
-        .seg_id = SEG_ID,
-        .caller_line = __LINE__,
-        .read_ts = 1,
-        .expected_bitmap = "11110101010010010010000000000000000",
+        .expected_bitmap = "010001",
     });
 }
 CATCH

@@ -179,8 +179,7 @@ template <ExtraHandleType HandleType>
         {
             for (UInt32 i = 0; i < block.rows(); ++i)
             {
-                filtered_out_rows += filter[pack_start_row_id + i]
-                    && versions[i] > read_ts; // Not filtered out yet && will be filtered out.
+                filtered_out_rows += filter[pack_start_row_id + i] && versions[i] > read_ts;
                 filter[pack_start_row_id + i] = filter[pack_start_row_id + i] && versions[i] <= read_ts;
             }
         }
