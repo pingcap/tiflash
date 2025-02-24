@@ -22,8 +22,8 @@
 #include <Poco/Util/LayeredConfiguration.h>
 #include <Server/ServerInfo.h>
 #include <Storages/FormatVersion.h>
-#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/KVStore.h>
+#include <Storages/Transaction/ProxyFFI.h>
 #include <Storages/Transaction/TMTContext.h>
 
 #include <boost/noncopyable.hpp>
