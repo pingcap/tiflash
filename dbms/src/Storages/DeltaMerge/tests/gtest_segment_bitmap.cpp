@@ -242,6 +242,7 @@ protected:
         const std::optional<std::vector<RowID>> expected_base_versions;
         const std::optional<RowKeyRanges> read_ranges;
         const std::optional<String> expected_bitmap;
+        const DMFilePackFilterResults rs_filter_results;
 
         String toDebugString() const
         {
@@ -275,11 +276,16 @@ protected:
         const auto read_ranges = Segment::shrinkRowKeyRanges(
             seg->getRowKeyRange(),
             opt.read_ranges.value_or(RowKeyRanges{seg->getRowKeyRange()}));
+
+        const auto & rs_filter_results = opt.rs_filter_results.empty()
+            ? loadPackFilterResults(snap, read_ranges)
+            : opt.rs_filter_results;
+
         auto bitmap_filter_version_chain = seg->buildBitmapFilter(
             *dm_context,
             snap,
             read_ranges,
-            loadPackFilterResults(snap, read_ranges),
+            rs_filter_results,
             opt.read_ts,
             DEFAULT_BLOCK_SIZE,
             use_version_chain);
@@ -288,7 +294,7 @@ protected:
             *dm_context,
             snap,
             read_ranges,
-            loadPackFilterResults(snap, read_ranges),
+            rs_filter_results,
             opt.read_ts,
             DEFAULT_BLOCK_SIZE,
             !use_version_chain);
@@ -1769,6 +1775,19 @@ CATCH
 
 TEST_P(SegmentBitmapFilterTest, RSFilter)
 {
-    writeSegmentGeneric("s:[0, 100):pack_size_10:ts_1|d_tiny:[55, 65):ts_2");
+    writeSegmentGeneric("s:[0, 50):pack_size_5:ts_1|d_tiny:[22, 27):ts_2");
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto rs_filter_results = loadPackFilterResults(snap, {seg->getRowKeyRange()});
+    ASSERT_EQ(rs_filter_results.size(), 1);
+    auto & rs_filter_result = rs_filter_results[0];
+    ASSERT_EQ(rs_filter_result->handle_res.size(), 10);
+    ASSERT_EQ(rs_filter_result->pack_res.size(), 10);
+    rs_filter_result->pack_res[4] = RSResult::None; // [20, 25)
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "1111111111111111111100000001111111111111111111111111111",
+        .rs_filter_results = rs_filter_results,
+    });
 }
 } // namespace DB::DM::tests
