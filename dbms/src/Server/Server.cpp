@@ -475,6 +475,7 @@ void loadBlockList(
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
+try
 {
     setThreadName("TiFlashMain");
 
@@ -1250,6 +1251,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     return Application::EXIT_OK;
+}
+catch (...)
+{
+    // The default exception handler of Poco::Util::Application will catch the
+    // `DB::Exception` as `Poco::Exception` and do not print the stacktrace.
+    // So we catch all exceptions here and print the stacktrace.
+    tryLogCurrentException("Server::main");
+    auto code = getCurrentExceptionCode();
+    return code > 0 ? code : 1;
 }
 } // namespace DB
 
