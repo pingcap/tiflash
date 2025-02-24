@@ -64,6 +64,11 @@ struct FuncInitStore
 
         try
         {
+            // This will skip the init of storages that do not contain any data. TiFlash now sync the schema and
+            // create all tables regardless the table have define TiFlash replica or not, so there may be lots
+            // of empty tables in TiFlash.
+            // Note that we still need to init stores that contains data (defined by the stable dir of this storage
+            // is exist), or the data used size reported to PD is not correct.
             bool init_done = storage->initStoreIfDataDirExist(nullptr);
             init_cnt += static_cast<Int64>(init_done);
             LOG_INFO(
