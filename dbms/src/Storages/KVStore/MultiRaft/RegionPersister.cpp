@@ -406,6 +406,7 @@ RegionMap RegionPersister::restore(
             LOG_INFO(log, "Region already exist, skip it, region_id={}", page.page_id);
             return;
         }
+        RUNTIME_CHECK_MSG(!page.data.empty(), "meet unexpected empty page data, region_id={}", page.page_id);
 
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
         RegionPtr region;
@@ -415,14 +416,15 @@ RegionMap RegionPersister::restore(
         }
         catch (DB::Exception & ex)
         {
-            ex.addMessage(fmt::format("restoring region_id={}", page.page_id));
+            ex.addMessage(fmt::format("restoring region_id={} page_size={}", page.page_id, page.data.size()));
             ex.rethrow();
         }
         RUNTIME_CHECK_MSG(
             page.page_id == region->id(),
-            "region_id and page_id not match! region_id={} page_id={}",
+            "region_id and page_id not match! region_id={} page_id={} page_size={}",
             region->id(),
-            page.page_id);
+            page.page_id,
+            page.data.size());
 #if SERVERLESS_PROXY == 1
         if (global_context.isKeyspaceInBlocklist(region->getKeyspaceID()))
         {
