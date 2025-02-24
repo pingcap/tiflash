@@ -53,7 +53,8 @@ BitmapFilterPtr buildBitmapFilter(
 
     LOG_INFO(
         snapshot.log,
-        "rowkey_filtered_out_rows={}, version_filtered_out_rows={}, delete_filtered_out_rows={}",
+        "read_ranges={}, rowkey_filtered_out_rows={}, version_filtered_out_rows={}, delete_filtered_out_rows={}",
+        read_ranges,
         rowkey_filtered_out_rows,
         version_filtered_out_rows,
         delete_filtered_out_rows);

@@ -207,7 +207,7 @@ template <ExtraHandleType HandleType>
                 const UInt32 base_row_id = itr - handles.begin() + pack_start_row_id;
                 if (!filter[base_row_id])
                 {
-                    filter.set(base_row_id + 1, count - 1, 0);
+                    filter.set(base_row_id + 1, count - 1, false);
                     filtered_out_rows += count - 1;
                     continue;
                 }

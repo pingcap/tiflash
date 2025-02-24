@@ -130,7 +130,7 @@ UInt32 buildRowKeyFilterDMFile(
         const auto pack_id = valid_start_pack_id + i;
         if (!valid_handle_res[i].isUse())
         {
-            filter.set(start_row_id + processed_rows, pack_stats[pack_id].rows, 0);
+            filter.set(start_row_id + processed_rows, pack_stats[pack_id].rows, false);
             filtered_out_rows += pack_stats[pack_id].rows;
         }
         else if (!valid_handle_res[i].allMatch())
