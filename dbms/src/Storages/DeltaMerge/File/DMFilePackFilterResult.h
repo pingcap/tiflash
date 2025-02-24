@@ -20,10 +20,10 @@
 
 namespace DB::DM
 {
-    namespace tests
-    {
-    class SegmentBitmapFilterTest_RSFilter_Test;
-    } // namespace tests
+namespace tests
+{
+class SegmentBitmapFilterTest_RSFilter_Test;
+} // namespace tests
 class DMFilePackFilterResult
 {
     friend class DMFilePackFilter;

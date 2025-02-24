@@ -277,9 +277,8 @@ protected:
             seg->getRowKeyRange(),
             opt.read_ranges.value_or(RowKeyRanges{seg->getRowKeyRange()}));
 
-        const auto & rs_filter_results = opt.rs_filter_results.empty()
-            ? loadPackFilterResults(snap, read_ranges)
-            : opt.rs_filter_results;
+        const auto & rs_filter_results
+            = opt.rs_filter_results.empty() ? loadPackFilterResults(snap, read_ranges) : opt.rs_filter_results;
 
         auto bitmap_filter_version_chain = seg->buildBitmapFilter(
             *dm_context,
