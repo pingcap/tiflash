@@ -80,6 +80,7 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
+#include <Storages/KVStore/ProxyStateMachine.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/S3/FileCache.h>
