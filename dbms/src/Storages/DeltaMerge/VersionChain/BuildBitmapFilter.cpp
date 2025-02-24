@@ -41,13 +41,17 @@ BitmapFilterPtr buildBitmapFilter(
     const UInt32 total_rows = delta_rows + stable_rows;
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, true);
 
+    const bool enable_version_chain_for_test = dm_context.global_context.getSettingsRef().enable_version_chain
+        == static_cast<Int64>(VersionChainMode::EnabledForTest);
     auto version_filtered_out_rows
         = buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, *bitmap_filter);
-    bitmap_filter->saveVersionFilterForDebug(); // TODO: save when check mvcc bitmap enabled.
+    if (enable_version_chain_for_test)
+        bitmap_filter->saveVersionFilterForDebug();
 
     auto rowkey_filtered_out_rows
         = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, pack_filter_results[0], *bitmap_filter);
-    bitmap_filter->saveRowKeyFilterForDebug();
+    if (enable_version_chain_for_test)
+        bitmap_filter->saveRowKeyFilterForDebug();
 
     auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, *bitmap_filter);
 

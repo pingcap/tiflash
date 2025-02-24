@@ -3598,11 +3598,16 @@ void Segment::checkMVCCBitmap(
     {
         if (new_bitmap_filter->get(i) != bitmap_filter.get(i))
         {
-            std::string_view filter_by = "delemark";
-            if (!bitmap_filter.rowkey_filter[i])
-                filter_by = "rowkey";
-            else if (!bitmap_filter.version_filter[i])
-                filter_by = "version";
+            std::string_view filter_by;
+            if (!bitmap_filter.get(i))
+            {
+                if (!bitmap_filter.version_filter[i])
+                    filter_by = "version";
+                else if (!bitmap_filter.rowkey_filter[i])
+                    filter_by = "rowkey";
+                else
+                    filter_by = "delmark";
+            }
 
             LOG_ERROR(
                 segment_snap->log,
