@@ -92,8 +92,6 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
     this->proxy_helper = proxy_helper;
     manage_lock.regions = region_persister->restore(path_pool, proxy_helper);
 
-    LOG_INFO(log, "Restored {} regions", manage_lock.regions.size());
-
     // init range index
     for (const auto & [id, region] : manage_lock.regions)
     {
@@ -103,19 +101,17 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
 
     {
         const size_t batch = 512;
-        std::vector<std::stringstream> msgs;
+        std::vector<FmtBuffer> msgs;
         msgs.resize(batch);
 
-        // init range index
         for (const auto & [id, region] : manage_lock.regions)
         {
-            msgs[id % batch] << region->getDebugString() << ";";
+            msgs[id % batch].fmtAppend("{};", region->getDebugString());
         }
 
         for (const auto & msg : msgs)
         {
-            auto str = msg.str();
-            if (!str.empty())
+            if (auto str = msg.toString(); !str.empty())
                 LOG_INFO(log, "{}", str);
         }
     }

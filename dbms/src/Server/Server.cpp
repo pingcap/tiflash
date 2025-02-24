@@ -960,26 +960,43 @@ void syncSchemaWithTiDB(
     if (storage_config.api_version == 1)
     {
         Stopwatch watch;
-        while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
+        const UInt64 total_wait_seconds = global_context->getSettingsRef().ddl_restart_wait_seconds;
+        static constexpr int retry_wait_seconds = 3;
+        while (true)
         {
+            if (watch.elapsedSeconds() > total_wait_seconds)
+            {
+                LOG_WARNING(log, "Sync schemas during init timeout, cost={:.3f}s", watch.elapsedSeconds());
+                break;
+            }
+
             try
             {
                 global_context->getTMTContext().getSchemaSyncerManager()->syncSchemas(*global_context, NullspaceID);
+                LOG_INFO(log, "Sync schemas during init done, cost={:.3f}s", watch.elapsedSeconds());
                 break;
             }
-            catch (Poco::Exception & e)
+            catch (DB::Exception & e)
             {
-                const int wait_seconds = 3;
                 LOG_ERROR(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
                     e.displayText(),
-                    wait_seconds);
-                ::sleep(wait_seconds);
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
+            }
+            catch (Poco::Exception & e)
+            {
+                LOG_ERROR(
+                    log,
+                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                    " seconds and try again.",
+                    e.displayText(),
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
             }
         }
-        LOG_DEBUG(log, "Sync schemas done.");
     }
 
     // Init the DeltaMergeStore instances if data exist.
@@ -993,6 +1010,7 @@ void syncSchemaWithTiDB(
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
+try
 {
     setThreadName("TiFlashMain");
 
@@ -1914,6 +1932,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     return Application::EXIT_OK;
+}
+catch (...)
+{
+    // The default exception handler of Poco::Util::Application will catch the
+    // `DB::Exception` as `Poco::Exception` and do not print the stacktrace.
+    // So we catch all exceptions here and print the stacktrace.
+    tryLogCurrentException("Server::main");
+    auto code = getCurrentExceptionCode();
+    return code > 0 ? code : 1;
 }
 } // namespace DB
 
