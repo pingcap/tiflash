@@ -150,7 +150,7 @@ public:
         SnapshotPtr snapshot,
         bool throw_on_not_exist) override;
 
-    void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
+    void traverseImpl(const TraversePageCallback & acceptor, SnapshotPtr snapshot) override;
 
     bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
@@ -236,7 +236,7 @@ public:
     PageMap read(const PageIds & page_ids) { return readImpl(TEST_NAMESPACE_ID, page_ids, nullptr, nullptr, true); }
     PageMap read(const PageIds & page_ids, const ReadLimiterPtr & read_limiter, SnapshotPtr snapshot) { return readImpl(TEST_NAMESPACE_ID, page_ids, read_limiter, snapshot, true); };
     PageMap read(const std::vector<PageReadFields> & page_fields) { return readImpl(TEST_NAMESPACE_ID, page_fields, nullptr, nullptr, true); }
-    void traverse(const std::function<void(const DB::Page & page)> & acceptor) { return traverseImpl(acceptor, nullptr); }
+    void traverse(const TraversePageCallback & acceptor) { return traverseImpl(acceptor, nullptr); }
     bool gc() { return gcImpl(false, nullptr, nullptr); }
     // clang-format on
 #endif
