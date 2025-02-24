@@ -93,7 +93,6 @@ void KVStore::restore(PathPool & path_pool, const TiFlashRaftProxyHelper * proxy
         std::vector<FmtBuffer> msgs;
         msgs.resize(batch);
 
-        // init range index
         for (const auto & [id, region] : manage_lock.regions)
         {
             msgs[id % batch].fmtAppend("{};", region->getDebugString());
