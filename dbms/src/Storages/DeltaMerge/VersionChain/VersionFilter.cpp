@@ -118,7 +118,7 @@ template <ExtraHandleType HandleType>
 [[nodiscard]] UInt32 buildVersionFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
-    const std::optional<RowKeyRange> & segment_range,
+    const std::optional<RowKeyRange> & segment_range, // range of ColumnFileBig
     const UInt64 read_ts,
     const ssize_t start_row_id,
     BitmapFilter & filter)
@@ -130,8 +130,7 @@ template <ExtraHandleType HandleType>
     const auto max_versions = loadPackMaxValue<UInt64>(dm_context.global_context, *dmfile, MutSup::version_col_id);
 
     auto need_read_packs = std::make_shared<IdSet>();
-    UInt32 need_read_rows = 0;
-    std::unordered_map<UInt32, UInt32> need_read_pack_to_start_row_ids;
+    std::unordered_map<UInt32, UInt32> start_row_id_of_need_read_packs; // pack_id -> start_row_id
 
     const auto & pack_stats = dmfile->getPackStats();
     UInt32 processed_rows = 0;
@@ -140,19 +139,20 @@ template <ExtraHandleType HandleType>
         const UInt32 pack_id = valid_start_pack_id + i;
         const UInt32 pack_start_row_id = start_row_id + processed_rows;
         const auto & stat = pack_stats[pack_id];
+        // `not_clean` means there are multiple versions of the same handle in this pack.
+        // `max_versions[pack_id] > read_ts` means there is a version of this pack that is not visible to `read_ts`.
         if (stat.not_clean || max_versions[pack_id] > read_ts)
         {
             need_read_packs->insert(pack_id);
-            need_read_pack_to_start_row_ids.emplace(pack_id, pack_start_row_id);
-            need_read_rows += stat.rows;
+            start_row_id_of_need_read_packs.emplace(pack_id, pack_start_row_id);
         }
         processed_rows += stat.rows;
     }
 
-    if (need_read_rows == 0)
+    if (need_read_packs->empty())
         return 0;
 
-    // If all packs need to read is clean, we can just read version column.
+    // TODO: If all packs need to read is clean, we can just read version column.
     // However, the benefits in general scenarios may not be significant.
     // For simplicity, read handle column and version column directly.
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
@@ -160,20 +160,18 @@ template <ExtraHandleType HandleType>
     auto stream = builder.build(
         dmfile,
         {getHandleColumnDefine<HandleType>(), getVersionColumnDefine()},
-        {},
+        /*rowkey_ranges*/ {},
         dm_context.scan_context);
 
-    UInt32 read_rows = 0;
     UInt32 filtered_out_rows = 0;
     for (auto pack_id : *need_read_packs)
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
-        read_rows += block.rows();
         const auto handles = ColumnView<HandleType>(*(block.getByPosition(0).column));
-        const auto & versions = *toColumnVectorDataPtr<UInt64>(block.getByPosition(1).column); // Must success.
-        const auto itr = need_read_pack_to_start_row_ids.find(pack_id);
-        RUNTIME_CHECK(itr != need_read_pack_to_start_row_ids.end(), need_read_pack_to_start_row_ids, pack_id);
+        const auto & versions = *toColumnVectorDataPtr<UInt64>(block.getByPosition(1).column);
+        const auto itr = start_row_id_of_need_read_packs.find(pack_id);
+        RUNTIME_CHECK(itr != start_row_id_of_need_read_packs.end(), start_row_id_of_need_read_packs, pack_id);
         const UInt32 pack_start_row_id = itr->second;
 
         // Filter invisible versions
@@ -181,8 +179,9 @@ template <ExtraHandleType HandleType>
         {
             for (UInt32 i = 0; i < block.rows(); ++i)
             {
-                filter[pack_start_row_id + i] = versions[i] <= read_ts;
-                filtered_out_rows += (versions[i] > read_ts);
+                filtered_out_rows += filter[pack_start_row_id + i]
+                    && versions[i] > read_ts; // Not filtered out yet && will be filtered out.
+                filter[pack_start_row_id + i] = filter[pack_start_row_id + i] && versions[i] <= read_ts;
             }
         }
 
@@ -193,23 +192,24 @@ template <ExtraHandleType HandleType>
             auto handle_end = handles.end();
             for (;;)
             {
-                // Search for the first two consecutive equal elements
+                // Search for the first consecutive equal elements
                 auto itr = std::adjacent_find(handle_itr, handle_end);
                 if (itr == handle_end)
                     break;
 
                 // Let `handle_itr` point to next different handle.
                 handle_itr = std::find_if(itr, handle_end, [h = *itr](auto a) { return h != a; });
-                // [itr, handle_itr) are the same handle of different verions.
+                // [itr, handle_itr) are the same handle of different versions.
                 auto count = handle_itr - itr;
                 RUNTIME_CHECK(count >= 2, count);
-
+                // `base_row_id` is the row_id of the first version of the same handle.
+                // The first version is the oldest version in DMFile.
                 const UInt32 base_row_id = itr - handles.begin() + pack_start_row_id;
+                // If the first version is filtered out, that means the newer version in delta has been chosen.
                 if (!filter[base_row_id])
                 {
                     filter.set(base_row_id + 1, count - 1, false);
                     filtered_out_rows += count - 1;
-                    continue;
                 }
                 else
                 {
@@ -227,10 +227,9 @@ template <ExtraHandleType HandleType>
                             break;
                     }
                 }
-            }
-        }
-    }
-    RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
+            } // for loop handling not clean pack
+        } // if (pack_stats[pack_id].not_clean)
+    } // for (auto pack_id : *need_read_packs)
     return filtered_out_rows;
 }
 
@@ -296,10 +295,14 @@ UInt32 buildVersionFilter(
     // Delta MVCC
     UInt32 read_rows = 0;
     UInt32 filtered_out_rows = 0;
-    // Read versions from new to old
+    // Read versions from new to old. Assume that the same handle is written in version order.
+    // So we can read versions from new to old and filter out the older versions.
+    // Raft log replay repeatly is allow, but reorder is not allow.
     for (const auto & cf : cfs | std::views::reverse)
     {
-        if (cf->isDeleteRange()) // Delete range is handled by RowKeyFilter.
+        // Delete range will be handled by RowKeyFilter.
+        // TODO: If we add min-max handles in ColumnFile, delete range can help skip some ColumnFiles here.
+        if (cf->isDeleteRange())
             continue;
 
         const UInt32 cf_rows = cf->getRows();
