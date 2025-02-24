@@ -47,6 +47,8 @@ struct FuncInitStore
     std::atomic<Int64> & init_cnt;
     std::atomic<Int64> & err_cnt;
     const size_t total_count;
+    // If not null, segments in one table will be restored concurrently
+    // Otherwise, segments are restored in serial order
     ThreadPool * restore_segments_thread_pool;
     const LoggerPtr & log;
 
@@ -69,7 +71,7 @@ struct FuncInitStore
             // of empty tables in TiFlash.
             // Note that we still need to init stores that contains data (defined by the stable dir of this storage
             // is exist), or the data used size reported to PD is not correct.
-            bool init_done = storage->initStoreIfDataDirExist(nullptr);
+            bool init_done = storage->initStoreIfDataDirExist(restore_segments_thread_pool);
             init_cnt += static_cast<Int64>(init_done);
             LOG_INFO(
                 log,
@@ -138,12 +140,12 @@ void doInitStores(Context & global_context, const std::atomic_size_t & terminate
         LOG_INFO(log, "Init stores without thread pool");
         for (const auto & [ks_tbl_id, storage] : storages)
         {
-            // execute serially
             if (terminated.load() != 0)
             {
                 LOG_INFO(log, "cancel init storage, shutting down");
                 break;
             }
+            // run in serial order
             FuncInitStore{ks_tbl_id, storage, terminated, init_cnt, err_cnt, total_count, nullptr, log}();
         }
     }
