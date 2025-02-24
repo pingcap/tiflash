@@ -1018,6 +1018,9 @@ int Server::main(const std::vector<std::string> & /*args*/)
       *  settings, available functions, data types, aggregate functions, databases...
       */
     global_context = Context::createGlobal();
+    global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
+    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
@@ -1086,19 +1089,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     /// get CPU/memory/disk info of this server
-<<<<<<< HEAD
-    diagnosticspb::ServerInfoRequest request;
-    diagnosticspb::ServerInfoResponse response;
-    request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
-    std::string req = request.SerializeAsString();
-    ffi_get_server_info_from_proxy(reinterpret_cast<intptr_t>(&helper), strIntoView(&req), &response);
-    server_info.parseSysInfo(response);
-    setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
-    computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
-    LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
-=======
-    proxy_machine.getServerInfo(server_info, settings);
->>>>>>> ab5a5178cc (Fix the incorrect value of the max thread size (#9881))
+    getServerInfoFromProxy(log, server_info, &helper, settings);
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
@@ -1112,9 +1103,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // Reset the `tiflash_instance_wrap.tmt` before `global_context` get released, or it will be a dangling pointer
         tiflash_instance_wrap.tmt = nullptr;
     });
-    global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
-    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     /// Init File Provider
     bool enable_encryption = false;

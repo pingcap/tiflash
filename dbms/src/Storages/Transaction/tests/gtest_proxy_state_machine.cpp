@@ -17,6 +17,8 @@
 #include <Storages/KVStore/ProxyStateMachine.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <ext/scope_guard.h>
+
 // TODO: Move ServerInfo into KVStore, to make it more conhensive.
 namespace DB
 {
@@ -29,13 +31,13 @@ namespace tests
 {
 TEST(ProxyStateMachineTest, SetLogicalCores)
 {
+    auto log = Logger::get();
     {
         FailPointHelper::enableFailPoint(FailPoints::force_set_proxy_state_machine_cpu_cores);
         SCOPE_EXIT({ FailPointHelper::disableFailPoint(FailPoints::force_set_proxy_state_machine_cpu_cores); });
         Settings settings;
         ServerInfo server_info;
-        ProxyStateMachine proxy_machine{DB::Logger::get(), TiFlashProxyConfig::genForTest()};
-        proxy_machine.getServerInfo(server_info, settings);
+        getServerInfoFromProxy(log, server_info, nullptr, settings);
         ASSERT_EQ(settings.max_threads.get(), 12345);
     }
     {
@@ -45,15 +47,13 @@ TEST(ProxyStateMachineTest, SetLogicalCores)
         Settings settings;
         settings.max_threads.set(8);
         ServerInfo server_info;
-        ProxyStateMachine proxy_machine{DB::Logger::get(), TiFlashProxyConfig::genForTest()};
-        proxy_machine.getServerInfo(server_info, settings);
+        getServerInfoFromProxy(log, server_info, nullptr, settings);
         ASSERT_EQ(settings.max_threads.get(), 8);
     }
     {
         Settings settings;
         ServerInfo server_info;
-        ProxyStateMachine proxy_machine{DB::Logger::get(), TiFlashProxyConfig::genForTest()};
-        proxy_machine.getServerInfo(server_info, settings);
+        getServerInfoFromProxy(log, server_info, nullptr, settings);
         ASSERT_EQ(settings.max_threads.get(), std::thread::hardware_concurrency());
     }
 }

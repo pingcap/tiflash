@@ -105,9 +105,6 @@ namespace DB
     M(force_schema_sync_too_old_schema)                      \
     M(skip_seek_before_read_dmfile)                          \
     M(exception_after_large_write_exceed)                    \
-<<<<<<< HEAD
-    M(delta_tree_create_node_fail)
-=======
     M(proactive_flush_force_set_type)                        \
     M(exception_when_fetch_disagg_pages)                     \
     M(cop_send_failure)                                      \
@@ -126,7 +123,6 @@ namespace DB
     M(force_checkpoint_dump_throw_datafile)                  \
     M(force_semi_join_time_exceed)                           \
     M(force_set_proxy_state_machine_cpu_cores)
->>>>>>> ab5a5178cc (Fix the incorrect value of the max thread size (#9881))
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M) \
     M(pause_with_alter_locks_acquired)         \
