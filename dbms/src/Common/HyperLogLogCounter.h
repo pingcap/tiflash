@@ -463,7 +463,7 @@ private:
             return fixed_estimate;
         }
         else
-            throw Poco::Exception("Internal error", DB::ErrorCodes::LOGICAL_ERROR);
+            throw DB::Exception("Internal error", DB::ErrorCodes::LOGICAL_ERROR);
     }
 
     inline double applyCorrection(double raw_estimate) const

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/NaNUtils.h>
 #include <Common/PODArray.h>
 #include <IO/Buffer/ReadBuffer.h>
@@ -139,7 +140,7 @@ public:
     void merge(const ReservoirSampler<T, OnEmpty> & b)
     {
         if (sample_count != b.sample_count)
-            throw Poco::Exception("Cannot merge ReservoirSampler's with different sample_count");
+            throw DB::Exception("Cannot merge ReservoirSampler's with different sample_count");
         sorted = false;
 
         if (b.total_values <= sample_count)
@@ -250,7 +251,7 @@ private:
     ResultType onEmpty() const
     {
         if (OnEmpty == ReservoirSamplerOnEmpty::THROW)
-            throw Poco::Exception("Quantile of empty ReservoirSampler");
+            throw DB::Exception("Quantile of empty ReservoirSampler");
         else
             return NanLikeValueConstructor<ResultType, std::is_floating_point_v<ResultType>>::getValue();
     }
