@@ -30,17 +30,38 @@ import time
 import re
 import traceback
 import json
+import typing
+
+
+class Colors:  # Colors with os support
+    def __init__(self):
+        self.RESET = "\033[0m"
+        self.OK = "\033[92m\033[1m"
+        self.NOTE = "\033[96m\033[1m"
+        self.FAIL = "\033[91m\033[1m"
+        self.WARN = "\033[93m\033[1m"
+        self.DIM = "\033[2m"
+        self.TIME_OK = "\033[90m"
+        self.TIME_WARN = "\033[93m\033[1m"
+
+        colorize = sys.stdout.isatty() and sys.stderr.isatty()
+        if len(os.getenv("NO_COLOR", "")) > 0:
+            colorize = False
+        if len(os.getenv("FORCE_COLOR", "")) > 0:
+            colorize = True
+        if not colorize:
+            for key in self.__dict__:
+                setattr(self, key, "")
+
+
+C = Colors()
 
 # fmt: off
-class C:  # Colors
-    RESET     = "\033[0m"
-    OK        = "\033[92m\033[1m"
-    FAIL      = "\033[91m\033[1m"
-    WARN      = "\033[93m\033[1m"
-    DIM       = "\033[2m"
-    TIME_OK   = "\033[90m"
-    TIME_WARN = "\033[93m\033[1m"
 class Out:
+    MSG_ERROR =  f"{C.FAIL}Error: {C.RESET}"
+    MSG_WARN  =  f"{C.WARN}Warn:  {C.RESET}"
+    MSG_NOTE  =  f"{C.NOTE}Note:  {C.RESET}"
+
     OK         =     f"{C.OK}OK:      {C.RESET}"
     FAILED     =   f"{C.FAIL}FAILED:  {C.RESET}"
     FAILED_DIM =    f"{C.DIM}FAILED:  "
@@ -102,12 +123,12 @@ class History(dict[str, dict[str, int]]):
                 return History(json.load(f))
         except FileNotFoundError:
             print(
-                f"{C.WARN}WARN: {C.RESET}There is no run history file. Tests may be running slower than optimal."
+                f"{Out.MSG_WARN}There is no run history file. Tests may be running slower than optimal."
             )
             return History()
         except json.JSONDecodeError:
             print(
-                f"{C.WARN}WARN: {C.RESET}Failed to read run history file. Tests may be running slower than optimal."
+                f"{Out.MSG_WARN}Failed to read run history file. Tests may be running slower than optimal."
             )
             return History()
 
@@ -277,7 +298,7 @@ class ProcWatcher:
             # If any exception happens we cancel the current process
             # because this is not expected
             print(
-                f"{C.FAIL}Meet Python exception when running test, a test will be aborted:{C.RESET}"
+                f"{Out.MSG_ERROR}Meet Python exception when running test, a test will be aborted:{C.RESET}"
             )
             traceback.print_exception(sys.exception(), chain=True, colorize=True)
         finally:
@@ -570,6 +591,14 @@ async def find_tests(ctx: GlobalContext) -> list[TestCase]:
             )
             ctx.all_tests += 1
 
+        await proc.wait()
+        if proc.returncode != 0:
+            print(
+                f"{Out.MSG_ERROR}Failed to list tests in {test_binary}: "
+                f"exit code {proc.returncode}"
+            )
+            sys.exit(1)
+
     return tests
 
 
@@ -645,14 +674,34 @@ async def spawn_test_proc(ctx: GlobalContext, tests: TestGroup):
     await watcher.handle_proc(proc)
 
 
-def sync_read_test_list_file(file_path: str) -> set[str]:
+def sync_read_test_list_file(
+    file_path_arg: str,
+    default_name: str,
+    effective_fn: typing.Callable[[int, str], None],
+) -> set[str]:
+    if file_path_arg:
+        if not os.path.exists(file_path_arg):
+            print(f"{Out.MSG_ERROR}File not found: {file_path_arg}")
+            sys.exit(1)
+
+    path = file_path_arg
+    if not path:
+        path = os.path.abspath(default_name)
+        if not os.path.exists(path):
+            path = os.path.join(os.path.dirname(__file__), default_name)
+        if not os.path.exists(path):
+            return set()
+
     l = set()
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(path, "r", encoding="utf-8") as f:
         while line := f.readline():
             # Remove anything after #
             line = line.split("#")[0].strip()
             if line:
                 l.add(line)
+
+    effective_fn(len(l), os.path.realpath(path))
+
     return l
 
 
@@ -729,13 +778,15 @@ async def main():
         sys.exit(1)
 
     unique_binaries = set(os.path.basename(binary) for binary in options.binaries)
-    assert len(unique_binaries) == len(
-        options.binaries
-    ), "All test binaries must have an unique basename."
+    if len(unique_binaries) != len(options.binaries):
+        print(f"{Out.MSG_ERROR}All test binaries must have an unique basename.")
+        sys.exit(1)
 
     # Resolve into absolute path because we will change the working directory when running the tests.
     for binary in options.binaries:
-        assert os.path.exists(binary), f"Binary not found: {binary}"
+        if not os.path.exists(binary):
+            print(f"{Out.MSG_ERROR}Binary not found: {binary}")
+            sys.exit(1)
     options.binaries = [os.path.abspath(binary) for binary in options.binaries]
 
     options.v.working_dir_tests = os.path.join(options.v.working_dir, "./tests_tmp")
@@ -745,20 +796,24 @@ async def main():
 
     history_path = os.path.join(options.v.working_dir, "history.json")
 
-    if options.v.skip_list:
-        options.skip_tests = sync_read_test_list_file(options.v.skip_list)
-    if options.v.suppress_list:
-        options.suppress_tests = sync_read_test_list_file(options.v.suppress_list)
+    options.skip_tests = sync_read_test_list_file(
+        options.v.skip_list,
+        "./gtest_10x_skip.txt",
+        lambda n, path: print(f"{Out.MSG_WARN}Skip {n} tests listed in {path}"),
+    )
+    options.suppress_tests = sync_read_test_list_file(
+        options.v.suppress_list,
+        "./gtest_10x_suppress.txt",
+        lambda n, path: print(
+            f"{Out.MSG_WARN}Suppress {n} test failures listed in {path}"
+        ),
+    )
 
     stdout_file = os.path.join(options.v.working_dir, "test_stdout.log")
     stderr_file = os.path.join(options.v.working_dir, "test_stderr.log")
-    print("Test case failures will be log to:")
+    print(f"{Out.MSG_NOTE}Test case failures will be log to:")
     print(f"  {stdout_file}")
     print(f"  {stderr_file}")
-    print()
-    print(
-        "Start running tests. Slow tests will be run first, fast tests will be run later. Keep patient..."
-    )
 
     exit_code = 1
     with open(stdout_file, "wb") as stdout_writer:
@@ -773,6 +828,12 @@ async def main():
             )
             try:
                 tests = await find_tests(ctx)
+                print()
+                print(
+                    "Start running tests. Slow tests will be run first, "
+                    "fast tests will be run later. Keep patient..."
+                )
+                print()
                 await execute_tests(ctx, tests)
                 # Summarize test results
                 exit_code = summarize(ctx)
