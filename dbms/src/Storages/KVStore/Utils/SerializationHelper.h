@@ -67,7 +67,11 @@ inline std::string readBinary2<std::string>(ReadBuffer & buf)
     readIntBinary(size, buf);
 
     if (size > DEFAULT_MAX_STRING_SIZE)
-        throw Exception("Too large string size.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Too large string size, size={} max_size={}",
+            size,
+            DEFAULT_MAX_STRING_SIZE);
     std::string s;
     s.resize(size);
     buf.readStrict(&s[0], size);
