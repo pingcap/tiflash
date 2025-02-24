@@ -296,9 +296,24 @@ void SegmentTestBasic::mergeSegment(const PageIdU64s & segments_id, bool check_r
         operation_statistics["mergeTwo"]++;
 }
 
-void SegmentTestBasic::mergeSegmentDelta(PageIdU64 segment_id, bool check_rows)
+void SegmentTestBasic::mergeSegmentDelta(PageIdU64 segment_id, bool check_rows, std::optional<size_t> pack_size)
 {
-    LOG_INFO(logger_op, "mergeSegmentDelta, segment_id={}", segment_id);
+    LOG_INFO(logger_op, "mergeSegmentDelta, segment_id={}, pack_size={}", segment_id, pack_size);
+
+    const size_t initial_pack_rows = db_context->getSettingsRef().dt_segment_stable_pack_rows;
+    if (pack_size)
+    {
+        db_context->getSettingsRef().dt_segment_stable_pack_rows = *pack_size;
+        reloadDMContext();
+        ASSERT_EQ(dm_context->stable_pack_rows, *pack_size);
+    }
+    SCOPE_EXIT({
+        if (initial_pack_rows != db_context->getSettingsRef().dt_segment_stable_pack_rows)
+        {
+            db_context->getSettingsRef().dt_segment_stable_pack_rows = initial_pack_rows;
+            reloadDMContext();
+        }
+    });
 
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];

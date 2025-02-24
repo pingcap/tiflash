@@ -49,7 +49,46 @@ std::vector<std::tuple<T, T, bool>> parseRanges(std::string_view str_ranges)
     return vector_ranges;
 }
 
-const std::unordered_set<String> segment_commands = {"flush_cache", "compact_delta", "merge_delta"};
+const std::unordered_set<std::string_view> segment_commands = {"flush_cache", "compact_delta", "merge_delta"};
+const std::unordered_set<std::string_view> delta_small_data_types = {"d_mem", "d_mem_del", "d_tiny", "d_tiny_del"};
+const std::unordered_set<std::string_view> segment_data_types
+    = {"d_mem", "d_mem_del", "d_tiny", "d_tiny_del", "d_dr", "s"};
+
+void parseSegUnitAttr(std::string_view attr, SegDataUnit & unit)
+{
+    // Pack size for DMFile
+    static const std::string_view attr_pack_size_prefix{"pack_size_"};
+    static const std::string_view attr_shuffle{"shuffle"};
+    static const std::string_view attr_timestamp_prefix{"ts_"};
+
+    if (attr.starts_with(attr_pack_size_prefix))
+    {
+        RUNTIME_CHECK(unit.type == "d_big" || unit.type == "s" || unit.type == "merge_delta", attr, unit.type);
+        unit.pack_size = std::stoul(String(attr.substr(attr_pack_size_prefix.size())));
+        return;
+    }
+
+    // Make data in ColumnFileTiny or ColumnFileMem unsorted.
+    if (attr == attr_shuffle)
+    {
+        RUNTIME_CHECK(delta_small_data_types.contains(unit.type), attr, unit.type, delta_small_data_types);
+        unit.shuffle = true;
+        return;
+    }
+
+    if (attr.starts_with(attr_timestamp_prefix))
+    {
+        RUNTIME_CHECK(
+            delta_small_data_types.contains(unit.type) || unit.type == "s",
+            attr,
+            unit.type,
+            delta_small_data_types);
+        unit.ts = std::stoul(String(attr.substr(attr_timestamp_prefix.size())));
+        return;
+    }
+
+    RUNTIME_CHECK_MSG(false, "{} is unsupported", attr);
+}
 
 // "type:[a, b)" => SegDataUnit
 SegDataUnit parseSegDataUnit(String & s)
@@ -61,48 +100,16 @@ SegDataUnit parseSegDataUnit(String & s)
     for (auto & v : values)
         boost::algorithm::trim(v);
 
-    if (values.size() == 1)
+    size_t i = 0;
+    SegDataUnit unit{.type = values[i++]};
+    if (!segment_commands.contains(unit.type))
     {
-        RUNTIME_CHECK(segment_commands.contains(values[0]), s);
-        return SegDataUnit{.type = values[0]};
+        RUNTIME_CHECK(values.size() >= 2, s, values);
+        unit.range = parseRange<Int64>(values[i++]);
     }
+    for (; i < values.size(); i++)
+        parseSegUnitAttr(values[i], unit);
 
-    static const std::unordered_set<String> delta_small_data_types = {"d_mem", "d_mem_del", "d_tiny", "d_tiny_del"};
-
-    RUNTIME_CHECK(values.size() >= 2, s, values);
-    SegDataUnit unit;
-    unit.type = values[0];
-    unit.range = parseRange<Int64>(values[1]);
-    for (size_t i = 2; i < values.size(); i++)
-    {
-        const auto & v = values[i];
-        // Pack size for DMFile
-        std::string_view attr_pack_size_prefix{"pack_size_"};
-        if (v.starts_with(attr_pack_size_prefix))
-        {
-            RUNTIME_CHECK(unit.type == "d_big" || unit.type == "s", s, v, unit.type);
-            unit.pack_size = std::stoul(v.substr(attr_pack_size_prefix.size()));
-            continue;
-        }
-
-        // Make data in ColumnFileTiny or ColumnFileMem unsorted.
-        std::string_view attr_shuffle{"shuffle"};
-        if (v == attr_shuffle)
-        {
-            RUNTIME_CHECK(delta_small_data_types.contains(unit.type), s, v, unit.type, delta_small_data_types);
-            unit.shuffle = true;
-            continue;
-        }
-
-        std::string_view attr_timestamp_prefix{"ts_"};
-        if (v.starts_with(attr_timestamp_prefix))
-        {
-            RUNTIME_CHECK(delta_small_data_types.contains(unit.type), s, v, unit.type, delta_small_data_types);
-            unit.ts = std::stoul(v.substr(attr_timestamp_prefix.size()));
-            continue;
-        }
-        RUNTIME_CHECK_MSG(false, "{}: {} is unsupported", s, values[i]);
-    }
     return unit;
 }
 

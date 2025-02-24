@@ -65,7 +65,10 @@ public:
         Segment::SplitMode split_mode = Segment::SplitMode::Auto,
         bool check_rows = true);
     void mergeSegment(const std::vector<PageIdU64> & segments, bool check_rows = true);
-    void mergeSegmentDelta(PageIdU64 segment_id, bool check_rows = true);
+    void mergeSegmentDelta(
+        PageIdU64 segment_id,
+        bool check_rows = true,
+        std::optional<size_t> pack_size = std::nullopt);
     void flushSegmentCache(PageIdU64 segment_id);
     void compactSegmentDelta(PageIdU64 segment_id);
 

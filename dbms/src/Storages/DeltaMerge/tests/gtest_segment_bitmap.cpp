@@ -153,14 +153,8 @@ protected:
         }
         else if (type == "s")
         {
-            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin);
-            if (unit.pack_size)
-            {
-                db_context->getSettingsRef().dt_segment_stable_pack_rows = *(unit.pack_size);
-                reloadDMContext();
-                ASSERT_EQ(dm_context->stable_pack_rows, *(unit.pack_size));
-            }
-            SegmentTestBasic::mergeSegmentDelta(SEG_ID);
+            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
+            SegmentTestBasic::mergeSegmentDelta(SEG_ID, /*check_rows*/ true, unit.pack_size);
         }
         else if (type == "compact_delta")
         {
@@ -172,7 +166,7 @@ protected:
         }
         else if (type == "merge_delta")
         {
-            SegmentTestBasic::mergeSegmentDelta(SEG_ID);
+            SegmentTestBasic::mergeSegmentDelta(SEG_ID, /*check_rows*/ true, unit.pack_size);
         }
         else
         {
@@ -928,7 +922,7 @@ CATCH
 
 // Since rowkey_range is a left closed and right open interval, the right boundary is not included.
 // So the maximum value of Int64 needs to be handled carefully.
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_Int64Boundary)
+TEST_P(SegmentBitmapFilterTest, Int64Boundary)
 try
 {
     writeSegmentGeneric("d_mem:[-9223372036854775808, -9223372036854775800):shuffle|d_mem:[9223372036854775800, "
@@ -962,7 +956,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_Stable)
+TEST_P(SegmentBitmapFilterTest, Range_Stable)
 try
 {
     writeSegmentGeneric("s:[250, 1000):pack_size_50");
@@ -980,7 +974,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_CFBig)
+TEST_P(SegmentBitmapFilterTest, Range_CFBig)
 try
 {
     writeSegmentGeneric("d_big:[250, 1000):pack_size_50", std::tuple{388, 888, false});
@@ -998,7 +992,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_CFTinyOrMem)
+TEST_P(SegmentBitmapFilterTest, Range_CFTinyOrMem)
 try
 {
     writeSegmentGeneric("d_mem:[115, 277):shuffle|d_tiny:[140, 250):shuffle");
@@ -1009,7 +1003,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange1)
+TEST_P(SegmentBitmapFilterTest, DeleteRange1)
 try
 {
     writeSegmentGeneric("s:[10, 500):pack_size_10|d_dr:[5, 73)");
@@ -1020,7 +1014,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange2)
+TEST_P(SegmentBitmapFilterTest, DeleteRange2)
 try
 {
     writeSegmentGeneric("s:[10, 500):pack_size_10|d_dr:[5, 73)|d_tiny:[60, 83):shuffle");
@@ -1031,7 +1025,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange3)
+TEST_P(SegmentBitmapFilterTest, DeleteRange3)
 try
 {
     writeSegmentGeneric("s:[10, 500):pack_size_10|d_dr:[5, 73)|d_tiny:[60, 83):shuffle|d_dr:[70, 100)");
@@ -1042,7 +1036,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange4)
+TEST_P(SegmentBitmapFilterTest, DeleteRange4)
 try
 {
     writeSegmentGeneric(
@@ -1056,7 +1050,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange4_1)
+TEST_P(SegmentBitmapFilterTest, DeleteRange4_1)
 try
 {
     writeSegmentGeneric(
@@ -1070,7 +1064,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange5)
+TEST_P(SegmentBitmapFilterTest, DeleteRange5)
 try
 {
     writeSegmentGeneric(
@@ -1084,7 +1078,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange5_1)
+TEST_P(SegmentBitmapFilterTest, DeleteRange5_1)
 try
 {
     writeSegmentGeneric(
@@ -1098,7 +1092,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange6)
+TEST_P(SegmentBitmapFilterTest, DeleteRange6)
 try
 {
     writeSegmentGeneric(
@@ -1112,7 +1106,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange7)
+TEST_P(SegmentBitmapFilterTest, DeleteRange7)
 try
 {
     writeSegmentGeneric(
@@ -1126,7 +1120,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange8)
+TEST_P(SegmentBitmapFilterTest, DeleteRange8)
 try
 {
     writeSegmentGeneric("d_big:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, "
@@ -1140,7 +1134,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange9)
+TEST_P(SegmentBitmapFilterTest, DeleteRange9)
 try
 {
     writeSegmentGeneric("d_big:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, "
@@ -1154,7 +1148,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange10)
+TEST_P(SegmentBitmapFilterTest, DeleteRange10)
 try
 {
     writeSegmentGeneric(
@@ -1170,7 +1164,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, RowKeyFilter_DeleteRange11)
+TEST_P(SegmentBitmapFilterTest, DeleteRange11)
 try
 {
     writeSegmentGeneric(
@@ -1186,7 +1180,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta)
+TEST_P(SegmentBitmapFilterTest, Version_Delta)
 try
 {
     writeSegmentGeneric("d_mem:[0, 1):ts_1|d_mem:[0, 1):ts_2|d_mem:[0, 1):ts_3");
@@ -1211,7 +1205,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta_Flush)
+TEST_P(SegmentBitmapFilterTest, Version_Delta_Flush)
 try
 {
     writeSegmentGeneric("d_mem:[0, 10):shuffle:ts_1|d_mem:[3, 13):shuffle:ts_2|d_mem:[6, 16):shuffle:ts_3");
@@ -1251,7 +1245,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta_Compact)
+TEST_P(SegmentBitmapFilterTest, Version_Delta_Compact)
 try
 {
     writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3");
@@ -1298,7 +1292,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, VersionFilter_Delta_Compact_1)
+TEST_P(SegmentBitmapFilterTest, Version_Delta_Compact_1)
 try
 {
     writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny:[3, 13):ts_2|d_tiny:[6, 16):ts_3");
@@ -1351,7 +1345,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, VersionFilter_Stable)
+TEST_P(SegmentBitmapFilterTest, Version_Stable)
 try
 {
     writeSegmentGeneric(
@@ -1382,7 +1376,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, VersionFilter_Stable2)
+TEST_P(SegmentBitmapFilterTest, Version_Stable2)
 try
 {
     writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny:[3, 13):shuffle:ts_2|d_tiny:[6, "
@@ -1421,7 +1415,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, DeleteMarkFilter1)
+TEST_P(SegmentBitmapFilterTest, DeleteMark1)
 try
 {
     writeSegmentGeneric("d_mem:[0, 1):ts_1|d_mem_del:[0, 1):ts_2|d_mem:[0, 1):ts_3");
@@ -1446,7 +1440,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, DeleteMarkFilter2)
+TEST_P(SegmentBitmapFilterTest, DeleteMark2)
 try
 {
     writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny_del:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3");
@@ -1468,7 +1462,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, DeleteMarkFilter2_1)
+TEST_P(SegmentBitmapFilterTest, DeleteMark2_1)
 try
 {
     writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny_del:[3, 13):ts_2|d_tiny:[6, 16):ts_3");
@@ -1494,7 +1488,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, DeleteMarkFilter3)
+TEST_P(SegmentBitmapFilterTest, DeleteMark3)
 try
 {
     writeSegmentGeneric(
@@ -1525,7 +1519,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, DeleteMarkFilter4)
+TEST_P(SegmentBitmapFilterTest, DeleteMark4)
 try
 {
     writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny_del:[3, 13):shuffle:ts_2|d_tiny:[6, "
@@ -1772,4 +1766,9 @@ try
     verify(seg1, snap1);
 }
 CATCH
+
+TEST_P(SegmentBitmapFilterTest, RSFilter)
+{
+    writeSegmentGeneric("s:[0, 100):pack_size_10:ts_1|d_tiny:[55, 65):ts_2");
+}
 } // namespace DB::DM::tests
