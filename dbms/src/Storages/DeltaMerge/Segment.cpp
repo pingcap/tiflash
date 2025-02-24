@@ -3632,8 +3632,10 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
 {
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
 
-    const bool enable_version_chain = dm_context.global_context.getSettingsRef().enable_version_chain;
-    const bool verify_mvcc_bitmap = dm_context.global_context.getSettingsRef().dt_verify_mvcc_bitmap;
+    const auto & settings = dm_context.global_context.getSettingsRef();
+    const bool enable_version_chain = settings.enable_version_chain != static_cast<Int64>(VersionChainMode::Disabled);
+    const bool verify_mvcc_bitmap
+        = settings.enable_version_chain == static_cast<Int64>(VersionChainMode::EnabledForTest);
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
@@ -3643,7 +3645,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         build_bitmap_filter_block_rows,
         enable_version_chain);
 
-    if (unlikely(enable_version_chain && verify_mvcc_bitmap))
+    if (unlikely(verify_mvcc_bitmap))
     {
         checkMVCCBitmap(
             dm_context,

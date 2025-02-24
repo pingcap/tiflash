@@ -21,6 +21,7 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/Settings.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
@@ -29,13 +30,10 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
 
+#include <ext/scope_guard.h>
 #include <vector>
 
-namespace DB
-{
-namespace DM
-{
-namespace tests
+namespace DB::DM::tests
 {
 #define GET_REGION_RANGE(start, end, table_id) \
     RowKeyRange::fromHandleRange(::DB::DM::HandleRange((start), (end))).toRegionRange((table_id))
@@ -573,6 +571,12 @@ public:
     }
 };
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+[[nodiscard]] inline auto disableVersionChainTemporary(Settings & settings)
+{
+    const Int64 enable_version_chain = settings.enable_version_chain;
+    settings.set("enable_version_chain", "0");
+    return ext::make_scope_guard([enable_version_chain, &settings]() {
+        settings.set("enable_version_chain", std::to_string(enable_version_chain));
+    });
+}
+} // namespace DB::DM::tests
