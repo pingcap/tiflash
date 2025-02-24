@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Server/Setup.h>
 #include <common/config_common.h> // Included for `USE_JEMALLOC`/`USE_MIMALLOC`
@@ -191,4 +192,36 @@ void setupSIMD(const LoggerPtr & log)
     tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
 }
+<<<<<<< HEAD
+=======
+
+void setOpenFileLimit(UInt64 new_limit, const LoggerPtr & log)
+{
+    if (new_limit == 0)
+        return;
+
+    rlimit rlim{};
+    if (getrlimit(RLIMIT_NOFILE, &rlim))
+        throw DB::Exception("Cannot getrlimit");
+
+    if (rlim.rlim_cur == rlim.rlim_max)
+    {
+        LOG_INFO(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
+        return;
+    }
+
+    rlim_t old = rlim.rlim_cur;
+    rlim.rlim_cur = new_limit;
+    int rc = setrlimit(RLIMIT_NOFILE, &rlim);
+    if (rc != 0)
+        LOG_WARNING(
+            log,
+            "Cannot set max number of file descriptors to {}"
+            ". Try to specify max_open_files according to your system limits. error: {}",
+            rlim.rlim_cur,
+            strerror(errno));
+    else
+        LOG_INFO(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
+}
+>>>>>>> ad52116ac5 (*: Add stacktrace logging when exceptions are thrown in `Server::main` (#9903))
 } // namespace DB
