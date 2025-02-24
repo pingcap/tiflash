@@ -130,7 +130,11 @@ inline void readStringBinary(std::string & s, ReadBuffer & buf, size_t MAX_STRIN
     readVarUInt(size, buf);
 
     if (size > MAX_STRING_SIZE)
-        throw Poco::Exception("Too large string size.");
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Too large string size, size={} max_size={}",
+            size,
+            MAX_STRING_SIZE);
 
     s.resize(size);
     buf.readStrict(&s[0], size);
@@ -161,7 +165,11 @@ void readVectorBinary(std::vector<T> & v, ReadBuffer & buf, size_t MAX_VECTOR_SI
     readVarUInt(size, buf);
 
     if (size > MAX_VECTOR_SIZE)
-        throw Poco::Exception("Too large vector size.");
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Too large vector size, size={}, max_size={}",
+            size,
+            MAX_VECTOR_SIZE);
 
     v.resize(size);
     for (size_t i = 0; i < size; ++i)
@@ -972,7 +980,11 @@ void readBinary(std::vector<T> & x, ReadBuffer & buf)
     readVarUInt(size, buf);
 
     if (size > DEFAULT_MAX_STRING_SIZE)
-        throw Poco::Exception("Too large vector size.");
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Too large vector size, size={} max_size={}",
+            size,
+            DEFAULT_MAX_STRING_SIZE);
 
     x.resize(size);
     for (size_t i = 0; i < size; ++i)
