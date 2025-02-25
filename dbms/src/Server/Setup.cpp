@@ -18,6 +18,7 @@
 #include <common/config_common.h> // Included for `USE_JEMALLOC`/`USE_MIMALLOC`
 #include <common/logger_useful.h>
 #include <common/simd.h>
+#include <sys/resource.h>
 
 #if USE_JEMALLOC
 #include <jemalloc/jemalloc.h>
