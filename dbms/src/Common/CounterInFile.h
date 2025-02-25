@@ -63,7 +63,7 @@ public:
         bool file_doesnt_exists = !Poco::File(path).exists();
         if (file_doesnt_exists && !create_if_need)
         {
-            throw Poco::Exception(
+            throw DB::Exception(
                 "File " + path
                 + " does not exist. "
                   "You must create it manulally with appropriate value or 0 for first start.");

@@ -132,7 +132,7 @@ public:
     void merge(const ReservoirSamplerDeterministic & b)
     {
         if (sample_count != b.sample_count)
-            throw Poco::Exception("Cannot merge ReservoirSamplerDeterministic's with different sample_count");
+            throw DB::Exception("Cannot merge ReservoirSamplerDeterministic's with different sample_count");
         sorted = false;
 
         if (b.skip_degree > skip_degree)
@@ -232,7 +232,7 @@ private:
     ResultType onEmpty() const
     {
         if (OnEmpty == ReservoirSamplerDeterministicOnEmpty::THROW)
-            throw Poco::Exception("Quantile of empty ReservoirSamplerDeterministic");
+            throw DB::Exception("Quantile of empty ReservoirSamplerDeterministic");
         else
             return NanLikeValueConstructor<ResultType, std::is_floating_point_v<ResultType>>::getValue();
     }
