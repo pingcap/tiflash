@@ -39,17 +39,24 @@ BitmapFilterPtr buildBitmapFilter(
     const UInt32 delta_rows = delta.getRows();
     const UInt32 stable_rows = stable.getDMFilesRows();
     const UInt32 total_rows = delta_rows + stable_rows;
+    const auto & stable_filter_res = pack_filter_results[0];
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, true);
 
     const bool enable_version_chain_for_test = dm_context.global_context.getSettingsRef().enable_version_chain
         == static_cast<Int64>(VersionChainMode::EnabledForTest);
-    auto version_filtered_out_rows
-        = buildVersionFilter<HandleType>(dm_context, snapshot, *base_ver_snap, read_ts, *bitmap_filter);
+
+    auto version_filtered_out_rows = buildVersionFilter<HandleType>(
+        dm_context,
+        snapshot,
+        *base_ver_snap,
+        read_ts,
+        stable_filter_res,
+        *bitmap_filter);
     if (enable_version_chain_for_test)
         bitmap_filter->saveVersionFilterForDebug();
 
     auto rowkey_filtered_out_rows
-        = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, pack_filter_results[0], *bitmap_filter);
+        = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, stable_filter_res, *bitmap_filter);
     if (enable_version_chain_for_test)
         bitmap_filter->saveRowKeyFilterForDebug();
 

@@ -118,15 +118,12 @@ template <ExtraHandleType HandleType>
 [[nodiscard]] UInt32 buildVersionFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
-    const std::optional<RowKeyRange> & segment_range, // range of ColumnFileBig
     const UInt64 read_ts,
+    const UInt32 start_pack_id,
+    const RSResults & rs_results,
     const ssize_t start_row_id,
     BitmapFilter & filter)
 {
-    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
-    if (valid_handle_res.empty())
-        return 0;
-
     const auto max_versions = loadPackMaxValue<UInt64>(dm_context.global_context, *dmfile, MutSup::version_col_id);
 
     auto need_read_packs = std::make_shared<IdSet>();
@@ -134,11 +131,19 @@ template <ExtraHandleType HandleType>
 
     const auto & pack_stats = dmfile->getPackStats();
     UInt32 processed_rows = 0;
-    for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
+    for (UInt32 i = 0; i < rs_results.size(); ++i)
     {
-        const UInt32 pack_id = valid_start_pack_id + i;
+        const UInt32 pack_id = start_pack_id + i;
         const UInt32 pack_start_row_id = start_row_id + processed_rows;
         const auto & stat = pack_stats[pack_id];
+        processed_rows += stat.rows;
+
+        if (!rs_results[i].isUse())
+        {
+            filter.set(pack_start_row_id, stat.rows, false);
+            continue;
+        }
+
         // `not_clean` means there are multiple versions of the same handle in this pack.
         // `max_versions[pack_id] > read_ts` means there is a version of this pack that is not visible to `read_ts`.
         if (stat.not_clean || max_versions[pack_id] > read_ts)
@@ -146,7 +151,6 @@ template <ExtraHandleType HandleType>
             need_read_packs->insert(pack_id);
             start_row_id_of_need_read_packs.emplace(pack_id, pack_start_row_id);
         }
-        processed_rows += stat.rows;
     }
 
     if (need_read_packs->empty())
@@ -240,11 +244,20 @@ template <ExtraHandleType HandleType>
     const ssize_t start_row_id,
     BitmapFilter & filter)
 {
+    // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
+    // `valid_handle_res` is the filter results of the rowkey range. The packs that do not intersect at both ends have been cut off.
+    // `valid_start_pack_id` is the first pack that intersects with the rowkey range in DMFile.
+    auto [valid_handle_res, valid_start_pack_id]
+        = getClippedRSResultsByRanges(dm_context, cf_big.getFile(), cf_big.getRange());
+    if (valid_handle_res.empty())
+        return 0;
+
     return buildVersionFilterDMFile<HandleType>(
         dm_context,
         cf_big.getFile(),
-        cf_big.getRange(),
         read_ts,
+        valid_start_pack_id,
+        valid_handle_res,
         start_row_id,
         filter);
 }
@@ -254,11 +267,23 @@ template <ExtraHandleType HandleType>
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
     const UInt64 read_ts,
+    const DMFilePackFilterResultPtr & stable_filter_res,
     BitmapFilter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-    return buildVersionFilterDMFile<HandleType>(dm_context, dmfiles[0], std::nullopt, read_ts, 0, filter);
+    const auto & dmfile = dmfiles[0];
+    constexpr UInt32 start_pack_id = 0; // For Stable, all packs of DMFile will be considered in BitmapFilter.
+    const auto & rs_results = stable_filter_res->getPackRes();
+    constexpr UInt32 start_row_id = 0;
+    return buildVersionFilterDMFile<HandleType>(
+        dm_context,
+        dmfile,
+        read_ts,
+        start_pack_id,
+        rs_results,
+        start_row_id,
+        filter);
 }
 
 bool isApplySnapshotOrIngestSST(
@@ -280,6 +305,7 @@ UInt32 buildVersionFilter(
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
+    const DMFilePackFilterResultPtr & stable_filter_res,
     BitmapFilter & filter)
 {
     const auto & delta = *(snapshot.delta);
@@ -344,7 +370,7 @@ UInt32 buildVersionFilter(
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
     }
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
-    filtered_out_rows += buildVersionFilterStable<HandleType>(dm_context, stable, read_ts, filter);
+    filtered_out_rows += buildVersionFilterStable<HandleType>(dm_context, stable, read_ts, stable_filter_res, filter);
     return filtered_out_rows;
 }
 
@@ -353,6 +379,7 @@ template UInt32 buildVersionFilter<Int64>(
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
+    const DMFilePackFilterResultPtr & stable_filter_res,
     BitmapFilter & filter);
 
 template UInt32 buildVersionFilter<String>(
@@ -360,5 +387,6 @@ template UInt32 buildVersionFilter<String>(
     const SegmentSnapshot & snapshot,
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
+    const DMFilePackFilterResultPtr & stable_filter_res,
     BitmapFilter & filter);
 } // namespace DB::DM

@@ -302,7 +302,11 @@ protected:
             ASSERT_EQ(bitmap_filter_version_chain->toDebugString(), *(opt.expected_bitmap))
                 << fmt::format("{}, bitmap_filter_delta_index={}", info, bitmap_filter_delta_index->toDebugString());
 
-        ASSERT_EQ(*bitmap_filter_delta_index, *bitmap_filter_version_chain) << info;
+        ASSERT_EQ(*bitmap_filter_delta_index, *bitmap_filter_version_chain) << fmt::format(
+            "{}, bitmap_filter_delta_index={}, bitmap_filter_version_chain={}",
+            info,
+            bitmap_filter_delta_index->toDebugString(),
+            bitmap_filter_version_chain->toDebugString());
     }
 
     void checkHandle(PageIdU64 seg_id, std::string_view seq_ranges, int caller_line)
