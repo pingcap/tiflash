@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Utils/SerializationHelper.h>

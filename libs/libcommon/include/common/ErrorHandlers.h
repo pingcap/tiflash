@@ -26,9 +26,9 @@
 class KillingErrorHandler : public Poco::ErrorHandler
 {
 public:
-    void exception(const Poco::Exception &) { std::terminate(); }
-    void exception(const std::exception &) { std::terminate(); }
-    void exception() { std::terminate(); }
+    void exception(const Poco::Exception &) override { std::terminate(); }
+    void exception(const std::exception &) override { std::terminate(); }
+    void exception() override { std::terminate(); }
 };
 
 
@@ -37,9 +37,9 @@ public:
 class ServerErrorHandler : public Poco::ErrorHandler
 {
 public:
-    void exception(const Poco::Exception &) { logException(); }
-    void exception(const std::exception &) { logException(); }
-    void exception() { logException(); }
+    void exception(const Poco::Exception &) override { logException(); }
+    void exception(const std::exception &) override { logException(); }
+    void exception() override { logException(); }
 
 private:
     Poco::Logger * log = &Poco::Logger::get("ServerErrorHandler");
