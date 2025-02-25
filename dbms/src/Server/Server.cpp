@@ -1315,7 +1315,7 @@ try
     {
         rlimit rlim{};
         if (getrlimit(RLIMIT_NOFILE, &rlim))
-            throw Poco::Exception("Cannot getrlimit");
+            throw DB::Exception("Cannot getrlimit");
 
         if (rlim.rlim_cur == rlim.rlim_max)
         {

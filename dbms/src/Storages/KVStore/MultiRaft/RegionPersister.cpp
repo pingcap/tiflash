@@ -423,28 +423,8 @@ RegionMap RegionPersister::restore(
             page.page_id == region->id(),
             "region_id and page_id not match! region_id={} page_id={} page_size={}",
             region->id(),
-<<<<<<< HEAD
-            page.page_id);
-=======
             page.page_id,
             page.data.size());
-#if SERVERLESS_PROXY == 1
-        if (global_context.isKeyspaceInBlocklist(region->getKeyspaceID()))
-        {
-            LOG_WARNING(
-                log,
-                "Region skip restore because keyspace in blocklist, region_id={} keyspace={}",
-                region->id(),
-                region->getKeyspaceID());
-            return;
-        }
-        if (global_context.isRegionInBlocklist(region->id()))
-        {
-            LOG_WARNING(log, "Region skip restore because region_id in blacklist, region_id={}", region->id());
-            return;
-        }
-#endif
->>>>>>> ad52116ac5 (*: Add stacktrace logging when exceptions are thrown in `Server::main` (#9903))
 
         regions.emplace(page.page_id, region);
     };
