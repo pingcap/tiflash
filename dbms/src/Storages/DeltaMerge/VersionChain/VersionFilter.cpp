@@ -140,6 +140,7 @@ template <ExtraHandleType HandleType>
 
         if (!rs_results[i].isUse())
         {
+            // Rows that filtered out by rs_results are counted independently.
             filter.set(pack_start_row_id, stat.rows, false);
             continue;
         }
