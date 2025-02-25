@@ -62,6 +62,8 @@ BitmapFilterPtr buildBitmapFilter(
 
     auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, *bitmap_filter);
 
+    // TODO: count filterout rows by rs_results
+
     LOG_INFO(
         snapshot.log,
         "read_ranges={}, rowkey_filtered_out_rows={}, version_filtered_out_rows={}, delete_filtered_out_rows={}",

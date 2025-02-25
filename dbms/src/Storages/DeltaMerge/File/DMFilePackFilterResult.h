@@ -22,7 +22,8 @@ namespace DB::DM
 {
 namespace tests
 {
-class SegmentBitmapFilterTest_RSFilter_Test;
+class SegmentBitmapFilterTest_RSFilter0_Test;
+class SegmentBitmapFilterTest_RSFilter1_Test;
 } // namespace tests
 class DMFilePackFilterResult
 {
@@ -100,7 +101,8 @@ private:
     // `pack_res` is the filter results of `rowkey_ranges && filter && read_packs`.
     std::vector<RSResult> pack_res;
 
-    friend class tests::SegmentBitmapFilterTest_RSFilter_Test;
+    friend class tests::SegmentBitmapFilterTest_RSFilter0_Test;
+    friend class tests::SegmentBitmapFilterTest_RSFilter1_Test;
 };
 
 } // namespace DB::DM
