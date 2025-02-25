@@ -92,7 +92,7 @@ struct HashMethodOneNumber
 class KeyStringBatchHandlerBase
 {
 private:
-    size_t batch_row_idx = 0;
+    size_t processed_row_idx = 0;
     std::vector<String> sort_key_containers{};
     std::vector<StringRef> batch_rows{};
 
@@ -111,7 +111,7 @@ private:
         const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
         for (size_t i = 0; i < cur_batch_size; ++i)
         {
-            const auto row = batch_row_idx + i;
+            const auto row = processed_row_idx + i;
             const auto last_offset = offsets[row - 1];
             // Remove last zero byte.
             StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
@@ -120,7 +120,7 @@ private:
 
             batch_rows[i] = key;
         }
-        batch_row_idx += cur_batch_size;
+        processed_row_idx += cur_batch_size;
         return 0;
     }
 
@@ -136,7 +136,7 @@ protected:
     void init(size_t start_row, size_t max_batch_size)
     {
         RUNTIME_CHECK(max_batch_size >= 256);
-        batch_row_idx = start_row;
+        processed_row_idx = start_row;
         sort_key_containers.resize(max_batch_size);
         batch_rows.reserve(max_batch_size);
     }
@@ -693,7 +693,7 @@ struct HashMethodKeysFixed
 class KeySerializedBatchHandlerBase
 {
 private:
-    size_t batch_row_idx = 0;
+    size_t processed_row_idx = 0;
     String sort_key_container{};
     PaddedPODArray<size_t> byte_size{};
     PaddedPODArray<char *> pos{};
@@ -717,7 +717,7 @@ protected:
 
     void init(size_t start_row, const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators)
     {
-        batch_row_idx = start_row;
+        processed_row_idx = start_row;
         byte_size.resize_fill_zero(key_columns[0]->size());
         RUNTIME_CHECK(!byte_size.empty());
         for (size_t i = 0; i < key_columns.size(); ++i)
@@ -739,9 +739,9 @@ protected:
         if unlikely (cur_batch_size <= 0)
             return 0;
 
-        assert(batch_row_idx + cur_batch_size <= byte_size.size());
+        assert(processed_row_idx + cur_batch_size <= byte_size.size());
         size_t mem_size = 0;
-        for (size_t i = batch_row_idx; i < batch_row_idx + cur_batch_size; ++i)
+        for (size_t i = processed_row_idx; i < processed_row_idx + cur_batch_size; ++i)
             mem_size += byte_size[i];
 
         auto * ptr = static_cast<char *>(pool->alignedAlloc(mem_size, 16));
@@ -749,13 +749,13 @@ protected:
         {
             pos[i] = ptr;
             ori_pos[i] = ptr;
-            ptr += byte_size[i + batch_row_idx];
+            ptr += byte_size[i + processed_row_idx];
         }
 
         for (size_t i = 0; i < key_columns.size(); ++i)
             key_columns[i]->serializeToPosForCmp(
                 pos,
-                batch_row_idx,
+                processed_row_idx,
                 cur_batch_size,
                 false,
                 nullptr,
@@ -765,7 +765,7 @@ protected:
         for (size_t i = 0; i < cur_batch_size; ++i)
             real_byte_size[i] = pos[i] - ori_pos[i];
 
-        batch_row_idx += cur_batch_size;
+        processed_row_idx += cur_batch_size;
 
         return mem_size;
     }
