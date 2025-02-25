@@ -16,7 +16,7 @@
 
 #include <Common/nocopyable.h>
 
-#include <cstring>
+#include <string>
 
 namespace DB
 {
@@ -25,16 +25,16 @@ struct RawCppString : std::string
     using Base = std::string;
     using Base::Base;
     RawCppString() = delete;
-    RawCppString(Base && src)
+    RawCppString(Base && src) // NOLINT(google-explicit-constructor)
         : Base(std::move(src))
     {}
-    RawCppString(const Base & src)
+    RawCppString(const Base & src) // NOLINT(google-explicit-constructor)
         : Base(src)
     {}
     DISALLOW_COPY(RawCppString);
 
     template <class... Args>
-    static RawCppString * New(Args &&... _args)
+    static RawCppString * New(Args &&... _args) // NOLINT(readability-identifier-naming)
     {
         return new RawCppString{std::forward<Args>(_args)...};
     }

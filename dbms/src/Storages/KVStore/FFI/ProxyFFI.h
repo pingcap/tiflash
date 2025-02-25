@@ -175,7 +175,7 @@ RawCppPtr PreHandleSnapshot(
 void ApplyPreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
 void AbortPreHandledSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t peer_id);
 void ReleasePreHandledSnapshot(EngineStoreServerWrap * server, void * res, RawCppPtrType type);
-BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_id, BaseBuffView key);
+CppStrWithView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_id, BaseBuffView key);
 HttpRequestRes HandleHttpRequest(EngineStoreServerWrap *, BaseBuffView path, BaseBuffView query, BaseBuffView body);
 uint8_t CheckHttpUriAvailable(BaseBuffView);
 void GcRawCppPtr(void * ptr, RawCppPtrType type);
