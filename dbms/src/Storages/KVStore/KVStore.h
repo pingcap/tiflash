@@ -167,6 +167,8 @@ public: // Region Management
     void setKVStoreMemoryLimit(size_t s) { maximum_kvstore_memory = s; }
     size_t getKVStoreMemoryLimit() const { return maximum_kvstore_memory; }
 
+    std::shared_ptr<const TiKVValue> getLockByKey(RegionID region_id, const TiKVKey & tikv_key) const;
+
 public: // Raft Read and Write
     EngineStoreApplyRes handleAdminRaftCmd(
         raft_cmdpb::AdminRequest && request,

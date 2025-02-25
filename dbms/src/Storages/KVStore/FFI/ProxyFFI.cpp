@@ -1024,14 +1024,28 @@ CppStrWithView GetLockByKey(const EngineStoreServerWrap * server, uint64_t regio
     {
         RUNTIME_CHECK(server->tmt != nullptr);
         auto & kvstore = server->tmt->getKVStore();
+        // prevent concurrent write to the same region
+        auto region_task_lock = kvstore->genRegionTaskLock(region_id);
         auto region = kvstore->getRegion(region_id);
+        if (!region)
+        {
+            // in case region is not exist
+            LOG_WARNING(
+                Logger::get(),
+                "Failed to get lock by key, region is not exist, region_id={} key={}",
+                region_id,
+                tikv_key.toDebugString());
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
+        }
+
         auto value = region->getLockByKey(tikv_key);
         if (!value)
         {
-            // key not exist
+            // Key not exist. Use debug level because with feature file-base-txn, there could be lots of logging
             LOG_DEBUG(Logger::get(), "Failed to get lock by key {}, region_id={}", tikv_key.toDebugString(), region_id);
             return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
         }
+
         auto * s = RawCppString::New(*value);
         return CppStrWithView{
             .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
