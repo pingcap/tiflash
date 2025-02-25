@@ -360,26 +360,43 @@ void syncSchemaWithTiDB(
     if (storage_config.api_version == 1)
     {
         Stopwatch watch;
-        while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
+        const UInt64 total_wait_seconds = global_context->getSettingsRef().ddl_restart_wait_seconds;
+        static constexpr int retry_wait_seconds = 3;
+        while (true)
         {
+            if (watch.elapsedSeconds() > total_wait_seconds)
+            {
+                LOG_WARNING(log, "Sync schemas during init timeout, cost={:.3f}s", watch.elapsedSeconds());
+                break;
+            }
+
             try
             {
                 global_context->getTMTContext().getSchemaSyncerManager()->syncSchemas(*global_context, NullspaceID);
+                LOG_INFO(log, "Sync schemas during init done, cost={:.3f}s", watch.elapsedSeconds());
                 break;
             }
-            catch (Poco::Exception & e)
+            catch (DB::Exception & e)
             {
-                const int wait_seconds = 3;
                 LOG_ERROR(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
                     e.displayText(),
-                    wait_seconds);
-                ::sleep(wait_seconds);
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
+            }
+            catch (Poco::Exception & e)
+            {
+                LOG_ERROR(
+                    log,
+                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                    " seconds and try again.",
+                    e.displayText(),
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
             }
         }
-        LOG_DEBUG(log, "Sync schemas done.");
     }
 
     // Init the DeltaMergeStore instances if data exist.
@@ -464,34 +481,8 @@ void loadBlockList(
 #endif
 }
 
-void setOpenFileLimit(std::optional<UInt64> new_limit, const LoggerPtr & log)
-{
-    rlimit rlim{};
-    if (getrlimit(RLIMIT_NOFILE, &rlim))
-        throw Poco::Exception("Cannot getrlimit");
-
-    if (rlim.rlim_cur == rlim.rlim_max)
-    {
-        LOG_INFO(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
-    }
-    else
-    {
-        rlim_t old = rlim.rlim_cur;
-        rlim.rlim_cur = new_limit.value_or(rlim.rlim_max);
-        int rc = setrlimit(RLIMIT_NOFILE, &rlim);
-        if (rc != 0)
-            LOG_WARNING(
-                log,
-                "Cannot set max number of file descriptors to {}"
-                ". Try to specify max_open_files according to your system limits. error: {}",
-                rlim.rlim_cur,
-                strerror(errno));
-        else
-            LOG_INFO(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
-    }
-}
-
 int Server::main(const std::vector<std::string> & /*args*/)
+try
 {
     setThreadName("TiFlashMain");
 
@@ -745,14 +736,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     /// Try to increase limit on number of open files.
-    if (config().hasProperty("max_open_files"))
-    {
-        setOpenFileLimit(config().getUInt("max_open_files"), log);
-    }
-    else
-    {
-        setOpenFileLimit(std::nullopt, log);
-    }
+    setOpenFileLimit(config().getUInt("max_open_files", 0), log);
 
     static ServerErrorHandler error_handler;
     Poco::ErrorHandler::set(&error_handler);
@@ -1285,6 +1269,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     return Application::EXIT_OK;
+}
+catch (...)
+{
+    // The default exception handler of Poco::Util::Application will catch the
+    // `DB::Exception` as `Poco::Exception` and do not print the stacktrace.
+    // So we catch all exceptions here and print the stacktrace.
+    tryLogCurrentException("Server::main");
+    auto code = getCurrentExceptionCode();
+    return code > 0 ? code : 1;
 }
 } // namespace DB
 
