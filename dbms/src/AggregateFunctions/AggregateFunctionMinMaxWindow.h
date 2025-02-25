@@ -42,22 +42,28 @@ private:
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
+        insertBatchMinOrMaxResultInto<is_min>(to, 1);
+    }
+
+    template <bool is_min>
+    void insertBatchMinOrMaxResultInto(IColumn & to, size_t num) const
+    {
         if (!saved_values.empty())
         {
             if constexpr (is_min)
             {
                 const auto & iter = saved_values.begin();
-                static_cast<ColumnType &>(to).getData().push_back(*iter);
+                static_cast<ColumnType &>(to).getData().resize_fill(num, *iter);
             }
             else
             {
                 const auto & iter = saved_values.rbegin();
-                static_cast<ColumnType &>(to).getData().push_back(*iter);
+                static_cast<ColumnType &>(to).getData().resize_fill(num, *iter);
             }
         }
         else
         {
-            static_cast<ColumnType &>(to).insertDefault();
+            static_cast<ColumnType &>(to).insertManyDefaults(num);
         }
     }
 
@@ -65,6 +71,10 @@ public:
     void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
     void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
+
+    void insertBatchMaxResultInto(IColumn & to, size_t num) const { insertBatchMinOrMaxResultInto<false>(to, num); }
+
+    void insertBatchMinResultInto(IColumn & to, size_t num) const { insertBatchMinOrMaxResultInto<true>(to, num); }
 
     void reset() { saved_values.clear(); }
 
@@ -123,22 +133,34 @@ private:
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
+        insertBatchMinOrMaxResultInto<is_min>(to, 1);
+    }
+
+    template <bool is_min>
+    void insertBatchMinOrMaxResultInto(IColumn & to, size_t num) const
+    {
         if (!saved_values.empty())
         {
             if constexpr (is_min)
             {
                 const auto & iter = saved_values.begin();
-                static_cast<ColumnString &>(to).insertDataWithTerminatingZero(iter->value.data, iter->value.size);
+                const char * data = iter->value.data;
+                size_t size = iter->value.size;
+                for (size_t i = 0; i < num; ++i)
+                    static_cast<ColumnString &>(to).insertDataWithTerminatingZero(data, size);
             }
             else
             {
                 const auto & iter = saved_values.rbegin();
-                static_cast<ColumnString &>(to).insertDataWithTerminatingZero(iter->value.data, iter->value.size);
+                const char * data = iter->value.data;
+                size_t size = iter->value.size;
+                for (size_t i = 0; i < num; ++i)
+                    static_cast<ColumnString &>(to).insertDataWithTerminatingZero(data, size);
             }
         }
         else
         {
-            static_cast<ColumnString &>(to).insertDefault();
+            static_cast<ColumnString &>(to).insertManyDefaults(num);
         }
     }
 
@@ -146,6 +168,10 @@ public:
     void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
     void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
+
+    void insertBatchMaxResultInto(IColumn & to, size_t num) const { insertBatchMinOrMaxResultInto<false>(to, num); }
+
+    void insertBatchMinResultInto(IColumn & to, size_t num) const { insertBatchMinOrMaxResultInto<true>(to, num); }
 
     void reset() { saved_values.clear(); }
 
@@ -180,22 +206,28 @@ private:
     template <bool is_min>
     void insertMinOrMaxResultInto(IColumn & to) const
     {
+        insertBatchMinOrMaxResultInto<is_min>(to, 1);
+    }
+
+    template <bool is_min>
+    void insertBatchMinOrMaxResultInto(IColumn & to, size_t num) const
+    {
         if (!saved_values.empty())
         {
             if constexpr (is_min)
             {
                 const auto & iter = saved_values.begin();
-                to.insert(*iter);
+                to.insertMany(*iter, num);
             }
             else
             {
                 const auto & iter = saved_values.rbegin();
-                to.insert(*iter);
+                to.insertMany(*iter, num);
             }
         }
         else
         {
-            to.insertDefault();
+            to.insertManyDefaults(num);
         }
     }
 
@@ -203,6 +235,10 @@ public:
     void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
     void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
+
+    void insertBatchMaxResultInto(IColumn & to, size_t num) const { insertBatchMinOrMaxResultInto<false>(to, num); }
+
+    void insertBatchMinResultInto(IColumn & to, size_t num) const { insertBatchMinOrMaxResultInto<true>(to, num); }
 
     void reset() { saved_values.clear(); }
 
@@ -241,6 +277,8 @@ struct AggregateFunctionMinDataForWindow : Data
 
     void insertResultInto(IColumn & to) const { Data::insertMinResultInto(to); }
 
+    void insertBatchResultInto(IColumn & to, size_t num) const { Data::insertBatchMinResultInto(to, num); }
+
     static const char * name() { return "min_for_window"; }
 };
 
@@ -257,6 +295,8 @@ struct AggregateFunctionMaxDataForWindow : Data
     void changeIfBetter(const Self &, Arena *) { throw Exception("Not implemented yet"); }
 
     void insertResultInto(IColumn & to) const { Data::insertMaxResultInto(to); }
+
+    void insertBatchResultInto(IColumn & to, size_t num) const { Data::insertBatchMaxResultInto(to, num); }
 
     static const char * name() { return "max_for_window"; }
 };

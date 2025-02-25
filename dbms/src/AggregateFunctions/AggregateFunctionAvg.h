@@ -131,6 +131,23 @@ public:
         }
     }
 
+    void insertBatchResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
+    {
+        if constexpr (IsDecimal<TResult>)
+        {
+            ScaleType left_scale = result_scale - scale;
+            TResult result = this->data(place).sum.value * getScaleMultiplier<TResult>(left_scale)
+                / static_cast<typename TResult::NativeType>(this->data(place).count);
+            static_cast<ColumnDecimal<TResult> &>(to).getData().resize_fill(num, result);
+        }
+        else
+        {
+            static_cast<ColumnFloat64 &>(to).getData().resize_fill(
+                num,
+                static_cast<Float64>(this->data(place).sum) / this->data(place).count);
+        }
+    }
+
     void create(AggregateDataPtr __restrict place) const override
     {
         using Data

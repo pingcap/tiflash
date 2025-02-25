@@ -239,8 +239,11 @@ WindowTransformAction::WindowTransformAction(
     }
 
     initialWorkspaces();
-
     initialPartitionAndOrderColumnIndices();
+
+    has_shortcut = window_description_.frame.begin_type == WindowFrame::BoundaryType::Unbounded
+        && window_description_.frame.end_type == WindowFrame::BoundaryType::Unbounded
+        && !aggregation_workspaces.empty();
 }
 
 void WindowTransformAction::cleanUp()
@@ -291,6 +294,9 @@ void WindowTransformAction::initialWorkspaces()
             window_workspaces.push_back(std::move(workspace));
         }
     }
+
+    // Can not have window and agg functions together in one window
+    assert((aggregation_workspaces.size() > 0 && window_workspaces.size() > 0) == false);
 
     has_rank_or_dense_rank = false;
     for (const auto & workspace : window_workspaces)
@@ -1294,10 +1300,58 @@ void WindowTransformAction::writeOutCurrentRow()
     }
 }
 
+void WindowTransformAction::writeBatchResult()
+{
+    assert(partition_ended);
+    assert(current_row < partition_end);
+
+    size_t insert_row_num = 0;
+    const auto & block = blockAt(current_row);
+    RowNumber tmp_row;
+    if (current_row.block != partition_end.block)
+    {
+        insert_row_num = block.rows - current_row.row;
+        tmp_row = current_row;
+        tmp_row.block += 1;
+        tmp_row.row = 0;
+    }
+    else
+    {
+        insert_row_num = partition_end.row - current_row.row;
+        tmp_row = partition_end;
+    }
+
+    // As aggregation function and window function can not occur in one window at the same time
+    // Only batch inserting results for aggregation function is ok
+    for (auto & ws : aggregation_workspaces)
+    {
+        IColumn * result_column = block.output_columns[ws.idx].get();
+        const auto * agg_func = ws.aggregate_function.get();
+        auto * buf = ws.aggregate_function_state.data();
+        agg_func->insertBatchResultInto(buf, *result_column, insert_row_num, nullptr);
+    }
+
+    current_row = tmp_row;
+}
+
+
 Block WindowTransformAction::tryGetOutputBlock()
 {
     // first try calculate the result based on current data
-    tryCalculate();
+    if (window_description.need_decrease)
+    {
+        if (has_shortcut)
+            tryCalculate<true, true>();
+        else
+            tryCalculate<true, false>();
+    }
+    else
+    {
+        if (has_shortcut)
+            tryCalculate<false, true>();
+        else
+            tryCalculate<false, false>();
+    }
     // then return block if it is ready
     assert(first_not_ready_row.block >= first_block_number);
     // The first_not_ready_row might be past-the-end if we have already
@@ -1445,6 +1499,7 @@ void WindowTransformAction::updateAggregationState()
     first_processed = false;
 }
 
+template <bool need_decrease, bool has_shortcut>
 void WindowTransformAction::tryCalculate()
 {
     // if there is no input data, we don't need to calculate
@@ -1506,14 +1561,23 @@ void WindowTransformAction::tryCalculate()
             assert(frame_started);
             assert(frame_ended);
 
-            if (window_description.need_decrease)
+            if constexpr (need_decrease)
                 updateAggregationState<true>();
             else
                 updateAggregationState<false>();
 
-            // Write out the results.
+
+            if constexpr (has_shortcut)
+            {
+                // When we reach here, partition must be ended
+                assert(partition_ended);
+                writeBatchResult();
+            }
+            else
+            {
+                writeOutCurrentRow();
+            }
             // TODO execute the window function by block instead of row.
-            writeOutCurrentRow();
 
             prev_frame_start = frame_start;
             prev_frame_end = frame_end;

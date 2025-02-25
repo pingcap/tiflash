@@ -282,6 +282,11 @@ public:
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
 
+    void insertBatchResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
+    {
+        static_cast<ColumnUInt64 &>(to).getData().resize_fill(num, data(place).count);
+    }
+
     const char * getHeaderFilePath() const override { return __FILE__; }
 
 private:

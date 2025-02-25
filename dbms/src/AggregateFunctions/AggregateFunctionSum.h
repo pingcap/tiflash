@@ -449,6 +449,20 @@ public:
             static_cast<ColumnVector<TResult> &>(to).getData().push_back(this->data(place).get());
     }
 
+    void insertBatchResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
+    {
+        if constexpr (IsDecimal<TResult>)
+        {
+            // TODO refine it
+            auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
+            container.reserve(container.size() + num);
+            for (size_t i = 0; i < num; ++i)
+                static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(this->data(place).get(), result_scale);
+        }
+        else
+            static_cast<ColumnVector<TResult> &>(to).getData().resize_fill(num, this->data(place).get());
+    }
+
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
