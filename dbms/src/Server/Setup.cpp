@@ -192,8 +192,6 @@ void setupSIMD(const LoggerPtr & log)
     tryLoadBoolConfigFromEnv(log, simd_option::ENABLE_SVE, "TIFLASH_ENABLE_SVE");
 #endif
 }
-<<<<<<< HEAD
-=======
 
 void setOpenFileLimit(UInt64 new_limit, const LoggerPtr & log)
 {
@@ -223,5 +221,4 @@ void setOpenFileLimit(UInt64 new_limit, const LoggerPtr & log)
     else
         LOG_INFO(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
 }
->>>>>>> ad52116ac5 (*: Add stacktrace logging when exceptions are thrown in `Server::main` (#9903))
 } // namespace DB
