@@ -318,11 +318,10 @@ void SimplePKTestBasic::ingestFiles(const IngestFilesOptions & options)
 
     auto range = buildRowRange(options.range.first, options.range.second);
 
+    // When ingestFiles concurrently, use options.mtx to serialize the operation with intersecting ranges.
+    // And need to generate data after the lock to make sure the data version is generated in the correct order.
     auto lock = options.mtx ? std::unique_lock{*options.mtx} : std::unique_lock<std::mutex>{};
-
-    const auto & blocks = options.blocks.empty() && options.range.first < options.range.second
-        ? Blocks{1, fillBlock({.range = options.range})}
-        : options.blocks;
+    const auto & blocks = options.mtx ? Blocks{1, fillBlock({.range = options.range})} : options.blocks;
 
     std::vector<DM::ExternalDTFileInfo> external_files;
     external_files.reserve(blocks.size());

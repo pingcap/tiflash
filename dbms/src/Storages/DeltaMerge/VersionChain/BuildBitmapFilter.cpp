@@ -33,6 +33,7 @@ BitmapFilterPtr buildBitmapFilter(
     VersionChain<HandleType> & version_chain)
 {
     RUNTIME_CHECK(pack_filter_results.size() == 1, pack_filter_results.size());
+    RUNTIME_CHECK(snapshot.stable->getDMFiles().size() == 1, snapshot.stable->getDMFiles().size());
     const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -62,20 +63,30 @@ BitmapFilterPtr buildBitmapFilter(
 
     auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, *bitmap_filter);
 
-    // TODO: count filterout rows by rs_results
+    const auto & stable_pack_stats = stable.getDMFiles()[0]->getPackStats();
+    const auto & stable_rs_results = stable_filter_res->getPackRes();
+    auto rs_result_filter_out_rows = 0;
+    for (UInt32 i = 0; i < stable_pack_stats.size(); ++i)
+    {
+        if (!stable_rs_results[i].isUse())
+            rs_result_filter_out_rows += stable_pack_stats[i].rows;
+    }
 
     LOG_INFO(
         snapshot.log,
-        "read_ranges={}, rowkey_filtered_out_rows={}, version_filtered_out_rows={}, delete_filtered_out_rows={}",
+        "read_ranges={}, rowkey_filtered_out_rows={}, version_filtered_out_rows={}, delete_filtered_out_rows={}, "
+        "rs_result_filter_out_rows={}",
         read_ranges,
         rowkey_filtered_out_rows,
         version_filtered_out_rows,
-        delete_filtered_out_rows);
+        delete_filtered_out_rows,
+        rs_result_filter_out_rows);
 
-    // rowkey_filtered_out_rows + version_filtered_out_rows + delete_filtered_out_rows
-    // may greater than the number of rows that are filtered out.
+    // The sum of `*_filtered_out_rows` may greater than the actual number of rows that are filtered out,
     // because the same row may be filtered out by multiple filters and counted multiple times.
-    bitmap_filter->setAllMatch(rowkey_filtered_out_rows + version_filtered_out_rows + delete_filtered_out_rows == 0);
+    bitmap_filter->setAllMatch(
+        rowkey_filtered_out_rows + version_filtered_out_rows + delete_filtered_out_rows + rs_result_filter_out_rows
+        == 0);
     return bitmap_filter;
 }
 
