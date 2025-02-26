@@ -138,12 +138,10 @@ template <ExtraHandleType HandleType>
         const auto & stat = pack_stats[pack_id];
         processed_rows += stat.rows;
 
+        // Packs that filtered out by rs_results is handle by RowKeyFilter.
+        // So we just skip these packs here.
         if (!rs_results[i].isUse())
-        {
-            // Rows that filtered out by rs_results are counted independently.
-            filter.set(pack_start_row_id, stat.rows, false);
             continue;
-        }
 
         // `not_clean` means there are multiple versions of the same handle in this pack.
         // `max_versions[pack_id] > read_ts` means there is a version of this pack that is not visible to `read_ts`.

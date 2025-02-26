@@ -95,6 +95,7 @@ UInt32 buildRowKeyFilterDMFile(
 
     const auto & pack_stats = dmfile->getPackStats();
     UInt32 processed_rows = 0;
+    UInt32 filtered_out_rows = 0;
     for (UInt32 i = 0; i < handle_res.size(); ++i)
     {
         const auto pack_id = start_pack_id + i;
@@ -102,6 +103,7 @@ UInt32 buildRowKeyFilterDMFile(
         processed_rows += pack_stats[pack_id].rows;
         if (!pack_res[i].isUse())
         {
+            filtered_out_rows += pack_stats[pack_id].rows;
             filter.set(pack_start_row_id, pack_stats[pack_id].rows, false);
         }
         else if (!handle_res[i].allMatch())
@@ -109,18 +111,17 @@ UInt32 buildRowKeyFilterDMFile(
             need_read_packs->insert(pack_id);
             start_row_id_of_need_read_packs.emplace(pack_id, pack_start_row_id);
         }
-        // else handle_res[i].allMatch()
+        // else handle_res[i].allMatch() do nothing
     }
 
     if (need_read_packs->empty())
-        return 0;
+        return filtered_out_rows;
 
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     builder.onlyReadOnePackEveryTime().setReadPacks(need_read_packs).setReadTag(ReadTag::MVCC);
     auto stream
         = builder.build(dmfile, {getHandleColumnDefine<HandleType>()}, /*rowkey_ranges*/ {}, dm_context.scan_context);
 
-    UInt32 filtered_out_rows = 0;
     for (auto pack_id : *need_read_packs)
     {
         auto block = stream->read();
