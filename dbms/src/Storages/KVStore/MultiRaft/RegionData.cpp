@@ -119,6 +119,13 @@ RegionDataMemDiff RegionData::remove(ColumnFamilyType cf, const TiKVKey & key)
     return delta;
 }
 
+void RegionData::removeDeletedLocks()
+{
+    auto delta = lock_cf.removeDeletedKeys();
+    recordMemChange(delta);
+    updateMemoryUsage(delta);
+}
+
 RegionData::WriteCFIter RegionData::removeDataByWriteIt(const WriteCFIter & write_it)
 {
     const auto & [key, value, decoded_val] = write_it->second;

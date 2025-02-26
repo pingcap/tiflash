@@ -380,6 +380,7 @@ std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & re
 
 void RemoveRegionCommitCache(const RegionPtr & region, const RegionDataReadInfoList & data_list_read, bool lock_region)
 {
+    region->removeDeletedLocks(lock_region);
     /// Remove data in region.
     auto remover = region->createCommittedRemover(lock_region);
     size_t remove_committed_count = 0;

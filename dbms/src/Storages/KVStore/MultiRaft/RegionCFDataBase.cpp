@@ -164,21 +164,41 @@ RegionDataMemDiff RegionCFDataBase<Trait>::remove(const Key & key, bool quiet)
         if (shouldIgnoreRemove(value))
             return {};
 
-        auto delta = calcTotalKVSize(value).negative();
         if constexpr (std::is_same<Trait, RegionLockCFDataTrait>::value)
         {
             if unlikely (std::get<2>(value)->isLargeTxn())
-            {
                 GET_METRIC(tiflash_raft_process_keys, type_large_txn_lock_del).Increment(1);
-            }
+            this->deleted_keys.push_back(std::get<0>(value)); // Will delete locks after data write to storage.
+            return {};
         }
-        map.erase(it);
-        return delta;
+        else
+        {
+            auto delta = calcTotalKVSize(value).negative();
+            map.erase(it);
+            return delta;
+        }
     }
     else if (!quiet)
         throw Exception("Key not found", ErrorCodes::LOGICAL_ERROR);
 
     return {};
+}
+
+template <>
+RegionDataMemDiff RegionCFDataBase<RegionLockCFDataTrait>::removeDeletedKeys()
+{
+    RegionDataMemDiff delta;
+    for (const auto & key : this->deleted_keys)
+    {
+        const auto k = Key{nullptr, std::string_view{key->data(), key->dataSize()}};
+        auto it = data.find(k);
+        if (it == data.end())
+            continue;
+        delta.sub(calcTotalKVSize(it->second));
+        data.erase(it);
+    }
+    deleted_keys.clear();
+    return delta;
 }
 
 template <typename Trait>

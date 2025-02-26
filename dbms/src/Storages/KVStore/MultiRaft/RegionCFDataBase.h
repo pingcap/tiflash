@@ -16,6 +16,7 @@
 
 #include <Common/TiFlashMetrics.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 
 namespace DB
@@ -64,21 +65,34 @@ enum class DupCheck
     AllowSame,
 };
 
+
 template <typename Trait>
-struct RegionCFDataBase
+struct DeletedKeysHolder
+{
+};
+
+template <>
+struct DeletedKeysHolder<RegionLockCFDataTrait>
+{
+    std::vector<std::shared_ptr<const TiKVKey>> deleted_keys;
+};
+
+template <typename Trait>
+struct RegionCFDataBase : DeletedKeysHolder<Trait>
 {
     using Key = typename Trait::Key;
     using Value = typename Trait::Value;
     using Map = typename Trait::Map;
     using Data = Map;
     using Pair = std::pair<Key, Value>;
-    using Status = bool;
 
     RegionDataMemDiff insert(TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
 
     static RegionDataMemDiff calcTotalKVSize(const Value & value);
 
     RegionDataMemDiff remove(const Key & key, bool quiet = false);
+
+    RegionDataMemDiff removeDeletedKeys();
 
     static bool cmp(const Map & a, const Map & b);
 
