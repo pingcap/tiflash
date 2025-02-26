@@ -82,82 +82,52 @@ template <ExtraHandleType HandleType>
 UInt32 buildRowKeyFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
-    const std::optional<RowKeyRange> & segment_range,
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
-    const DMFilePackFilterResultPtr & stable_filter_res,
+    const UInt32 start_pack_id,
+    const RSResults & handle_res, // read_ranges && !delete_ranges
+    const RSResults & pack_res, // read_ranges && !delete_ranges && (rs_filter if stable)
     const UInt32 start_row_id,
     BitmapFilter & filter)
 {
-    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
-    if (unlikely(valid_handle_res.empty()))
-        return 0;
-
-    // Filter out these packs that don't need to read.
-    if (stable_filter_res)
-    {
-        RUNTIME_CHECK(valid_start_pack_id == 0, valid_start_pack_id);
-        const auto & pack_res = stable_filter_res->getPackRes();
-        RUNTIME_CHECK(pack_res.size() == valid_handle_res.size(), pack_res.size(), valid_handle_res.size());
-        for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
-            if (!pack_res[i].isUse())
-                valid_handle_res[i] = RSResult::None;
-    }
-
-    // RSResult of read_ranges.
-    const auto & read_ranges_handle_res
-        = stable_filter_res ? stable_filter_res->getHandleRes() : getRSResultsByRanges(dm_context, dmfile, read_ranges);
-    for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
-        valid_handle_res[i] = valid_handle_res[i] && read_ranges_handle_res[valid_start_pack_id + i];
-
-    // RSResult of delete_ranges.
-    if (!delete_ranges.empty())
-    {
-        const auto delete_ranges_handle_res = getRSResultsByRanges(dm_context, dmfile, delete_ranges);
-        for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
-            valid_handle_res[i] = valid_handle_res[i] && !delete_ranges_handle_res[valid_start_pack_id + i];
-    }
-
     auto need_read_packs = std::make_shared<IdSet>();
-    UInt32 need_read_rows = 0;
-    std::unordered_map<UInt32, UInt32> need_read_pack_to_start_row_ids;
+    std::unordered_map<UInt32, UInt32> start_row_id_of_need_read_packs; // pack_id -> start_row_id
 
     const auto & pack_stats = dmfile->getPackStats();
     UInt32 processed_rows = 0;
-    UInt32 filtered_out_rows = 0;
-    for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
+    for (UInt32 i = 0; i < handle_res.size(); ++i)
     {
-        const auto pack_id = valid_start_pack_id + i;
-        if (!valid_handle_res[i].isUse())
+        const auto pack_id = start_pack_id + i;
+        const auto pack_start_row_id = start_row_id + processed_rows;
+        processed_rows += pack_stats[pack_id].rows;
+        if (!pack_res[i].isUse())
         {
-            filter.set(start_row_id + processed_rows, pack_stats[pack_id].rows, false);
-            filtered_out_rows += pack_stats[pack_id].rows;
+            filter.set(pack_start_row_id, pack_stats[pack_id].rows, false);
         }
-        else if (!valid_handle_res[i].allMatch())
+        else if (!handle_res[i].allMatch())
         {
             need_read_packs->insert(pack_id);
-            need_read_pack_to_start_row_ids.emplace(pack_id, start_row_id + processed_rows);
-            need_read_rows += pack_stats[pack_id].rows;
+            start_row_id_of_need_read_packs.emplace(pack_id, pack_start_row_id);
         }
-        processed_rows += pack_stats[pack_id].rows;
+        // else handle_res[i].allMatch()
     }
 
-    if (need_read_rows == 0)
-        return filtered_out_rows;
+    if (need_read_packs->empty())
+        return 0;
 
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     builder.onlyReadOnePackEveryTime().setReadPacks(need_read_packs).setReadTag(ReadTag::MVCC);
     auto stream
         = builder.build(dmfile, {getHandleColumnDefine<HandleType>()}, /*rowkey_ranges*/ {}, dm_context.scan_context);
-    UInt32 read_rows = 0;
+
+    UInt32 filtered_out_rows = 0;
     for (auto pack_id : *need_read_packs)
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
-        read_rows += block.rows();
         const auto handles = ColumnView<HandleType>(*(block.begin()->column));
-        const auto itr = need_read_pack_to_start_row_ids.find(pack_id);
-        RUNTIME_CHECK(itr != need_read_pack_to_start_row_ids.end(), need_read_pack_to_start_row_ids, pack_id);
+        const auto itr = start_row_id_of_need_read_packs.find(pack_id);
+        RUNTIME_CHECK(itr != start_row_id_of_need_read_packs.end(), start_row_id_of_need_read_packs, pack_id);
         filtered_out_rows += buildRowKeyFilterVector(
             handles,
             delete_ranges,
@@ -165,7 +135,6 @@ UInt32 buildRowKeyFilterDMFile(
             /*start_row_id*/ itr->second,
             filter);
     }
-    RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
     return filtered_out_rows;
 }
 
@@ -178,15 +147,33 @@ UInt32 buildRowKeyFilterColumnFileBig(
     const UInt32 start_row_id,
     BitmapFilter & filter)
 {
-    if (cf_big.getRows() == 0)
+    auto [valid_handle_res, valid_start_pack_id]
+        = getClippedRSResultsByRanges(dm_context, cf_big.getFile(), cf_big.getRange());
+    if (unlikely(valid_handle_res.empty()))
         return 0;
+
+    if (!delete_ranges.empty())
+    {
+        const auto delete_ranges_handle_res = getRSResultsByRanges(dm_context, cf_big.getFile(), delete_ranges);
+        for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
+            valid_handle_res[i] = valid_handle_res[i] && !delete_ranges_handle_res[valid_start_pack_id + i];
+    }
+
+    auto real_read_ranges = Segment::shrinkRowKeyRanges(cf_big.getRange(), read_ranges);
+    {
+        auto real_read_ranges_handle_res = getRSResultsByRanges(dm_context, cf_big.getFile(), real_read_ranges);
+        for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
+            valid_handle_res[i] = valid_handle_res[i] && real_read_ranges_handle_res[valid_start_pack_id + i];
+    }
+
     return buildRowKeyFilterDMFile<HandleType>(
         dm_context,
         cf_big.getFile(),
-        cf_big.getRange(),
         delete_ranges,
-        Segment::shrinkRowKeyRanges(cf_big.getRange(), read_ranges),
-        /*stable_filter_res*/ nullptr,
+        real_read_ranges,
+        valid_start_pack_id,
+        valid_handle_res,
+        valid_handle_res,
         start_row_id,
         filter);
 }
@@ -205,13 +192,27 @@ UInt32 buildRowKeyFilterStable(
     const auto & dmfile = dmfiles[0];
     if (unlikely(dmfile->getPacks() == 0))
         return 0;
+
+    auto handle_res = stable_filter_res->getHandleRes();
+    auto pack_res = stable_filter_res->getPackRes();
+    if (!delete_ranges.empty())
+    {
+        const auto delete_ranges_handle_res = getRSResultsByRanges(dm_context, dmfile, delete_ranges);
+        for (UInt32 i = 0; i < handle_res.size(); ++i)
+        {
+            handle_res[i] = handle_res[i] && !delete_ranges_handle_res[i];
+            pack_res[i] = pack_res[i] && !delete_ranges_handle_res[i];
+        }
+    }
+
     return buildRowKeyFilterDMFile<HandleType>(
         dm_context,
         dmfile,
-        /*segment_range*/ std::nullopt,
         delete_ranges,
         read_ranges,
-        stable_filter_res,
+        /*start_pack_id*/ 0,
+        handle_res,
+        pack_res,
         /*start_row_id*/ 0,
         filter);
 }
