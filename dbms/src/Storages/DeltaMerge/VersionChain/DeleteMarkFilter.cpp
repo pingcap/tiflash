@@ -56,59 +56,58 @@ UInt32 buildDeleteMarkFilterBlock(
 UInt32 buildDeleteMarkFilterDMFile(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
-    const std::optional<RowKeyRange> & segment_range,
+    const UInt32 start_pack_id,
+    const RSResults & rs_results,
     const ssize_t start_row_id,
     BitmapFilter & filter)
 {
-    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, segment_range);
-    if (valid_handle_res.empty())
-        return 0;
-
     auto need_read_packs = std::make_shared<IdSet>();
-    UInt32 need_read_rows = 0;
-    std::unordered_map<UInt32, UInt32> need_read_pack_to_start_row_ids;
-
+    std::unordered_map<UInt32, UInt32> start_row_id_of_need_read_packs; // pack_id -> start_row_id
     const auto & pack_stats = dmfile->getPackStats();
     const auto & pack_properties = dmfile->getPackProperties();
     UInt32 processed_rows = 0;
-    for (UInt32 i = 0; i < valid_handle_res.size(); ++i)
+    for (UInt32 i = 0; i < rs_results.size(); ++i)
     {
-        const UInt32 pack_id = valid_start_pack_id + i;
+        const UInt32 pack_id = start_pack_id + i;
         const UInt32 pack_start_row_id = start_row_id + processed_rows;
+        processed_rows += pack_stats[pack_id].rows;
+
+        // Packs that filtered out by rs_results is handle by RowKeyFilter.
+        // So we just skip these packs here.
+        if (!rs_results[i].isUse())
+            continue;
+
         if (pack_properties.property(pack_id).deleted_rows() > 0)
         {
             need_read_packs->insert(pack_id);
-            need_read_pack_to_start_row_ids.emplace(pack_id, pack_start_row_id);
-            need_read_rows += pack_stats[pack_id].rows;
+            start_row_id_of_need_read_packs.emplace(pack_id, pack_start_row_id);
         }
-        processed_rows += pack_stats[pack_id].rows;
     }
 
-    if (need_read_rows == 0)
+    if (need_read_packs->empty())
         return 0;
 
     DMFileBlockInputStreamBuilder builder(dm_context.global_context);
     builder.onlyReadOnePackEveryTime().setReadPacks(need_read_packs).setReadTag(ReadTag::MVCC);
     auto stream = builder.build(dmfile, {getTagColumnDefine()}, {}, dm_context.scan_context);
-    UInt32 read_rows = 0;
     UInt32 filtered_out_rows = 0;
     for (auto pack_id : *need_read_packs)
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
-        const auto & deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column); // Must success
-
-        const auto itr = need_read_pack_to_start_row_ids.find(pack_id);
-        RUNTIME_CHECK(itr != need_read_pack_to_start_row_ids.end(), need_read_pack_to_start_row_ids, pack_id);
+        const auto & is_deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column);
+        const auto itr = start_row_id_of_need_read_packs.find(pack_id);
+        RUNTIME_CHECK(itr != start_row_id_of_need_read_packs.end(), start_row_id_of_need_read_packs, pack_id);
         const UInt32 pack_start_row_id = itr->second;
-        for (UInt32 i = 0; i < deleteds.size(); ++i)
+        for (UInt32 i = 0; i < is_deleteds.size(); ++i)
         {
-            filter[pack_start_row_id + i] = filter[pack_start_row_id + i] && !deleteds[i];
-            filtered_out_rows += deleteds[i];
+            if (filter[pack_start_row_id + i] && is_deleteds[i])
+            {
+                filter[pack_start_row_id + i] = 0;
+                ++filtered_out_rows;
+            }
         }
-        read_rows += pack_stats[pack_id].rows;
     }
-    RUNTIME_CHECK(read_rows == need_read_rows, read_rows, need_read_rows);
     return filtered_out_rows;
 }
 
@@ -118,20 +117,40 @@ UInt32 buildDeleteMarkFilterColumnFileBig(
     const ssize_t start_row_id,
     BitmapFilter & filter)
 {
-    return buildDeleteMarkFilterDMFile(dm_context, cf_big.getFile(), cf_big.getRange(), start_row_id, filter);
+    auto [valid_handle_res, valid_start_pack_id] = getClippedRSResultsByRanges(dm_context, cf_big.getFile(), cf_big.getRange());
+    if (valid_handle_res.empty())
+        return 0;
+    return buildDeleteMarkFilterDMFile(
+        dm_context,
+        cf_big.getFile(),
+        valid_start_pack_id,
+        valid_handle_res,
+        start_row_id,
+        filter);
 }
 
 UInt32 buildDeleteMarkFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
+    const DMFilePackFilterResultPtr & stable_filter_res,
     BitmapFilter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
-    return buildDeleteMarkFilterDMFile(dm_context, dmfiles[0], std::nullopt, 0, filter);
+    return buildDeleteMarkFilterDMFile(
+        dm_context,
+        dmfiles[0],
+        /*start_pack_id*/ 0,
+        stable_filter_res->getPackRes(),
+        /*start_row_id*/ 0,
+        filter);
 }
 
-UInt32 buildDeleteMarkFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, BitmapFilter & filter)
+UInt32 buildDeleteMarkFilter(
+    const DMContext & dm_context,
+    const SegmentSnapshot & snapshot,
+    const DMFilePackFilterResultPtr & stable_filter_res,
+    BitmapFilter & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -142,7 +161,7 @@ UInt32 buildDeleteMarkFilter(const DMContext & dm_context, const SegmentSnapshot
     const auto & data_provider = delta.getDataProvider();
     assert(filter.size() == total_rows);
 
-    auto filtered_out_rows = buildDeleteMarkFilterStable(dm_context, stable, filter);
+    auto filtered_out_rows = buildDeleteMarkFilterStable(dm_context, stable, stable_filter_res, filter);
     auto read_rows = stable_rows;
     for (const auto & cf : cfs)
     {

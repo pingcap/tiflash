@@ -20,5 +20,9 @@ namespace DB::DM
 {
 struct DMContext;
 struct SegmentSnapshot;
-UInt32 buildDeleteMarkFilter(const DMContext & dm_context, const SegmentSnapshot & snapshot, BitmapFilter & filter);
+UInt32 buildDeleteMarkFilter(
+    const DMContext & dm_context,
+    const SegmentSnapshot & snapshot,
+    const DMFilePackFilterResultPtr & stable_filter_res,
+    BitmapFilter & filter);
 } // namespace DB::DM

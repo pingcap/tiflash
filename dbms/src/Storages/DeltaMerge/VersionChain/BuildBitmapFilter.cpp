@@ -61,7 +61,7 @@ BitmapFilterPtr buildBitmapFilter(
     if (enable_version_chain_for_test)
         bitmap_filter->saveRowKeyFilterForDebug();
 
-    auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, *bitmap_filter);
+    auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, stable_filter_res, *bitmap_filter);
 
     LOG_INFO(
         snapshot.log,
