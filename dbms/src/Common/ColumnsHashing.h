@@ -717,6 +717,9 @@ protected:
 
     void init(size_t start_row, const ColumnRawPtrs & key_columns, const TiDB::TiDBCollators & collators)
     {
+        // When start_row is not 0, byte_size will be re-initialized for the same block.
+        // However, the situation where start_row != 0 will only occur when spilling happens,
+        // so there is no need to consider the performance impact of repeatedly calling countSerializeByteSizeForCmp.
         processed_row_idx = start_row;
         byte_size.resize_fill_zero(key_columns[0]->size());
         RUNTIME_CHECK(!byte_size.empty());
