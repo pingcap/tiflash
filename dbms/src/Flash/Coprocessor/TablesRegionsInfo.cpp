@@ -25,7 +25,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_no_local_region_for_mpp_task[];
-extern const char force_random_remote_read_for_partition_table[];
+extern const char force_random_remote_read[];
 } // namespace FailPoints
 
 SingleTableRegions & TablesRegionsInfo::getOrCreateTableRegionInfoByTableID(Int64 table_id)
@@ -103,7 +103,7 @@ static void insertRegionInfoToTablesRegionInfo(
         ///    is served by the same node (but still read from remote).
         bool duplicated_region = local_region_id_set.contains(region_info.region_id);
 #ifndef NDEBUG
-        fiu_do_on(FailPoints::force_random_remote_read_for_partition_table, {
+        fiu_do_on(FailPoints::force_random_remote_read, {
             if ((i % 2) != 0)
             {
                 table_region_info.remote_regions.push_back(region_info);

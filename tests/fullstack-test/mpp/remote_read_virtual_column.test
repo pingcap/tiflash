@@ -26,7 +26,7 @@ mysql> split table test.test_vir by (100), (500), (1000);
 TOTAL_SPLIT_REGION	SCATTER_FINISH_RATIO
 3	1
 
-=> DBGInvoke __enable_fail_point(force_random_remote_read_for_partition_table)
+=> DBGInvoke __enable_fail_point(force_random_remote_read)
 mysql> set @@tidb_isolation_read_engines='tiflash'; set @@tidb_enforce_mpp=1; select * from test.test_vir order by 1, 2, 3 limit 5;
 id	str	str_vir
 1	ABC	abc
@@ -34,7 +34,7 @@ id	str	str_vir
 2
 2	Def	def
 3
-=> DBGInvoke __disable_fail_point(force_random_remote_read_for_partition_table)
+=> DBGInvoke __disable_fail_point(force_random_remote_read)
 
 # Clean up.
 mysql> drop table if exists test.test_vir
