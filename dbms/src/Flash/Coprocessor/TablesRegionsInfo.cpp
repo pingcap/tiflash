@@ -71,10 +71,12 @@ static void insertRegionInfoToTablesRegionInfo(
     Int64 table_id,
     TablesRegionsInfo & tables_region_infos,
     std::unordered_set<RegionID> & local_region_id_set,
-    const TMTContext & tmt_context,
-    bool force_remote [[maybe_unused]])
+    const TMTContext & tmt_context)
 {
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
+#ifndef NDEBUG
+    size_t i = 0;
+#endif
     for (const auto & r : regions)
     {
         RegionInfo region_info(
@@ -100,14 +102,15 @@ static void insertRegionInfoToTablesRegionInfo(
         /// 4. The remote read will fetch the newest region info via key ranges. So it is possible to find the region
         ///    is served by the same node (but still read from remote).
         bool duplicated_region = local_region_id_set.contains(region_info.region_id);
-
 #ifndef NDEBUG
-        // Only for failpoint test.
-        if (force_remote)
-        {
-            table_region_info.remote_regions.push_back(region_info);
-            continue;
-        }
+        fiu_do_on(FailPoints::force_random_remote_read_for_partition_table, {
+            if ((i % 2) != 0)
+            {
+                table_region_info.remote_regions.push_back(region_info);
+                continue;
+            }
+        });
+        ++i;
 #endif
 
         if (duplicated_region || needRemoteRead(region_info, tmt_context))
@@ -134,26 +137,18 @@ TablesRegionsInfo TablesRegionsInfo::create(
             InvalidTableID,
             tables_regions_info,
             local_region_id_set,
-            tmt_context,
-            false);
+            tmt_context);
     else
     {
-        for (int i = 0; i < table_regions.size(); ++i) // NOLINT
+        for (const auto & table_region : table_regions)
         {
-            const auto & table_region = table_regions[i];
             assert(table_region.physical_table_id() != InvalidTableID);
-            bool force_remote = false;
-            fiu_do_on(FailPoints::force_random_remote_read_for_partition_table, {
-                if ((i % 2) != 0)
-                    force_remote = true;
-            });
             insertRegionInfoToTablesRegionInfo(
                 table_region.regions(),
                 table_region.physical_table_id(),
                 tables_regions_info,
                 local_region_id_set,
-                tmt_context,
-                force_remote);
+                tmt_context);
         }
         assert(static_cast<UInt64>(table_regions.size()) == tables_regions_info.tableCount());
     }
