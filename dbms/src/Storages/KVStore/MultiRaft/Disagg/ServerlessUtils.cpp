@@ -147,7 +147,7 @@ String getCompactibleInnerKey(UniversalPageStoragePtr uni_ps, uint32_t keyspace_
         {
             LOG_INFO(
                 DB::Logger::get(),
-                "Failed to find compactible inner key, region_id={}, keyspace_id={}",
+                "Failed to find compactible inner key, region_id={}, keyspace={}",
                 region_id,
                 keyspace_id);
         }
@@ -213,7 +213,7 @@ String getCompactibleEncKey(UniversalPageStoragePtr uni_ps, uint32_t keyspace_id
         {
             LOG_INFO(
                 DB::Logger::get(),
-                "Failed to find compactible enc key, region_id={}, keyspace_id={}",
+                "Failed to find compactible enc key, region_id={}, keyspace={}",
                 region_id,
                 keyspace_id);
         }

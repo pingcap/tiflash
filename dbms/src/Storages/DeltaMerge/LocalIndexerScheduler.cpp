@@ -176,7 +176,7 @@ size_t LocalIndexerScheduler::dropTasks(KeyspaceID keyspace_id, TableID table_id
         }
     }
 
-    LOG_INFO(logger, "Removed {} tasks, keyspace_id={} table_id={}", dropped_tasks, keyspace_id, table_id);
+    LOG_INFO(logger, "Removed {} tasks, keyspace={} table_id={}", dropped_tasks, keyspace_id, table_id);
 
     return dropped_tasks;
 }
@@ -206,7 +206,7 @@ void LocalIndexerScheduler::taskOnSchedule(std::unique_lock<std::mutex> &, const
 
     LOG_DEBUG( //
         logger,
-        "Start LocalIndex task, keyspace_id={} table_id={} file_ids={} "
+        "Start LocalIndex task, keyspace={} table_id={} file_ids={} "
         "memory_[this/total/limit]_mb={:.1f}/{:.1f}/{:.1f} all_tasks={}",
         task->user_task.keyspace_id,
         task->user_task.table_id,
@@ -235,7 +235,7 @@ void LocalIndexerScheduler::taskOnFinish(std::unique_lock<std::mutex> & lock, co
 
     LOG_DEBUG( //
         logger,
-        "Finish LocalIndex task, keyspace_id={} table_id={} file_ids={} "
+        "Finish LocalIndex task, keyspace={} table_id={} file_ids={} "
         "memory_[this/total/limit]_mb={:.1f}/{:.1f}/{:.1f} "
         "[schedule/task]_cost_sec={:.1f}/{:.1f}",
         task->user_task.keyspace_id,
@@ -302,7 +302,7 @@ bool LocalIndexerScheduler::tryAddTaskToPool(std::unique_lock<std::mutex> & lock
             tryLogCurrentException(
                 logger,
                 fmt::format(
-                    "LocalIndexScheduler meet exception when running task: keyspace_id={} table_id={}",
+                    "LocalIndexScheduler meet exception when running task: keyspace={} table_id={}",
                     task->user_task.keyspace_id,
                     task->user_task.table_id));
         }
@@ -375,7 +375,7 @@ LocalIndexerScheduler::ScheduleResult LocalIndexerScheduler::scheduleNextTask(st
         LOG_DEBUG(
             logger,
             "LocalIndex task is not ready, will try again later when it is ready. "
-            "keyspace_id={} table_id={} file_ids={}",
+            "keyspace={} table_id={} file_ids={}",
             task->user_task.keyspace_id,
             task->user_task.table_id,
             task->user_task.file_ids);

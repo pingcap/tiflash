@@ -710,7 +710,7 @@ PageStorageRunMode StoragePool::restore()
     const auto [max_log_page_id, max_data_page_id, max_meta_page_id] = global_id_allocator->getCurrentIds();
     LOG_INFO(
         logger,
-        "Finished StoragePool restore. run_mode={} keyspace_id={} table_id={}"
+        "Finished StoragePool restore. run_mode={} keyspace={} table_id={}"
         " max_log_page_id={} max_data_page_id={} max_meta_page_id={}",
         magic_enum::enum_name(run_mode),
         keyspace_id,
