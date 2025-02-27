@@ -112,7 +112,7 @@ String DatabaseTiFlash::getDataPath() const
 }
 
 
-static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 256;
+static constexpr size_t PRINT_MESSAGE_EACH_N_TABLES = 512;
 static constexpr size_t PRINT_MESSAGE_EACH_N_SECONDS = 5;
 static constexpr size_t TABLES_PARALLEL_LOAD_BUNCH_SIZE = 100;
 
@@ -145,7 +145,12 @@ void DatabaseTiFlash::loadTables(Context & context, ThreadPool * thread_pool, bo
             if ((++tables_processed) % PRINT_MESSAGE_EACH_N_TABLES == 0
                 || watch.compareAndRestart(PRINT_MESSAGE_EACH_N_SECONDS))
             {
-                LOG_INFO(log, "{:.2f}%", tables_processed * 100.0 / total_tables);
+                LOG_INFO(
+                    log,
+                    "processed={} total={} pct={:.2f}%",
+                    tables_processed.load(),
+                    total_tables,
+                    tables_processed * 100.0 / total_tables);
                 watch.restart();
             }
 

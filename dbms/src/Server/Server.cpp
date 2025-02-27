@@ -351,6 +351,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 void syncSchemaWithTiDB(
     const TiFlashStorageConfig & storage_config,
     BgStorageInitHolder & bg_init_stores,
+    const std::atomic_size_t & terminate_signals_counter,
     const std::unique_ptr<Context> & global_context,
     const LoggerPtr & log)
 {
@@ -359,33 +360,54 @@ void syncSchemaWithTiDB(
     if (storage_config.api_version == 1)
     {
         Stopwatch watch;
-        while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
+        const UInt64 total_wait_seconds = global_context->getSettingsRef().ddl_restart_wait_seconds;
+        static constexpr int retry_wait_seconds = 3;
+        while (true)
         {
+            if (watch.elapsedSeconds() > total_wait_seconds)
+            {
+                LOG_WARNING(log, "Sync schemas during init timeout, cost={:.3f}s", watch.elapsedSeconds());
+                break;
+            }
+
             try
             {
                 global_context->getTMTContext().getSchemaSyncerManager()->syncSchemas(*global_context, NullspaceID);
+                LOG_INFO(log, "Sync schemas during init done, cost={:.3f}s", watch.elapsedSeconds());
                 break;
             }
-            catch (Poco::Exception & e)
+            catch (DB::Exception & e)
             {
-                const int wait_seconds = 3;
                 LOG_ERROR(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
                     e.displayText(),
-                    wait_seconds);
-                ::sleep(wait_seconds);
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
+            }
+            catch (Poco::Exception & e)
+            {
+                LOG_ERROR(
+                    log,
+                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                    " seconds and try again.",
+                    e.displayText(),
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
             }
         }
-        LOG_DEBUG(log, "Sync schemas done.");
     }
 
     // Init the DeltaMergeStore instances if data exist.
     // Make the disk usage correct and prepare for serving
     // queries.
-    bg_init_stores
-        .start(*global_context, log, storage_config.lazily_init_store, storage_config.s3_config.isS3Enabled());
+    bg_init_stores.start(
+        *global_context,
+        terminate_signals_counter,
+        log,
+        storage_config.lazily_init_store,
+        storage_config.s3_config.isS3Enabled());
 
     // init schema sync service with tidb
     global_context->initializeSchemaSyncService();
@@ -459,34 +481,8 @@ void loadBlockList(
 #endif
 }
 
-void setOpenFileLimit(std::optional<UInt64> new_limit, const LoggerPtr & log)
-{
-    rlimit rlim{};
-    if (getrlimit(RLIMIT_NOFILE, &rlim))
-        throw Poco::Exception("Cannot getrlimit");
-
-    if (rlim.rlim_cur == rlim.rlim_max)
-    {
-        LOG_INFO(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
-    }
-    else
-    {
-        rlim_t old = rlim.rlim_cur;
-        rlim.rlim_cur = new_limit.value_or(rlim.rlim_max);
-        int rc = setrlimit(RLIMIT_NOFILE, &rlim);
-        if (rc != 0)
-            LOG_WARNING(
-                log,
-                "Cannot set max number of file descriptors to {}"
-                ". Try to specify max_open_files according to your system limits. error: {}",
-                rlim.rlim_cur,
-                strerror(errno));
-        else
-            LOG_INFO(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
-    }
-}
-
 int Server::main(const std::vector<std::string> & /*args*/)
+try
 {
     setThreadName("TiFlashMain");
 
@@ -510,12 +506,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerTableFunctions();
     registerStorages();
 
-    const auto disaggregated_mode = getDisaggregatedMode(config());
-    const auto use_autoscaler = useAutoScaler(config());
+    const auto disagg_opt = DisaggOptions::parseFromConfig(config());
 
     // Later we may create thread pool from GlobalThreadPool
     // init it before other components
-    initThreadPool(disaggregated_mode);
+    initThreadPool(disagg_opt.mode);
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
@@ -532,7 +527,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         storage_config.s3_config.enable(/*check_requirements*/ true, log);
     }
-    else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
+    else if (disagg_opt.mode == DisaggregatedMode::Compute && disagg_opt.use_autoscaler)
     {
         // compute node with auto scaler, the requirements will be initted later.
         storage_config.s3_config.enable(/*check_requirements*/ false, log);
@@ -571,7 +566,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // sanitize check for disagg mode
     if (storage_config.s3_config.isS3Enabled())
     {
-        if (disaggregated_mode == DisaggregatedMode::None)
+        if (disagg_opt.mode == DisaggregatedMode::None)
         {
             LOG_WARNING(log, "'flash.disaggregated_mode' must be set when S3 is enabled!");
             throw Exception(
@@ -588,7 +583,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
       */
-    global_context = Context::createGlobal();
+    global_context = Context::createGlobal(Context::ApplicationType::SERVER, disagg_opt);
+
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
@@ -605,8 +601,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Init Proxy's config
     TiFlashProxyConfig proxy_conf( //
         config(),
-        disaggregated_mode,
-        use_autoscaler,
+        disagg_opt.mode,
+        disagg_opt.use_autoscaler,
         STORAGE_FORMAT_CURRENT,
         settings,
         log);
@@ -618,15 +614,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
     SCOPE_EXIT({ proxy_machine.waitProxyStopped(); });
 
     /// get CPU/memory/disk info of this server
-    proxy_machine.getServerInfo(server_info);
+    proxy_machine.getServerInfo(server_info, settings);
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
-
-    global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
-    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     // Must init this before KVStore.
     global_context->initializeJointThreadInfoJeallocMap();
@@ -673,7 +665,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         log,
         "disaggregated_mode={} use_autoscaler={} enable_s3={}",
         magic_enum::enum_name(global_context->getSharedContextDisagg()->disaggregated_mode),
-        use_autoscaler,
+        disagg_opt.use_autoscaler,
         storage_config.s3_config.isS3Enabled());
 
     if (storage_config.s3_config.isS3Enabled())
@@ -744,14 +736,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     /// Try to increase limit on number of open files.
-    if (config().hasProperty("max_open_files"))
-    {
-        setOpenFileLimit(config().getUInt("max_open_files"), log);
-    }
-    else
-    {
-        setOpenFileLimit(std::nullopt, log);
-    }
+    setOpenFileLimit(config().getUInt("max_open_files", 0), log);
 
     static ServerErrorHandler error_handler;
     Poco::ErrorHandler::set(&error_handler);
@@ -853,7 +838,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::optional<raft_serverpb::StoreIdent> store_ident;
     // Only when this node is disagg compute node and autoscaler is enabled, we don't need the WriteNodePageStorage instance
     // Disagg compute node without autoscaler still need this instance for proxy's data
-    if (!(is_disagg_compute_mode && use_autoscaler))
+    if (!(is_disagg_compute_mode && disagg_opt.use_autoscaler))
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
         if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
@@ -1051,7 +1036,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // do not depend on `store_id`. Start sync schema before serving any requests.
             // For the node has not been bootstrapped, this stage will be postpone.
             // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-            syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+            syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
         }
     }
     // set default database for ch-client
@@ -1187,7 +1172,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     // Not disagg node done it before
                     // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
                     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-                    syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+                    syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
                 proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
@@ -1258,7 +1243,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // And we want to make sure LAC is cleanedup.
             // The effects are there will be no resource control during [lac.safeStop(), FlashGrpcServer destruct done],
             // but it's basically ok, that duration is small(normally 100-200ms).
-            if (is_disagg_compute_mode && use_autoscaler && LocalAdmissionController::global_instance)
+            if (is_disagg_compute_mode && disagg_opt.use_autoscaler && LocalAdmissionController::global_instance)
                 LocalAdmissionController::global_instance->safeStop();
         });
 
@@ -1284,6 +1269,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     return Application::EXIT_OK;
+}
+catch (...)
+{
+    // The default exception handler of Poco::Util::Application will catch the
+    // `DB::Exception` as `Poco::Exception` and do not print the stacktrace.
+    // So we catch all exceptions here and print the stacktrace.
+    tryLogCurrentException("Server::main");
+    auto code = getCurrentExceptionCode();
+    return code > 0 ? code : 1;
 }
 } // namespace DB
 

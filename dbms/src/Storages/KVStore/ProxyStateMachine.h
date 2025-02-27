@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/TiFlashBuildInfo.h>
+#include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Interpreters/Settings.h>
 #include <Poco/Util/AbstractConfiguration.h>
@@ -34,6 +36,10 @@
 
 namespace DB
 {
+namespace FailPoints
+{
+extern const char force_set_proxy_state_machine_cpu_cores[];
+} // namespace FailPoints
 
 extern "C" {
 void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
@@ -85,6 +91,8 @@ struct TiFlashProxyConfig
             settings.max_memory_usage_for_all_queries.get());
     }
 
+    static TiFlashProxyConfig genForTest() { return TiFlashProxyConfig{}; }
+
     std::vector<const char *> getArgs() const
     {
         std::vector<const char *> args;
@@ -103,6 +111,10 @@ struct TiFlashProxyConfig
     size_t getReadIndexRunnerCount() const { return read_index_runner_count; }
 
 private:
+    TiFlashProxyConfig()
+    {
+        // For test, bootstrap no proxy.
+    }
     // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
     void addExtraArgs(const std::string & k, const std::string & v) { val_map["--" + k] = v; }
 
@@ -148,9 +160,36 @@ private:
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
+#if SERVERLESS_PROXY == 0
+            String extra_label;
+            if (disaggregated_mode == DisaggregatedMode::Storage)
+            {
+                // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
+                // to distinguish with the node under non-disagg mode
+                extra_label = fmt::format("engine_role={}", DISAGGREGATED_MODE_WRITE_ENGINE_ROLE);
+            }
+            else if (disaggregated_mode == DisaggregatedMode::Compute)
+            {
+                // For compute node, explicitly add a label with `exclusive=no-data` to avoid Region
+                // being placed to the compute node.
+                // Related logic in pd-server:
+                // https://github.com/tikv/pd/blob/v8.5.0/pkg/schedule/placement/label_constraint.go#L69-L95
+                extra_label = "exclusive=no-data";
+            }
+            if (args_map.contains("labels"))
+                extra_label = fmt::format("{},{}", args_map["labels"], extra_label);
+            // For non-disagg mode, no extra labels is required
+            if (!extra_label.empty())
+            {
+                args_map["labels"] = extra_label;
+            }
+#else
+            // Serverless proxy has not adapted with these changes yet.
             // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
             if (disaggregated_mode == DisaggregatedMode::Storage)
                 args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
+#endif
+
 #if SERVERLESS_PROXY == 1
             if (config.has("blacklist_file"))
                 args_map["blacklist-ile"] = config.getString("blacklist_file");
@@ -408,18 +447,39 @@ struct ProxyStateMachine
 
     EngineStoreServerWrap * getEngineStoreServerWrap() { return &tiflash_instance_wrap; }
 
-    void getServerInfo(ServerInfo & server_info)
+    // TODO: decouple `ffi_get_server_info_from_proxy` to make it does not rely on `helper`
+    void getServerInfo(ServerInfo & server_info, Settings & global_settings)
     {
         /// get CPU/memory/disk info of this server
         diagnosticspb::ServerInfoRequest request;
         diagnosticspb::ServerInfoResponse response;
         request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
         std::string req = request.SerializeAsString();
+#ifndef DBMS_PUBLIC_GTEST
+        // In tests, no proxy is provided, and Server is not linked to.
         ffi_get_server_info_from_proxy(reinterpret_cast<intptr_t>(&helper), strIntoView(&req), &response);
         server_info.parseSysInfo(response);
+        LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
+#endif
+        fiu_do_on(FailPoints::force_set_proxy_state_machine_cpu_cores, {
+            server_info.cpu_info.logical_cores = 12345;
+        }); // Mock a server_info
         setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
         computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
-        LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
+
+        // If the max_threads in global_settings is "0"/"auto", it is set by
+        // `getNumberOfLogicalCPUCores` in `SettingMaxThreads::getAutoValue`.
+        // We should let it follow the cpu cores get from proxy.
+        if (global_settings.max_threads.is_auto && global_settings.max_threads.get() != getNumberOfLogicalCPUCores())
+        {
+            // now it should set the max_threads value according to the new logical cores
+            global_settings.max_threads.setAuto();
+            LOG_INFO(
+                log,
+                "Reset max_threads, max_threads={} logical_cores={}",
+                global_settings.max_threads.get(),
+                getNumberOfLogicalCPUCores());
+        }
     }
 
 private:

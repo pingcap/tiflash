@@ -96,7 +96,7 @@ public:
         SnapshotPtr snapshot,
         bool throw_on_not_exist) override;
 
-    void traverseImpl(const std::function<void(const DB::Page & page)> & acceptor, SnapshotPtr snapshot) override;
+    void traverseImpl(const TraversePageCallback & acceptor, SnapshotPtr snapshot) override;
 
     bool gcImpl(bool not_skip, const WriteLimiterPtr & write_limiter, const ReadLimiterPtr & read_limiter) override;
 
