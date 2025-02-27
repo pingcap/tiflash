@@ -52,7 +52,6 @@
 #include <Poco/Util/Application.h>
 #include <WindowFunctions/registerWindowFunctions.h>
 #include <common/find_symbols.h>
-#include <common/readline_use.h>
 #include <fcntl.h>
 #include <port/unistd.h>
 #include <signal.h>
@@ -61,14 +60,15 @@
 #include <algorithm>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/program_options.hpp>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <map>
 #include <optional>
+#include <string>
 #include <unordered_set>
 
 #include "InterruptListener.h"
-
 
 /// http://en.wikipedia.org/wiki/ANSI_escape_code
 
@@ -93,13 +93,21 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int NETWORK_ERROR;
 extern const int NO_DATA_TO_INSERT;
 extern const int BAD_ARGUMENTS;
-extern const int CANNOT_READ_HISTORY;
-extern const int CANNOT_APPEND_HISTORY;
 extern const int UNKNOWN_PACKET_FROM_SERVER;
 extern const int UNEXPECTED_PACKET_FROM_SERVER;
 extern const int CLIENT_OUTPUT_FORMAT_SPECIFIED;
 } // namespace ErrorCodes
 
+inline char * readline(const char * prompt)
+{
+    std::string s;
+    std::cout << prompt;
+    std::getline(std::cin, s);
+
+    if (!std::cin.good())
+        return nullptr;
+    return strdup(s.data());
+}
 
 class Client : public Poco::Util::Application
 {
@@ -147,9 +155,6 @@ private:
     String current_profile;
 
     String prompt_by_server_display_name;
-
-    /// Path to a file containing command history.
-    String history_file;
 
     /// How many rows have been read or written.
     size_t processed_rows = 0;
@@ -388,31 +393,6 @@ private:
                     "time option could be specified only in non-interactive mode",
                     ErrorCodes::BAD_ARGUMENTS);
 
-            /// Turn tab completion off.
-            rl_bind_key('\t', rl_insert);
-
-            /// Load command history if present.
-            if (config().has("history_file"))
-                history_file = config().getString("history_file");
-            else if (!home_path.empty())
-                history_file = home_path + "/.clickhouse-client-history";
-
-            if (!history_file.empty())
-            {
-                if (Poco::File(history_file).exists())
-                {
-#if USE_READLINE
-                    int res = read_history(history_file.c_str());
-                    if (res)
-                        throwFromErrno(
-                            "Cannot read history from file " + history_file,
-                            ErrorCodes::CANNOT_READ_HISTORY);
-#endif
-                }
-                else /// Create history file.
-                    Poco::File(history_file).createFile();
-            }
-
             loop();
 
             std::cout << "Bye." << std::endl;
@@ -533,14 +513,6 @@ private:
                     /// every line of the query will be displayed separately.
                     std::string logged_query = query;
                     std::replace(logged_query.begin(), logged_query.end(), '\n', ' ');
-                    add_history(logged_query.c_str());
-
-#if USE_READLINE && HAVE_READLINE_HISTORY
-                    if (!history_file.empty() && append_history(1, history_file.c_str()))
-                        throwFromErrno(
-                            "Cannot append history to file " + history_file,
-                            ErrorCodes::CANNOT_APPEND_HISTORY);
-#endif
 
                     prev_query = query;
                 }
