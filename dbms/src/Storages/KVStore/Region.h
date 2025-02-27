@@ -148,7 +148,7 @@ public: // Simple Read and Write
         TiKVValue && value,
         DupCheck mode = DupCheck::Deny);
     void remove(const std::string & cf, const TiKVKey & key);
-    void removeDeletedLocks(bool lock_region);
+    void removeDeletedLocks(bool lock_region)
     {
         auto lock = lock_region ? std::unique_lock{mutex} : std::unique_lock<std::shared_mutex>{};
         data.removeDeletedLocks();
