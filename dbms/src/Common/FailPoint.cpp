@@ -86,6 +86,7 @@ std::unordered_map<String, std::shared_ptr<FailPointChannel>> FailPointHelper::f
     M(force_set_page_data_compact_batch)                     \
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
+    M(force_random_remote_read)                              \
     M(force_remote_read_for_batch_cop)                       \
     M(force_context_path)                                    \
     M(force_slow_page_storage_snapshot_release)              \

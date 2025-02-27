@@ -22,6 +22,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_no_local_region_for_mpp_task[];
+extern const char force_random_remote_read[];
 } // namespace FailPoints
 
 SingleTableRegions & TablesRegionsInfo::getOrCreateTableRegionInfoByTableID(Int64 table_id)
@@ -56,9 +57,19 @@ static bool needRemoteRead(const RegionInfo & region_info, const TMTContext & tm
 static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedPtrField<coprocessor::RegionInfo> & regions, Int64 table_id, TablesRegionsInfo & tables_region_infos, std::unordered_set<RegionID> & local_region_id_set, const TMTContext & tmt_context)
 {
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
-    for (const auto & r : regions)
+    for (int i = 0; i < regions.size(); ++i) // NOLINT
     {
+<<<<<<< HEAD
         RegionInfo region_info(r.region_id(), r.region_epoch().version(), r.region_epoch().conf_ver(), CoprocessorHandler::GenCopKeyRange(r.ranges()), nullptr);
+=======
+        const auto & r = regions[i];
+        RegionInfo region_info(
+            r.region_id(),
+            r.region_epoch().version(),
+            r.region_epoch().conf_ver(),
+            genCopKeyRange(r.ranges()),
+            nullptr);
+>>>>>>> 27cfea2c99 (fix virtual column not found when remote read happens (#9920))
         if (region_info.key_ranges.empty())
         {
             throw TiFlashException(
@@ -74,9 +85,20 @@ static void insertRegionInfoToTablesRegionInfo(const google::protobuf::RepeatedP
         /// 3. TiFlash will pick the right version of region for local read and others for remote read.
         /// 4. The remote read will fetch the newest region info via key ranges. So it is possible to find the region
         ///    is served by the same node (but still read from remote).
+<<<<<<< HEAD
         bool duplicated_region = local_region_id_set.count(region_info.region_id) > 0;
+=======
+        bool duplicated_region = local_region_id_set.contains(region_info.region_id);
+        bool is_remote = duplicated_region || needRemoteRead(region_info, tmt_context);
+#ifndef NDEBUG
+        fiu_do_on(FailPoints::force_random_remote_read, {
+            if ((i % 2) != 0)
+                is_remote = true;
+        });
+#endif
+>>>>>>> 27cfea2c99 (fix virtual column not found when remote read happens (#9920))
 
-        if (duplicated_region || needRemoteRead(region_info, tmt_context))
+        if (is_remote)
             table_region_info.remote_regions.push_back(region_info);
         else
         {
