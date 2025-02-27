@@ -305,7 +305,7 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
 
     /// Just four following options are supported
     if (options & (~(RE_CASELESS | RE_NO_CAPTURE | RE_DOT_NL | RE_NO_OPTIMIZE)))
-        throw Poco::Exception("OptimizedRegularExpression: Unsupported option.");
+        throw DB::Exception("OptimizedRegularExpression: Unsupported option.");
 
     is_case_insensitive = options & RE_CASELESS;
     bool is_dot_nl = options & RE_DOT_NL;
@@ -326,7 +326,7 @@ OptimizedRegularExpressionImpl<thread_safe>::OptimizedRegularExpressionImpl(cons
 
         re2 = std::make_unique<RegexType>(regexp_, reg_options);
         if (!re2->ok())
-            throw Poco::Exception(
+            throw DB::Exception(
                 fmt::format("OptimizedRegularExpression: cannot compile re2: {}, error: {}", regexp_, re2->error()));
 
         capture_num = re2->NumberOfCapturingGroups();
@@ -822,7 +822,7 @@ Instructions OptimizedRegularExpressionImpl<thread_safe>::getInstructions(const 
 
     for (const auto & instr : instructions)
         if (instr.substitution_num > static_cast<Int32>(capture_num))
-            throw Poco::Exception(
+            throw DB::Exception(
                 fmt::format(
                     "Id {} in replacement string is an invalid substitution, regexp has only {} capturing groups",
                     instr.substitution_num,

@@ -84,6 +84,7 @@
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/ProxyStateMachine.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -288,7 +289,10 @@ struct TiFlashProxyConfig
     // Return true if proxy need to be started, and `val_map` will be filled with the
     // proxy start params.
     // Return false if proxy is not need.
-    bool tryParseFromConfig(const Poco::Util::LayeredConfiguration & config, bool has_s3_config, const LoggerPtr & log)
+    bool tryParseFromConfig(
+        const Poco::Util::LayeredConfiguration & config,
+        [[maybe_unused]] bool has_s3_config,
+        const LoggerPtr & log)
     {
         // tiflash_compute doesn't need proxy.
         auto disaggregated_mode = getDisaggregatedMode(config);
@@ -323,8 +327,34 @@ struct TiFlashProxyConfig
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
+#if SERVERLESS_PROXY == 0
+            String extra_label;
+            if (disaggregated_mode == DisaggregatedMode::Storage)
+            {
+                // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
+                // to distinguish with the node under non-disagg mode
+                extra_label = fmt::format("engine_role={}", DISAGGREGATED_MODE_WRITE_ENGINE_ROLE);
+            }
+            else if (disaggregated_mode == DisaggregatedMode::Compute)
+            {
+                // For compute node, explicitly add a label with `exclusive=no-data` to avoid Region
+                // being placed to the compute node.
+                // Related logic in pd-server:
+                // https://github.com/tikv/pd/blob/v8.5.0/pkg/schedule/placement/label_constraint.go#L69-L95
+                extra_label = "exclusive=no-data";
+            }
+            if (args_map.contains("labels"))
+                extra_label = fmt::format("{},{}", args_map["labels"], extra_label);
+            // For non-disagg mode, no extra labels is required
+            if (!extra_label.empty())
+            {
+                args_map["labels"] = extra_label;
+            }
+#else
+            // Serverless proxy has not adapted with these changes yet.
             if (disaggregated_mode != DisaggregatedMode::Compute && has_s3_config)
                 args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
+#endif
 
             for (auto && [k, v] : args_map)
                 val_map.emplace("--" + k, std::move(v));
@@ -924,6 +954,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 void syncSchemaWithTiDB(
     const TiFlashStorageConfig & storage_config,
     BgStorageInitHolder & bg_init_stores,
+    const std::atomic_size_t & terminate_signals_counter,
     const std::unique_ptr<Context> & global_context,
     const LoggerPtr & log)
 {
@@ -932,39 +963,61 @@ void syncSchemaWithTiDB(
     if (storage_config.api_version == 1)
     {
         Stopwatch watch;
-        while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
+        const UInt64 total_wait_seconds = global_context->getSettingsRef().ddl_restart_wait_seconds;
+        static constexpr int retry_wait_seconds = 3;
+        while (true)
         {
+            if (watch.elapsedSeconds() > total_wait_seconds)
+            {
+                LOG_WARNING(log, "Sync schemas during init timeout, cost={:.3f}s", watch.elapsedSeconds());
+                break;
+            }
+
             try
             {
                 global_context->getTMTContext().getSchemaSyncerManager()->syncSchemas(*global_context, NullspaceID);
+                LOG_INFO(log, "Sync schemas during init done, cost={:.3f}s", watch.elapsedSeconds());
                 break;
             }
-            catch (Poco::Exception & e)
+            catch (DB::Exception & e)
             {
-                const int wait_seconds = 3;
                 LOG_ERROR(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
                     e.displayText(),
-                    wait_seconds);
-                ::sleep(wait_seconds);
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
+            }
+            catch (Poco::Exception & e)
+            {
+                LOG_ERROR(
+                    log,
+                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                    " seconds and try again.",
+                    e.displayText(),
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
             }
         }
-        LOG_DEBUG(log, "Sync schemas done.");
     }
 
     // Init the DeltaMergeStore instances if data exist.
     // Make the disk usage correct and prepare for serving
     // queries.
-    bg_init_stores
-        .start(*global_context, log, storage_config.lazily_init_store, storage_config.s3_config.isS3Enabled());
+    bg_init_stores.start(
+        *global_context,
+        terminate_signals_counter,
+        log,
+        storage_config.lazily_init_store,
+        storage_config.s3_config.isS3Enabled());
 
     // init schema sync service with tidb
     global_context->initializeSchemaSyncService();
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
+try
 {
     setThreadName("TiFlashMain");
 
@@ -1079,6 +1132,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
       *  settings, available functions, data types, aggregate functions, databases...
       */
     global_context = Context::createGlobal();
+    global_context->setApplicationType(Context::ApplicationType::SERVER);
+    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
+    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
+
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
@@ -1137,16 +1194,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_INFO(log, "tiflash proxy thread is joined");
     });
 
-    /// get CPU/memory/disk info of this server
-    diagnosticspb::ServerInfoRequest request;
-    diagnosticspb::ServerInfoResponse response;
-    request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
-    std::string req = request.SerializeAsString();
-    ffi_get_server_info_from_proxy(reinterpret_cast<intptr_t>(&helper), strIntoView(&req), &response);
-    server_info.parseSysInfo(response);
-    setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
-    computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
-    LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
+    getServerInfoFromProxy(log, server_info, &helper, settings);
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
@@ -1160,9 +1208,6 @@ int Server::main(const std::vector<std::string> & /*args*/)
         // Reset the `tiflash_instance_wrap.tmt` before `global_context` get released, or it will be a dangling pointer
         tiflash_instance_wrap.tmt = nullptr;
     });
-    global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
-    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
 
     /// Init File Provider
     if (proxy_conf.is_proxy_runnable)
@@ -1277,7 +1322,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         rlimit rlim{};
         if (getrlimit(RLIMIT_NOFILE, &rlim))
-            throw Poco::Exception("Cannot getrlimit");
+            throw DB::Exception("Cannot getrlimit");
 
         if (rlim.rlim_cur == rlim.rlim_max)
         {
@@ -1577,7 +1622,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // do not depend on `store_id`. Start sync schema before serving any requests.
             // For the node has not been bootstrapped, this stage will be postpone.
             // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-            syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+            syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
         }
     }
     // set default database for ch-client
@@ -1746,7 +1791,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     // Not disagg node done it before
                     // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
                     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-                    syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+                    syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
 
@@ -1894,6 +1939,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     return Application::EXIT_OK;
+}
+catch (...)
+{
+    // The default exception handler of Poco::Util::Application will catch the
+    // `DB::Exception` as `Poco::Exception` and do not print the stacktrace.
+    // So we catch all exceptions here and print the stacktrace.
+    tryLogCurrentException("Server::main");
+    auto code = getCurrentExceptionCode();
+    return code > 0 ? code : 1;
 }
 } // namespace DB
 
