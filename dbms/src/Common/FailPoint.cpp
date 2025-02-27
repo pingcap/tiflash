@@ -92,6 +92,7 @@ namespace DB
     M(force_set_page_data_compact_batch)                     \
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
+    M(force_random_remote_read_for_partition_table)          \
     M(force_remote_read_for_batch_cop)                       \
     M(force_pd_grpc_error)                                   \
     M(force_context_path)                                    \

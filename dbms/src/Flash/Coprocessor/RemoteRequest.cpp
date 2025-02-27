@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Storages/MutableSupport.h>
 #include <common/logger_useful.h>
-#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 
 namespace DB
 {

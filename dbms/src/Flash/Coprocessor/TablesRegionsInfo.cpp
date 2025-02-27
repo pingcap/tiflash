@@ -25,6 +25,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_no_local_region_for_mpp_task[];
+extern const char force_random_remote_read_for_partition_table[];
 } // namespace FailPoints
 
 SingleTableRegions & TablesRegionsInfo::getOrCreateTableRegionInfoByTableID(Int64 table_id)
@@ -70,7 +71,8 @@ static void insertRegionInfoToTablesRegionInfo(
     Int64 table_id,
     TablesRegionsInfo & tables_region_infos,
     std::unordered_set<RegionID> & local_region_id_set,
-    const TMTContext & tmt_context)
+    const TMTContext & tmt_context,
+    bool force_remote [[maybe_unused]])
 {
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
     for (const auto & r : regions)
@@ -99,6 +101,15 @@ static void insertRegionInfoToTablesRegionInfo(
         ///    is served by the same node (but still read from remote).
         bool duplicated_region = local_region_id_set.contains(region_info.region_id);
 
+#ifndef NDEBUG
+        // Only for failpoint test.
+        if (force_remote)
+        {
+            table_region_info.remote_regions.push_back(region_info);
+            continue;
+        }
+#endif
+
         if (duplicated_region || needRemoteRead(region_info, tmt_context))
             table_region_info.remote_regions.push_back(region_info);
         else
@@ -123,18 +134,26 @@ TablesRegionsInfo TablesRegionsInfo::create(
             InvalidTableID,
             tables_regions_info,
             local_region_id_set,
-            tmt_context);
+            tmt_context,
+            false);
     else
     {
-        for (const auto & table_region : table_regions)
+        for (int i = 0; i < table_regions.size(); ++i) // NOLINT
         {
+            const auto & table_region = table_regions[i];
             assert(table_region.physical_table_id() != InvalidTableID);
+            bool force_remote = false;
+            fiu_do_on(FailPoints::force_random_remote_read_for_partition_table, {
+                if ((i % 2) != 0)
+                    force_remote = true;
+            });
             insertRegionInfoToTablesRegionInfo(
                 table_region.regions(),
                 table_region.physical_table_id(),
                 tables_regions_info,
                 local_region_id_set,
-                tmt_context);
+                tmt_context,
+                force_remote);
         }
         assert(static_cast<UInt64>(table_regions.size()) == tables_regions_info.tableCount());
     }
