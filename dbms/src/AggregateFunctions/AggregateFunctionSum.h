@@ -460,7 +460,10 @@ public:
                 static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(this->data(place).get(), result_scale);
         }
         else
-            static_cast<ColumnVector<TResult> &>(to).getData().resize_fill(num, this->data(place).get());
+        {
+            auto & container = static_cast<ColumnVector<TResult> &>(to).getData();
+            container.resize_fill(container.size() + num, this->data(place).get());
+        }
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }

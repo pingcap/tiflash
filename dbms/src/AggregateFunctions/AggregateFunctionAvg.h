@@ -138,12 +138,14 @@ public:
             ScaleType left_scale = result_scale - scale;
             TResult result = this->data(place).sum.value * getScaleMultiplier<TResult>(left_scale)
                 / static_cast<typename TResult::NativeType>(this->data(place).count);
-            static_cast<ColumnDecimal<TResult> &>(to).getData().resize_fill(num, result);
+            auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
+            container.resize_fill(container.size() + num, result);
         }
         else
         {
-            static_cast<ColumnFloat64 &>(to).getData().resize_fill(
-                num,
+            auto & container = static_cast<ColumnFloat64 &>(to).getData();
+            container.resize_fill(
+                container.size() + num,
                 static_cast<Float64>(this->data(place).sum) / this->data(place).count);
         }
     }

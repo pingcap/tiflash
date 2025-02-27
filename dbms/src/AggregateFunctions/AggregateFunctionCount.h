@@ -284,7 +284,8 @@ public:
 
     void insertBatchResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
     {
-        static_cast<ColumnUInt64 &>(to).getData().resize_fill(num, data(place).count);
+        auto & container = static_cast<ColumnUInt64 &>(to).getData();
+        container.resize_fill(container.size() + num, data(place).count);
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }

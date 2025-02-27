@@ -53,12 +53,14 @@ private:
             if constexpr (is_min)
             {
                 const auto & iter = saved_values.begin();
-                static_cast<ColumnType &>(to).getData().resize_fill(num, *iter);
+                auto & container = static_cast<ColumnType &>(to).getData();
+                container.resize_fill(num + container.size(), *iter);
             }
             else
             {
                 const auto & iter = saved_values.rbegin();
-                static_cast<ColumnType &>(to).getData().resize_fill(num, *iter);
+                auto & container = static_cast<ColumnType &>(to).getData();
+                container.resize_fill(num + container.size(), *iter);
             }
         }
         else

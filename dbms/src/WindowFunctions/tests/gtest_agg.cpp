@@ -69,6 +69,7 @@ public:
     void initializeContext() override { ExecutorTest::initializeContext(); }
 
     void executeTest(const TestCase & test);
+    void executeTestForIssue9913(const TestCase & test);
 
 protected:
     static std::vector<Int64> partition;
@@ -129,6 +130,33 @@ void WindowAggFuncTest::executeTest(const TestCase & test)
 
         executeFunctionAndAssert(
             res,
+            test.ast_func,
+            {toVec<Int64>(partition), toVec<Int64>(order), value_col_with_type_and_name},
+            frame);
+    }
+}
+
+void WindowAggFuncTest::executeTestForIssue9913(const TestCase & test)
+{
+    MockWindowFrame frame;
+    if (test.is_range_frame)
+        frame.type = tipb::WindowFrameType::Ranges;
+    else
+        frame.type = tipb::WindowFrameType::Rows;
+
+    for (size_t i = 0; i < test.test_case_num; i++)
+    {
+        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, true, 0);
+        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, true, 0);
+
+        ColumnWithTypeAndName value_col_with_type_and_name;
+        if (test.is_input_value_nullable)
+            value_col_with_type_and_name = toNullableVec<Int64>(int_nullable_value);
+        else
+            value_col_with_type_and_name = toVec<Int64>(int_value);
+
+        executeFunctionAndAssert(
+            toNullableVec<Int64>(test.results[i]),
             test.ast_func,
             {toVec<Int64>(partition), toVec<Int64>(order), value_col_with_type_and_name},
             frame);
@@ -530,6 +558,11 @@ try
         mock_frame,
         false);
 }
+CATCH
+
+TEST_F(WindowAggFuncTest, issue9913)
+try
+{}
 CATCH
 
 } // namespace DB::tests
