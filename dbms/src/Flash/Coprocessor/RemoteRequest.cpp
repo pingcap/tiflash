@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
@@ -53,7 +54,16 @@ RemoteRequest RemoteRequest::build(
             const auto & col = table_scan.getColumns()[i];
             auto col_id = col.id;
 
+<<<<<<< HEAD
             if (col_id == DB::TiDBPkColumnID)
+=======
+            if (col.hasGeneratedColumnFlag())
+            {
+                const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
+                schema.emplace_back(std::make_pair(col_name, std::move(col)));
+            }
+            else if (col_id == MutSup::extra_handle_id)
+>>>>>>> 27cfea2c99 (fix virtual column not found when remote read happens (#9920))
             {
                 ColumnInfo ci;
                 ci.tp = TiDB::TypeLongLong;
