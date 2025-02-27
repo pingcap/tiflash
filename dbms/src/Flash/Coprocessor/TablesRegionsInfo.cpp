@@ -74,11 +74,9 @@ static void insertRegionInfoToTablesRegionInfo(
     const TMTContext & tmt_context)
 {
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
-#ifndef NDEBUG
-    size_t i = 0;
-#endif
-    for (const auto & r : regions)
+    for (int i = 0; i < regions.size(); ++i) // NOLINT
     {
+        const auto & r = regions[i];
         RegionInfo region_info(
             r.region_id(),
             r.region_epoch().version(),
@@ -102,18 +100,15 @@ static void insertRegionInfoToTablesRegionInfo(
         /// 4. The remote read will fetch the newest region info via key ranges. So it is possible to find the region
         ///    is served by the same node (but still read from remote).
         bool duplicated_region = local_region_id_set.contains(region_info.region_id);
+        bool is_remote = duplicated_region || needRemoteRead(region_info, tmt_context);
 #ifndef NDEBUG
         fiu_do_on(FailPoints::force_random_remote_read, {
             if ((i % 2) != 0)
-            {
-                table_region_info.remote_regions.push_back(region_info);
-                continue;
-            }
+                is_remote = true;
         });
-        ++i;
 #endif
 
-        if (duplicated_region || needRemoteRead(region_info, tmt_context))
+        if (is_remote)
             table_region_info.remote_regions.push_back(region_info);
         else
         {
