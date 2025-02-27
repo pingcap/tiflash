@@ -92,6 +92,7 @@ namespace DB
     M(force_set_page_data_compact_batch)                     \
     M(force_set_dtfile_exist_when_acquire_id)                \
     M(force_no_local_region_for_mpp_task)                    \
+    M(force_random_remote_read)                              \
     M(force_remote_read_for_batch_cop)                       \
     M(force_pd_grpc_error)                                   \
     M(force_context_path)                                    \
@@ -116,6 +117,7 @@ namespace DB
     M(force_raise_prehandle_exception)                       \
     M(force_agg_on_partial_block)                            \
     M(force_agg_prefetch)                                    \
+    M(force_magic_hash)                                      \
     M(force_set_fap_candidate_store_id)                      \
     M(force_not_clean_fap_on_destroy)                        \
     M(force_fap_worker_throw)                                \

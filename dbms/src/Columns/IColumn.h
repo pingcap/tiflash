@@ -38,6 +38,14 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 class Arena;
 class ColumnGathererStream;
 
+using NullMap = PaddedPODArray<UInt8>;
+using ConstNullMapPtr = const NullMap *;
+
+inline bool isNullAt(const NullMap & nullmap, size_t n)
+{
+    return nullmap[n] != 0;
+}
+
 /// Declares interface to store columns in memory.
 class IColumn : public COWPtr<IColumn>
 {
@@ -240,6 +248,7 @@ public:
     /// The byte_size.size() must be equal to the column size.
     virtual void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & /* byte_size */,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & /* collator */) const
         = 0;
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
@@ -250,6 +259,7 @@ public:
     virtual void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const Offsets & /* array_offsets */,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & /* collator */) const
         = 0;
     virtual void countSerializeByteSizeForColumnArray(
@@ -262,39 +272,45 @@ public:
     /// Note:
     /// 1. The pos.size() must be greater than or equal to length.
     /// 2. If has_null is true, then the pos[i] could be nullptr, which means the i-th element does not need to be serialized.
-    virtual void serializeToPosForCmp(
-        PaddedPODArray<char *> & /* pos */,
-        size_t /* start */,
-        size_t /* length */,
-        bool /* has_null */,
-        const TiDB::TiDBCollatorPtr & /* collator */,
-        String * /* sort_key_container */) const
-        = 0;
     virtual void serializeToPos(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */) const
         = 0;
-
-    /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
-    /// serialized data.
-    /// Only called by ColumnArray.
-    virtual void serializeToPosForCmpColumnArray(
+    /// Similar to serializeToPos, but there are two changes to make sure compare semantics is kept:
+    /// 1. For ColumnString with collator, this method first decode collator and then serialize to pos.
+    /// 2. For ColumnNullable(ColumnXXX), a default value of the nested column will be serialized if this row is null.
+    virtual void serializeToPosForCmp(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */,
-        const Offsets & /* array_offsets */,
+        const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /* sort_key_container */) const
         = 0;
+
+    /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
+    /// serialized data.
+    /// Only called by ColumnArray.
     virtual void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */,
         const Offsets & /* array_offsets */) const
+        = 0;
+    /// Similary to serializeToPosForCmp, but only called by ColumnArray.
+    virtual void serializeToPosForCmpColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const NullMap * /*nullmap*/,
+        const Offsets & /* array_offsets */,
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        String * /* sort_key_container */) const
         = 0;
 
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
