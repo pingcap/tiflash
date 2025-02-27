@@ -62,16 +62,12 @@ RemoteRequest RemoteRequest::build(
             const auto & col = table_scan.getColumns()[i];
             auto col_id = col.column_id();
 
-<<<<<<< HEAD
-            if (col_id == DB::TiDBPkColumnID)
-=======
             if (col.hasGeneratedColumnFlag())
             {
                 const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
                 schema.emplace_back(std::make_pair(col_name, std::move(col)));
             }
-            else if (col_id == MutSup::extra_handle_id)
->>>>>>> 27cfea2c99 (fix virtual column not found when remote read happens (#9920))
+            else if (col_id == DB::TiDBPkColumnID)
             {
                 ColumnInfo ci;
                 ci.tp = TiDB::TypeLongLong;
