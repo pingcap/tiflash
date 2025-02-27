@@ -61,7 +61,6 @@
 #include <algorithm>
 #include <boost/algorithm/string/replace.hpp>
 #include <boost/program_options.hpp>
-#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <map>
@@ -131,8 +130,6 @@ private:
     size_t max_client_network_bandwidth
         = 0; /// The maximum speed of data exchange over the network for the client in bytes per second.
 
-    bool has_vertical_output_suffix = false; /// Is \G present at the end of the query string?
-
     std::unique_ptr<Context> context = Context::createGlobal(Context::ApplicationType::CLIENT);
 
     /// Buffer that reads from stdin in batch mode.
@@ -188,7 +185,6 @@ private:
         String default_database;
         String user;
         String password;
-        Protocol::Secure security = Protocol::Secure::Disable;
         Protocol::Compression compression = Protocol::Compression::Disable;
         ConnectionTimeouts timeouts;
 
@@ -196,15 +192,8 @@ private:
 
         explicit ConnectionParameters(const Poco::Util::AbstractConfiguration & config)
         {
-            bool is_secure = config.getBool("secure", false);
-            security = is_secure ? Protocol::Secure::Enable : Protocol::Secure::Disable;
-
             host = config.getString("host", "localhost");
-            port = config.getInt(
-                "port",
-                config.getInt(
-                    is_secure ? "tcp_port_secure" : "tcp_port",
-                    is_secure ? DBMS_DEFAULT_SECURE_PORT : DBMS_DEFAULT_PORT));
+            port = config.getInt("port", config.getInt("tcp_port", DBMS_DEFAULT_PORT));
 
             default_database = config.getString("database", "");
             user = config.getString("user", "");
@@ -301,20 +290,6 @@ private:
         }
     }
 
-    /// Should we celebrate a bit?
-    static bool isNewYearMode()
-    {
-        time_t current_time = time(nullptr);
-
-        /// It's bad to be intrusive.
-        if (current_time % 3 != 0)
-            return false;
-
-        LocalDate now(current_time);
-        return (now.month() == 12 && now.day() >= 20) || (now.month() == 1 && now.day() <= 5);
-    }
-
-
     int mainImpl()
     {
         registerFunctions();
@@ -336,11 +311,8 @@ private:
         if (is_interactive)
             showClientVersion();
 
-        is_default_format = !config().has("vertical") && !config().has("format");
-        if (config().has("vertical"))
-            format = config().getString("format", "Vertical");
-        else
-            format = config().getString("format", is_interactive ? "PrettyCompact" : "TabSeparated");
+        is_default_format = !config().has("format");
+        format = config().getString("format", is_interactive ? "PrettyCompactNoEscapes" : "TabSeparated");
 
         format_max_block_size = config().getInt("format_max_block_size", context->getSettingsRef().max_block_size);
 
@@ -384,21 +356,8 @@ private:
             }
         }
 
-        Strings keys;
-
         prompt_by_server_display_name
             = config().getRawString("prompt_by_server_display_name.default", "{display_name} :) ");
-
-        config().keys("prompt_by_server_display_name", keys);
-
-        for (const String & key : keys)
-        {
-            if (key != "default" && server_display_name.find(key) != std::string::npos)
-            {
-                prompt_by_server_display_name = config().getRawString("prompt_by_server_display_name." + key);
-                break;
-            }
-        }
 
         /// Prompt may contain escape sequences including \e[ or \x1b[ sequences to set terminal color.
         {
@@ -456,7 +415,7 @@ private:
 
             loop();
 
-            std::cout << (isNewYearMode() ? "Happy new year." : "Bye.") << std::endl;
+            std::cout << "Bye." << std::endl;
 
             return 0;
         }
@@ -492,8 +451,7 @@ private:
             connection_parameters.password,
             connection_parameters.timeouts,
             "client",
-            connection_parameters.compression,
-            connection_parameters.security);
+            connection_parameters.compression);
 
         String server_name;
         UInt64 server_version_major = 0;
@@ -560,16 +518,12 @@ private:
             bool ends_with_semicolon = line[ws - 1] == ';';
             bool ends_with_backslash = line[ws - 1] == '\\';
 
-            has_vertical_output_suffix = (ws >= 2) && (line[ws - 2] == '\\') && (line[ws - 1] == 'G');
-
             if (ends_with_backslash)
                 line = line.substr(0, ws - 1);
 
             query += line;
 
-            if (!ends_with_backslash
-                && (ends_with_semicolon || has_vertical_output_suffix
-                    || (!config().has("multiline") && !hasDataInSTDIN())))
+            if (!ends_with_backslash && (ends_with_semicolon || (!config().has("multiline") && !hasDataInSTDIN())))
             {
                 if (query != prev_query)
                 {
@@ -590,9 +544,6 @@ private:
 
                     prev_query = query;
                 }
-
-                if (has_vertical_output_suffix)
-                    query = query.substr(0, query.length() - 2);
 
                 try
                 {
@@ -1111,15 +1062,10 @@ private:
                 }
                 if (query_with_output->format != nullptr)
                 {
-                    if (has_vertical_output_suffix)
-                        throw Exception("Output format already specified", ErrorCodes::CLIENT_OUTPUT_FORMAT_SPECIFIED);
                     const auto & id = typeid_cast<const ASTIdentifier &>(*query_with_output->format);
                     current_format = id.name;
                 }
             }
-
-            if (has_vertical_output_suffix)
-                current_format = "Vertical";
 
             block_out_stream = context->getOutputFormat(current_format, *out_buf, block);
             block_out_stream->writePrefix();
@@ -1373,7 +1319,6 @@ public:
             ("config-file,c", boost::program_options::value<std::string>(), "config-file path")
             ("host,h", boost::program_options::value<std::string>()->default_value("localhost"), "server host")
             ("port", boost::program_options::value<int>()->default_value(9000), "server port")
-            ("secure,s", "secure")
             ("user,u", boost::program_options::value<std::string>(), "user")
             ("password", boost::program_options::value<std::string>(), "password")
             ("query_id", boost::program_options::value<std::string>(), "query_id")
@@ -1384,7 +1329,6 @@ public:
             ("multiquery,n", "multiquery")
             ("ignore-error", "Do not stop processing in multiquery mode")
             ("format,f", boost::program_options::value<std::string>(), "default output format")
-            ("vertical,E", "vertical output format, same as --format=Vertical or FORMAT Vertical or \\G at end of command")
             ("time,t", "print query execution time to stderr in non-interactive mode (for benchmarks)")
             ("stacktrace", "print stack traces of exceptions")
             ("progress", "print progress even in non-interactive mode")
@@ -1487,8 +1431,6 @@ public:
 
         if (options.count("port") && !options["port"].defaulted())
             config().setInt("port", options["port"].as<int>());
-        if (options.count("secure"))
-            config().setBool("secure", true);
         if (options.count("user"))
             config().setString("user", options["user"].as<std::string>());
         if (options.count("password"))
@@ -1502,8 +1444,6 @@ public:
             config().setBool("ignore-error", true);
         if (options.count("format"))
             config().setString("format", options["format"].as<std::string>());
-        if (options.count("vertical"))
-            config().setBool("vertical", true);
         if (options.count("stacktrace"))
             config().setBool("stacktrace", true);
         if (options.count("progress"))
