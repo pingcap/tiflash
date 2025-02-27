@@ -1494,6 +1494,7 @@ void WindowTransformAction::updateAggregationState()
         }
 
         addAggregationState(ws, start, frame_end);
+        std::cout << "update row num " << distance(frame_end, start) << std::endl;
     }
 
     first_processed = false;
@@ -1575,21 +1576,23 @@ void WindowTransformAction::tryCalculate()
             }
             else
             {
+                // TODO execute the window function by block instead of row.
                 writeOutCurrentRow();
+
+                // Move to the next row. The frame will have to be recalculated.
+                // The peer group start is updated at the beginning of the loop,
+                // because current_row might now be past-the-end.
+                advanceRowNumber(current_row);
+                ++current_row_number;
             }
-            // TODO execute the window function by block instead of row.
 
             prev_frame_start = frame_start;
             prev_frame_end = frame_end;
 
-            // Move to the next row. The frame will have to be recalculated.
-            // The peer group start is updated at the beginning of the loop,
-            // because current_row might now be past-the-end.
-            advanceRowNumber(current_row);
-            ++current_row_number;
             first_not_ready_row = current_row;
             frame_ended = false;
             frame_started = false;
+
             // each `tryCalculate()` will calculate at most 1 block's data
             // this is to make sure that in pipeline mode, the execution time
             // of each iterator won't be too long

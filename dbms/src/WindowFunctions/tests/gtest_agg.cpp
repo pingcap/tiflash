@@ -144,23 +144,20 @@ void WindowAggFuncTest::executeTestForIssue9913(const TestCase & test)
     else
         frame.type = tipb::WindowFrameType::Rows;
 
-    for (size_t i = 0; i < test.test_case_num; i++)
-    {
-        frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, true, 0);
-        frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, true, 0);
+    frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, true, 0);
+    frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, true, 0);
 
-        ColumnWithTypeAndName value_col_with_type_and_name;
-        if (test.is_input_value_nullable)
-            value_col_with_type_and_name = toNullableVec<Int64>(int_nullable_value);
-        else
-            value_col_with_type_and_name = toVec<Int64>(int_value);
+    ColumnWithTypeAndName value_col_with_type_and_name;
+    if (test.is_input_value_nullable)
+        value_col_with_type_and_name = toNullableVec<Int64>(int_nullable_value);
+    else
+        value_col_with_type_and_name = toVec<Int64>(int_value);
 
-        executeFunctionAndAssert(
-            toNullableVec<Int64>(test.results[i]),
-            test.ast_func,
-            {toVec<Int64>(partition), toVec<Int64>(order), value_col_with_type_and_name},
-            frame);
-    }
+    executeFunctionAndAssert(
+        toNullableVec<Int64>(test.results[0]),
+        test.ast_func,
+        {toVec<Int64>(partition), toVec<Int64>(order), value_col_with_type_and_name},
+        frame);
 }
 
 
@@ -562,7 +559,24 @@ CATCH
 
 TEST_F(WindowAggFuncTest, issue9913)
 try
-{}
+{
+    std::vector<std::optional<Int64>> res = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 4, 5, 0, 0, 0};
+    executeTestForIssue9913(TestCase(MinForWindow(value_col), {}, {}, {res}, {}, false, false));
+    // executeTestForIssue9913(TestCase(MinForWindow(value_col), {}, {}, {res}, {}, true, false));
+
+    // res = {0, 6, 6, 6, 6, 4, 4, 4, 4, 4, 9, 9, 9, 9, 9, 9, 9, 4, 5, 5, 5, 5};
+    // executeTestForIssue9913(TestCase(MaxForWindow(value_col), {}, {}, {res}, {}, false, false));
+    // executeTestForIssue9913(TestCase(MaxForWindow(value_col), {}, {}, {res}, {}, true, false));
+
+    // res = {0, 11, 11, 11, 11, 9, 9, 9, 9, 9, 34, 34, 34, 34, 34, 34, 34, 4, 5, 7, 7, 7};
+    // executeTestForIssue9913(TestCase(Sum(value_col), {}, {}, {res}, {}, false, false));
+    // executeTestForIssue9913(TestCase(Sum(value_col), {}, {}, {res}, {}, true, false));
+
+    // res = {1, 4, 4, 4, 4, 5, 5, 5, 5, 5, 7, 7, 7, 7, 7, 7, 7, 1, 1, 3, 3, 3};
+    // executeTestForIssue9913(TestCase(Count(value_col), {}, {}, {res}, {}, false, false));
+    // executeTestForIssue9913(TestCase(Count(value_col), {}, {}, {res}, {}, true, false));
+    // TODO executeTest(TestCase(Avg(value_col), {}, {}, {res}, {}, false, false));
+}
 CATCH
 
 } // namespace DB::tests
