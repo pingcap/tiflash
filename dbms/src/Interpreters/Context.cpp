@@ -148,8 +148,10 @@ struct ContextShared
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
-    mutable DM::LocalIndexCachePtr light_local_index_cache; // Cache of local index reader which memory usage is small < 1MB.
-    mutable DM::LocalIndexCachePtr heavy_local_index_cache; // Cache of local index reader which memory usage is large > 1MB.
+    mutable DM::LocalIndexCachePtr
+        light_local_index_cache; // Cache of local index reader which memory usage is small < 1MB.
+    mutable DM::LocalIndexCachePtr
+        heavy_local_index_cache; // Cache of local index reader which memory usage is large > 1MB.
     mutable DM::ColumnCacheLongTermPtr column_cache_long_term;
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
