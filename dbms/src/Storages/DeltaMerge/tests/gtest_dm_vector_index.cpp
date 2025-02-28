@@ -1735,7 +1735,7 @@ public:
         global_context.tryReleaseWriteNodePageStorageForTest();
         global_context.initializeWriteNodePageStorageIfNeed(global_context.getPathPool());
 
-        global_context.setLocalIndexCache(1000);
+        global_context.setLocalIndexCache(10000, 1000);
 
         auto kvstore = db_context->getTMTContext().getKVStore();
         {
@@ -2308,7 +2308,7 @@ try
     }
     {
         // We should be able to clear something from the vector index cache.
-        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getLocalIndexCache();
+        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getHeavyLocalIndexCache();
         ASSERT_NE(local_index_cache, nullptr);
         ASSERT_EQ(1, cleanLocalIndexCacheEntries(local_index_cache));
     }
@@ -2448,7 +2448,7 @@ try
     }
     {
         // We should be able to clear something from the vector index cache.
-        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getLocalIndexCache();
+        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getHeavyLocalIndexCache();
         ASSERT_NE(local_index_cache, nullptr);
         ASSERT_EQ(1, cleanLocalIndexCacheEntries(local_index_cache));
     }
