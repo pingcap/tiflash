@@ -31,6 +31,12 @@ public:
         const WindowDescription & window_description_,
         const String & req_id);
 
+    ~WindowTransformAction()
+    {
+        for (auto & ws : aggregation_workspaces)
+            ws.aggregate_function->reset(ws.aggregate_function_state.data());
+    }
+
     void cleanUp();
 
     void advancePartitionEnd();
