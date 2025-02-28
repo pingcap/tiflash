@@ -147,7 +147,7 @@ public: // Simple Read and Write
         TiKVKey && key,
         TiKVValue && value,
         DupCheck mode = DupCheck::Deny);
-    void remove(const std::string & cf, const TiKVKey & key);
+    void removeDebug(const std::string & cf, const TiKVKey & key);
 
     // Directly drop all data in this Region object.
     void clearAllData();

@@ -406,17 +406,14 @@ void LearnerReadWorker::waitIndex(
             continue;
         }
 
-        // Try to resolve locks and flush data into storage layer
         const auto & physical_table_id = region_to_query.physical_table_id;
-        auto res = RegionTable::resolveLocksAndWriteRegion(
-            tmt,
+        auto res = RegionTable::checkRegionAndGetLocks(
             physical_table_id,
             region,
             mvcc_query_info.start_ts,
             region_to_query.bypass_lock_ts,
             region_to_query.version,
-            region_to_query.conf_version,
-            log);
+            region_to_query.conf_version);
 
         std::visit(
             variant_op::overloaded{
