@@ -34,7 +34,7 @@ public:
     ~WindowTransformAction()
     {
         for (auto & ws : aggregation_workspaces)
-            ws.aggregate_function->reset(ws.aggregate_function_state.data());
+            ws.aggregate_function->destroy(ws.aggregate_function_state.data());
     }
 
     void cleanUp();
