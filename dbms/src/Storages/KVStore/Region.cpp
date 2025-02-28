@@ -94,7 +94,7 @@ RegionDataMemDiff Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVVa
     return data.insert(type, std::move(key), std::move(value), mode);
 }
 
-void Region::remove(const std::string & cf, const TiKVKey & key)
+void Region::removeDebug(const std::string & cf, const TiKVKey & key)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     doRemove(NameToCF(cf), key);

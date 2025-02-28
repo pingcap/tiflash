@@ -162,7 +162,7 @@ try
         auto delta = str_key.dataSize() + str_val_default.size();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), delta);
         ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), originTableSize + delta);
-        region->remove("default", TiKVKey::copyFrom(str_key));
+        region->removeDebug("default", TiKVKey::copyFrom(str_key));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
