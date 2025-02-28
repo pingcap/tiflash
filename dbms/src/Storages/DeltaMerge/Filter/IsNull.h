@@ -39,6 +39,11 @@ public:
         auto rs_index = getRSIndex(param, attr);
         return rs_index ? rs_index->minmax->checkIsNull(start_pack, pack_count) : RSResults(pack_count, RSResult::Some);
     }
+
+    ColumnValueSetPtr buildSets(const LocalIndexInfosSnapshot &) override
+    {
+        return UnsupportedColumnValueSet::create();
+    }
 };
 
 } // namespace DB::DM

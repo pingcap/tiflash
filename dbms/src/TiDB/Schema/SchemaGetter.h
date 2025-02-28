@@ -104,12 +104,14 @@ enum class SchemaActionType : Int8
     ActionAlterTablePartitioning = 71,
     ActionRemovePartitioning = 72,
     ActionAddVectorIndex = 73,
+    ActionModifyEngineAttribute = 74,
+    ActionAddColumnarIndex = 75,
 
 
     // If we support new type from TiDB.
     // MaxRecognizedType also needs to be changed.
     // It should always be equal to the maximum supported type + 1
-    MaxRecognizedType = 74,
+    MaxRecognizedType = 76,
 };
 
 struct AffectedOption

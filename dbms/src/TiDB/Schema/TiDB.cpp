@@ -111,7 +111,7 @@ using DB::Field;
 using DB::SchemaNameMapper;
 
 // The IndexType defined in TiDB
-// https://github.com/pingcap/tidb/blob/a5e07a2ed360f29216c912775ce482f536f4102b/pkg/parser/model/model.go#L193-L219
+// https://github.com/pingcap/tidb/blob/a5e07a2ed360f29216c912775ce482f536f4102b/pkg/parser/model/model.go#L193-L219 // FIXME: Update the link
 enum class IndexType
 {
     INVALID = 0,
@@ -120,6 +120,7 @@ enum class IndexType
     RTREE = 3,
     HYPO = 4,
     HNSW = 5,
+    INVERTED = 6,
 };
 
 inline tipb::VectorIndexKind toVectorIndexKind(IndexType index_type)
@@ -170,6 +171,31 @@ Poco::JSON::Object::Ptr vectorIndexToJSON(const VectorIndexDefinitionPtr & vecto
     vector_index_json->set("dimension", vector_index->dimension);
     vector_index_json->set("distance_metric", tipb::VectorDistanceMetric_Name(vector_index->distance_metric));
     return vector_index_json;
+}
+
+InvertedIndexDefinitionPtr parseInvertedIndexFromJSON(IndexType index_type, const Poco::JSON::Object::Ptr & json)
+{
+    assert(json); // not nullptr
+
+    RUNTIME_CHECK(index_type == IndexType::INVERTED);
+    bool is_signed = json->getValue<bool>("is_signed");
+    auto type_size = json->getValue<UInt8>("type_size");
+    RUNTIME_CHECK(type_size > 0 && type_size <= sizeof(UInt64), type_size); // Just a protection
+    return std::make_shared<const InvertedIndexDefinition>(InvertedIndexDefinition{
+        .is_signed = is_signed,
+        .type_size = type_size,
+    });
+}
+
+Poco::JSON::Object::Ptr invertedIndexToJSON(const InvertedIndexDefinitionPtr & inverted_index)
+{
+    assert(inverted_index != nullptr);
+    RUNTIME_CHECK(inverted_index->type_size > 0 && inverted_index->type_size <= sizeof(UInt64));
+
+    Poco::JSON::Object::Ptr inverted_index_json = new Poco::JSON::Object();
+    inverted_index_json->set("is_signed", inverted_index->is_signed);
+    inverted_index_json->set("type_size", inverted_index->type_size);
+    return inverted_index_json;
 }
 
 ////////////////////////
@@ -887,6 +913,10 @@ try
     {
         json->set("vector_index", vectorIndexToJSON(vector_index));
     }
+    else if (inverted_index)
+    {
+        json->set("inverted_index", invertedIndexToJSON(inverted_index));
+    }
 
 #ifndef NDEBUG
     std::stringstream str;
@@ -932,6 +962,10 @@ try
     if (auto vector_index_json = json->getObject("vector_index"); vector_index_json)
     {
         vector_index = parseVectorIndexFromJSON(static_cast<IndexType>(index_type), vector_index_json);
+    }
+    if (auto inverted_index_json = json->getObject("inverted_index"); inverted_index_json)
+    {
+        inverted_index = parseInvertedIndexFromJSON(static_cast<IndexType>(index_type), inverted_index_json);
     }
 }
 catch (const Poco::Exception & e)

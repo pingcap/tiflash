@@ -928,7 +928,7 @@ try
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
     /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
-    size_t vec_index_cache_entities = config().getUInt64("vec_index_cache_entities", 1000);
+    size_t vec_index_cache_entities = config().getUInt64("vec_index_cache_entities", 100000); // FIXME: too large
     if (vec_index_cache_entities)
         global_context->setLocalIndexCache(vec_index_cache_entities);
 

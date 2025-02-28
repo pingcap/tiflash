@@ -917,6 +917,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             filter_conditions.conditions,
             table_scan.getANNQueryInfo(),
             table_scan.getPushedDownFilters(),
+            table_scan.getUsedIndexes(),
             table_scan.getColumns(),
             table_scan.getRuntimeFilterIDs(),
             table_scan.getMaxWaitTimeMs(),

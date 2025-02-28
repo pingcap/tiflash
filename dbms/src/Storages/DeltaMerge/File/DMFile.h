@@ -313,6 +313,8 @@ private:
         {
         case TiDB::ColumnarIndexKind::Vector:
             return fmt::format("idx_{}.vector", index_id);
+        case TiDB::ColumnarIndexKind::Inverted:
+            return fmt::format("idx_{}.inverted", index_id);
         default:
             throw Exception(fmt::format("Unsupported index kind: {}", magic_enum::enum_name(kind)));
         }
@@ -345,6 +347,7 @@ public:
     DMFileMetaPtr meta;
 
     friend class DMFileVectorIndexReader;
+    friend class DMFileInvertedIndexReader;
     friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
     friend class DMFileLocalIndexWriter;

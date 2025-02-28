@@ -479,30 +479,39 @@ std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> StorageDisaggregated:
     return establish_req;
 }
 
-DM::RSOperatorPtr StorageDisaggregated::buildRSOperator(
+std::tuple<DM::RSOperatorPtr, DM::ColumnValueSetPtr> StorageDisaggregated::buildRSOperatorAndColumnValueSet(
     const Context & db_context,
     const DM::ColumnDefinesPtr & columns_to_read)
 {
     if (!filter_conditions.hasValue())
-        return DM::EMPTY_RS_OPERATOR;
+        return {DM::EMPTY_RS_OPERATOR, nullptr};
 
     const bool enable_rs_filter = db_context.getSettingsRef().dt_enable_rough_set_filter;
     if (!enable_rs_filter)
     {
         LOG_DEBUG(log, "Rough set filter is disabled.");
-        return DM::EMPTY_RS_OPERATOR;
+        return {DM::EMPTY_RS_OPERATOR, nullptr};
     }
 
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filter_conditions.conditions,
         table_scan.getANNQueryInfo(),
         table_scan.getPushedDownFilters(),
+        table_scan.getUsedIndexes(),
         table_scan.getColumns(),
         std::vector<int>{},
         0,
         db_context.getTimezoneInfo());
 
-    return DM::RSOperator::build(dag_query, table_scan.getColumns(), *columns_to_read, enable_rs_filter, log);
+    const auto rs_operator
+        = DM::RSOperator::build(dag_query, table_scan.getColumns(), *columns_to_read, enable_rs_filter, log);
+    const auto & local_index_infos = dag_query->used_indexes;
+
+    // build column_value_set
+    const auto column_value_set
+        = rs_operator && local_index_infos ? rs_operator->buildSets(local_index_infos) : nullptr;
+
+    return {rs_operator, column_value_set};
 }
 
 std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisaggregated::packSegmentReadTasks(
@@ -515,7 +524,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     const auto & executor_id = table_scan.getTableScanExecutorID();
 
     // build the rough set operator
-    auto rs_operator = buildRSOperator(db_context, column_defines);
+    auto [rs_operator, column_value_set] = buildRSOperatorAndColumnValueSet(db_context, column_defines);
     // build ANN query info
     DM::ANNQueryInfoPtr ann_query_info = nullptr;
     if (table_scan.getANNQueryInfo().query_type() != tipb::ANNQueryType::InvalidQueryType)
@@ -527,6 +536,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
         table_scan.getColumns(),
         table_scan.getPushedDownFilters(),
         *column_defines,
+        column_value_set,
         db_context,
         log);
     const auto read_mode = DM::DeltaMergeStore::getReadMode(

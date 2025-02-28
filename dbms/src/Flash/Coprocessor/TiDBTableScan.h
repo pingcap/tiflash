@@ -44,6 +44,7 @@ public:
     int getMaxWaitTimeMs() const { return max_wait_time_ms; }
 
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getPushedDownFilters() const { return pushed_down_filters; }
+    const google::protobuf::RepeatedPtrField<tipb::IndexInfo> & getUsedIndexes() const { return used_indexes; }
 
     const tipb::ANNQueryInfo & getANNQueryInfo() const { return ann_query_info; }
 
@@ -66,6 +67,8 @@ private:
     /// pushed down to table scan by late materialization.
     /// They will be executed on Storage layer.
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
+
+    const google::protobuf::RepeatedPtrField<tipb::IndexInfo> used_indexes;
 
     const tipb::ANNQueryInfo ann_query_info;
 

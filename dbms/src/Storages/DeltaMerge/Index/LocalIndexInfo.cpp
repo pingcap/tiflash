@@ -13,9 +13,12 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo_fwd.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 #include <fiu.h>
 
@@ -42,12 +45,12 @@ bool isLocalIndexSupported(const LoggerPtr & logger)
     return true;
 }
 
-ColumnID getVectorIndxColumnID(
+ColumnID getColumnarIndexColumnID(
     const TiDB::TableInfo & table_info,
     const TiDB::IndexInfo & idx_info,
     const LoggerPtr & logger)
 {
-    if (!idx_info.vector_index)
+    if (!idx_info.hasColumnarIndex())
         return EmptyColumnID;
 
     // Vector Index requires a specific storage format to work.
@@ -58,7 +61,7 @@ ColumnID getVectorIndxColumnID(
     {
         LOG_ERROR(
             logger,
-            "The index columns length is {}, which does not support building vector index, index_id={}, table_id={}.",
+            "The index columns length is {}, which does not support building local index, index_id={}, table_id={}.",
             idx_info.idx_cols.size(),
             idx_info.id,
             table_info.id);
@@ -80,6 +83,37 @@ ColumnID getVectorIndxColumnID(
         idx_info.id,
         idx_info.idx_cols[0].name);
     return EmptyColumnID;
+}
+
+void saveIndexFilePros(
+    const LocalIndexInfo & index_info,
+    dtpb::IndexFilePropsV2 * pb_idx,
+    size_t file_size,
+    size_t uncompressed_size)
+{
+    pb_idx->set_index_id(index_info.index_id);
+    pb_idx->set_file_size(file_size);
+    switch (index_info.kind)
+    {
+    case TiDB::ColumnarIndexKind::Vector:
+    {
+        pb_idx->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
+        auto * pb_vec_idx = pb_idx->mutable_vector_index();
+        pb_vec_idx->set_format_version(0);
+        pb_vec_idx->set_dimensions(index_info.def_vector_index->dimension);
+        pb_vec_idx->set_distance_metric(tipb::VectorDistanceMetric_Name(index_info.def_vector_index->distance_metric));
+        break;
+    }
+    case TiDB::ColumnarIndexKind::Inverted:
+    {
+        pb_idx->set_kind(dtpb::IndexFileKind::INVERTED_INDEX);
+        auto * pb_inv_idx = pb_idx->mutable_inverted_index();
+        pb_inv_idx->set_uncompressed_size(uncompressed_size);
+        break;
+    }
+    default:
+        RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index_info.kind));
+    }
 }
 
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger)
@@ -171,7 +205,7 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
         if (!idx.hasColumnarIndex())
             continue;
 
-        const auto column_id = getVectorIndxColumnID(new_table_info, idx, logger);
+        const auto column_id = getColumnarIndexColumnID(new_table_info, idx, logger);
         if (column_id <= EmptyColumnID)
             continue;
 
@@ -180,13 +214,10 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
             if (idx.state == TiDB::StatePublic || idx.state == TiDB::StateWriteReorganization)
             {
                 // create a new index
-                new_index_infos->emplace_back(LocalIndexInfo{
-                    .kind = idx.columnarIndexKind(),
-                    .index_id = idx.id,
-                    .column_id = column_id,
-                    // Only one of the below will be set
-                    .def_vector_index = idx.vector_index,
-                });
+                if (idx.columnarIndexKind() == TiDB::ColumnarIndexKind::Vector)
+                    new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.vector_index));
+                else if (idx.columnarIndexKind() == TiDB::ColumnarIndexKind::Inverted)
+                    new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.inverted_index));
                 newly_added.emplace_back(idx.id);
                 index_ids_in_new_table.emplace(idx.id);
             }
@@ -261,5 +292,35 @@ String LocalIndexInfosChangeset::toString() const
     }
     return buf.toString();
 }
+
+LocalIndexInfosPtr PBToLocalIndexInfos(const google::protobuf::RepeatedPtrField<tipb::IndexInfo> & indexes)
+{
+    auto local_index_infos = std::make_shared<LocalIndexInfos>();
+    for (const auto & idx : indexes)
+    {
+        switch (idx.columnar_index_type())
+        {
+        case tipb::ColumnarIndexType::TypeHNSW:
+        {
+            auto def = std::make_shared<TiDB::VectorIndexDefinition>();
+            local_index_infos->emplace_back(LocalIndexInfo(idx.index_id(), idx.columns(0).column_id(), def));
+            break;
+        }
+        case tipb::ColumnarIndexType::TypeInverted:
+        {
+            auto def = std::make_shared<TiDB::InvertedIndexDefinition>();
+            local_index_infos->emplace_back(LocalIndexInfo(idx.index_id(), idx.columns(0).column_id(), def));
+            break;
+        }
+        default:
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Unsupported columnar index type: {}",
+                tipb::ColumnarIndexType_Name(idx.columnar_index_type()));
+        }
+    }
+    return local_index_infos;
+}
+
 
 } // namespace DB::DM

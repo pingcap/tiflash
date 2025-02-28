@@ -40,7 +40,6 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
-#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/LateMaterializationBlockInputStream.h>
 #include <Storages/DeltaMerge/PKSquashingBlockInputStream.h>
 #include <Storages/DeltaMerge/Range.h>
@@ -50,6 +49,7 @@
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/SegmentInvertedIndexReader.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
@@ -69,6 +69,7 @@
 #include <fiu.h>
 #include <fmt/core.h>
 
+#include <algorithm>
 #include <ext/scope_guard.h>
 #include <memory>
 
@@ -3511,6 +3512,38 @@ static bool hasCacheableColumn(const ColumnDefines & columns)
     return std::find_if(columns.begin(), columns.end(), DMFileReader::isCacheableColumn) != columns.end();
 }
 
+namespace
+{
+
+// Modify pack_filter_results according to the bitmap_filter.
+size_t modifyPackFilterResults(
+    const SegmentSnapshotPtr & segment_snap,
+    const DMFilePackFilterResults & pack_filter_results,
+    const BitmapFilterPtr & bitmap_filter)
+{
+    const auto & dmfiles = segment_snap->stable->getDMFiles();
+    size_t offset = 0;
+    size_t skipped_pack = 0;
+    for (size_t i = 0; i < dmfiles.size(); ++i)
+    {
+        const auto & dmfile = dmfiles[i];
+        const auto & pack_stats = dmfile->getPackStats();
+        for (size_t pack_id = 0; pack_id < pack_stats.size(); ++pack_id)
+        {
+            if (pack_filter_results[i]->getPackRes()[pack_id].isUse()
+                && bitmap_filter->isAllNotMatch(offset, pack_stats[pack_id].rows))
+            {
+                pack_filter_results[i]->mutPackRes(pack_id, RSResult::None);
+                ++skipped_pack;
+            }
+            offset += pack_stats[pack_id].rows;
+        }
+    }
+    return skipped_pack;
+}
+
+} // namespace
+
 BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
@@ -3524,13 +3557,68 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
 {
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
 
-    auto bitmap_filter = buildBitmapFilter(
+    BitmapFilterPtr bitmap_filter = nullptr;
+    if (executor->column_value_set && executor->column_value_set->type != ColumnValueSetType::Unsupported)
+    {
+        bool all_dmfile_packs_skipped
+            = std::any_of(pack_filter_results.begin(), pack_filter_results.end(), [](const auto & res) {
+                  return res->countUsePack() == 0;
+              });
+        if (!all_dmfile_packs_skipped)
+        {
+            bitmap_filter = SegmentInvertedIndexReader::loadStable(
+                segment_snap,
+                executor->column_value_set,
+                dm_context.global_context.getLocalIndexCache());
+            size_t skipped_pack = modifyPackFilterResults(segment_snap, pack_filter_results, bitmap_filter);
+            LOG_INFO(
+                segment_snap->log,
+                "Finish load inverted index, column_value_set={}, bitmap_filter={}/{}, skipped_pack={}",
+                executor->column_value_set->toDebugString(),
+                bitmap_filter->count(),
+                bitmap_filter->size(),
+                skipped_pack);
+        }
+        else
+        {
+            LOG_INFO(
+                segment_snap->log,
+                "Skip load inverted index, all dmfile packs are skipped, column_value_set={}",
+                executor->column_value_set->toDebugString());
+        }
+    }
+
+    auto mvcc_bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
         read_ranges,
         pack_filter_results,
         start_ts,
         build_bitmap_filter_block_rows);
+    if (bitmap_filter)
+    {
+        if (!dm_context.read_stable_only
+            && (segment_snap->delta->getRows() != 0 || segment_snap->delta->getDeletes() != 0))
+        {
+            auto delta_index_bitmap = SegmentInvertedIndexReader::loadDelta(
+                segment_snap,
+                executor->column_value_set,
+                dm_context.global_context.getLocalIndexCache());
+            bitmap_filter->append(*delta_index_bitmap);
+        }
+        bitmap_filter->intersect(*mvcc_bitmap_filter);
+        bitmap_filter->runOptimize();
+    }
+    else
+        bitmap_filter = mvcc_bitmap_filter;
+
+    size_t skipped_pack = modifyPackFilterResults(segment_snap, pack_filter_results, bitmap_filter);
+    LOG_INFO(
+        segment_snap->log,
+        "Finish build MVCC bitmap filter, bitmap_filter={}/{}, skipped_pack={}",
+        bitmap_filter->count(),
+        bitmap_filter->size(),
+        skipped_pack);
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
     if (!hasCacheableColumn(columns_to_read))

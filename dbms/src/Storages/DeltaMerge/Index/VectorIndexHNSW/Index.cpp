@@ -55,13 +55,13 @@ unum::usearch::metric_kind_t getUSearchMetricKind(tipb::VectorDistanceMetric d)
     }
 }
 
-VectorIndexHNSWBuilder::VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinitionPtr & definition_)
-    : VectorIndexBuilder(definition_)
+VectorIndexHNSWBuilder::VectorIndexHNSWBuilder(const LocalIndexInfo & index_info)
+    : VectorIndexBuilder(index_info)
     , index(USearchImplType::make(unum::usearch::metric_punned_t( //
-          definition_->dimension,
+          definition->dimension,
           getUSearchMetricKind(definition->distance_metric))))
 {
-    RUNTIME_CHECK(definition_->kind == kind());
+    RUNTIME_CHECK(definition->kind == kind());
     GET_METRIC(tiflash_vector_index_active_instances, type_build).Increment();
 }
 

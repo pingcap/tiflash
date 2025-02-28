@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Common/LRUCache.h>
-#include <Storages/DeltaMerge/Index/LocalIndexViewer.h>
 #include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
 #include <common/types.h>
 
