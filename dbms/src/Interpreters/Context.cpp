@@ -148,7 +148,10 @@ struct ContextShared
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
-    mutable DM::LocalIndexCachePtr local_index_cache;
+    mutable DM::LocalIndexCachePtr
+        light_local_index_cache; // Cache of local index reader which memory usage is small < 1MB.
+    mutable DM::LocalIndexCachePtr
+        heavy_local_index_cache; // Cache of local index reader which memory usage is large > 1MB.
     mutable DM::ColumnCacheLongTermPtr column_cache_long_term;
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
@@ -1385,26 +1388,35 @@ void Context::dropMinMaxIndexCache() const
         shared->minmax_index_cache->reset();
 }
 
-void Context::setLocalIndexCache(size_t cache_entities)
+void Context::setLocalIndexCache(size_t light_local_index_cache, size_t heavy_cache_entities)
 {
     auto lock = getLock();
 
-    RUNTIME_CHECK(!shared->local_index_cache);
-
-    shared->local_index_cache = std::make_shared<DM::LocalIndexCache>(cache_entities);
+    RUNTIME_CHECK(!shared->light_local_index_cache);
+    shared->light_local_index_cache = std::make_shared<DM::LocalIndexCache>(light_local_index_cache);
+    RUNTIME_CHECK(!shared->heavy_local_index_cache);
+    shared->heavy_local_index_cache = std::make_shared<DM::LocalIndexCache>(heavy_cache_entities);
 }
 
-DM::LocalIndexCachePtr Context::getLocalIndexCache() const
+DM::LocalIndexCachePtr Context::getLightLocalIndexCache() const
 {
     auto lock = getLock();
-    return shared->local_index_cache;
+    return shared->light_local_index_cache;
+}
+
+DM::LocalIndexCachePtr Context::getHeavyLocalIndexCache() const
+{
+    auto lock = getLock();
+    return shared->heavy_local_index_cache;
 }
 
 void Context::dropLocalIndexCache() const
 {
     auto lock = getLock();
-    if (shared->local_index_cache)
-        shared->local_index_cache.reset();
+    if (shared->light_local_index_cache)
+        shared->light_local_index_cache.reset();
+    if (shared->heavy_local_index_cache)
+        shared->heavy_local_index_cache.reset();
 }
 
 void Context::setColumnCacheLongTerm(size_t cache_size_in_bytes)
