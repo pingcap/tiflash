@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockKVStore/MockUtils.h>
 #include <IO/VarInt.h>
 #include <Storages/KVStore/Decode/TiKVHelper.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <Storages/KVStore/Types.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
 

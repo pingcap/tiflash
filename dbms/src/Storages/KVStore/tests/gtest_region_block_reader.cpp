@@ -14,6 +14,7 @@
 
 #include <Common/hex.h>
 #include <Core/Field.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
@@ -22,7 +23,6 @@
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Decode/DatumCodec.h>
@@ -645,9 +645,10 @@ try
         NullspaceID);
 
     RegionID region_id = 4;
+    // the start_key and end_key for table_id = 68
     String region_start_key(bytesFromHexString("7480000000000000FF445F720000000000FA"));
     String region_end_key(bytesFromHexString("7480000000000000FF4500000000000000F8"));
-    auto region = makeRegion(region_id, region_start_key, region_end_key);
+    auto region = RegionBench::makeRegionForRange(region_id, region_start_key, region_end_key);
     // the hex kv dump from SSTFile
     std::vector<std::tuple<std::string_view, std::string_view>> kvs = {
         {"7480000000000000FF4D5F728000000000FF0000010000000000FAF9F3125EFCF3FFFE", "4C8280809290B4BB8606"},
