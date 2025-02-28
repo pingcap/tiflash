@@ -149,7 +149,7 @@ public:
     }
 
     static auto queryTopK(
-        VectorIndexViewerPtr viewer,
+        VectorIndexReaderPtr viewer,
         const std::vector<Float32> & ref,
         UInt32 top_k,
         std::optional<std::reference_wrapper<::benchmark::State>> state = std::nullopt)

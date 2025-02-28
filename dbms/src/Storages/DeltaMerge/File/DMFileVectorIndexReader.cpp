@@ -17,7 +17,7 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileVectorIndexReader.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
-#include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/FileCachePerf.h>
@@ -42,7 +42,7 @@ String DMFileVectorIndexReader::PerfStat::toString() const
         duration_read_vec_column);
 }
 
-std::vector<VectorIndexViewer::SearchResult> DMFileVectorIndexReader::load()
+std::vector<VectorIndexReader::SearchResult> DMFileVectorIndexReader::load()
 {
     if (loaded)
         return {};
@@ -126,7 +126,7 @@ void DMFileVectorIndexReader::loadVectorIndex()
 
     auto load_from_file = [&]() {
         perf_stat.has_load_from_file = true;
-        return VectorIndexViewer::view(vector_index->index_props().vector_index(), local_index_file_path);
+        return VectorIndexReader::createFromMmap(vector_index->index_props().vector_index(), local_index_file_path);
     };
 
     Stopwatch watch;
@@ -136,7 +136,7 @@ void DMFileVectorIndexReader::loadVectorIndex()
         // will check whether file is still valid and try to remove memory references
         // when file is dropped.
         auto local_index = local_index_cache->getOrSet(local_index_file_path, load_from_file);
-        vec_index = std::dynamic_pointer_cast<VectorIndexViewer>(local_index);
+        vec_index = std::dynamic_pointer_cast<VectorIndexReader>(local_index);
     }
     else
     {
@@ -174,7 +174,7 @@ String DMFileVectorIndexReader::perfStat() const
         perf_stat.selected_nodes);
 }
 
-std::vector<VectorIndexViewer::SearchResult> DMFileVectorIndexReader::loadVectorSearchResult()
+std::vector<VectorIndexReader::SearchResult> DMFileVectorIndexReader::loadVectorSearchResult()
 {
     Stopwatch watch;
 
@@ -207,7 +207,7 @@ std::vector<VectorIndexViewer::SearchResult> DMFileVectorIndexReader::loadVector
 
 void DMFileVectorIndexReader::read(
     MutableColumnPtr & vec_column,
-    const std::span<const VectorIndexViewer::Key> & selected_rows)
+    const std::span<const VectorIndexReader::Key> & selected_rows)
 {
     Stopwatch watch;
     RUNTIME_CHECK(loaded);

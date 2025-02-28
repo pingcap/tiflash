@@ -1,4 +1,4 @@
-// Copyright 2025 PingCAP, Inc.
+// Copyright 2024 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,19 @@
 
 #pragma once
 
-#include <memory>
-
 namespace DB::DM
 {
 
-class VectorIndexCache;
-using VectorIndexCachePtr = std::shared_ptr<VectorIndexCache>;
+/// By deriving from this class, it is possible to put in LocalIndexCache.
+class ICacheableLocalIndexReader
+{
+public:
+    explicit ICacheableLocalIndexReader() = default;
+
+    virtual ~ICacheableLocalIndexReader() = default;
+
+    // TODO: Add more methods. Only methods related with putting inside a LocalIndexCache
+    // should be added here.
+};
 
 } // namespace DB::DM

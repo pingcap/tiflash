@@ -28,9 +28,6 @@ ccache.tar
 # https://clang.llvm.org/docs/JSONCompilationDatabase.html
 compile_commands.json
 
-# git patch reject report
-*.rej
-
 # vim cache files
 *.swp
 

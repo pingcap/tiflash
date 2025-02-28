@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/File/DMFileVectorIndexReader.h>
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream_fwd.h>
-#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache_fwd.h>
 #include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
 
 
@@ -96,7 +96,7 @@ public:
 
     Block getHeader() const override { return header; }
 
-    std::vector<VectorIndexViewer::SearchResult> load() override;
+    std::vector<VectorIndexReader::SearchResult> load() override;
 
     void setSelectedRows(const std::span<const UInt32> & selected_rows) override;
 
@@ -123,7 +123,7 @@ private:
     const DMFileVectorIndexReaderPtr vec_index_reader;
 
     // Set after load().
-    VectorIndexViewerPtr vec_index = nullptr;
+    VectorIndexReaderPtr vec_index = nullptr;
     // VectorColumnFromIndexReaderPtr vec_column_reader = nullptr;
     // Set after load(). Used to filter the output rows.
     std::vector<UInt32> sorted_results{}; // Key is rowid

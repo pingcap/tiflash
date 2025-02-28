@@ -12,18 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
+#include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
 
-namespace DB::DM
+namespace DB::PerfContext
 {
 
-/// Viewer for local index.
-class LocalIndexViewer
-{
-public:
-    explicit LocalIndexViewer() = default;
+thread_local VectorSearchPerfContext vector_search = {};
 
-    virtual ~LocalIndexViewer() = default;
-};
-
-} // namespace DB::DM
+}

@@ -15,8 +15,8 @@
 #pragma once
 
 #include <Common/LRUCache.h>
-#include <Storages/DeltaMerge/Index/LocalIndexViewer.h>
-#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
+#include <Storages/DeltaMerge/Index/ICacheableLocalIndexReader.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache_fwd.h>
 #include <common/types.h>
 
 #include <condition_variable>
@@ -36,7 +36,7 @@ namespace DB::DM
 class LocalIndexCache
 {
 private:
-    using Cache = LRUCache<String, LocalIndexViewer>;
+    using Cache = LRUCache<String, ICacheableLocalIndexReader>;
 
     Cache cache;
     LoggerPtr log;
