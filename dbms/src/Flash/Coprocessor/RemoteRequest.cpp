@@ -59,8 +59,9 @@ RemoteRequest RemoteRequest::build(
         {
             const auto & col = table_scan.getColumns()[i];
             auto col_id = col.column_id();
+            auto tidb_ci = TiDB::toTiDBColumnInfo(col);
 
-            if (col.hasGeneratedColumnFlag())
+            if (tidb_ci.hasGeneratedColumnFlag())
             {
                 const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
                 schema.emplace_back(std::make_pair(col_name, std::move(col)));
