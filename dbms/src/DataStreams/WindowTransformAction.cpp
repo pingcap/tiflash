@@ -1494,7 +1494,6 @@ void WindowTransformAction::updateAggregationState()
         }
 
         addAggregationState(ws, start, frame_end);
-        std::cout << "update row num " << distance(frame_end, start) << std::endl;
     }
 
     first_processed = false;
