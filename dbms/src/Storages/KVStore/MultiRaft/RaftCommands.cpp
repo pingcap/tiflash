@@ -349,7 +349,9 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
     auto is_v2 = this->getClusterRaftstoreVer() == RaftstoreVer::V2;
 
     std::vector<TiKVKey> deleting_lock_keys;
-    deleting_lock_keys.reserve(cmds.len / 2); // write + lock
+    const size_t lock_count
+        = std::count_if(cmds.cmd_cf, cmds.cmd_cf + cmds.len, [](auto cf) { return cf == ColumnFamilyType::Lock; });
+    deleting_lock_keys.reserve(lock_count);
     const auto handle_by_index_func = [&](auto i) {
         auto type = cmds.cmd_types[i];
         auto cf = cmds.cmd_cf[i];
