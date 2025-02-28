@@ -19,19 +19,22 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileLocalIndexWriter.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
+#include <Storages/DeltaMerge/Index/LocalIndexBuilder.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <Storages/PathPool.h>
 #include <tipb/executor.pb.h>
 
+#include <magic_enum.hpp>
 #include <unordered_map>
 
 namespace DB::ErrorCodes
 {
 extern const int ABORTED;
-}
+extern const int BAD_ARGUMENTS;
+} // namespace DB::ErrorCodes
+
 namespace DB::FailPoints
 {
 extern const char exception_build_local_index_for_file[];
@@ -40,16 +43,33 @@ extern const char exception_build_local_index_for_file[];
 namespace DB::DM
 {
 
+namespace
+{
+size_t estimateIndexMemoryBytes(const LocalIndexInfo & index_info, size_t data_bytes)
+{
+    static constexpr double VECTOR_INDEX_SIZE_FACTOR = 1.2;
+    static constexpr double INVERTED_INDEX_SIZE_FACTOR = 1.5;
+    switch (index_info.kind)
+    {
+    case TiDB::ColumnarIndexKind::Vector:
+        return data_bytes * VECTOR_INDEX_SIZE_FACTOR;
+    case TiDB::ColumnarIndexKind::Inverted:
+        return data_bytes * INVERTED_INDEX_SIZE_FACTOR;
+    default:
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported index kind={}", magic_enum::enum_name(index_info.kind));
+    }
+}
+} // namespace
+
 LocalIndexBuildInfo DMFileLocalIndexWriter::getLocalIndexBuildInfo(
     const LocalIndexInfosSnapshot & index_infos,
     const DMFiles & dm_files)
 {
     assert(index_infos != nullptr);
-    static constexpr double VECTOR_INDEX_SIZE_FACTOR = 1.2;
 
-    // TODO(vector-index): Now we only generate the build info when new index is added.
+    // TODO(local-index): Now we only generate the build info when new index is added.
     //    The built indexes will be dropped (lazily) after the segment instance is updated.
-    //    We can support dropping the vector index more quickly later.
+    //    We can support dropping the local index more quickly later.
     LocalIndexBuildInfo build;
     build.indexes_to_build = std::make_shared<LocalIndexInfos>();
     build.dm_files.reserve(dm_files.size());
@@ -71,7 +91,7 @@ LocalIndexBuildInfo DMFileLocalIndexWriter::getLocalIndexBuildInfo(
                 any_new_index_build = true;
 
                 build.indexes_to_build->emplace_back(index);
-                build.estimated_memory_bytes += data_bytes * VECTOR_INDEX_SIZE_FACTOR;
+                build.estimated_memory_bytes += estimateIndexMemoryBytes(index, data_bytes);
                 break;
             }
             }
@@ -116,18 +136,20 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
         LocalIndexInfo info;
         String index_file_path; // For write out
         String index_file_name; // For meta include
-        VectorIndexBuilderPtr builder_vector;
+        LocalIndexBuilderPtr builder_index;
     };
 
     std::unordered_map<ColId, std::vector<IndexToBuild>> index_builders;
 
     for (const auto & index_info : *options.index_infos)
     {
+        if (index_info.kind != TiDB::ColumnarIndexKind::Vector && index_info.kind != TiDB::ColumnarIndexKind::Inverted)
+            continue;
         index_builders[index_info.column_id].emplace_back(IndexToBuild{
             .info = index_info,
             .index_file_path = "",
             .index_file_name = "",
-            .builder_vector = {},
+            .builder_index = {},
         });
     }
 
@@ -156,15 +178,7 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
                 index.info.column_id,
                 index.info.index_id);
 
-            switch (index.info.kind)
-            {
-            case TiDB::ColumnarIndexKind::Vector:
-                index.builder_vector = VectorIndexBuilder::create(index.info.def_vector_index);
-                break;
-            default:
-                RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                break;
-            }
+            index.builder_index = LocalIndexBuilder::create(index.info);
         }
         read_columns.push_back(*cd_iter);
     }
@@ -211,16 +225,8 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
             const auto & col = col_with_type_and_name.column;
             for (const auto & index : index_builders[read_columns[col_idx].id])
             {
-                switch (index.info.kind)
-                {
-                case TiDB::ColumnarIndexKind::Vector:
-                    RUNTIME_CHECK(index.builder_vector);
-                    index.builder_vector->addBlock(*col, del_mark, should_proceed);
-                    break;
-                default:
-                    RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                    break;
-                }
+                RUNTIME_CHECK(index.builder_index);
+                index.builder_index->addBlock(*col, del_mark, should_proceed);
             }
         }
     }
@@ -238,31 +244,16 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
 
         for (const auto & index : index_builders[cd.id])
         {
+            index.builder_index->saveToFile(index.index_file_path);
             dtpb::DMFileIndexInfo pb_dmfile_idx{};
             auto * pb_idx = pb_dmfile_idx.mutable_index_props();
-
-            switch (index.info.kind)
-            {
-            case TiDB::ColumnarIndexKind::Vector:
-            {
-                index.builder_vector->saveToFile(index.index_file_path);
-                auto * pb_vec_idx = pb_idx->mutable_vector_index();
-                pb_vec_idx->set_format_version(0);
-                pb_vec_idx->set_dimensions(index.info.def_vector_index->dimension);
-                pb_vec_idx->set_distance_metric(
-                    tipb::VectorDistanceMetric_Name(index.info.def_vector_index->distance_metric));
-                break;
-            }
-            default:
-                RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                break;
-            }
 
             auto index_file = Poco::File(index.index_file_path);
             RUNTIME_CHECK(index_file.exists());
             pb_idx->set_kind(index.info.getKindAsDtpb());
             pb_idx->set_index_id(index.info.index_id);
             pb_idx->set_file_size(index_file.getSize());
+            saveIndexFilePros(index.info, pb_idx, index_file.getSize());
 
             total_built_index_bytes += pb_idx->file_size();
             new_indexes.emplace_back(std::move(pb_dmfile_idx));
