@@ -15,16 +15,15 @@
 #include <Common/Stopwatch.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Functions/FunctionHelpers.h>
-#include <IO/Buffer/ReadBufferFromString.h>
+#include <IO/Buffer/ReadBufferFromMemory.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
-#include <IO/Compression/CompressedReadBuffer.h>
-#include <IO/Compression/CompressedWriteBuffer.h>
 #include <IO/ReadHelpers.h>
 #include <IO/VarInt.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex.h>
 
 #include <ext/scope_guard.h>
+
 
 namespace DB::ErrorCodes
 {
@@ -46,38 +45,108 @@ template <typename T>
 void serializeBlock(const Block<T> & meta, WriteBuffer & write_buf)
 {
     writeIntBinary(static_cast<UInt32>(meta.size()), write_buf);
+    // write all values first
     for (const auto & entry : meta)
     {
-        auto [value, row_ids] = entry;
-        writeIntBinary(value, write_buf); // value
-        writeIntBinary(static_cast<UInt32>(row_ids.size()), write_buf); // row_ids size
-        for (const auto & row_id : row_ids)
-            writeVarUInt(row_id, write_buf); // row_ids
+        writeIntBinary(entry.value, write_buf);
+        writeIntBinary(static_cast<UInt32>(entry.row_ids.size()), write_buf);
+    }
+    // write all row_ids
+    for (const auto & entry : meta)
+    {
+        auto row_ids = entry.row_ids;
+        write_buf.write(reinterpret_cast<const char *>(row_ids.data()), row_ids.size() * sizeof(RowID));
     }
 }
 
 template <typename T>
-void deserializeBlock(Block<T> & meta, ReadBuffer & read_buf)
+Block<T> deserializeBlock(ReadBuffer & read_buf)
 {
     UInt32 size;
     readIntBinary(size, read_buf);
-    meta.resize(size);
-    for (auto & entry : meta)
+    Block<T> block(size);
+    for (UInt32 i = 0; i < size; ++i)
     {
-        auto & [value, row_ids] = entry;
-        readIntBinary(value, read_buf); // value
+        T value;
+        readIntBinary(value, read_buf);
         UInt32 row_ids_size;
-        readIntBinary(row_ids_size, read_buf); // row_ids size
-        row_ids.resize(row_ids_size);
-        for (auto & row_id : row_ids)
-            readVarUInt(row_id, read_buf); // row_ids
+        readIntBinary(row_ids_size, read_buf);
+        block[i].value = value;
+        block[i].row_ids.resize(row_ids_size);
+    }
+    for (UInt32 i = 0; i < size; ++i)
+    {
+        auto & entry = block[i];
+        read_buf.read(reinterpret_cast<char *>(entry.row_ids.data()), entry.row_ids.size() * sizeof(RowID));
+    }
+    return block;
+}
+
+template <typename T>
+void blockSearch(BitmapFilterPtr & bitmap_filter, ReadBuffer & read_buf, const T key)
+{
+    UInt32 size;
+    readIntBinary(size, read_buf);
+    UInt32 seek_offset = size * (sizeof(T) + sizeof(UInt32));
+    for (UInt32 i = 0; i < size; ++i)
+    {
+        T value;
+        readIntBinary(value, read_buf);
+        UInt32 row_ids_size;
+        readIntBinary(row_ids_size, read_buf);
+        seek_offset -= (sizeof(T) + sizeof(UInt32));
+        if (value == key)
+        {
+            // ignore the rest values and previous row_ids
+            read_buf.ignore(seek_offset);
+            RowIDs row_ids(row_ids_size);
+            read_buf.readStrict(reinterpret_cast<char *>(row_ids.data()), row_ids_size * sizeof(RowID));
+            bitmap_filter->set(row_ids, nullptr);
+            return;
+        }
+        seek_offset += row_ids_size * sizeof(RowID);
     }
 }
 
-// Get the size of the block in bytes. But it is not accurate, because the size of the row_ids is variable.
-size_t getBlockSize(UInt32 entry_size)
+template <typename T>
+void blockSearchRange(BitmapFilterPtr & bitmap_filter, ReadBuffer & read_buf, const T begin, const T end)
 {
-    return 1 + entry_size * sizeof(BlockEntry<UInt32>);
+    UInt32 read_count = read_buf.count();
+    UInt32 size;
+    readIntBinary(size, read_buf);
+    UInt32 acc_row_ids_size = 0;
+    UInt32 start_offset = 0;
+    UInt32 end_offset = 0;
+    for (UInt32 i = 0; i < size; ++i)
+    {
+        T value;
+        readIntBinary(value, read_buf);
+        UInt32 row_ids_size;
+        readIntBinary(row_ids_size, read_buf);
+        if (value >= begin && value <= end && start_offset == 0)
+            start_offset = sizeof(UInt32) + size * (sizeof(T) + sizeof(UInt32)) + acc_row_ids_size * sizeof(RowID);
+        acc_row_ids_size += row_ids_size;
+        if (value >= begin && value <= end)
+            end_offset = sizeof(UInt32) + size * (sizeof(T) + sizeof(UInt32)) + acc_row_ids_size * sizeof(RowID);
+        if (value > end)
+            break;
+    }
+
+    if (start_offset == 0)
+        return;
+
+    read_count = read_buf.count() - read_count;
+    read_buf.ignore(start_offset - read_count);
+    RowIDs row_ids((end_offset - start_offset) / sizeof(RowID));
+    read_buf.readStrict(reinterpret_cast<char *>(row_ids.data()), row_ids.size() * sizeof(RowID));
+    bitmap_filter->set(row_ids, nullptr);
+}
+
+// Get the size of the block in bytes. But it is not accurate, because the size of the row_ids is VarUInt.
+template <typename T>
+constexpr size_t getBlockSize(UInt32 entry_size, UInt32 row_ids_size)
+{
+    return sizeof(UInt32) + entry_size * (sizeof(T) + sizeof(UInt32)) + row_ids_size * sizeof(RowID);
 }
 
 template <typename T>
@@ -167,14 +236,24 @@ LocalIndexBuilderPtr createInvertedIndexBuilder(const LocalIndexInfo & index_inf
     }
 }
 
-template <typename T>
-bool InvertedIndexBuilder<T>::isSupportedType(const IDataType & type)
+TiDB::InvertedIndexDefinitionPtr tryGetInvertedIndexDefinition(
+    const TiDB::ColumnInfo & col_info,
+    const IDataType & type)
 {
     const auto * nullable = checkAndGetDataType<DataTypeNullable>(&type);
-    if (nullable)
-        return nullable->getNestedType()->isValueRepresentedByInteger();
+    const auto * real_type = nullable ? nullable->getNestedType().get() : &type;
+    bool is_integer = real_type->isValueRepresentedByInteger() && !real_type->isDecimal();
+    if (!is_integer)
+        return nullptr;
 
-    return type.isValueRepresentedByInteger();
+    bool is_unsigned
+        = (col_info.tp == 7 /* MyDateTime */ || col_info.tp == 10 /* MyDate */
+           || col_info.tp == 12 /* MyDateTime */);
+    is_unsigned = is_unsigned || col_info.hasUnsignedFlag();
+    return std::make_shared<TiDB::InvertedIndexDefinition>(TiDB::InvertedIndexDefinition{
+        .is_signed = !is_unsigned,
+        .type_size = static_cast<UInt8>(real_type->getSizeOfValueInMemory()),
+    });
 }
 
 template <typename T>
@@ -228,6 +307,7 @@ void InvertedIndexBuilder<T>::saveToFile(std::string_view path) const
 {
     WriteBufferFromFile write_buf(path.data());
     saveToBuffer(write_buf);
+    write_buf.next();
     write_buf.sync();
 }
 
@@ -238,30 +318,25 @@ void InvertedIndexBuilder<T>::saveToBuffer(WriteBuffer & write_buf) const
 
     // 1. write data by block
     size_t offset = 0;
-    size_t uncompressed_offset = 0;
-    static const CompressionSettings settings(CompressionMethod::LZ4);
-    CompressedWriteBuffer compressed(write_buf, settings);
 
     InvertedIndex::Block<T> block;
+    size_t row_ids_size = 0;
     auto write_block = [&] {
-        InvertedIndex::serializeBlock(block, compressed);
-        meta.emplace_back(
-            offset,
-            compressed.getUncompressedBytes() - uncompressed_offset,
-            block.front().value,
-            block.back().value);
+        InvertedIndex::serializeBlock(block, write_buf);
+        size_t total_size = write_buf.count();
+        meta.emplace_back(offset, total_size - offset, block.front().value, block.back().value);
         block.clear();
-        compressed.next(); // compress
-        offset = compressed.getCompressedBytes();
-        uncompressed_offset = compressed.getUncompressedBytes();
+        offset = total_size;
+        row_ids_size = 0;
     };
 
     for (const auto & [key, row_ids] : index)
     {
         block.emplace_back(key, row_ids);
+        row_ids_size += row_ids.size();
 
         // write block
-        if (InvertedIndex::getBlockSize(block.size()) >= InvertedIndex::BlockSize)
+        if (InvertedIndex::getBlockSize<T>(block.size(), row_ids_size) >= InvertedIndex::BlockSize)
             write_block();
     }
     if (!block.empty())
@@ -277,12 +352,12 @@ void InvertedIndexBuilder<T>::saveToBuffer(WriteBuffer & write_buf) const
 
     // 4. write magic flag
     write_buf.write(InvertedIndex::MagicFlag, InvertedIndex::MagicFlagLength);
-
-    write_buf.next();
 }
 
-InvertedIndexViewerPtr InvertedIndexViewer::view(TypeIndex type_id, std::string_view path)
+InvertedIndexViewerPtr InvertedIndexViewer::view(const DataTypePtr & type, std::string_view path)
 {
+    auto type_id = type->isNullable() ? dynamic_cast<const DataTypeNullable &>(*type).getNestedType()->getTypeId()
+                                      : type->getTypeId();
     switch (type_id)
     {
     case TypeIndex::UInt8:
@@ -320,8 +395,10 @@ InvertedIndexViewerPtr InvertedIndexViewer::view(TypeIndex type_id, std::string_
     }
 }
 
-InvertedIndexViewerPtr InvertedIndexViewer::view(TypeIndex type_id, ReadBuffer & buf, size_t index_size)
+InvertedIndexViewerPtr InvertedIndexViewer::view(const DataTypePtr & type, ReadBuffer & buf, size_t index_size)
 {
+    auto type_id = type->isNullable() ? dynamic_cast<const DataTypeNullable &>(*type).getNestedType()->getTypeId()
+                                      : type->getTypeId();
     switch (type_id)
     {
     case TypeIndex::UInt8:
@@ -376,24 +453,18 @@ void InvertedIndexMemoryViewer<T>::load(ReadBuffer & read_buf, size_t index_size
     UInt32 meta_size = *reinterpret_cast<const UInt32 *>(buf.data() + data_size);
 
     // 4. read meta
-    std::string_view buffer(buf.data(), buf.size());
+    ReadBufferFromMemory buffer(buf.data() + data_size - meta_size, meta_size);
     InvertedIndex::Meta<T> meta;
     data_size = data_size - meta_size;
-    {
-        ReadBufferFromString rbuf(buffer.substr(data_size, meta_size));
-        InvertedIndex::deserializeMeta(meta, rbuf);
-    }
+    InvertedIndex::deserializeMeta(meta, buffer);
 
     // 5. read blocks & build index
-    ReadBufferFromString rbuf(buffer.substr(0, data_size));
-    CompressedReadBuffer compressed(rbuf);
+    buffer = ReadBufferFromMemory(buf.data(), data_size);
     for (const auto meta_entry : meta)
     {
-        std::vector<char> block_data(meta_entry.size);
-        compressed.readBig(block_data.data(), meta_entry.size);
-        ReadBufferFromString block_buf(block_data);
-        InvertedIndex::Block<T> block;
-        InvertedIndex::deserializeBlock(block, block_buf);
+        auto count = buffer.count();
+        auto block = InvertedIndex::deserializeBlock<T>(buffer);
+        RUNTIME_CHECK(buffer.count() - count == meta_entry.size);
         for (const auto & block_entry : block)
         {
             auto [value, row_ids] = block_entry;
@@ -403,26 +474,24 @@ void InvertedIndexMemoryViewer<T>::load(ReadBuffer & read_buf, size_t index_size
 }
 
 template <typename T>
-std::vector<typename InvertedIndexMemoryViewer<T>::RowID> InvertedIndexMemoryViewer<T>::search(const Key & key) const
+void InvertedIndexMemoryViewer<T>::search(BitmapFilterPtr & bitmap_filter, const Key & key) const
 {
     T real_key = key;
     auto it = index.find(real_key);
-    return it == index.end() ? std::vector<RowID>{} : it->second;
+    if (it != index.end())
+        bitmap_filter->set(it->second, nullptr);
 }
 
 template <typename T>
-std::vector<typename InvertedIndexMemoryViewer<T>::RowID> InvertedIndexMemoryViewer<T>::searchRange(
-    const Key & begin,
-    const Key & end) const
+void InvertedIndexMemoryViewer<T>::searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end)
+    const
 {
     T real_begin = begin;
     T real_end = end;
-    std::vector<RowID> result;
     auto index_begin = index.lower_bound(real_begin);
-    auto index_end = index.lower_bound(real_end);
+    auto index_end = index.upper_bound(real_end);
     for (auto it = index_begin; it != index_end; ++it)
-        result.insert(result.end(), it->second.begin(), it->second.end());
-    return result;
+        bitmap_filter->set(it->second, nullptr);
 }
 
 template <typename T>
@@ -443,77 +512,45 @@ void InvertedIndexFileViewer<T>::loadMeta(ReadBuffer & read_buf, size_t index_si
 
     // 4. read meta
     data_size = data_size - meta_size;
-    std::string_view buffer(buf.data() + data_size, meta_size);
-    {
-        ReadBufferFromString rbuf(buffer);
-        InvertedIndex::deserializeMeta(meta, rbuf);
-    }
+    ReadBufferFromMemory buffer(buf.data() + data_size, meta_size);
+    InvertedIndex::deserializeMeta(meta, buffer);
 }
 
 template <typename T>
-InvertedIndex::Block<T> InvertedIndexFileViewer<T>::readBlock(UInt32 offset, UInt32 size) const
-{
-    ReadBufferFromFile file_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-    file_buf.ignore(offset);
-    CompressedReadBuffer compressed(file_buf);
-    std::vector<char> block_data(size);
-    RUNTIME_CHECK(compressed.readBig(block_data.data(), size) == size);
-    ReadBufferFromString block_buf(block_data);
-    InvertedIndex::Block<T> block;
-    InvertedIndex::deserializeBlock(block, block_buf);
-    return block;
-}
-
-template <typename T>
-std::vector<typename InvertedIndexFileViewer<T>::RowID> InvertedIndexFileViewer<T>::search(const Key & key) const
+void InvertedIndexFileViewer<T>::search(BitmapFilterPtr & bitmap_filter, const Key & key) const
 {
     T real_key = key;
     auto it = std::find_if(meta.begin(), meta.end(), [&](const auto & entry) {
         return entry.min <= real_key && entry.max >= real_key;
     });
     if (it == meta.end())
-        return std::vector<RowID>{};
+        return;
 
-    const auto block = readBlock(it->offset, it->size);
-    auto block_it
-        = std::find_if(block.begin(), block.end(), [&](const auto & entry) { return entry.value == real_key; });
-    return block_it == block.end() ? std::vector<RowID>{} : block_it->row_ids;
+    ReadBufferFromFile file_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+    file_buf.seek(it->offset, SEEK_SET);
+    InvertedIndex::blockSearch(bitmap_filter, file_buf, real_key);
 }
 
 template <typename T>
-std::vector<typename InvertedIndexFileViewer<T>::RowID> InvertedIndexFileViewer<T>::searchRange(
-    const Key & begin,
-    const Key & end) const
+void InvertedIndexFileViewer<T>::searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const
 {
     T real_begin = begin;
     T real_end = end;
-    std::vector<RowID> result;
     // max < begin
     auto meta_begin = std::lower_bound(meta.begin(), meta.end(), real_begin, [](const auto & entry, const auto & key) {
         return entry.max < key;
     });
-    // min >= end
-    auto meta_end = std::lower_bound(meta_begin, meta.end(), real_end, [](const auto & entry, const auto & key) {
-        return entry.min < key;
+    // min > end
+    auto meta_end = std::upper_bound(meta_begin, meta.end(), real_end, [](const auto & key, const auto & entry) {
+        return key < entry.min;
     });
 
+    ReadBufferFromFile file_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
     for (auto it = meta_begin; it != meta_end; ++it)
     {
-        const auto block = readBlock(it->offset, it->size);
-        auto block_begin
-            = std::lower_bound(block.begin(), block.end(), real_begin, [](const auto & entry, const auto & key) {
-                  return entry.value < key;
-              });
-        for (auto block_it = block_begin; block_it != block.end(); ++block_it)
-        {
-            auto [value, row_ids] = *block_it;
-            if (value >= real_begin && value < real_end)
-                result.insert(result.end(), row_ids.begin(), row_ids.end());
-            else if (value >= real_end)
-                break;
-        }
+        file_buf.seek(it->offset, SEEK_SET);
+        InvertedIndex::blockSearchRange(bitmap_filter, file_buf, real_begin, real_end);
     }
-    return result;
 }
 
 template class InvertedIndexBuilder<UInt8>;
