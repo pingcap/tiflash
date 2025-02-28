@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
 #include <Storages/MutableSupport.h>
@@ -60,8 +61,14 @@ RemoteRequest RemoteRequest::build(
         {
             const auto & col = table_scan.getColumns()[i];
             auto col_id = col.column_id();
+            auto tidb_ci = TiDB::toTiDBColumnInfo(col);
 
-            if (col_id == DB::TiDBPkColumnID)
+            if (tidb_ci.hasGeneratedColumnFlag())
+            {
+                const auto & col_name = GeneratedColumnPlaceholderBlockInputStream::getColumnName(i);
+                schema.emplace_back(std::make_pair(col_name, std::move(tidb_ci)));
+            }
+            else if (col_id == DB::TiDBPkColumnID)
             {
                 ColumnInfo ci;
                 ci.tp = TiDB::TypeLongLong;
