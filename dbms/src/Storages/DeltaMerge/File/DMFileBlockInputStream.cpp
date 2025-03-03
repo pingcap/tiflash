@@ -30,7 +30,7 @@ DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & con
     setCaches(
         global_context.getMarkCache(),
         global_context.getMinMaxIndexCache(),
-        global_context.getHeavyLocalIndexCache(),
+        global_context.getLightLocalIndexCache(),
         global_context.getColumnCacheLongTerm());
     // init from settings
     setFromSettings(context.getSettingsRef());

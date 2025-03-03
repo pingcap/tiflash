@@ -2308,7 +2308,7 @@ try
     }
     {
         // We should be able to clear something from the vector index cache.
-        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getHeavyLocalIndexCache();
+        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getLightLocalIndexCache();
         ASSERT_NE(local_index_cache, nullptr);
         ASSERT_EQ(1, cleanLocalIndexCacheEntries(local_index_cache));
     }
@@ -2448,7 +2448,7 @@ try
     }
     {
         // We should be able to clear something from the vector index cache.
-        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getHeavyLocalIndexCache();
+        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getLightLocalIndexCache();
         ASSERT_NE(local_index_cache, nullptr);
         ASSERT_EQ(1, cleanLocalIndexCacheEntries(local_index_cache));
     }
