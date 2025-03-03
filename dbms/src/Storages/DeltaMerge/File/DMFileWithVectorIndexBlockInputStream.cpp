@@ -116,7 +116,7 @@ Block DMFileWithVectorIndexBlockInputStream::read()
     return block;
 }
 
-std::vector<VectorIndexViewer::SearchResult> DMFileWithVectorIndexBlockInputStream::load()
+std::vector<VectorIndexReader::SearchResult> DMFileWithVectorIndexBlockInputStream::load()
 {
     if (loaded)
         return {};

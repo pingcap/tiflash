@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,160 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Columns/ColumnArray.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
-#include <Functions/FunctionHelpers.h>
-#include <IO/ReadHelpers.h>
-#include <IO/WriteHelpers.h>
-#include <Storages/DeltaMerge/Index/VectorIndexHNSW/Index.h>
-#include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
-#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
-#include <tipb/executor.pb.h>
-
-#include <ext/scope_guard.h>
+#include <IO/Endian.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/CommonUtil.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
+#include <TiDB/Schema/VectorIndex.h>
 
 namespace DB::ErrorCodes
 {
-extern const int INCORRECT_DATA;
 extern const int INCORRECT_QUERY;
-extern const int ABORTED;
 } // namespace DB::ErrorCodes
 
 namespace DB::DM
 {
 
-unum::usearch::metric_kind_t getUSearchMetricKind(tipb::VectorDistanceMetric d)
-{
-    switch (d)
-    {
-    case tipb::VectorDistanceMetric::INNER_PRODUCT:
-        return unum::usearch::metric_kind_t::ip_k;
-    case tipb::VectorDistanceMetric::COSINE:
-        return unum::usearch::metric_kind_t::cos_k;
-    case tipb::VectorDistanceMetric::L2:
-        return unum::usearch::metric_kind_t::l2sq_k;
-    default:
-        // Specifically, L1 is currently unsupported by usearch.
-
-        RUNTIME_CHECK_MSG( //
-            false,
-            "Unsupported vector distance {}",
-            tipb::VectorDistanceMetric_Name(d));
-    }
-}
-
-VectorIndexHNSWBuilder::VectorIndexHNSWBuilder(const TiDB::VectorIndexDefinitionPtr & definition_)
-    : VectorIndexBuilder(definition_)
-    , index(USearchImplType::make(unum::usearch::metric_punned_t( //
-          definition_->dimension,
-          getUSearchMetricKind(definition->distance_metric))))
-{
-    RUNTIME_CHECK(definition_->kind == kind());
-    GET_METRIC(tiflash_vector_index_active_instances, type_build).Increment();
-}
-
-void VectorIndexHNSWBuilder::addBlock(
-    const IColumn & column,
-    const ColumnVector<UInt8> * del_mark,
-    ProceedCheckFn should_proceed)
-{
-    // Note: column may be nullable.
-    const ColumnArray * col_array;
-    if (column.isColumnNullable())
-        col_array = checkAndGetNestedColumn<ColumnArray>(&column);
-    else
-        col_array = checkAndGetColumn<ColumnArray>(&column);
-
-    RUNTIME_CHECK(col_array != nullptr, column.getFamilyName());
-    RUNTIME_CHECK(checkAndGetColumn<ColumnVector<Float32>>(col_array->getDataPtr().get()) != nullptr);
-
-    const auto * del_mark_data = (!del_mark) ? nullptr : &(del_mark->getData());
-
-    index.reserve(unum::usearch::ceil2(index.size() + column.size()));
-
-    Stopwatch w;
-    SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
-
-    Stopwatch w_proceed_check(CLOCK_MONOTONIC_COARSE);
-
-    for (int i = 0, i_max = col_array->size(); i < i_max; ++i)
-    {
-        auto row_offset = added_rows;
-        added_rows++;
-
-        if (unlikely(i % 100 == 0 && w_proceed_check.elapsedSeconds() > 0.5))
-        {
-            // The check of should_proceed could be non-trivial, so do it not too often.
-            w_proceed_check.restart();
-            if (!should_proceed())
-                throw Exception(ErrorCodes::ABORTED, "Index build is interrupted");
-        }
-
-        // Ignore rows with del_mark, as the column values are not meaningful.
-        if (del_mark_data != nullptr && (*del_mark_data)[i])
-            continue;
-
-        // Ignore NULL values, as they are not meaningful to store in index.
-        if (column.isNullAt(i))
-            continue;
-
-        // Expect all data to have matching dimensions.
-        RUNTIME_CHECK(col_array->sizeAt(i) == definition->dimension);
-
-        auto data = col_array->getDataAt(i);
-        RUNTIME_CHECK(data.size == definition->dimension * sizeof(Float32));
-
-        if (auto rc = index.add(row_offset, reinterpret_cast<const Float32 *>(data.data)); !rc)
-            throw Exception(
-                ErrorCodes::INCORRECT_DATA,
-                "Failed to add vector to HNSW index, i={} row_offset={} error={}",
-                i,
-                row_offset,
-                rc.error.release());
-    }
-
-    auto current_memory_usage = index.memory_usage();
-    auto delta = static_cast<Int64>(current_memory_usage) - static_cast<Int64>(last_reported_memory_usage);
-    GET_METRIC(tiflash_vector_index_memory_usage, type_build).Increment(static_cast<double>(delta));
-    last_reported_memory_usage = current_memory_usage;
-}
-
-void VectorIndexHNSWBuilder::saveToFile(std::string_view path) const
-{
-    Stopwatch w;
-    SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
-
-    auto result = index.save(unum::usearch::output_file_t(path.data()));
-    RUNTIME_CHECK_MSG(result, "Failed to save vector index: {} path={}", result.error.what(), path);
-}
-
-void VectorIndexHNSWBuilder::saveToBuffer(WriteBuffer & write_buf) const
-{
-    Stopwatch w;
-    SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
-
-    auto result = index.save_to_stream([&](void const * buffer, std::size_t length) {
-        write_buf.write(reinterpret_cast<const char *>(buffer), length);
-        return true;
-    });
-    RUNTIME_CHECK_MSG(result, "Failed to save vector index: {}", result.error.what());
-}
-
-VectorIndexHNSWBuilder::~VectorIndexHNSWBuilder()
-{
-    GET_METRIC(tiflash_vector_index_duration, type_build).Observe(total_duration);
-    GET_METRIC(tiflash_vector_index_memory_usage, type_build)
-        .Decrement(static_cast<double>(last_reported_memory_usage));
-    GET_METRIC(tiflash_vector_index_active_instances, type_build).Decrement();
-}
-
-tipb::VectorIndexKind VectorIndexHNSWBuilder::kind()
-{
-    return tipb::VectorIndexKind::HNSW;
-}
-
-VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::IndexFilePropsV2Vector & file_props, std::string_view path)
+VectorIndexReaderPtr VectorIndexReader::createFromMmap(
+    const dtpb::IndexFilePropsV2Vector & file_props,
+    std::string_view path)
 {
     tipb::VectorDistanceMetric metric;
     RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
@@ -174,7 +39,7 @@ VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::IndexFilePropsV2Vec
     Stopwatch w;
     SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_view).Observe(w.elapsedSeconds()); });
 
-    auto vi = std::make_shared<VectorIndexHNSWViewer>(file_props);
+    auto vi = std::make_shared<VectorIndexReader>(file_props);
 
     vi->index = USearchImplType::make(
         unum::usearch::metric_punned_t( //
@@ -204,7 +69,9 @@ VectorIndexViewerPtr VectorIndexHNSWViewer::view(const dtpb::IndexFilePropsV2Vec
     return vi;
 }
 
-VectorIndexViewerPtr VectorIndexHNSWViewer::load(const dtpb::IndexFilePropsV2Vector & file_props, ReadBuffer & buf)
+VectorIndexReaderPtr VectorIndexReader::createFromMemory(
+    const dtpb::IndexFilePropsV2Vector & file_props,
+    ReadBuffer & buf)
 {
     tipb::VectorDistanceMetric metric;
     RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
@@ -213,7 +80,7 @@ VectorIndexViewerPtr VectorIndexHNSWViewer::load(const dtpb::IndexFilePropsV2Vec
     Stopwatch w;
     SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_view).Observe(w.elapsedSeconds()); });
 
-    auto vi = std::make_shared<VectorIndexHNSWViewer>(file_props);
+    auto vi = std::make_shared<VectorIndexReader>(file_props);
 
     vi->index = USearchImplType::make(
         unum::usearch::metric_punned_t( //
@@ -240,7 +107,7 @@ VectorIndexViewerPtr VectorIndexHNSWViewer::load(const dtpb::IndexFilePropsV2Vec
     return vi;
 }
 
-auto VectorIndexHNSWViewer::searchImpl(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const
+auto VectorIndexReader::searchImpl(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const
 {
     RUNTIME_CHECK(query_info->ref_vec_f32().size() >= sizeof(UInt32));
     auto query_vec_size = readLittleEndian<UInt32>(query_info->ref_vec_f32().data());
@@ -304,7 +171,7 @@ auto VectorIndexHNSWViewer::searchImpl(const ANNQueryInfoPtr & query_info, const
     return result;
 }
 
-std::vector<VectorIndexViewer::SearchResult> VectorIndexHNSWViewer::search(
+std::vector<VectorIndexReader::SearchResult> VectorIndexReader::search(
     const ANNQueryInfoPtr & query_info,
     const RowFilter & valid_rows) const
 {
@@ -324,32 +191,30 @@ std::vector<VectorIndexViewer::SearchResult> VectorIndexHNSWViewer::search(
     return search_results;
 }
 
-size_t VectorIndexHNSWViewer::size() const
+size_t VectorIndexReader::size() const
 {
     return index.size();
 }
 
-void VectorIndexHNSWViewer::get(Key key, std::vector<Float32> & out) const
+void VectorIndexReader::get(Key key, std::vector<Float32> & out) const
 {
     out.resize(file_props.dimensions());
     index.get(key, out.data());
 }
 
-VectorIndexHNSWViewer::VectorIndexHNSWViewer(const dtpb::IndexFilePropsV2Vector & props)
-    : VectorIndexViewer(props)
+VectorIndexReader::VectorIndexReader(const dtpb::IndexFilePropsV2Vector & file_props_)
+    : file_props(file_props_)
 {
+    RUNTIME_CHECK(file_props.dimensions() > 0);
+    RUNTIME_CHECK(file_props.dimensions() <= TiDB::MAX_VECTOR_DIMENSION);
+
     GET_METRIC(tiflash_vector_index_active_instances, type_view).Increment();
 }
 
-VectorIndexHNSWViewer::~VectorIndexHNSWViewer()
+VectorIndexReader::~VectorIndexReader()
 {
     GET_METRIC(tiflash_vector_index_memory_usage, type_view).Decrement(static_cast<double>(last_reported_memory_usage));
     GET_METRIC(tiflash_vector_index_active_instances, type_view).Decrement();
-}
-
-tipb::VectorIndexKind VectorIndexHNSWViewer::kind()
-{
-    return tipb::VectorIndexKind::HNSW;
 }
 
 } // namespace DB::DM

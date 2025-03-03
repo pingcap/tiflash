@@ -198,7 +198,7 @@ void ConcatVectorIndexBlockInputStream::load()
     UInt32 precedes_rows = 0;
     // otherwise the `row.key` of the search result is not correct
     assert(stream->children.size() == index_streams.size());
-    std::vector<VectorIndexViewer::SearchResult> search_results;
+    std::vector<VectorIndexReader::SearchResult> search_results;
     for (size_t i = 0; i < stream->children.size(); ++i)
     {
         if (auto * index_stream = index_streams[i]; index_stream)
