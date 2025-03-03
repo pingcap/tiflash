@@ -348,6 +348,13 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
 
     auto is_v2 = this->getClusterRaftstoreVer() == RaftstoreVer::V2;
 
+    // After removing the logic of the read thread writing to the storage engine during learner reads,
+    // if we remove the locks before committed data written to storage,
+    // it would cause concurrency control problems that could result in missing some of the latest data.
+    // The concurrency logic is as follows:
+    // 1. **Raft thread**: Receives a write log and removes the lock.
+    // 2. **Read thread**: Detects no lock and begins reading (missing the data written in step 3).
+    // 3. **Raft thread**: Writes the data.
     std::vector<TiKVKey> deleting_lock_keys;
     const size_t lock_count
         = std::count_if(cmds.cmd_cf, cmds.cmd_cf + cmds.len, [](auto cf) { return cf == ColumnFamilyType::Lock; });
