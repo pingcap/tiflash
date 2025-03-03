@@ -529,9 +529,27 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
 
         if (!deleting_lock_keys.empty())
         {
-            std::unique_lock<std::shared_mutex> lock(mutex);
-            for (const auto & tikv_key : deleting_lock_keys)
-                doRemove(ColumnFamilyType::Lock, tikv_key);
+            size_t i = 0;
+            try
+            {
+                std::unique_lock<std::shared_mutex> lock(mutex);
+                for (; i < deleting_lock_keys.size(); ++i)
+                    doRemove(ColumnFamilyType::Lock, deleting_lock_keys[i]);
+            }
+            catch (Exception & e)
+            {
+                LOG_ERROR(
+                    log,
+                    "{} catch exception: {}, while applying `CmdType::Delete` on [term {}, index {}], key in hex: {}, "
+                    "CF {}",
+                    toString(),
+                    e.message(),
+                    term,
+                    index,
+                    deleting_lock_keys[i].toDebugString(),
+                    CFToName(ColumnFamilyType::Lock));
+                e.rethrow();
+            }
         }
 
         meta.setApplied(index, term);
