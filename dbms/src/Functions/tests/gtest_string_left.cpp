@@ -68,6 +68,7 @@ public:
             for (bool is_length_const : is_consts)
                 inner_test(is_str_const, is_length_const);
     }
+<<<<<<< HEAD
 
     template <typename Integer>
     void testInvalidLengthType()
@@ -87,12 +88,20 @@ public:
             for (bool is_length_const : is_consts)
                 inner_test(is_str_const, is_length_const);
     }
+=======
+>>>>>>> 9f85bb2f16 (Support other integer types for SubstringUTF8 & RightUTF8 functions (#9507))
 };
 
 TEST_F(StringLeftTest, testBoundary)
 try
 {
+    testBoundary<Int8>();
+    testBoundary<Int16>();
+    testBoundary<Int32>();
     testBoundary<Int64>();
+    testBoundary<UInt8>();
+    testBoundary<UInt16>();
+    testBoundary<UInt32>();
     testBoundary<UInt64>();
 }
 CATCH
@@ -100,6 +109,16 @@ CATCH
 TEST_F(StringLeftTest, testMoreCases)
 try
 {
+#define CALL(A, B, C)      \
+    test<Int8>(A, B, C);   \
+    test<Int16>(A, B, C);  \
+    test<Int32>(A, B, C);  \
+    test<Int64>(A, B, C);  \
+    test<UInt8>(A, B, C);  \
+    test<UInt16>(A, B, C); \
+    test<UInt32>(A, B, C); \
+    test<UInt64>(A, B, C);
+
     // test big string
     // big_string.size() > length
     String big_string;
@@ -107,23 +126,19 @@ try
     String unit_string = "big string is 我!!!!!!!";
     for (size_t i = 0; i < 1000; ++i)
         big_string += unit_string;
-    test<Int64>(big_string, 22, unit_string);
-    test<UInt64>(big_string, 22, unit_string);
+    CALL(big_string, 22, unit_string);
 
     // test origin_str.size() == length
     String origin_str = "我的 size = 12";
-    test<Int64>(origin_str, 12, origin_str);
-    test<UInt64>(origin_str, 12, origin_str);
+    CALL(origin_str, 12, origin_str);
 
     // test origin_str.size() < length
-    test<Int64>(origin_str, 22, origin_str);
-    test<UInt64>(origin_str, 22, origin_str);
+    CALL(origin_str, 22, origin_str);
 
     // Mixed language
     String english_str = "This is English";
     String mixed_language_str = english_str + ",这是中文,C'est français,これが日本の";
-    test<Int64>(mixed_language_str, english_str.size(), english_str);
-    test<UInt64>(mixed_language_str, english_str.size(), english_str);
+    CALL(mixed_language_str, english_str.size(), english_str);
 
     // column size != 1
     // case 1
@@ -150,18 +165,8 @@ try
             createConstColumn<Nullable<String>>(8, second_case_string),
             createConstColumn<Int64>(8, 1),
             createColumn<Nullable<Int64>>({0, 1, 0, 1, 0, 0, 1, 1})));
-}
-CATCH
 
-TEST_F(StringLeftTest, testInvalidLengthType)
-try
-{
-    testInvalidLengthType<Int8>();
-    testInvalidLengthType<Int16>();
-    testInvalidLengthType<Int32>();
-    testInvalidLengthType<UInt8>();
-    testInvalidLengthType<UInt16>();
-    testInvalidLengthType<UInt32>();
+#undef CALL
 }
 CATCH
 
