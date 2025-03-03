@@ -136,7 +136,8 @@ PushDownExecutorPtr PushDownExecutor::build(
     }
 
     // build filter expression actions
-    auto [before_where, filter_column_name, project_after_where] = analyzer->buildPushDownExecutor(pushed_down_filters);
+    auto [before_where, filter_column_name, project_after_where]
+        = analyzer->buildPushDownFilter(pushed_down_filters, true);
     LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
 
     // record current column defines

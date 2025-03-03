@@ -43,7 +43,7 @@ private:
     const ColumnDefinesPtr rest_col_defs;
 
     // Set after load(). Top K search results in files with vector index.
-    std::vector<VectorIndexViewer::Key> sorted_results;
+    std::vector<VectorIndexReader::Key> sorted_results;
     std::vector<ColumnFileTinyVectorIndexReaderPtr> tiny_readers;
 
     const ColumnFiles & column_files;
@@ -94,7 +94,7 @@ public:
 
     Block read() override;
 
-    std::vector<VectorIndexViewer::SearchResult> load() override;
+    std::vector<VectorIndexReader::SearchResult> load() override;
 
     void setSelectedRows(const std::span<const UInt32> & selected_rows) override;
 
