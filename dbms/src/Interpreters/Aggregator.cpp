@@ -389,110 +389,6 @@ enum class AggFastPathType
 #undef M
 };
 
-AggregatedDataVariants::Type ChooseAggregationMethodTwoKeys(const AggFastPathType * fast_path_types)
-{
-    auto tp1 = fast_path_types[0];
-    auto tp2 = fast_path_types[1];
-    switch (tp1)
-    {
-    case AggFastPathType::Number64:
-    {
-        switch (tp2)
-        {
-        case AggFastPathType::Number64:
-            return AggregatedDataVariants::Type::serialized; // unreachable. keys64 or keys128 will be used before
-        case AggFastPathType::StringBin:
-            return AggregatedDataVariants::Type::two_keys_num64_strbin;
-        case AggFastPathType::StringBinPadding:
-            return AggregatedDataVariants::Type::two_keys_num64_strbinpadding;
-        }
-    }
-    case AggFastPathType::StringBin:
-    {
-        switch (tp2)
-        {
-        case AggFastPathType::Number64:
-            return AggregatedDataVariants::Type::two_keys_strbin_num64;
-        case AggFastPathType::StringBin:
-            return AggregatedDataVariants::Type::two_keys_strbin_strbin;
-        case AggFastPathType::StringBinPadding:
-            return AggregatedDataVariants::Type::serialized; // rare case
-        }
-    }
-    case AggFastPathType::StringBinPadding:
-    {
-        switch (tp2)
-        {
-        case AggFastPathType::Number64:
-            return AggregatedDataVariants::Type::two_keys_strbinpadding_num64;
-        case AggFastPathType::StringBin:
-            return AggregatedDataVariants::Type::serialized; // rare case
-        case AggFastPathType::StringBinPadding:
-            return AggregatedDataVariants::Type::two_keys_strbinpadding_strbinpadding;
-        }
-    }
-    }
-}
-
-// return AggregatedDataVariants::Type::serialized if can NOT determine fast path.
-AggregatedDataVariants::Type ChooseAggregationMethodFastPath(
-    size_t keys_size,
-    const DataTypes & types_not_null,
-    const TiDB::TiDBCollators & collators)
-{
-    std::array<AggFastPathType, 2> fast_path_types{};
-
-    if (keys_size == fast_path_types.max_size())
-    {
-        for (size_t i = 0; i < keys_size; ++i)
-        {
-            const auto & type = types_not_null[i];
-            if (type->isString())
-            {
-                if (collators.empty() || !collators[i])
-                {
-                    // use original way
-                    return AggregatedDataVariants::Type::serialized;
-                }
-                else
-                {
-                    switch (collators[i]->getCollatorType())
-                    {
-                    case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
-                    case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
-                    case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
-                    case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
-                    {
-                        fast_path_types[i] = AggFastPathType::StringBinPadding;
-                        break;
-                    }
-                    case TiDB::ITiDBCollator::CollatorType::BINARY:
-                    {
-                        fast_path_types[i] = AggFastPathType::StringBin;
-                        break;
-                    }
-                    default:
-                    {
-                        // for CI COLLATION, use original way
-                        return AggregatedDataVariants::Type::serialized;
-                    }
-                    }
-                }
-            }
-            else if (IsTypeNumber64(type))
-            {
-                fast_path_types[i] = AggFastPathType::Number64;
-            }
-            else
-            {
-                return AggregatedDataVariants::Type::serialized;
-            }
-        }
-        return ChooseAggregationMethodTwoKeys(fast_path_types.data());
-    }
-    return AggregatedDataVariants::Type::serialized;
-}
-
 AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
 {
     auto method = chooseAggregationMethodInner();
@@ -629,42 +525,11 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethodInner()
 
     /// If single string key - will use hash table with references to it. Strings itself are stored separately in Arena.
     if (params.keys_size == 1 && types_not_null[0]->isString())
-    {
-        if (params.collators.empty() || !params.collators[0])
-        {
-            // use original way. `Type::one_key_strbin` will generate empty column.
-            return AggregatedDataVariants::Type::key_string;
-        }
-        else
-        {
-            switch (params.collators[0]->getCollatorType())
-            {
-            case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
-            case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
-            case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
-            case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
-            {
-                return AggregatedDataVariants::Type::one_key_strbinpadding;
-            }
-            case TiDB::ITiDBCollator::CollatorType::BINARY:
-            {
-                return AggregatedDataVariants::Type::one_key_strbin;
-            }
-            default:
-            {
-                // for CI COLLATION, use original way
-                return AggregatedDataVariants::Type::key_string;
-            }
-            }
-        }
-    }
+        return AggregatedDataVariants::Type::key_string;
 
     if (params.keys_size == 1 && types_not_null[0]->isFixedString())
         return AggregatedDataVariants::Type::key_fixed_string;
 
-    // ChooseAggregationMethodFastPath() was removed because key_serialized has already implemented batch-wise get key holder,
-    // which basically eliminates virtual function calls. As a result, methods for two-key types such as two_keys_num64_strbin
-    // and two_keys_strbin_strbin no longer have an advantage.
     return AggregatedDataVariants::Type::serialized;
 }
 
