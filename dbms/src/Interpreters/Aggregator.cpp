@@ -879,8 +879,8 @@ void Aggregator::handleOneBatch(
     std::vector<KeyHolderType> key_holders;
     if constexpr (enable_prefetch || batch_get_key_holder)
     {
-        // mini batch will only be used when HashTable is big(a.k.a enable_prefetch is true),
-        // which can reduce cache miss of agg data.
+        // mini batch will only be used when HashTable is big(because reduce cache miss of agg data),
+        // or when need to get key batch-wise.
         mini_batch_size = agg_mini_batch;
     }
 
