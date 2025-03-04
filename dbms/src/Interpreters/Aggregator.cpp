@@ -1713,101 +1713,6 @@ inline void Aggregator::insertAggregatesIntoColumns(
         std::rethrow_exception(exception);
 }
 
-template <typename Method>
-struct AggregatorMethodInitKeyColumnHelper
-{
-    Method & method;
-    explicit AggregatorMethodInitKeyColumnHelper(Method & method_)
-        : method(method_)
-    {}
-    ALWAYS_INLINE inline void initAggKeys(size_t, std::vector<IColumn *> &) {}
-    template <typename Key>
-    ALWAYS_INLINE inline void insertKeyIntoColumns(
-        const Key & key,
-        std::vector<IColumn *> & key_columns,
-        const Sizes & sizes,
-        const TiDB::TiDBCollators & collators)
-    {
-        method.insertKeyIntoColumns(key, key_columns, sizes, collators);
-    }
-};
-
-template <typename Key1Desc, typename Key2Desc, typename TData>
-struct AggregatorMethodInitKeyColumnHelper<AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>>
-{
-    using Method = AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>;
-    size_t index{};
-    std::function<void(const StringRef &, std::vector<IColumn *> &, size_t)> insert_key_into_columns_function_ptr{};
-
-    Method & method;
-    explicit AggregatorMethodInitKeyColumnHelper(Method & method_)
-        : method(method_)
-    {}
-
-    ALWAYS_INLINE inline void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
-    {
-        index = 0;
-        if (key_columns.size() == 1)
-        {
-            Method::template initAggKeys<Key1Desc>(rows, key_columns[0]);
-            insert_key_into_columns_function_ptr
-                = AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>::insertKeyIntoColumnsOneKey;
-        }
-        else if (key_columns.size() == 2)
-        {
-            Method::template initAggKeys<Key1Desc>(rows, key_columns[0]);
-            Method::template initAggKeys<Key2Desc>(rows, key_columns[1]);
-            insert_key_into_columns_function_ptr
-                = AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>::insertKeyIntoColumnsTwoKey;
-        }
-        else
-        {
-            throw Exception("unexpected key_columns size for AggMethodFastPathTwoKey: {}", key_columns.size());
-        }
-    }
-    ALWAYS_INLINE inline void insertKeyIntoColumns(
-        const StringRef & key,
-        std::vector<IColumn *> & key_columns,
-        const Sizes &,
-        const TiDB::TiDBCollators &)
-    {
-        assert(insert_key_into_columns_function_ptr);
-        insert_key_into_columns_function_ptr(key, key_columns, index);
-        ++index;
-    }
-};
-
-template <bool bin_padding, typename TData>
-struct AggregatorMethodInitKeyColumnHelper<AggregationMethodOneKeyStringNoCache<bin_padding, TData>>
-{
-    using Method = AggregationMethodOneKeyStringNoCache<bin_padding, TData>;
-    size_t index{};
-
-    Method & method;
-    explicit AggregatorMethodInitKeyColumnHelper(Method & method_)
-        : method(method_)
-    {}
-
-    void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
-    {
-        index = 0;
-        RUNTIME_CHECK_MSG(
-            key_columns.size() == 1,
-            "unexpected key_columns size for AggMethodOneKeyString: {}",
-            key_columns.size());
-        Method::initAggKeys(rows, key_columns[0]);
-    }
-    ALWAYS_INLINE inline void insertKeyIntoColumns(
-        const StringRef & key,
-        std::vector<IColumn *> & key_columns,
-        const Sizes &,
-        const TiDB::TiDBCollators &)
-    {
-        method.insertKeyIntoColumns(key, key_columns, index);
-        ++index;
-    }
-};
-
 template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
 void NO_INLINE Aggregator::convertToBlockImplFinal(
     Method & method,
@@ -1819,7 +1724,6 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
 {
     assert(key_sizes.size() == key_columns.size());
     Sizes key_sizes_ref = key_sizes; // NOLINT
-    AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     if constexpr (!skip_convert_key)
     {
         auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
@@ -1830,7 +1734,6 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             RUNTIME_CHECK(params.key_ref_agg_func.empty());
             key_sizes_ref = *shuffled_key_sizes;
         }
-        agg_keys_helper.initAggKeys(data.size(), key_columns);
     }
 
     PaddedPODArray<char *> key_places;
@@ -1849,7 +1752,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             }
             else
             {
-                agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
+                method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collator);
             }
         }
 
@@ -1916,7 +1819,6 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
         assert(key_columns.size() == key_sizes.size());
     }
 #endif
-    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
     Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
     {
@@ -1926,7 +1828,6 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
             RUNTIME_CHECK(params.key_ref_agg_func.empty());
             key_sizes_ref = *shuffled_key_sizes;
         }
-        agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
     }
 
     size_t data_index = 0;
@@ -1951,11 +1852,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
             }
             else
             {
-                agg_keys_helpers[key_columns_vec_index]->insertKeyIntoColumns(
-                    key,
-                    key_columns_vec[key_columns_vec_index],
-                    key_sizes_ref,
-                    params.collators);
+                method.insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collator);
             }
         }
         places[data_index] = mapped;
@@ -2008,7 +1905,6 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     AggregateColumnsData & aggregate_columns) const
 {
     assert(key_sizes.size() == key_columns.size());
-    AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
     {
@@ -2018,7 +1914,6 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
             RUNTIME_CHECK(params.key_ref_agg_func.empty());
             key_sizes_ref = *shuffled_key_sizes;
         }
-        agg_keys_helper.initAggKeys(data.size(), key_columns);
     }
 
     PaddedPODArray<char *> key_places;
@@ -2036,7 +1931,7 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
             }
             else
             {
-                agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
+                method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collator);
             }
         }
 
@@ -2068,7 +1963,6 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
         assert(key_sizes.size() == key_columns.size());
     }
 #endif
-    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
     Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
     {
@@ -2078,7 +1972,6 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
             RUNTIME_CHECK(params.key_ref_agg_func.empty());
             key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
         }
-        agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
     }
 
     PaddedPODArray<char *> key_places;
@@ -2099,11 +1992,7 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
             }
             else
             {
-                agg_keys_helpers[key_columns_vec_index]->insertKeyIntoColumns(
-                    key,
-                    key_columns_vec[key_columns_vec_index],
-                    key_sizes_ref,
-                    params.collators);
+                method.insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collator);
             }
         }
 
