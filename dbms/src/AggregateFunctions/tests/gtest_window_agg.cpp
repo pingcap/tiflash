@@ -662,7 +662,7 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
         }
     }
 
-    agg_func->reset(agg_state.data());
+    agg_func->destroy(agg_state.data());
 
     const std::vector<String> res_vec = test_case.getResults();
     size_t res_num = res_vec.size();
