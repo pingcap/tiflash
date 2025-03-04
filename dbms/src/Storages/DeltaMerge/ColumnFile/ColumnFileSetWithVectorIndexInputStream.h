@@ -69,6 +69,7 @@ public:
         , data_provider(data_provider_)
         , ann_query_info(ann_query_info_)
         , valid_rows(std::move(valid_rows_))
+        // ColumnFile vector index stores all data in memory, can not be evicted by system.
         , vec_index_cache(context_.global_context.getHeavyLocalIndexCache())
         , vec_cd(std::move(vec_cd_))
         , rest_col_defs(rest_col_defs_)

@@ -30,6 +30,7 @@ DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & con
     setCaches(
         global_context.getMarkCache(),
         global_context.getMinMaxIndexCache(),
+        // DMFile vector index uses mmap to read data, does not directly occupy memory.
         global_context.getLightLocalIndexCache(),
         global_context.getColumnCacheLongTerm());
     // init from settings
