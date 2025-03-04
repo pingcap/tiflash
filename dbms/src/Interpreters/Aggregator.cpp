@@ -1852,7 +1852,8 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
             }
             else
             {
-                method.insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collator);
+                method
+                    .insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collator);
             }
         }
         places[data_index] = mapped;
@@ -1992,7 +1993,8 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
             }
             else
             {
-                method.insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collator);
+                method
+                    .insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collator);
             }
         }
 

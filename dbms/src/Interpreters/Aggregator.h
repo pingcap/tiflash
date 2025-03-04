@@ -539,49 +539,49 @@ struct AggregatedDataVariants : private boost::noncopyable
         = AggregationMethodKeysFixed<AggregatedDataWithKeys256MagicHashTwoLevel, true>;
 
 /// In this and similar macros, the option without_key is not considered.
-#define APPLY_FOR_AGGREGATED_VARIANTS(M)                    \
-    M(key8, false)                                          \
-    M(key16, false)                                         \
-    M(key32, false)                                         \
-    M(key64, false)                                         \
-    M(key_string, false)                                    \
-    M(key_fixed_string, false)                              \
-    M(keys16, false)                                        \
-    M(keys32, false)                                        \
-    M(keys64, false)                                        \
-    M(keys128, false)                                       \
-    M(keys256, false)                                       \
-    M(key_int256, false)                                    \
-    M(serialized, false)                                    \
-    M(key64_hash64, false)                                  \
-    M(key_string_hash64, false)                             \
-    M(key_fixed_string_hash64, false)                       \
-    M(keys128_hash64, false)                                \
-    M(keys256_hash64, false)                                \
-    M(serialized_hash64, false)                             \
-    M(nullable_keys128, false)                              \
-    M(nullable_keys256, false)                              \
-    M(key32_two_level, true)                                \
-    M(key64_two_level, true)                                \
-    M(key_int256_two_level, true)                           \
-    M(key_string_two_level, true)                           \
-    M(key_fixed_string_two_level, true)                     \
-    M(keys32_two_level, true)                               \
-    M(keys64_two_level, true)                               \
-    M(keys128_two_level, true)                              \
-    M(keys256_two_level, true)                              \
-    M(serialized_two_level, true)                           \
-    M(nullable_keys128_two_level, true)                     \
-    M(nullable_keys256_two_level, true)                     \
-    M(keys128_magic_hash, false)                            \
-    M(keys256_magic_hash, false)                            \
-    M(key_int256_magic_hash, false)                         \
-    M(nullable_keys128_magic_hash, false)                   \
-    M(nullable_keys256_magic_hash, false)                   \
-    M(key_int256_magic_hash_two_level, true)                \
-    M(keys128_magic_hash_two_level, true)                   \
-    M(keys256_magic_hash_two_level, true)                   \
-    M(nullable_keys128_magic_hash_two_level, true)          \
+#define APPLY_FOR_AGGREGATED_VARIANTS(M)           \
+    M(key8, false)                                 \
+    M(key16, false)                                \
+    M(key32, false)                                \
+    M(key64, false)                                \
+    M(key_string, false)                           \
+    M(key_fixed_string, false)                     \
+    M(keys16, false)                               \
+    M(keys32, false)                               \
+    M(keys64, false)                               \
+    M(keys128, false)                              \
+    M(keys256, false)                              \
+    M(key_int256, false)                           \
+    M(serialized, false)                           \
+    M(key64_hash64, false)                         \
+    M(key_string_hash64, false)                    \
+    M(key_fixed_string_hash64, false)              \
+    M(keys128_hash64, false)                       \
+    M(keys256_hash64, false)                       \
+    M(serialized_hash64, false)                    \
+    M(nullable_keys128, false)                     \
+    M(nullable_keys256, false)                     \
+    M(key32_two_level, true)                       \
+    M(key64_two_level, true)                       \
+    M(key_int256_two_level, true)                  \
+    M(key_string_two_level, true)                  \
+    M(key_fixed_string_two_level, true)            \
+    M(keys32_two_level, true)                      \
+    M(keys64_two_level, true)                      \
+    M(keys128_two_level, true)                     \
+    M(keys256_two_level, true)                     \
+    M(serialized_two_level, true)                  \
+    M(nullable_keys128_two_level, true)            \
+    M(nullable_keys256_two_level, true)            \
+    M(keys128_magic_hash, false)                   \
+    M(keys256_magic_hash, false)                   \
+    M(key_int256_magic_hash, false)                \
+    M(nullable_keys128_magic_hash, false)          \
+    M(nullable_keys256_magic_hash, false)          \
+    M(key_int256_magic_hash_two_level, true)       \
+    M(keys128_magic_hash_two_level, true)          \
+    M(keys256_magic_hash_two_level, true)          \
+    M(nullable_keys128_magic_hash_two_level, true) \
     M(nullable_keys256_magic_hash_two_level, true)
 
     enum class Type
@@ -774,23 +774,23 @@ struct AggregatedDataVariants : private boost::noncopyable
 
     void setResizeCallbackIfNeeded(size_t thread_num) const;
 
-#define APPLY_FOR_VARIANTS_TWO_LEVEL(M)               \
-    M(key32_two_level)                                \
-    M(key64_two_level)                                \
-    M(key_int256_two_level)                           \
-    M(key_string_two_level)                           \
-    M(key_fixed_string_two_level)                     \
-    M(keys32_two_level)                               \
-    M(keys64_two_level)                               \
-    M(keys128_two_level)                              \
-    M(keys256_two_level)                              \
-    M(serialized_two_level)                           \
-    M(nullable_keys128_two_level)                     \
-    M(nullable_keys256_two_level)                     \
-    M(key_int256_magic_hash_two_level)                \
-    M(keys128_magic_hash_two_level)                   \
-    M(keys256_magic_hash_two_level)                   \
-    M(nullable_keys128_magic_hash_two_level)          \
+#define APPLY_FOR_VARIANTS_TWO_LEVEL(M)      \
+    M(key32_two_level)                       \
+    M(key64_two_level)                       \
+    M(key_int256_two_level)                  \
+    M(key_string_two_level)                  \
+    M(key_fixed_string_two_level)            \
+    M(keys32_two_level)                      \
+    M(keys64_two_level)                      \
+    M(keys128_two_level)                     \
+    M(keys256_two_level)                     \
+    M(serialized_two_level)                  \
+    M(nullable_keys128_two_level)            \
+    M(nullable_keys256_two_level)            \
+    M(key_int256_magic_hash_two_level)       \
+    M(keys128_magic_hash_two_level)          \
+    M(keys256_magic_hash_two_level)          \
+    M(nullable_keys128_magic_hash_two_level) \
     M(nullable_keys256_magic_hash_two_level)
 };
 
