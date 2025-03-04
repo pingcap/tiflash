@@ -192,8 +192,9 @@ struct AggregateFunctionUniqExactData : AggregationCollatorsWrapper<false>
     using Key = T;
 
     /// When creating, the hash table must be small.
+    using Hash = HashCRC32<Key>;
     using Set
-        = HashSet<Key, HashCRC32<Key>, HashTableGrower<4>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 4)>>;
+        = HashSet<Key, Hash, HashTableGrower<4>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 4)>>;
 
     Set set;
 
@@ -421,6 +422,69 @@ struct OneAdder
     }
 };
 
+template <typename T, typename Data>
+struct BatchAdder
+{
+    static void ALWAYS_INLINE addBatch(
+            size_t start_offset,
+            size_t batch_size,
+            AggregateDataPtr * places,
+            size_t place_offset,
+            const IColumn ** columns,
+            Arena * arene,
+            ssize_t if_argument_pos = -1)
+    {
+        // Other uniq function not support batch-wise for now.
+        static_assert((std::is_same_v<Data, AggregateFunctionUniqExactData<T>>);
+
+        const auto & arg_column = *columns[0];
+        std::vector<size_t> hashvasl;
+        hashvals.reserve(batch_size);
+        std::vector<T> keys;
+        keys.reserve(batch_size);
+
+        const size_t end = start_offset + batch_size;
+        if constexpr (!std::is_same_v<T, String>)
+        {
+            for (size_t row = start_offset; row < end; ++row)
+            {
+                hashvals.push_back(Data::Hash(static_cast<const ColumnVector<T> &>(arg_column).getData()[row]));
+            }
+        }
+        else
+        {
+            for (size_t row = start_offset; row < end; ++row)
+            {
+                StringRef value = column.getDataAt();
+                value = this->data(places[row]).getUpdatedValueForCollator(value, 0);
+
+                UInt128 key;
+                SipHash hash;
+                hash.update(value.data, value.size);
+                hash.get128(key);
+
+                // todo type?
+                // data.set.insert(key);
+                hashvals.push_back(Data::Hash(key));
+            }
+        }
+
+        static constexpr prefetch_step = 16;
+        for (size_t i = 0; i < batch_size; ++i)
+        {
+            const size_t row = i + start_offset;
+            const size_t prefetch_row = row + prefetch_step;
+            if unlikely (prefetch_row < end)
+            {
+                const size_t prefetch_i = i + prefetch_step;
+                this->data(places[prefetch_row]).set.emplace(keys[prefetch_i], hashvals[prefetch_i]);
+            }
+
+            this->data(places[row]).set.emplace(keys[i], hashvals[i]);
+        }
+    }
+};
+
 } // namespace detail
 
 
@@ -436,6 +500,17 @@ public:
     void add(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
     {
         detail::OneAdder<T, Data>::add(this->data(place), *columns[0], row_num);
+    }
+
+    void addBatch(
+            size_t start_offset,
+            size_t batch_size,
+            AggregateDataPtr * places,
+            size_t place_offset,
+            const IColumn ** columns,
+            Arena * arene,
+            ssize_t if_argument_pos = -1) const
+    {
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
