@@ -246,7 +246,40 @@ protected:
     friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, use_cache>;
 };
 
-static_assert(std::is_same_v<size_t, decltype(reinterpret_cast<const StringRef *>(0)->size)>);
+template <typename Value, typename Mapped, bool padding>
+struct HashMethodStringBin
+    : public columns_hashing_impl::HashMethodBase<HashMethodStringBin<Value, Mapped, padding>, Value, Mapped, false>
+{
+    using Self = HashMethodStringBin<Value, Mapped, padding>;
+    using Base = columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
+    using KeyHolderType = ArenaKeyHolder;
+    using BatchKeyHolderType = KeyHolderType;
+
+    static constexpr bool is_serialized_key = false;
+    static constexpr bool can_batch_get_key_holder = false;
+
+    const IColumn::Offset * offsets;
+    const UInt8 * chars;
+
+    HashMethodStringBin(const ColumnRawPtrs & key_columns, const Sizes & /*key_sizes*/, const TiDB::TiDBCollators &)
+    {
+        const IColumn & column = *key_columns[0];
+        const auto & column_string = assert_cast<const ColumnString &>(column);
+        offsets = column_string.getOffsets().data();
+        chars = column_string.getChars().data();
+    }
+
+    ALWAYS_INLINE inline KeyHolderType getKeyHolder(ssize_t row, Arena * pool, std::vector<String> &) const
+    {
+        auto last_offset = row == 0 ? 0 : offsets[row - 1];
+        StringRef key(chars + last_offset, offsets[row] - last_offset - 1);
+        key = BinCollatorSortKey<padding>(key.data, key.size);
+        return ArenaKeyHolder{key, pool};
+    }
+
+protected:
+    friend class columns_hashing_impl::HashMethodBase<Self, Value, Mapped, false>;
+};
 
 /// For the case when there is one fixed-length string key.
 template <typename Value, typename Mapped, bool use_cache = true>

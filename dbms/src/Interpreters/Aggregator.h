@@ -171,9 +171,9 @@ struct AggregationMethodOneNumber
     }
 };
 
-/// For the case where there is one string key(default no cache).
-template <typename TData>
-struct AggregationMethodStringNoCache
+/// For the case where there is one string key.
+template <typename TData, bool use_cache>
+struct AggregationMethodString
 {
     using Data = TData;
     using Key = typename Data::key_type;
@@ -181,14 +181,14 @@ struct AggregationMethodStringNoCache
 
     Data data;
 
-    AggregationMethodStringNoCache() = default;
+    AggregationMethodString() = default;
 
     template <typename Other>
-    explicit AggregationMethodStringNoCache(const Other & other)
+    explicit AggregationMethodString(const Other & other)
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, /*use_cache=*/false>;
+    using State = ColumnsHashing::HashMethodString<typename Data::value_type, Mapped, use_cache>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -220,9 +220,9 @@ struct AggregationMethodStringNoCache
     }
 };
 
-/// For the case where there is one fixed-length string key(default no cache).
-template <typename TData>
-struct AggregationMethodFixedStringNoCache
+/// For the case where there is one fixed-length string key.
+template <typename TData, bool use_cache>
+struct AggregationMethodFixedString
 {
     using Data = TData;
     using Key = typename Data::key_type;
@@ -230,14 +230,14 @@ struct AggregationMethodFixedStringNoCache
 
     Data data;
 
-    AggregationMethodFixedStringNoCache() = default;
+    AggregationMethodFixedString() = default;
 
     template <typename Other>
-    explicit AggregationMethodFixedStringNoCache(const Other & other)
+    explicit AggregationMethodFixedString(const Other & other)
         : data(other.data)
     {}
 
-    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, false>;
+    using State = ColumnsHashing::HashMethodFixedString<typename Data::value_type, Mapped, use_cache>;
     template <bool only_lookup>
     struct EmplaceOrFindKeyResult
     {
@@ -481,8 +481,8 @@ struct AggregatedDataVariants : private boost::noncopyable
     using AggregationMethod_key32 = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key>;
     using AggregationMethod_key64 = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key>;
     using AggregationMethod_key_int256 = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256Key>;
-    using AggregationMethod_key_string = AggregationMethodStringNoCache<AggregatedDataWithShortStringKey>;
-    using AggregationMethod_key_fixed_string = AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKey>;
+    using AggregationMethod_key_string = AggregationMethodString<AggregatedDataWithShortStringKey, false>;
+    using AggregationMethod_key_fixed_string = AggregationMethodFixedString<AggregatedDataWithShortStringKey, false>;
     using AggregationMethod_keys16 = AggregationMethodKeysFixed<AggregatedDataWithUInt16Key, false, false>;
     using AggregationMethod_keys32 = AggregationMethodKeysFixed<AggregatedDataWithUInt32Key>;
     using AggregationMethod_keys64 = AggregationMethodKeysFixed<AggregatedDataWithUInt64Key>;
@@ -494,17 +494,18 @@ struct AggregatedDataVariants : private boost::noncopyable
     using AggregationMethod_key_int256_two_level
         = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>;
     using AggregationMethod_key_string_two_level
-        = AggregationMethodStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>;
+        = AggregationMethodString<AggregatedDataWithShortStringKeyTwoLevel, false>;
     using AggregationMethod_key_fixed_string_two_level
-        = AggregationMethodFixedStringNoCache<AggregatedDataWithShortStringKeyTwoLevel>;
+        = AggregationMethodFixedString<AggregatedDataWithShortStringKeyTwoLevel, false>;
     using AggregationMethod_keys32_two_level = AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyTwoLevel>;
     using AggregationMethod_keys64_two_level = AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyTwoLevel>;
     using AggregationMethod_keys128_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>;
     using AggregationMethod_keys256_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>;
     using AggregationMethod_serialized_two_level = AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>;
     using AggregationMethod_key64_hash64 = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyHash64>;
-    using AggregationMethod_key_string_hash64 = AggregationMethodStringNoCache<AggregatedDataWithStringKeyHash64>;
-    using AggregationMethod_key_fixed_string_hash64 = AggregationMethodFixedString<AggregatedDataWithStringKeyHash64>;
+    using AggregationMethod_key_string_hash64 = AggregationMethodString<AggregatedDataWithStringKeyHash64, false>;
+    using AggregationMethod_key_fixed_string_hash64
+        = AggregationMethodFixedString<AggregatedDataWithStringKeyHash64, true>;
     using AggregationMethod_keys128_hash64 = AggregationMethodKeysFixed<AggregatedDataWithKeys128Hash64>;
     using AggregationMethod_keys256_hash64 = AggregationMethodKeysFixed<AggregatedDataWithKeys256Hash64>;
     using AggregationMethod_serialized_hash64 = AggregationMethodSerialized<AggregatedDataWithStringKeyHash64>;

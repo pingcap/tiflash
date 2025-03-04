@@ -1752,7 +1752,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             }
             else
             {
-                method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collator);
+                method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
             }
         }
 
@@ -1781,25 +1781,6 @@ std::optional<Sizes> shuffleKeyColumnsForKeyColumnsVec(
         assert(shuffled_key_sizes == new_key_sizes);
     }
     return shuffled_key_sizes;
-}
-template <typename Method>
-std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> initAggKeysForKeyColumnsVec(
-    Method & method,
-    std::vector<std::vector<IColumn *>> & key_columns_vec,
-    size_t max_block_size,
-    size_t total_row_count)
-{
-    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> agg_keys_helpers;
-    size_t block_row_count = max_block_size;
-    for (size_t i = 0; i < key_columns_vec.size(); ++i)
-    {
-        if (i == key_columns_vec.size() - 1 && total_row_count % block_row_count != 0)
-            /// update block_row_count for the last block
-            block_row_count = total_row_count % block_row_count;
-        agg_keys_helpers.push_back(std::make_unique<AggregatorMethodInitKeyColumnHelper<Method>>(method));
-        agg_keys_helpers.back()->initAggKeys(block_row_count, key_columns_vec[i]);
-    }
-    return agg_keys_helpers;
 }
 } // namespace
 
@@ -1853,7 +1834,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
             else
             {
                 method
-                    .insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collator);
+                    .insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
             }
         }
         places[data_index] = mapped;
@@ -1932,7 +1913,7 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
             }
             else
             {
-                method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collator);
+                method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
             }
         }
 
@@ -1994,7 +1975,7 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
             else
             {
                 method
-                    .insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collator);
+                    .insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
             }
         }
 
