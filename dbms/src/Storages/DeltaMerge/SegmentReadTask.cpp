@@ -132,7 +132,7 @@ SegmentReadTask::SegmentReadTask(
                 remote_page_ids.emplace_back(tiny->getDataPageId());
                 remote_page_sizes.emplace_back(tiny->getDataPageSize());
                 ++count;
-                // Add vector index pages.
+                // Add local index pages.
                 if (auto index_infos = tiny->getIndexInfos(); index_infos)
                 {
                     for (const auto & index_info : *index_infos)

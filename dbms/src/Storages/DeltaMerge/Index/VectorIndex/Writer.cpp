@@ -20,9 +20,8 @@
 #include <Functions/FunctionHelpers.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/CommonUtil.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Writer.h>
-#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <TiDB/Schema/VectorIndex.h>
-#include <tipb/executor.pb.h>
+
 
 namespace DB::ErrorCodes
 {
@@ -34,15 +33,36 @@ extern const int ABORTED;
 namespace DB::DM
 {
 
-VectorIndexWriterInternal::VectorIndexWriterInternal(const TiDB::VectorIndexDefinitionPtr & definition_)
-    : definition(definition_)
-    , index(USearchImplType::make(unum::usearch::metric_punned_t( //
-          definition_->dimension,
-          getUSearchMetricKind(definition->distance_metric))))
+std::shared_ptr<VectorIndexWriterInternal> VectorIndexWriterInternal::createInMemory(
+    IndexID index_id,
+    const TiDB::VectorIndexDefinitionPtr & definition)
 {
-    RUNTIME_CHECK(definition_->kind == tipb::VectorIndexKind::HNSW);
+    return std::make_shared<VectorIndexWriterInMemory>(index_id, definition);
+}
+
+std::shared_ptr<VectorIndexWriterInternal> VectorIndexWriterInternal::createOnDisk(
+    std::string_view index_file,
+    IndexID index_id,
+    const TiDB::VectorIndexDefinitionPtr & definition)
+{
+    return std::make_shared<VectorIndexWriterOnDisk>(index_file, index_id, definition);
+}
+
+VectorIndexWriterInternal::VectorIndexWriterInternal(
+    IndexID index_id,
+    const TiDB::VectorIndexDefinitionPtr & definition_)
+    : LocalIndexWriter(index_id)
+    , definition(definition_)
+{
+    RUNTIME_CHECK(definition != nullptr);
+    RUNTIME_CHECK(definition->kind == tipb::VectorIndexKind::HNSW);
     RUNTIME_CHECK(definition->dimension > 0);
     RUNTIME_CHECK(definition->dimension <= TiDB::MAX_VECTOR_DIMENSION);
+
+    index = USearchImplType::make(unum::usearch::metric_punned_t( //
+        definition->dimension,
+        getUSearchMetricKind(definition->distance_metric)));
+
     GET_METRIC(tiflash_vector_index_active_instances, type_build).Increment();
 }
 
@@ -139,6 +159,14 @@ VectorIndexWriterInternal::~VectorIndexWriterInternal()
     GET_METRIC(tiflash_vector_index_memory_usage, type_build)
         .Decrement(static_cast<double>(last_reported_memory_usage));
     GET_METRIC(tiflash_vector_index_active_instances, type_build).Decrement();
+}
+
+void VectorIndexWriterInternal::saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) const
+{
+    auto * pb_vec_idx = pb_idx->mutable_vector_index();
+    pb_vec_idx->set_format_version(0);
+    pb_vec_idx->set_dimensions(definition->dimension);
+    pb_vec_idx->set_distance_metric(tipb::VectorDistanceMetric_Name(definition->distance_metric));
 }
 
 } // namespace DB::DM

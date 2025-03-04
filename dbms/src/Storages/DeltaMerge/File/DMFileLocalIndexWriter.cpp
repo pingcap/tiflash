@@ -20,18 +20,18 @@
 #include <Storages/DeltaMerge/File/DMFileLocalIndexWriter.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
-#include <Storages/DeltaMerge/Index/VectorIndex/Writer.h>
+#include <Storages/DeltaMerge/Index/LocalIndexWriter.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <Storages/PathPool.h>
-#include <tipb/executor.pb.h>
 
 #include <unordered_map>
+
 
 namespace DB::ErrorCodes
 {
 extern const int ABORTED;
 }
+
 namespace DB::FailPoints
 {
 extern const char exception_build_local_index_for_file[];
@@ -116,7 +116,7 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
         LocalIndexInfo info;
         String index_file_path; // For write out
         String index_file_name; // For meta include
-        VectorIndexWriterOnDiskPtr builder_vector;
+        LocalIndexWriterPtr index_writer;
     };
 
     std::unordered_map<ColId, std::vector<IndexToBuild>> index_builders;
@@ -127,7 +127,7 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
             .info = index_info,
             .index_file_path = "",
             .index_file_name = "",
-            .builder_vector = {},
+            .index_writer = {},
         });
     }
 
@@ -156,17 +156,7 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
                 index.info.column_id,
                 index.info.index_id);
 
-            switch (index.info.kind)
-            {
-            case TiDB::ColumnarIndexKind::Vector:
-                index.builder_vector = VectorIndexWriterOnDisk::create( //
-                    index.index_file_path,
-                    index.info.def_vector_index);
-                break;
-            default:
-                RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                break;
-            }
+            index.index_writer = LocalIndexWriter::createOnDisk(index.index_file_path, index.info);
         }
         read_columns.push_back(*cd_iter);
     }
@@ -213,16 +203,8 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
             const auto & col = col_with_type_and_name.column;
             for (const auto & index : index_builders[read_columns[col_idx].id])
             {
-                switch (index.info.kind)
-                {
-                case TiDB::ColumnarIndexKind::Vector:
-                    RUNTIME_CHECK(index.builder_vector);
-                    index.builder_vector->addBlock(*col, del_mark, should_proceed);
-                    break;
-                default:
-                    RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                    break;
-                }
+                RUNTIME_CHECK(index.index_writer);
+                index.index_writer->addBlock(*col, del_mark, should_proceed);
             }
         }
     }
@@ -240,33 +222,10 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
 
         for (const auto & index : index_builders[cd.id])
         {
-            dtpb::DMFileIndexInfo pb_dmfile_idx{};
-            auto * pb_idx = pb_dmfile_idx.mutable_index_props();
-
-            switch (index.info.kind)
-            {
-            case TiDB::ColumnarIndexKind::Vector:
-            {
-                index.builder_vector->finalize();
-                auto * pb_vec_idx = pb_idx->mutable_vector_index();
-                pb_vec_idx->set_format_version(0);
-                pb_vec_idx->set_dimensions(index.info.def_vector_index->dimension);
-                pb_vec_idx->set_distance_metric(
-                    tipb::VectorDistanceMetric_Name(index.info.def_vector_index->distance_metric));
-                break;
-            }
-            default:
-                RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                break;
-            }
-
-            auto index_file = Poco::File(index.index_file_path);
-            RUNTIME_CHECK(index_file.exists());
-            pb_idx->set_kind(index.info.getKindAsDtpb());
-            pb_idx->set_index_id(index.info.index_id);
-            pb_idx->set_file_size(index_file.getSize());
-
-            total_built_index_bytes += pb_idx->file_size();
+            dtpb::DMFileIndexInfo pb_dmfile_idx;
+            auto idx_info = index.index_writer->finalize(index.index_file_path);
+            pb_dmfile_idx.mutable_index_props()->Swap(&idx_info);
+            total_built_index_bytes += pb_dmfile_idx.index_props().file_size();
             new_indexes.emplace_back(std::move(pb_dmfile_idx));
             iw->include(index.index_file_name);
         }

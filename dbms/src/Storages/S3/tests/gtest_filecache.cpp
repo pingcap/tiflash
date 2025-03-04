@@ -448,191 +448,23 @@ try
     auto unknow_fname1 = fmt::format("{}/123456.lock", s3_fname);
     ASSERT_EQ(FileCache::getFileType(unknow_fname1), FileType::Unknow);
 
+    for (UInt64 level = 0; level <= magic_enum::enum_count<FileType>(); ++level)
     {
-        UInt64 level = 0;
         auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
         StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
         FileCache file_cache(capacity_metrics, cache_config);
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_FALSE(file_cache.canCache(FileType::Meta));
-        ASSERT_FALSE(file_cache.canCache(FileType::Merged));
-        ASSERT_FALSE(file_cache.canCache(FileType::Index));
-        ASSERT_FALSE(file_cache.canCache(FileType::Mark));
-        ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
-        ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
-    }
-    {
-        UInt64 level = 1;
-        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
-        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_FALSE(file_cache.canCache(FileType::VectorIndex));
-        ASSERT_FALSE(file_cache.canCache(FileType::Merged));
-        ASSERT_FALSE(file_cache.canCache(FileType::Index));
-        ASSERT_FALSE(file_cache.canCache(FileType::Mark));
-        ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
-        ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
-    }
-    {
-        UInt64 level = 2;
-        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
-        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::VectorIndex));
-        ASSERT_FALSE(file_cache.canCache(FileType::Merged));
-        ASSERT_FALSE(file_cache.canCache(FileType::Index));
-        ASSERT_FALSE(file_cache.canCache(FileType::Mark));
-        ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
-        ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
-    }
-    {
-        UInt64 level = 3;
-        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
-        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::VectorIndex));
-        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
-        ASSERT_FALSE(file_cache.canCache(FileType::Index));
-        ASSERT_FALSE(file_cache.canCache(FileType::Mark));
-        ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
-        ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
-    }
-    {
-        UInt64 level = 4;
-        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
-        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::VectorIndex));
-        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
-        ASSERT_TRUE(file_cache.canCache(FileType::Index));
-        ASSERT_FALSE(file_cache.canCache(FileType::Mark));
-        ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
-        ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
-    }
-    {
-        UInt64 level = 5;
-        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
-        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::VectorIndex));
-        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
-        ASSERT_TRUE(file_cache.canCache(FileType::Index));
-        ASSERT_TRUE(file_cache.canCache(FileType::Mark));
-        ASSERT_FALSE(file_cache.canCache(FileType::NullMap));
-        ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
-    }
-    {
-        UInt64 level = 6;
-        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
-        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::VectorIndex));
-        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
-        ASSERT_TRUE(file_cache.canCache(FileType::Index));
-        ASSERT_TRUE(file_cache.canCache(FileType::Mark));
-        ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
-        ASSERT_FALSE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
-    }
-    {
-        UInt64 level = 7;
-        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
-        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::VectorIndex));
-        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
-        ASSERT_TRUE(file_cache.canCache(FileType::Index));
-        ASSERT_TRUE(file_cache.canCache(FileType::Mark));
-        ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
-        ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
-    }
-    {
-        UInt64 level = 8;
-        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
-        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::VectorIndex));
-        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
-        ASSERT_TRUE(file_cache.canCache(FileType::Index));
-        ASSERT_TRUE(file_cache.canCache(FileType::Mark));
-        ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
-        ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_TRUE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
-    }
-    {
-        UInt64 level = 9;
-        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
-        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::VectorIndex));
-        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
-        ASSERT_TRUE(file_cache.canCache(FileType::Index));
-        ASSERT_TRUE(file_cache.canCache(FileType::Mark));
-        ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
-        ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_TRUE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_TRUE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_FALSE(file_cache.canCache(FileType::ColData));
-    }
-    {
-        UInt64 level = 10;
-        auto cache_dir = fmt::format("{}/filetype{}", tmp_dir, level);
-        StorageRemoteCacheConfig cache_config{.dir = cache_dir, .capacity = cache_capacity, .dtfile_level = level};
-        FileCache file_cache(capacity_metrics, cache_config);
-        ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
-        ASSERT_TRUE(file_cache.canCache(FileType::Meta));
-        ASSERT_TRUE(file_cache.canCache(FileType::VectorIndex));
-        ASSERT_TRUE(file_cache.canCache(FileType::Merged));
-        ASSERT_TRUE(file_cache.canCache(FileType::Index));
-        ASSERT_TRUE(file_cache.canCache(FileType::Mark));
-        ASSERT_TRUE(file_cache.canCache(FileType::NullMap));
-        ASSERT_TRUE(file_cache.canCache(FileType::DeleteMarkColData));
-        ASSERT_TRUE(file_cache.canCache(FileType::VersionColData));
-        ASSERT_TRUE(file_cache.canCache(FileType::HandleColData));
-        ASSERT_TRUE(file_cache.canCache(FileType::ColData));
+        ASSERT_EQ(file_cache.canCache(FileType::Meta), level >= 1);
+        ASSERT_EQ(file_cache.canCache(FileType::VectorIndex), level >= 2);
+        ASSERT_EQ(file_cache.canCache(FileType::InvertedIndex), level >= 3);
+        ASSERT_EQ(file_cache.canCache(FileType::Merged), level >= 4);
+        ASSERT_EQ(file_cache.canCache(FileType::Index), level >= 5);
+        ASSERT_EQ(file_cache.canCache(FileType::Mark), level >= 6);
+        ASSERT_EQ(file_cache.canCache(FileType::NullMap), level >= 7);
+        ASSERT_EQ(file_cache.canCache(FileType::DeleteMarkColData), level >= 8);
+        ASSERT_EQ(file_cache.canCache(FileType::VersionColData), level >= 9);
+        ASSERT_EQ(file_cache.canCache(FileType::HandleColData), level >= 10);
+        ASSERT_EQ(file_cache.canCache(FileType::ColData), level >= 11);
     }
 }
 CATCH
