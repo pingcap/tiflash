@@ -15,7 +15,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB::DM
@@ -30,7 +30,8 @@ DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & con
     setCaches(
         global_context.getMarkCache(),
         global_context.getMinMaxIndexCache(),
-        global_context.getLocalIndexCache(),
+        // DMFile vector index uses mmap to read data, does not directly occupy memory.
+        global_context.getLightLocalIndexCache(),
         global_context.getColumnCacheLongTerm());
     // init from settings
     setFromSettings(context.getSettingsRef());

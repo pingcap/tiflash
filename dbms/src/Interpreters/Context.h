@@ -413,8 +413,9 @@ public:
     std::shared_ptr<DM::MinMaxIndexCache> getMinMaxIndexCache() const;
     void dropMinMaxIndexCache() const;
 
-    void setLocalIndexCache(size_t cache_entities);
-    std::shared_ptr<DM::LocalIndexCache> getLocalIndexCache() const;
+    void setLocalIndexCache(size_t light_local_index_cache, size_t heavy_cache_entities);
+    std::shared_ptr<DM::LocalIndexCache> getLightLocalIndexCache() const;
+    std::shared_ptr<DM::LocalIndexCache> getHeavyLocalIndexCache() const;
     void dropLocalIndexCache() const;
 
     void setColumnCacheLongTerm(size_t cache_size_in_bytes);
