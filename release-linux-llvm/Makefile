@@ -14,10 +14,11 @@
 
 DOCKER ?= docker
 SUFFIX ?= ""
+ARCH = $(shell uname -m)
 
 # Base docker files with prerequisites build tools
 image_tiflash_llvm_base:
-	$(DOCKER) build dockerfiles -f dockerfiles/Dockerfile-tiflash-llvm-base -t hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX)
+	$(DOCKER) build dockerfiles -f dockerfiles/Dockerfile-tiflash-llvm-base --build-arg arch="$(ARCH)" -t hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX)
 
 # Build tiflash binaries under directory "tiflash"
 build_tiflash_release:
