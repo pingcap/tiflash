@@ -180,13 +180,7 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
             if (idx.state == TiDB::StatePublic || idx.state == TiDB::StateWriteReorganization)
             {
                 // create a new index
-                new_index_infos->emplace_back(LocalIndexInfo{
-                    .kind = idx.columnarIndexKind(),
-                    .index_id = idx.id,
-                    .column_id = column_id,
-                    // Only one of the below will be set
-                    .def_vector_index = idx.vector_index,
-                });
+                new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.vector_index));
                 newly_added.emplace_back(idx.id);
                 index_ids_in_new_table.emplace(idx.id);
             }
