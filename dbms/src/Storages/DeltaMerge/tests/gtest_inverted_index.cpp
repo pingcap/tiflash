@@ -35,7 +35,7 @@ public:
     ~InvertedIndexTest() = default;
 
     static void writeBlock(
-        InvertedIndexWriter<T> & builder,
+        InvertedIndexWriterOnDisk<T> & builder,
         const DB::tests::InferredDataVector<T> & values,
         const DB::tests::InferredDataVector<UInt8> & del_marks)
     {
@@ -81,11 +81,11 @@ public:
         static void run()
         {
             {
-                auto builder = InvertedIndexWriter<T>(0);
+                auto builder = InvertedIndexWriterOnDisk<T>(0, IndexFileName);
                 writeBlock(builder, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 1});
                 writeBlock(builder, {1, 2, 3, 4, 5, 6, 7, 8, 9, 10}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
                 writeBlock(builder, {1, 2, 2, 2, 3, 3, 3, 4, 4, 4}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
-                builder.finalize(IndexFileName);
+                builder.finalize();
             }
             {
                 auto viewer = std::make_shared<InvertedIndexMemoryReader<T>>(IndexFileName);
@@ -198,14 +198,14 @@ public:
         static void run()
         {
             {
-                auto builder = InvertedIndexWriter<T>(0);
+                auto builder = InvertedIndexWriterOnDisk<T>(0, IndexFileName);
                 for (UInt32 i = 0; i < block_count; ++i)
                 {
                     DB::tests::InferredDataVector<T> values(block_size, i);
                     DB::tests::InferredDataVector<UInt8> del_marks(block_size, 0);
                     writeBlock(builder, values, del_marks);
                 }
-                builder.finalize(IndexFileName);
+                builder.finalize();
             }
             {
                 auto viewer = std::make_shared<InvertedIndexMemoryReader<T>>(IndexFileName);
@@ -221,14 +221,14 @@ public:
         static void runMultiThread()
         {
             {
-                auto builder = InvertedIndexWriter<T>(0);
+                auto builder = InvertedIndexWriterOnDisk<T>(0, IndexFileName);
                 for (UInt32 i = 0; i < block_count; ++i)
                 {
                     DB::tests::InferredDataVector<T> values(block_size, i);
                     DB::tests::InferredDataVector<UInt8> del_marks(block_size, 0);
                     writeBlock(builder, values, del_marks);
                 }
-                builder.finalize(IndexFileName);
+                builder.finalize();
             }
             {
                 auto viewer = std::make_shared<InvertedIndexMemoryReader<T>>(IndexFileName);

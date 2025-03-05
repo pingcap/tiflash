@@ -25,7 +25,11 @@
 namespace DB::DM
 {
 
-/// Builds a LocalIndex.
+class LocalIndexWriterInMemory;
+using LocalIndexWriterInMemoryPtr = std::shared_ptr<LocalIndexWriterInMemory>;
+class LocalIndexWriterOnDisk;
+using LocalIndexWriterOnDiskPtr = std::shared_ptr<LocalIndexWriterOnDisk>;
+
 class LocalIndexWriter
 {
 public:
@@ -36,27 +40,55 @@ public:
         : index_id(index_id_)
     {}
 
-    static LocalIndexWriterPtr createInMemory(const LocalIndexInfo & index_info);
-    static LocalIndexWriterPtr createOnDisk(std::string_view index_file, const LocalIndexInfo & index_info);
+    static LocalIndexWriterInMemoryPtr createInMemory(const LocalIndexInfo & index_info);
+    static LocalIndexWriterOnDiskPtr createOnDisk(std::string_view index_file, const LocalIndexInfo & index_info);
 
     virtual ~LocalIndexWriter() = default;
 
     virtual void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark, ProceedCheckFn should_proceed)
         = 0;
 
-    dtpb::IndexFilePropsV2 finalize(std::string_view path) const;
-    dtpb::IndexFilePropsV2 finalize(WriteBuffer & write_buf) const;
-
 protected:
-    virtual void saveToFile(std::string_view path) const = 0;
-    virtual void saveToBuffer(WriteBuffer & write_buf) const = 0;
-
     virtual void saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) const = 0;
 
     virtual dtpb::IndexFileKind kind() const = 0;
 
-private:
+protected:
     IndexID index_id;
+};
+
+class LocalIndexWriterInMemory : public LocalIndexWriter
+{
+public:
+    explicit LocalIndexWriterInMemory(IndexID index_id_)
+        : LocalIndexWriter(index_id_)
+    {}
+
+    ~LocalIndexWriterInMemory() override = default;
+
+    dtpb::IndexFilePropsV2 finalize(WriteBuffer & write_buf);
+
+protected:
+    virtual void saveToBuffer(WriteBuffer & write_buf) = 0;
+};
+
+class LocalIndexWriterOnDisk : public LocalIndexWriter
+{
+public:
+    explicit LocalIndexWriterOnDisk(IndexID index_id_, std::string_view index_file_)
+        : LocalIndexWriter(index_id_)
+        , index_file(index_file_)
+    {}
+
+    ~LocalIndexWriterOnDisk() override = default;
+
+    dtpb::IndexFilePropsV2 finalize();
+
+protected:
+    virtual void saveToFile() const = 0;
+
+protected:
+    String index_file;
 };
 
 } // namespace DB::DM

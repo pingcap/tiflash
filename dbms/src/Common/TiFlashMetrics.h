@@ -878,6 +878,18 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_download, {{"type", "download"}}, ExpBuckets{0.001, 2, 20}),                                                           \
       F(type_view, {{"type", "view"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
       F(type_search, {{"type", "search"}}, ExpBuckets{0.001, 2, 20}))                                                               \
+    M(tiflash_inverted_index_active_instances,                                                                                      \
+      "Active Inverted index instances",                                                                                            \
+      Gauge,                                                                                                                        \
+      F(type_build, {"type", "build"}),                                                                                             \
+      F(type_view, {"type", "view"}))                                                                                               \
+    M(tiflash_inverted_index_duration,                                                                                              \
+      "Inverted index operation duration",                                                                                          \
+      Histogram,                                                                                                                    \
+      F(type_build, {{"type", "build"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+      F(type_download, {{"type", "download"}}, ExpBuckets{0.001, 2, 20}),                                                           \
+      F(type_view, {{"type", "view"}}, ExpBuckets{0.001, 2, 20}),                                                                   \
+      F(type_search, {{"type", "search"}}, ExpBuckets{0.001, 2, 20}))                                                               \
     M(tiflash_storage_io_limiter_pending_count,                                                                                     \
       "I/O limiter pending count",                                                                                                  \
       Counter,                                                                                                                      \

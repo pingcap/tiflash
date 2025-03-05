@@ -94,7 +94,7 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
     struct IndexToBuild
     {
         LocalIndexInfo info;
-        LocalIndexWriterPtr index_writer;
+        LocalIndexWriterInMemoryPtr index_writer;
     };
 
     std::unordered_map<ColId, std::vector<IndexToBuild>> index_builders;
