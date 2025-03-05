@@ -949,7 +949,7 @@ try
 }
 CATCH
 
-TEST_F(SegmentBitmapFilterTest, testSkipPackStableOnly)
+TEST_P(SegmentBitmapFilterTest, testSkipPackStableOnly)
 {
     std::string expect_result;
     expect_result.append(std::string(200, '0'));
@@ -965,14 +965,14 @@ TEST_F(SegmentBitmapFilterTest, testSkipPackStableOnly)
         reloadDMContext();
 
         version = 0;
-        writeSegment("d_mem:[0, 1000)|d_mem:[500, 1500)|d_mem:[1500, 2000)");
+        writeSegmentGeneric("d_mem:[0, 1000)|d_mem:[500, 1500)|d_mem:[1500, 2000)");
         mergeSegmentDelta(SEG_ID, true);
         auto [seg, snap] = getSegmentForRead(SEG_ID);
         ASSERT_EQ(seg->getDelta()->getRows(), 0);
         ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
         ASSERT_EQ(seg->getStable()->getRows(), 2500);
 
-        auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(200, 2000)};
+        auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(200, 2000, is_common_handle)};
         auto pack_filter_results = loadPackFilterResults(snap, ranges);
 
         if (pack_rows == 1)
@@ -1014,7 +1014,7 @@ TEST_F(SegmentBitmapFilterTest, testSkipPackStableOnly)
     }
 }
 
-TEST_F(SegmentBitmapFilterTest, testSkipPackNormal)
+TEST_P(SegmentBitmapFilterTest, testSkipPackNormal)
 {
     std::string expect_result;
     expect_result.append(std::string(50, '0'));
@@ -1040,15 +1040,15 @@ TEST_F(SegmentBitmapFilterTest, testSkipPackNormal)
         reloadDMContext();
 
         version = 0;
-        writeSegment("d_mem:[0, 1000)|d_mem:[500, 1500)|d_mem:[1500, 2000)");
+        writeSegmentGeneric("d_mem:[0, 1000)|d_mem:[500, 1500)|d_mem:[1500, 2000)");
         mergeSegmentDelta(SEG_ID, true);
-        writeSegment("d_tiny:[99, 100)|d_dr:[355, 370)|d_dr:[409, 481)|d_mem:[200, 201)|d_mem:[301, 315)");
+        writeSegmentGeneric("d_tiny:[99, 100)|d_dr:[355, 370)|d_dr:[409, 481)|d_mem:[200, 201)|d_mem:[301, 315)");
         auto [seg, snap] = getSegmentForRead(SEG_ID);
         ASSERT_EQ(seg->getDelta()->getRows(), 16);
         ASSERT_EQ(seg->getDelta()->getDeletes(), 2);
         ASSERT_EQ(seg->getStable()->getRows(), 2500);
 
-        auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(50, 2000)};
+        auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(50, 2000, is_common_handle)};
         auto pack_filter_results = loadPackFilterResults(snap, ranges);
         UInt64 start_ts = 6;
         if (pack_rows == 10)
