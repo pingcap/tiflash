@@ -116,7 +116,7 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
         LocalIndexInfo info;
         String index_file_path; // For write out
         String index_file_name; // For meta include
-        LocalIndexWriterPtr index_writer;
+        LocalIndexWriterOnDiskPtr index_writer;
     };
 
     std::unordered_map<ColId, std::vector<IndexToBuild>> index_builders;
@@ -223,7 +223,7 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
         for (const auto & index : index_builders[cd.id])
         {
             dtpb::DMFileIndexInfo pb_dmfile_idx;
-            auto idx_info = index.index_writer->finalize(index.index_file_path);
+            auto idx_info = index.index_writer->finalize();
             pb_dmfile_idx.mutable_index_props()->Swap(&idx_info);
             total_built_index_bytes += pb_dmfile_idx.index_props().file_size();
             new_indexes.emplace_back(std::move(pb_dmfile_idx));

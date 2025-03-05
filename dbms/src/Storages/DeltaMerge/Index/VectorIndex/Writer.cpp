@@ -33,26 +33,8 @@ extern const int ABORTED;
 namespace DB::DM
 {
 
-std::shared_ptr<VectorIndexWriterInternal> VectorIndexWriterInternal::createInMemory(
-    IndexID index_id,
-    const TiDB::VectorIndexDefinitionPtr & definition)
-{
-    return std::make_shared<VectorIndexWriterInMemory>(index_id, definition);
-}
-
-std::shared_ptr<VectorIndexWriterInternal> VectorIndexWriterInternal::createOnDisk(
-    std::string_view index_file,
-    IndexID index_id,
-    const TiDB::VectorIndexDefinitionPtr & definition)
-{
-    return std::make_shared<VectorIndexWriterOnDisk>(index_file, index_id, definition);
-}
-
-VectorIndexWriterInternal::VectorIndexWriterInternal(
-    IndexID index_id,
-    const TiDB::VectorIndexDefinitionPtr & definition_)
-    : LocalIndexWriter(index_id)
-    , definition(definition_)
+VectorIndexWriterInternal::VectorIndexWriterInternal(const TiDB::VectorIndexDefinitionPtr & definition_)
+    : definition(definition_)
 {
     RUNTIME_CHECK(definition != nullptr);
     RUNTIME_CHECK(definition->kind == tipb::VectorIndexKind::HNSW);
@@ -132,27 +114,6 @@ void VectorIndexWriterInternal::addBlock(
     last_reported_memory_usage = current_memory_usage;
 }
 
-void VectorIndexWriterInternal::saveToFile(std::string_view path) const
-{
-    Stopwatch w;
-    SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
-
-    auto result = index.save(unum::usearch::output_file_t(path.data()));
-    RUNTIME_CHECK_MSG(result, "Failed to save vector index: {} path={}", result.error.what(), path);
-}
-
-void VectorIndexWriterInternal::saveToBuffer(WriteBuffer & write_buf) const
-{
-    Stopwatch w;
-    SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
-
-    auto result = index.save_to_stream([&](void const * buffer, std::size_t length) {
-        write_buf.write(reinterpret_cast<const char *>(buffer), length);
-        return true;
-    });
-    RUNTIME_CHECK_MSG(result, "Failed to save vector index: {}", result.error.what());
-}
-
 VectorIndexWriterInternal::~VectorIndexWriterInternal()
 {
     GET_METRIC(tiflash_vector_index_duration, type_build).Observe(total_duration);
@@ -167,6 +128,27 @@ void VectorIndexWriterInternal::saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) co
     pb_vec_idx->set_format_version(0);
     pb_vec_idx->set_dimensions(definition->dimension);
     pb_vec_idx->set_distance_metric(tipb::VectorDistanceMetric_Name(definition->distance_metric));
+}
+
+void VectorIndexWriterOnDisk::saveToFile() const
+{
+    Stopwatch w;
+    SCOPE_EXIT({ writer.total_duration += w.elapsedSeconds(); });
+
+    auto result = writer.index.save(unum::usearch::output_file_t(index_file.data()));
+    RUNTIME_CHECK_MSG(result, "Failed to save vector index: {} path={}", result.error.what(), index_file);
+}
+
+void VectorIndexWriterInMemory::saveToBuffer(WriteBuffer & write_buf)
+{
+    Stopwatch w;
+    SCOPE_EXIT({ writer.total_duration += w.elapsedSeconds(); });
+
+    auto result = writer.index.save_to_stream([&](void const * buffer, std::size_t length) {
+        write_buf.write(reinterpret_cast<const char *>(buffer), length);
+        return true;
+    });
+    RUNTIME_CHECK_MSG(result, "Failed to save vector index: {}", result.error.what());
 }
 
 } // namespace DB::DM
