@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
+#include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -286,6 +287,61 @@ try
 
     // check delta index has built for all segments
     waitDeltaIndexReady();
+
+    const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+
+    // read from store
+    {
+        read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
+    }
+
+    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+    ann_query_info->set_column_id(vec_column_id);
+    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+
+    // read with ANN query
+    {
+        ann_query_info->set_top_k(2);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
+
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+        read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
+    }
+
+    // read with ANN query
+    {
+        ann_query_info->set_top_k(2);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({127.5}));
+
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+        read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreVectorTest, TestMultipleColumnFileTinyMinorCompaction)
+try
+{
+    store = reload();
+
+    const size_t num_rows_write = 128;
+
+    // write [0, 128) to store
+    write(0, num_rows_write);
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // write [128, 256) to store
+    write(num_rows_write, num_rows_write * 2);
+    // trigger FlushCache for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+
+    // check delta index has built for all segments
+    LOG_INFO(Logger::get(), "wait delta index ready");
+    waitDeltaIndexReady();
+    LOG_INFO(Logger::get(), "wait delta index ready done");
+    triggerCompactDelta();
+    LOG_INFO(Logger::get(), "compact delta done");
 
     const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
 
