@@ -97,14 +97,14 @@ private:
     std::vector<StringRef> batch_rows{};
 
     template <typename DerivedCollator, bool has_collator>
-    size_t prepareNextBatchType(
+    void prepareNextBatchType(
         const UInt8 * chars,
         const IColumn::Offsets & offsets,
         size_t cur_batch_size,
         const TiDB::TiDBCollatorPtr & collator)
     {
         if (cur_batch_size <= 0)
-            return 0;
+            return;
 
         batch_rows.resize(cur_batch_size);
 
@@ -121,7 +121,6 @@ private:
             batch_rows[i] = key;
         }
         processed_row_idx += cur_batch_size;
-        return 0;
     }
 
     void santityCheck() const
@@ -141,7 +140,7 @@ protected:
         batch_rows.reserve(max_batch_size);
     }
 
-    size_t prepareNextBatch(
+    void prepareNextBatch(
         const UInt8 * chars,
         const IColumn::Offsets & offsets,
         size_t cur_batch_size,
@@ -220,10 +219,10 @@ struct HashMethodString
         BatchHandlerBase::init(start_row, max_batch_size);
     }
 
-    size_t prepareNextBatch(Arena *, size_t cur_batch_size)
+    void prepareNextBatch(Arena *, size_t cur_batch_size)
     {
         assert(BatchHandlerBase::inited());
-        return BatchHandlerBase::prepareNextBatch(chars, *offsets, cur_batch_size, collator);
+        BatchHandlerBase::prepareNextBatch(chars, *offsets, cur_batch_size, collator);
     }
 
     ALWAYS_INLINE inline KeyHolderType getKeyHolder(
@@ -526,7 +525,7 @@ protected:
                 collators.empty() ? nullptr : collators[i]);
     }
 
-    size_t prepareNextBatch(
+    void prepareNextBatch(
         const ColumnRawPtrs & key_columns,
         Arena * pool,
         size_t cur_batch_size,
@@ -536,14 +535,14 @@ protected:
         resize(cur_batch_size);
 
         if unlikely (cur_batch_size <= 0)
-            return 0;
+            return;
 
         assert(processed_row_idx + cur_batch_size <= byte_size.size());
         size_t mem_size = 0;
         for (size_t i = processed_row_idx; i < processed_row_idx + cur_batch_size; ++i)
             mem_size += byte_size[i];
 
-        auto * ptr = static_cast<char *>(pool->alignedAlloc(mem_size, 16));
+        auto * ptr = static_cast<char *>(pool->alignedAlloc(mem_size, 16, /*only_keep_one_chunk=*/true));
         for (size_t i = 0; i < cur_batch_size; ++i)
         {
             pos[i] = ptr;
@@ -565,8 +564,6 @@ protected:
             real_byte_size[i] = pos[i] - ori_pos[i];
 
         processed_row_idx += cur_batch_size;
-
-        return mem_size;
     }
 
 public:
@@ -617,10 +614,10 @@ struct HashMethodSerialized
         BatchHandlerBase::init(start_row, key_columns, collators);
     }
 
-    size_t prepareNextBatch(Arena * pool, size_t cur_batch_size)
+    void prepareNextBatch(Arena * pool, size_t cur_batch_size)
     {
         assert(BatchHandlerBase::inited());
-        return BatchHandlerBase::prepareNextBatch(key_columns, pool, cur_batch_size, collators);
+        BatchHandlerBase::prepareNextBatch(key_columns, pool, cur_batch_size, collators);
     }
 
     ALWAYS_INLINE inline KeyHolderType getKeyHolder(size_t row, Arena * pool, std::vector<String> & sort_key_containers)

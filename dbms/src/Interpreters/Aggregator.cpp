@@ -890,9 +890,8 @@ void Aggregator::handleOneBatch(
         if unlikely (i + mini_batch_size > end)
             mini_batch_size = end - i;
 
-        size_t batch_mem_size = 0;
         if constexpr (batch_get_key_holder)
-            batch_mem_size = state.prepareNextBatch(&temp_batch_pool, mini_batch_size);
+            state.prepareNextBatch(&temp_batch_pool, mini_batch_size);
 
         if constexpr (enable_prefetch || batch_get_key_holder)
         {
@@ -990,7 +989,7 @@ void Aggregator::handleOneBatch(
         }
 
         if constexpr (batch_get_key_holder)
-            temp_batch_pool.rollback(batch_mem_size);
+            temp_batch_pool.rollback();
 
         if unlikely (!processed_rows.has_value())
             break;
