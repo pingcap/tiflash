@@ -1,0 +1,2 @@
+# Suppress heap-buffer-overflow in usearch::index_gt::search_to_find_in_base_
+fun:*search_to_find_in_base*
