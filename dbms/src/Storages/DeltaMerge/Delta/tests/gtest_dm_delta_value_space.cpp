@@ -149,6 +149,8 @@ protected:
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, false, /*tso*/ 2);
         auto tiny_file = ColumnFileTiny::writeColumnFile(context, block, 0, block.rows(), wbs);
+        // Just pretend we have those local index pages. It is OK because we don't read
+        // with the page_id of local index during following tests
         tiny_file = tiny_file->cloneWith(tiny_file->getDataPageId(), genIndexInfos(idx_page_ids));
         wbs.writeLogAndData();
         delta->appendColumnFile(context, tiny_file);
