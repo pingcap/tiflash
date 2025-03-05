@@ -118,7 +118,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
 {
     const ColumnsDescription & columns = getColumns();
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "updateTableColumnInfo, table_name={} ordinary=\"{}\" materialized=\"{}\"",
         table_column_info->table_name,
@@ -318,7 +318,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         // TODO: Handle with PK change: drop old PK column cache rather than let LRU evict it.
     }
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "updateTableColumnInfo finished, table_name={} table_column_defines={}",
         table_column_info->table_name,
