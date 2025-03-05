@@ -66,7 +66,7 @@ public:
 
     ~LocalIndexWriterInMemory() override = default;
 
-    dtpb::IndexFilePropsV2 finalize(WriteBuffer & write_buf);
+    dtpb::IndexFilePropsV2 finalize(WriteBuffer & write_buf, std::function<size_t()> get_index_size);
 
 protected:
     virtual void saveToBuffer(WriteBuffer & write_buf) = 0;

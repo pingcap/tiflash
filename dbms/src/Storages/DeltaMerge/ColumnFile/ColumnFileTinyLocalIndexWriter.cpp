@@ -181,7 +181,7 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
             CompressedWriteBuffer compressed(write_buf);
             dtpb::ColumnFileIndexInfo pb_cf_idx;
             pb_cf_idx.set_index_page_id(index_page_id);
-            auto idx_info = index.index_writer->finalize(compressed);
+            auto idx_info = index.index_writer->finalize(compressed, [&write_buf] { return write_buf.count(); });
             pb_cf_idx.mutable_index_props()->Swap(&idx_info);
             auto data_size = write_buf.count();
             auto buf = write_buf.tryGetReadBuffer();
