@@ -14,6 +14,7 @@
 
 #include <Columns/ColumnNullable.h>
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
 #include <IO/Compression/CompressedWriteBuffer.h>
@@ -31,7 +32,7 @@ namespace DB::DM
 {
 
 template <typename T>
-void InvertedIndexWriter<T>::addBlock(
+void InvertedIndexWriterInternal<T>::addBlock(
     const IColumn & column,
     const ColumnVector<UInt8> * del_mark,
     ProceedCheckFn should_proceed)
@@ -77,16 +78,7 @@ void InvertedIndexWriter<T>::addBlock(
 }
 
 template <typename T>
-void InvertedIndexWriter<T>::saveToFile(std::string_view path) const
-{
-    WriteBufferFromFile write_buf(path.data());
-    saveToBuffer(write_buf);
-    write_buf.sync();
-    uncompressed_size = write_buf.count();
-}
-
-template <typename T>
-void InvertedIndexWriter<T>::saveToBuffer(WriteBuffer & write_buf) const
+void InvertedIndexWriterInternal<T>::saveToBuffer(WriteBuffer & write_buf) const
 {
     InvertedIndex::Meta<T> meta;
 
@@ -138,57 +130,148 @@ void InvertedIndexWriter<T>::saveToBuffer(WriteBuffer & write_buf) const
 }
 
 template <typename T>
-void InvertedIndexWriter<T>::saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) const
+void InvertedIndexWriterInternal<T>::saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) const
 {
     auto * pb_inv_idx = pb_idx->mutable_inverted_index();
     pb_inv_idx->set_uncompressed_size(uncompressed_size);
 }
 
-template class InvertedIndexWriter<UInt8>;
-template class InvertedIndexWriter<UInt16>;
-template class InvertedIndexWriter<UInt32>;
-template class InvertedIndexWriter<UInt64>;
-template class InvertedIndexWriter<Int8>;
-template class InvertedIndexWriter<Int16>;
-template class InvertedIndexWriter<Int32>;
-template class InvertedIndexWriter<Int64>;
+template <typename T>
+InvertedIndexWriterInternal<T>::~InvertedIndexWriterInternal()
+{
+    GET_METRIC(tiflash_inverted_index_duration, type_build).Observe(total_duration);
+    GET_METRIC(tiflash_inverted_index_active_instances, type_build).Decrement();
+}
 
-LocalIndexWriterPtr createInvertedIndexWriter(IndexID index_id, const TiDB::InvertedIndexDefinitionPtr & definition)
+template <typename T>
+void InvertedIndexWriterOnDisk<T>::saveToFile() const
+{
+    Stopwatch w;
+    SCOPE_EXIT({ writer.total_duration += w.elapsedSeconds(); });
+
+    WriteBufferFromFile write_buf(index_file);
+    writer.saveToBuffer(write_buf);
+    write_buf.sync();
+}
+
+template <typename T>
+void InvertedIndexWriterInMemory<T>::saveToBuffer(WriteBuffer & write_buf)
+{
+    Stopwatch w;
+    SCOPE_EXIT({ writer.total_duration += w.elapsedSeconds(); });
+
+    writer.saveToBuffer(write_buf);
+}
+
+template class InvertedIndexWriterInternal<UInt8>;
+template class InvertedIndexWriterInternal<UInt16>;
+template class InvertedIndexWriterInternal<UInt32>;
+template class InvertedIndexWriterInternal<UInt64>;
+template class InvertedIndexWriterInternal<Int8>;
+template class InvertedIndexWriterInternal<Int16>;
+template class InvertedIndexWriterInternal<Int32>;
+template class InvertedIndexWriterInternal<Int64>;
+template class InvertedIndexWriterOnDisk<UInt8>;
+template class InvertedIndexWriterOnDisk<UInt16>;
+template class InvertedIndexWriterOnDisk<UInt32>;
+template class InvertedIndexWriterOnDisk<UInt64>;
+template class InvertedIndexWriterOnDisk<Int8>;
+template class InvertedIndexWriterOnDisk<Int16>;
+template class InvertedIndexWriterOnDisk<Int32>;
+template class InvertedIndexWriterOnDisk<Int64>;
+template class InvertedIndexWriterInMemory<UInt8>;
+template class InvertedIndexWriterInMemory<UInt16>;
+template class InvertedIndexWriterInMemory<UInt32>;
+template class InvertedIndexWriterInMemory<UInt64>;
+template class InvertedIndexWriterInMemory<Int8>;
+template class InvertedIndexWriterInMemory<Int16>;
+template class InvertedIndexWriterInMemory<Int32>;
+template class InvertedIndexWriterInMemory<Int64>;
+
+LocalIndexWriterOnDiskPtr createOnDiskInvertedIndexWriter(
+    IndexID index_id,
+    std::string_view index_file,
+    const TiDB::InvertedIndexDefinitionPtr & definition)
 {
     if (!definition)
         throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid index kind or definition");
 
     if (definition->type_size == sizeof(UInt8) && !definition->is_signed)
     {
-        return std::make_shared<InvertedIndexWriter<UInt8>>(index_id);
+        return std::make_shared<InvertedIndexWriterOnDisk<UInt8>>(index_id, index_file);
     }
     else if (definition->type_size == sizeof(Int8) && definition->is_signed)
     {
-        return std::make_shared<InvertedIndexWriter<Int8>>(index_id);
+        return std::make_shared<InvertedIndexWriterOnDisk<Int8>>(index_id, index_file);
     }
     else if (definition->type_size == sizeof(UInt16) && !definition->is_signed)
     {
-        return std::make_shared<InvertedIndexWriter<UInt16>>(index_id);
+        return std::make_shared<InvertedIndexWriterOnDisk<UInt16>>(index_id, index_file);
     }
     else if (definition->type_size == sizeof(Int16) && definition->is_signed)
     {
-        return std::make_shared<InvertedIndexWriter<Int16>>(index_id);
+        return std::make_shared<InvertedIndexWriterOnDisk<Int16>>(index_id, index_file);
     }
     else if (definition->type_size == sizeof(UInt32) && !definition->is_signed)
     {
-        return std::make_shared<InvertedIndexWriter<UInt32>>(index_id);
+        return std::make_shared<InvertedIndexWriterOnDisk<UInt32>>(index_id, index_file);
     }
     else if (definition->type_size == sizeof(Int32) && definition->is_signed)
     {
-        return std::make_shared<InvertedIndexWriter<Int32>>(index_id);
+        return std::make_shared<InvertedIndexWriterOnDisk<Int32>>(index_id, index_file);
     }
     else if (definition->type_size == sizeof(UInt64) && !definition->is_signed)
     {
-        return std::make_shared<InvertedIndexWriter<UInt64>>(index_id);
+        return std::make_shared<InvertedIndexWriterOnDisk<UInt64>>(index_id, index_file);
     }
     else if (definition->type_size == sizeof(Int64) && definition->is_signed)
     {
-        return std::make_shared<InvertedIndexWriter<Int64>>(index_id);
+        return std::make_shared<InvertedIndexWriterOnDisk<Int64>>(index_id, index_file);
+    }
+    else
+    {
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Unsupported type size {}", definition->type_size);
+    }
+}
+
+LocalIndexWriterInMemoryPtr createInMemoryInvertedIndexWriter(
+    IndexID index_id,
+    const TiDB::InvertedIndexDefinitionPtr & definition)
+{
+    if (!definition)
+        throw Exception(ErrorCodes::BAD_ARGUMENTS, "Invalid index kind or definition");
+
+    if (definition->type_size == sizeof(UInt8) && !definition->is_signed)
+    {
+        return std::make_shared<InvertedIndexWriterInMemory<UInt8>>(index_id);
+    }
+    else if (definition->type_size == sizeof(Int8) && definition->is_signed)
+    {
+        return std::make_shared<InvertedIndexWriterInMemory<Int8>>(index_id);
+    }
+    else if (definition->type_size == sizeof(UInt16) && !definition->is_signed)
+    {
+        return std::make_shared<InvertedIndexWriterInMemory<UInt16>>(index_id);
+    }
+    else if (definition->type_size == sizeof(Int16) && definition->is_signed)
+    {
+        return std::make_shared<InvertedIndexWriterInMemory<Int16>>(index_id);
+    }
+    else if (definition->type_size == sizeof(UInt32) && !definition->is_signed)
+    {
+        return std::make_shared<InvertedIndexWriterInMemory<UInt32>>(index_id);
+    }
+    else if (definition->type_size == sizeof(Int32) && definition->is_signed)
+    {
+        return std::make_shared<InvertedIndexWriterInMemory<Int32>>(index_id);
+    }
+    else if (definition->type_size == sizeof(UInt64) && !definition->is_signed)
+    {
+        return std::make_shared<InvertedIndexWriterInMemory<UInt64>>(index_id);
+    }
+    else if (definition->type_size == sizeof(Int64) && definition->is_signed)
+    {
+        return std::make_shared<InvertedIndexWriterInMemory<Int64>>(index_id);
     }
     else
     {
