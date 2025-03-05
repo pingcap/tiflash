@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -119,6 +120,40 @@ protected:
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
     DMContext & dmContext() { return *dm_context; }
+
+    static ColumnFileTiny::IndexInfosPtr genIndexInfos(const std::vector<UInt64> & idx_page_ids)
+    {
+        auto indexes = std::make_shared<ColumnFileTiny::IndexInfos>();
+        for (const auto pid : idx_page_ids)
+        {
+            dtpb::ColumnFileIndexInfo idx;
+            idx.set_index_page_id(pid);
+            auto * idx_props = idx.mutable_index_props();
+            idx_props->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
+            idx_props->set_index_id(1);
+            idx_props->set_file_size(1024);
+            auto * vec_idx = idx_props->mutable_vector_index();
+            vec_idx->set_format_version(0);
+            indexes->emplace_back(std::move(idx));
+        }
+        return indexes;
+    }
+
+    static Block appendCFileTinyToDeltaVSWithIndexes(
+        DMContext & context,
+        DeltaValueSpacePtr delta,
+        size_t rows_start,
+        size_t rows_num,
+        WriteBatches & wbs,
+        const std::vector<UInt64> & idx_page_ids)
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(rows_start, rows_start + rows_num, false, /*tso*/ 2);
+        auto tiny_file = ColumnFileTiny::writeColumnFile(context, block, 0, block.rows(), wbs);
+        tiny_file = tiny_file->cloneWith(tiny_file->getDataPageId(), genIndexInfos(idx_page_ids));
+        wbs.writeLogAndData();
+        delta->appendColumnFile(context, tiny_file);
+        return block;
+    }
 
 protected:
     /// all these var lives as ref in dm_context
@@ -390,11 +425,10 @@ TEST_F(DeltaValueSpaceTest, Flush)
 
 TEST_F(DeltaValueSpaceTest, MinorCompaction)
 {
-    auto persisted_file_set = delta->getPersistedFileSet();
-    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
     size_t total_rows_write = 0;
     // write some column_file and flush
     {
+        WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
         {
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
@@ -416,13 +450,16 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
             total_rows_write += num_rows_write_per_batch;
         }
+        wbs.writeAll();
         delta->flush(dmContext());
     }
     // build compaction task and finish prepare stage
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
+    auto persisted_file_set = delta->getPersistedFileSet();
     MinorCompactionPtr compaction_task;
     {
         PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
-        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
         // There should be three compaction sub_tasks.
         // The first task try to compact the first three column files to a larger one.
         // The second task is a trivial move for a ColumnFileDeleteRange.
@@ -459,11 +496,11 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     // now the column files in persisted_file_set should be: T_300, D_0_100, T_100, T_100
     {
         // generate but not commit
-        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
         EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
         // generate and commit
         PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
-        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
         EXPECT_EQ(compaction_task->getFirsCompactIndex(), 2);
         compaction_task->prepare(dmContext(), wbs, *reader);
         ASSERT_TRUE(compaction_task->commit(persisted_file_set, wbs));
@@ -474,7 +511,7 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
     // now the column files in persisted_file_set should be: T_300, D_0_100, T_200
     // so there is no compaction task to do
     {
-        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
         ASSERT_TRUE(!compaction_task);
     }
     // do a lot of minor compaction and check the status
@@ -487,7 +524,8 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             while (true)
             {
                 PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
-                auto minor_compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext());
+                auto minor_compaction_task
+                    = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
                 if (!minor_compaction_task)
                     break;
                 ASSERT_NE(minor_compaction_task->getFirsCompactIndex(), std::numeric_limits<size_t>::max());
@@ -498,6 +536,108 @@ TEST_F(DeltaValueSpaceTest, MinorCompaction)
             ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
             ASSERT_EQ(persisted_file_set->getDeletes(), 1);
         }
+    }
+}
+
+TEST_F(DeltaValueSpaceTest, MinorCompactionWithLocalIndexes)
+{
+    size_t total_rows_write = 0;
+    // write some column_file and flush
+    {
+        WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
+        {
+            appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
+            total_rows_write += num_rows_write_per_batch;
+        }
+        {
+            // CFTiny1
+            appendCFileTinyToDeltaVSWithIndexes(
+                dmContext(),
+                delta,
+                total_rows_write,
+                num_rows_write_per_batch,
+                wbs,
+                {2000000, 2000001} // with 2 fake local index page_id
+            );
+            total_rows_write += num_rows_write_per_batch;
+        }
+        {
+            appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
+            total_rows_write += num_rows_write_per_batch;
+        }
+        {
+            delta->appendDeleteRange(
+                dmContext(),
+                RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write_per_batch)));
+        }
+        {
+            // CFTiny2
+            appendCFileTinyToDeltaVSWithIndexes(
+                dmContext(),
+                delta,
+                total_rows_write,
+                num_rows_write_per_batch,
+                wbs,
+                {2000002, 2000003} // with 2 fake local index page_id
+            );
+            total_rows_write += num_rows_write_per_batch;
+        }
+        wbs.writeAll();
+        delta->flush(dmContext());
+    }
+
+    // build compaction task and finish prepare stage
+    WriteBatches wbs(*dmContext().storage_pool, dmContext().getWriteLimiter());
+    auto persisted_file_set = delta->getPersistedFileSet();
+    MinorCompactionPtr compaction_task;
+    {
+        PageReaderPtr reader = dmContext().storage_pool->newLogReader(dmContext().getReadLimiter(), true, "");
+        compaction_task = persisted_file_set->pickUpMinorCompaction(dmContext().delta_small_column_file_rows);
+        // There should be three compaction sub_tasks.
+        // The first task try to compact the first three column files to a larger one.
+        // The second task is a trivial move for a ColumnFileDeleteRange.
+        // The third task is a trivial move for and a ColumnFileTiny.
+        const auto & tasks = compaction_task->getTasks();
+        ASSERT_EQ(compaction_task->getFirsCompactIndex(), 0);
+        ASSERT_EQ(tasks.size(), 3);
+        ASSERT_EQ(tasks[0].to_compact.size(), 3);
+        ASSERT_EQ(tasks[0].is_trivial_move, false);
+        ASSERT_EQ(tasks[1].to_compact.size(), 1);
+        ASSERT_EQ(tasks[1].is_trivial_move, true);
+        ASSERT_EQ(tasks[2].to_compact.size(), 1);
+        ASSERT_EQ(tasks[2].is_trivial_move, true);
+        compaction_task->prepare(dmContext(), wbs, *reader);
+
+        // Collect the page_ids in log that is pending to be removed
+        std::set<PageIdU64> removed_log_ids;
+        for (const auto & w : wbs.removed_log.getWriteBatch().getWrites())
+        {
+            removed_log_ids.emplace(w.page_id);
+        }
+        // The local index in CFTiny1 must be presented at the removing list
+        ASSERT_TRUE(removed_log_ids.contains(2000000));
+        ASSERT_TRUE(removed_log_ids.contains(2000001));
+        // The local index in CFTiny2 must NOT be presented at the removing list
+        // Because tasks[2] is just a trivial move
+        ASSERT_FALSE(removed_log_ids.contains(2000002));
+        ASSERT_FALSE(removed_log_ids.contains(2000003));
+    }
+    // another thread write more data to the delta value space and flush it
+    {
+        appendBlockToDeltaValueSpace(dmContext(), delta, total_rows_write, num_rows_write_per_batch);
+        total_rows_write += num_rows_write_per_batch;
+        delta->flush(dmContext());
+        ASSERT_EQ(delta->getUnsavedRows(), 0);
+        ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
+        ASSERT_EQ(persisted_file_set->getDeletes(), 1);
+        ASSERT_EQ(persisted_file_set->getColumnFileCount(), 6);
+    }
+    // commit the compaction task and check the status
+    {
+        ASSERT_TRUE(compaction_task->commit(persisted_file_set, wbs));
+        ASSERT_EQ(persisted_file_set->getRows(), total_rows_write);
+        ASSERT_EQ(persisted_file_set->getDeletes(), 1);
+        ASSERT_EQ(persisted_file_set->getColumnFileCount(), 4);
     }
 }
 

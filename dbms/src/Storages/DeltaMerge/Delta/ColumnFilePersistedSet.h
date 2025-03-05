@@ -157,7 +157,9 @@ public:
         WriteBatches & wbs);
 
     /// Choose all small column files that can be compacted to larger column files
-    MinorCompactionPtr pickUpMinorCompaction(DMContext & context);
+    // Try to compact the CFTiny with rows less than `small_column_file_rows` into larger
+    // CFTiny
+    MinorCompactionPtr pickUpMinorCompaction(size_t delta_small_column_file_rows);
 
     /// Update the metadata to commit the compaction results
     bool installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs);

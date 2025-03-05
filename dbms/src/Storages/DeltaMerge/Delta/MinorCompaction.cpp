@@ -52,7 +52,6 @@ void MinorCompaction::prepare(DMContext & context, WriteBatches & wbs, const Pag
             }
 
             t_file->removeData(wbs); // record the ColumnFile (and its indexes) should be removed
-            // wbs.removed_log.delPage(t_file->getDataPageId());
         }
         Block compact_block = schema.cloneWithColumns(std::move(compact_columns));
         auto compact_rows = compact_block.rows();

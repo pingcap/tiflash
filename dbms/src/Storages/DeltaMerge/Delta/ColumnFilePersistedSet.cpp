@@ -254,56 +254,56 @@ bool ColumnFilePersistedSet::updatePersistedColumnFilesAfterAddingIndex(
     return true;
 }
 
-MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & context)
+MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(size_t delta_small_column_file_rows)
 {
     // Every time we try to compact all column files.
     // For ColumnFileTiny, we will try to combine small `ColumnFileTiny`s to a bigger one.
     // For ColumnFileDeleteRange and ColumnFileBig, we keep them intact.
     // And only if there exists some small `ColumnFileTiny`s which can be combined, we will actually do the compaction.
+    if (persisted_files.empty())
+        return nullptr;
+
     auto compaction = std::make_shared<MinorCompaction>(minor_compaction_version);
-    if (!persisted_files.empty())
+    bool is_all_trivial_move = true;
+    MinorCompaction::Task cur_task;
+    auto pack_up_cur_task = [&]() {
+        bool is_trivial_move = compaction->packUpTask(std::move(cur_task));
+        is_all_trivial_move = is_all_trivial_move && is_trivial_move;
+        cur_task = {};
+    };
+    size_t index = 0;
+    for (auto & file : persisted_files)
     {
-        bool is_all_trivial_move = true;
-        MinorCompaction::Task cur_task;
-        auto pack_up_cur_task = [&]() {
-            bool is_trivial_move = compaction->packUpTask(std::move(cur_task));
-            is_all_trivial_move = is_all_trivial_move && is_trivial_move;
-            cur_task = {};
-        };
-        size_t index = 0;
-        for (auto & file : persisted_files)
+        if (auto * t_file = file->tryToTinyFile(); t_file)
         {
-            if (auto * t_file = file->tryToTinyFile(); t_file)
+            bool cur_task_full = cur_task.total_rows >= delta_small_column_file_rows;
+            bool small_column_file = t_file->getRows() < delta_small_column_file_rows;
+            bool schema_ok = cur_task.to_compact.empty();
+
+            if (!schema_ok)
             {
-                bool cur_task_full = cur_task.total_rows >= context.delta_small_column_file_rows;
-                bool small_column_file = t_file->getRows() < context.delta_small_column_file_rows;
-                bool schema_ok = cur_task.to_compact.empty();
-
-                if (!schema_ok)
-                {
-                    if (auto * last_t_file = cur_task.to_compact.back()->tryToTinyFile(); last_t_file)
-                        schema_ok = t_file->getSchema() == last_t_file->getSchema();
-                }
-
-                if (cur_task_full || !small_column_file || !schema_ok)
-                    pack_up_cur_task();
-
-                cur_task.addColumnFile(file, index);
+                if (auto * last_t_file = cur_task.to_compact.back()->tryToTinyFile(); last_t_file)
+                    schema_ok = t_file->getSchema() == last_t_file->getSchema();
             }
-            else
-            {
+
+            if (cur_task_full || !small_column_file || !schema_ok)
                 pack_up_cur_task();
-                cur_task.addColumnFile(file, index);
-            }
 
-            ++index;
+            cur_task.addColumnFile(file, index);
         }
-        pack_up_cur_task();
+        else
+        {
+            pack_up_cur_task();
+            cur_task.addColumnFile(file, index);
+        }
 
-        if (!is_all_trivial_move)
-            return compaction;
+        ++index;
     }
-    return nullptr;
+    pack_up_cur_task();
+
+    if (is_all_trivial_move)
+        return nullptr;
+    return compaction;
 }
 
 bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs)
