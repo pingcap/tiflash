@@ -148,6 +148,7 @@ void VectorIndexWriterInMemory::saveToBuffer(WriteBuffer & write_buf)
         write_buf.write(reinterpret_cast<const char *>(buffer), length);
         return true;
     });
+    write_buf.next();
     RUNTIME_CHECK_MSG(result, "Failed to save vector index: {}", result.error.what());
 }
 
