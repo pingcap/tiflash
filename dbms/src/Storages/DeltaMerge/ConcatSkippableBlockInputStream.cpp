@@ -247,6 +247,8 @@ Block ConcatVectorIndexBlockInputStream::read()
 {
     load();
     auto block = stream->read();
+    if (!block)
+        return block;
 
     // The block read from `VectorIndexBlockInputStream` only return the selected rows. Return it directly.
     // For streams which are not `VectorIndexBlockInputStream`, the block should be filtered by bitmap.
