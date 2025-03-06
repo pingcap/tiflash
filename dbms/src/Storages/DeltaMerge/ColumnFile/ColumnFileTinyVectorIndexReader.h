@@ -16,8 +16,8 @@
 
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
-#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache_fwd.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
 
 
 namespace DB::DM
@@ -31,7 +31,7 @@ private:
 
     const ANNQueryInfoPtr ann_query_info;
     // Set after load().
-    VectorIndexViewerPtr vec_index;
+    VectorIndexReaderPtr vec_index;
     const BitmapFilterView valid_rows;
     // Note: ColumnDefine comes from read path does not have vector_index fields.
     const ColumnDefine vec_cd;
@@ -77,16 +77,16 @@ public:
     // Read vector column data with the specified rowids.
     void read(
         MutableColumnPtr & vec_column,
-        const std::span<const VectorIndexViewer::Key> & read_rowids,
+        const std::span<const VectorIndexReader::Key> & read_rowids,
         size_t rowid_start_offset);
 
     // Load vector index and search results.
     // Return the rowids of the selected rows.
-    std::vector<VectorIndexViewer::SearchResult> load();
+    std::vector<VectorIndexReader::SearchResult> load();
 
 private:
     void loadVectorIndex();
-    std::vector<VectorIndexViewer::SearchResult> loadVectorSearchResult();
+    std::vector<VectorIndexReader::SearchResult> loadVectorSearchResult();
 };
 
 using ColumnFileTinyVectorIndexReaderPtr = std::shared_ptr<ColumnFileTinyVectorIndexReader>;

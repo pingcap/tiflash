@@ -349,6 +349,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 void syncSchemaWithTiDB(
     const TiFlashStorageConfig & storage_config,
     BgStorageInitHolder & bg_init_stores,
+    const std::atomic_size_t & terminate_signals_counter,
     const std::unique_ptr<Context> & global_context,
     const LoggerPtr & log)
 {
@@ -357,33 +358,54 @@ void syncSchemaWithTiDB(
     if (storage_config.api_version == 1)
     {
         Stopwatch watch;
-        while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
+        const UInt64 total_wait_seconds = global_context->getSettingsRef().ddl_restart_wait_seconds;
+        static constexpr int retry_wait_seconds = 3;
+        while (true)
         {
+            if (watch.elapsedSeconds() > total_wait_seconds)
+            {
+                LOG_WARNING(log, "Sync schemas during init timeout, cost={:.3f}s", watch.elapsedSeconds());
+                break;
+            }
+
             try
             {
                 global_context->getTMTContext().getSchemaSyncerManager()->syncSchemas(*global_context, NullspaceID);
+                LOG_INFO(log, "Sync schemas during init done, cost={:.3f}s", watch.elapsedSeconds());
                 break;
             }
-            catch (Poco::Exception & e)
+            catch (DB::Exception & e)
             {
-                const int wait_seconds = 3;
                 LOG_ERROR(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
                     e.displayText(),
-                    wait_seconds);
-                ::sleep(wait_seconds);
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
+            }
+            catch (Poco::Exception & e)
+            {
+                LOG_ERROR(
+                    log,
+                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                    " seconds and try again.",
+                    e.displayText(),
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
             }
         }
-        LOG_DEBUG(log, "Sync schemas done.");
     }
 
     // Init the DeltaMergeStore instances if data exist.
     // Make the disk usage correct and prepare for serving
     // queries.
-    bg_init_stores
-        .start(*global_context, log, storage_config.lazily_init_store, storage_config.s3_config.isS3Enabled());
+    bg_init_stores.start(
+        *global_context,
+        terminate_signals_counter,
+        log,
+        storage_config.lazily_init_store,
+        storage_config.s3_config.isS3Enabled());
 
     // init schema sync service with tidb
     global_context->initializeSchemaSyncService();
@@ -458,6 +480,7 @@ void loadBlockList(
 }
 
 int Server::main(const std::vector<std::string> & /*args*/)
+try
 {
     setThreadName("TiFlashMain");
 
@@ -905,9 +928,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
     /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
-    size_t vec_index_cache_entities = config().getUInt64("vec_index_cache_entities", 1000);
-    if (vec_index_cache_entities)
-        global_context->setLocalIndexCache(vec_index_cache_entities);
+    size_t light_local_index_cache_entities = config().getUInt64("light_local_index_cache_entities", 10000);
+    size_t heavy_local_index_cache_entities = config().getUInt64("heavy_local_index_cache_entities", 500);
+    if (light_local_index_cache_entities && heavy_local_index_cache_entities)
+        global_context->setLocalIndexCache(light_local_index_cache_entities, heavy_local_index_cache_entities);
 
     size_t column_cache_long_term_size
         = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
@@ -1007,7 +1031,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // do not depend on `store_id`. Start sync schema before serving any requests.
             // For the node has not been bootstrapped, this stage will be postpone.
             // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-            syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+            syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
         }
     }
     // set default database for ch-client
@@ -1136,7 +1160,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     // Not disagg node done it before
                     // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
                     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-                    syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+                    syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
                 proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
@@ -1233,6 +1257,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     return Application::EXIT_OK;
+}
+catch (...)
+{
+    // The default exception handler of Poco::Util::Application will catch the
+    // `DB::Exception` as `Poco::Exception` and do not print the stacktrace.
+    // So we catch all exceptions here and print the stacktrace.
+    tryLogCurrentException("Server::main");
+    auto code = getCurrentExceptionCode();
+    return code > 0 ? code : 1;
 }
 } // namespace DB
 

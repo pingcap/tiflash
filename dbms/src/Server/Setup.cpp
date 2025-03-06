@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Server/Setup.h>
 #include <common/config_common.h> // Included for `USE_JEMALLOC`/`USE_MIMALLOC`
@@ -202,7 +203,7 @@ void setOpenFileLimit(UInt64 new_limit, const LoggerPtr & log)
 
     rlimit rlim{};
     if (getrlimit(RLIMIT_NOFILE, &rlim))
-        throw Poco::Exception("Cannot getrlimit");
+        throw DB::Exception("Cannot getrlimit");
 
     if (rlim.rlim_cur == rlim.rlim_max)
     {

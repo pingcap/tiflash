@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,28 +14,17 @@
 
 #pragma once
 
-#include <tipb/executor.pb.h>
-
 #include <memory>
 
 namespace DB::DM
 {
 
-class LocalIndexViewer;
-using LocalIndexViewerPtr = std::shared_ptr<LocalIndexViewer>;
+class VectorIndexWriterInMemory;
 
-class LocalIndexBuilder;
-using LocalIndexBuilderPtr = std::shared_ptr<LocalIndexBuilder>;
+using VectorIndexWriterInMemoryPtr = std::shared_ptr<VectorIndexWriterInMemory>;
 
-class LocalIndexCache;
-using LocalIndexCachePtr = std::shared_ptr<LocalIndexCache>;
+class VectorIndexWriterOnDisk;
 
-using ANNQueryInfoPtr = std::shared_ptr<tipb::ANNQueryInfo>;
-
-class VectorIndexBuilder;
-using VectorIndexBuilderPtr = std::shared_ptr<VectorIndexBuilder>;
-
-class VectorIndexViewer;
-using VectorIndexViewerPtr = std::shared_ptr<VectorIndexViewer>;
+using VectorIndexWriterOnDiskPtr = std::shared_ptr<VectorIndexWriterOnDisk>;
 
 } // namespace DB::DM
