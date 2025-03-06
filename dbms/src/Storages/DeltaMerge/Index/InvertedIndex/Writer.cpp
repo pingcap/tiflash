@@ -17,7 +17,6 @@
 #include <Common/TiFlashMetrics.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
-#include <IO/Compression/CompressedWriteBuffer.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Writer.h>
 
 #include <ext/scope_guard.h>
@@ -120,17 +119,11 @@ void InvertedIndexWriterInternal<T>::saveToBuffer(WriteBuffer & write_buf) const
     write_buf.write(InvertedIndex::MagicFlag, InvertedIndex::MagicFlagLength);
 
     // 5. record uncompressed size
-    write_buf.next();
-    if (auto * compressed = dynamic_cast<CompressedWriteBuffer<true> *>(&write_buf); compressed)
-        uncompressed_size = compressed->getUncompressedBytes();
-    else if (auto * compressed = dynamic_cast<CompressedWriteBuffer<false> *>(&write_buf); compressed)
-        uncompressed_size = compressed->getUncompressedBytes();
-    else
-        uncompressed_size = write_buf.count();
+    uncompressed_size = write_buf.count();
 }
 
 template <typename T>
-void InvertedIndexWriterInternal<T>::saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) const
+void InvertedIndexWriterInternal<T>::saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) const
 {
     auto * pb_inv_idx = pb_idx->mutable_inverted_index();
     pb_inv_idx->set_uncompressed_size(uncompressed_size);

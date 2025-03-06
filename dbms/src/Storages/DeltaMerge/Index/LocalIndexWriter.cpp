@@ -54,7 +54,7 @@ dtpb::IndexFilePropsV2 LocalIndexWriterOnDisk::finalize()
     pb_idx.set_index_id(index_id);
     pb_idx.set_file_size(Poco::File(index_file.data()).getSize());
     pb_idx.set_kind(kind());
-    saveFilePros(&pb_idx);
+    saveFileProps(&pb_idx);
     return pb_idx;
 }
 
@@ -67,7 +67,7 @@ dtpb::IndexFilePropsV2 LocalIndexWriterInMemory::finalize(
     pb_idx.set_index_id(index_id);
     pb_idx.set_file_size(get_index_size());
     pb_idx.set_kind(kind());
-    saveFilePros(&pb_idx);
+    saveFileProps(&pb_idx);
     return pb_idx;
 }
 
