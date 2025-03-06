@@ -122,7 +122,7 @@ VectorIndexWriterInternal::~VectorIndexWriterInternal()
     GET_METRIC(tiflash_vector_index_active_instances, type_build).Decrement();
 }
 
-void VectorIndexWriterInternal::saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) const
+void VectorIndexWriterInternal::saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) const
 {
     auto * pb_vec_idx = pb_idx->mutable_vector_index();
     pb_vec_idx->set_format_version(0);

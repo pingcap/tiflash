@@ -43,7 +43,7 @@ public:
 
     using ProceedCheckFn = LocalIndexWriter::ProceedCheckFn;
     void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark, ProceedCheckFn should_proceed);
-    void saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) const;
+    void saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) const;
 
 public:
     const TiDB::VectorIndexDefinitionPtr definition;
@@ -70,7 +70,7 @@ public:
         writer.addBlock(column, del_mark, should_proceed);
     }
 
-    void saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) const override { writer.saveFilePros(pb_idx); }
+    void saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) const override { writer.saveFileProps(pb_idx); }
 
     dtpb::IndexFileKind kind() const override { return dtpb::IndexFileKind::VECTOR_INDEX; }
 
@@ -97,7 +97,7 @@ public:
         writer.addBlock(column, del_mark, should_proceed);
     }
 
-    void saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) const override { writer.saveFilePros(pb_idx); }
+    void saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) const override { writer.saveFileProps(pb_idx); }
 
     dtpb::IndexFileKind kind() const override { return dtpb::IndexFileKind::VECTOR_INDEX; }
 

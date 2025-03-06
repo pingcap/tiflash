@@ -25,11 +25,6 @@
 namespace DB::DM
 {
 
-class LocalIndexWriterInMemory;
-using LocalIndexWriterInMemoryPtr = std::shared_ptr<LocalIndexWriterInMemory>;
-class LocalIndexWriterOnDisk;
-using LocalIndexWriterOnDiskPtr = std::shared_ptr<LocalIndexWriterOnDisk>;
-
 class LocalIndexWriter
 {
 public:
@@ -49,7 +44,7 @@ public:
         = 0;
 
 protected:
-    virtual void saveFilePros(dtpb::IndexFilePropsV2 * pb_idx) const = 0;
+    virtual void saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) const = 0;
 
     virtual dtpb::IndexFileKind kind() const = 0;
 

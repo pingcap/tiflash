@@ -22,4 +22,10 @@ namespace DB::DM
 class LocalIndexWriter;
 using LocalIndexWriterPtr = std::shared_ptr<LocalIndexWriter>;
 
+class LocalIndexWriterInMemory;
+using LocalIndexWriterInMemoryPtr = std::shared_ptr<LocalIndexWriterInMemory>;
+
+class LocalIndexWriterOnDisk;
+using LocalIndexWriterOnDiskPtr = std::shared_ptr<LocalIndexWriterOnDisk>;
+
 } // namespace DB::DM
