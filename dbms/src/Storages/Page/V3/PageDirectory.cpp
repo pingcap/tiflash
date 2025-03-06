@@ -1650,7 +1650,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
     writers.push_back(&w); // push to write pipeline queue
     SYNC_FOR("after_PageDirectory::enter_write_group");
     // wait until becoming the write group owner or finished by the write group owner
-    w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); }); 
+    w.cv.wait(apply_lock, [&] { return w.done || &w == writers.front(); });
     GET_METRIC(tiflash_storage_page_write_duration_seconds, type_wait_in_group).Observe(watch.elapsedSeconds());
     watch.restart();
 
@@ -1673,7 +1673,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
         return {};
     }
 
-    /// This thread now is the write group owner, build the group. It will merge the 
+    /// This thread now is the write group owner, build the group. It will merge the
     /// edits from `writers`  to the owner's edit.
     auto * last_writer = buildWriteGroup(&w, apply_lock);
     apply_lock.unlock(); // release the lock so that coming write could enter the pipeline queue
