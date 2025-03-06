@@ -20,6 +20,7 @@
 
 namespace DB::DM
 {
+// `ColumnView` is a class that provides unified access to both Int64 handles and String handles.
 template <typename T>
 class ColumnView
 {
