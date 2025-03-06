@@ -21,31 +21,41 @@ namespace DB::DM::tests
 
 namespace
 {
-template <typename T>
-std::tuple<T, T, bool> parseRange(String & str_range)
+Strings splitAndTrim(std::string_view s, std::string_view delimiter, std::optional<size_t> expected_size = std::nullopt)
 {
-    boost::algorithm::trim(str_range);
+    Strings results;
+    boost::split(results, s, boost::is_any_of(delimiter));
+    if (expected_size)
+        RUNTIME_CHECK(results.size() == *expected_size, s, delimiter, expected_size);
+    else
+        RUNTIME_CHECK(!results.empty(), s, delimiter);
+    for (auto & r : results)
+        boost::trim(r);
+    return results;
+}
+
+// [a, b) => {a, b, false}
+// [a, b] => {a, b, true}
+template <typename T>
+std::tuple<T, T, bool> parseRange(std::string_view s)
+{
+    auto str_range = boost::trim_copy(s);
     RUNTIME_CHECK(str_range.front() == '[' && (str_range.back() == ')' || str_range.back() == ']'), str_range);
-    std::vector<String> values;
-    const auto left_right = str_range.substr(1, str_range.size() - 2);
-    boost::split(values, left_right, boost::is_any_of(","));
-    RUNTIME_CHECK(values.size() == 2, left_right);
+    auto values = splitAndTrim(str_range.substr(1, str_range.size() - 2), ",", 2);
     return {static_cast<T>(std::stol(values[0])), static_cast<T>(std::stol(values[1])), str_range.back() == ']'};
 }
 
-// "[a, b)|[c, d)" => [std::pair{a, b}, std::pair{c, d}]
+// "[a, b)|[c, d]" => [{a, b, false}, {c, d, true}]
 template <typename T>
-std::vector<std::tuple<T, T, bool>> parseRanges(std::string_view str_ranges)
+std::vector<std::tuple<T, T, bool>> parseRanges(std::string_view s)
 {
-    std::vector<String> ranges;
-    boost::split(ranges, str_ranges, boost::is_any_of("|"));
-    RUNTIME_CHECK(!ranges.empty(), str_ranges);
+    auto str_range = boost::trim_copy(s);
+    RUNTIME_CHECK(str_range.front() == '[' && (str_range.back() == ')' || str_range.back() == ']'), str_range);
+    auto ranges = splitAndTrim(str_range, "|");
     std::vector<std::tuple<T, T, bool>> vector_ranges;
     vector_ranges.reserve(ranges.size());
     for (auto & r : ranges)
-    {
         vector_ranges.emplace_back(parseRange<T>(r));
-    }
     return vector_ranges;
 }
 
@@ -58,7 +68,9 @@ void parseSegUnitAttr(std::string_view attr, SegDataUnit & unit)
 {
     // Pack size for DMFile
     static const std::string_view attr_pack_size_prefix{"pack_size_"};
+    // Shuffle data ColumnFileTiny and ColumnFileMemory
     static const std::string_view attr_shuffle{"shuffle"};
+    // Timestamp for generated data
     static const std::string_view attr_timestamp_prefix{"ts_"};
 
     if (attr.starts_with(attr_pack_size_prefix))
@@ -68,7 +80,6 @@ void parseSegUnitAttr(std::string_view attr, SegDataUnit & unit)
         return;
     }
 
-    // Make data in ColumnFileTiny or ColumnFileMem unsorted.
     if (attr == attr_shuffle)
     {
         RUNTIME_CHECK(delta_small_data_types.contains(unit.type), attr, unit.type, delta_small_data_types);
@@ -90,26 +101,21 @@ void parseSegUnitAttr(std::string_view attr, SegDataUnit & unit)
     RUNTIME_CHECK_MSG(false, "{} is unsupported", attr);
 }
 
-// "type:[a, b)" => SegDataUnit
-SegDataUnit parseSegDataUnit(String & s)
+// data_type:[left, right):attr1:attr2
+// cmd_type:attr1:attr2
+SegDataUnit parseSegDataUnit(std::string_view s)
 {
-    boost::algorithm::trim(s);
-    std::vector<String> values;
-    boost::split(values, s, boost::is_any_of(":"));
-    RUNTIME_CHECK(!values.empty(), s);
-    for (auto & v : values)
-        boost::algorithm::trim(v);
-
+    auto s_trim = boost::trim_copy(s);
+    auto values = splitAndTrim(s_trim, ":");
     size_t i = 0;
     SegDataUnit unit{.type = values[i++]};
     if (!segment_commands.contains(unit.type))
     {
-        RUNTIME_CHECK(values.size() >= 2, s, values);
+        RUNTIME_CHECK(values.size() >= i, s, values);
         unit.range = parseRange<Int64>(values[i++]);
     }
     for (; i < values.size(); i++)
         parseSegUnitAttr(values[i], unit);
-
     return unit;
 }
 
@@ -163,12 +169,10 @@ std::vector<T> genSequence(const std::vector<std::tuple<T, T, bool>> & ranges)
 
 std::vector<SegDataUnit> parseSegData(std::string_view seg_data)
 {
-    std::vector<String> str_seg_data_units;
-    boost::split(str_seg_data_units, seg_data, boost::is_any_of("|"));
-    RUNTIME_CHECK(!str_seg_data_units.empty(), seg_data);
+    auto str_seg_data_units = splitAndTrim(seg_data, "|");
     std::vector<SegDataUnit> seg_data_units;
     seg_data_units.reserve(str_seg_data_units.size());
-    for (auto & s : str_seg_data_units)
+    for (const auto & s : str_seg_data_units)
     {
         seg_data_units.emplace_back(parseSegDataUnit(s));
     }
