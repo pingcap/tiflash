@@ -28,7 +28,6 @@
 #include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler_fwd.h>
 #include <Storages/KVStore/Types.h>
-#include <common/MultiVersion.h>
 
 #include <chrono>
 #include <condition_variable>
