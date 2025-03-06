@@ -223,6 +223,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         }
         table_column_defines.push_back(col_def);
     }
+    table_column_defines.shrink_to_fit();
 
     if (!new_columns.materialized.contains(MutSup::version_column_name))
     {
