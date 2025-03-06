@@ -334,13 +334,9 @@ if (ENABLE_TESTS)
         file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "gtest*.cpp")
     endmacro()
 
-    macro(grep_bench_sources BASE_DIR DST_VAR EXCLUDE_PATTERNS)
+    macro(grep_bench_sources BASE_DIR DST_VAR)
         # Cold match files that are not in tests/ directories
-        file(GLOB_RECURSE _ALL_SOURCES RELATIVE "${BASE_DIR}" "bench*.cpp")
-        if(NOT "${EXCLUDE_PATTERNS}" STREQUAL "")
-            list(FILTER _ALL_SOURCES EXCLUDE REGEX "${EXCLUDE_PATTERNS}")
-        endif()
-        set(${DST_VAR} ${_ALL_SOURCES})
+        file(GLOB_RECURSE "${DST_VAR}" RELATIVE "${BASE_DIR}" "bench*.cpp")
     endmacro()
 
     # attach all dbms gtest sources
@@ -390,7 +386,7 @@ if (ENABLE_TESTS)
     add_check(gtests_dbms)
 
     add_target_pch("pch-dbms.h" gtests_dbms)
-    grep_bench_sources(${TiFlash_SOURCE_DIR}/dbms dbms_bench_sources "bench_parse_lock.cpp|bench_vector_index.cpp")
+    grep_bench_sources(${TiFlash_SOURCE_DIR}/dbms dbms_bench_sources)
     add_executable(bench_dbms EXCLUDE_FROM_ALL
         ${dbms_bench_sources}
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/StorageConfigParser.cpp
