@@ -21,6 +21,7 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <Interpreters/Context_fwd.h>
+#include <Interpreters/Settings.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
@@ -29,13 +30,10 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
 
+#include <ext/scope_guard.h>
 #include <vector>
 
-namespace DB
-{
-namespace DM
-{
-namespace tests
+namespace DB::DM::tests
 {
 #define GET_REGION_RANGE(start, end, table_id) \
     RowKeyRange::fromHandleRange(::DB::DM::HandleRange((start), (end))).toRegionRange((table_id))
@@ -110,6 +108,14 @@ inline String genMockCommonHandle(Int64 value, size_t rowkey_column_size)
         ::DB::EncodeInt64(value, ss);
     }
     return ss.releaseStr();
+}
+
+inline Int64 decodeMockCommonHandle(const String & s)
+{
+    size_t cursor = 0;
+    auto flag = ::DB::DecodeUInt<UInt8>(cursor, s);
+    RUNTIME_CHECK(flag == static_cast<UInt8>(TiDB::CodecFlagInt), flag);
+    return ::DB::DecodeInt64(cursor, s);
 }
 
 class DMTestEnv
@@ -305,36 +311,32 @@ public:
         size_t rowkey_column_size = 1,
         bool with_internal_columns = true,
         bool is_deleted = false,
-        bool with_nullable_uint64 = false)
+        bool with_nullable_uint64 = false,
+        bool including_right_boundary = false) // [beg, end) or [beg, end]
     {
         Block block;
-        const size_t num_rows = (end - beg);
+        const size_t num_rows = (end - beg) + including_right_boundary;
+        std::vector<Int64> handles(num_rows);
+        std::iota(handles.begin(), handles.end(), beg);
+        if (reversed)
+            std::reverse(handles.begin(), handles.end());
         if (is_common_handle)
         {
-            // common_pk_col
             Strings values;
-            for (size_t i = 0; i < num_rows; i++)
-            {
-                Int64 value = reversed ? end - 1 - i : beg + i;
-                values.emplace_back(genMockCommonHandle(value, rowkey_column_size));
-            }
+            for (Int64 h : handles)
+                values.emplace_back(genMockCommonHandle(h, rowkey_column_size));
             block.insert(DB::tests::createColumn<String>(std::move(values), pk_name_, pk_col_id));
         }
         else
         {
             // int-like pk_col
-            block.insert(ColumnWithTypeAndName{
-                DB::tests::makeColumn<Int64>(pk_type, createNumbers<Int64>(beg, end, reversed)),
-                pk_type,
-                pk_name_,
-                pk_col_id});
+            block.insert(
+                ColumnWithTypeAndName{DB::tests::makeColumn<Int64>(pk_type, handles), pk_type, pk_name_, pk_col_id});
             // add extra column if need
             if (pk_col_id != MutSup::extra_handle_id)
             {
                 block.insert(ColumnWithTypeAndName{
-                    DB::tests::makeColumn<Int64>(
-                        MutSup::getExtraHandleColumnIntType(),
-                        createNumbers<Int64>(beg, end, reversed)),
+                    DB::tests::makeColumn<Int64>(MutSup::getExtraHandleColumnIntType(), handles),
                     MutSup::getExtraHandleColumnIntType(),
                     MutSup::extra_handle_column_name,
                     MutSup::extra_handle_id});
@@ -568,7 +570,4 @@ public:
         return num++;
     }
 };
-
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests
