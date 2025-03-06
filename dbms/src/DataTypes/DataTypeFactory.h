@@ -31,7 +31,7 @@ using DataTypePtr = std::shared_ptr<const IDataType>;
 // When there are lots of tables created, the DataTypePtr could consume lots of
 // memory (tiflash#9947), or lots of CPU time to parse the string into IAST and
 // create the datatype (tiflash#6395). So we make a cache of FullName to
-// DataTypePtr in order to reusing the same DataTypePtr.
+// DataTypePtr in order to reuse the same DataTypePtr.
 class DataTypePtrCache
 {
 public:
