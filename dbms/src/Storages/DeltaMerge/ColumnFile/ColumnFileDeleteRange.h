@@ -73,6 +73,10 @@ public:
             return false;
     }
 
+    // ColumnFileDeleteRange does not store itself into PageStorage.
+    // So there is no need to do anything
+    void removeData(WriteBatches &) const override {}
+
     String toString() const override { return "{delete_range:" + delete_range.toString() + "}"; }
 };
 
