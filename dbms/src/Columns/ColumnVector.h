@@ -236,14 +236,18 @@ public:
         data.resize_fill(data.size() + length, value);
     }
 
-    void insertSelectiveFrom(const IColumn & src, const IColumn::Offsets & selective_offsets) override
+    void insertSelectiveRangeFrom(
+        const IColumn & src,
+        const IColumn::Offsets & selective_offsets,
+        size_t start,
+        size_t length) override
     {
+        RUNTIME_CHECK(selective_offsets.size() >= start + length);
         const auto & src_container = static_cast<const Self &>(src).getData();
         size_t old_size = data.size();
-        size_t to_add_size = selective_offsets.size();
-        data.resize(old_size + to_add_size);
-        for (size_t i = 0; i < to_add_size; ++i)
-            data[i + old_size] = src_container[selective_offsets[i]];
+        data.resize(old_size + length);
+        for (size_t i = 0; i < length; ++i)
+            data[i + old_size] = src_container[selective_offsets[start + i]];
     }
 
     void insertMany(const Field & field, size_t length) override

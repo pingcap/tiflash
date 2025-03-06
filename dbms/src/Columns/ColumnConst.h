@@ -80,10 +80,7 @@ public:
 
     void insertManyFrom(const IColumn &, size_t, size_t length) override { s += length; }
 
-    void insertSelectiveFrom(const IColumn &, const Offsets & selective_offsets) override
-    {
-        s += selective_offsets.size();
-    }
+    void insertSelectiveRangeFrom(const IColumn &, const Offsets &, size_t, size_t length) override { s += length; }
 
     void insertMany(const Field &, size_t length) override { s += length; }
 

@@ -140,7 +140,8 @@ public:
     void insert(const Field & x) override;
     void insertFrom(const IColumn & src, size_t n) override;
     void insertManyFrom(const IColumn & src, size_t n, size_t length) override;
-    void insertSelectiveFrom(const IColumn & src, const Offsets & selective_offsets) override;
+    void insertSelectiveRangeFrom(const IColumn & src, const Offsets & selective_offsets, size_t start, size_t length)
+        override;
 
     void insertDefault() override
     {

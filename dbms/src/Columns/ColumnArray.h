@@ -200,10 +200,12 @@ public:
             insertFrom(src_, n);
     }
 
-    void insertSelectiveFrom(const IColumn & src_, const Offsets & selective_offsets) override
+    void insertSelectiveRangeFrom(const IColumn & src_, const Offsets & selective_offsets, size_t start, size_t length)
+        override
     {
-        for (auto position : selective_offsets)
-            insertFrom(src_, position);
+        RUNTIME_CHECK(selective_offsets.size() >= start + length);
+        for (size_t i = start; i < start + length; ++i)
+            insertFrom(src_, selective_offsets[i]);
     }
 
     void insertDefault() override;

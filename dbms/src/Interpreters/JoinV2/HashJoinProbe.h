@@ -16,7 +16,9 @@
 
 #include <Columns/ColumnNullable.h>
 #include <Columns/IColumn.h>
+#include <Common/PODArray.h>
 #include <Core/Block.h>
+#include <Core/Types.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/JoinV2/HashJoinKey.h>
 #include <Interpreters/JoinV2/HashJoinPointerTable.h>
@@ -35,7 +37,11 @@ struct JoinProbeContext
     Block orignal_block;
     size_t rows = 0;
     size_t start_row_idx = 0;
-    RowPtr current_probe_row_ptr = nullptr;
+    RowPtr current_row_ptr = nullptr;
+    /// For left outer/(left outer) (anti) semi join without other conditions.
+    bool current_row_is_matched = false;
+    /// For left outer/(left outer) (anti) semi join with other conditions.
+    IColumn::Filter rows_is_matched;
 
     size_t prefetch_active_states = 0;
     size_t prefetch_iter = 0;
@@ -48,8 +54,6 @@ struct JoinProbeContext
     ConstNullMapPtr null_map = nullptr;
     std::unique_ptr<void, std::function<void(void *)>> key_getter;
 
-    bool current_row_is_matched = false;
-
     bool input_is_finished = false;
 
     bool isCurrentProbeFinished() const;
@@ -58,6 +62,7 @@ struct JoinProbeContext
     void prepareForHashProbe(
         HashJoinKeyMethod method,
         ASTTableJoin::Kind kind,
+        bool has_other_condition,
         const Names & key_names,
         const String & filter_column,
         const NameSet & probe_output_name_set,
@@ -69,6 +74,7 @@ struct JoinProbeContext
 struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
 {
     IColumn::Offsets selective_offsets;
+    RowPtrs row_ptrs_for_lm;
 
     RowPtrs insert_batch;
 
@@ -79,10 +85,11 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     size_t other_condition_time = 0;
     size_t collision = 0;
 
-    /// filter for other condition
+    /// For other condition
     ColumnVector<UInt8>::Container filter;
-    IColumn::Offsets filter_offsets1;
-    IColumn::Offsets filter_offsets2;
+    IColumn::Offsets filter_offsets;
+    IColumn::Offsets filter_selective_offsets;
+    RowPtrs filter_row_ptrs_for_lm;
 
     /// Schema: HashJoin::all_sample_block_pruned
     Block result_block;
@@ -95,6 +102,7 @@ void joinProbeBlock(
     JoinProbeWorkerData & wd,
     HashJoinKeyMethod method,
     ASTTableJoin::Kind kind,
+    bool late_materialization,
     const JoinNonEqualConditions & non_equal_conditions,
     const HashJoinSettings & settings,
     const HashJoinPointerTable & pointer_table,

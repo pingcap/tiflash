@@ -99,7 +99,7 @@ public:
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
-    void insertSelectiveFrom(const IColumn &, const Offsets &) override
+    void insertSelectiveRangeFrom(const IColumn &, const Offsets &, size_t, size_t) override
     {
         throw Exception("Cannot insert into " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }

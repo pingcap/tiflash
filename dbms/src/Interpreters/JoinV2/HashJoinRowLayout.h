@@ -84,6 +84,10 @@ struct HashJoinRowLayout
     std::vector<std::pair<size_t, bool>> raw_required_key_column_indexes;
     /// other_required_column_index + is_fixed_size
     std::vector<std::pair<size_t, bool>> other_required_column_indexes;
+    /// Number of columns at the beginning of `other_required_column_indexes`
+    /// that are used for evaluating the join other condition.
+    size_t other_required_count_for_other_condition = 0;
+
     size_t key_column_fixed_size = 0;
     size_t other_column_fixed_size = 0;
 
