@@ -45,7 +45,10 @@ DataTypePtr DataTypePtrCache::get(const String & full_name) const
 
 void DataTypePtrCache::tryCache(const String & full_name, const DataTypePtr & datatype_ptr)
 {
-    // avoid big hashmap in rare cases.
+    // It can not handle the situation that DataTypePtr sharing between
+    // "Enum16('N' = 1, 'Y' = 2)" and "Enum16('Y' = 2, 'N' = 1)", but should
+    // be good enough.
+    // Avoid big hashmap in rare cases.
     std::unique_lock lock(rw_lock);
     if (cached_types.size() < MAX_FULLNAME_TYPES)
     {
