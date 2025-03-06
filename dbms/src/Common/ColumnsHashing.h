@@ -542,7 +542,7 @@ protected:
         for (size_t i = processed_row_idx; i < processed_row_idx + cur_batch_size; ++i)
             mem_size += byte_size[i];
 
-        auto * ptr = static_cast<char *>(pool->alignedAlloc(mem_size, 16, /*only_keep_one_chunk=*/true));
+        auto * ptr = static_cast<char *>(pool->alignedAlloc(mem_size, 16, /*free_empty_head_chunk=*/true));
         for (size_t i = 0; i < cur_batch_size; ++i)
         {
             pos[i] = ptr;

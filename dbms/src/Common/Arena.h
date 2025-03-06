@@ -95,8 +95,9 @@ private:
     }
 
     /// Add next contiguous chunk of memory with size not less than specified.
-    /// only_keep_one_chunk is useful when you need to reuse one Chunk.
-    void NO_INLINE addChunk(size_t min_size, bool only_keep_one_chunk)
+    /// If free_empty_head_chunk is true, empty head will be freed if head space is not enough.
+    /// It can avoid mem leak when you want always reuse one chunk.
+    void NO_INLINE addChunk(size_t min_size, bool free_empty_head_chunk)
     {
         if (resize_callback != nullptr)
         {
@@ -104,11 +105,13 @@ private:
                 throw ResizeException("Error in arena resize");
         }
         const auto next_size = nextSize(min_size);
-        if (only_keep_one_chunk)
+        if (free_empty_head_chunk && head->remaining() == head->size())
         {
-            size_in_bytes = 0;
+            size_in_bytes -= head->size();
+            auto * new_head = head->prev;
+            head->prev = nullptr;
             delete head;
-            head = nullptr;
+            head = new_head;
         }
         head = new Chunk(next_size, head);
         size_in_bytes += head->size();
@@ -130,7 +133,7 @@ public:
     ~Arena() { delete head; }
 
     /// Get piece of memory with alignment
-    char * alignedAlloc(size_t size, size_t alignment, bool only_keep_one_chunk = false)
+    char * alignedAlloc(size_t size, size_t alignment, bool free_empty_head_chunk = false)
     {
         do
         {
@@ -145,15 +148,15 @@ public:
                 return res;
             }
 
-            addChunk(size + alignment, only_keep_one_chunk);
+            addChunk(size + alignment, free_empty_head_chunk);
         } while (true);
     }
 
     /// Get piece of memory, without alignment.
-    char * alloc(size_t size, bool only_keep_one_chunk = false)
+    char * alloc(size_t size, bool free_empty_head_chunk = false)
     {
         if (unlikely(head->pos + size > head->end))
-            addChunk(size, only_keep_one_chunk);
+            addChunk(size, free_empty_head_chunk);
 
         char * res = head->pos;
         head->pos += size;
@@ -173,12 +176,12 @@ public:
       * If there is no space in chunk to expand current piece of memory - then copy all piece to new chunk and change value of 'begin'.
       * NOTE This method is usable only for latest allocation. For earlier allocations, see 'realloc' method.
       */
-    char * allocContinue(size_t size, char const *& begin, bool only_keep_one_chunk = false)
+    char * allocContinue(size_t size, char const *& begin, bool free_empty_head_chunk = false)
     {
         while (unlikely(head->pos + size > head->end))
         {
             char * prev_end = head->pos;
-            addChunk(size, only_keep_one_chunk);
+            addChunk(size, free_empty_head_chunk);
 
             if (begin)
                 begin = insert(begin, prev_end - begin);
