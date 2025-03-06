@@ -571,6 +571,7 @@ public:
     }
 };
 
+// For some tests only for delta-index, use this function to diable version-chain temporarily.
 [[nodiscard]] inline auto disableVersionChainTemporary(Settings & settings)
 {
     const Int64 enable_version_chain = settings.enable_version_chain;
