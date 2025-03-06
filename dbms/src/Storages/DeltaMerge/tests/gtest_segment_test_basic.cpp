@@ -16,19 +16,29 @@
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyLocalIndexWriter.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+<<<<<<< HEAD
 #include <Storages/DeltaMerge/File/DMFileVectorIndexWriter.h>
+=======
+#include <Storages/DeltaMerge/File/DMFileLocalIndexWriter.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo_fwd.h>
+>>>>>>> cbf37d0f2b (vector: Fix the bug that the local index in CFTiny is not removed during MinorCompaction (#9945))
 #include <Storages/DeltaMerge/Segment.h>
+#include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/Page/PageDefinesBase.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/TiDB.h>
 
 #include <magic_enum.hpp>
 
@@ -801,6 +811,45 @@ bool SegmentTestBasic::ensureSegmentStableLocalIndex(PageIdU64 segment_id, const
 
     operation_statistics["ensureStableLocalIndex"]++;
     return success;
+}
+
+bool SegmentTestBasic::ensureSegmentDeltaLocalIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos)
+{
+    LOG_INFO(logger_op, "EnsureSegmentDeltaLocalIndex, segment_id={}", segment_id);
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments[segment_id];
+    auto delta = segment->delta;
+    if (auto lock = delta->getLock(); !lock)
+    {
+        return false;
+    }
+    auto storage_snap = std::make_shared<StorageSnapshot>(*storage_pool, nullptr, "", true);
+    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
+    auto persisted_files_snap = delta->getPersistedFileSet()->createSnapshot(data_from_storage_snap);
+    WriteBatches wbs(*storage_pool, nullptr);
+    // Build index
+    ColumnFileTinyLocalIndexWriter iw(ColumnFileTinyLocalIndexWriter::Options{
+        .storage_pool = storage_pool,
+        .write_limiter = nullptr,
+        .files = persisted_files_snap->getColumnFiles(),
+        .data_provider = persisted_files_snap->getDataProvider(),
+        .index_infos = local_index_infos,
+        .wbs = wbs,
+    });
+    auto new_tiny_files = iw.build([] { return true; });
+
+    ColumnFilePersisteds new_persisted_files;
+    for (const auto & f : new_tiny_files)
+    {
+        new_persisted_files.push_back(f);
+    }
+    delta->getPersistedFileSet()->updatePersistedColumnFilesAfterAddingIndex(new_persisted_files, wbs);
+
+    operation_statistics["ensureDeltaLocalIndex"]++;
+    LOG_INFO(logger_op, "EnsureSegmentDeltaLocalIndex, build index done, segment_id={}", segment_id);
+
+    return true;
 }
 
 bool SegmentTestBasic::areSegmentsSharingStable(const std::vector<PageIdU64> & segments_id) const
