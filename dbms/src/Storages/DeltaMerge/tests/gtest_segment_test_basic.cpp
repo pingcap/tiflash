@@ -17,16 +17,12 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyLocalIndexWriter.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
-<<<<<<< HEAD
 #include <Storages/DeltaMerge/File/DMFileVectorIndexWriter.h>
-=======
-#include <Storages/DeltaMerge/File/DMFileLocalIndexWriter.h>
-#include <Storages/DeltaMerge/Index/LocalIndexInfo_fwd.h>
->>>>>>> cbf37d0f2b (vector: Fix the bug that the local index in CFTiny is not removed during MinorCompaction (#9945))
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
@@ -976,9 +972,10 @@ SegmentPtr SegmentTestBasic::reload(
     storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
     storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, NAMESPACE_ID, *storage_path_pool, "test.t1");
     storage_pool->restore();
-    ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(
-                                is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID)
-                                                  : pre_define_columns;
+    ColumnDefinesPtr cols = (!pre_define_columns)
+        ? DMTestEnv::getDefaultColumns(
+              is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID)
+        : pre_define_columns;
     prepareColumns(cols);
     setColumns(cols);
 

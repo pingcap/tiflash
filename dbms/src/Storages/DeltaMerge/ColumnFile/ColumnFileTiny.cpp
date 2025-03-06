@@ -411,11 +411,7 @@ ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(
     auto schema = getSharedBlockSchemas(dm_context)->getOrCreate(block);
 
     auto bytes = block.bytes(offset, limit);
-<<<<<<< HEAD
-    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, context, nullptr, cache);
-=======
-    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, dm_context);
->>>>>>> cbf37d0f2b (vector: Fix the bug that the local index in CFTiny is not removed during MinorCompaction (#9945))
+    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, dm_context, nullptr, cache);
 }
 
 PageIdU64 ColumnFileTiny::writeColumnFileData(
