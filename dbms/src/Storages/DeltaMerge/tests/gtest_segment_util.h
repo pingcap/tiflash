@@ -24,7 +24,9 @@ namespace DB::DM::tests
 struct SegDataUnit
 {
     String type;
-    std::tuple<Int64, Int64, bool> range; // {left, right, including_right_boundary}
+    // {left, right, including_right_boundary}
+    // `including_right_boundary` is required if we want to generate data with int64_max.
+    std::tuple<Int64, Int64, bool> range;
     std::optional<size_t> pack_size; // For DMFile
     bool shuffle = false; // For ColumnFileTiny and ColumnFileMemory
     std::optional<UInt64> ts;
