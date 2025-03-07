@@ -60,12 +60,12 @@ dtpb::IndexFilePropsV2 LocalIndexWriterOnDisk::finalize()
 
 dtpb::IndexFilePropsV2 LocalIndexWriterInMemory::finalize(
     WriteBuffer & write_buf,
-    std::function<size_t()> get_index_size)
+    std::function<size_t()> get_materialized_size)
 {
     saveToBuffer(write_buf);
     dtpb::IndexFilePropsV2 pb_idx;
     pb_idx.set_index_id(index_id);
-    pb_idx.set_file_size(get_index_size());
+    pb_idx.set_file_size(get_materialized_size());
     pb_idx.set_kind(kind());
     saveFileProps(&pb_idx);
     return pb_idx;

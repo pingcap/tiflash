@@ -14,6 +14,7 @@
 
 #include <DataTypes/DataTypeNullable.h>
 #include <IO/Buffer/ReadBufferFromMemory.h>
+#include <IO/ReadHelpers.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader.h>
 
 namespace DB::ErrorCodes
@@ -110,6 +111,12 @@ InvertedIndexReaderPtr InvertedIndexReader::view(const DataTypePtr & type, ReadB
 template <typename T>
 void InvertedIndexMemoryReader<T>::load(ReadBuffer & read_buf, size_t index_size)
 {
+    // 0. check version
+    UInt8 version;
+    readIntBinary(version, read_buf);
+    RUNTIME_CHECK(version == magic_enum::enum_integer(InvertedIndex::Version::V1));
+    index_size -= sizeof(UInt8);
+
     // 1. read all data
     std::vector<char> buf(index_size);
     RUNTIME_CHECK(read_buf.readBig(buf.data(), index_size) == index_size);
@@ -169,6 +176,12 @@ void InvertedIndexMemoryReader<T>::searchRange(BitmapFilterPtr & bitmap_filter, 
 template <typename T>
 void InvertedIndexFileReader<T>::loadMeta(ReadBuffer & read_buf, size_t index_size)
 {
+    // 0. check version
+    UInt8 version;
+    readIntBinary(version, read_buf);
+    RUNTIME_CHECK(version == magic_enum::enum_integer(InvertedIndex::Version::V1));
+    index_size -= sizeof(UInt8);
+
     // 1. read all data
     std::vector<char> buf(index_size);
     RUNTIME_CHECK(read_buf.readBig(buf.data(), index_size) == index_size);

@@ -79,11 +79,16 @@ void InvertedIndexWriterInternal<T>::addBlock(
 template <typename T>
 void InvertedIndexWriterInternal<T>::saveToBuffer(WriteBuffer & write_buf) const
 {
+    size_t offset = 0;
+
+    // 0. write version
+    UInt8 version = magic_enum::enum_integer(InvertedIndex::Version::V1);
+    writeIntBinary(version, write_buf);
+    offset += sizeof(UInt8);
+
     InvertedIndex::Meta<T> meta;
 
     // 1. write data by block
-    size_t offset = 0;
-
     InvertedIndex::Block<T> block;
     size_t row_ids_size = 0;
     auto write_block = [&] {

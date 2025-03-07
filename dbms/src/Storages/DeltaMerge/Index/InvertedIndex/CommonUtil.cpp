@@ -33,7 +33,7 @@ void Block<T>::serialize(WriteBuffer & write_buf) const
     // write all row_ids
     for (const auto & entry : entries)
     {
-        auto row_ids = entry.row_ids;
+        const auto & row_ids = entry.row_ids;
         write_buf.write(reinterpret_cast<const char *>(row_ids.data()), row_ids.size() * sizeof(RowID));
     }
 }
@@ -56,7 +56,7 @@ void Block<T>::deserialize(Block<T> & block, ReadBuffer & read_buf)
     for (UInt32 i = 0; i < size; ++i)
     {
         auto & entry = block.entries[i];
-        read_buf.read(reinterpret_cast<char *>(entry.row_ids.data()), entry.row_ids.size() * sizeof(RowID));
+        read_buf.readStrict(reinterpret_cast<char *>(entry.row_ids.data()), entry.row_ids.size() * sizeof(RowID));
     }
 }
 

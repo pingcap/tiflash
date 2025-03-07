@@ -22,8 +22,14 @@
 namespace DB::DM::InvertedIndex
 {
 
+enum class Version
+{
+    Invalid = 0,
+    V1 = 1,
+};
+
 // InvertedIndex file format:
-// | Block 0 (compressed) | Block 1 (compressed) | ... | Block N (compressed) | Meta | Meta size | Magic flag |
+// | VERSION | Block 0 (compressed) | Block 1 (compressed) | ... | Block N (compressed) | Meta | Meta size | Magic flag |
 
 // Block format:
 // | number of values | value | row_ids size | value | row_ids size | ... | value | row_ids size | row_ids | row_ids | ... | row_ids |
