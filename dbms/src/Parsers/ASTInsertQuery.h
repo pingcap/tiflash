@@ -54,7 +54,7 @@ public:
     bool is_delete = false;
 
     /** Get the text that identifies this element. */
-    String getID() const override { return "InsertQuery_" + database + "_" + table; };
+    String getID() const override { return "InsertQuery_" + database + "_" + table; }
 
     ASTPtr clone() const override
     {
