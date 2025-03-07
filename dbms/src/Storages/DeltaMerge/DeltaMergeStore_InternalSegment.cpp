@@ -960,16 +960,16 @@ bool DeltaMergeStore::segmentWaitDeltaLocalIndexReady(const SegmentPtr & segment
         }
         if (!column_file_persisted_set)
             return false; // ColumnFilePersistedSet is not exist, return false
-        auto lock = delta_weak_ptr.lock()->getLock();
         bool all_indexes_built = true;
         for (const auto & index : *build_info.indexes_to_build)
         {
             for (const auto & column_file : column_file_persisted_set->getFiles())
             {
-                auto * tiny_file = column_file->tryToTinyFile();
-                if (!tiny_file)
-                    continue;
-                all_indexes_built = all_indexes_built && (tiny_file->hasIndex(index.index_id));
+                if (auto * tiny_file = column_file->tryToTinyFile(); tiny_file)
+                {
+                    auto lock = delta_weak_ptr.lock()->getLock();
+                    all_indexes_built = all_indexes_built && (tiny_file->hasIndex(index.index_id));
+                }
             }
         }
         if (all_indexes_built)

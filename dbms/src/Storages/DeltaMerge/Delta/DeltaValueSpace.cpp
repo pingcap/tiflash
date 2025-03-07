@@ -383,14 +383,20 @@ bool DeltaValueSpace::flush(DMContext & context)
         return true;
     }
 
+    String simple_info;
+    {
+        std::scoped_lock lock(mutex);
+        simple_info = simpleInfo();
+    }
+
     /// Write prepared data to disk.
     auto delta_index_updates = flush_task->prepare(wbs);
     DeltaIndexPtr new_delta_index;
     if (!delta_index_updates.empty())
     {
-        // LOG_DEBUG(log, "Update index start, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Update index start, delta={}", simple_info);
         new_delta_index = cur_delta_index->cloneWithUpdates(delta_index_updates);
-        // LOG_DEBUG(log, "Update index done, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Update index done, delta={}", simple_info);
     }
     GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_delta_flush).Increment(flush_task->getFlushBytes());
     GET_METRIC(tiflash_storage_subtask_throughput_rows, type_delta_flush).Increment(flush_task->getFlushRows());
@@ -404,14 +410,14 @@ bool DeltaValueSpace::flush(DMContext & context)
         {
             // Delete written data.
             wbs.setRollback();
-            LOG_DEBUG(log, "Flush stop because abandoned, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Flush stop because abandoned, delta={}", simple_info);
             return false;
         }
 
         if (!flush_task->commit(persisted_file_set, wbs))
         {
             wbs.rollbackWrittenLogAndData();
-            LOG_DEBUG(log, "Flush stop because structure got updated, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Flush stop because structure got updated, delta={}", simple_info);
             return false;
         }
 
