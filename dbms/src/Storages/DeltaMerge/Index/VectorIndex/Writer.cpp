@@ -92,7 +92,7 @@ void VectorIndexWriterInternal::addBlock(
             continue;
 
         // Expect all data to have matching dimensions.
-        RUNTIME_CHECK(col_array->sizeAt(i) == definition->dimension);
+        RUNTIME_CHECK(col_array->sizeAt(i) == definition->dimension, col_array->sizeAt(i), definition->dimension);
 
         auto data = col_array->getDataAt(i);
         RUNTIME_CHECK(data.size == definition->dimension * sizeof(Float32));
