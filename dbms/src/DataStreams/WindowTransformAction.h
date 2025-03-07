@@ -207,12 +207,12 @@ private:
 
             if constexpr (is_add)
             {
-                agg_func->addBatchSinglePlace(start_row, end_row - start_row, buf, columns, nullptr);
+                agg_func->addBatchSinglePlace(start_row, end_row - start_row, buf, columns, arena.get());
             }
             else
             {
                 for (auto row = start_row; row < end_row; ++row)
-                    agg_func->decrease(buf, columns, row, nullptr);
+                    agg_func->decrease(buf, columns, row, arena.get());
             }
         }
     }
@@ -312,5 +312,7 @@ public:
     RowNumber prev_frame_end;
 
     bool has_rank_or_dense_rank = false;
+
+    std::unique_ptr<Arena> arena;
 };
 } // namespace DB

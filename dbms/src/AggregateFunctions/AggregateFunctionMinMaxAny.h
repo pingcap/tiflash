@@ -33,6 +33,7 @@ namespace DB
 struct CommonImpl
 {
     static void decrease(const IColumn &, size_t) { throw Exception("decrease is not implemented yet"); }
+    static bool needArena() { return false; }
 };
 
 /// For numeric values.
@@ -225,6 +226,8 @@ protected:
     char small_data[MAX_SMALL_STRING_SIZE]{}; /// Including the terminating zero.
 
 public:
+    static bool needArena() { return true; }
+
     bool has() const { return size >= 0; }
 
     const char * getData() const { return size <= MAX_SMALL_STRING_SIZE ? small_data : large_data; }
@@ -792,6 +795,8 @@ public:
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
+
+    bool allocatesMemoryInArena() const override { return Data::needArena(); }
 };
 
 } // namespace DB
