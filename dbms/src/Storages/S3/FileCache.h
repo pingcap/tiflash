@@ -237,9 +237,9 @@ public:
     static void shutdown()
     {
         global_file_cache_initialized.store(false, std::memory_order_release);
-        while (!global_file_cache_instance.unique())
+        while (global_file_cache_instance.use_count() > 1)
         {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         global_file_cache_instance = nullptr;
     }
