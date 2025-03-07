@@ -182,8 +182,6 @@ protected:
         std::optional<std::tuple<Int64, Int64, bool>> rowkey_range;
     };
 
-    inline static constexpr auto max_read_ts = std::numeric_limits<UInt64>::max();
-
     void runTestCaseGeneric(TestCase test_case, int caller_line)
     {
         if (is_common_handle)
@@ -240,26 +238,6 @@ protected:
             auto expected_handle = genHandleSequence<Int64>(seq_ranges);
             ASSERT_TRUE(sequenceEqual(expected_handle, ColumnView<Int64>{*handle})) << info;
         }
-    }
-
-    struct verifyNotCleanAndDeletedOption
-    {
-        const size_t pack_id;
-        const size_t expected_pack_rows;
-        const size_t expected_not_clean_rows;
-        const size_t expected_deleted_rows;
-        const int caller_line;
-    };
-    void verifyNotCleanAndDeleted(const verifyNotCleanAndDeletedOption & opt)
-    {
-        auto [seg, snap] = getSegmentForRead(SEG_ID);
-        const auto & dmfile = snap->stable->getDMFiles()[0];
-        ASSERT_GT(dmfile->getPacks(), opt.pack_id) << opt.caller_line;
-        const auto & pack_stat = dmfile->getPackStats()[opt.pack_id];
-        const auto & pack_property = dmfile->getPackProperties().property()[opt.pack_id];
-        ASSERT_EQ(pack_stat.rows, opt.expected_pack_rows) << opt.caller_line;
-        ASSERT_EQ(pack_stat.not_clean, opt.expected_not_clean_rows) << opt.caller_line;
-        ASSERT_EQ(pack_property.deleted_rows(), opt.expected_deleted_rows) << opt.caller_line;
     }
 
     bool is_common_handle = false;

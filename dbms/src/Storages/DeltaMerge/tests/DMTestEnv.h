@@ -21,7 +21,6 @@
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <IO/Operators.h>
 #include <Interpreters/Context_fwd.h>
-#include <Interpreters/Settings.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Range.h>
@@ -30,7 +29,6 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
 
-#include <ext/scope_guard.h>
 #include <vector>
 
 namespace DB::DM::tests

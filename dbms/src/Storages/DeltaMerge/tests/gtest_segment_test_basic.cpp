@@ -59,6 +59,26 @@ extern DMFilePtr writeIntoNewDMFile(
 namespace DB::DM::tests
 {
 
+namespace
+{
+
+// a + b
+bool isSumOverflow(Int64 a, Int64 b)
+{
+    return (b > 0 && a > std::numeric_limits<Int64>::max() - b) || (b < 0 && a < std::numeric_limits<Int64>::min() - b);
+}
+
+// a - b
+auto isDiffOverflow(Int64 a, Int64 b)
+{
+    assert(a > b);
+    if (b < 0)
+        return a > std::numeric_limits<Int64>::max() + b;
+    else
+        return false;
+}
+} // namespace
+
 void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
 {
     {
@@ -454,19 +474,6 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
 {
     RUNTIME_CHECK(0 < total_write_rows, total_write_rows);
 
-    auto is_sum_overflow = [](Int64 a, Int64 b) {
-        return (b > 0 && a > std::numeric_limits<Int64>::max() - b)
-            || (b < 0 && a < std::numeric_limits<Int64>::min() - b);
-    };
-
-    auto is_diff_overflow = [](Int64 a, Int64 b) {
-        assert(a > b);
-        if (b < 0)
-            return a > std::numeric_limits<Int64>::max() + b;
-        else
-            return false;
-    };
-
     // For example, write_start_key is int64_max and total_write_rows is 1,
     // We will generate block with one row with int64_max.
     auto is_including_right_boundary = [](Int64 write_start_key, Int64 total_write_rows) {
@@ -489,13 +496,13 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
 
         including_right_boundary = is_including_right_boundary(*write_start_key, total_write_rows);
         RUNTIME_CHECK(
-            including_right_boundary || !is_sum_overflow(*write_start_key, total_write_rows),
+            including_right_boundary || !isSumOverflow(*write_start_key, total_write_rows),
             *write_start_key,
             total_write_rows);
     }
     else
     {
-        auto segment_max_rows = is_diff_overflow(segment_end_key, segment_start_key)
+        auto segment_max_rows = isDiffOverflow(segment_end_key, segment_start_key)
             ? std::numeric_limits<Int64>::max() // UInt64 is more accurate, but Int64 is enough and for simplicity.
             : segment_end_key - segment_start_key;
 
@@ -649,7 +656,10 @@ BlockInputStreamPtr SegmentTestBasic::getIngestDTFileInputStream(
         rows_per_block = std::min(rows_per_block, write_rows - written);
         std::optional<Int64> start;
         if (start_at)
-            start.emplace(*start_at + written); // Caller should make sure not overflow here.
+        {
+            RUNTIME_CHECK(!isSumOverflow(*start_at, written), *start_at, written);
+            start.emplace(*start_at + written);
+        }
 
         if (check_range)
         {
