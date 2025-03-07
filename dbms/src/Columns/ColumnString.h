@@ -223,12 +223,14 @@ public:
             insertFromImpl(src, position);
     }
 
-    void insertSelectiveFrom(const IColumn & src_, const Offsets & selective_offsets) override
+    void insertSelectiveRangeFrom(const IColumn & src_, const Offsets & selective_offsets, size_t start, size_t length)
+        override
     {
+        RUNTIME_CHECK(selective_offsets.size() >= start + length);
         const auto & src = static_cast<const ColumnString &>(src_);
-        offsets.reserve(offsets.size() + selective_offsets.size());
-        for (auto position : selective_offsets)
-            insertFromImpl(src, position);
+        offsets.reserve(offsets.size() + length);
+        for (size_t i = start; i < start + length; ++i)
+            insertFromImpl(src, selective_offsets[i]);
     }
 
     template <bool add_terminating_zero>
