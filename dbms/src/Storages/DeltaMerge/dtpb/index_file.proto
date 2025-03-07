@@ -19,6 +19,7 @@ package dtpb;
 enum IndexFileKind {
     INVALID = 0;
     VECTOR_INDEX = 1;
+    INVERTED_INDEX = 2;
 }
 
 message IndexFilePropsV2 {
@@ -28,6 +29,7 @@ message IndexFilePropsV2 {
 
     oneof prop {
         IndexFilePropsV2Vector vector_index = 31;
+        IndexFilePropsInverted inverted_index = 32;
     }
 }
 
@@ -41,4 +43,8 @@ message IndexFilePropsV2Vector {
     optional uint32 format_version = 1; // Currently it must be 0.
     optional string distance_metric = 2;  // The value is tipb.VectorDistanceMetric
     optional uint64 dimensions = 3;
+}
+
+message IndexFilePropsInverted {
+    optional uint32 uncompressed_size = 1;
 }
