@@ -138,7 +138,7 @@ void MockRaftCommand::dbgFuncRegionBatchSplit(Context & context, const ASTs & ar
         std::move(request),
         std::move(response),
         region_id,
-        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getNextRaftIndex(region_id),
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
 
@@ -179,7 +179,7 @@ void MockRaftCommand::dbgFuncPrepareMerge(Context & context, const ASTs & args, 
         std::move(request),
         std::move(response),
         region_id,
-        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getNextRaftIndex(region_id),
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
 
@@ -216,7 +216,7 @@ void MockRaftCommand::dbgFuncCommitMerge(Context & context, const ASTs & args, D
         std::move(request),
         std::move(response),
         current_id,
-        MockTiKV::instance().getRaftIndex(current_id),
+        MockTiKV::instance().getNextRaftIndex(current_id),
         MockTiKV::instance().getRaftTerm(current_id),
         tmt);
 
@@ -252,7 +252,7 @@ void MockRaftCommand::dbgFuncRollbackMerge(Context & context, const ASTs & args,
         std::move(request),
         std::move(response),
         region_id,
-        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getNextRaftIndex(region_id),
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
 
