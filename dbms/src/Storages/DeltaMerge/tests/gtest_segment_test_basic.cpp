@@ -447,24 +447,32 @@ Block sortvstackBlocks(std::vector<Block> && blocks)
 
 Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
     PageIdU64 segment_id,
-    UInt64 total_write_rows,
+    Int64 total_write_rows,
     std::optional<Int64> write_start_key,
     bool is_deleted,
     std::optional<UInt64> ts)
 {
-    RUNTIME_CHECK(0 < total_write_rows && total_write_rows < std::numeric_limits<Int64>::max());
+    RUNTIME_CHECK(0 < total_write_rows, total_write_rows);
+
+    auto is_sum_overflow = [](Int64 a, Int64 b) {
+        return (b > 0 && a > std::numeric_limits<Int64>::max() - b)
+            || (b < 0 && a < std::numeric_limits<Int64>::min() - b);
+    };
+
+    // For example, write_start_key is int64_max and total_write_rows is 1,
+    // We will generate block with one row with int64_max.
+    auto is_including_right_boundary = [](Int64 write_start_key, Int64 total_write_rows) {
+        return std::numeric_limits<Int64>::max() - total_write_rows + 1 == write_start_key;
+    };
 
     bool including_right_boundary = false;
     if (write_start_key.has_value())
     {
-        including_right_boundary
-            = *write_start_key + static_cast<Int64>(total_write_rows - 1) == std::numeric_limits<Int64>::max();
+        including_right_boundary = is_including_right_boundary(*write_start_key, total_write_rows);
         RUNTIME_CHECK(
-            std::numeric_limits<Int64>::max() - static_cast<Int64>(total_write_rows) + including_right_boundary
-                >= *write_start_key,
-            std::numeric_limits<Int64>::max() - static_cast<Int64>(total_write_rows),
-            including_right_boundary,
-            *write_start_key);
+            including_right_boundary || !is_sum_overflow(*write_start_key, total_write_rows),
+            *write_start_key,
+            total_write_rows);
     }
 
     auto seg = segments.find(segment_id);
@@ -481,7 +489,7 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
 
     if (!write_start_key.has_value())
     {
-        auto segment_max_rows = static_cast<UInt64>(segment_end_key - segment_start_key);
+        auto segment_max_rows = segment_end_key - segment_start_key;
         if (segment_max_rows == 0)
             return {};
 

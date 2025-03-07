@@ -131,7 +131,7 @@ public:
         std::optional<UInt64> ts = std::nullopt);
     Block prepareWriteBlockInSegmentRange(
         PageIdU64 segment_id,
-        UInt64 total_write_rows,
+        Int64 total_write_rows,
         std::optional<Int64> write_start_key = std::nullopt,
         bool is_deleted = false,
         std::optional<UInt64> ts = std::nullopt);
