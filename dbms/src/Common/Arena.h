@@ -95,7 +95,7 @@ private:
     }
 
     /// Add next contiguous chunk of memory with size not less than specified.
-    /// If free_empty_head_chunk is true, empty head will be freed if head space is not enough.
+    /// If free_empty_head_chunk is true, empty head will be freed.
     /// It can avoid mem leak when you want always reuse one chunk.
     void NO_INLINE addChunk(size_t min_size, bool free_empty_head_chunk)
     {
@@ -108,10 +108,10 @@ private:
         if (free_empty_head_chunk && head->remaining() == head->size())
         {
             size_in_bytes -= head->size();
-            auto * new_head = head->prev;
-            head->prev = nullptr;
-            delete head;
-            head = new_head;
+            auto * old_head = head;
+            head = head->prev;
+            old_head->prev = nullptr;
+            delete old_head;
         }
         head = new Chunk(next_size, head);
         size_in_bytes += head->size();
@@ -176,12 +176,12 @@ public:
       * If there is no space in chunk to expand current piece of memory - then copy all piece to new chunk and change value of 'begin'.
       * NOTE This method is usable only for latest allocation. For earlier allocations, see 'realloc' method.
       */
-    char * allocContinue(size_t size, char const *& begin, bool free_empty_head_chunk = false)
+    char * allocContinue(size_t size, char const *& begin)
     {
         while (unlikely(head->pos + size > head->end))
         {
             char * prev_end = head->pos;
-            addChunk(size, free_empty_head_chunk);
+            addChunk(size, false);
 
             if (begin)
                 begin = insert(begin, prev_end - begin);

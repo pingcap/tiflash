@@ -123,12 +123,6 @@ private:
         processed_row_idx += cur_batch_size;
     }
 
-    void santityCheck() const
-    {
-        // Make sure init() has been called.
-        assert(!sort_key_containers.empty());
-    }
-
 protected:
     bool inited() const { return !sort_key_containers.empty(); }
 
@@ -146,7 +140,7 @@ protected:
         size_t cur_batch_size,
         const TiDB::TiDBCollatorPtr & collator)
     {
-        if likely (collator)
+        if likely (collator && !collator->isTrivialCollator())
         {
 #define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID)                                    \
     case (COLLATOR_ID):                                                                         \
@@ -174,7 +168,7 @@ public:
     // NOTE: i is the index of mini batch, it's not the row index of Column.
     ALWAYS_INLINE inline ArenaKeyHolder getKeyHolderBatch(size_t i, Arena * pool) const
     {
-        santityCheck();
+        assert(inited());
         assert(i < batch_rows.size());
         return ArenaKeyHolder{batch_rows[i], pool};
     }
