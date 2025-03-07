@@ -52,6 +52,8 @@ public:
 
     void decrease(const IColumn & column, size_t row_num)
     {
+        assert(!queue.empty());
+
         auto value = static_cast<const ColumnType &>(column).getData()[row_num];
         if (queue.front() == value)
             queue.pop_front();
@@ -100,12 +102,14 @@ public:
 
     void decrease(const IColumn & column, size_t row_num)
     {
+        assert(!queue.empty());
+
         auto str = static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num);
         if (collator != nullptr)
             if (collator->compareFastPath(str.data, str.size, queue.back().data, queue.back().size) == 0)
                 queue.pop_front();
             else {}
-        else if (str.compare(queue.back()))
+        else if (str.compare(queue.front()) == 0)
             queue.pop_front();
     }
 
@@ -165,6 +169,8 @@ public:
 
     void decrease(const IColumn & column, size_t row_num)
     {
+        assert(!queue.empty());
+
         Field value;
         column.get(row_num, value);
         if (value == queue.front())
