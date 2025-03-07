@@ -263,20 +263,15 @@ DM::WriteResult writeRegionDataToStorage(
     }
 }
 
-std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfoPtr> resolveLocksAndReadRegionData(
+
+std::variant<LockInfoPtr, RegionException::RegionReadStatus> RegionTable::checkRegionAndGetLocks(
     const TiDB::TableID table_id,
     const RegionPtr & region,
     const Timestamp start_ts,
     const std::unordered_set<UInt64> * bypass_lock_ts,
     RegionVersion region_version,
-    RegionVersion conf_version,
-    bool resolve_locks,
-    bool need_data_value)
+    RegionVersion conf_version)
 {
-    LockInfoPtr lock_info;
-
-    auto scanner = region->createCommittedScanner(true, need_data_value);
-
     /// Some sanity checks for region meta.
     {
         /**
@@ -303,33 +298,12 @@ std::variant<RegionDataReadInfoList, RegionException::RegionReadStatus, LockInfo
                 table_id);
     }
 
-    /// Deal with locks.
-    if (resolve_locks)
-    {
-        /// Check if there are any lock should be resolved, if so, throw LockException.
-        /// It will iterate all locks with in the time range.
-        lock_info = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
-    }
-
+    auto scanner = region->createCommittedScanner(true, /*need_data_value*/ false);
+    /// Get transaction locks that should be resolved in this region.
+    auto lock_info = scanner.getLockInfo(RegionLockReadQuery{.read_tso = start_ts, .bypass_lock_ts = bypass_lock_ts});
     if (lock_info)
         return lock_info;
-
-    /// If there is no lock, leave scope of region scanner and raise LockException.
-    /// Read raw KVs from region cache.
-    RegionDataReadInfoList data_list_read;
-    // Shortcut for empty region.
-    if (!scanner.hasNext())
-        return data_list_read;
-
-    // If worked with raftstore v2, the final size may not equal to here.
-    data_list_read.reserve(scanner.writeMapSize());
-
-    // Tiny optimization for queries that need only handle, tso, delmark.
-    do
-    {
-        data_list_read.emplace_back(scanner.next());
-    } while (scanner.hasNext());
-    return data_list_read;
+    return RegionException::RegionReadStatus::OK;
 }
 
 std::optional<RegionDataReadInfoList> ReadRegionCommitCache(const RegionPtr & region, bool lock_region)
@@ -454,42 +428,6 @@ DM::WriteResult RegionTable::writeCommittedByRegion(
     /// Save removed data to outer.
     data_list_to_remove = std::move(data_list_read);
     return write_result;
-}
-
-RegionTable::ResolveLocksAndWriteRegionRes RegionTable::resolveLocksAndWriteRegion(
-    TMTContext & tmt,
-    const TiDB::TableID table_id,
-    const RegionPtr & region,
-    const Timestamp start_ts,
-    const std::unordered_set<UInt64> * bypass_lock_ts,
-    RegionVersion region_version,
-    RegionVersion conf_version,
-    const LoggerPtr & log)
-{
-    auto region_data_lock = resolveLocksAndReadRegionData(
-        table_id,
-        region,
-        start_ts,
-        bypass_lock_ts,
-        region_version,
-        conf_version,
-        /* resolve_locks */ true,
-        /* need_data_value */ true);
-
-    return std::visit(
-        variant_op::overloaded{
-            [&](RegionDataReadInfoList & data_list_read) -> ResolveLocksAndWriteRegionRes {
-                if (data_list_read.empty())
-                    return RegionException::RegionReadStatus::OK;
-                auto & context = tmt.getContext();
-                // There is no raft input here, so we can just ignore the fg flush request.
-                writeRegionDataToStorage(context, region, data_list_read, log);
-                RemoveRegionCommitCache(region, data_list_read);
-                return RegionException::RegionReadStatus::OK;
-            },
-            [](auto & r) -> ResolveLocksAndWriteRegionRes { return std::move(r); },
-        },
-        region_data_lock);
 }
 
 // Note that there could be a chance that the table have been totally removed from TiKV

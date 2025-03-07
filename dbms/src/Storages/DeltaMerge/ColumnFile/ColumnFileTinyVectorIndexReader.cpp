@@ -19,14 +19,15 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyVectorIndexReader.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
-#include <Storages/DeltaMerge/Index/VectorSearchPerf.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
+
 
 namespace DB::DM
 {
 
 void ColumnFileTinyVectorIndexReader::read(
     MutableColumnPtr & vec_column,
-    const std::span<const VectorIndexViewer::Key> & read_rowids,
+    const std::span<const VectorIndexReader::Key> & read_rowids,
     size_t rowid_start_offset)
 {
     RUNTIME_CHECK(loaded);
@@ -45,7 +46,7 @@ void ColumnFileTinyVectorIndexReader::read(
     perf_stat.read_vec_column_seconds = watch.elapsedSeconds();
 }
 
-std::vector<VectorIndexViewer::SearchResult> ColumnFileTinyVectorIndexReader::load()
+std::vector<VectorIndexReader::SearchResult> ColumnFileTinyVectorIndexReader::load()
 {
     if (loaded)
         return {};
@@ -82,13 +83,13 @@ void ColumnFileTinyVectorIndexReader::loadVectorIndex()
         auto index_page = data_provider->readTinyData(index_page_id, index_fields);
         ReadBufferFromOwnString read_buf(index_page.data);
         CompressedReadBuffer compressed(read_buf);
-        return VectorIndexViewer::load(index_info_iter->index_props().vector_index(), compressed);
+        return VectorIndexReader::createFromMemory(index_info_iter->index_props().vector_index(), compressed);
     };
     if (local_index_cache)
     {
         const auto key = fmt::format("{}{}", LocalIndexCache::COLUMNFILETINY_INDEX_NAME_PREFIX, index_page_id);
         auto local_index = local_index_cache->getOrSet(key, load_from_page_storage);
-        vec_index = std::dynamic_pointer_cast<VectorIndexViewer>(local_index);
+        vec_index = std::dynamic_pointer_cast<VectorIndexReader>(local_index);
     }
     else
         vec_index = load_from_page_storage();
@@ -115,7 +116,7 @@ ColumnFileTinyVectorIndexReader::~ColumnFileTinyVectorIndexReader()
         perf_stat.returned_rows);
 }
 
-std::vector<VectorIndexViewer::SearchResult> ColumnFileTinyVectorIndexReader::loadVectorSearchResult()
+std::vector<VectorIndexReader::SearchResult> ColumnFileTinyVectorIndexReader::loadVectorSearchResult()
 {
     auto perf_begin = PerfContext::vector_search;
     RUNTIME_CHECK(valid_rows.size() == tiny_file.getRows(), valid_rows.size(), tiny_file.getRows());

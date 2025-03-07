@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
 #include <Storages/KVStore/Region.h>
@@ -1016,23 +1017,40 @@ BaseBuffView cppStringAsBuff(const std::string & s)
     return BaseBuffView{.data = s.data(), .len = s.size()};
 }
 
-BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_id, BaseBuffView key)
+CppStrWithView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_id, BaseBuffView key)
 {
     auto tikv_key = TiKVKey(key.data, key.len);
     try
     {
         RUNTIME_CHECK(server->tmt != nullptr);
         auto & kvstore = server->tmt->getKVStore();
+        // prevent concurrent write to the same region
+        auto region_task_lock = kvstore->genRegionTaskLock(region_id);
         auto region = kvstore->getRegion(region_id);
+        if (!region)
+        {
+            // in case region is not exist
+            LOG_WARNING(
+                Logger::get(),
+                "Failed to get lock by key, region is not exist, region_id={} key={}",
+                region_id,
+                tikv_key.toDebugString());
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
+        }
+
         auto value = region->getLockByKey(tikv_key);
         if (!value)
         {
-            // key not exist
+            // Key not exist. Use debug level because with feature file-base-txn, there could be lots of logging
             LOG_DEBUG(Logger::get(), "Failed to get lock by key {}, region_id={}", tikv_key.toDebugString(), region_id);
-            return BaseBuffView{};
+            return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
         }
 
-        return BaseBuffView{value->data(), value->dataSize()};
+        auto * s = RawCppString::New(*value);
+        return CppStrWithView{
+            .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{s->data(), s->size()},
+        };
     }
     catch (...)
     {
@@ -1041,7 +1059,7 @@ BaseBuffView GetLockByKey(const EngineStoreServerWrap * server, uint64_t region_
             "Failed to get lock by key {}, region_id={}",
             tikv_key.toDebugString(),
             region_id);
-        return BaseBuffView{};
+        return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
     }
 }
 

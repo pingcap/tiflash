@@ -294,7 +294,9 @@ try
             *params,
             "BenchProbeAggHashMap",
             /*concurrency=*/1,
-            register_operator_spill_context);
+            register_operator_spill_context,
+            /*is_auto_pass_through=*/false,
+            params->use_magic_hash);
         data_variants->aggregator = aggregator.get();
 
         Aggregator::AggProcessInfo agg_process_info(aggregator.get());

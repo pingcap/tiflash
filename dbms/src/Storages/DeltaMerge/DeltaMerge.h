@@ -149,7 +149,7 @@ public:
         }
         else
         {
-            use_stable_rows = delta_index_it.getSid();
+            use_stable_rows = delta_index_it->getSid();
         }
         auto all_range = RowKeyRange::newAll(is_common_handle, rowkey_column_size);
         last_value = all_range.getStart().toRowKeyValue();
@@ -365,10 +365,10 @@ private:
             }
             else
             {
-                if (delta_index_it.isDelete())
+                if (delta_index_it->isDelete())
                 {
                     // Delete.
-                    writeDeleteFromDelta(delta_index_it.getCount());
+                    writeDeleteFromDelta(delta_index_it->getCount());
                 }
                 else
                 {
@@ -376,17 +376,17 @@ private:
                     bool do_write = true;
                     if constexpr (skippable_place)
                     {
-                        if (delta_index_it.getSid() < sk_skip_stable_rows)
+                        if (delta_index_it->getSid() < sk_skip_stable_rows)
                         {
                             do_write = false;
-                            sk_skip_total_rows += delta_index_it.getCount();
+                            sk_skip_total_rows += delta_index_it->getCount();
                         }
                     }
 
                     if (do_write)
                     {
-                        use_delta_offset = delta_index_it.getValue();
-                        use_delta_rows = delta_index_it.getCount();
+                        use_delta_offset = delta_index_it->getValue();
+                        use_delta_rows = delta_index_it->getCount();
                         writeInsertFromDelta(output_columns, output_write_limit);
                     }
                 }
@@ -630,9 +630,9 @@ private:
     {
         UInt64 prev_sid;
         {
-            prev_sid = delta_index_it.getSid();
-            if (delta_index_it.isDelete())
-                prev_sid += delta_index_it.getCount();
+            prev_sid = delta_index_it->getSid();
+            if (delta_index_it->isDelete())
+                prev_sid += delta_index_it->getCount();
         }
 
         ++delta_index_it;
@@ -644,7 +644,7 @@ private:
         }
         else
         {
-            use_stable_rows = delta_index_it.getSid() - prev_sid;
+            use_stable_rows = delta_index_it->getSid() - prev_sid;
         }
     }
 };

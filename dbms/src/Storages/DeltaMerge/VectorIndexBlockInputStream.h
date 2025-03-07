@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 
 
@@ -43,7 +43,7 @@ public:
 
     // Load vector index and search results.
     // Return the rowids of the selected rows.
-    virtual std::vector<VectorIndexViewer::SearchResult> load() = 0;
+    virtual std::vector<VectorIndexReader::SearchResult> load() = 0;
 
     // Set the real selected rows offset (local offset). This is used to update Packs/ColumnFiles to read.
     // For example, DMFile should update DMFilePackFilter, only packs with selected rows will be read.

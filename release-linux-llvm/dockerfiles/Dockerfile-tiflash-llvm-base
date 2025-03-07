@@ -16,14 +16,15 @@
 
 FROM quay.io/rockylinux/rockylinux:8.10.20240528-ubi
 
+ARG arch
 COPY misc /misc
 
 RUN sh /misc/bake_llvm_base.sh
 
 ENV PATH="/opt/cmake/bin:/usr/local/bin/:${PATH}:/usr/local/go/bin:/root/.cargo/bin" \
-    LIBRARY_PATH="/usr/local/lib/$(uname -m)-unknown-linux-gnu/:${LIBRARY_PATH}" \
-    LD_LIBRARY_PATH="/usr/local/lib/$(uname -m)-unknown-linux-gnu/:${LD_LIBRARY_PATH}" \
-    CPLUS_INCLUDE_PATH="/usr/local/include/$(uname -m)-unknown-linux-gnu/c++/v1/:${CPLUS_INCLUDE_PATH}" \
+    LIBRARY_PATH="/usr/local/lib/${arch}-unknown-linux-gnu/:${LIBRARY_PATH}" \
+    LD_LIBRARY_PATH="/usr/local/lib/${arch}-unknown-linux-gnu/:${LD_LIBRARY_PATH}" \
+    CPLUS_INCLUDE_PATH="/usr/local/include/${arch}-unknown-linux-gnu/c++/v1/:${CPLUS_INCLUDE_PATH}" \
     OPENSSL_ROOT_DIR="/usr/local/opt/openssl" \
     CC=clang \
     CXX=clang++ \

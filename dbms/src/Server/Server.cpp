@@ -582,7 +582,7 @@ try
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
-    /// Load global settings from default_profile and system_profile.
+    /// Load global settings from default_profile
     /// It internally depends on UserConfig::parseSettings.
     // TODO: Parse the settings from config file at the program beginning
     global_context->setDefaultProfiles();
@@ -928,9 +928,10 @@ try
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
     /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
-    size_t vec_index_cache_entities = config().getUInt64("vec_index_cache_entities", 1000);
-    if (vec_index_cache_entities)
-        global_context->setLocalIndexCache(vec_index_cache_entities);
+    size_t light_local_index_cache_entities = config().getUInt64("light_local_index_cache_entities", 10000);
+    size_t heavy_local_index_cache_entities = config().getUInt64("heavy_local_index_cache_entities", 500);
+    if (light_local_index_cache_entities && heavy_local_index_cache_entities)
+        global_context->setLocalIndexCache(light_local_index_cache_entities, heavy_local_index_cache_entities);
 
     size_t column_cache_long_term_size
         = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
