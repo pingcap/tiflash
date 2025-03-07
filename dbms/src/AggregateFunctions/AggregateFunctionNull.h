@@ -629,6 +629,20 @@ public:
         }
     }
 
+    void insertBatchResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
+    {
+        auto & to_concrete = static_cast<ColumnNullable &>(to);
+        if (getCounter(place) > 0)
+        {
+            nested_function->insertBatchResultInto(nestedPlace(place), to_concrete.getNestedColumn(), num, nullptr);
+            to_concrete.insertManyNulls(num, 0);
+        }
+        else
+        {
+            to_concrete.insertManyDefaults(num);
+        }
+    }
+
     bool hasTrivialDestructor() const override { return nested_function->hasTrivialDestructor(); }
 
     size_t sizeOfData() const override { return prefix_size + nested_function->sizeOfData(); }
