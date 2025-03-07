@@ -214,11 +214,13 @@ private:
 };
 
 class FileCache
+    : public std::enable_shared_from_this<FileCache>
+    , private boost::noncopyable
 {
 public:
     static void initialize(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_)
     {
-        global_file_cache_instance = std::make_unique<FileCache>(capacity_metrics_, config_);
+        global_file_cache_instance = std::make_shared<FileCache>(capacity_metrics_, config_);
         global_file_cache_initialized.store(true, std::memory_order_release);
     }
 
@@ -228,7 +230,19 @@ public:
                                                                              : nullptr;
     }
 
-    static void shutdown() { global_file_cache_instance = nullptr; }
+    // `bgDownload` will add task which holds weak_ptr of `global_file_cache_instance` to S3FileCachePool.
+    // When the task is scheduled in another thread, it will try to lock the weak_ptr to get the shared_ptr.
+    // If the global_file_cache_instance is destructed before the task is scheduled, the weak_ptr will be expired.
+    // If there are still tasks running, the `global_file_cache_instance` should wait until all tasks are finished.
+    static void shutdown()
+    {
+        global_file_cache_initialized.store(false, std::memory_order_release);
+        while (global_file_cache_instance.use_count() > 1)
+        {
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        global_file_cache_instance = nullptr;
+    }
 
     FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_);
 
@@ -252,7 +266,7 @@ public:
 #endif
 
     inline static std::atomic<bool> global_file_cache_initialized{false};
-    static std::unique_ptr<FileCache> global_file_cache_instance;
+    static std::shared_ptr<FileCache> global_file_cache_instance;
 
     DISALLOW_COPY_AND_MOVE(FileCache);
 

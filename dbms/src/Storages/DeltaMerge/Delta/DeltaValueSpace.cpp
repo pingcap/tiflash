@@ -336,18 +336,19 @@ bool DeltaValueSpace::ingestColumnFiles(
 
 bool DeltaValueSpace::flush(DMContext & context)
 {
+    String simple_info = simpleInfo();
     bool v = false;
     if (!is_flushing.compare_exchange_strong(v, true))
     {
         // other thread is flushing, just return.
-        LOG_DEBUG(log, "Flush stop because other thread is flushing, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Flush stop because other thread is flushing, delta={}", simple_info);
         return false;
     }
     SCOPE_EXIT({
         bool v = true;
         if (!is_flushing.compare_exchange_strong(v, false))
             throw Exception(
-                fmt::format("Delta is expected to be flushing, delta={}", simpleInfo()),
+                fmt::format("Delta is expected to be flushing, delta={}", simple_info),
                 ErrorCodes::LOGICAL_ERROR);
     });
 
@@ -365,7 +366,7 @@ bool DeltaValueSpace::flush(DMContext & context)
         std::scoped_lock lock(mutex);
         if (abandoned.load(std::memory_order_relaxed))
         {
-            LOG_DEBUG(log, "Flush stop because abandoned, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Flush stop because abandoned, delta={}", simple_info);
             return false;
         }
         flush_task = mem_table_set->buildFlushTask(
@@ -379,7 +380,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     // No update, return successfully.
     if (!flush_task)
     {
-        LOG_DEBUG(log, "Flush cancel because nothing to flush, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Flush cancel because nothing to flush, delta={}", simple_info);
         return true;
     }
 
@@ -388,9 +389,9 @@ bool DeltaValueSpace::flush(DMContext & context)
     DeltaIndexPtr new_delta_index;
     if (!delta_index_updates.empty())
     {
-        LOG_DEBUG(log, "Update index start, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Update index start, delta={}", simple_info);
         new_delta_index = cur_delta_index->cloneWithUpdates(delta_index_updates);
-        LOG_DEBUG(log, "Update index done, delta={}", simpleInfo());
+        LOG_DEBUG(log, "Update index done, delta={}", simple_info);
     }
     GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_delta_flush).Increment(flush_task->getFlushBytes());
     GET_METRIC(tiflash_storage_subtask_throughput_rows, type_delta_flush).Increment(flush_task->getFlushRows());
@@ -404,14 +405,14 @@ bool DeltaValueSpace::flush(DMContext & context)
         {
             // Delete written data.
             wbs.setRollback();
-            LOG_DEBUG(log, "Flush stop because abandoned, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Flush stop because abandoned, delta={}", simple_info);
             return false;
         }
 
         if (!flush_task->commit(persisted_file_set, wbs))
         {
             wbs.rollbackWrittenLogAndData();
-            LOG_DEBUG(log, "Flush stop because structure got updated, delta={}", simpleInfo());
+            LOG_DEBUG(log, "Flush stop because structure got updated, delta={}", simple_info);
             return false;
         }
 

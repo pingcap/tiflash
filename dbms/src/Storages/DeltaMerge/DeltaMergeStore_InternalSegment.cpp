@@ -965,10 +965,11 @@ bool DeltaMergeStore::segmentWaitDeltaLocalIndexReady(const SegmentPtr & segment
         {
             for (const auto & column_file : column_file_persisted_set->getFiles())
             {
-                auto * tiny_file = column_file->tryToTinyFile();
-                if (!tiny_file)
-                    continue;
-                all_indexes_built = all_indexes_built && (tiny_file->hasIndex(index.index_id));
+                if (auto * tiny_file = column_file->tryToTinyFile(); tiny_file)
+                {
+                    auto lock = delta_weak_ptr.lock()->getLock();
+                    all_indexes_built = all_indexes_built && (tiny_file->hasIndex(index.index_id));
+                }
             }
         }
         if (all_indexes_built)

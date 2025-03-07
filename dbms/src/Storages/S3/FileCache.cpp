@@ -65,7 +65,7 @@ namespace DB
 {
 using FileType = FileSegment::FileType;
 
-std::unique_ptr<FileCache> FileCache::global_file_cache_instance;
+std::shared_ptr<FileCache> FileCache::global_file_cache_instance;
 
 FileSegment::Status FileSegment::waitForNotEmpty()
 {
@@ -773,8 +773,16 @@ void FileCache::bgDownload(const String & s3_key, FileSegmentPtr & file_seg)
         "downloading count {} => s3_key {} start",
         bg_downloading_count.load(std::memory_order_relaxed),
         s3_key);
-    S3FileCachePool::get().scheduleOrThrowOnError(
-        [this, s3_key = s3_key, file_seg = file_seg]() mutable { download(s3_key, file_seg); });
+    S3FileCachePool::get().scheduleOrThrowOnError([instance = weak_from_this(),
+                                                   s3_key = s3_key,
+                                                   file_seg = file_seg,
+                                                   &initialized = global_file_cache_initialized]() mutable {
+        // The global_file_cache_initialized = false means the global_file_cache_instance is trying to destruct or not initialized.
+        if (!initialized)
+            return;
+        if (auto p = instance.lock(); p)
+            p->download(s3_key, file_seg);
+    });
 }
 
 void FileCache::fgDownload(const String & s3_key, FileSegmentPtr & file_seg)
