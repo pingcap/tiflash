@@ -388,9 +388,9 @@ bool DeltaValueSpace::flush(DMContext & context)
     DeltaIndexPtr new_delta_index;
     if (!delta_index_updates.empty())
     {
-        LOG_DEBUG(log, "Update index start, delta={}", simpleInfo());
+        // LOG_DEBUG(log, "Update index start, delta={}", simpleInfo());
         new_delta_index = cur_delta_index->cloneWithUpdates(delta_index_updates);
-        LOG_DEBUG(log, "Update index done, delta={}", simpleInfo());
+        // LOG_DEBUG(log, "Update index done, delta={}", simpleInfo());
     }
     GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_delta_flush).Increment(flush_task->getFlushBytes());
     GET_METRIC(tiflash_storage_subtask_throughput_rows, type_delta_flush).Increment(flush_task->getFlushRows());

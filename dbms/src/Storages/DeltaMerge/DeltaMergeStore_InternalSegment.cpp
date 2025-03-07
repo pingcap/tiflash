@@ -960,6 +960,7 @@ bool DeltaMergeStore::segmentWaitDeltaLocalIndexReady(const SegmentPtr & segment
         }
         if (!column_file_persisted_set)
             return false; // ColumnFilePersistedSet is not exist, return false
+        auto lock = delta_weak_ptr.lock()->getLock();
         bool all_indexes_built = true;
         for (const auto & index : *build_info.indexes_to_build)
         {
