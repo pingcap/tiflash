@@ -312,8 +312,8 @@ void WindowTransformAction::initialAggregateFunction(
     workspace.argument_columns.assign(workspace.arguments.size(), nullptr);
     workspace.aggregate_function = window_function_description.aggregate_function;
     const auto & aggregate_function = workspace.aggregate_function;
-    if (aggregate_function->allocatesMemoryInArena())
-        throw Exception("arena is not supported now");
+    if (!arena && aggregate_function->allocatesMemoryInArena())
+        arena = std::make_unique<Arena>();
 
     workspace.aggregate_function_state.reset(aggregate_function->sizeOfData(), aggregate_function->alignOfData());
     aggregate_function->create(workspace.aggregate_function_state.data());
@@ -1290,7 +1290,7 @@ void WindowTransformAction::writeOutCurrentRow()
         IColumn * result_column = block.output_columns[ws.idx].get();
         const auto * agg_func = ws.aggregate_function.get();
         auto * buf = ws.aggregate_function_state.data();
-        agg_func->insertResultInto(buf, *result_column, nullptr);
+        agg_func->insertResultInto(buf, *result_column, arena.get());
     }
 }
 
