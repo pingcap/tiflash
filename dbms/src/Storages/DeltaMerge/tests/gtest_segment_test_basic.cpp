@@ -459,27 +459,27 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
             || (b < 0 && a < std::numeric_limits<Int64>::min() - b);
     };
 
+    auto is_diff_overflow = [](Int64 a, Int64 b) {
+        assert(a > b);
+        if (b < 0)
+            return a > std::numeric_limits<Int64>::max() + b;
+        else
+            return false;
+    };
+
     // For example, write_start_key is int64_max and total_write_rows is 1,
     // We will generate block with one row with int64_max.
     auto is_including_right_boundary = [](Int64 write_start_key, Int64 total_write_rows) {
         return std::numeric_limits<Int64>::max() - total_write_rows + 1 == write_start_key;
     };
 
-    bool including_right_boundary = false;
-    if (write_start_key.has_value())
-    {
-        including_right_boundary = is_including_right_boundary(*write_start_key, total_write_rows);
-        RUNTIME_CHECK(
-            including_right_boundary || !is_sum_overflow(*write_start_key, total_write_rows),
-            *write_start_key,
-            total_write_rows);
-    }
-
     auto seg = segments.find(segment_id);
     RUNTIME_CHECK(seg != segments.end());
     auto segment_range = seg->second->getRowKeyRange();
     auto [segment_start_key, segment_end_key] = getSegmentKeyRange(segment_id);
+    bool including_right_boundary = false;
     if (write_start_key.has_value())
+    {
         RUNTIME_CHECK_MSG(
             segment_start_key <= *write_start_key
                 && (*write_start_key < segment_end_key || segment_range.isEndInfinite()),
@@ -487,9 +487,18 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
             *write_start_key,
             segment_range.toDebugString());
 
-    if (!write_start_key.has_value())
+        including_right_boundary = is_including_right_boundary(*write_start_key, total_write_rows);
+        RUNTIME_CHECK(
+            including_right_boundary || !is_sum_overflow(*write_start_key, total_write_rows),
+            *write_start_key,
+            total_write_rows);
+    }
+    else
     {
-        auto segment_max_rows = segment_end_key - segment_start_key;
+        auto segment_max_rows = is_diff_overflow(segment_end_key, segment_start_key)
+            ? std::numeric_limits<Int64>::max() // UInt64 is more accurate, but Int64 is enough and for simplicity.
+            : segment_end_key - segment_start_key;
+
         if (segment_max_rows == 0)
             return {};
 
