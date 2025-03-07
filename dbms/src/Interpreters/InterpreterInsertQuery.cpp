@@ -119,7 +119,8 @@ BlockIO InterpreterInsertQuery::execute()
     BlockOutputStreamPtr out;
 
     out = std::make_shared<AddingDefaultBlockOutputStream>(
-        out,
+        table,
+        query_ptr,
         getSampleBlock(query, table),
         required_columns,
         table->getColumns().defaults,

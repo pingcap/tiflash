@@ -23,8 +23,6 @@
 #include <Storages/TableLockHolder.h>
 
 #include <memory>
-#include <optional>
-#include <shared_mutex>
 
 
 namespace DB
