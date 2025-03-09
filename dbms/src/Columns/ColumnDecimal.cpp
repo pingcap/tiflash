@@ -76,7 +76,7 @@ ALWAYS_INLINE inline char * serializeDecimal256Helper(char * dst, const Decimal2
     dst += sizeof(size_t);
 
     const size_t limb_size = limb_count * sizeof(boost::multiprecision::limb_type);
-    inline_memcpy(dst, val.limbs(), limb_size);
+    memcpy(dst, val.limbs(), limb_size);
     dst += limb_size;
     return dst;
 }
