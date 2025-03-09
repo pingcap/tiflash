@@ -81,8 +81,9 @@ ALWAYS_INLINE inline char * serializeDecimal256Helper(char * dst, const Decimal2
     return dst;
 }
 
-ALWAYS_INLINE inline const char * deserializeDecimal256Helper(Decimal256 & value, const char * ptr)
+ALWAYS_INLINE inline const char * deserializeDecimal256Helper(Decimal256 & new_value, const char * ptr)
 {
+    Decimal256 value;
     auto & val = value.value.backend();
 
     size_t offset = 0;
@@ -98,6 +99,7 @@ ALWAYS_INLINE inline const char * deserializeDecimal256Helper(Decimal256 & value
     val.normalize();
     offset += limb_count * sizeof(boost::multiprecision::limb_type);
 
+    new_value = value;
     return ptr + offset;
 }
 
