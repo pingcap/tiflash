@@ -506,12 +506,12 @@ void DeltaMergeStore::checkAllSegmentsLocalIndex(std::vector<IndexID> && dropped
 
     size_t segments_missing_indexes = 0;
 
-    // 2. Trigger EnsureStableLocalIndex for all segments.
+    // 2. Trigger EnsureStableLocalIndex & EnsureDeltaLocalIndex for all segments.
     // There could be new segments between 1 and 2, which is fine. New segments
-    // will invoke EnsureStableLocalIndex at creation time.
+    // will invoke EnsureStableLocalIndex & EnsureDeltaLocalIndex at creation time.
     {
         // There must be a lock, because segments[] may be mutated.
-        // And one lock for all is fine, because segmentEnsureStableLocalIndexAsync is non-blocking, it
+        // And one lock for all is fine, because segmentEnsureStableLocalIndexAsync & segmentEnsureDeltaLocalIndexAsync is non-blocking, it
         // simply put tasks in the background.
         std::shared_lock lock(read_write_mutex);
         for (const auto & [end, segment] : segments)
@@ -520,7 +520,7 @@ void DeltaMergeStore::checkAllSegmentsLocalIndex(std::vector<IndexID> && dropped
             // cleanup the index error message for dropped indexes
             segment->clearIndexBuildError(dropped_indexes);
 
-            if (segmentEnsureStableLocalIndexAsync(segment))
+            if (segmentEnsureStableLocalIndexAsync(segment) || segmentEnsureDeltaLocalIndexAsync(segment))
                 ++segments_missing_indexes;
         }
     }
