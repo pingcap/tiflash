@@ -185,7 +185,7 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
             pb_cf_idx.mutable_index_props()->Swap(&idx_info);
             auto data_size = write_buf.count();
             auto buf = write_buf.tryGetReadBuffer();
-            // ColumnFileDataProviderRNLocalPageCache currently does not support read data with fields
+            // ColumnFileDataProviderRNLocalPageCache currently does not support read data withiout fields
             options.wbs.log.putPage(index_page_id, 0, buf, data_size, {data_size});
             index_infos->emplace_back(std::move(pb_cf_idx));
         }
