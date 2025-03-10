@@ -145,7 +145,12 @@ private:
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container,
         const NullMap * nullmap) const;
-    template <bool compare_semantics, bool has_null, bool need_decode_collator, typename DerivedCollator, bool has_nullmap>
+    template <
+        bool compare_semantics,
+        bool has_null,
+        bool need_decode_collator,
+        typename DerivedCollator,
+        bool has_nullmap>
     void serializeToPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
