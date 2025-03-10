@@ -34,25 +34,26 @@ Strings splitAndTrim(std::string_view s, std::string_view delimiter, std::option
     return results;
 }
 
-// [a, b) => {a, b, false}
-// [a, b] => {a, b, true}
 template <typename T>
-std::tuple<T, T, bool> parseRange(std::string_view s)
+SegDataRange<T> parseRange(std::string_view s)
 {
     auto str_range = boost::trim_copy(s);
     RUNTIME_CHECK(str_range.front() == '[' && (str_range.back() == ')' || str_range.back() == ']'), str_range);
     auto values = splitAndTrim(str_range.substr(1, str_range.size() - 2), ",", 2);
-    return {static_cast<T>(std::stol(values[0])), static_cast<T>(std::stol(values[1])), str_range.back() == ']'};
+    return SegDataRange<T>{
+        .left = static_cast<T>(std::stol(values[0])),
+        .right = static_cast<T>(std::stol(values[1])),
+        .including_right_boundary = str_range.back() == ']'};
 }
 
 // "[a, b)|[c, d]" => [{a, b, false}, {c, d, true}]
 template <typename T>
-std::vector<std::tuple<T, T, bool>> parseRanges(std::string_view s)
+std::vector<SegDataRange<T>> parseRanges(std::string_view s)
 {
     auto str_range = boost::trim_copy(s);
     RUNTIME_CHECK(str_range.front() == '[' && (str_range.back() == ')' || str_range.back() == ']'), str_range);
     auto ranges = splitAndTrim(str_range, "|");
-    std::vector<std::tuple<T, T, bool>> vector_ranges;
+    std::vector<SegDataRange<T>> vector_ranges;
     vector_ranges.reserve(ranges.size());
     for (auto & r : ranges)
         vector_ranges.emplace_back(parseRange<T>(r));
@@ -155,7 +156,7 @@ std::vector<T> genSequence(T begin, T end, bool including_right_boundary)
 }
 
 template <typename T>
-std::vector<T> genSequence(const std::vector<std::tuple<T, T, bool>> & ranges)
+std::vector<T> genSequence(const std::vector<SegDataRange<T>> & ranges)
 {
     std::vector<T> res;
     for (auto [begin, end, including_right_boundary] : ranges)

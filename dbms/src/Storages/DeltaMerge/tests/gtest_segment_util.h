@@ -21,12 +21,24 @@
 
 namespace DB::DM::tests
 {
+
+// If including_right_boundary is false, it means [left, right).
+// If including_right_boundary is true, it means [left, right].
+// `including_right_boundary` is required if we want to generate data with std::numeric_limits<T>::max().
+// Theoretically, we could enforce the use of closed intervals, thereby eliminating the need for the parameter 'including_right_boundary'.
+// However, a multitude of existing tests are predicated on the assumption that the interval is left-closed and right-open.
+template <typename T>
+struct SegDataRange
+{
+    T left;
+    T right;
+    bool including_right_boundary;
+};
+
 struct SegDataUnit
 {
     String type;
-    // {left, right, including_right_boundary}
-    // `including_right_boundary` is required if we want to generate data with int64_max.
-    std::tuple<Int64, Int64, bool> range;
+    SegDataRange<Int64> range;
     std::optional<size_t> pack_size; // For DMFile
     bool shuffle = false; // For ColumnFileTiny and ColumnFileMemory
     std::optional<UInt64> ts;
