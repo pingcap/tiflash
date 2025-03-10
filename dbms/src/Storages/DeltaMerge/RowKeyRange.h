@@ -867,7 +867,7 @@ struct RowKeyRange
 
 inline auto format_as(const RowKeyRange & range)
 {
-    return range.toString();
+    return range.toDebugString();
 }
 
 // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
