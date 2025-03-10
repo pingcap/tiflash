@@ -33,7 +33,6 @@ namespace DB
 struct CommonImpl
 {
     static void decrease(const IColumn &, size_t) { throw Exception("decrease is not implemented yet"); }
-    static bool needArena() { return false; }
 };
 
 /// For numeric values.
@@ -50,6 +49,8 @@ protected:
     using ColumnType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
 
 public:
+    static bool needArena() { return false; }
+
     bool has() const { return has_value; }
 
     void setCollators(const TiDB::TiDBCollators &) {}
@@ -442,6 +443,8 @@ protected:
     Field value;
 
 public:
+    static bool needArena() { return false; }
+
     bool has() const { return !value.isNull(); }
 
     void setCollators(const TiDB::TiDBCollators &) {}

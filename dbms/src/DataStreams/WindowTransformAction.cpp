@@ -312,7 +312,7 @@ void WindowTransformAction::initialAggregateFunction(
     workspace.argument_columns.assign(workspace.arguments.size(), nullptr);
     workspace.aggregate_function = window_function_description.aggregate_function;
     const auto & aggregate_function = workspace.aggregate_function;
-    if (!arena && aggregate_function->allocatesMemoryInArena())
+    if (!arena)
         arena = std::make_unique<Arena>();
 
     workspace.aggregate_function_state.reset(aggregate_function->sizeOfData(), aggregate_function->alignOfData());
