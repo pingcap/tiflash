@@ -1386,6 +1386,28 @@ try
 }
 CATCH
 
+TEST_P(VectorIndexSegmentTest1, DataInCFTinyWithLocalIndex)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 5, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ensureSegmentDeltaLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+
+    // the query result should be filtered by local index on DeltaVS
+    auto stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {100.0});
+    assertStreamOut(stream, "[4, 5)");
+
+    stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 3, {100.0});
+    assertStreamOut(stream, "[2, 5)");
+
+    stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {1.1});
+    assertStreamOut(stream, "[1, 2)");
+
+    stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 2, {1.1});
+    assertStreamOut(stream, "[1, 3)");
+}
+CATCH
+
 TEST_P(VectorIndexSegmentTest2, DataInStable)
 try
 {
@@ -1735,7 +1757,7 @@ public:
         global_context.tryReleaseWriteNodePageStorageForTest();
         global_context.initializeWriteNodePageStorageIfNeed(global_context.getPathPool());
 
-        global_context.setLocalIndexCache(1000);
+        global_context.setLocalIndexCache(10000, 1000);
 
         auto kvstore = db_context->getTMTContext().getKVStore();
         {
@@ -2308,7 +2330,7 @@ try
     }
     {
         // We should be able to clear something from the vector index cache.
-        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getLocalIndexCache();
+        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getLightLocalIndexCache();
         ASSERT_NE(local_index_cache, nullptr);
         ASSERT_EQ(1, cleanLocalIndexCacheEntries(local_index_cache));
     }
@@ -2448,7 +2470,7 @@ try
     }
     {
         // We should be able to clear something from the vector index cache.
-        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getLocalIndexCache();
+        auto local_index_cache = TiFlashTestEnv::getGlobalContext().getLightLocalIndexCache();
         ASSERT_NE(local_index_cache, nullptr);
         ASSERT_EQ(1, cleanLocalIndexCacheEntries(local_index_cache));
     }

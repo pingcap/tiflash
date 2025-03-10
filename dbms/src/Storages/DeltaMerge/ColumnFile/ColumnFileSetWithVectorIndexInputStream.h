@@ -43,7 +43,7 @@ private:
     const ColumnDefinesPtr rest_col_defs;
 
     // Set after load(). Top K search results in files with vector index.
-    std::vector<VectorIndexViewer::Key> sorted_results;
+    std::vector<VectorIndexReader::Key> sorted_results;
     std::vector<ColumnFileTinyVectorIndexReaderPtr> tiny_readers;
 
     const ColumnFiles & column_files;
@@ -69,7 +69,8 @@ public:
         , data_provider(data_provider_)
         , ann_query_info(ann_query_info_)
         , valid_rows(std::move(valid_rows_))
-        , vec_index_cache(context_.global_context.getLocalIndexCache())
+        // ColumnFile vector index stores all data in memory, can not be evicted by system.
+        , vec_index_cache(context_.global_context.getHeavyLocalIndexCache())
         , vec_cd(std::move(vec_cd_))
         , rest_col_defs(rest_col_defs_)
         , column_files(reader.snapshot->getColumnFiles())
@@ -94,7 +95,7 @@ public:
 
     Block read() override;
 
-    std::vector<VectorIndexViewer::SearchResult> load() override;
+    std::vector<VectorIndexReader::SearchResult> load() override;
 
     void setSelectedRows(const std::span<const UInt32> & selected_rows) override;
 

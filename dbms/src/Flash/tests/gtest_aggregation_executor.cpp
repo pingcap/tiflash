@@ -1081,10 +1081,10 @@ try
     std::vector<size_t> max_block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
     std::vector<UInt64> two_level_thresholds{0, 1};
 
-    std::uniform_int_distribution<size_t> dist(0, max_block_sizes.size());
+    std::uniform_int_distribution<size_t> dist(0, max_block_sizes.size() - 1);
     size_t random_block_size = max_block_sizes[dist(gen)];
 
-    std::uniform_int_distribution<size_t> dist1(0, two_level_thresholds.size());
+    std::uniform_int_distribution<size_t> dist1(0, two_level_thresholds.size() - 1);
     size_t random_two_level_threshold = two_level_thresholds[dist1(gen)];
     LOG_DEBUG(
         Logger::get("AggExecutorTestRunner::AggKeyOptimization"),

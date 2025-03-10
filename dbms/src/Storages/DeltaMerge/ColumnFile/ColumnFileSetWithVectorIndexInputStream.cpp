@@ -174,14 +174,14 @@ Block ColumnFileSetWithVectorIndexInputStream::read()
     return {};
 }
 
-std::vector<VectorIndexViewer::SearchResult> ColumnFileSetWithVectorIndexInputStream::load()
+std::vector<VectorIndexReader::SearchResult> ColumnFileSetWithVectorIndexInputStream::load()
 {
     if (loaded)
         return {};
 
     tiny_readers.reserve(column_files.size());
     UInt32 precedes_rows = 0;
-    std::vector<VectorIndexViewer::SearchResult> search_results;
+    std::vector<VectorIndexReader::SearchResult> search_results;
     for (const auto & column_file : column_files)
     {
         if (auto * tiny_file = column_file->tryToTinyFile();

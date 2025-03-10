@@ -17,7 +17,6 @@
 #include <Core/Types.h>
 #include <Parsers/TokenIterator.h>
 
-#include <map>
 #include <memory>
 
 
@@ -29,7 +28,7 @@ struct StringRange
     const char * first = nullptr;
     const char * second = nullptr;
 
-    StringRange() {}
+    StringRange() = default;
     StringRange(const char * begin, const char * end)
         : first(begin)
         , second(end)

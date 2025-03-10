@@ -104,9 +104,14 @@ public:
     bool replaceSegmentStableData(PageIdU64 segment_id, const DMFilePtr & file);
 
     /**
-     * Returns whether segment stable index is created.
+     * Returns whether segment local index on StableVS is created.
      */
     bool ensureSegmentStableLocalIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos);
+
+    /**
+     * Returns whether segment local index on DeltaVS is created.
+     */
+    bool ensureSegmentDeltaLocalIndex(PageIdU64 segment_id, const LocalIndexInfosPtr & local_index_infos);
 
     Block prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted = false);
     Block prepareWriteBlockInSegmentRange(

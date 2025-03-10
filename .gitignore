@@ -28,9 +28,6 @@ ccache.tar
 # https://clang.llvm.org/docs/JSONCompilationDatabase.html
 compile_commands.json
 
-# git patch reject report
-*.rej
-
 # vim cache files
 *.swp
 
@@ -92,3 +89,6 @@ CoverageReport
 # installation and sysroot path
 release-linux-llvm/tiflash
 release-linux-llvm/build-release
+
+
+gtest_10x_workdir/

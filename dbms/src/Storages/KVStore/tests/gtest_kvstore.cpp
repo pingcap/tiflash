@@ -695,7 +695,7 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         }
         ASSERT_EQ(0, region->writeCFCount());
         {
-            region->remove("lock", RecordKVFormat::genKey(table_id, 3));
+            region->removeDebug("lock", RecordKVFormat::genKey(table_id, 3));
             auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_EQ(lock, nullptr);
@@ -767,7 +767,7 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
             RecordKVFormat::genKey(table_id, 4, 8),
             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::DelFlag, 5));
         ASSERT_EQ(1, region->writeCFCount());
-        region->remove("write", RecordKVFormat::genKey(table_id, 4, 8));
+        region->removeDebug("write", RecordKVFormat::genKey(table_id, 4, 8));
         ASSERT_EQ(1, region->writeCFCount());
         {
             std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
@@ -781,10 +781,10 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         ASSERT_EQ(0, region->dataSize());
         region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         ASSERT_LT(0, region->dataSize());
-        region->remove("default", RecordKVFormat::genKey(table_id, 3, 5));
+        region->removeDebug("default", RecordKVFormat::genKey(table_id, 3, 5));
         ASSERT_EQ(0, region->dataSize());
         // remove duplicate records
-        region->remove("default", RecordKVFormat::genKey(table_id, 3, 5));
+        region->removeDebug("default", RecordKVFormat::genKey(table_id, 3, 5));
         ASSERT_EQ(0, region->dataSize());
     }
 }
@@ -892,7 +892,7 @@ TEST_F(RegionKVStoreOldTest, Writes)
                     "7480000000000000FF015F728000000000FF00091D0000000000FAFFFFFFFFFFFFFFFE");
             }
             ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[lock 1 default 1 ]");
-            kvs.getRegion(1)->remove("default", RecordKVFormat::genKey(1, 2333, 1));
+            kvs.getRegion(1)->removeDebug("default", RecordKVFormat::genKey(1, 2333, 1));
             try
             {
                 raft_cmdpb::RaftCmdRequest request;
@@ -1299,7 +1299,7 @@ try
                 e.message(),
                 fmt::format(
                     "try to apply with older index, region_id={} applied_index={} new_index={}: (while "
-                    "applyPreHandledSnapshot region_id={} keyspace_id=4294967295 table_id={})",
+                    "applyPreHandledSnapshot region_id={} keyspace=4294967295 table_id={})",
                     region_id,
                     8,
                     6,
