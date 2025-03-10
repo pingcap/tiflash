@@ -41,7 +41,7 @@ public:
     friend struct Remote::Serializer;
 
     using IndexInfos = std::vector<dtpb::ColumnFileIndexInfo>;
-    using IndexInfosPtr = std::shared_ptr<IndexInfos>;
+    using IndexInfosPtr = std::shared_ptr<const IndexInfos>;
 
 private:
     ColumnFileSchemaPtr schema;
@@ -50,7 +50,7 @@ private:
     UInt64 bytes = 0;
 
     /// The id of data page which stores the data of this pack.
-    PageIdU64 data_page_id;
+    const PageIdU64 data_page_id;
 
     /// HACK: Currently this field is only available when ColumnFileTiny is restored from remote proto.
     /// It is not available when ColumnFileTiny is constructed or restored locally.
@@ -58,7 +58,7 @@ private:
     UInt64 data_page_size = 0;
 
     /// The index information of this file.
-    IndexInfosPtr index_infos;
+    const IndexInfosPtr index_infos;
 
     /// The id of the keyspace which this ColumnFileTiny belongs to.
     const KeyspaceID keyspace_id;
@@ -76,6 +76,15 @@ public:
         PageIdU64 data_page_id_,
         const DMContext & dm_context,
         const IndexInfosPtr & index_infos_ = nullptr);
+
+    ColumnFileTiny(
+        const ColumnFileSchemaPtr & schema_,
+        UInt64 rows_,
+        UInt64 bytes_,
+        PageIdU64 data_page_id_,
+        KeyspaceID keyspace_id_,
+        const FileProviderPtr & file_provider_,
+        const IndexInfosPtr & index_infos_);
 
     Type getType() const override { return Type::TINY_FILE; }
 
@@ -96,17 +105,26 @@ public:
 
     ColumnFileTinyPtr cloneWith(PageIdU64 new_data_page_id)
     {
-        auto new_tiny_file = std::make_shared<ColumnFileTiny>(*this);
-        new_tiny_file->data_page_id = new_data_page_id;
-        return new_tiny_file;
+        return std::make_shared<ColumnFileTiny>(
+            schema,
+            rows,
+            bytes,
+            new_data_page_id,
+            keyspace_id,
+            file_provider,
+            index_infos);
     }
 
-    ColumnFileTinyPtr cloneWith(PageIdU64 new_data_page_id, const IndexInfosPtr & index_infos_) const
+    ColumnFileTinyPtr cloneWith(PageIdU64 new_data_page_id, const IndexInfosPtr & new_index_infos) const
     {
-        auto new_tiny_file = std::make_shared<ColumnFileTiny>(*this);
-        new_tiny_file->data_page_id = new_data_page_id;
-        new_tiny_file->index_infos = index_infos_;
-        return new_tiny_file;
+        return std::make_shared<ColumnFileTiny>(
+            schema,
+            rows,
+            bytes,
+            new_data_page_id,
+            keyspace_id,
+            file_provider,
+            new_index_infos);
     }
 
     ColumnFileReaderPtr getReader(
