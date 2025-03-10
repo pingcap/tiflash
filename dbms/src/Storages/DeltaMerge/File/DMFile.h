@@ -322,8 +322,6 @@ private:
     {
         return subFilePath(localIndexFileName(index_id, kind));
     }
-    static String vectorIndexFileName(IndexID index_id) { return fmt::format("idx_{}.vector", index_id); }
-    String vectorIndexPath(IndexID index_id) const { return subFilePath(vectorIndexFileName(index_id)); }
 
     void addPack(const DMFileMeta::PackStat & pack_stat) const { meta->pack_stats.push_back(pack_stat); }
 
