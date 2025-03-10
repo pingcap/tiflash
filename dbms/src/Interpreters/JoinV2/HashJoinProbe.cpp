@@ -13,11 +13,15 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
+#include <Common/PODArray.h>
 #include <Common/Stopwatch.h>
 #include <DataStreams/materializeBlock.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/NullableUtils.h>
+
+#include "Columns/IColumn.h"
+#include "Parsers/ASTTablesInSelectQuery.h"
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 ASSERT_USE_AVX2_COMPILE_FLAG
@@ -30,7 +34,7 @@ using enum ASTTableJoin::Kind;
 
 bool JoinProbeContext::isCurrentProbeFinished() const
 {
-    return start_row_idx >= rows && prefetch_active_states == 0;
+    return start_row_idx >= rows && prefetch_active_states == 0 && rows_is_matched.empty();
 }
 
 void JoinProbeContext::resetBlock(Block & block_)
@@ -39,7 +43,10 @@ void JoinProbeContext::resetBlock(Block & block_)
     orignal_block = block_;
     rows = block.rows();
     start_row_idx = 0;
-    current_probe_row_ptr = nullptr;
+    current_row_ptr = nullptr;
+    current_row_is_matched = false;
+    rows_is_matched.clear();
+
     prefetch_active_states = 0;
 
     is_prepared = false;
@@ -47,12 +54,12 @@ void JoinProbeContext::resetBlock(Block & block_)
     key_columns.clear();
     null_map = nullptr;
     null_map_holder = nullptr;
-    current_row_is_matched = false;
 }
 
 void JoinProbeContext::prepareForHashProbe(
     HashJoinKeyMethod method,
     ASTTableJoin::Kind kind,
+    bool has_other_condition,
     const Names & key_names,
     const String & filter_column,
     const NameSet & probe_output_name_set,
@@ -95,12 +102,18 @@ void JoinProbeContext::prepareForHashProbe(
 
     assertBlocksHaveEqualStructure(block, sample_block_pruned, "Join Probe");
 
+    if ((kind == LeftOuter || kind == Semi || kind == Anti) && has_other_condition)
+    {
+        rows_is_matched.clear();
+        rows_is_matched.resize_fill_zero(block.rows());
+    }
+
     is_prepared = true;
 }
 
 #define PREFETCH_READ(ptr) __builtin_prefetch((ptr), 0 /* rw==read */, 3 /* locality */)
 
-/// The implemtation of prefetch in join probe process is inspired by a paper named
+/// The implemtation of prefetching in join probe process is inspired by a paper named
 /// `Asynchronous Memory Access Chaining` in vldb-15.
 /// Ref: https://www.vldb.org/pvldb/vol9/p252-kocberber.pdf
 enum class ProbePrefetchStage : UInt8
@@ -130,8 +143,7 @@ struct ProbePrefetchState
     KeyType key{};
 };
 
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
 class JoinProbeBlockHelper
 {
 public:
@@ -164,9 +176,13 @@ public:
     {
         wd.insert_batch.clear();
         wd.insert_batch.reserve(settings.probe_insert_batch_size);
-
         wd.selective_offsets.clear();
         wd.selective_offsets.reserve(settings.max_block_size);
+        if constexpr (late_materialization)
+        {
+            wd.row_ptrs_for_lm.clear();
+            wd.row_ptrs_for_lm.reserve(settings.max_block_size);
+        }
 
         if (pointer_table.enableProbePrefetch() && !context.prefetch_states)
         {
@@ -174,10 +190,25 @@ public:
                 static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
                 [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
         }
+
+        if constexpr (late_materialization)
+        {
+            RUNTIME_CHECK(
+                added_columns.size()
+                == row_layout.raw_required_key_column_indexes.size()
+                    + row_layout.other_required_count_for_other_condition);
+        }
+        else
+        {
+            RUNTIME_CHECK(
+                added_columns.size()
+                == row_layout.raw_required_key_column_indexes.size() + row_layout.other_required_column_indexes.size());
+        }
     }
 
     void joinProbeBlockImpl();
 
+private:
     void NO_INLINE joinProbeBlockInner();
     void NO_INLINE joinProbeBlockInnerPrefetch();
 
@@ -190,22 +221,15 @@ public:
     void NO_INLINE joinProbeBlockAnti();
     void NO_INLINE joinProbeBlockAntiPrefetch();
 
-    template <bool has_other_condition>
     void NO_INLINE joinProbeBlockRightOuter();
-    template <bool has_other_condition>
     void NO_INLINE joinProbeBlockRightOuterPrefetch();
 
-    template <bool has_other_condition>
     void NO_INLINE joinProbeBlockRightSemi();
-    template <bool has_other_condition>
     void NO_INLINE joinProbeBlockRightSemiPrefetch();
 
-    template <bool has_other_condition>
     void NO_INLINE joinProbeBlockRightAnti();
-    template <bool has_other_condition>
     void NO_INLINE joinProbeBlockRightAntiPrefetch();
 
-private:
     bool ALWAYS_INLINE joinKeyIsEqual(
         KeyGetterType & key_getter,
         const KeyType & key1,
@@ -236,33 +260,69 @@ private:
             if likely (wd.insert_batch.size() < settings.probe_insert_batch_size)
                 return;
         }
-        for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
+        if constexpr (late_materialization)
         {
-            IColumn * column = added_columns[column_index].get();
-            if (has_null_map && is_nullable)
-                column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-            column->deserializeAndInsertFromPos(wd.insert_batch, true);
-        }
-        for (auto [column_index, _] : row_layout.other_required_column_indexes)
-            added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch, true);
+            size_t idx = 0;
+            for (auto [_, is_nullable] : row_layout.raw_required_key_column_indexes)
+            {
+                IColumn * column = added_columns[idx].get();
+                if (has_null_map && is_nullable)
+                    column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
+                column->deserializeAndInsertFromPos(wd.insert_batch, true);
+                ++idx;
+            }
+            for (size_t i = 0; i < row_layout.other_required_count_for_other_condition; ++i)
+                added_columns[idx++]->deserializeAndInsertFromPos(wd.insert_batch, true);
 
-        if constexpr (force)
+            wd.row_ptrs_for_lm.insert(wd.insert_batch.begin(), wd.insert_batch.end());
+        }
+        else
         {
             for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
             {
                 IColumn * column = added_columns[column_index].get();
                 if (has_null_map && is_nullable)
                     column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-                column->flushNTAlignBuffer();
+                column->deserializeAndInsertFromPos(wd.insert_batch, true);
             }
             for (auto [column_index, _] : row_layout.other_required_column_indexes)
-                added_columns[column_index]->flushNTAlignBuffer();
+                added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch, true);
+        }
+
+        if constexpr (force)
+        {
+            if constexpr (late_materialization)
+            {
+                size_t idx = 0;
+                for (auto [_, is_nullable] : row_layout.raw_required_key_column_indexes)
+                {
+                    IColumn * column = added_columns[idx].get();
+                    if (has_null_map && is_nullable)
+                        column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
+                    column->flushNTAlignBuffer();
+                    ++idx;
+                }
+                for (size_t i = 0; i < row_layout.other_required_count_for_other_condition; ++i)
+                    added_columns[idx++]->flushNTAlignBuffer();
+            }
+            else
+            {
+                for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
+                {
+                    IColumn * column = added_columns[column_index].get();
+                    if (has_null_map && is_nullable)
+                        column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
+                    column->flushNTAlignBuffer();
+                }
+                for (auto [column_index, _] : row_layout.other_required_column_indexes)
+                    added_columns[column_index]->flushNTAlignBuffer();
+            }
         }
 
         wd.insert_batch.clear();
     }
 
-    void ALWAYS_INLINE fillNullMap(size_t size) const
+    void ALWAYS_INLINE fillNullMapWithZero(size_t size) const
     {
         if constexpr (has_null_map)
         {
@@ -288,17 +348,50 @@ private:
     const HashJoinPointerTable & pointer_table;
     const HashJoinRowLayout & row_layout;
     MutableColumns & added_columns;
-    const size_t added_rows;
+    size_t added_rows;
 };
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockInner()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockImpl()
+{
+#define CALL(JoinType)                            \
+    {                                             \
+        if (pointer_table.enableProbePrefetch())  \
+            joinProbeBlock##JoinType##Prefetch(); \
+        else                                      \
+            joinProbeBlock##JoinType();           \
+    }
+
+    if (kind == Inner)
+        CALL(Inner)
+    else if (kind == LeftOuter)
+        CALL(LeftOuter)
+    else if (kind == Semi)
+        CALL(Semi)
+    else if (kind == Anti)
+        CALL(Anti)
+    else if (kind == RightOuter)
+        CALL(RightOuter)
+    else if (kind == RightSemi)
+        CALL(RightSemi)
+    else if (kind == RightAnti)
+        CALL(RightAnti)
+    else
+        throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
+
+#undef CALL2
+#undef CALL
+}
+
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockInner()
 {
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
     size_t current_offset = added_rows;
     auto & selective_offsets = wd.selective_offsets;
     size_t idx = context.start_row_idx;
-    RowPtr ptr = context.current_probe_row_ptr;
+    RowPtr ptr = context.current_row_ptr;
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
     if constexpr (KeyGetterType::joinKeyCompareHashFirst())
@@ -356,15 +449,16 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
         }
     }
     flushBatchIfNecessary<true>();
-    fillNullMap(current_offset - added_rows);
+    fillNullMapWithZero(current_offset - added_rows);
 
     context.start_row_idx = idx;
-    context.current_probe_row_ptr = ptr;
+    context.current_row_ptr = ptr;
     wd.collision += collision;
 }
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockInnerPrefetch()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockInnerPrefetch()
 {
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
     auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(context.prefetch_states.get());
@@ -487,7 +581,7 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
     }
 
     flushBatchIfNecessary<true>();
-    fillNullMap(current_offset - added_rows);
+    fillNullMapWithZero(current_offset - added_rows);
 
     context.start_row_idx = idx;
     context.prefetch_active_states = active_states;
@@ -495,108 +589,70 @@ void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::jo
     wd.collision += collision;
 }
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockLeftOuter()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockLeftOuter()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockLeftOuterPrefetch()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockLeftOuterPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockSemi()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockSemi()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockSemiPrefetch()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockSemiPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockAnti()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockAnti()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockAntiPrefetch()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockAntiPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockRightOuter()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightOuter()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockRightOuterPrefetch()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightOuterPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockRightSemi()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightSemi()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockRightSemiPrefetch()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightSemiPrefetch()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockRightAnti()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightAnti()
 {}
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-template <bool has_other_condition>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockRightAntiPrefetch()
+template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
+void NO_INLINE
+JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightAntiPrefetch()
 {}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer>
-void JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>::joinProbeBlockImpl()
-{
-#define CALL(JoinType)                        \
-    if (pointer_table.enableProbePrefetch())  \
-        joinProbeBlock##JoinType##Prefetch(); \
-    else                                      \
-        joinProbeBlock##JoinType();
-
-#define CALL2(JoinType, has_other_condition)                       \
-    if (pointer_table.enableProbePrefetch())                       \
-        joinProbeBlock##JoinType##Prefetch<has_other_condition>(); \
-    else                                                           \
-        joinProbeBlock##JoinType<has_other_condition>();
-
-    bool has_other_condition = non_equal_conditions.other_cond_expr != nullptr;
-    if (kind == Inner)
-        CALL(Inner)
-    else if (kind == LeftOuter)
-        CALL(LeftOuter)
-    else if (kind == Semi && !has_other_condition)
-        CALL(Semi)
-    else if (kind == Anti && !has_other_condition)
-        CALL(Anti)
-    else if (kind == RightOuter && has_other_condition)
-        CALL2(RightOuter, true)
-    else if (kind == RightOuter)
-        CALL2(RightOuter, false)
-    else if (kind == RightSemi && has_other_condition)
-        CALL2(RightSemi, true)
-    else if (kind == RightSemi)
-        CALL2(RightSemi, false)
-    else if (kind == RightAnti && has_other_condition)
-        CALL2(RightAnti, true)
-    else if (kind == RightAnti)
-        CALL2(RightAnti, false)
-    else
-        throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
-
-#undef CALL2
-#undef CALL
-}
 
 void joinProbeBlock(
     JoinProbeContext & context,
     JoinProbeWorkerData & wd,
     HashJoinKeyMethod method,
     ASTTableJoin::Kind kind,
+    bool late_materialization,
     const JoinNonEqualConditions & non_equal_conditions,
     const HashJoinSettings & settings,
     const HashJoinPointerTable & pointer_table,
@@ -609,28 +665,38 @@ void joinProbeBlock(
 
     switch (method)
     {
-#define CALL(KeyGetter, has_null_map, tagged_pointer)              \
-    JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer>( \
-        context,                                                   \
-        wd,                                                        \
-        method,                                                    \
-        kind,                                                      \
-        non_equal_conditions,                                      \
-        settings,                                                  \
-        pointer_table,                                             \
-        row_layout,                                                \
-        added_columns,                                             \
-        added_rows)                                                \
+#define CALL(KeyGetter, has_null_map, tagged_pointer, late_materialization)              \
+    JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>( \
+        context,                                                                         \
+        wd,                                                                              \
+        method,                                                                          \
+        kind,                                                                            \
+        non_equal_conditions,                                                            \
+        settings,                                                                        \
+        pointer_table,                                                                   \
+        row_layout,                                                                      \
+        added_columns,                                                                   \
+        added_rows)                                                                      \
         .joinProbeBlockImpl();
 
-#define CALL2(KeyGetter, has_null_map)        \
-    if (pointer_table.enableTaggedPointer())  \
-    {                                         \
-        CALL(KeyGetter, has_null_map, true);  \
-    }                                         \
-    else                                      \
-    {                                         \
-        CALL(KeyGetter, has_null_map, false); \
+#define CALL3(KeyGetter, has_null_map, tagged_pointer)        \
+    if (late_materialization)                                 \
+    {                                                         \
+        CALL(KeyGetter, has_null_map, tagged_pointer, true);  \
+    }                                                         \
+    else                                                      \
+    {                                                         \
+        CALL(KeyGetter, has_null_map, tagged_pointer, false); \
+    }
+
+#define CALL2(KeyGetter, has_null_map)         \
+    if (pointer_table.enableTaggedPointer())   \
+    {                                          \
+        CALL3(KeyGetter, has_null_map, true);  \
+    }                                          \
+    else                                       \
+    {                                          \
+        CALL3(KeyGetter, has_null_map, false); \
     }
 
 #define CALL1(KeyGetter)         \

@@ -78,7 +78,7 @@ private:
 
     void workAfterBuildRowFinish();
 
-    Block handleOtherConditions(size_t stream_index);
+    Block handleOtherConditions(JoinProbeContext & context, JoinProbeWorkerData & wd, bool late_materialization);
 
 private:
     const ASTTableJoin::Kind kind;
@@ -125,6 +125,7 @@ private:
     NameSet output_column_names_set_after_finalize;
     NameSet output_columns_names_set_for_other_condition_after_finalize;
     Names required_columns;
+    NameSet required_columns_names_set_for_other_condition;
     bool finalized = false;
 
     /// Row containers
@@ -146,6 +147,7 @@ private:
 
     /// For other condition
     const IColumn::Offsets base_offsets;
+    BoolVec left_required_flag_for_other_condition;
 };
 
 using HashJoinPtr = std::shared_ptr<HashJoin>;

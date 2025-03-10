@@ -322,6 +322,12 @@ INSTANTIATE(Decimal32, DecimalPaddedPODArray<Decimal32>)
 INSTANTIATE(Decimal64, DecimalPaddedPODArray<Decimal64>)
 INSTANTIATE(Decimal128, DecimalPaddedPODArray<Decimal128>)
 INSTANTIATE(Decimal256, DecimalPaddedPODArray<Decimal256>)
+// Cannot use INSTANTIATE micro because `const T * data_pos` + `T: char *` will be intepreted as `const char **`
+template void filterImpl<char *, PaddedPODArray<char *>>(
+    const UInt8 * filt_pos,
+    const UInt8 * filt_end,
+    char * const * data_pos,
+    PaddedPODArray<char *> & res_data);
 
 #undef INSTANTIATE
 
