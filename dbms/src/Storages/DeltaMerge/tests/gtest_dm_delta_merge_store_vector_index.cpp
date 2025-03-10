@@ -151,6 +151,21 @@ public:
         }
     }
 
+    void triggerFlushCache() const
+    {
+        std::vector<SegmentPtr> all_segments;
+        {
+            std::shared_lock lock(store->read_write_mutex);
+            for (const auto & [_, segment] : store->id_to_segment)
+                all_segments.push_back(segment);
+        }
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        for (const auto & segment : all_segments)
+        {
+            ASSERT_TRUE(segment->flushCache(*dm_context));
+        }
+    }
+
     void triggerCompactDelta() const
     {
         std::vector<SegmentPtr> all_segments;
@@ -810,6 +825,9 @@ try
     // write [128, 256) to store
     write(num_rows_write, num_rows_write * 2);
 
+    // trigger FlushCache for all segments
+    triggerFlushCache();
+
     {
         // Add vecotr index
         TiDB::TableInfo new_table_info_with_vector_index;
@@ -835,9 +853,6 @@ try
         store->applyLocalIndexChange(new_table_info_with_vector_index);
         ASSERT_EQ(store->local_index_infos->size(), 1);
     }
-
-    // trigger FlushCache for all segments
-    triggerFlushCacheAndEnsureDeltaLocalIndex();
 
     // check delta index has built for all segments
     waitDeltaIndexReady();
@@ -900,6 +915,9 @@ try
     // write [128, 256) to store
     write(num_rows_write, num_rows_write * 2);
 
+    // trigger FlushCache for all segments
+    triggerFlushCache();
+
     auto add_vector_index = [&](std::vector<IndexID> index_id, std::vector<tipb::VectorDistanceMetric> metrics) {
         TiDB::TableInfo new_table_info_with_vector_index;
         TiDB::ColumnInfo column_info;
@@ -926,9 +944,6 @@ try
         // - generate the background tasks for building index on stable
         store->applyLocalIndexChange(new_table_info_with_vector_index);
         ASSERT_EQ(store->local_index_infos->size(), index_id.size());
-
-        // trigger FlushCache for all segments
-        triggerFlushCacheAndEnsureDeltaLocalIndex();
 
         // check delta index has built for all segments
         waitDeltaIndexReady();
