@@ -1196,7 +1196,7 @@ public:
         ColumnDefines columns_to_read,
         ANNQueryInfoPtr ann_query)
     {
-        auto range = buildRowKeyRange(begin, end);
+        auto range = buildRowKeyRange(begin, end, /*is_common_handle*/ false);
         auto [segment, snapshot] = getSegmentForRead(segment_id);
         // load DMilePackFilterResult for each DMFile
         DMFilePackFilterResults pack_filter_results;
@@ -1228,9 +1228,15 @@ public:
     ColumnDefine cdPK() { return getExtraHandleColumnDefine(options.is_common_handle); }
 
 protected:
-    Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted) override
+    Block prepareWriteBlockImpl(
+        Int64 start_key,
+        Int64 end_key,
+        bool is_deleted,
+        bool including_right_boundary,
+        std::optional<UInt64> ts) override
     {
-        auto block = SegmentTestBasic::prepareWriteBlockImpl(start_key, end_key, is_deleted);
+        auto block
+            = SegmentTestBasic::prepareWriteBlockImpl(start_key, end_key, is_deleted, including_right_boundary, ts);
         block.insert(colVecFloat32(fmt::format("[{}, {})", start_key, end_key), vec_column_name, vec_column_id));
         return block;
     }
@@ -1383,6 +1389,28 @@ try
 
     auto stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {100.0});
     assertStreamOut(stream, "[0, 5)");
+}
+CATCH
+
+TEST_P(VectorIndexSegmentTest1, DataInCFTinyWithLocalIndex)
+try
+{
+    writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 5, /* at */ 0);
+    flushSegmentCache(DELTA_MERGE_FIRST_SEGMENT_ID);
+    ensureSegmentDeltaLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
+
+    // the query result should be filtered by local index on DeltaVS
+    auto stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {100.0});
+    assertStreamOut(stream, "[4, 5)");
+
+    stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 3, {100.0});
+    assertStreamOut(stream, "[2, 5)");
+
+    stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {1.1});
+    assertStreamOut(stream, "[1, 2)");
+
+    stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 2, {1.1});
+    assertStreamOut(stream, "[1, 3)");
 }
 CATCH
 
@@ -1644,9 +1672,19 @@ protected:
         return ColumnDefine(extra_column_id, extra_column_name, tests::typeFromString("Int64"));
     }
 
-    Block prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted) override
+    Block prepareWriteBlockImpl(
+        Int64 start_key,
+        Int64 end_key,
+        bool is_deleted,
+        bool including_right_boundary,
+        std::optional<UInt64> ts) override
     {
-        auto block = VectorIndexSegmentTestBase::prepareWriteBlockImpl(start_key, end_key, is_deleted);
+        auto block = VectorIndexSegmentTestBase::prepareWriteBlockImpl(
+            start_key,
+            end_key,
+            is_deleted,
+            including_right_boundary,
+            ts);
         block.insert(
             colInt64(fmt::format("[{}, {})", start_key + 1000, end_key + 1000), extra_column_name, extra_column_id));
         return block;
