@@ -123,7 +123,7 @@ void InvertedIndexMemoryReader<T>::load(ReadBuffer & read_buf, size_t index_size
 
     // 2. check magic flag
     size_t data_size = index_size - InvertedIndex::MagicFlagLength;
-    if (memcmp(buf.data() + data_size, InvertedIndex::MagicFlag, InvertedIndex::MagicFlagLength) != 0)
+    if (memcmp(buf.data() + data_size, InvertedIndex::MagicFlag.data(), InvertedIndex::MagicFlagLength) != 0)
         throw Exception(ErrorCodes::ABORTED, "Invalid magic flag");
 
     // 3. read meta size
@@ -188,7 +188,7 @@ void InvertedIndexFileReader<T>::loadMeta(ReadBuffer & read_buf, size_t index_si
 
     // 2. check magic flag
     size_t data_size = index_size - InvertedIndex::MagicFlagLength;
-    if (memcmp(buf.data() + data_size, InvertedIndex::MagicFlag, InvertedIndex::MagicFlagLength) != 0)
+    if (memcmp(buf.data() + data_size, InvertedIndex::MagicFlag.data(), InvertedIndex::MagicFlagLength) != 0)
         throw Exception(ErrorCodes::ABORTED, "Invalid magic flag");
 
     // 3. read meta size

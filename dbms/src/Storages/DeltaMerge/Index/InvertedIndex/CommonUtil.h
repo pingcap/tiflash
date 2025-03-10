@@ -28,7 +28,7 @@ enum class Version
     V1 = 1,
 };
 
-// InvertedIndex file format:
+// InvertedIndex file format (V1):
 // | VERSION | Block 0 (compressed) | Block 1 (compressed) | ... | Block N (compressed) | Meta | Meta size | Magic flag |
 
 // Block format:
@@ -56,10 +56,6 @@ struct Block
 {
     Block() = default;
 
-    explicit Block(UInt32 size)
-        : entries(size)
-    {}
-
     std::vector<BlockEntry<T>> entries;
     void serialize(WriteBuffer & write_buf) const;
     static void deserialize(Block<T> & block, ReadBuffer & read_buf);
@@ -85,17 +81,13 @@ struct Meta
 {
     Meta() = default;
 
-    explicit Meta(UInt32 size)
-        : entries(size)
-    {}
-
     std::vector<MetaEntry<T>> entries;
     void serialize(WriteBuffer & write_buf) const;
     static void deserialize(Meta<T> & meta, ReadBuffer & read_buf);
 };
 
-static auto constexpr MagicFlag = "INVE";
-static UInt32 constexpr MagicFlagLength = 4; // strlen(MagicFlag)
+static std::string_view constexpr MagicFlag = "INVE";
+static UInt32 constexpr MagicFlagLength = MagicFlag.size();
 
 // Get the size of the block in bytes.
 template <typename T>

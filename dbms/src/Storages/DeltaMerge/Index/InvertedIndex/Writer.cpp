@@ -121,7 +121,7 @@ void InvertedIndexWriterInternal<T>::saveToBuffer(WriteBuffer & write_buf) const
     write_buf.write(reinterpret_cast<const char *>(&meta_size), sizeof(meta_size));
 
     // 4. write magic flag
-    write_buf.write(InvertedIndex::MagicFlag, InvertedIndex::MagicFlagLength);
+    write_buf.write(InvertedIndex::MagicFlag.data(), InvertedIndex::MagicFlagLength);
 
     // 5. record uncompressed size
     uncompressed_size = write_buf.count();
