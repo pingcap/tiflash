@@ -339,7 +339,7 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
     {
         LOG_INFO(
             log,
-            "Begin apply snapshot, new_region={} keyspace_id={} table_id={}",
+            "Begin apply snapshot, new_region={} keyspace={} table_id={}",
             new_region->toString(true),
             keyspace_id,
             table_id);
@@ -357,7 +357,7 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
         // `new_region` may change in the previous function, just log the region_id down
         LOG_INFO(
             log,
-            "Finish apply snapshot, cost={:.3f}s region_id={} keyspace_id={} table_id={}",
+            "Finish apply snapshot, cost={:.3f}s region_id={} keyspace={} table_id={}",
             watch.elapsedSeconds(),
             new_region->id(),
             keyspace_id,
@@ -366,7 +366,7 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
     catch (Exception & e)
     {
         e.addMessage(fmt::format(
-            "(while applyPreHandledSnapshot region_id={} keyspace_id={} table_id={})",
+            "(while applyPreHandledSnapshot region_id={} keyspace={} table_id={})",
             new_region->id(),
             keyspace_id,
             table_id));

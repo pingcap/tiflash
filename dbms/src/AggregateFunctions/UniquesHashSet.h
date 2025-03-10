@@ -378,7 +378,7 @@ public:
     void write(DB::WriteBuffer & wb) const
     {
         if (m_size > UNIQUES_HASH_MAX_SIZE)
-            throw Poco::Exception("Cannot write UniquesHashSet: too large size_degree.");
+            throw DB::Exception("Cannot write UniquesHashSet: too large size_degree.");
 
         DB::writeIntBinary(skip_degree, wb);
         DB::writeVarUInt(m_size, wb);
@@ -402,7 +402,7 @@ public:
         DB::readVarUInt(m_size, rb);
 
         if (m_size > UNIQUES_HASH_MAX_SIZE)
-            throw Poco::Exception("Cannot read UniquesHashSet: too large size_degree.");
+            throw DB::Exception("Cannot read UniquesHashSet: too large size_degree.");
 
         free();
 
@@ -438,7 +438,7 @@ public:
         DB::readVarUInt(rhs_size, rb);
 
         if (rhs_size > UNIQUES_HASH_MAX_SIZE)
-            throw Poco::Exception("Cannot read UniquesHashSet: too large size_degree.");
+            throw DB::Exception("Cannot read UniquesHashSet: too large size_degree.");
 
         if ((1ULL << size_degree) < rhs_size)
         {
@@ -463,7 +463,7 @@ public:
         DB::readVarUInt(size, rb);
 
         if (size > UNIQUES_HASH_MAX_SIZE)
-            throw Poco::Exception("Cannot read UniquesHashSet: too large size_degree.");
+            throw DB::Exception("Cannot read UniquesHashSet: too large size_degree.");
 
         rb.ignore(sizeof(HashValue_t) * size);
     }
@@ -471,7 +471,7 @@ public:
     void writeText(DB::WriteBuffer & wb) const
     {
         if (m_size > UNIQUES_HASH_MAX_SIZE)
-            throw Poco::Exception("Cannot write UniquesHashSet: too large size_degree.");
+            throw DB::Exception("Cannot write UniquesHashSet: too large size_degree.");
 
         DB::writeIntText(skip_degree, wb);
         wb.write(",", 1);
@@ -499,7 +499,7 @@ public:
         DB::readIntText(m_size, rb);
 
         if (m_size > UNIQUES_HASH_MAX_SIZE)
-            throw Poco::Exception("Cannot read UniquesHashSet: too large size_degree.");
+            throw DB::Exception("Cannot read UniquesHashSet: too large size_degree.");
 
         free();
 

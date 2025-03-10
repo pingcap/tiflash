@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -1085,11 +1086,18 @@ try
         // test built bitmap filter
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
         auto real_ranges = segment->shrinkRowKeyRanges({read_range});
+        DMFilePackFilterResults pack_filter_results;
+        pack_filter_results.reserve(segment_snap->stable->getDMFiles().size());
+        for (const auto & file : segment_snap->stable->getDMFiles())
+        {
+            auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, real_ranges, EMPTY_RS_OPERATOR, {});
+            pack_filter_results.push_back(pack_filter);
+        }
         auto bitmap_filter = segment->buildBitmapFilter( //
             dmContext(),
             segment_snap,
             real_ranges,
-            {},
+            pack_filter_results,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
         // the bitmap only contains the overlapped packs of ColumnFileBig. So only 60 here.

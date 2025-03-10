@@ -16,9 +16,8 @@
 
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
-#include <Storages/DeltaMerge/Index/LocalIndex_fwd.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache_fwd.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 
 namespace DB::DM
@@ -52,7 +51,7 @@ private:
     PerfStat perf_stat;
 
     // Set after load().
-    VectorIndexViewerPtr vec_index = nullptr;
+    VectorIndexReaderPtr vec_index = nullptr;
     bool loaded = false;
 
 public:
@@ -73,17 +72,17 @@ public:
     ~DMFileVectorIndexReader();
 
     // Read vector column data with the specified rowids.
-    void read(MutableColumnPtr & vec_column, const std::span<const VectorIndexViewer::Key> & selected_rows);
+    void read(MutableColumnPtr & vec_column, const std::span<const VectorIndexReader::Key> & selected_rows);
 
     // Load vector index and search results.
     // Return the rowids of the selected rows.
-    std::vector<VectorIndexViewer::SearchResult> load();
+    std::vector<VectorIndexReader::SearchResult> load();
 
     String perfStat() const;
 
 private:
     void loadVectorIndex();
-    std::vector<VectorIndexViewer::SearchResult> loadVectorSearchResult();
+    std::vector<VectorIndexReader::SearchResult> loadVectorSearchResult();
 };
 
 using DMFileVectorIndexReaderPtr = std::shared_ptr<DMFileVectorIndexReader>;

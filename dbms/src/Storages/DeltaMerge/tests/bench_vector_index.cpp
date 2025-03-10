@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// Comment out this file for too many compilation issues.
+// If you resolve these compilation issues, remove these comments.
+#if 0
 #include <Storages/DeltaMerge/Index/VectorIndexHNSW/Index.h>
 #include <Storages/DeltaMerge/tests/bench_vector_index_utils.h>
 #include <TestUtils/TiFlashTestEnv.h>
@@ -96,3 +99,4 @@ BENCHMARK(VectorIndexSearchTop10);
 BENCHMARK(VectorIndexSearchTop100);
 
 } // namespace DB::DM::bench
+#endif

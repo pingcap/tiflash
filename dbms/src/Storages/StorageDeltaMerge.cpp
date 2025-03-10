@@ -45,7 +45,6 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -119,7 +118,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
 {
     const ColumnsDescription & columns = getColumns();
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "updateTableColumnInfo, table_name={} ordinary=\"{}\" materialized=\"{}\"",
         table_column_info->table_name,
@@ -224,6 +223,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         }
         table_column_defines.push_back(col_def);
     }
+    table_column_defines.shrink_to_fit();
 
     if (!new_columns.materialized.contains(MutSup::version_column_name))
     {
@@ -319,7 +319,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         // TODO: Handle with PK change: drop old PK column cache rather than let LRU evict it.
     }
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "updateTableColumnInfo finished, table_name={} table_column_defines={}",
         table_column_info->table_name,

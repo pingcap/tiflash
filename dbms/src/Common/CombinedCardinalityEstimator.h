@@ -123,7 +123,7 @@ public:
         else if (container_type == details::ContainerType::LARGE)
             return getContainer<Large>().size();
         else
-            throw Poco::Exception("Internal error", ErrorCodes::LOGICAL_ERROR);
+            throw DB::Exception("Internal error", ErrorCodes::LOGICAL_ERROR);
     }
 
     void merge(const Self & rhs)
@@ -233,7 +233,7 @@ private:
     void toMedium()
     {
         if (getContainerType() != details::ContainerType::SMALL)
-            throw Poco::Exception("Internal error", ErrorCodes::LOGICAL_ERROR);
+            throw DB::Exception("Internal error", ErrorCodes::LOGICAL_ERROR);
 
         CurrentMemoryTracker::alloc(sizeof(Medium));
         auto tmp_medium = std::make_unique<Medium>();
@@ -250,7 +250,7 @@ private:
         auto container_type = getContainerType();
 
         if ((container_type != details::ContainerType::SMALL) && (container_type != details::ContainerType::MEDIUM))
-            throw Poco::Exception("Internal error", ErrorCodes::LOGICAL_ERROR);
+            throw DB::Exception("Internal error", ErrorCodes::LOGICAL_ERROR);
 
         CurrentMemoryTracker::alloc(sizeof(Large));
         auto tmp_large = std::make_unique<Large>();
