@@ -41,7 +41,7 @@ public:
     friend struct Remote::Serializer;
 
     using IndexInfos = std::vector<dtpb::ColumnFileIndexInfo>;
-    using IndexInfosPtr = std::shared_ptr<IndexInfos>;
+    using IndexInfosPtr = std::shared_ptr<const IndexInfos>;
 
 private:
     ColumnFileSchemaPtr schema;
