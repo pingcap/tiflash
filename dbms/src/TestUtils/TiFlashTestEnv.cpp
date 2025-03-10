@@ -24,6 +24,7 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
@@ -99,7 +100,10 @@ void TiFlashTestEnv::initializeGlobalContext(
     PageStorageRunMode ps_run_mode,
     uint64_t bg_thread_count)
 {
-    addGlobalContext(DB::Settings(), testdata_path, ps_run_mode, bg_thread_count);
+    DB::Settings settings;
+    if (settings.enable_version_chain == static_cast<Int64>(DM::VersionChainMode::Enabled))
+        settings.set("enable_version_chain", std::to_string(static_cast<Int64>(DM::VersionChainMode::EnabledForTest)));
+    addGlobalContext(settings, testdata_path, ps_run_mode, bg_thread_count);
 }
 
 void TiFlashTestEnv::addGlobalContext(
