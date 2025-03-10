@@ -59,7 +59,7 @@ bool inRowKeyRange(const RowKeyRange & range, HandleRefType handle)
 
 RSResults getRSResultsByRanges(const DMContext & dm_context, const DMFilePtr & dmfile, const RowKeyRanges & ranges);
 
-std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
+std::pair<RSResults, UInt32> getClippedRSResultsByRange(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range);

@@ -74,7 +74,7 @@ std::pair<RSResults, UInt32> clipRSResults(const RSResults & rs_results)
 }
 } // namespace
 
-std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
+std::pair<RSResults, UInt32> getClippedRSResultsByRange(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range)

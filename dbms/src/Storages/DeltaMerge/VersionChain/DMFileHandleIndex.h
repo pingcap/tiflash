@@ -204,7 +204,7 @@ private:
         if (!rowkey_range)
             return PackRange{.start_pack_id = 0, .end_pack_id = static_cast<UInt32>(dmfile->getPacks())};
 
-        const auto [handle_res, start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, rowkey_range);
+        const auto [handle_res, start_pack_id] = getClippedRSResultsByRange(dm_context, dmfile, rowkey_range);
         return PackRange{
             .start_pack_id = start_pack_id,
             .end_pack_id = start_pack_id + static_cast<UInt32>(handle_res.size())};

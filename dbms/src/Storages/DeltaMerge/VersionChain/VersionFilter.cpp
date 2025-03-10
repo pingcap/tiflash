@@ -247,7 +247,7 @@ template <ExtraHandleType HandleType>
     // `valid_handle_res` is the filter results of the rowkey range. The packs that do not intersect at both ends have been cut off.
     // `valid_start_pack_id` is the first pack that intersects with the rowkey range in DMFile.
     auto [valid_handle_res, valid_start_pack_id]
-        = getClippedRSResultsByRanges(dm_context, cf_big.getFile(), cf_big.getRange());
+        = getClippedRSResultsByRange(dm_context, cf_big.getFile(), cf_big.getRange());
     if (valid_handle_res.empty())
         return 0;
 
