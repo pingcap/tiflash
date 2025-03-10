@@ -573,11 +573,13 @@ bool DeltaMergeStore::segmentEnsureStableLocalIndexAsync(const SegmentPtr & segm
     {
         // new task of these index are generated, clear existing error_message in segment
         segment->clearIndexBuildError(build_info.indexesIDs());
-
+        auto file_ids = build_info.filesIDs();
+        if (file_ids.empty())
+            return true;
         auto [ok, reason] = indexer_scheduler->pushTask(LocalIndexerScheduler::Task{
             .keyspace_id = keyspace_id,
             .table_id = physical_table_id,
-            .file_ids = build_info.filesIDs(),
+            .file_ids = file_ids,
             .request_memory = build_info.estimated_memory_bytes,
             .workload = workload,
         });
@@ -965,10 +967,11 @@ bool DeltaMergeStore::segmentWaitDeltaLocalIndexReady(const SegmentPtr & segment
         {
             for (const auto & column_file : column_file_persisted_set->getFiles())
             {
-                auto * tiny_file = column_file->tryToTinyFile();
-                if (!tiny_file)
-                    continue;
-                all_indexes_built = all_indexes_built && (tiny_file->hasIndex(index.index_id));
+                if (auto * tiny_file = column_file->tryToTinyFile(); tiny_file)
+                {
+                    auto lock = delta_weak_ptr.lock()->getLock();
+                    all_indexes_built = all_indexes_built && (tiny_file->hasIndex(index.index_id));
+                }
             }
         }
         if (all_indexes_built)

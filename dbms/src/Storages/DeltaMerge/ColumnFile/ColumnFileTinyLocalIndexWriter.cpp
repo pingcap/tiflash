@@ -229,8 +229,8 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
         }
     }
 
-    if (file->index_infos)
-        file->index_infos->insert(file->index_infos->end(), index_infos->begin(), index_infos->end());
+    if (const auto & file_index_info = file->getIndexInfos(); file_index_info)
+        index_infos->insert(index_infos->end(), file_index_info->begin(), file_index_info->end());
 
     options.wbs.writeLogAndData();
     // Note: The id of the file cannot be changed, otherwise minor compaction will fail.
