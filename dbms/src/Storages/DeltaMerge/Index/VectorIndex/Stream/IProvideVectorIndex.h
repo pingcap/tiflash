@@ -25,9 +25,9 @@ namespace DB::DM
 {
 
 /**
- * @brief If some inputStream is capable of providing and filtering via a VectorIndex,
+ * @brief If some InputStream is capable of providing and filtering via a VectorIndex,
  * then it should inherit and implement this class.
- * inputStream could then only return a subset rows of the matched rows, thank to joining multiple TopK results
+ * InputStream could then only return a subset rows of the matched rows, thank to joining multiple TopK results
  * via VectorIndexInputStream.
  */
 class IProvideVectorIndex

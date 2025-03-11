@@ -52,6 +52,7 @@ VectorIndexReaderPtr VectorIndexReaderFromColumnFileTiny::load(
     };
 
     VectorIndexReaderPtr vec_index = nullptr;
+    // ColumnFile vector index stores all data in memory, can not be evicted by system, so use heavy cache.
     if (ctx->index_cache_heavy)
     {
         const auto key = fmt::format("{}{}", LocalIndexCache::COLUMNFILETINY_INDEX_NAME_PREFIX, index_page_id);
