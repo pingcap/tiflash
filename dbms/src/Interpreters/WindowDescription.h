@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <AggregateFunctions/IAggregateFunction.h>
 #include <Core/Field.h>
 #include <Core/Names.h>
 #include <Core/NamesAndTypes.h>
@@ -24,16 +25,16 @@
 #include <WindowFunctions/IWindowFunction.h>
 #include <tipb/select.pb.h>
 
-
 namespace DB
 {
 struct WindowFunctionDescription
 {
     WindowFunctionPtr window_function;
+    AggregateFunctionPtr aggregate_function;
     Array parameters;
     ColumnNumbers arguments;
     Names argument_names;
-    std::string column_name;
+    String column_name;
 };
 
 using WindowFunctionDescriptions = std::vector<WindowFunctionDescription>;
@@ -53,6 +54,26 @@ struct WindowFrame
         Offset
     };
 
+    WindowFrame() = default;
+
+    // This constructor is only for test
+    WindowFrame(
+        const FrameType type_,
+        const BoundaryType begin_type_,
+        const UInt64 begin_offset_,
+        const bool begin_preceding_,
+        const BoundaryType end_type_,
+        const UInt64 end_offset_,
+        const bool end_preceding_)
+        : type(type_)
+        , begin_type(begin_type_)
+        , begin_offset(begin_offset_)
+        , begin_preceding(begin_preceding_)
+        , end_type(end_type_)
+        , end_offset(end_offset_)
+        , end_preceding(end_preceding_)
+    {}
+
     // This flag signifies that the frame properties were not set explicitly by
     // user, but the fields of this structure still have to contain proper values
     // for the default frame of RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW.
@@ -64,13 +85,13 @@ struct WindowFrame
     UInt64 begin_offset = 0;
     bool begin_preceding = true;
     Int32 begin_range_auxiliary_column_index = -1;
-    tipb::RangeCmpDataType begin_cmp_data_type;
+    tipb::RangeCmpDataType begin_cmp_data_type = tipb::RangeCmpDataType::Int;
 
     BoundaryType end_type = BoundaryType::Unbounded;
     UInt64 end_offset = 0;
     bool end_preceding = false;
     Int32 end_range_auxiliary_column_index = -1;
-    tipb::RangeCmpDataType end_cmp_data_type;
+    tipb::RangeCmpDataType end_cmp_data_type = tipb::RangeCmpDataType::Int;
 
     bool operator==(const WindowFrame & other) const
     {
@@ -125,9 +146,12 @@ struct WindowDescription
     bool is_begin_aux_col_nullable;
     bool is_end_aux_col_nullable;
 
+    bool need_decrease;
+
     void setWindowFrame(const tipb::WindowFrame & frame_);
 
     void fillArgColumnNumbers();
+    void initNeedDecrease(bool has_agg);
 };
 
 } // namespace DB

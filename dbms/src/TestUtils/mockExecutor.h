@@ -375,6 +375,8 @@ MockWindowFrame buildDefaultRowsFrame();
 // Aggregation functions
 #define Max(expr) makeASTFunction("max", (expr))
 #define Min(expr) makeASTFunction("min", (expr))
+#define MinForWindow(expr) makeASTFunction("min_for_window", (expr))
+#define MaxForWindow(expr) makeASTFunction("max_for_window", (expr))
 #define Count(expr) makeASTFunction("count", (expr))
 #define Sum(expr) makeASTFunction("sum", (expr))
 #define Avg(expr) makeASTFunction("avg", (expr))
