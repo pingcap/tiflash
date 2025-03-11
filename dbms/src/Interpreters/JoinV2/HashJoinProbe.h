@@ -305,18 +305,4 @@ private:
     const HashJoinRowLayout & row_layout;
 };
 
-void joinProbeBlock(
-    JoinProbeContext & context,
-    JoinProbeWorkerData & wd,
-    HashJoinKeyMethod method,
-    ASTTableJoin::Kind kind,
-    bool late_materialization,
-    const JoinNonEqualConditions & non_equal_conditions,
-    const HashJoinSettings & settings,
-    const HashJoinPointerTable & pointer_table,
-    const HashJoinRowLayout & row_layout,
-    MutableColumns & added_columns,
-    size_t added_rows);
-
-
 } // namespace DB

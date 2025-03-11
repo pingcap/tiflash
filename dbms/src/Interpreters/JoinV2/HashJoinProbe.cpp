@@ -839,20 +839,4 @@ Block JoinProbeBlockHelper::handleOtherConditions(JoinProbeContext & context, Jo
     return res_block;
 }
 
-void joinProbeBlock(
-    JoinProbeContext &,
-    JoinProbeWorkerData &,
-    HashJoinKeyMethod,
-    ASTTableJoin::Kind,
-    bool,
-    const JoinNonEqualConditions &,
-    const HashJoinSettings &,
-    const HashJoinPointerTable &,
-    const HashJoinRowLayout &,
-    MutableColumns &,
-    size_t)
-{
-    return;
-}
-
 } // namespace DB
