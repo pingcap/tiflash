@@ -520,9 +520,9 @@ void DeltaMergeStore::checkAllSegmentsLocalIndex(std::vector<IndexID> && dropped
             // cleanup the index error message for dropped indexes
             segment->clearIndexBuildError(dropped_indexes);
 
-            bool missing_indexes = segmentEnsureStableLocalIndexAsync(segment);
-            missing_indexes = segmentEnsureDeltaLocalIndexAsync(segment) || missing_indexes;
-            segments_missing_indexes += missing_indexes;
+            bool stable_missing_indexes = segmentEnsureStableLocalIndexAsync(segment);
+            bool delta_missing_indexes = segmentEnsureDeltaLocalIndexAsync(segment);
+            segments_missing_indexes += (stable_missing_indexes || delta_missing_indexes);
         }
     }
 

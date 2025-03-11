@@ -415,4 +415,21 @@ ColumnFileTiny::ColumnFileTiny(
     , file_provider(dm_context.global_context.getFileProvider())
 {}
 
+ColumnFileTiny::ColumnFileTiny(
+    const ColumnFileSchemaPtr & schema_,
+    UInt64 rows_,
+    UInt64 bytes_,
+    PageIdU64 data_page_id_,
+    KeyspaceID keyspace_id_,
+    const FileProviderPtr & file_provider_,
+    const IndexInfosPtr & index_infos_)
+    : schema(schema_)
+    , rows(rows_)
+    , bytes(bytes_)
+    , data_page_id(data_page_id_)
+    , index_infos(index_infos_)
+    , keyspace_id(keyspace_id_)
+    , file_provider(file_provider_)
+{}
+
 } // namespace DB::DM
