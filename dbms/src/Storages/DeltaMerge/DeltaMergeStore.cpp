@@ -209,16 +209,12 @@ ColumnDefinesPtr generateStoreColumns(const ColumnDefines & table_columns, bool 
 
 void convertStringTypeToDefault(DataTypePtr & type)
 {
-    static const auto default_string_type = DataTypeFactory::instance().getOrSet(DataTypeString::getDefaultName());
-    static const auto default_nullable_string_type
-        = DataTypeFactory::instance().getOrSet(DataTypeString::getNullableDefaultName());
-
     if (removeNullable(type)->getTypeId() != TypeIndex::String)
         return;
     if (type->isNullable())
-        type = default_nullable_string_type;
+        type = DataTypeFactory::instance().getOrSet(DataTypeString::getNullableDefaultName());
     else
-        type = default_string_type;
+        type = DataTypeFactory::instance().getOrSet(DataTypeString::getDefaultName());
 }
 
 void convertStringTypeToDefault(ColumnDefines & cds)
