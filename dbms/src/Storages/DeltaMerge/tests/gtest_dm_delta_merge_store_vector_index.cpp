@@ -277,29 +277,15 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({127.5}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 2, {127.5});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 2, {72.1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
     }
 }
@@ -333,29 +319,15 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 2, {72.1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({127.5}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 2, {127.5});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
     }
 }
@@ -396,30 +368,16 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.0}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {72.0});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         // [0, 128) with vector index return 72.0, [128, 130) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}, {129.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {72.1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         // [0, 128) with vector index return 72.0, [128, 130) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}, {129.0}}));
     }
@@ -461,30 +419,16 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {1.0});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         // [0, 4) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {1.1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         // [0, 4) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
     }
@@ -550,31 +494,15 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(left_segment_range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {222.1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(left_segment_range, filter, createVecFloat32Column<Array>({{127.0}}));
     }
 
@@ -593,31 +521,15 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({122.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {122.1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{122.0}}));
     }
 }
@@ -694,31 +606,15 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(left_segment_range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {222.1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(left_segment_range, filter, createVecFloat32Column<Array>({{127.0}}));
     }
 
@@ -737,31 +633,15 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({122.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {122.1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{122.0}}));
     }
 }
@@ -833,31 +713,15 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 }
@@ -927,31 +791,15 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {222.1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
         read(range, filter, createVecFloat32Column<Array>({{222.0}}));
     }
 }
@@ -1019,30 +867,16 @@ try
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0}, 2);
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-<<<<<<< HEAD
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
-
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-=======
         const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {222.1}, 2);
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
->>>>>>> 526f5409b2 (Storages: fix adding delta vector index does not work with existing indexes  (#9975))
+        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
         read(range, filter, createVecFloat32Column<Array>({{222.0}}));
     }
@@ -1129,7 +963,7 @@ try
         // read with ANN query
         {
             const auto ann_query_info = createANNQueryInfo(vec_column_id, metric, 1, {2.0}, index_id);
-            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
             read(range, filter, createVecFloat32Column<Array>(result_1));
         }
@@ -1137,7 +971,7 @@ try
         // read with ANN query
         {
             const auto ann_query_info = createANNQueryInfo(vec_column_id, metric, 1, {222.1}, index_id);
-            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
 
             read(range, filter, createVecFloat32Column<Array>(result_2));
         }
