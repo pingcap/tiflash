@@ -21,8 +21,8 @@ namespace DB::DM
 {
 
 VectorIndexStreamCtxPtr VectorIndexStreamCtx::create(
-    const LocalIndexCachePtr & index_cache_light,
-    const LocalIndexCachePtr & index_cache_heavy,
+    const LocalIndexCachePtr & index_cache_light, // nullable
+    const LocalIndexCachePtr & index_cache_heavy, // nullable
     const ANNQueryInfoPtr & ann_query_info,
     const ColumnDefinesPtr & col_defs,
     const IColumnFileDataProviderPtr & data_provider,

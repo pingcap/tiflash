@@ -3373,6 +3373,9 @@ BlockInputStreamPtr Segment::getConcatVectorIndexBlockInputStream(
         stream->appendChild(ColumnFileProvideVectorIndexInputStream::createOrFallback(ctx, file), file->getRows());
 
     auto stream2 = VectorIndexInputStream::create(ctx, bitmap_filter, stream);
+    // For vector search, there are more likely to return small blocks from different
+    // sub-streams. Squash blocks to reduce the number of blocks thus improve the
+    // performance of upper layer.
     auto stream3 = std::make_shared<SquashingBlockInputStream>(
         stream2,
         /*min_block_size_rows=*/expected_block_size,
