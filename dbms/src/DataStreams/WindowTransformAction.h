@@ -102,6 +102,8 @@ public:
 
     void appendInfo(FmtBuffer & buffer) const;
 
+    void tryCalculate();
+
 private:
     // This is the function for Offset type boundary
     void stepToFrameStart();
@@ -142,8 +144,6 @@ private:
 
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
-
-    void tryCalculate();
 
     template <
         typename AuxColType,
