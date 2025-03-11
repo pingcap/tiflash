@@ -84,12 +84,7 @@ public:
 
     IndexInfosPtr getIndexInfos() const { return index_infos; }
 
-    bool hasIndex(Int64 index_id) const
-    {
-        if (!index_infos)
-            return false;
-        return findIndexInfo(index_id) != nullptr;
-    }
+    bool hasIndex(Int64 index_id) const { return findIndexInfo(index_id) != nullptr; }
 
     const dtpb::ColumnFileIndexInfo * findIndexInfo(Int64 index_id) const
     {

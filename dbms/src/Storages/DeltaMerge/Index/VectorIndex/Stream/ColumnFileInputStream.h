@@ -59,7 +59,7 @@ public: // Implements IBlockInputStream
 
 private:
     // Note: Keep this struct small, because it will be constructed for each ColumnFileTiny who has index.
-    // If you have common things, put it in ::Shared. Only put things that are different by each ColumnFileTiny here.
+    // If you have common things, put it in ctx. Only put things that are different by each ColumnFileTiny here.
 
     const VectorIndexStreamCtxPtr ctx;
     const ColumnFileTinyPtr tiny_file;

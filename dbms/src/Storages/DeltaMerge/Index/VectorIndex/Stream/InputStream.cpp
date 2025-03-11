@@ -52,7 +52,7 @@ void VectorIndexInputStream::initSearchResults()
                 last_rowid = rowid;
                 // The result from usearch may contain filtered out rows so we filter again
                 if (current_filter[rowid])
-                    search_results->push_back({
+                    search_results->emplace_back(IProvideVectorIndex::SearchResult{
                         // We need to sort globally so convert it to a global offset temporarily.
                         // We will convert it back to local offset when we feed it back to substreams.
                         .rowid = rowid + precedes_rows,
