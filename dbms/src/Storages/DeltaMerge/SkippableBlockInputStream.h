@@ -46,6 +46,7 @@ public:
 using SkippableBlockInputStreamPtr = std::shared_ptr<SkippableBlockInputStream>;
 using SkippableBlockInputStreams = std::vector<SkippableBlockInputStreamPtr>;
 
+/// A SkippableBlockInputStream that always returns an empty block.
 class EmptySkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
@@ -67,6 +68,45 @@ public:
 
 private:
     ColumnDefines read_columns;
+};
+
+template <typename T>
+class AsNopSkippableBlockInputStream;
+
+/// A SkippableBlockInputStream that does not support any skip operations.
+class NopSkippableBlockInputStream : public SkippableBlockInputStream
+{
+public:
+    /// Wraps any stream into a NopSkippableBlockInputStream.
+    /// Note: After wrapping, you cannot use dynamic_pointer_cast to get the original stream. Use children[0] instead.
+    template <typename T>
+    static auto wrap(const std::shared_ptr<T> & stream)
+    {
+        return std::make_shared<AsNopSkippableBlockInputStream<T>>(stream);
+    }
+
+public:
+    bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+
+    size_t skipNextBlock() override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
+
+    Block readWithFilter(const IColumn::Filter &) override
+    {
+        throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
+    }
+};
+
+template <typename T>
+class AsNopSkippableBlockInputStream : public NopSkippableBlockInputStream
+{
+public:
+    explicit AsNopSkippableBlockInputStream(const std::shared_ptr<T> & stream_) { children.push_back(stream_); }
+
+    String getName() const override { return "AsNopSkippable"; }
+
+    Block getHeader() const override { return children[0]->getHeader(); }
+
+    Block read() override { return children[0]->read(); }
 };
 
 } // namespace DB::DM

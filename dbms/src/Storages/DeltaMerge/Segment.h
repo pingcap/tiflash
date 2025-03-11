@@ -751,8 +751,7 @@ public:
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size);
-    // Returns <InputStream, is_vector_stream>
-    std::tuple<SkippableBlockInputStreamPtr, bool> getConcatVectorIndexBlockInputStream(
+    BlockInputStreamPtr getConcatVectorIndexBlockInputStream(
         BitmapFilterPtr bitmap_filter,
         const SegmentSnapshotPtr & segment_snap,
         const DMContext & dm_context,

@@ -83,13 +83,25 @@ public:
     size_t getBytes() const override { return bytes; }
 
     IndexInfosPtr getIndexInfos() const { return index_infos; }
+
     bool hasIndex(Int64 index_id) const
     {
         if (!index_infos)
             return false;
-        return std::any_of(index_infos->cbegin(), index_infos->cend(), [index_id](const auto & info) {
-            return info.index_props().index_id() == index_id;
-        });
+        return findIndexInfo(index_id) != nullptr;
+    }
+
+    const dtpb::ColumnFileIndexInfo * findIndexInfo(Int64 index_id) const
+    {
+        if (!index_infos)
+            return nullptr;
+        const auto it = std::find_if( //
+            index_infos->cbegin(),
+            index_infos->cend(),
+            [index_id](const auto & info) { return info.index_props().index_id() == index_id; });
+        if (it == index_infos->cend())
+            return nullptr;
+        return &*it;
     }
 
     ColumnFileSchemaPtr getSchema() const { return schema; }

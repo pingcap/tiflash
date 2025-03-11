@@ -15,9 +15,9 @@
 #pragma once
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
+#include <Storages/DeltaMerge/ConcatSkippableBlockInputStream_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-#include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
 
 
 namespace DB::DM
@@ -27,10 +27,19 @@ template <bool need_row_id = false>
 class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, const ScanContextPtr & scan_context_);
+    static auto create(
+        SkippableBlockInputStreams && inputs_,
+        std::vector<size_t> && rows_,
+        const ScanContextPtr & scan_context_)
+    {
+        return std::make_shared<ConcatSkippableBlockInputStream<need_row_id>>(
+            std::move(inputs_),
+            std::move(rows_),
+            scan_context_);
+    }
 
     ConcatSkippableBlockInputStream(
-        SkippableBlockInputStreams inputs_,
+        SkippableBlockInputStreams && inputs_,
         std::vector<size_t> && rows_,
         const ScanContextPtr & scan_context_);
 
@@ -49,7 +58,7 @@ public:
     Block read() override;
 
 private:
-    friend class ConcatVectorIndexBlockInputStream;
+    friend class VectorIndexInputStream;
     ColumnPtr createSegmentRowIdCol(UInt64 start, UInt64 limit);
 
     void addReadBytes(UInt64 bytes);
@@ -59,55 +68,6 @@ private:
     size_t precede_stream_rows;
     const ScanContextPtr scan_context;
     LACBytesCollector lac_bytes_collector;
-};
-
-class ConcatVectorIndexBlockInputStream : public SkippableBlockInputStream
-{
-public:
-    // Only return the rows that match `bitmap_filter_`
-    ConcatVectorIndexBlockInputStream(
-        const BitmapFilterPtr & bitmap_filter_,
-        std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream,
-        std::vector<VectorIndexBlockInputStream *> && index_streams,
-        UInt32 topk_)
-        : stream(std::move(stream))
-        , index_streams(std::move(index_streams))
-        , topk(topk_)
-        , bitmap_filter(bitmap_filter_)
-    {}
-
-    // Returns <InputStream, is_vector_stream>
-    static std::tuple<SkippableBlockInputStreamPtr, bool> build(
-        const BitmapFilterPtr & bitmap_filter,
-        std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream,
-        const ANNQueryInfoPtr & ann_query_info);
-
-    String getName() const override { return "ConcatVectorIndex"; }
-
-    Block getHeader() const override { return stream->getHeader(); }
-
-    bool getSkippedRows(size_t &) override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
-
-    size_t skipNextBlock() override { throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED); }
-
-    Block readWithFilter(const IColumn::Filter &) override
-    {
-        throw Exception("Not implemented", ErrorCodes::NOT_IMPLEMENTED);
-    }
-
-    Block read() override;
-
-private:
-    void load();
-
-    std::shared_ptr<ConcatSkippableBlockInputStream<false>> stream;
-    // Pointers to stream's children, nullptr if the child is not a VectorIndexBlockInputStream.
-    std::vector<VectorIndexBlockInputStream *> index_streams;
-    UInt32 topk = 0;
-    bool loaded = false;
-
-    BitmapFilterPtr bitmap_filter;
-    IColumn::Filter filter; // reuse the memory allocated among all `read`
 };
 
 } // namespace DB::DM

@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,13 +14,18 @@
 
 #pragma once
 
-#include <memory>
+#include <Storages/DeltaMerge/Index/VectorIndex/Reader_fwd.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx_fwd.h>
 
 namespace DB::DM
 {
 
-class DMFileWithVectorIndexBlockInputStream;
+class ColumnFileTiny;
 
-using DMFileWithVectorIndexBlockInputStreamPtr = std::shared_ptr<DMFileWithVectorIndexBlockInputStream>;
+class VectorIndexReaderFromColumnFileTiny
+{
+public:
+    static VectorIndexReaderPtr load(const VectorIndexStreamCtxPtr & ctx, const ColumnFileTiny & tiny_file);
+};
 
 } // namespace DB::DM
