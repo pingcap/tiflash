@@ -37,12 +37,12 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 
 struct ColumnStringDefaultValue
 {
-    char mem[sizeof(UInt32) + 1] = {0};
+    char mem[sizeof(size_t) + 1] = {0};
     ColumnStringDefaultValue()
     {
-        UInt32 str_size = 1;
+        UInt64 str_size = 1;
         tiflash_compiler_builtin_memcpy(&mem[0], &str_size, sizeof(str_size));
-        mem[sizeof(UInt32)] = 0;
+        mem[sizeof(size_t)] = 0;
     }
 };
 
@@ -542,16 +542,16 @@ void ColumnString::countSerializeByteSizeImpl(
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
-    if unlikely (!offsets.empty() && offsets.back() > UINT32_MAX)
-    {
-        size_t sz = size();
-        for (size_t i = 0; i < sz; ++i)
-            RUNTIME_CHECK_MSG(
-                sizeAt(i) <= UINT32_MAX,
-                "size of ({}) is ({}), which is greater than UINT32_MAX",
-                i,
-                sizeAt(i));
-    }
+    // if unlikely (!offsets.empty() && offsets.back() > UINT32_MAX)
+    // {
+    //     size_t sz = size();
+    //     for (size_t i = 0; i < sz; ++i)
+    //         RUNTIME_CHECK_MSG(
+    //             sizeAt(i) <= UINT32_MAX,
+    //             "size of ({}) is ({}), which is greater than UINT32_MAX",
+    //             i,
+    //             sizeAt(i));
+    // }
 
     const size_t size = byte_size.size();
     size_t max_bytes_one_char = 0;
@@ -567,7 +567,7 @@ void ColumnString::countSerializeByteSizeImpl(
         {
             if (DB::isNullAt(*nullmap, i))
             {
-                byte_size[i] += sizeof(UInt32) + 1;
+                byte_size[i] += sizeof(size_t) + 1;
                 continue;
             }
         }
@@ -577,11 +577,11 @@ void ColumnString::countSerializeByteSizeImpl(
             assert(sizeAt(i) > 0);
             const auto num_char = UTF8::countCodePoints(&chars[offsetAt(i)], sizeAt(i) - 1);
             // Add 1 for terminating zero.
-            byte_size[i] += sizeof(UInt32) + num_char * max_bytes_one_char + 1;
+            byte_size[i] += sizeof(size_t) + num_char * max_bytes_one_char + 1;
         }
         else
         {
-            byte_size[i] += sizeof(UInt32) + sizeAt(i);
+            byte_size[i] += sizeof(size_t) + sizeAt(i);
         }
     }
 }
@@ -644,16 +644,16 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
         array_offsets.back(),
         size());
 
-    if unlikely (!offsets.empty() && offsets.back() > UINT32_MAX)
-    {
-        size_t sz = size();
-        for (size_t i = 0; i < sz; ++i)
-            RUNTIME_CHECK_MSG(
-                sizeAt(i) <= UINT32_MAX,
-                "size of ({}) is ({}), which is greater than UINT32_MAX",
-                i,
-                sizeAt(i));
-    }
+    // if unlikely (!offsets.empty() && offsets.back() > UINT32_MAX)
+    // {
+    //     size_t sz = size();
+    //     for (size_t i = 0; i < sz; ++i)
+    //         RUNTIME_CHECK_MSG(
+    //             sizeAt(i) <= UINT32_MAX,
+    //             "size of ({}) is ({}), which is greater than UINT32_MAX",
+    //             i,
+    //             sizeAt(i));
+    // }
 
     size_t size = array_offsets.size();
     auto max_bytes_one_char = 0;
@@ -683,11 +683,11 @@ void ColumnString::countSerializeByteSizeForColumnArrayImpl(
                 cur_row_bytes += num_char * max_bytes_one_char + 1;
             }
 
-            byte_size[i] += sizeof(UInt32) * ele_count + cur_row_bytes;
+            byte_size[i] += sizeof(size_t) * ele_count + cur_row_bytes;
         }
         else
         {
-            byte_size[i] += sizeof(UInt32) * ele_count + offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]);
+            byte_size[i] += sizeof(size_t) * ele_count + offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]);
         }
     }
 }
@@ -911,7 +911,7 @@ void ColumnString::serializeToPosImpl(
             }
         }
 
-        UInt32 str_size = sizeAt(start + i);
+        size_t str_size = sizeAt(start + i);
         const void * src = &chars[offsetAt(start + i)];
         if constexpr (need_decode_collator)
         {
@@ -920,8 +920,8 @@ void ColumnString::serializeToPosImpl(
             // For terminating zero.
             str_size = sort_key.size + 1;
 
-            tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
-            pos[i] += sizeof(UInt32);
+            tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(size_t));
+            pos[i] += sizeof(size_t);
             inline_memcpy(pos[i], sort_key.data, sort_key.size);
             pos[i] += sort_key.size;
             *(pos[i]) = '\0';
@@ -929,8 +929,8 @@ void ColumnString::serializeToPosImpl(
         }
         else
         {
-            tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
-            pos[i] += sizeof(UInt32);
+            tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(size_t));
+            pos[i] += sizeof(size_t);
             inline_memcpy(pos[i], src, str_size);
             pos[i] += str_size;
         }
@@ -1146,7 +1146,7 @@ void ColumnString::serializeToPosForColumnArrayImpl(
         {
             for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
             {
-                UInt32 str_size = sizeAt(j);
+                size_t str_size = sizeAt(j);
                 const void * src = &chars[offsetAt(j)];
                 if constexpr (need_decode_collator)
                 {
@@ -1157,8 +1157,8 @@ void ColumnString::serializeToPosForColumnArrayImpl(
                     // For terminating zero.
                     str_size = sort_key.size + 1;
 
-                    tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
-                    pos[i] += sizeof(UInt32);
+                    tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(size_t));
+                    pos[i] += sizeof(size_t);
                     inline_memcpy(pos[i], sort_key.data, sort_key.size);
                     pos[i] += sort_key.size;
                     *(pos[i]) = '\0';
@@ -1166,8 +1166,8 @@ void ColumnString::serializeToPosForColumnArrayImpl(
                 }
                 else
                 {
-                    tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
-                    pos[i] += sizeof(UInt32);
+                    tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(size_t));
+                    pos[i] += sizeof(size_t);
                     inline_memcpy(pos[i], src, str_size);
                     pos[i] += str_size;
                 }
@@ -1178,8 +1178,8 @@ void ColumnString::serializeToPosForColumnArrayImpl(
             for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
             {
                 UInt32 str_size = sizeAt(j);
-                tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
-                pos[i] += sizeof(UInt32);
+                tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(size_t));
+                pos[i] += sizeof(size_t);
             }
             size_t strs_size = offsetAt(array_offsets[start + i]) - offsetAt(array_offsets[start + i - 1]);
             inline_memcpy(pos[i], &chars[offsetAt(array_offsets[start + i - 1])], strs_size);
@@ -1240,9 +1240,9 @@ void ColumnString::deserializeAndInsertFromPosImpl(
             offsets.reserve(offsets.size() + size + offset_buffer_size / sizeof(size_t));
             for (size_t i = 0; i < size; ++i)
             {
-                UInt32 str_size;
-                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
-                pos[i] += sizeof(UInt32);
+                size_t str_size;
+                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(size_t));
+                pos[i] += sizeof(size_t);
 
                 auto * p = pos[i];
                 while (true)
@@ -1295,9 +1295,9 @@ void ColumnString::deserializeAndInsertFromPosImpl(
     offsets.resize(prev_size + size);
     for (size_t i = 0; i < size; ++i)
     {
-        UInt32 str_size;
-        tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
-        pos[i] += sizeof(UInt32);
+        size_t str_size;
+        tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(size_t));
+        pos[i] += sizeof(size_t);
 
         chars.resize(char_size + str_size);
         memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
@@ -1354,9 +1354,9 @@ void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
         {
             for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
             {
-                UInt32 str_size;
-                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
-                pos[i] += sizeof(UInt32);
+                size_t str_size;
+                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(size_t));
+                pos[i] += sizeof(size_t);
 
                 chars.resize(char_size + str_size);
                 memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
@@ -1374,9 +1374,9 @@ void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
             size_t prev_char_size = char_size;
             for (size_t j = array_offsets[start_point + i - 1]; j < array_offsets[start_point + i]; ++j)
             {
-                UInt32 str_size;
-                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
-                pos[i] += sizeof(UInt32);
+                UInt64 str_size;
+                tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(size_t));
+                pos[i] += sizeof(size_t);
                 char_size += str_size;
                 offsets[j] = char_size;
             }
