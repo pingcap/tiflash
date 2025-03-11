@@ -1378,7 +1378,12 @@ try
             }));
 
         // TopK=4
+        ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
         ann_query_info->set_top_k(4);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({8.0}));
+
         builder = DMFileBlockInputStreamBuilder(dbContext());
         stream = builder.setVecIndexQuery(vec_idx_ctx)
                      .build(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
