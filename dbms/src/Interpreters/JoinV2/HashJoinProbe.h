@@ -97,6 +97,214 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     Block result_block_for_other_condition;
 };
 
+/// The implemtation of prefetching in join probe process is inspired by a paper named
+/// `Asynchronous Memory Access Chaining` in vldb-15.
+/// Ref: https://www.vldb.org/pvldb/vol9/p252-kocberber.pdf
+enum class ProbePrefetchStage : UInt8
+{
+    None,
+    FindHeader,
+    FindNext,
+};
+
+template <typename KeyGetter>
+struct ProbePrefetchState
+{
+    using KeyGetterType = typename KeyGetter::Type;
+    using KeyType = typename KeyGetterType::KeyType;
+    using HashValueType = typename KeyGetter::HashValueType;
+
+    ProbePrefetchStage stage = ProbePrefetchStage::None;
+    bool is_matched = false;
+    UInt16 hash_tag = 0;
+    HashValueType hash = 0;
+    size_t index = 0;
+    union
+    {
+        RowPtr ptr = nullptr;
+        std::atomic<RowPtr> * pointer_ptr;
+    };
+    KeyType key{};
+};
+
+#define JOIN_PROBE_TEMPLATE       \
+    template <                    \
+        typename KeyGetter,       \
+        bool has_null_map,        \
+        bool tagged_pointer,      \
+        bool has_other_condition, \
+        bool late_materialization>
+
+class HashJoin;
+class JoinProbeBlockHelper
+{
+public:
+    JoinProbeBlockHelper(const HashJoin * join, bool late_materialization);
+
+    Block joinProbeBlock(JoinProbeContext & context, JoinProbeWorkerData & wd);
+
+private:
+    template <bool has_other_condition, bool late_materialization>
+    Block joinProbeBlockImpl(JoinProbeContext & context, JoinProbeWorkerData & wd);
+
+    JOIN_PROBE_TEMPLATE
+    void NO_INLINE
+    joinProbeBlockInner(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+    JOIN_PROBE_TEMPLATE
+    void NO_INLINE
+    joinProbeBlockInnerPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+
+    JOIN_PROBE_TEMPLATE
+    void NO_INLINE
+    joinProbeBlockLeftOuter(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+    JOIN_PROBE_TEMPLATE
+    void NO_INLINE joinProbeBlockLeftOuterPrefetch(
+        JoinProbeContext & context,
+        JoinProbeWorkerData & wd,
+        MutableColumns & added_columns);
+
+    template <typename KeyGetter>
+    void ALWAYS_INLINE initPrefetchStates(JoinProbeContext & context)
+    {
+        if (!context.prefetch_states)
+        {
+            context.prefetch_states = decltype(context.prefetch_states)(
+                static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
+                [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
+        }
+    }
+
+    template <typename KeyGetterType, typename KeyType, typename HashValueType>
+    bool ALWAYS_INLINE joinKeyIsEqual(
+        KeyGetterType & key_getter,
+        const KeyType & key1,
+        const KeyType & key2,
+        HashValueType hash1,
+        RowPtr row_ptr) const
+    {
+        if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+        {
+            auto hash2 = unalignedLoad<HashValueType>(row_ptr + sizeof(RowPtr));
+            if (hash1 != hash2)
+                return false;
+        }
+        return key_getter.joinKeyIsEqual(key1, key2);
+    }
+
+    template <bool has_null_map, bool late_materialization, typename KeyGetterType, typename KeyType>
+    void ALWAYS_INLINE insertRowToBatch(
+        JoinProbeWorkerData & wd,
+        MutableColumns & added_columns,
+        KeyGetterType & key_getter,
+        RowPtr row_ptr,
+        const KeyType & key) const
+    {
+        wd.insert_batch.push_back(row_ptr + key_getter.getRequiredKeyOffset(key));
+        flushBatchIfNecessary<has_null_map, late_materialization, false>(wd, added_columns);
+    }
+
+    template <bool has_null_map, bool late_materialization, bool force>
+    void ALWAYS_INLINE flushBatchIfNecessary(JoinProbeWorkerData & wd, MutableColumns & added_columns) const
+    {
+        if constexpr (!force)
+        {
+            if likely (wd.insert_batch.size() < settings.probe_insert_batch_size)
+                return;
+        }
+        if constexpr (late_materialization)
+        {
+            size_t idx = 0;
+            for (auto [_, is_nullable] : row_layout.raw_required_key_column_indexes)
+            {
+                IColumn * column = added_columns[idx].get();
+                if (has_null_map && is_nullable)
+                    column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
+                column->deserializeAndInsertFromPos(wd.insert_batch, true);
+                ++idx;
+            }
+            for (size_t i = 0; i < row_layout.other_required_count_for_other_condition; ++i)
+                added_columns[idx++]->deserializeAndInsertFromPos(wd.insert_batch, true);
+
+            wd.row_ptrs_for_lm.insert(wd.insert_batch.begin(), wd.insert_batch.end());
+        }
+        else
+        {
+            for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
+            {
+                IColumn * column = added_columns[column_index].get();
+                if (has_null_map && is_nullable)
+                    column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
+                column->deserializeAndInsertFromPos(wd.insert_batch, true);
+            }
+            for (auto [column_index, _] : row_layout.other_required_column_indexes)
+                added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch, true);
+        }
+
+        if constexpr (force)
+        {
+            if constexpr (late_materialization)
+            {
+                size_t idx = 0;
+                for (auto [_, is_nullable] : row_layout.raw_required_key_column_indexes)
+                {
+                    IColumn * column = added_columns[idx].get();
+                    if (has_null_map && is_nullable)
+                        column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
+                    column->flushNTAlignBuffer();
+                    ++idx;
+                }
+                for (size_t i = 0; i < row_layout.other_required_count_for_other_condition; ++i)
+                    added_columns[idx++]->flushNTAlignBuffer();
+            }
+            else
+            {
+                for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
+                {
+                    IColumn * column = added_columns[column_index].get();
+                    if (has_null_map && is_nullable)
+                        column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
+                    column->flushNTAlignBuffer();
+                }
+                for (auto [column_index, _] : row_layout.other_required_column_indexes)
+                    added_columns[column_index]->flushNTAlignBuffer();
+            }
+        }
+
+        wd.insert_batch.clear();
+    }
+
+    template <bool has_null_map>
+    void ALWAYS_INLINE fillNullMapWithZero(MutableColumns & added_columns, size_t size) const
+    {
+        if constexpr (has_null_map)
+        {
+            for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
+            {
+                if (is_nullable)
+                {
+                    auto & null_map_vec
+                        = static_cast<ColumnNullable &>(*added_columns[column_index]).getNullMapColumn().getData();
+                    null_map_vec.resize_fill_zero(null_map_vec.size() + size);
+                }
+            }
+        }
+    }
+
+    template <bool late_materialization>
+    Block handleOtherConditions(JoinProbeContext & context, JoinProbeWorkerData & wd);
+
+private:
+    using FuncType = void (JoinProbeBlockHelper::*)(JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &);
+    FuncType func_ptr_has_null = nullptr;
+    FuncType func_ptr_no_null = nullptr;
+    const HashJoin * join;
+    const bool late_materialization;
+    const ASTTableJoin::Kind kind;
+    const HashJoinSettings & settings;
+    const HashJoinPointerTable & pointer_table;
+    const HashJoinRowLayout & row_layout;
+};
+
 void joinProbeBlock(
     JoinProbeContext & context,
     JoinProbeWorkerData & wd,

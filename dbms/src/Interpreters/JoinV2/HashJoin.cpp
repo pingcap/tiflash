@@ -13,8 +13,6 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
-#include <Columns/countBytesInFilter.h>
-#include <Columns/filterColumn.h>
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Core/ColumnsWithTypeAndName.h>
@@ -26,6 +24,7 @@
 
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
+#include <memory>
 
 namespace DB
 {
@@ -433,6 +432,14 @@ void HashJoin::workAfterBuildRowFinish()
         right_sample_block_pruned.columns(),
         pointer_table.enableProbePrefetch(),
         pointer_table.enableTaggedPointer());
+
+    bool late_materialization = false;
+    if (has_other_condition)
+    {
+        late_materialization
+            = row_layout.other_required_count_for_other_condition < row_layout.other_required_column_indexes.size();
+    }
+    join_probe_helper = std::make_unique<JoinProbeBlockHelper>(this, late_materialization);
 }
 
 void HashJoin::buildRowFromBlock(const Block & b, size_t stream_index)
@@ -554,120 +561,10 @@ Block HashJoin::probeBlock(JoinProbeContext & context, size_t stream_index)
         row_layout);
 
     auto & wd = probe_workers_data[stream_index];
-    size_t left_columns = left_sample_block_pruned.columns();
-    size_t right_columns = right_sample_block_pruned.columns();
-    if (!wd.result_block)
-    {
-        for (size_t i = 0; i < left_columns + right_columns; ++i)
-        {
-            ColumnWithTypeAndName new_column = all_sample_block_pruned.safeGetByPosition(i).cloneEmpty();
-            new_column.column->assumeMutable()->reserveAlign(settings.max_block_size, FULL_VECTOR_SIZE_AVX2);
-            wd.result_block.insert(std::move(new_column));
-        }
-    }
-
-    bool late_materialization = false;
-    if (has_other_condition)
-    {
-        late_materialization
-            = row_layout.other_required_count_for_other_condition < row_layout.other_required_column_indexes.size();
-    }
-
-    MutableColumns added_columns;
-    if (late_materialization)
-    {
-        for (auto [column_index, _] : row_layout.raw_required_key_column_indexes)
-            added_columns.emplace_back(
-                wd.result_block.safeGetByPosition(left_columns + column_index).column->assumeMutable());
-        for (size_t i = 0; i < row_layout.other_required_count_for_other_condition; ++i)
-        {
-            size_t column_index = row_layout.other_required_column_indexes[i].first;
-            added_columns.emplace_back(
-                wd.result_block.safeGetByPosition(left_columns + column_index).column->assumeMutable());
-        }
-    }
-    else
-    {
-        added_columns.resize(right_columns);
-        for (size_t i = 0; i < right_columns; ++i)
-            added_columns[i] = wd.result_block.safeGetByPosition(left_columns + i).column->assumeMutable();
-    }
-
-    Stopwatch watch;
-    joinProbeBlock(
-        context,
-        wd,
-        method,
-        kind,
-        late_materialization,
-        non_equal_conditions,
-        settings,
-        pointer_table,
-        row_layout,
-        added_columns,
-        wd.result_block.rows());
-    wd.probe_hash_table_time += watch.elapsedFromLastTime();
+    Block res = join_probe_helper->joinProbeBlock(context, wd);
     if (context.isCurrentProbeFinished())
         wd.probe_handle_rows += context.rows;
-
-    if (late_materialization)
-    {
-        size_t idx = 0;
-        for (auto [column_index, _] : row_layout.raw_required_key_column_indexes)
-            wd.result_block.safeGetByPosition(left_columns + column_index).column = std::move(added_columns[idx++]);
-        for (size_t i = 0; i < row_layout.other_required_count_for_other_condition; ++i)
-        {
-            size_t column_index = row_layout.other_required_column_indexes[i].first;
-            wd.result_block.safeGetByPosition(left_columns + column_index).column = std::move(added_columns[idx++]);
-        }
-    }
-    else
-    {
-        for (size_t i = 0; i < right_columns; ++i)
-            wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
-    }
-
-    if (wd.selective_offsets.empty())
-        return output_block_after_finalize;
-
-    if (has_other_condition)
-    {
-        // Always using late materialization for left side
-        for (size_t i = 0; i < left_columns; ++i)
-        {
-            if (!left_required_flag_for_other_condition[i])
-                continue;
-            wd.result_block.safeGetByPosition(i).column->assumeMutable()->insertSelectiveFrom(
-                *context.block.safeGetByPosition(i).column.get(),
-                wd.selective_offsets);
-        }
-    }
-    else
-    {
-        for (size_t i = 0; i < left_columns; ++i)
-        {
-            wd.result_block.safeGetByPosition(i).column->assumeMutable()->insertSelectiveFrom(
-                *context.block.safeGetByPosition(i).column.get(),
-                wd.selective_offsets);
-        }
-    }
-
-    wd.replicate_time += watch.elapsedFromLastTime();
-
-    if (has_other_condition)
-    {
-        auto res_block = handleOtherConditions(context, wd, late_materialization);
-        wd.other_condition_time += watch.elapsedFromLastTime();
-        return res_block;
-    }
-
-    if (wd.result_block.rows() >= settings.max_block_size)
-    {
-        auto res_block = removeUselessColumnForOutput(wd.result_block);
-        wd.result_block = {};
-        return res_block;
-    }
-    return output_block_after_finalize;
+    return res;
 }
 
 Block HashJoin::probeLastResultBlock(size_t stream_index)
@@ -824,245 +721,6 @@ void HashJoin::finalize(const Names & parent_require)
     for (const auto & name : required_names_set)
         required_columns.push_back(name);
     finalized = true;
-}
-
-Block HashJoin::handleOtherConditions(JoinProbeContext & context, JoinProbeWorkerData & wd, bool late_materialization)
-{
-    size_t left_columns = left_sample_block_pruned.columns();
-    size_t right_columns = right_sample_block_pruned.columns();
-    // Some columns in wd.result_block may be empty so need to create another block to execute other condition expressions
-    Block exec_block;
-    for (size_t i = 0; i < left_columns; ++i)
-    {
-        if (left_required_flag_for_other_condition[i])
-            exec_block.insert(wd.result_block.getByPosition(i));
-    }
-    if (late_materialization)
-    {
-        for (auto [column_index, _] : row_layout.raw_required_key_column_indexes)
-            exec_block.insert(wd.result_block.getByPosition(left_columns + column_index));
-        for (size_t i = 0; i < row_layout.other_required_count_for_other_condition; ++i)
-        {
-            size_t column_index = row_layout.other_required_column_indexes[i].first;
-            exec_block.insert(wd.result_block.getByPosition(left_columns + column_index));
-        }
-    }
-    else
-    {
-        for (size_t i = 0; i < right_columns; ++i)
-            exec_block.insert(wd.result_block.getByPosition(left_columns + i));
-    }
-
-    non_equal_conditions.other_cond_expr->execute(exec_block);
-
-    size_t rows = exec_block.rows();
-    RUNTIME_CHECK_MSG(
-        rows <= settings.max_block_size,
-        "exec_block rows {} > max_block_size {}",
-        rows,
-        settings.max_block_size);
-
-    wd.filter.clear();
-    mergeNullAndFilterResult(exec_block, wd.filter, non_equal_conditions.other_cond_name, false);
-
-    size_t output_columns = output_block_after_finalize.columns();
-
-    auto init_result_block_for_other_condition = [&]() {
-        wd.result_block_for_other_condition = {};
-        for (size_t i = 0; i < output_columns; ++i)
-        {
-            ColumnWithTypeAndName new_column = output_block_after_finalize.safeGetByPosition(i).cloneEmpty();
-            new_column.column->assumeMutable()->reserveAlign(settings.max_block_size, FULL_VECTOR_SIZE_AVX2);
-            wd.result_block_for_other_condition.insert(std::move(new_column));
-        }
-    };
-
-    if (!wd.result_block_for_other_condition)
-        init_result_block_for_other_condition();
-
-    RUNTIME_CHECK_MSG(
-        wd.result_block_for_other_condition.rows() < settings.max_block_size,
-        "result_block_for_other_condition rows {} >= max_block_size {}",
-        wd.result_block_for_other_condition.rows(),
-        settings.max_block_size);
-    size_t remaining_insert_size = settings.max_block_size - wd.result_block_for_other_condition.rows();
-    size_t result_size = countBytesInFilter(wd.filter);
-
-    bool filter_offsets_is_initialized = false;
-    auto init_filter_offsets = [&]() {
-        RUNTIME_CHECK(wd.filter.size() == rows);
-        wd.filter_offsets.clear();
-        wd.filter_offsets.reserve(result_size);
-        filterImpl(&wd.filter[0], &wd.filter[rows], &base_offsets[0], wd.filter_offsets);
-        RUNTIME_CHECK(wd.filter_offsets.size() == result_size);
-        filter_offsets_is_initialized = true;
-    };
-
-    bool filter_selective_offsets_is_initialized = false;
-    auto init_filter_selective_offsets = [&]() {
-        RUNTIME_CHECK(wd.selective_offsets.size() == rows);
-        wd.filter_selective_offsets.clear();
-        wd.filter_selective_offsets.reserve(result_size);
-        filterImpl(&wd.filter[0], &wd.filter[rows], &wd.selective_offsets[0], wd.filter_selective_offsets);
-        RUNTIME_CHECK(wd.filter_selective_offsets.size() == result_size);
-        filter_selective_offsets_is_initialized = true;
-    };
-
-    bool filter_row_ptrs_for_lm_is_initialized = false;
-    auto init_filter_row_ptrs_for_lm = [&]() {
-        RUNTIME_CHECK(wd.row_ptrs_for_lm.size() == rows);
-        wd.filter_row_ptrs_for_lm.clear();
-        wd.filter_row_ptrs_for_lm.reserve(result_size);
-        filterImpl(&wd.filter[0], &wd.filter[rows], &wd.row_ptrs_for_lm[0], wd.filter_row_ptrs_for_lm);
-        RUNTIME_CHECK(wd.filter_row_ptrs_for_lm.size() == result_size);
-        filter_row_ptrs_for_lm_is_initialized = true;
-    };
-
-    auto fill_block = [&](size_t start, size_t length) {
-        if (late_materialization)
-        {
-            for (auto [column_index, _] : row_layout.raw_required_key_column_indexes)
-            {
-                const auto & name = right_sample_block_pruned.getByPosition(column_index).name;
-                if (!wd.result_block_for_other_condition.has(name))
-                    continue;
-                if unlikely (!filter_offsets_is_initialized)
-                    init_filter_offsets();
-                auto & des_column = wd.result_block_for_other_condition.getByName(name);
-                auto & src_column = exec_block.getByName(name);
-                des_column.column->assumeMutable()
-                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
-            }
-            for (size_t i = 0; i < row_layout.other_required_count_for_other_condition; ++i)
-            {
-                size_t column_index = row_layout.other_required_column_indexes[i].first;
-                const auto & name = right_sample_block_pruned.getByPosition(column_index).name;
-                if (!wd.result_block_for_other_condition.has(name))
-                    continue;
-                if unlikely (!filter_offsets_is_initialized)
-                    init_filter_offsets();
-                auto & des_column = wd.result_block_for_other_condition.getByName(name);
-                auto & src_column = exec_block.getByName(name);
-                des_column.column->assumeMutable()
-                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
-            }
-            if (!filter_row_ptrs_for_lm_is_initialized)
-                init_filter_row_ptrs_for_lm();
-
-            std::vector<size_t> actual_column_indexes;
-            for (size_t i = row_layout.other_required_count_for_other_condition;
-                 i < row_layout.other_required_column_indexes.size();
-                 ++i)
-            {
-                size_t column_index = row_layout.other_required_column_indexes[i].first;
-                const auto & name = right_sample_block_pruned.getByPosition(column_index).name;
-                size_t actual_column_index = wd.result_block_for_other_condition.getPositionByName(name);
-                actual_column_indexes.emplace_back(actual_column_index);
-            }
-
-            constexpr size_t step = 256;
-            for (size_t i = start; i < start + length; i += step)
-            {
-                size_t end = i + step > start + length ? start + length : i + step;
-                wd.insert_batch.clear();
-                wd.insert_batch.insert(&wd.row_ptrs_for_lm[i], &wd.row_ptrs_for_lm[end]);
-                for (auto column_index : actual_column_indexes)
-                {
-                    auto & des_column = wd.result_block_for_other_condition.getByPosition(column_index);
-                    des_column.column->assumeMutable()->deserializeAndInsertFromPos(wd.insert_batch, true);
-                }
-            }
-            for (auto column_index : actual_column_indexes)
-            {
-                auto & des_column = wd.result_block_for_other_condition.getByPosition(column_index);
-                des_column.column->assumeMutable()->flushNTAlignBuffer();
-            }
-        }
-        else
-        {
-            for (size_t i = 0; i < right_columns; ++i)
-            {
-                const auto & name = right_sample_block_pruned.getByPosition(i).name;
-                if (!wd.result_block_for_other_condition.has(name))
-                    continue;
-                if unlikely (!filter_offsets_is_initialized)
-                    init_filter_offsets();
-                auto & des_column = wd.result_block_for_other_condition.getByName(name);
-                auto & src_column = exec_block.getByName(name);
-                des_column.column->assumeMutable()
-                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
-            }
-        }
-
-        for (size_t i = 0; i < left_columns; ++i)
-        {
-            const auto & name = left_sample_block_pruned.getByPosition(i).name;
-            if (!wd.result_block_for_other_condition.has(name))
-                continue;
-            auto & des_column = wd.result_block_for_other_condition.getByName(name);
-            if (left_required_flag_for_other_condition[i])
-            {
-                if unlikely (!filter_offsets_is_initialized && !filter_selective_offsets_is_initialized)
-                    init_filter_selective_offsets();
-                if (filter_offsets_is_initialized)
-                {
-                    auto & src_column = exec_block.getByName(name);
-                    des_column.column->assumeMutable()
-                        ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
-                }
-                else
-                {
-                    auto & src_column = context.block.safeGetByPosition(i);
-                    des_column.column->assumeMutable()->insertSelectiveRangeFrom(
-                        *src_column.column.get(),
-                        wd.filter_selective_offsets,
-                        start,
-                        length);
-                }
-                continue;
-            }
-            if unlikely (!filter_selective_offsets_is_initialized)
-                init_filter_selective_offsets();
-            auto & src_column = context.block.safeGetByPosition(i);
-            des_column.column->assumeMutable()
-                ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_selective_offsets, start, length);
-        }
-    };
-
-    size_t length = result_size > remaining_insert_size ? remaining_insert_size : result_size;
-    fill_block(0, length);
-
-    Block res_block;
-    if (result_size >= remaining_insert_size)
-    {
-        res_block = wd.result_block_for_other_condition;
-        init_result_block_for_other_condition();
-        if (result_size > remaining_insert_size)
-            fill_block(remaining_insert_size, result_size - remaining_insert_size);
-    }
-    else
-    {
-        res_block = output_block_after_finalize;
-    }
-
-    exec_block.clear();
-    /// Remove the new column added from other condition expressions.
-    removeUselessColumn(wd.result_block);
-
-    assertBlocksHaveEqualStructure(
-        wd.result_block,
-        all_sample_block_pruned,
-        "Join Probe reuses result_block for other condition");
-
-    /// Clear the data in result_block.
-    for (size_t i = 0; i < wd.result_block.columns(); ++i)
-    {
-        auto column = wd.result_block.getByPosition(i).column->assumeMutable();
-        column->popBack(column->size());
-        wd.result_block.getByPosition(i).column = std::move(column);
-    }
-
-    return res_block;
 }
 
 } // namespace DB

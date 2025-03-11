@@ -27,6 +27,8 @@
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
 
+#include <memory>
+
 
 namespace DB
 {
@@ -78,9 +80,9 @@ private:
 
     void workAfterBuildRowFinish();
 
-    Block handleOtherConditions(JoinProbeContext & context, JoinProbeWorkerData & wd, bool late_materialization);
-
 private:
+    friend JoinProbeBlockHelper;
+
     const ASTTableJoin::Kind kind;
     const String join_req_id;
 
@@ -131,17 +133,18 @@ private:
     /// Row containers
     std::vector<std::unique_ptr<MultipleRowContainer>> multi_row_containers;
 
-    /// Build phase
+    /// Build row phase
     size_t build_concurrency = 0;
     std::vector<JoinBuildWorkerData> build_workers_data;
     std::atomic<size_t> active_build_worker = 0;
+
+    HashJoinPointerTable pointer_table;
 
     /// Probe phase
     size_t probe_concurrency = 0;
     std::vector<JoinProbeWorkerData> probe_workers_data;
     std::atomic<size_t> active_probe_worker = 0;
-
-    HashJoinPointerTable pointer_table;
+    std::unique_ptr<JoinProbeBlockHelper> join_probe_helper;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 
