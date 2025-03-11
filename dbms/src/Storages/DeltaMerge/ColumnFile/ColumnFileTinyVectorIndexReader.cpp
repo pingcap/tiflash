@@ -64,7 +64,7 @@ std::vector<VectorIndexReader::SearchResult> ColumnFileTinyVectorIndexReader::lo
 
 void ColumnFileTinyVectorIndexReader::loadVectorIndex()
 {
-    const auto & index_infos = tiny_file.index_infos;
+    const auto & index_infos = tiny_file.getIndexInfos();
     if (!index_infos || index_infos->empty())
         return;
     auto index_id = ann_query_info->index_id();
