@@ -18,10 +18,33 @@
 #include <DataStreams/AddingDefaultBlockOutputStream.h>
 #include <DataTypes/DataTypeArray.h>
 #include <DataTypes/NestedUtils.h>
+#include <Interpreters/Context.h>
 
 
 namespace DB
 {
+AddingDefaultBlockOutputStream::AddingDefaultBlockOutputStream(
+    const StoragePtr & storage_,
+    const ASTPtr & query_ptr_,
+    const Block & header_,
+    NamesAndTypesList required_columns_,
+    const ColumnDefaults & column_defaults_,
+    const Context & context_)
+    : storage(storage_)
+    , header(header_)
+    , required_columns(required_columns_)
+    , column_defaults(column_defaults_)
+    , context(context_)
+    , query_ptr(query_ptr_)
+{
+    /** Notice
+     * This is a very important line. At any insertion into the table one of streams should own lock.
+     * Although now any insertion into the table is done via AddingDefaultBlockOutputStream,
+     * but it's clear that here is not the best place for this functionality.
+     */
+    addTableLock(storage->lockForShare(context.getCurrentQueryId()));
+    output = storage->write(query_ptr, context.getSettingsRef());
+}
 
 void AddingDefaultBlockOutputStream::write(const Block & block)
 {
@@ -38,7 +61,7 @@ void AddingDefaultBlockOutputStream::write(const Block & block)
     {
         const auto & elem = res.getByPosition(i);
 
-        if (const ColumnArray * array = typeid_cast<const ColumnArray *>(&*elem.column))
+        if (const auto * array = typeid_cast<const ColumnArray *>(&*elem.column))
         {
             String offsets_name = Nested::extractTableName(elem.name);
             auto & offsets_column = offset_columns[offsets_name];

@@ -23,8 +23,6 @@
 #include <Storages/TableLockHolder.h>
 
 #include <memory>
-#include <optional>
-#include <shared_mutex>
 
 
 namespace DB
@@ -319,9 +317,6 @@ public:
     /// If it can - returns true
     /// Otherwise - throws an exception with detailed information or returns false
     virtual bool checkTableCanBeDropped() const { return true; }
-
-    /** Notify engine about updated dependencies for this storage. */
-    virtual void updateDependencies() {}
 
     /// Returns data path if storage supports it, empty string otherwise.
     virtual String getDataPath() const { return {}; }

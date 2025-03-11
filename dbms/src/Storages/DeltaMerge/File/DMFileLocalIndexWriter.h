@@ -45,6 +45,8 @@ public:
         ids.reserve(dm_files.size());
         for (const auto & dmf : dm_files)
         {
+            if (unlikely(dmf->getRows() == 0))
+                continue;
             ids.emplace_back(LocalIndexerScheduler::DMFileID(dmf->fileId()));
         }
         return ids;

@@ -122,6 +122,19 @@ if (HAVE_APPLY_PATCH EQUAL 1)
   else ()
     message(STATUS "aws patch done")
   endif ()
+
+  set (AWS_PATCH_FILE "${TiFlash_SOURCE_DIR}/contrib/aws-cmake/0003-Suppress-enum-overflow.patch")
+  # apply the patch
+  execute_process(
+    COMMAND git apply -v "${AWS_PATCH_FILE}"
+    WORKING_DIRECTORY "${AWS_SDK_CORE_DIR}"
+    COMMAND_ECHO STDOUT
+    RESULT_VARIABLE PATCH_SUCC)
+  if (NOT PATCH_SUCC EQUAL 0)
+    message(FATAL_ERROR "Can not apply aws patch ${AWS_PATCH_FILE}")
+  else ()
+    message(STATUS "aws patch done")
+  endif ()
 elseif (HAVE_APPLY_PATCH EQUAL 0)
   message(STATUS "aws patch have been applied: ${HAVE_APPLY_PATCH}")
 else ()

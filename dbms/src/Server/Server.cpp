@@ -582,7 +582,7 @@ try
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
-    /// Load global settings from default_profile and system_profile.
+    /// Load global settings from default_profile
     /// It internally depends on UserConfig::parseSettings.
     // TODO: Parse the settings from config file at the program beginning
     global_context->setDefaultProfiles();

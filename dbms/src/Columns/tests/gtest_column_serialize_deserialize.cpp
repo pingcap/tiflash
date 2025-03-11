@@ -219,7 +219,8 @@ public:
     {
         if (compare_semantics)
         {
-            doTestSerializeAndDeserializeForCmp(column_ptr, compare_semantics, collator, sort_key_container);
+            doTestSerializeAndDeserializeForCmp(column_ptr, true, collator, sort_key_container);
+            doTestSerializeAndDeserializeForCmp(column_ptr, false, collator, sort_key_container);
         }
         else
         {
@@ -525,6 +526,17 @@ try
 
     testSerializeAndDeserialize(col_decimal_256);
     testSerializeAndDeserialize(col_decimal_256, true, nullptr, nullptr);
+
+    // Also test row-base interface for ColumnDecimal.
+    Arena arena;
+    const char * begin = nullptr;
+    String sort;
+    auto new_col_ptr = col_decimal_256->cloneEmpty();
+    for (size_t i = 0; i < col_decimal_256->size(); ++i)
+        col_decimal_256->serializeValueIntoArena(i, arena, begin, nullptr, sort);
+    for (size_t i = 0; i < col_decimal_256->size(); ++i)
+        begin = new_col_ptr->deserializeAndInsertFromArena(begin, nullptr);
+    ASSERT_COLUMN_EQ(std::move(col_decimal_256), std::move(new_col_ptr));
 }
 CATCH
 
