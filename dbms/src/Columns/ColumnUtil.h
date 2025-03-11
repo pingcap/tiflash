@@ -23,11 +23,4 @@ UInt64 ToBits64(const UInt8 * bytes64);
 
 constexpr size_t FILTER_SIMD_BYTES = 64;
 
-/// If mask is a number of this kind: [0]*[1]+ function returns the length of the cluster of 1s.
-/// Otherwise it returns the special value: 0xFF.
-/// Note: mask must be non-zero.
-UInt8 prefixToCopy(UInt64 mask);
-
-UInt8 suffixToCopy(UInt64 mask);
-
 } // namespace DB
