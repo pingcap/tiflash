@@ -37,7 +37,7 @@ VectorIndexReaderPtr VectorIndexReader::createFromMmap(
     RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
     RUNTIME_CHECK(metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
-    auto vi = std::make_shared<VectorIndexReader>(file_props, perf);
+    auto vi = std::make_shared<VectorIndexReader>(/* is_in_memory */ false, file_props, perf);
 
     vi->index = USearchImplType::make(
         unum::usearch::metric_punned_t( //
@@ -76,7 +76,7 @@ VectorIndexReaderPtr VectorIndexReader::createFromMemory(
     RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
     RUNTIME_CHECK(metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
-    auto vi = std::make_shared<VectorIndexReader>(file_props, perf);
+    auto vi = std::make_shared<VectorIndexReader>(/* is_in_memory */ true, file_props, perf);
 
     vi->index = USearchImplType::make(
         unum::usearch::metric_punned_t( //
@@ -97,8 +97,7 @@ VectorIndexReaderPtr VectorIndexReader::createFromMemory(
     RUNTIME_CHECK_MSG(result, "Failed to load vector index: {}", result.error.what());
 
     auto current_memory_usage = vi->index.memory_usage();
-    GET_METRIC(tiflash_vector_index_memory_usage, type_view)
-        .Increment(static_cast<double>(current_memory_usage)); // FIXME, should be type_load
+    GET_METRIC(tiflash_vector_index_memory_usage, type_load).Increment(static_cast<double>(current_memory_usage));
     vi->last_reported_memory_usage = current_memory_usage;
 
     return vi;
@@ -186,21 +185,42 @@ void VectorIndexReader::get(Key key, std::vector<Float32> & out) const
     index.get(key, out.data());
 }
 
-VectorIndexReader::VectorIndexReader(const dtpb::IndexFilePropsV2Vector & file_props_, const VectorIndexPerfPtr & perf_)
-    : file_props(file_props_)
+VectorIndexReader::VectorIndexReader(
+    bool is_in_memory_,
+    const dtpb::IndexFilePropsV2Vector & file_props_,
+    const VectorIndexPerfPtr & perf_)
+    : is_in_memory(is_in_memory_)
+    , file_props(file_props_)
     , perf(perf_)
 {
     RUNTIME_CHECK(perf_ != nullptr);
     RUNTIME_CHECK(file_props.dimensions() > 0);
     RUNTIME_CHECK(file_props.dimensions() <= TiDB::MAX_VECTOR_DIMENSION);
 
-    GET_METRIC(tiflash_vector_index_active_instances, type_view).Increment();
+    if (is_in_memory)
+    {
+        GET_METRIC(tiflash_vector_index_active_instances, type_load).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_vector_index_active_instances, type_view).Increment();
+    }
 }
 
 VectorIndexReader::~VectorIndexReader()
 {
-    GET_METRIC(tiflash_vector_index_memory_usage, type_view).Decrement(static_cast<double>(last_reported_memory_usage));
-    GET_METRIC(tiflash_vector_index_active_instances, type_view).Decrement();
+    if (is_in_memory)
+    {
+        GET_METRIC(tiflash_vector_index_memory_usage, type_load)
+            .Decrement(static_cast<double>(last_reported_memory_usage));
+        GET_METRIC(tiflash_vector_index_active_instances, type_load).Decrement();
+    }
+    else
+    {
+        GET_METRIC(tiflash_vector_index_memory_usage, type_view)
+            .Decrement(static_cast<double>(last_reported_memory_usage));
+        GET_METRIC(tiflash_vector_index_active_instances, type_view).Decrement();
+    }
 }
 
 } // namespace DB::DM

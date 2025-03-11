@@ -860,6 +860,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Vector index memory usage",                                                                                                  \
       Gauge,                                                                                                                        \
       F(type_build, {"type", "build"}),                                                                                             \
+      F(type_load, {"type", "load"}),                                                                                               \
       F(type_view, {"type", "view"}))                                                                                               \
     M(tiflash_vector_index_build_count,                                                                                             \
       "Vector index build count",                                                                                                   \
@@ -870,6 +871,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Active Vector index instances",                                                                                              \
       Gauge,                                                                                                                        \
       F(type_build, {"type", "build"}),                                                                                             \
+      F(type_load, {"type", "load"}),                                                                                               \
       F(type_view, {"type", "view"}))                                                                                               \
     M(tiflash_vector_index_duration,                                                                                                \
       "Vector index operation duration",                                                                                            \

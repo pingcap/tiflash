@@ -55,6 +55,7 @@ public:
 
 public:
     explicit VectorIndexReader(
+        bool is_in_memory_,
         const dtpb::IndexFilePropsV2Vector & file_props_,
         const VectorIndexPerfPtr & perf_ // must not be null
     );
@@ -71,6 +72,7 @@ public:
     void get(Key key, std::vector<Float32> & out) const;
 
 public:
+    const bool is_in_memory;
     const dtpb::IndexFilePropsV2Vector file_props;
 
 private:
