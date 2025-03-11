@@ -957,6 +957,114 @@ try
 }
 CATCH
 
+<<<<<<< HEAD
+=======
+TEST_F(DeltaMergeStoreVectorTest, DDLAddMultipleVectorIndex)
+try
+{
+    {
+        auto indexes = std::make_shared<LocalIndexInfos>();
+        store = reload(indexes);
+        ASSERT_EQ(store->getLocalIndexInfosSnapshot(), nullptr);
+    }
+
+    const size_t num_rows_write = 128;
+
+    // write [0, 128) to store
+    write(0, num_rows_write);
+    // trigger mergeDelta for all segments
+    triggerMergeDelta();
+
+    // write [128, 256) to store
+    write(num_rows_write, num_rows_write * 2);
+
+    // trigger FlushCache for all segments
+    triggerFlushCache();
+
+    auto add_vector_index = [&](std::vector<IndexID> index_id, std::vector<tipb::VectorDistanceMetric> metrics) {
+        TiDB::TableInfo new_table_info_with_vector_index;
+        TiDB::ColumnInfo column_info;
+        column_info.name = VectorIndexTestUtils::vec_column_name;
+        column_info.id = VectorIndexTestUtils::vec_column_id;
+        new_table_info_with_vector_index.columns.emplace_back(column_info);
+        TiDB::IndexColumnInfo index_col_info;
+        index_col_info.name = VectorIndexTestUtils::vec_column_name;
+        index_col_info.offset = 0;
+        for (size_t i = 0; i < index_id.size(); ++i)
+        {
+            TiDB::IndexInfo index;
+            index.id = index_id[i];
+            index.idx_cols.push_back(index_col_info);
+            index.vector_index = TiDB::VectorIndexDefinitionPtr(new TiDB::VectorIndexDefinition{
+                .kind = tipb::VectorIndexKind::HNSW,
+                .dimension = 1,
+                .distance_metric = metrics[i],
+            });
+            new_table_info_with_vector_index.index_infos.emplace_back(index);
+        }
+        // apply local index change, should
+        // - create the local index
+        // - generate the background tasks for building index on stable and delta
+        store->applyLocalIndexChange(new_table_info_with_vector_index);
+        ASSERT_EQ(store->local_index_infos->size(), index_id.size());
+
+        // check delta index has built for all segments
+        waitDeltaIndexReady();
+        // check stable index has built for all segments
+        waitStableLocalIndexReady();
+    };
+
+    const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+    auto query = [&](IndexID index_id,
+                     tipb::VectorDistanceMetric metric,
+                     const InferredDataVector<Array> & result_1,
+                     const InferredDataVector<Array> & result_2) {
+        // read from store
+        {
+            read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
+        }
+
+        // read with ANN query
+        {
+            const auto ann_query_info = createANNQueryInfo(vec_column_id, metric, 1, {2.0}, index_id);
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+
+            read(range, filter, createVecFloat32Column<Array>(result_1));
+        }
+
+        // read with ANN query
+        {
+            const auto ann_query_info = createANNQueryInfo(vec_column_id, metric, 1, {222.1}, index_id);
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+
+            read(range, filter, createVecFloat32Column<Array>(result_2));
+        }
+    };
+
+    // Add COSINE vector index
+    add_vector_index({1}, {tipb::VectorDistanceMetric::COSINE});
+    query(1, tipb::VectorDistanceMetric::COSINE, {{129.0}}, {{129.0}});
+
+    // Add L2 vector index
+    add_vector_index({1, 2}, {tipb::VectorDistanceMetric::COSINE, tipb::VectorDistanceMetric::L2});
+    query(1, tipb::VectorDistanceMetric::COSINE, {{129.0}}, {{129.0}});
+    query(2, tipb::VectorDistanceMetric::L2, {{2.0}}, {{222.0}});
+
+    {
+        // vector index is dropped
+        TiDB::TableInfo new_table_info_with_vector_index;
+        TiDB::ColumnInfo column_info;
+        column_info.name = VectorIndexTestUtils::vec_column_name;
+        column_info.id = VectorIndexTestUtils::vec_column_id;
+        new_table_info_with_vector_index.columns.emplace_back(column_info);
+        // apply local index change, shuold drop the local index
+        store->applyLocalIndexChange(new_table_info_with_vector_index);
+        ASSERT_EQ(store->local_index_infos->size(), 0);
+    }
+}
+CATCH
+
+>>>>>>> b25fa23f95 (Storages: fix a series of data race issues (#9962))
 TEST_F(DeltaMergeStoreVectorTest, DDLAddVectorIndexErrorMemoryExceed)
 try
 {
