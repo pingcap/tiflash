@@ -2324,6 +2324,9 @@ void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context)
 
 void DeltaMergeStore::updateColumnDefines(ColumnDefines && tmp_columns)
 {
+    // Tables created before the new string serialization format takes effect will
+    // not be automatically converted to the new type during restoration.
+    // Here, we force it to algin with default string type.
     convertStringTypeToDefault(tmp_columns);
     original_table_columns = std::move(tmp_columns);
     store_columns = generateStoreColumns(original_table_columns, is_common_handle);
