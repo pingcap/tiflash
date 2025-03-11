@@ -44,7 +44,6 @@ extern const char random_aggregate_merge_failpoint[];
 extern const char force_agg_on_partial_block[];
 extern const char random_fail_in_resize_callback[];
 extern const char force_agg_prefetch[];
-extern const char disable_agg_batch_get_key_holder[];
 extern const char force_magic_hash[];
 } // namespace FailPoints
 
@@ -389,6 +388,110 @@ enum class AggFastPathType
 #undef M
 };
 
+AggregatedDataVariants::Type ChooseAggregationMethodTwoKeys(const AggFastPathType * fast_path_types)
+{
+    auto tp1 = fast_path_types[0];
+    auto tp2 = fast_path_types[1];
+    switch (tp1)
+    {
+    case AggFastPathType::Number64:
+    {
+        switch (tp2)
+        {
+        case AggFastPathType::Number64:
+            return AggregatedDataVariants::Type::serialized; // unreachable. keys64 or keys128 will be used before
+        case AggFastPathType::StringBin:
+            return AggregatedDataVariants::Type::two_keys_num64_strbin;
+        case AggFastPathType::StringBinPadding:
+            return AggregatedDataVariants::Type::two_keys_num64_strbinpadding;
+        }
+    }
+    case AggFastPathType::StringBin:
+    {
+        switch (tp2)
+        {
+        case AggFastPathType::Number64:
+            return AggregatedDataVariants::Type::two_keys_strbin_num64;
+        case AggFastPathType::StringBin:
+            return AggregatedDataVariants::Type::two_keys_strbin_strbin;
+        case AggFastPathType::StringBinPadding:
+            return AggregatedDataVariants::Type::serialized; // rare case
+        }
+    }
+    case AggFastPathType::StringBinPadding:
+    {
+        switch (tp2)
+        {
+        case AggFastPathType::Number64:
+            return AggregatedDataVariants::Type::two_keys_strbinpadding_num64;
+        case AggFastPathType::StringBin:
+            return AggregatedDataVariants::Type::serialized; // rare case
+        case AggFastPathType::StringBinPadding:
+            return AggregatedDataVariants::Type::two_keys_strbinpadding_strbinpadding;
+        }
+    }
+    }
+}
+
+// return AggregatedDataVariants::Type::serialized if can NOT determine fast path.
+AggregatedDataVariants::Type ChooseAggregationMethodFastPath(
+    size_t keys_size,
+    const DataTypes & types_not_null,
+    const TiDB::TiDBCollators & collators)
+{
+    std::array<AggFastPathType, 2> fast_path_types{};
+
+    if (keys_size == fast_path_types.max_size())
+    {
+        for (size_t i = 0; i < keys_size; ++i)
+        {
+            const auto & type = types_not_null[i];
+            if (type->isString())
+            {
+                if (collators.empty() || !collators[i])
+                {
+                    // use original way
+                    return AggregatedDataVariants::Type::serialized;
+                }
+                else
+                {
+                    switch (collators[i]->getCollatorType())
+                    {
+                    case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+                    case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+                    case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+                    case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+                    {
+                        fast_path_types[i] = AggFastPathType::StringBinPadding;
+                        break;
+                    }
+                    case TiDB::ITiDBCollator::CollatorType::BINARY:
+                    {
+                        fast_path_types[i] = AggFastPathType::StringBin;
+                        break;
+                    }
+                    default:
+                    {
+                        // for CI COLLATION, use original way
+                        return AggregatedDataVariants::Type::serialized;
+                    }
+                    }
+                }
+            }
+            else if (IsTypeNumber64(type))
+            {
+                fast_path_types[i] = AggFastPathType::Number64;
+            }
+            else
+            {
+                return AggregatedDataVariants::Type::serialized;
+            }
+        }
+        return ChooseAggregationMethodTwoKeys(fast_path_types.data());
+    }
+    return AggregatedDataVariants::Type::serialized;
+}
+
 AggregatedDataVariants::Type Aggregator::chooseAggregationMethod()
 {
     auto method = chooseAggregationMethodInner();
@@ -525,12 +628,40 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethodInner()
 
     /// If single string key - will use hash table with references to it. Strings itself are stored separately in Arena.
     if (params.keys_size == 1 && types_not_null[0]->isString())
-        return AggregatedDataVariants::Type::key_string;
+    {
+        if (params.collators.empty() || !params.collators[0])
+        {
+            // use original way. `Type::one_key_strbin` will generate empty column.
+            return AggregatedDataVariants::Type::key_string;
+        }
+        else
+        {
+            switch (params.collators[0]->getCollatorType())
+            {
+            case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
+            case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+            case TiDB::ITiDBCollator::CollatorType::LATIN1_BIN:
+            case TiDB::ITiDBCollator::CollatorType::ASCII_BIN:
+            {
+                return AggregatedDataVariants::Type::one_key_strbinpadding;
+            }
+            case TiDB::ITiDBCollator::CollatorType::BINARY:
+            {
+                return AggregatedDataVariants::Type::one_key_strbin;
+            }
+            default:
+            {
+                // for CI COLLATION, use original way
+                return AggregatedDataVariants::Type::key_string;
+            }
+            }
+        }
+    }
 
     if (params.keys_size == 1 && types_not_null[0]->isFixedString())
         return AggregatedDataVariants::Type::key_fixed_string;
 
-    return AggregatedDataVariants::Type::serialized;
+    return ChooseAggregationMethodFastPath(params.keys_size, types_not_null, params.collators);
 }
 
 
@@ -557,6 +688,7 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
     }
 }
 
+
 /** It's interesting - if you remove `noinline`, then gcc for some reason will inline this function, and the performance decreases (~ 10%).
   * (Probably because after the inline of this function, more internal functions no longer be inlined.)
   * Inline does not make sense, since the inner loop is entirely inside this function.
@@ -564,147 +696,52 @@ void Aggregator::createAggregateStates(AggregateDataPtr & aggregate_data) const
 template <bool collect_hit_rate, bool only_lookup, typename Method>
 void NO_INLINE Aggregator::executeImpl(
     Method & method,
-    AggregatedDataVariants & result,
+    Arena * aggregates_pool,
     AggProcessInfo & agg_process_info,
     TiDB::TiDBCollators & collators) const
 {
+    typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
+
     // 2MB as prefetch threshold, because normally server L2 cache is 1MB.
     static constexpr size_t prefetch_threshold = (2 << 20);
 #ifndef NDEBUG
-    // In debug mode, failpoint disable_agg_batch_get_key_holder can be used.
     bool disable_prefetch = (method.data.getBufferSizeInBytes() < prefetch_threshold);
     fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
-
-    bool disable_batch_get_key_holder = false;
-    fiu_do_on(FailPoints::disable_agg_batch_get_key_holder, { disable_batch_get_key_holder = true; });
-
-    if (disable_batch_get_key_holder)
-    {
-        if (disable_prefetch)
-            executeImplInner<
-                collect_hit_rate,
-                only_lookup,
-                /*enable_prefetch=*/false,
-                /*enable_agg_batch_get_key_holder=*/false>(method, result, agg_process_info, collators);
-        else
-            executeImplInner<
-                collect_hit_rate,
-                only_lookup,
-                /*enable_prefetch=*/true,
-                /*enable_agg_batch_get_key_holder=*/false>(method, result, agg_process_info, collators);
-    }
-    else
-    {
-        if (disable_prefetch)
-            executeImplInner<
-                collect_hit_rate,
-                only_lookup,
-                /*enable_prefetch=*/false,
-                /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
-        else
-            executeImplInner<
-                collect_hit_rate,
-                only_lookup,
-                /*enable_prefetch=*/true,
-                /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
-    }
 #else
     const bool disable_prefetch = (method.data.getBufferSizeInBytes() < prefetch_threshold);
-    if (disable_prefetch)
-        executeImplInner<
-            collect_hit_rate,
-            only_lookup,
-            /*enable_prefetch=*/false,
-            /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
-    else
-        executeImplInner<
-            collect_hit_rate,
-            only_lookup,
-            /*enable_prefetch=*/true,
-            /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
 #endif
-}
 
-template <
-    bool collect_hit_rate,
-    bool only_lookup,
-    bool enable_prefetch,
-    bool enable_batch_get_key_holder,
-    typename Method>
-void Aggregator::executeImplInner(
-    Method & method,
-    AggregatedDataVariants & result,
-    AggProcessInfo & agg_process_info,
-    TiDB::TiDBCollators & collators) const
-{
-    auto * aggregates_pool = result.aggregates_pool;
-    typename Method::State state(agg_process_info.key_columns, key_sizes, collators);
-
-    // For key_serialized, memory allocation and key serialization will be batch-wise.
-    // For key_string, collation decode will be batch-wise.
-    static constexpr bool batch_get_key_holder = Method::State::can_batch_get_key_holder && enable_batch_get_key_holder;
-    if constexpr (batch_get_key_holder)
+    if constexpr (Method::State::is_serialized_key)
     {
-        state.initBatchHandler(agg_process_info.start_row, agg_mini_batch);
-        result.batch_get_key_holder = true;
+        executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
     }
-    using KeyHolderType = typename std::conditional<
-        batch_get_key_holder,
-        typename Method::State::BatchKeyHolderType,
-        typename Method::State::KeyHolderType>::type;
-
-    if constexpr (Method::Data::is_string_hash_map)
+    else if constexpr (Method::Data::is_string_hash_map)
     {
         // StringHashMap doesn't support prefetch.
-        executeImplBatch<
-            collect_hit_rate,
-            only_lookup,
-            /*enable_prefetch=*/false,
-            batch_get_key_holder,
-            KeyHolderType>(method, state, aggregates_pool, agg_process_info);
+        executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
     }
     else
     {
-        executeImplBatch<collect_hit_rate, only_lookup, enable_prefetch, batch_get_key_holder, KeyHolderType>(
-            method,
-            state,
-            aggregates_pool,
-            agg_process_info);
+        if (disable_prefetch)
+            executeImplBatch<collect_hit_rate, only_lookup, false>(method, state, aggregates_pool, agg_process_info);
+        else
+            executeImplBatch<collect_hit_rate, only_lookup, true>(method, state, aggregates_pool, agg_process_info);
     }
 }
 
-template <bool only_lookup, typename Method, typename KeyHolderType>
+template <bool only_lookup, typename Method>
 std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> Aggregator::emplaceOrFindKey(
     Method & method,
     typename Method::State & state,
-    KeyHolderType & key_holder,
+    typename Method::State::Derived::KeyHolderType && key_holder,
     size_t hashval) const
 {
     try
     {
         if constexpr (only_lookup)
-            return state.template findKey(method.data, key_holder, hashval);
+            return state.template findKey(method.data, std::move(key_holder), hashval);
         else
-            return state.template emplaceKey(method.data, key_holder, hashval);
-    }
-    catch (ResizeException &)
-    {
-        return {};
-    }
-}
-
-template <bool only_lookup, typename Method, typename KeyHolderType>
-std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::ResultType> Aggregator::emplaceOrFindKey(
-    Method & method,
-    typename Method::State & state,
-    KeyHolderType & key_holder) const
-{
-    try
-    {
-        if constexpr (only_lookup)
-            return state.template findKey(method.data, key_holder);
-        else
-            return state.template emplaceKey(method.data, key_holder);
+            return state.template emplaceKey(method.data, std::move(key_holder), hashval);
     }
     catch (ResizeException &)
     {
@@ -733,44 +770,30 @@ std::optional<typename Method::template EmplaceOrFindKeyResult<only_lookup>::Res
     }
 }
 
-template <bool enable_prefetch, bool batch_get_key_holder, typename Method, typename KeyHolderType>
-ALWAYS_INLINE inline void setupKeyHolderAndHashVal(
+template <typename Method>
+ALWAYS_INLINE inline void prepareBatch(
     size_t row_idx,
-    size_t batch_size,
+    size_t end_row,
     std::vector<size_t> & hashvals,
-    std::vector<KeyHolderType> & key_holders,
+    std::vector<typename Method::State::Derived::KeyHolderType> & key_holders,
     Arena * aggregates_pool,
     std::vector<String> & sort_key_containers,
     Method & method,
     typename Method::State & state)
 {
-    key_holders.resize(batch_size);
-    if constexpr (enable_prefetch)
-        hashvals.resize(batch_size);
+    assert(hashvals.size() == key_holders.size());
 
-    for (size_t i = row_idx, j = 0; i < row_idx + batch_size; ++i, ++j)
+    for (size_t i = row_idx, j = 0; i < row_idx + hashvals.size() && i < end_row; ++i, ++j)
     {
-        if constexpr (batch_get_key_holder)
-            key_holders[j]
-                = static_cast<typename Method::State::Derived *>(&state)->getKeyHolderBatch(j, aggregates_pool);
-        else
-            key_holders[j] = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
-                i,
-                aggregates_pool,
-                sort_key_containers);
-
-        if constexpr (enable_prefetch)
-            hashvals[j] = method.data.hash(keyHolderGetKey(key_holders[j]));
+        key_holders[j] = static_cast<typename Method::State::Derived *>(&state)->getKeyHolder(
+            i,
+            aggregates_pool,
+            sort_key_containers);
+        hashvals[j] = method.data.hash(keyHolderGetKey(key_holders[j]));
     }
 }
 
-template <
-    bool collect_hit_rate,
-    bool only_lookup,
-    bool enable_prefetch,
-    bool batch_get_key_holder,
-    typename KeyHolderType,
-    typename Method>
+template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, typename Method>
 ALWAYS_INLINE void Aggregator::executeImplBatch(
     Method & method,
     typename Method::State & state,
@@ -782,13 +805,11 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
 
     /// Optimization for special case when there are no aggregate functions.
     if (params.aggregates_size == 0)
-        return handleOneBatch<
-            collect_hit_rate,
-            only_lookup,
-            enable_prefetch,
-            batch_get_key_holder,
-            /*compute_agg_data=*/false,
-            KeyHolderType>(method, state, agg_process_info, aggregates_pool);
+        return handleOneBatch<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/false>(
+            method,
+            state,
+            agg_process_info,
+            aggregates_pool);
 
     /// Optimization for special case when aggregating by 8bit key.
     if constexpr (std::is_same_v<Method, AggregatedDataVariants::AggregationMethod_key8>)
@@ -830,23 +851,14 @@ ALWAYS_INLINE void Aggregator::executeImplBatch(
     }
 
     /// Generic case.
-    return handleOneBatch<
-        collect_hit_rate,
-        only_lookup,
-        enable_prefetch,
-        batch_get_key_holder,
-        /*compute_agg_data=*/true,
-        KeyHolderType>(method, state, agg_process_info, aggregates_pool);
+    return handleOneBatch<collect_hit_rate, only_lookup, enable_prefetch, /*compute_agg_data=*/true>(
+        method,
+        state,
+        agg_process_info,
+        aggregates_pool);
 }
 
-template <
-    bool collect_hit_rate,
-    bool only_lookup,
-    bool enable_prefetch,
-    bool batch_get_key_holder,
-    bool compute_agg_data,
-    typename KeyHolderType,
-    typename Method>
+template <bool collect_hit_rate, bool only_lookup, bool enable_prefetch, bool compute_agg_data, typename Method>
 void Aggregator::handleOneBatch(
     Method & method,
     typename Method::State & state,
@@ -872,38 +884,28 @@ void Aggregator::handleOneBatch(
 
     size_t i = agg_process_info.start_row;
     const size_t end = agg_process_info.start_row + rows;
-    Arena temp_batch_pool;
 
     size_t mini_batch_size = rows;
     std::vector<size_t> hashvals;
-    std::vector<KeyHolderType> key_holders;
-    if constexpr (enable_prefetch || batch_get_key_holder)
+    std::vector<typename Method::State::KeyHolderType> key_holders;
+    if constexpr (enable_prefetch)
     {
-        // mini batch will only be used when HashTable is big(because reduce cache miss of agg data),
-        // or when need to get key batch-wise.
+        // mini batch will only be used when HashTable is big(a.k.a enable_prefetch is true),
+        // which can reduce cache miss of agg data.
         mini_batch_size = agg_mini_batch;
+        hashvals.resize(agg_mini_batch);
+        key_holders.resize(agg_mini_batch);
     }
 
     // i is the begin row index of each mini batch.
     while (i < end)
     {
-        if unlikely (i + mini_batch_size > end)
-            mini_batch_size = end - i;
-
-        if constexpr (batch_get_key_holder)
-            state.prepareNextBatch(&temp_batch_pool, mini_batch_size);
-
-        if constexpr (enable_prefetch || batch_get_key_holder)
+        if constexpr (enable_prefetch)
         {
-            setupKeyHolderAndHashVal<enable_prefetch, batch_get_key_holder>(
-                i,
-                mini_batch_size,
-                hashvals,
-                key_holders,
-                aggregates_pool,
-                sort_key_containers,
-                method,
-                state);
+            if unlikely (i + mini_batch_size > end)
+                mini_batch_size = end - i;
+
+            prepareBatch(i, end, hashvals, key_holders, aggregates_pool, sort_key_containers, method, state);
         }
 
         const auto cur_batch_end = i + mini_batch_size;
@@ -918,11 +920,8 @@ void Aggregator::handleOneBatch(
                 if likely (k + agg_prefetch_step < hashvals.size())
                     method.data.prefetch(hashvals[k + agg_prefetch_step]);
 
-                emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, key_holders[k], hashvals[k]);
-            }
-            else if constexpr (batch_get_key_holder)
-            {
-                emplace_result_holder = emplaceOrFindKey<only_lookup>(method, state, key_holders[k]);
+                emplace_result_holder
+                    = emplaceOrFindKey<only_lookup>(method, state, std::move(key_holders[k]), hashvals[k]);
             }
             else
             {
@@ -942,9 +941,13 @@ void Aggregator::handleOneBatch(
                 if constexpr (compute_agg_data)
                 {
                     if (emplace_result.isFound())
+                    {
                         aggregate_data = emplace_result.getMapped();
+                    }
                     else
+                    {
                         agg_process_info.not_found_rows.push_back(j);
+                    }
                 }
                 else
                 {
@@ -987,9 +990,6 @@ void Aggregator::handleOneBatch(
                 places[index_relative_to_start_row] = aggregate_data;
             processed_rows = j;
         }
-
-        if constexpr (batch_get_key_holder)
-            temp_batch_pool.rollback();
 
         if unlikely (!processed_rows.has_value())
             break;
@@ -1194,7 +1194,7 @@ bool Aggregator::executeOnBlockImpl(
     {                                                                      \
         executeImpl<collect_hit_rate, only_lookup>(                        \
             *ToAggregationMethodPtr(NAME, result.aggregation_method_impl), \
-            result,                                                        \
+            result.aggregates_pool,                                        \
             agg_process_info,                                              \
             params.collators);                                             \
         break;                                                             \
@@ -1301,52 +1301,24 @@ Block Aggregator::convertOneBucketToBlock(
     bool final,
     size_t bucket) const
 {
-    const bool batch_get_key_holder = data_variants.batch_get_key_holder;
-#define FILLER_DEFINE(name, skip_convert_key)                                                                \
-    auto filler_##name = [bucket, &method, arena, this, batch_get_key_holder](                               \
-                             const Sizes & key_sizes,                                                        \
-                             MutableColumns & key_columns,                                                   \
-                             AggregateColumnsData & aggregate_columns,                                       \
-                             MutableColumns & final_aggregate_columns,                                       \
-                             bool final_) {                                                                  \
-        (void)batch_get_key_holder;                                                                          \
-        using METHOD_TYPE = std::decay_t<decltype(method)>;                                                  \
-        using DATA_TYPE = std::decay_t<decltype(method.data.impls[bucket])>;                                 \
-        if constexpr (METHOD_TYPE::State::is_serialized_key && METHOD_TYPE::State::can_batch_get_key_holder) \
-        {                                                                                                    \
-            if (batch_get_key_holder)                                                                        \
-                convertToBlockImpl<METHOD_TYPE, DATA_TYPE, skip_convert_key, true>(                          \
-                    method,                                                                                  \
-                    method.data.impls[bucket],                                                               \
-                    key_sizes,                                                                               \
-                    key_columns,                                                                             \
-                    aggregate_columns,                                                                       \
-                    final_aggregate_columns,                                                                 \
-                    arena,                                                                                   \
-                    final_);                                                                                 \
-            else                                                                                             \
-                convertToBlockImpl<METHOD_TYPE, DATA_TYPE, skip_convert_key, false>(                         \
-                    method,                                                                                  \
-                    method.data.impls[bucket],                                                               \
-                    key_sizes,                                                                               \
-                    key_columns,                                                                             \
-                    aggregate_columns,                                                                       \
-                    final_aggregate_columns,                                                                 \
-                    arena,                                                                                   \
-                    final_);                                                                                 \
-        }                                                                                                    \
-        else                                                                                                 \
-        {                                                                                                    \
-            convertToBlockImpl<METHOD_TYPE, DATA_TYPE, skip_convert_key, false>(                             \
-                method,                                                                                      \
-                method.data.impls[bucket],                                                                   \
-                key_sizes,                                                                                   \
-                key_columns,                                                                                 \
-                aggregate_columns,                                                                           \
-                final_aggregate_columns,                                                                     \
-                arena,                                                                                       \
-                final_);                                                                                     \
-        }                                                                                                    \
+#define FILLER_DEFINE(name, skip_convert_key)                                \
+    auto filler_##name = [bucket, &method, arena, this](                     \
+                             const Sizes & key_sizes,                        \
+                             MutableColumns & key_columns,                   \
+                             AggregateColumnsData & aggregate_columns,       \
+                             MutableColumns & final_aggregate_columns,       \
+                             bool final_) {                                  \
+        using METHOD_TYPE = std::decay_t<decltype(method)>;                  \
+        using DATA_TYPE = std::decay_t<decltype(method.data.impls[bucket])>; \
+        convertToBlockImpl<METHOD_TYPE, DATA_TYPE, skip_convert_key>(        \
+            method,                                                          \
+            method.data.impls[bucket],                                       \
+            key_sizes,                                                       \
+            key_columns,                                                     \
+            aggregate_columns,                                               \
+            final_aggregate_columns,                                         \
+            arena,                                                           \
+            final_);                                                         \
     }
 
     FILLER_DEFINE(convert_key, false);
@@ -1389,50 +1361,22 @@ BlocksList Aggregator::convertOneBucketToBlocks(
     bool final,
     size_t bucket) const
 {
-    const auto batch_get_key_holder = data_variants.batch_get_key_holder;
-#define FILLER_DEFINE(name, skip_convert_key)                                                                        \
-    auto filler_##name = [bucket, &method, arena, this, batch_get_key_holder](                                       \
-                             const Sizes & key_sizes,                                                                \
-                             std::vector<MutableColumns> & key_columns_vec,                                          \
-                             std::vector<AggregateColumnsData> & aggregate_columns_vec,                              \
-                             std::vector<MutableColumns> & final_aggregate_columns_vec,                              \
-                             bool final_) {                                                                          \
-        (void)batch_get_key_holder;                                                                                  \
-        if constexpr (Method::State::is_serialized_key && Method::State::can_batch_get_key_holder)                   \
-        {                                                                                                            \
-            if (batch_get_key_holder)                                                                                \
-                convertToBlocksImpl<decltype(method), decltype(method.data.impls[bucket]), skip_convert_key, true>(  \
-                    method,                                                                                          \
-                    method.data.impls[bucket],                                                                       \
-                    key_sizes,                                                                                       \
-                    key_columns_vec,                                                                                 \
-                    aggregate_columns_vec,                                                                           \
-                    final_aggregate_columns_vec,                                                                     \
-                    arena,                                                                                           \
-                    final_);                                                                                         \
-            else                                                                                                     \
-                convertToBlocksImpl<decltype(method), decltype(method.data.impls[bucket]), skip_convert_key, false>( \
-                    method,                                                                                          \
-                    method.data.impls[bucket],                                                                       \
-                    key_sizes,                                                                                       \
-                    key_columns_vec,                                                                                 \
-                    aggregate_columns_vec,                                                                           \
-                    final_aggregate_columns_vec,                                                                     \
-                    arena,                                                                                           \
-                    final_);                                                                                         \
-        }                                                                                                            \
-        else                                                                                                         \
-        {                                                                                                            \
-            convertToBlocksImpl<decltype(method), decltype(method.data.impls[bucket]), skip_convert_key, false>(     \
-                method,                                                                                              \
-                method.data.impls[bucket],                                                                           \
-                key_sizes,                                                                                           \
-                key_columns_vec,                                                                                     \
-                aggregate_columns_vec,                                                                               \
-                final_aggregate_columns_vec,                                                                         \
-                arena,                                                                                               \
-                final_);                                                                                             \
-        }                                                                                                            \
+#define FILLER_DEFINE(name, skip_convert_key)                                                         \
+    auto filler_##name = [bucket, &method, arena, this](                                              \
+                             const Sizes & key_sizes,                                                 \
+                             std::vector<MutableColumns> & key_columns_vec,                           \
+                             std::vector<AggregateColumnsData> & aggregate_columns_vec,               \
+                             std::vector<MutableColumns> & final_aggregate_columns_vec,               \
+                             bool final_) {                                                           \
+        convertToBlocksImpl<decltype(method), decltype(method.data.impls[bucket]), skip_convert_key>( \
+            method,                                                                                   \
+            method.data.impls[bucket],                                                                \
+            key_sizes,                                                                                \
+            key_columns_vec,                                                                          \
+            aggregate_columns_vec,                                                                    \
+            final_aggregate_columns_vec,                                                              \
+            arena,                                                                                    \
+            final_);                                                                                  \
     };
 
     FILLER_DEFINE(convert_key, false);
@@ -1558,7 +1502,7 @@ void Aggregator::execute(const BlockInputStreamPtr & stream, AggregatedDataVaria
         src_bytes / elapsed_seconds / 1048576.0);
 }
 
-template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void Aggregator::convertToBlockImpl(
     Method & method,
     Table & data,
@@ -1578,7 +1522,7 @@ void Aggregator::convertToBlockImpl(
         raw_key_columns.push_back(column.get());
 
     if (final)
-        convertToBlockImplFinal<Method, Table, skip_convert_key, batch_deserialize_key>(
+        convertToBlockImplFinal<Method, Table, skip_convert_key>(
             method,
             data,
             key_sizes,
@@ -1586,7 +1530,7 @@ void Aggregator::convertToBlockImpl(
             final_aggregate_columns,
             arena);
     else
-        convertToBlockImplNotFinal<Method, Table, skip_convert_key, batch_deserialize_key>(
+        convertToBlockImplNotFinal<Method, Table, skip_convert_key>(
             method,
             data,
             key_sizes,
@@ -1597,7 +1541,7 @@ void Aggregator::convertToBlockImpl(
     data.clearAndShrink();
 }
 
-template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void Aggregator::convertToBlocksImpl(
     Method & method,
     Table & data,
@@ -1626,7 +1570,7 @@ void Aggregator::convertToBlocksImpl(
     }
 
     if (final)
-        convertToBlocksImplFinal<decltype(method), decltype(data), skip_convert_key, batch_deserialize_key>(
+        convertToBlocksImplFinal<decltype(method), decltype(data), skip_convert_key>(
             method,
             data,
             key_sizes,
@@ -1634,7 +1578,7 @@ void Aggregator::convertToBlocksImpl(
             final_aggregate_columns_vec,
             arena);
     else
-        convertToBlocksImplNotFinal<decltype(method), decltype(data), skip_convert_key, batch_deserialize_key>(
+        convertToBlocksImplNotFinal<decltype(method), decltype(data), skip_convert_key>(
             method,
             data,
             key_sizes,
@@ -1712,7 +1656,102 @@ inline void Aggregator::insertAggregatesIntoColumns(
         std::rethrow_exception(exception);
 }
 
-template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
+template <typename Method>
+struct AggregatorMethodInitKeyColumnHelper
+{
+    Method & method;
+    explicit AggregatorMethodInitKeyColumnHelper(Method & method_)
+        : method(method_)
+    {}
+    ALWAYS_INLINE inline void initAggKeys(size_t, std::vector<IColumn *> &) {}
+    template <typename Key>
+    ALWAYS_INLINE inline void insertKeyIntoColumns(
+        const Key & key,
+        std::vector<IColumn *> & key_columns,
+        const Sizes & sizes,
+        const TiDB::TiDBCollators & collators)
+    {
+        method.insertKeyIntoColumns(key, key_columns, sizes, collators);
+    }
+};
+
+template <typename Key1Desc, typename Key2Desc, typename TData>
+struct AggregatorMethodInitKeyColumnHelper<AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>>
+{
+    using Method = AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>;
+    size_t index{};
+    std::function<void(const StringRef &, std::vector<IColumn *> &, size_t)> insert_key_into_columns_function_ptr{};
+
+    Method & method;
+    explicit AggregatorMethodInitKeyColumnHelper(Method & method_)
+        : method(method_)
+    {}
+
+    ALWAYS_INLINE inline void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
+    {
+        index = 0;
+        if (key_columns.size() == 1)
+        {
+            Method::template initAggKeys<Key1Desc>(rows, key_columns[0]);
+            insert_key_into_columns_function_ptr
+                = AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>::insertKeyIntoColumnsOneKey;
+        }
+        else if (key_columns.size() == 2)
+        {
+            Method::template initAggKeys<Key1Desc>(rows, key_columns[0]);
+            Method::template initAggKeys<Key2Desc>(rows, key_columns[1]);
+            insert_key_into_columns_function_ptr
+                = AggregationMethodFastPathTwoKeysNoCache<Key1Desc, Key2Desc, TData>::insertKeyIntoColumnsTwoKey;
+        }
+        else
+        {
+            throw Exception("unexpected key_columns size for AggMethodFastPathTwoKey: {}", key_columns.size());
+        }
+    }
+    ALWAYS_INLINE inline void insertKeyIntoColumns(
+        const StringRef & key,
+        std::vector<IColumn *> & key_columns,
+        const Sizes &,
+        const TiDB::TiDBCollators &)
+    {
+        assert(insert_key_into_columns_function_ptr);
+        insert_key_into_columns_function_ptr(key, key_columns, index);
+        ++index;
+    }
+};
+
+template <bool bin_padding, typename TData>
+struct AggregatorMethodInitKeyColumnHelper<AggregationMethodOneKeyStringNoCache<bin_padding, TData>>
+{
+    using Method = AggregationMethodOneKeyStringNoCache<bin_padding, TData>;
+    size_t index{};
+
+    Method & method;
+    explicit AggregatorMethodInitKeyColumnHelper(Method & method_)
+        : method(method_)
+    {}
+
+    void initAggKeys(size_t rows, std::vector<IColumn *> & key_columns)
+    {
+        index = 0;
+        RUNTIME_CHECK_MSG(
+            key_columns.size() == 1,
+            "unexpected key_columns size for AggMethodOneKeyString: {}",
+            key_columns.size());
+        Method::initAggKeys(rows, key_columns[0]);
+    }
+    ALWAYS_INLINE inline void insertKeyIntoColumns(
+        const StringRef & key,
+        std::vector<IColumn *> & key_columns,
+        const Sizes &,
+        const TiDB::TiDBCollators &)
+    {
+        method.insertKeyIntoColumns(key, key_columns, index);
+        ++index;
+    }
+};
+
+template <typename Method, typename Table, bool skip_convert_key>
 void NO_INLINE Aggregator::convertToBlockImplFinal(
     Method & method,
     Table & data,
@@ -1723,6 +1762,7 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
 {
     assert(key_sizes.size() == key_columns.size());
     Sizes key_sizes_ref = key_sizes; // NOLINT
+    AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     if constexpr (!skip_convert_key)
     {
         auto shuffled_key_sizes = method.shuffleKeyColumns(key_columns, key_sizes);
@@ -1733,36 +1773,18 @@ void NO_INLINE Aggregator::convertToBlockImplFinal(
             RUNTIME_CHECK(params.key_ref_agg_func.empty());
             key_sizes_ref = *shuffled_key_sizes;
         }
+        agg_keys_helper.initAggKeys(data.size(), key_columns);
     }
-
-    PaddedPODArray<char *> key_places;
-    if constexpr (batch_deserialize_key)
-        key_places.reserve(data.size());
 
     // Doesn't prefetch agg data, because places[data.size()] is needed, which can be very large.
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         if constexpr (!skip_convert_key)
         {
-            if constexpr (batch_deserialize_key)
-            {
-                // Assume key is StringRef, because only key_serialize can be here.
-                static_assert(std::is_same_v<std::decay_t<decltype(key)>, StringRef>);
-                key_places.push_back(const_cast<char *>(key.data));
-            }
-            else
-            {
-                method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
-            }
+            agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
         }
 
         insertAggregatesIntoColumns(mapped, final_aggregate_columns, arena);
     });
-
-    if constexpr (!skip_convert_key && batch_deserialize_key)
-    {
-        if (!key_places.empty())
-            method.insertKeyIntoColumnsBatch(key_places, key_columns);
-    }
 }
 
 namespace
@@ -1781,9 +1803,28 @@ std::optional<Sizes> shuffleKeyColumnsForKeyColumnsVec(
     }
     return shuffled_key_sizes;
 }
+template <typename Method>
+std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> initAggKeysForKeyColumnsVec(
+    Method & method,
+    std::vector<std::vector<IColumn *>> & key_columns_vec,
+    size_t max_block_size,
+    size_t total_row_count)
+{
+    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<Method>>> agg_keys_helpers;
+    size_t block_row_count = max_block_size;
+    for (size_t i = 0; i < key_columns_vec.size(); ++i)
+    {
+        if (i == key_columns_vec.size() - 1 && total_row_count % block_row_count != 0)
+            /// update block_row_count for the last block
+            block_row_count = total_row_count % block_row_count;
+        agg_keys_helpers.push_back(std::make_unique<AggregatorMethodInitKeyColumnHelper<Method>>(method));
+        agg_keys_helpers.back()->initAggKeys(block_row_count, key_columns_vec[i]);
+    }
+    return agg_keys_helpers;
+}
 } // namespace
 
-template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void NO_INLINE Aggregator::convertToBlocksImplFinal(
     Method & method,
     Table & data,
@@ -1799,6 +1840,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
         assert(key_columns.size() == key_sizes.size());
     }
 #endif
+    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
     Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
     {
@@ -1808,15 +1850,12 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
             RUNTIME_CHECK(params.key_ref_agg_func.empty());
             key_sizes_ref = *shuffled_key_sizes;
         }
+        agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
     }
 
     size_t data_index = 0;
     const auto rows = data.size();
     std::unique_ptr<AggregateDataPtr[]> places(new AggregateDataPtr[rows]);
-
-    PaddedPODArray<char *> key_places;
-    if constexpr (batch_deserialize_key)
-        key_places.reserve(params.max_block_size);
 
     size_t current_bound = params.max_block_size;
     size_t key_columns_vec_index = 0;
@@ -1824,39 +1863,18 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         if constexpr (!skip_convert_key)
         {
-            if constexpr (batch_deserialize_key)
-            {
-                // Assume key is StringRef, because only key_serialize can be here.
-                static_assert(std::is_same_v<std::decay_t<decltype(key)>, StringRef>);
-                key_places.push_back(const_cast<char *>(key.data));
-            }
-            else
-            {
-                method
-                    .insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
-            }
+            agg_keys_helpers[key_columns_vec_index]
+                ->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
         }
         places[data_index] = mapped;
         ++data_index;
 
         if unlikely (data_index == current_bound)
         {
-            if constexpr (!skip_convert_key && batch_deserialize_key)
-            {
-                method.insertKeyIntoColumnsBatch(key_places, key_columns_vec[key_columns_vec_index]);
-                key_places.clear();
-            }
-
             ++key_columns_vec_index;
             current_bound += params.max_block_size;
         }
     });
-
-    if constexpr (!skip_convert_key && batch_deserialize_key)
-    {
-        if (!key_places.empty())
-            method.insertKeyIntoColumnsBatch(key_places, key_columns_vec[key_columns_vec_index]);
-    }
 
     data_index = 0;
     current_bound = params.max_block_size;
@@ -1877,7 +1895,7 @@ void NO_INLINE Aggregator::convertToBlocksImplFinal(
     }
 }
 
-template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     Method & method,
     Table & data,
@@ -1886,6 +1904,7 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
     AggregateColumnsData & aggregate_columns) const
 {
     assert(key_sizes.size() == key_columns.size());
+    AggregatorMethodInitKeyColumnHelper<Method> agg_keys_helper{method};
     Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
     {
@@ -1895,25 +1914,13 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
             RUNTIME_CHECK(params.key_ref_agg_func.empty());
             key_sizes_ref = *shuffled_key_sizes;
         }
+        agg_keys_helper.initAggKeys(data.size(), key_columns);
     }
-
-    PaddedPODArray<char *> key_places;
-    if constexpr (batch_deserialize_key)
-        key_places.reserve(data.size());
 
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
         if constexpr (!skip_convert_key)
         {
-            if constexpr (batch_deserialize_key)
-            {
-                // Assume key is StringRef, because only key_serialize can be here.
-                static_assert(std::is_same_v<std::decay_t<decltype(key)>, StringRef>);
-                key_places.push_back(const_cast<char *>(key.data));
-            }
-            else
-            {
-                method.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
-            }
+            agg_keys_helper.insertKeyIntoColumns(key, key_columns, key_sizes_ref, params.collators);
         }
 
         /// reserved, so push_back does not throw exceptions
@@ -1922,15 +1929,9 @@ void NO_INLINE Aggregator::convertToBlockImplNotFinal(
 
         mapped = nullptr;
     });
-
-    if constexpr (!skip_convert_key && batch_deserialize_key)
-    {
-        if (!key_places.empty())
-            method.insertKeyIntoColumnsBatch(key_places, key_columns);
-    }
 }
 
-template <typename Method, typename Table, bool skip_convert_key, bool batch_deserialize_key>
+template <typename Method, typename Table, bool skip_convert_key>
 void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
     Method & method,
     Table & data,
@@ -1944,6 +1945,7 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
         assert(key_sizes.size() == key_columns.size());
     }
 #endif
+    std::vector<std::unique_ptr<AggregatorMethodInitKeyColumnHelper<std::decay_t<Method>>>> agg_keys_helpers;
     Sizes key_sizes_ref = key_sizes; // NOLINT
     if constexpr (!skip_convert_key)
     {
@@ -1953,29 +1955,16 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
             RUNTIME_CHECK(params.key_ref_agg_func.empty());
             key_sizes_ref = shuffled_key_sizes ? *shuffled_key_sizes : key_sizes;
         }
+        agg_keys_helpers = initAggKeysForKeyColumnsVec(method, key_columns_vec, params.max_block_size, data.size());
     }
 
-    PaddedPODArray<char *> key_places;
-    if constexpr (batch_deserialize_key)
-        key_places.reserve(params.max_block_size);
-
     size_t data_index = 0;
-    size_t current_bound = params.max_block_size;
-    size_t key_columns_vec_index = 0;
     data.forEachValue([&](const auto & key [[maybe_unused]], auto & mapped) {
+        size_t key_columns_vec_index = data_index / params.max_block_size;
         if constexpr (!skip_convert_key)
         {
-            if constexpr (batch_deserialize_key)
-            {
-                // Assume key is StringRef, because only key_serialize can be here.
-                static_assert(std::is_same_v<std::decay_t<decltype(key)>, StringRef>);
-                key_places.push_back(const_cast<char *>(key.data));
-            }
-            else
-            {
-                method
-                    .insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
-            }
+            agg_keys_helpers[key_columns_vec_index]
+                ->insertKeyIntoColumns(key, key_columns_vec[key_columns_vec_index], key_sizes_ref, params.collators);
         }
 
         /// reserved, so push_back does not throw exceptions
@@ -1984,25 +1973,7 @@ void NO_INLINE Aggregator::convertToBlocksImplNotFinal(
 
         ++data_index;
         mapped = nullptr;
-
-        if unlikely (data_index == current_bound)
-        {
-            if constexpr (!skip_convert_key && batch_deserialize_key)
-            {
-                method.insertKeyIntoColumnsBatch(key_places, key_columns_vec[key_columns_vec_index]);
-                key_places.clear();
-            }
-
-            ++key_columns_vec_index;
-            current_bound += params.max_block_size;
-        }
     });
-
-    if constexpr (!skip_convert_key && batch_deserialize_key)
-    {
-        if (!key_places.empty())
-            method.insertKeyIntoColumnsBatch(key_places, key_columns_vec[++key_columns_vec_index]);
-    }
 }
 
 template <typename Filler>
@@ -2210,6 +2181,7 @@ BlocksList Aggregator::prepareBlocksAndFill(
     return res_list;
 }
 
+
 BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & data_variants, bool final) const
 {
     size_t rows = 1;
@@ -2251,62 +2223,33 @@ BlocksList Aggregator::prepareBlocksAndFillWithoutKey(AggregatedDataVariants & d
 BlocksList Aggregator::prepareBlocksAndFillSingleLevel(AggregatedDataVariants & data_variants, bool final) const
 {
     size_t rows = data_variants.size();
-    const bool batch_get_key_holder = data_variants.batch_get_key_holder;
-#define M(NAME, skip_convert_key)                                                                          \
-    case AggregationMethodType(NAME):                                                                      \
-    {                                                                                                      \
-        auto & tmp_method = *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl);          \
-        auto & tmp_data = ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl) -> data;     \
-        using MethodType = std::decay_t<decltype(tmp_method)>;                                             \
-        if constexpr (MethodType::State::is_serialized_key && MethodType::State::can_batch_get_key_holder) \
-        {                                                                                                  \
-            if (batch_get_key_holder)                                                                      \
-                convertToBlocksImpl<MethodType, decltype(tmp_data), skip_convert_key, true>(               \
-                    tmp_method,                                                                            \
-                    tmp_data,                                                                              \
-                    key_sizes,                                                                             \
-                    key_columns_vec,                                                                       \
-                    aggregate_columns_vec,                                                                 \
-                    final_aggregate_columns_vec,                                                           \
-                    data_variants.aggregates_pool,                                                         \
-                    final_);                                                                               \
-            else                                                                                           \
-                convertToBlocksImpl<MethodType, decltype(tmp_data), skip_convert_key, false>(              \
-                    tmp_method,                                                                            \
-                    tmp_data,                                                                              \
-                    key_sizes,                                                                             \
-                    key_columns_vec,                                                                       \
-                    aggregate_columns_vec,                                                                 \
-                    final_aggregate_columns_vec,                                                           \
-                    data_variants.aggregates_pool,                                                         \
-                    final_);                                                                               \
-        }                                                                                                  \
-        else                                                                                               \
-        {                                                                                                  \
-            convertToBlocksImpl<decltype(tmp_method), decltype(tmp_data), skip_convert_key, false>(        \
-                tmp_method,                                                                                \
-                tmp_data,                                                                                  \
-                key_sizes,                                                                                 \
-                key_columns_vec,                                                                           \
-                aggregate_columns_vec,                                                                     \
-                final_aggregate_columns_vec,                                                               \
-                data_variants.aggregates_pool,                                                             \
-                final_);                                                                                   \
-        }                                                                                                  \
-        break;                                                                                             \
+#define M(NAME, skip_convert_key)                                                                      \
+    case AggregationMethodType(NAME):                                                                  \
+    {                                                                                                  \
+        auto & tmp_method = *ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl);      \
+        auto & tmp_data = ToAggregationMethodPtr(NAME, data_variants.aggregation_method_impl) -> data; \
+        convertToBlocksImpl<decltype(tmp_method), decltype(tmp_data), skip_convert_key>(               \
+            tmp_method,                                                                                \
+            tmp_data,                                                                                  \
+            key_sizes,                                                                                 \
+            key_columns_vec,                                                                           \
+            aggregate_columns_vec,                                                                     \
+            final_aggregate_columns_vec,                                                               \
+            data_variants.aggregates_pool,                                                             \
+            final_);                                                                                   \
+        break;                                                                                         \
     }
 
 #define M_skip_convert_key(NAME) M(NAME, true)
 #define M_convert_key(NAME) M(NAME, false)
 
 #define FILLER_DEFINE(name, M_tmp)                                                                            \
-    auto filler_##name = [&data_variants, this, batch_get_key_holder](                                        \
+    auto filler_##name = [&data_variants, this](                                                              \
                              const Sizes & key_sizes,                                                         \
                              std::vector<MutableColumns> & key_columns_vec,                                   \
                              std::vector<AggregateColumnsData> & aggregate_columns_vec,                       \
                              std::vector<MutableColumns> & final_aggregate_columns_vec,                       \
                              bool final_) {                                                                   \
-        (void)batch_get_key_holder;                                                                           \
         switch (data_variants.type)                                                                           \
         {                                                                                                     \
             APPLY_FOR_VARIANTS_SINGLE_LEVEL(M_tmp)                                                            \
@@ -2495,9 +2438,6 @@ MergingBucketsPtr Aggregator::mergeAndConvertToBlocks(
             non_empty_data[i]->aggregates_pools.begin(),
             non_empty_data[i]->aggregates_pools.end());
     }
-
-    for (auto & data : non_empty_data)
-        RUNTIME_CHECK(non_empty_data[0]->batch_get_key_holder == data->batch_get_key_holder);
 
     // for single level merge, concurrency must be 1.
     size_t merge_concurrency = has_at_least_one_two_level ? std::max(max_threads, 1) : 1;
