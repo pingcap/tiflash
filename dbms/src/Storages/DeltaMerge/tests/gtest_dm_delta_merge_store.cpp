@@ -2943,7 +2943,12 @@ try
         auto table_column_defines = DMTestEnv::getDefaultColumns();
         table_column_defines->emplace_back(legacy_str_cd);
         dropDataOnDisk(getTemporaryPath());
+
+        auto tmp = STORAGE_FORMAT_CURRENT;
+        setStorageFormat(7); // set to legacy format temporary.
         store = reload(table_column_defines);
+        setStorageFormat(tmp.identifier); // Reset to current format.
+
         auto block = createBlock(legacy_str_cd, 0, 128);
         store->write(*db_context, db_context->getSettingsRef(), block);
 
