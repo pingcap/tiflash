@@ -513,7 +513,7 @@ inline size_t enlargePrefixSize(size_t prefix_size) noexcept
     static_assert((sizeof(prefix_size_look_up_table) / sizeof(UInt64)) == 7);
 
     // align_size is equal to prefix_size at the beginning
-    auto align_size = prefix_size;
+    [[maybe_unused]] const auto align_size = prefix_size;
 
     if (prefix_size < 8)
         prefix_size = prefix_size_look_up_table[prefix_size - 1];
