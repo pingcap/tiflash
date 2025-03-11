@@ -154,6 +154,22 @@ public:
         return new_dmfiles[0];
     }
 
+    static ANNQueryInfoPtr createANNQueryInfo(
+        ColumnID column_id,
+        tipb::VectorDistanceMetric metric,
+        UInt32 topk,
+        const std::vector<float> & ref_vec,
+        IndexID index_id = EmptyIndexID)
+    {
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(column_id);
+        ann_query_info->set_distance_metric(metric);
+        ann_query_info->set_top_k(topk);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32(ref_vec));
+        ann_query_info->set_index_id(index_id);
+        return ann_query_info;
+    }
+
     Context & dbContext() { return *db_context; }
 
 protected:
@@ -233,12 +249,7 @@ try
 
     // Read with exact match
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.5}));
-
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.5});
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
@@ -258,11 +269,7 @@ try
 
     // Read with approximate match
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -283,11 +290,7 @@ try
 
     // Read multiple rows
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 2, {1.0, 2.0, 3.8});
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -308,11 +311,7 @@ try
 
     // Read with MVCC filter
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
 
         auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
         bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
@@ -336,11 +335,7 @@ try
 
     // Query Top K = 0: the pack should be filtered out
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(0);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 0, {1.0, 2.0, 3.8});
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -361,11 +356,7 @@ try
 
     // Query Top K > rows
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(10);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 10, {1.0, 2.0, 3.8});
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -386,12 +377,7 @@ try
 
     // Illegal ANNQueryInfo: Ref Vector'dimension is different
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(10);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0}));
-
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 10, {1.0});
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
@@ -421,12 +407,7 @@ try
     // Illegal ANNQueryInfo: Referencing a non-existed column. This simply cause vector index not used.
     // The query will not fail, because ANNQueryInfo is passed globally in the whole read path.
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(5);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
+        const auto ann_query_info = createANNQueryInfo(5, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
@@ -446,12 +427,8 @@ try
 
     // Illegal ANNQueryInfo: Different distance metric.
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
+        const auto ann_query_info
+            = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::COSINE, 1, {1.0, 2.0, 3.8});
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
@@ -484,12 +461,16 @@ try
     // Currently the query is fine and ANNQueryInfo is discarded, because we discovered that this column
     // does not have index at all.
     {
+<<<<<<< HEAD
         auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
         ann_query_info->set_column_id(EXTRA_HANDLE_COLUMN_ID);
         ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
         ann_query_info->set_top_k(1);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+=======
+        const auto ann_query_info = createANNQueryInfo(5, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
+>>>>>>> b25fa23f95 (Storages: fix a series of data race issues (#9962))
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
                           .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
@@ -581,12 +562,8 @@ try
 
         // Read with approximate match
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(3);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+            const auto ann_query_info
+                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8}, 3);
 
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -607,12 +584,8 @@ try
 
         // Read multiple rows
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(3);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(2);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+            const auto ann_query_info
+                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 2, {1.0, 2.0, 3.8}, 3);
 
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -633,12 +606,8 @@ try
 
         // Read with MVCC filter
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(3);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+            const auto ann_query_info
+                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8}, 3);
 
             auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
@@ -666,12 +635,8 @@ try
 
         // Read with approximate match
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(4);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+            const auto ann_query_info
+                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::COSINE, 1, {1.0, 2.0, 3.8}, 4);
 
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -692,12 +657,8 @@ try
 
         // Read multiple rows
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(4);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
-            ann_query_info->set_top_k(2);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+            const auto ann_query_info
+                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::COSINE, 2, {1.0, 2.0, 3.8}, 4);
 
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -718,12 +679,8 @@ try
 
         // Read with MVCC filter
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(4);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+            const auto ann_query_info
+                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::COSINE, 1, {1.0, 2.0, 3.8}, 4);
 
             auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
@@ -752,11 +709,8 @@ try
 
         // Read with approximate match
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+            const auto ann_query_info
+                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
 
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -777,11 +731,8 @@ try
 
         // Read multiple rows
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(2);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+            const auto ann_query_info
+                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 2, {1.0, 2.0, 3.8});
 
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -802,11 +753,8 @@ try
 
         // Read with MVCC filter
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+            const auto ann_query_info
+                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
 
             auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
@@ -869,11 +817,7 @@ try
     dm_file = buildIndex(*vector_index);
 
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(4);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.5}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 4, {1.0, 2.0, 3.5});
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -937,11 +881,7 @@ try
 
     // Pack #0 is filtered out according to VecIndex
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({5.0, 5.0, 5.5}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {5.0, 5.0, 5.5});
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -962,11 +902,7 @@ try
 
     // Pack #1 is filtered out according to VecIndex
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.0}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.0});
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -987,11 +923,7 @@ try
 
     // Both packs are reserved
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({0.0, 0.0, 0.0}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 2, {0.0, 0.0, 0.0});
 
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
@@ -1012,11 +944,7 @@ try
 
     // Pack Filter + MVCC (the matching row #5 is marked as filtered out by MVCC)
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({0.0, 0.0, 0.0}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 2, {0.0, 0.0, 0.0});
 
         auto bitmap_filter = std::make_shared<BitmapFilter>(6, true);
         bitmap_filter->set(/* start */ 5, /* limit */ 1, false);
@@ -1080,11 +1008,7 @@ try
 
     // Pack Filter using RowKeyRange
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({8.0}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {8.0});
 
         // This row key range will cause pack#0 and pack#1 reserved, and pack#2 filtered out.
         auto row_key_ranges = RowKeyRanges{RowKeyRange::fromHandleRange(HandleRange(0, 5))};
@@ -1105,9 +1029,13 @@ try
             }));
 
         // TopK=4
-        ann_query_info->set_top_k(4);
+        const auto ann_query_info2 = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 4, {8.0});
         builder = DMFileBlockInputStreamBuilder(dbContext());
+<<<<<<< HEAD
         stream = builder.setRSOperator(wrapWithANNQueryInfo(nullptr, ann_query_info))
+=======
+        stream = builder.setAnnQureyInfo(ann_query_info2)
+>>>>>>> b25fa23f95 (Storages: fix a series of data race issues (#9962))
                      .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
                      .tryBuildWithVectorIndex(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
@@ -1121,11 +1049,7 @@ try
 
     // Pack Filter + Bitmap Filter
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(3);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({8.0}));
+        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 3, {8.0});
 
         // This row key range will cause pack#0 and pack#1 reserved, and pack#2 filtered out.
         auto row_key_ranges = RowKeyRanges{RowKeyRange::fromHandleRange(HandleRange(0, 5))};
