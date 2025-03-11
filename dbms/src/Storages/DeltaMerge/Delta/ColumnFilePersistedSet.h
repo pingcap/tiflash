@@ -49,7 +49,7 @@ class ColumnFilePersistedSet
     , private boost::noncopyable
 {
 private:
-    PageIdU64 metadata_id;
+    const PageIdU64 metadata_id;
     ColumnFilePersisteds persisted_files;
     // TODO: check the proper memory_order when use this atomic variable
     std::atomic<size_t> persisted_files_count = 0;
