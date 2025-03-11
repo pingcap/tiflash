@@ -150,9 +150,12 @@ void filterArraysImplGeneric(
                 {
                     while (mask)
                     {
+                        // 100011111000 -> index: 3, length: 5, mask: 100000000000
                         size_t index = std::countr_zero(mask);
-                        copy_chunk(offsets_pos + index, 1);
-                        mask &= mask - 1;
+                        size_t length = std::countr_one(mask >> index);
+                        copy_chunk(offsets_pos + index, length);
+                        mask >>= (index + length);
+                        mask <<= (index + length);
                     }
                 }
             }
