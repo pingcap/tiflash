@@ -231,6 +231,7 @@ public:
 
     static void shutdown()
     {
+        // wait for all tasks done
         S3FileCachePool::shutdown();
         global_file_cache_instance = nullptr;
     }

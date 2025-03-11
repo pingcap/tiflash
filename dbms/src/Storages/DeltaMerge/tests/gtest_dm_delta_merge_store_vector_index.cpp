@@ -939,7 +939,7 @@ try
             });
             new_table_info_with_vector_index.index_infos.emplace_back(index);
         }
-        // apply local index change, shuold
+        // apply local index change, should
         // - create the local index
         // - generate the background tasks for building index on stable and delta
         store->applyLocalIndexChange(new_table_info_with_vector_index);
