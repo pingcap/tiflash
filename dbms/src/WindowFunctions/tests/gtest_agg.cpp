@@ -501,4 +501,35 @@ try
 }
 CATCH
 
+TEST_F(WindowAggFuncTest, issue9868)
+try
+{
+    MockWindowFrame mock_frame;
+    mock_frame.type = tipb::WindowFrameType::Ranges;
+    mock_frame.start = buildRangeFrameBound(
+        tipb::WindowBoundType::Preceding,
+        tipb::RangeCmpDataType::Int,
+        ORDER_COL_NAME,
+        false,
+        static_cast<Int64>(1));
+    mock_frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::CurrentRow, false, 0);
+
+    std::vector<std::optional<Int64>> res{3, 1, 3,  23, 23, 23, 23, 23, 6, 6, 7, 4,  24, 24, 24, 24, 22, 3, 4,
+                                          2, 6, 20, 20, 20, 18, 14, 14, 8, 8, 8, 14, 11, 14, 14, 14, 4,  5};
+    auto partition_col = toVec<Int64>(/*partition*/ {0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2,
+                                                     3, 4, 4, 4, 4, 4, 4, 4, 5, 5, 6, 6, 6, 6, 6, 6, 7, 8});
+    auto order_col = toVec<Int64>(/*order*/ {0, 0, 1, 2, 2, 2, 2, 2, 4, 4, 5, 6, 7, 7, 7, 7, 8, 9, 0,
+                                             0, 0, 1, 1, 1, 2, 3, 3, 0, 0, 0, 1, 2, 3, 3, 3, 0, 0});
+    auto val_col = toVec<Int64>(/*value*/ {3, 1, 2, 4, 8, 5, 3, 1, 1, 5, 1, 3, 5, 9, 5, 2, 1, 2, 4,
+                                           2, 6, 7, 4, 3, 4, 6, 4, 2, 6, 8, 6, 5, 4, 3, 2, 4, 5});
+
+    executeFunctionAndAssert(
+        toNullableVec<Int64>(res),
+        Sum(value_col),
+        {partition_col, order_col, val_col},
+        mock_frame,
+        false);
+}
+CATCH
+
 } // namespace DB::tests
