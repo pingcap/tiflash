@@ -179,14 +179,40 @@ inline void filterImplAligned(
     while (filt_pos < filt_end_aligned)
     {
         UInt64 mask = ToBits64(filt_pos);
-        while (mask)
+        if likely (0 != mask)
         {
-            // 100011111000 -> index: 3, length: 5, mask: 100000000000
-            size_t index = std::countr_zero(mask);
-            size_t length = std::countr_one(mask >> index);
-            res_data.insert(data_pos + index, data_pos + index + length);
-            mask &= MASKS[index + length];
+            if (const UInt8 prefix_to_copy = prefixToCopy(mask); 0xFF != prefix_to_copy)
+            {
+                res_data.insert(data_pos, data_pos + prefix_to_copy);
+            }
+            else
+            {
+                if (const UInt8 suffix_to_copy = suffixToCopy(mask); 0xFF != suffix_to_copy)
+                {
+                    res_data.insert(data_pos + FILTER_SIMD_BYTES - suffix_to_copy, data_pos + FILTER_SIMD_BYTES);
+                }
+                else
+                {
+                    while (mask)
+                    {
+                        size_t index = std::countr_zero(mask);
+                        res_data.push_back(data_pos[index]);
+                        mask &= mask - 1;
+                    }
+                }
+            }
         }
+        // There is an alternative implementation which is similar to the one in filterArraysImplGeneric.
+        // But according to the micro benchmark, the below implementation is slower.
+        // So we choose to still use the above implementation.
+        // while (mask)
+        // {
+        //     // 100011111000 -> index: 3, length: 5, mask: 100000000000
+        //     size_t index = std::countr_zero(mask);
+        //     size_t length = std::countr_one(mask >> index);
+        //     res_data.insert(data_pos + index, data_pos + index + length);
+        //     mask &= MASKS[index + length];
+        // }
 
         filt_pos += FILTER_SIMD_BYTES;
         data_pos += FILTER_SIMD_BYTES;
