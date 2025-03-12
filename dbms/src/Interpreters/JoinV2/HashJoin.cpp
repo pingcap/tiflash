@@ -561,7 +561,7 @@ Block HashJoin::probeBlock(JoinProbeContext & context, size_t stream_index)
         row_layout);
 
     auto & wd = probe_workers_data[stream_index];
-    Block res = join_probe_helper->joinProbeBlock(context, wd);
+    Block res = join_probe_helper->probe(context, wd);
     if (context.isCurrentProbeFinished())
         wd.probe_handle_rows += context.rows;
     return res;

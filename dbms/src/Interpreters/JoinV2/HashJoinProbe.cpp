@@ -115,44 +115,19 @@ void JoinProbeContext::prepareForHashProbe(
 
 JoinProbeBlockHelper::JoinProbeBlockHelper(const HashJoin * join, bool late_materialization)
     : join(join)
-    , late_materialization(late_materialization)
     , kind(join->kind)
     , settings(join->settings)
     , pointer_table(join->pointer_table)
     , row_layout(join->row_layout)
 {
-#define CALL3(KeyGetter, JoinType, tagged_pointer, has_other_condition, late_materialization) \
-    {                                                                                         \
-        if (pointer_table.enableProbePrefetch())                                              \
-        {                                                                                     \
-            func_ptr_has_null = &JoinProbeBlockHelper::joinProbeBlock##JoinType##Prefetch<    \
-                KeyGetter,                                                                    \
-                true,                                                                         \
-                tagged_pointer,                                                               \
-                has_other_condition,                                                          \
-                late_materialization>;                                                        \
-            func_ptr_no_null = &JoinProbeBlockHelper::joinProbeBlock##JoinType##Prefetch<     \
-                KeyGetter,                                                                    \
-                false,                                                                        \
-                tagged_pointer,                                                               \
-                has_other_condition,                                                          \
-                late_materialization>;                                                        \
-        }                                                                                     \
-        else                                                                                  \
-        {                                                                                     \
-            func_ptr_has_null = &JoinProbeBlockHelper::joinProbeBlock##JoinType<              \
-                KeyGetter,                                                                    \
-                true,                                                                         \
-                tagged_pointer,                                                               \
-                has_other_condition,                                                          \
-                late_materialization>;                                                        \
-            func_ptr_no_null = &JoinProbeBlockHelper::joinProbeBlock##JoinType<               \
-                KeyGetter,                                                                    \
-                false,                                                                        \
-                tagged_pointer,                                                               \
-                has_other_condition,                                                          \
-                late_materialization>;                                                        \
-        }                                                                                     \
+#define CALL3(KeyGetter, JoinType, tagged_pointer, has_other_condition, late_materialization)                       \
+    {                                                                                                               \
+        func_ptr_has_null                                                                                           \
+            = &JoinProbeBlockHelper::                                                                               \
+                  probeImpl<KeyGetter, JoinType, true, tagged_pointer, has_other_condition, late_materialization>;  \
+        func_ptr_no_null                                                                                            \
+            = &JoinProbeBlockHelper::                                                                               \
+                  probeImpl<KeyGetter, JoinType, false, tagged_pointer, has_other_condition, late_materialization>; \
     }
 
 #define CALL2(KeyGetter, JoinType, tagged_pointer)                      \
@@ -217,23 +192,16 @@ JoinProbeBlockHelper::JoinProbeBlockHelper(const HashJoin * join, bool late_mate
 #undef CALL3
 }
 
-Block JoinProbeBlockHelper::joinProbeBlock(JoinProbeContext & context, JoinProbeWorkerData & wd)
+Block JoinProbeBlockHelper::probe(JoinProbeContext & context, JoinProbeWorkerData & wd)
 {
-    if (join->has_other_condition)
-    {
-        if (late_materialization)
-            return joinProbeBlockImpl<true, true>(context, wd);
-        else
-            return joinProbeBlockImpl<true, false>(context, wd);
-    }
+    if (context.null_map)
+        return (this->*func_ptr_has_null)(context, wd);
     else
-    {
-        return joinProbeBlockImpl<false, false>(context, wd);
-    }
+        return (this->*func_ptr_no_null)(context, wd);
 }
 
-template <bool has_other_condition, bool late_materialization>
-Block JoinProbeBlockHelper::joinProbeBlockImpl(JoinProbeContext & context, JoinProbeWorkerData & wd)
+JOIN_PROBE_TEMPLATE
+Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd)
 {
     static_assert(has_other_condition || !late_materialization);
 
@@ -284,10 +252,19 @@ Block JoinProbeBlockHelper::joinProbeBlockImpl(JoinProbeContext & context, JoinP
     }
 
     Stopwatch watch;
-    if (context.null_map)
-        (this->*func_ptr_has_null)(context, wd, added_columns);
+    if (pointer_table.enableProbePrefetch())
+        probeFillColumnsPrefetch<
+            KeyGetter,
+            kind,
+            has_null_map,
+            tagged_pointer,
+            has_other_condition,
+            late_materialization>(context, wd, added_columns);
     else
-        (this->*func_ptr_no_null)(context, wd, added_columns);
+        probeFillColumns<KeyGetter, kind, has_null_map, tagged_pointer, has_other_condition, late_materialization>(
+            context,
+            wd,
+            added_columns);
 
     wd.probe_hash_table_time += watch.elapsedFromLastTime();
 
@@ -352,7 +329,7 @@ Block JoinProbeBlockHelper::joinProbeBlockImpl(JoinProbeContext & context, JoinP
 }
 
 JOIN_PROBE_TEMPLATE
-void NO_INLINE JoinProbeBlockHelper::joinProbeBlockInner(
+void JoinProbeBlockHelper::probeFillColumns(
     JoinProbeContext & context,
     JoinProbeWorkerData & wd,
     MutableColumns & added_columns)
@@ -437,7 +414,7 @@ void NO_INLINE JoinProbeBlockHelper::joinProbeBlockInner(
 }
 
 JOIN_PROBE_TEMPLATE
-void NO_INLINE JoinProbeBlockHelper::joinProbeBlockInnerPrefetch(
+void JoinProbeBlockHelper::probeFillColumnsPrefetch(
     JoinProbeContext & context,
     JoinProbeWorkerData & wd,
     MutableColumns & added_columns)
@@ -581,16 +558,6 @@ void NO_INLINE JoinProbeBlockHelper::joinProbeBlockInnerPrefetch(
     context.prefetch_iter = k;
     wd.collision += collision;
 }
-
-JOIN_PROBE_TEMPLATE
-void NO_INLINE
-JoinProbeBlockHelper::joinProbeBlockLeftOuter(JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &)
-{}
-
-JOIN_PROBE_TEMPLATE
-void NO_INLINE
-JoinProbeBlockHelper::joinProbeBlockLeftOuterPrefetch(JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &)
-{}
 
 template <bool late_materialization>
 Block JoinProbeBlockHelper::handleOtherConditions(JoinProbeContext & context, JoinProbeWorkerData & wd)

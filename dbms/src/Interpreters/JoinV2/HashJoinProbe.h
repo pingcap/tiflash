@@ -130,6 +130,7 @@ struct ProbePrefetchState
 #define JOIN_PROBE_TEMPLATE       \
     template <                    \
         typename KeyGetter,       \
+        ASTTableJoin::Kind kind,  \
         bool has_null_map,        \
         bool tagged_pointer,      \
         bool has_other_condition, \
@@ -141,27 +142,16 @@ class JoinProbeBlockHelper
 public:
     JoinProbeBlockHelper(const HashJoin * join, bool late_materialization);
 
-    Block joinProbeBlock(JoinProbeContext & context, JoinProbeWorkerData & wd);
+    Block probe(JoinProbeContext & context, JoinProbeWorkerData & wd);
 
 private:
-    template <bool has_other_condition, bool late_materialization>
-    Block joinProbeBlockImpl(JoinProbeContext & context, JoinProbeWorkerData & wd);
+    JOIN_PROBE_TEMPLATE
+    Block probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd);
 
     JOIN_PROBE_TEMPLATE
-    void NO_INLINE
-    joinProbeBlockInner(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+    void probeFillColumns(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
     JOIN_PROBE_TEMPLATE
-    void NO_INLINE
-    joinProbeBlockInnerPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
-
-    JOIN_PROBE_TEMPLATE
-    void NO_INLINE
-    joinProbeBlockLeftOuter(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
-    JOIN_PROBE_TEMPLATE
-    void NO_INLINE joinProbeBlockLeftOuterPrefetch(
-        JoinProbeContext & context,
-        JoinProbeWorkerData & wd,
-        MutableColumns & added_columns);
+    void probeFillColumnsPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
 
     template <typename KeyGetter>
     void ALWAYS_INLINE initPrefetchStates(JoinProbeContext & context)
@@ -294,11 +284,10 @@ private:
     Block handleOtherConditions(JoinProbeContext & context, JoinProbeWorkerData & wd);
 
 private:
-    using FuncType = void (JoinProbeBlockHelper::*)(JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &);
+    using FuncType = Block (JoinProbeBlockHelper::*)(JoinProbeContext &, JoinProbeWorkerData &);
     FuncType func_ptr_has_null = nullptr;
     FuncType func_ptr_no_null = nullptr;
     const HashJoin * join;
-    const bool late_materialization;
     const ASTTableJoin::Kind kind;
     const HashJoinSettings & settings;
     const HashJoinPointerTable & pointer_table;
