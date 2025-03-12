@@ -908,6 +908,27 @@ try
     server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds = 0;
     // Use another call to cancel
     FastAddPeer(&server, region_id, 2333);
+    eventuallyPredicate([&]() {
+        auto ptr = fap_context->getOrRestoreCheckpointIngestInfo(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333);
+        return ptr == nullptr
+            && !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
+
+    {
+        CheckpointIngestInfo::forciblyClean(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            false,
+            CheckpointIngestInfo::CleanReason::ProxyFallback);
+    }
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
     LOG_INFO(log, "Try another snapshot");
     proxy_instance->snapshot(
         kvs,
@@ -991,7 +1012,6 @@ try
     ASSERT_EQ(result2.get().status, FastAddPeerStatus::Ok);
 }
 CATCH
-
 
 TEST_F(RegionKVStoreTestFAP, EmptySegment)
 try
