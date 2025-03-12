@@ -2969,11 +2969,26 @@ try
         // Mock that after restart, the data type has been changed to new serialize. But still can read old
         // serialized format data.
         auto table_column_defines = DMTestEnv::getDefaultColumns();
-        table_column_defines->emplace_back(str_cd);
+        table_column_defines->emplace_back(legacy_str_cd);
         store = reload(table_column_defines);
+
+        // Verify that the string column with old data type name will be automatically
+        // converted into new serialized format.
+        bool legacy_str_is_converted = false;
+        auto store_cds = *store->getStoreColumns();
+        for (const auto & cd : store_cds)
+        {
+            if (cd.id == legacy_str_cd.id)
+            {
+                ASSERT_EQ(cd.type->getName(), str_cd.type->getName());
+                legacy_str_is_converted = true;
+            }
+        }
+        ASSERT_TRUE(legacy_str_is_converted);
     }
 
     {
+        // Still can read old serialized format data
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
