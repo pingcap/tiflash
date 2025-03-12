@@ -140,6 +140,9 @@ void filterArraysImplGeneric(
             size_t index = std::countr_zero(mask);
             size_t length = std::countr_one(mask >> index);
             copy_chunk(offsets_pos + index, length);
+            // bitshifts are undefined for 64, so we need to check if we are at the end
+            if (index + length == FILTER_SIMD_BYTES)
+                break;
             mask >>= (index + length);
             mask <<= (index + length);
         }
@@ -243,6 +246,9 @@ inline void filterImplAligned(
             size_t index = std::countr_zero(mask);
             size_t length = std::countr_one(mask >> index);
             res_data.insert(data_pos + index, data_pos + index + length);
+            // bitshifts are undefined for 64, so we need to check if we are at the end
+            if (index + length == FILTER_SIMD_BYTES)
+                break;
             mask >>= (index + length);
             mask <<= (index + length);
         }
