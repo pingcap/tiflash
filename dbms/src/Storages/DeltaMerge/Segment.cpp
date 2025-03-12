@@ -66,6 +66,7 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
+#include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
@@ -490,11 +491,21 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         // The map is used to build cache.
         std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
         SegmentMetaInfos segment_infos;
+        ReadBufferFromRandomAccessFilePtr reusable_buf = nullptr;
+        size_t total_processed_segments = 0;
+        PS::V3::S3PageReader::ReuseStatAgg reused_agg;
+        // TODO If the regions are added in a slower rate, the cache may not be reused even if the TiFlash region replicas are always added in one table as a whole.
+        // This is because later added regions could use later checkpoints. So, there could be another optimization to avoid generating the cache.
         while (current_segment_id != 0)
         {
             if (cancel_handle->isCanceled())
             {
-                LOG_INFO(log, "FAP is canceled when building segments, built={}", end_key_and_segment_ids.size());
+                LOG_INFO(
+                    log,
+                    "FAP is canceled when building segments, built={}, total_processed_segments={} reused_agg={}",
+                    end_key_and_segment_ids.size(),
+                    total_processed_segments,
+                    reused_agg.toString());
                 // FAP task would be cleaned in FastAddPeerImplWrite. So returning empty result is OK.
                 return std::nullopt;
             }
@@ -502,7 +513,9 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             auto target_id = UniversalPageIdFormat::toFullPageId(
                 UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id),
                 current_segment_id);
-            auto page = checkpoint_info->temp_ps->read(target_id, nullptr, {}, false);
+            PS::V3::S3PageReader::ReuseStat reason = PS::V3::S3PageReader::ReuseStat::Reused;
+            auto page = checkpoint_info->temp_ps->read(target_id, nullptr, {}, false, reusable_buf, reason);
+            reused_agg.observe(reason);
             if unlikely (!page.isValid())
             {
                 // After #7642, DELTA_MERGE_FIRST_SEGMENT_ID may not exist, however, such checkpoint won't be selected.
@@ -528,12 +541,20 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             {
                 segment_infos.emplace_back(segment_info);
             }
-            // if not build cache, stop as early as possible.
-            if (is_cache_ready && segment_info.range.end.value->compare(*target_range.end.value) >= 0)
+            if (segment_info.range.end.value->compare(*target_range.end.value) >= 0)
             {
-                break;
+                // if not build cache, stop as early as possible.
+                if (is_cache_ready)
+                    break;
             }
+            total_processed_segments++;
         }
+        LOG_INFO(
+            log,
+            "Finish building segments, infos_size={} total_processed_segments={} reused_agg={}",
+            segment_infos.size(),
+            total_processed_segments,
+            reused_agg.toString());
         return std::make_pair(end_key_and_segment_ids, segment_infos);
     };
 

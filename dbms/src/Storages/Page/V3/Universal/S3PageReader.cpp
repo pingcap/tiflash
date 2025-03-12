@@ -27,6 +27,7 @@ extern const Event S3PageReaderReusedFile;
 extern const Event S3PageReaderNotReusedFile;
 extern const Event S3PageReaderNotReusedFileReadback;
 extern const Event S3PageReaderNotReusedFileChangeFile;
+extern const Event S3PageReaderRead;
 } // namespace ProfileEvents
 
 namespace DB::PS::V3
@@ -36,7 +37,7 @@ Page S3PageReader::read(const UniversalPageIdAndEntry & page_id_and_entry)
     return std::get<0>(readFromS3File(page_id_and_entry, nullptr, DBMS_DEFAULT_BUFFER_SIZE));
 }
 
-std::tuple<Page, ReadBufferFromRandomAccessFilePtr> S3PageReader::readFromS3File(
+std::tuple<Page, ReadBufferFromRandomAccessFilePtr, S3PageReader::ReuseStat> S3PageReader::readFromS3File(
     const UniversalPageIdAndEntry & page_id_and_entry,
     ReadBufferFromRandomAccessFilePtr file_buf,
     size_t prefetch_size)
@@ -51,8 +52,10 @@ std::tuple<Page, ReadBufferFromRandomAccessFilePtr> S3PageReader::readFromS3File
     const auto remote_fname
         = remote_fname_view.isLockFile() ? remote_fname_view.asDataFile().toFullKey() : data_file_id;
 
+    ProfileEvents::increment(ProfileEvents::S3PageReaderRead, 1);
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
     ReadBufferFromRandomAccessFilePtr read_buff;
+    ReuseStat unreused_reason = ReuseStat::Reused;
     if (file_buf == nullptr || file_buf->getPositionInFile() < 0
         || location.offset_in_file < static_cast<size_t>(file_buf->getPositionInFile())
         // note that S3RandomAccessFile will prepand the bucket name as prefix, we should
@@ -61,10 +64,24 @@ std::tuple<Page, ReadBufferFromRandomAccessFilePtr> S3PageReader::readFromS3File
     {
         if (file_buf != nullptr)
         {
-            if (location.offset_in_file < static_cast<size_t>(file_buf->getPositionInFile()))
-                ProfileEvents::increment(ProfileEvents::S3PageReaderNotReusedFileReadback, 1);
-            else if (remote_fname != file_buf->getInitialFileName())
+            if (remote_fname != file_buf->getInitialFileName())
+            {
+                unreused_reason = ReuseStat::NewFile;
                 ProfileEvents::increment(ProfileEvents::S3PageReaderNotReusedFileChangeFile, 1);
+            }
+            else if (file_buf->getPositionInFile() < 0)
+            {
+                unreused_reason = ReuseStat::NegFilePos;
+            }
+            else if (location.offset_in_file < static_cast<size_t>(file_buf->getPositionInFile()))
+            {
+                unreused_reason = ReuseStat::ReadBack;
+                ProfileEvents::increment(ProfileEvents::S3PageReaderNotReusedFileReadback, 1);
+            }
+        }
+        else
+        {
+            unreused_reason = ReuseStat::BuffIsNull;
         }
         S3::S3RandomAccessFilePtr s3_remote_file;
         ProfileEvents::increment(ProfileEvents::S3PageReaderNotReusedFile, 1);
@@ -121,7 +138,7 @@ std::tuple<Page, ReadBufferFromRandomAccessFilePtr> S3PageReader::readFromS3File
         const auto offset = page_entry.field_offsets[index].first;
         page.field_offsets.emplace(index, offset);
     }
-    return std::make_tuple(page, read_buff);
+    return std::make_tuple(page, read_buff, unreused_reason);
 }
 
 
