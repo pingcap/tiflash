@@ -1328,7 +1328,7 @@ void WindowTransformAction::writeBatchResult()
         IColumn * result_column = block.output_columns[ws.idx].get();
         const auto * agg_func = ws.aggregate_function.get();
         auto * buf = ws.aggregate_function_state.data();
-        agg_func->insertBatchResultInto(buf, *result_column, insert_row_num, nullptr);
+        agg_func->batchInsertSameResultInto(buf, *result_column, insert_row_num, nullptr);
     }
 
     current_row = tmp_row;

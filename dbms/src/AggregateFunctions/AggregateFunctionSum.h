@@ -449,7 +449,7 @@ public:
             static_cast<ColumnVector<TResult> &>(to).getData().push_back(this->data(place).get());
     }
 
-    void insertBatchResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
     {
         if constexpr (IsDecimal<TResult>)
         {

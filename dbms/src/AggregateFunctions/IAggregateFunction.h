@@ -120,7 +120,7 @@ public:
     virtual void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const = 0;
 
     /// Inserts batch results into a column
-    virtual void insertBatchResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena * arena)
+    virtual void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena * arena)
         const
         = 0;
 
@@ -389,9 +389,9 @@ public:
         throw Exception("decrease function is not implemented yet");
     }
 
-    void insertBatchResultInto(ConstAggregateDataPtr __restrict, IColumn &, size_t, Arena *) const override
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict, IColumn &, size_t, Arena *) const override
     {
-        throw Exception("insertBatchResultInto function is not implemented yet");
+        throw Exception("batchInsertSameResultInto function is not implemented yet");
     }
 
     void reset(AggregateDataPtr __restrict) const override { throw Exception("reset function is not implemented yet"); }

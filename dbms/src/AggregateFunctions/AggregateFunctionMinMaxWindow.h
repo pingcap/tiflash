@@ -279,7 +279,7 @@ struct AggregateFunctionMinDataForWindow : Data
 
     void insertResultInto(IColumn & to) const { Data::insertMinResultInto(to); }
 
-    void insertBatchResultInto(IColumn & to, size_t num) const { Data::insertBatchMinResultInto(to, num); }
+    void batchInsertSameResultInto(IColumn & to, size_t num) const { Data::insertBatchMinResultInto(to, num); }
 
     static const char * name() { return "min_for_window"; }
 };
@@ -298,7 +298,7 @@ struct AggregateFunctionMaxDataForWindow : Data
 
     void insertResultInto(IColumn & to) const { Data::insertMaxResultInto(to); }
 
-    void insertBatchResultInto(IColumn & to, size_t num) const { Data::insertBatchMaxResultInto(to, num); }
+    void batchInsertSameResultInto(IColumn & to, size_t num) const { Data::insertBatchMaxResultInto(to, num); }
 
     static const char * name() { return "max_for_window"; }
 };

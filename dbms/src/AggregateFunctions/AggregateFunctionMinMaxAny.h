@@ -61,7 +61,7 @@ public:
             static_cast<ColumnType &>(to).insertDefault();
     }
 
-    void insertBatchResultInto(IColumn & to, size_t num) const
+    void batchInsertSameResultInto(IColumn & to, size_t num) const
     {
         if (has())
         {
@@ -253,7 +253,7 @@ public:
             static_cast<ColumnString &>(to).insertDefault();
     }
 
-    void insertBatchResultInto(IColumn & to, size_t num) const
+    void batchInsertSameResultInto(IColumn & to, size_t num) const
     {
         if (has())
         {
@@ -476,7 +476,7 @@ public:
             to.insertDefault();
     }
 
-    void insertBatchResultInto(IColumn & to, size_t num) const
+    void batchInsertSameResultInto(IColumn & to, size_t num) const
     {
         if (has())
         {
@@ -826,9 +826,9 @@ public:
         this->data(place).insertResultInto(to);
     }
 
-    void insertBatchResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
     {
-        this->data(place).insertBatchResultInto(to, num);
+        this->data(place).batchInsertSameResultInto(to, num);
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
