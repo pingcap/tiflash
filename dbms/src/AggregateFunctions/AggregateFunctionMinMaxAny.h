@@ -49,6 +49,8 @@ protected:
     using ColumnType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
 
 public:
+    static bool needArena() { return false; }
+
     bool has() const { return has_value; }
 
     void setCollators(const TiDB::TiDBCollators &) {}
@@ -239,6 +241,8 @@ protected:
     char small_data[MAX_SMALL_STRING_SIZE]{}; /// Including the terminating zero.
 
 public:
+    static bool needArena() { return true; }
+
     bool has() const { return size >= 0; }
 
     const char * getData() const { return size <= MAX_SMALL_STRING_SIZE ? small_data : large_data; }
@@ -464,6 +468,8 @@ protected:
     Field value;
 
 public:
+    static bool needArena() { return false; }
+
     bool has() const { return !value.isNull(); }
 
     void setCollators(const TiDB::TiDBCollators &) {}
@@ -832,6 +838,8 @@ public:
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
+
+    bool allocatesMemoryInArena() const override { return Data::needArena(); }
 };
 
 } // namespace DB

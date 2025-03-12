@@ -70,6 +70,8 @@ private:
     }
 
 public:
+    static bool needArena() { return false; }
+
     void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
     void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
@@ -167,6 +169,8 @@ private:
     }
 
 public:
+    static bool needArena() { return false; }
+
     void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
     void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }
@@ -234,6 +238,8 @@ private:
     }
 
 public:
+    static bool needArena() { return false; }
+
     void insertMaxResultInto(IColumn & to) const { insertMinOrMaxResultInto<false>(to); }
 
     void insertMinResultInto(IColumn & to) const { insertMinOrMaxResultInto<true>(to); }

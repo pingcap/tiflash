@@ -59,6 +59,26 @@ extern DMFilePtr writeIntoNewDMFile(
 namespace DB::DM::tests
 {
 
+namespace
+{
+
+// a + b
+bool isSumOverflow(Int64 a, Int64 b)
+{
+    return (b > 0 && a > std::numeric_limits<Int64>::max() - b) || (b < 0 && a < std::numeric_limits<Int64>::min() - b);
+}
+
+// a - b
+auto isDiffOverflow(Int64 a, Int64 b)
+{
+    assert(a > b);
+    if (b < 0)
+        return a > std::numeric_limits<Int64>::max() + b;
+    else
+        return false;
+}
+} // namespace
+
 void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
 {
     {
@@ -302,9 +322,24 @@ void SegmentTestBasic::mergeSegment(const PageIdU64s & segments_id, bool check_r
         operation_statistics["mergeTwo"]++;
 }
 
-void SegmentTestBasic::mergeSegmentDelta(PageIdU64 segment_id, bool check_rows)
+void SegmentTestBasic::mergeSegmentDelta(PageIdU64 segment_id, bool check_rows, std::optional<size_t> pack_size)
 {
-    LOG_INFO(logger_op, "mergeSegmentDelta, segment_id={}", segment_id);
+    LOG_INFO(logger_op, "mergeSegmentDelta, segment_id={}, pack_size={}", segment_id, pack_size);
+
+    const size_t initial_pack_rows = db_context->getSettingsRef().dt_segment_stable_pack_rows;
+    if (pack_size)
+    {
+        db_context->getSettingsRef().dt_segment_stable_pack_rows = *pack_size;
+        reloadDMContext();
+        ASSERT_EQ(dm_context->stable_pack_rows, *pack_size);
+    }
+    SCOPE_EXIT({
+        if (initial_pack_rows != db_context->getSettingsRef().dt_segment_stable_pack_rows)
+        {
+            db_context->getSettingsRef().dt_segment_stable_pack_rows = initial_pack_rows;
+            reloadDMContext();
+        }
+    });
 
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
@@ -328,6 +363,18 @@ void SegmentTestBasic::flushSegmentCache(PageIdU64 segment_id)
     segment->flushCache(*dm_context);
     EXPECT_EQ(getSegmentRowNum(segment_id), segment_row_num);
     operation_statistics["flush"]++;
+}
+
+void SegmentTestBasic::compactSegmentDelta(PageIdU64 segment_id)
+{
+    LOG_INFO(logger_op, "compactSegmentDelta, segment_id={}", segment_id);
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments[segment_id];
+    size_t segment_row_num = getSegmentRowNum(segment_id);
+    segment->compactDelta(*dm_context);
+    EXPECT_EQ(getSegmentRowNum(segment_id), segment_row_num);
+    operation_statistics["compact"]++;
 }
 
 std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageIdU64 segment_id) const
@@ -367,29 +414,43 @@ std::pair<Int64, Int64> SegmentTestBasic::getSegmentKeyRange(PageIdU64 segment_i
     return {start_key, end_key};
 }
 
-Block SegmentTestBasic::prepareWriteBlockImpl(Int64 start_key, Int64 end_key, bool is_deleted)
+Block SegmentTestBasic::prepareWriteBlockImpl(
+    Int64 start_key,
+    Int64 end_key,
+    bool is_deleted,
+    bool including_right_boundary,
+    std::optional<UInt64> ts)
 {
-    RUNTIME_CHECK(start_key <= end_key);
-    if (end_key == start_key)
+    RUNTIME_CHECK(start_key <= end_key, start_key, end_key);
+    if (end_key == start_key && !including_right_boundary)
         return Block{};
-    version++;
+
+    UInt64 v = ts.value_or(version + 1);
+    version = std::max(v, version + 1); // Increase version
     return DMTestEnv::prepareSimpleWriteBlock(
         start_key, //
         end_key,
         false,
-        version,
+        v,
         DMTestEnv::pk_name,
         MutSup::extra_handle_id,
         options.is_common_handle ? MutSup::getExtraHandleColumnStringType() : MutSup::getExtraHandleColumnIntType(),
         options.is_common_handle,
         1,
         true,
-        is_deleted);
+        is_deleted,
+        /*with_null_uint64*/ false,
+        including_right_boundary);
 }
 
-Block SegmentTestBasic::prepareWriteBlock(Int64 start_key, Int64 end_key, bool is_deleted)
+Block SegmentTestBasic::prepareWriteBlock(
+    Int64 start_key,
+    Int64 end_key,
+    bool is_deleted,
+    bool including_right_boundary,
+    std::optional<UInt64> ts)
 {
-    return prepareWriteBlockImpl(start_key, end_key, is_deleted);
+    return prepareWriteBlockImpl(start_key, end_key, is_deleted, including_right_boundary, ts);
 }
 
 Block sortvstackBlocks(std::vector<Block> && blocks)
@@ -406,28 +467,48 @@ Block sortvstackBlocks(std::vector<Block> && blocks)
 
 Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
     PageIdU64 segment_id,
-    UInt64 total_write_rows,
+    Int64 total_write_rows,
     std::optional<Int64> write_start_key,
-    bool is_deleted)
+    bool is_deleted,
+    std::optional<UInt64> ts)
 {
-    RUNTIME_CHECK(total_write_rows < std::numeric_limits<Int64>::max());
+    RUNTIME_CHECK(0 < total_write_rows, total_write_rows);
 
-    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    // For example, write_start_key is int64_max and total_write_rows is 1,
+    // We will generate block with one row with int64_max.
+    auto is_including_right_boundary = [](Int64 write_start_key, Int64 total_write_rows) {
+        return std::numeric_limits<Int64>::max() - total_write_rows + 1 == write_start_key;
+    };
+
+    auto seg = segments.find(segment_id);
+    RUNTIME_CHECK(seg != segments.end());
+    auto segment_range = seg->second->getRowKeyRange();
     auto [segment_start_key, segment_end_key] = getSegmentKeyRange(segment_id);
-    auto segment_max_rows = static_cast<UInt64>(segment_end_key - segment_start_key);
-
-    if (segment_max_rows == 0)
-        return {};
-
+    bool including_right_boundary = false;
     if (write_start_key.has_value())
     {
-        // When write start key is specified, the caller must know exactly the segment range.
-        RUNTIME_CHECK(*write_start_key >= segment_start_key);
-        RUNTIME_CHECK(static_cast<UInt64>(segment_end_key - *write_start_key) > 0);
-    }
+        RUNTIME_CHECK_MSG(
+            segment_start_key <= *write_start_key
+                && (*write_start_key < segment_end_key || segment_range.isEndInfinite()),
+            "write_start_key={} segment_range={}",
+            *write_start_key,
+            segment_range.toDebugString());
 
-    if (!write_start_key.has_value())
+        including_right_boundary = is_including_right_boundary(*write_start_key, total_write_rows);
+        RUNTIME_CHECK(
+            including_right_boundary || !isSumOverflow(*write_start_key, total_write_rows),
+            *write_start_key,
+            total_write_rows);
+    }
+    else
     {
+        auto segment_max_rows = isDiffOverflow(segment_end_key, segment_start_key)
+            ? std::numeric_limits<Int64>::max() // UInt64 is more accurate, but Int64 is enough and for simplicity.
+            : segment_end_key - segment_start_key;
+
+        if (segment_max_rows == 0)
+            return {};
+
         // When write start key is unspecified, we will:
         // A. If the segment is large enough, we randomly pick a write start key in the range.
         // B. If the segment is small, we write from the beginning.
@@ -460,10 +541,10 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
         RUNTIME_CHECK(write_rows_this_round > 0);
         Int64 write_end_key_this_round = *write_start_key + static_cast<Int64>(write_rows_this_round);
         RUNTIME_CHECK(write_end_key_this_round <= segment_end_key);
-
-        Block block = prepareWriteBlock(*write_start_key, write_end_key_this_round, is_deleted);
+        Block block
+            = prepareWriteBlock(*write_start_key, write_end_key_this_round, is_deleted, including_right_boundary, ts);
         blocks.emplace_back(block);
-        remaining_rows -= write_rows_this_round;
+        remaining_rows -= write_rows_this_round + including_right_boundary;
 
         LOG_DEBUG(
             logger,
@@ -478,7 +559,52 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
     return sortvstackBlocks(std::move(blocks));
 }
 
-void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std::optional<Int64> start_at)
+void SegmentTestBasic::writeToCache(
+    PageIdU64 segment_id,
+    UInt64 write_rows,
+    Int64 start_at,
+    bool shuffle,
+    std::optional<UInt64> ts)
+{
+    LOG_INFO(logger_op, "writeToCache, segment_id={} write_rows={}", segment_id, write_rows);
+
+    if (write_rows == 0)
+        return;
+
+    RUNTIME_CHECK(segments.find(segment_id) != segments.end());
+    auto segment = segments[segment_id];
+    size_t segment_row_num = getSegmentRowNumWithoutMVCC(segment_id);
+    auto [start_key, end_key] = getSegmentKeyRange(segment_id);
+    LOG_DEBUG(
+        logger,
+        "write to segment, segment={} segment_rows={} start_key={} end_key={}",
+        segment->info(),
+        segment_row_num,
+        start_key,
+        end_key);
+
+    auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false, ts);
+
+    if (shuffle)
+    {
+        IColumn::Permutation perm(block.rows());
+        std::iota(perm.begin(), perm.end(), 0);
+        std::shuffle(perm.begin(), perm.end(), std::mt19937(std::random_device()()));
+        for (auto & column : block)
+            column.column = column.column->permute(perm, 0);
+    }
+    segment->writeToCache(*dm_context, block, 0, block.rows());
+
+    EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
+    operation_statistics["write"]++;
+}
+
+void SegmentTestBasic::writeSegment(
+    PageIdU64 segment_id,
+    UInt64 write_rows,
+    std::optional<Int64> start_at,
+    bool shuffle,
+    std::optional<UInt64> ts)
 {
     LOG_INFO(logger_op, "writeSegment, segment_id={} write_rows={}", segment_id, write_rows);
 
@@ -497,7 +623,16 @@ void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std
         start_key,
         end_key);
 
-    auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
+    auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false, ts);
+
+    if (shuffle)
+    {
+        IColumn::Permutation perm(block.rows());
+        std::iota(perm.begin(), perm.end(), 0);
+        std::shuffle(perm.begin(), perm.end(), std::mt19937(std::random_device()()));
+        for (auto & column : block)
+            column.column = column.column->permute(perm, 0);
+    }
     segment->write(*dm_context, block, false);
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
@@ -521,7 +656,10 @@ BlockInputStreamPtr SegmentTestBasic::getIngestDTFileInputStream(
         rows_per_block = std::min(rows_per_block, write_rows - written);
         std::optional<Int64> start;
         if (start_at)
+        {
+            RUNTIME_CHECK(!isSumOverflow(*start_at, written), *start_at, written);
             start.emplace(*start_at + written);
+        }
 
         if (check_range)
         {
@@ -530,9 +668,13 @@ BlockInputStreamPtr SegmentTestBasic::getIngestDTFileInputStream(
         }
         else
         {
-            auto start_key = start ? *start : 0;
-            auto end_key = start_key + rows_per_block;
-            auto block = prepareWriteBlock(start_key, end_key);
+            Int64 start_key = start.value_or(0);
+            bool overflow = std::numeric_limits<Int64>::max() - static_cast<Int64>(rows_per_block) < start_key;
+            Int64 end_key = overflow ? std::numeric_limits<Int64>::max() : start_key + rows_per_block;
+            // if overflow, write [start_key, end_key]
+            // if not overflow, write [start_key, end_key)
+            rows_per_block += overflow;
+            auto block = prepareWriteBlock(start_key, end_key, /*is_deleted*/ false, overflow);
             streams.push_back(std::make_shared<OneBlockInputStream>(std::move(block)));
         }
     }
@@ -1053,10 +1195,33 @@ Block mergeSegmentRowIds(std::vector<Block> && blocks)
     return accumulated_block;
 }
 
-RowKeyRange SegmentTestBasic::buildRowKeyRange(Int64 begin, Int64 end)
+RowKeyRange SegmentTestBasic::buildRowKeyRange(
+    Int64 begin,
+    Int64 end,
+    bool is_common_handle,
+    bool including_right_boundary)
 {
-    HandleRange range(begin, end);
-    return RowKeyRange::fromHandleRange(range);
+    // `including_right_boundary` is for creating range like [begin, std::numeric_limits<Int64>::max()) or [begin, std::numeric_limits<Int64>::max()]
+    if (including_right_boundary)
+        RUNTIME_CHECK(end == std::numeric_limits<Int64>::max());
+
+    if (is_common_handle)
+    {
+        auto create_rowkey_value = [](Int64 v) {
+            WriteBufferFromOwnString ss;
+            DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);
+            DB::EncodeInt64(v, ss);
+            return std::make_shared<String>(ss.releaseStr());
+        };
+        auto left = RowKeyValue{is_common_handle, create_rowkey_value(begin)};
+        auto right = including_right_boundary ? RowKeyValue::COMMON_HANDLE_MAX_KEY
+                                              : RowKeyValue{is_common_handle, create_rowkey_value(end)};
+        return RowKeyRange{left, right, is_common_handle, 1};
+    }
+
+    auto left = RowKeyValue::fromHandle(begin);
+    auto right = including_right_boundary ? RowKeyValue::INT_HANDLE_MAX_KEY : RowKeyValue::fromHandle(end);
+    return RowKeyRange{left, right, is_common_handle, 1};
 }
 
 std::pair<SegmentPtr, SegmentSnapshotPtr> SegmentTestBasic::getSegmentForRead(PageIdU64 segment_id)
@@ -1126,9 +1291,14 @@ ColumnPtr SegmentTestBasic::getSegmentHandle(PageIdU64 segment_id, const RowKeyR
     }
 }
 
-void SegmentTestBasic::writeSegmentWithDeleteRange(PageIdU64 segment_id, Int64 begin, Int64 end)
+void SegmentTestBasic::writeSegmentWithDeleteRange(
+    PageIdU64 segment_id,
+    Int64 begin,
+    Int64 end,
+    bool is_common_handle,
+    bool including_right_boundary)
 {
-    auto range = buildRowKeyRange(begin, end);
+    auto range = buildRowKeyRange(begin, end, is_common_handle, including_right_boundary);
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
     auto segment = segments[segment_id];
     RUNTIME_CHECK(segment->write(*dm_context, range));
