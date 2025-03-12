@@ -30,6 +30,17 @@ namespace DB
 
 namespace
 {
+
+constexpr std::array<UInt64, 65> MASKS = [] constexpr {
+    std::array<UInt64, 65> masks = {};
+    for (int i = 0; i < 64; ++i)
+    {
+        masks[i] = ~((1ULL << i) - 1);
+    }
+    masks[64] = 0;
+    return masks;
+}();
+
 /// Implementation details of filterArraysImpl function, used as template parameter.
 /// Allow to build or not to build offsets array.
 
@@ -140,11 +151,7 @@ void filterArraysImplGeneric(
             size_t index = std::countr_zero(mask);
             size_t length = std::countr_one(mask >> index);
             copy_chunk(offsets_pos + index, length);
-            // bitshifts are undefined for 64, so we need to check if we are at the end
-            if (index + length == FILTER_SIMD_BYTES)
-                break;
-            mask >>= (index + length);
-            mask <<= (index + length);
+            mask &= MASKS[index + length];
         }
 
         filt_pos += FILTER_SIMD_BYTES;
@@ -160,8 +167,33 @@ void filterArraysImplGeneric(
         ++offsets_pos;
     }
 }
-} // namespace
 
+/// filterImplAligned is used for aligned part of filter.
+template <typename T, typename Container>
+inline void filterImplAligned(
+    const UInt8 *& filt_pos,
+    const UInt8 *& filt_end_aligned,
+    const T *& data_pos,
+    Container & res_data)
+{
+    while (filt_pos < filt_end_aligned)
+    {
+        UInt64 mask = ToBits64(filt_pos);
+        while (mask)
+        {
+            // 100011111000 -> index: 3, length: 5, mask: 100000000000
+            size_t index = std::countr_zero(mask);
+            size_t length = std::countr_one(mask >> index);
+            res_data.insert(data_pos + index, data_pos + index + length);
+            mask &= MASKS[index + length];
+        }
+
+        filt_pos += FILTER_SIMD_BYTES;
+        data_pos += FILTER_SIMD_BYTES;
+    }
+}
+
+} // namespace
 
 template <typename T>
 void filterArraysImpl(
@@ -227,38 +259,6 @@ INSTANTIATE(Float32)
 INSTANTIATE(Float64)
 
 #undef INSTANTIATE
-
-namespace
-{
-template <typename T, typename Container>
-inline void filterImplAligned(
-    const UInt8 *& filt_pos,
-    const UInt8 *& filt_end_aligned,
-    const T *& data_pos,
-    Container & res_data)
-{
-    while (filt_pos < filt_end_aligned)
-    {
-        UInt64 mask = ToBits64(filt_pos);
-        while (mask)
-        {
-            // 100011111000 -> index: 3, length: 5, mask: 100000000000
-            size_t index = std::countr_zero(mask);
-            size_t length = std::countr_one(mask >> index);
-            res_data.insert(data_pos + index, data_pos + index + length);
-            // bitshifts are undefined for 64, so we need to check if we are at the end
-            if (index + length == FILTER_SIMD_BYTES)
-                break;
-            mask >>= (index + length);
-            mask <<= (index + length);
-        }
-
-        filt_pos += FILTER_SIMD_BYTES;
-        data_pos += FILTER_SIMD_BYTES;
-    }
-}
-} // namespace
-
 
 template <typename T, typename Container>
 void filterImpl(const UInt8 * filt_pos, const UInt8 * filt_end, const T * data_pos, Container & res_data)
