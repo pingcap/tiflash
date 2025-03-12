@@ -206,6 +206,22 @@ ColumnDefinesPtr generateStoreColumns(const ColumnDefines & table_columns, bool 
     }
     return columns;
 }
+
+void convertStringTypeToDefault(DataTypePtr & type)
+{
+    if (removeNullable(type)->getTypeId() != TypeIndex::String)
+        return;
+    if (type->isNullable())
+        type = DataTypeFactory::instance().getOrSet(DataTypeString::getNullableDefaultName());
+    else
+        type = DataTypeFactory::instance().getOrSet(DataTypeString::getDefaultName());
+}
+
+void convertStringTypeToDefault(ColumnDefines & cds)
+{
+    for (auto & col : cds)
+        convertStringTypeToDefault(col.type);
+}
 } // namespace
 
 DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS
@@ -262,18 +278,17 @@ DeltaMergeStore::DeltaMergeStore(
     // Should be done before any background task setup.
     restoreStableFiles();
 
-    original_table_columns.emplace_back(original_table_handle_define);
-    original_table_columns.emplace_back(getVersionColumnDefine());
-    original_table_columns.emplace_back(getTagColumnDefine());
+    ColumnDefines tmp_table_columns;
+    tmp_table_columns.emplace_back(original_table_handle_define);
+    tmp_table_columns.emplace_back(getVersionColumnDefine());
+    tmp_table_columns.emplace_back(getTagColumnDefine());
     for (const auto & col : columns)
     {
         if (col.id != original_table_handle_define.id && col.id != MutSup::version_col_id
             && col.id != MutSup::delmark_col_id)
-            original_table_columns.emplace_back(col);
+            tmp_table_columns.emplace_back(col);
     }
-
-    original_table_header = std::make_shared<Block>(toEmptyBlock(original_table_columns));
-    store_columns = generateStoreColumns(original_table_columns, is_common_handle);
+    updateColumnDefines(std::move(tmp_table_columns));
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
     PageStorageRunMode page_storage_run_mode;
@@ -2025,12 +2040,7 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
         replica_exist.store(false);
     }
 
-    auto new_store_columns = generateStoreColumns(new_original_table_columns, is_common_handle);
-
-    original_table_columns.swap(new_original_table_columns);
-    store_columns.swap(new_store_columns);
-
-    std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
+    updateColumnDefines(std::move(new_original_table_columns));
 
     // release the lock because `applyLocalIndexChange` will try to acquire the lock
     // and generate tasks on segments
@@ -2308,5 +2318,15 @@ void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context)
     addSegment(lock, first_segment);
 }
 
+void DeltaMergeStore::updateColumnDefines(ColumnDefines && tmp_columns)
+{
+    // Tables created before the new string serialization format takes effect will
+    // not be automatically converted to the new type during restoration.
+    // Here, we force it to algin with default string type.
+    convertStringTypeToDefault(tmp_columns);
+    original_table_columns = std::move(tmp_columns);
+    store_columns = generateStoreColumns(original_table_columns, is_common_handle);
+    std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
+}
 } // namespace DM
 } // namespace DB
