@@ -60,8 +60,14 @@ public:
 
     void tryPutColumn(size_t pack_id, ColId column_id, const ColumnPtr & column, size_t rows_offset, size_t rows_count);
 
-    using ColumnCacheElement = std::pair<ColumnPtr, std::pair<size_t, size_t>>;
-    ColumnCacheElement getColumn(size_t pack_id, ColId column_id);
+    // TODO: Optimize the following two methods:
+    // Now we only copy a pack of column data to result each time, we can copy multiple packs each time if cache column is longer than pack rows.
+
+    // Get column from cache, should make sure the column is in cache.
+    ColumnPtr getColumn(size_t start_pack_id, size_t end_pack_id, size_t read_rows, ColId column_id);
+    // Get column from cache, should make sure the column is in cache.
+    // Column data will append to `result`.
+    void getColumn(MutableColumnPtr & result, size_t start_pack_id, size_t end_pack_id, ColId column_id);
 
     void delColumn(ColId column_id, size_t upper_pack_id);
 
@@ -94,6 +100,5 @@ using ColumnCachePtr = std::shared_ptr<ColumnCache>;
 using ColumnCachePtrs = std::vector<ColumnCachePtr>;
 using RangeWithStrategy = ColumnCache::RangeWithStrategy;
 using RangeWithStrategys = ColumnCache::RangeWithStrategys;
-using ColumnCacheElement = ColumnCache::ColumnCacheElement;
 
 } // namespace DB::DM
