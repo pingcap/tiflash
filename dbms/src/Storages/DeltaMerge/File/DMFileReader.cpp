@@ -635,21 +635,28 @@ ColumnPtr DMFileReader::getColumnFromCache(
 
     const auto col_id = cd.id;
     auto read_strategy = data_cache->getReadStrategy(start_pack_id, pack_count, col_id);
+    if (read_strategy.size() == 1)
+    {
+        auto [range, strategy] = read_strategy.front();
+        if (strategy == ColumnCache::Strategy::Memory)
+        {
+            return data_cache->getColumn(range.first, range.second, read_rows, col_id);
+        }
+        else if (strategy == ColumnCache::Strategy::Disk)
+        {
+            return on_cache_miss(cd, type_on_disk, range.first, range.second - range.first, read_rows);
+        }
+
+        throw Exception("Unknown strategy", ErrorCodes::LOGICAL_ERROR);
+    }
+
     const auto & pack_stats = dmfile->getPackStats();
     auto mutable_col = type_on_disk->createColumn();
-    mutable_col->reserve(read_rows);
     for (auto & [range, strategy] : read_strategy)
     {
         if (strategy == ColumnCache::Strategy::Memory)
         {
-            for (size_t cursor = range.first; cursor < range.second; ++cursor)
-            {
-                auto cache_element = data_cache->getColumn(cursor, col_id);
-                mutable_col->insertRangeFrom(
-                    *(cache_element.first),
-                    cache_element.second.first,
-                    cache_element.second.second);
-            }
+            data_cache->getColumn(mutable_col, range.first, range.second, col_id);
         }
         else if (strategy == ColumnCache::Strategy::Disk)
         {

@@ -142,25 +142,66 @@ void ColumnCache::tryPutColumn(
     });
 }
 
-ColumnCacheElement ColumnCache::getColumn(size_t pack_id, ColId column_id)
+ColumnPtr ColumnCache::getColumn(size_t start_pack_id, size_t end_pack_id, size_t read_rows, ColId column_id)
+{
+    return column_caches.withShared([&](auto & column_caches) -> ColumnPtr {
+        auto iter = column_caches.find(start_pack_id);
+        RUNTIME_CHECK(iter != column_caches.end());
+        auto & columns = iter->second.columns;
+        auto col_iter = columns.find(column_id);
+        RUNTIME_CHECK_MSG(
+            col_iter != columns.end(),
+            "Cannot find column in cache for pack id: {}, column id: {}",
+            start_pack_id,
+            column_id);
+        auto column = col_iter->second;
+        // Optimization for some special cases:
+        // 1. The requested column is exactly the same as the cached column, return directly.
+        if (iter->second.rows_offset == 0 && column->size() == read_rows)
+        {
+            return column;
+        }
+        // 2. The requested column is a subset of the cached column, cut the cached column and return.
+        else if (column->size() - iter->second.rows_offset >= read_rows)
+        {
+            return column->cut(iter->second.rows_offset, read_rows);
+        }
+
+        auto mut_col = column->cloneEmpty();
+        mut_col->insertRangeFrom(*column, iter->second.rows_offset, iter->second.rows_count);
+        for (size_t cursor = start_pack_id + 1; cursor < end_pack_id; ++cursor)
+        {
+            auto iter = column_caches.find(cursor);
+            RUNTIME_CHECK(iter != column_caches.end());
+            auto & columns = iter->second.columns;
+            auto col_iter = columns.find(column_id);
+            RUNTIME_CHECK_MSG(
+                col_iter != columns.end(),
+                "Cannot find column in cache for pack id: {}, column id: {}",
+                start_pack_id,
+                column_id);
+            mut_col->insertRangeFrom(*col_iter->second, iter->second.rows_offset, iter->second.rows_count);
+        }
+        return mut_col;
+    });
+}
+
+void ColumnCache::getColumn(MutableColumnPtr & result, size_t start_pack_id, size_t end_pack_id, ColId column_id)
 {
     return column_caches.withShared([&](auto & column_caches) {
-        if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
+        for (size_t cursor = start_pack_id; cursor < end_pack_id; ++cursor)
         {
-            auto & column_cache_entry = iter->second;
-            auto & columns = column_cache_entry.columns;
-            if (auto column_iter = columns.find(column_id); column_iter != columns.end())
-            {
-                return std::make_pair(
-                    column_iter->second,
-                    std::make_pair(column_cache_entry.rows_offset, column_cache_entry.rows_count));
-            }
+            auto iter = column_caches.find(cursor);
+            RUNTIME_CHECK(iter != column_caches.end());
+            auto & columns = iter->second.columns;
+            auto col_iter = columns.find(column_id);
+            RUNTIME_CHECK_MSG(
+                col_iter != columns.end(),
+                "Cannot find column in cache for pack id: {}, column id: {}",
+                start_pack_id,
+                column_id);
+            result->insertRangeFrom(*col_iter->second, iter->second.rows_offset, iter->second.rows_count);
         }
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Cannot find column in cache for pack id: {}, column id: {}",
-            pack_id,
-            column_id);
     });
 }
 
