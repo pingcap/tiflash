@@ -17,6 +17,7 @@
 #include <IO/Buffer/ReadBuffer.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
 #include <Storages/DeltaMerge/Index/ICacheableLocalIndexReader.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Perf_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader_fwd.h>
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <Storages/DeltaMerge/dtpb/index_file.pb.h>
@@ -35,44 +36,49 @@ protected:
 public:
     /// The key is the row's offset in the DMFile.
     using Key = UInt32;
-    using Distance = Float32;
 
-    struct SearchResult
-    {
-        Key key;
-        Distance distance;
-    };
+    using SearchResults = USearchImplType::search_result_t;
 
     /// True bit means the row is valid and should be kept in the search result.
     /// False bit lets the row filtered out and will search for more results.
     using RowFilter = BitmapFilterView;
 
 public:
-    static VectorIndexReaderPtr createFromMmap(const dtpb::IndexFilePropsV2Vector & file_props, std::string_view path);
-    static VectorIndexReaderPtr createFromMemory(const dtpb::IndexFilePropsV2Vector & file_props, ReadBuffer & buf);
+    static VectorIndexReaderPtr createFromMmap(
+        const dtpb::IndexFilePropsV2Vector & file_props,
+        const VectorIndexPerfPtr & perf, // must not be null
+        std::string_view path);
+    static VectorIndexReaderPtr createFromMemory(
+        const dtpb::IndexFilePropsV2Vector & file_props,
+        const VectorIndexPerfPtr & perf, // must not be null
+        ReadBuffer & buf);
 
 public:
-    explicit VectorIndexReader(const dtpb::IndexFilePropsV2Vector & file_props_);
+    explicit VectorIndexReader(
+        bool is_in_memory_,
+        const dtpb::IndexFilePropsV2Vector & file_props_,
+        const VectorIndexPerfPtr & perf_ // must not be null
+    );
 
     ~VectorIndexReader() override;
 
-    // Invalid rows in `valid_rows` will be discared when applying the search
-    std::vector<SearchResult> search(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const;
-
-    size_t size() const;
+    /// The result is sorted by distance.
+    /// WARNING: Due to usearch's impl, invalid rows in `valid_rows` may be still contained in the search result.
+    /// WARNING: Drop the result as soon as possible, because it is "reader local", blocks more concurrent reads.
+    /// We choose to return search result directly without any copying to improve performance.
+    SearchResults search(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const;
 
     // Get the value (i.e. vector content) of a Key.
     void get(Key key, std::vector<Float32> & out) const;
 
-private:
-    auto searchImpl(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const;
-
 public:
+    const bool is_in_memory;
     const dtpb::IndexFilePropsV2Vector file_props;
 
 private:
     USearchImplType index;
 
+    const VectorIndexPerfPtr perf;
     size_t last_reported_memory_usage = 0;
 };
 

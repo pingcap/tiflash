@@ -14,24 +14,57 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/Index/VectorIndex/Perf_fwd.h>
 #include <common/types.h>
 
-/// Remove the population of thread_local from Poco
-#ifdef thread_local
-#undef thread_local
-#endif
+#include <memory>
 
-namespace DB::PerfContext
+namespace DB::DM
 {
 
-struct VectorSearchPerfContext
+/// Unlike FileCache, this is supposed to be wrapped inside a shared_ptr because an input stream could be
+/// accessed in different threads (although there is no concurrent access) throughout its lifetime. So
+/// thread local is no longer useful.
+struct VectorIndexPerf
 {
-    size_t visited_nodes = 0;
-    size_t discarded_nodes = 0; // Rows filtered out by MVCC
+    uint32_t n_from_cf_index = 0;
+    uint32_t n_from_cf_noindex = 0;
+    uint32_t n_from_dmf_index = 0;
+    uint32_t n_from_dmf_noindex = 0;
 
-    void reset() { *this = {}; }
+    // ============================================================
+    // Below: During search
+    uint32_t n_searches = 0;
+    uint32_t total_search_ms = 0;
+    uint64_t visited_nodes = 0;
+    uint64_t discarded_nodes = 0; // Rows filtered out by MVCC
+    uint64_t returned_nodes = 0;
+    uint32_t n_dm_searches = 0; // For calculating avg below
+    uint32_t dm_packs_in_file = 0;
+    uint32_t dm_packs_before_search = 0;
+    uint32_t dm_packs_after_search = 0;
+    // ============================================================
+
+    // ============================================================
+    // Below: During loading index
+    uint32_t total_load_ms = 0;
+    uint32_t load_from_cache = 0;
+    uint32_t load_from_column_file = 0; // contains ColumnFile load time
+    uint32_t load_from_stable_s3 = 0;
+    uint32_t load_from_stable_disk = 0;
+    // ============================================================
+
+    // ============================================================
+    // Below: During reading column data
+    uint32_t n_dm_reads = 0; // For calculating avg below
+    uint32_t total_dm_read_vec_ms = 0;
+    uint32_t total_dm_read_others_ms = 0;
+    uint32_t n_cf_reads = 0; // For calculating avg below
+    uint32_t total_cf_read_vec_ms = 0;
+    uint32_t total_cf_read_others_ms = 0;
+    // ============================================================
+
+    static VectorIndexPerfPtr create() { return std::make_shared<VectorIndexPerf>(); }
 };
 
-extern thread_local VectorSearchPerfContext vector_search;
-
-} // namespace DB::PerfContext
+} // namespace DB::DM

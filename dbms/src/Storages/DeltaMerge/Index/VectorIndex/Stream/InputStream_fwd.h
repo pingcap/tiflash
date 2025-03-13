@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
+#pragma once
 
-namespace DB::PerfContext
+#include <memory>
+
+namespace DB::DM
 {
 
-thread_local VectorSearchPerfContext vector_search = {};
+class VectorIndexInputStream;
 
-}
+using VectorIndexInputStreamPtr = std::shared_ptr<VectorIndexInputStream>;
+
+} // namespace DB::DM

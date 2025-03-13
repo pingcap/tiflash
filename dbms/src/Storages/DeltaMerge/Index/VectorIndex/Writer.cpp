@@ -65,7 +65,7 @@ void VectorIndexWriterInternal::addBlock(
 
     index.reserve(unum::usearch::ceil2(index.size() + column.size()));
 
-    Stopwatch w;
+    Stopwatch w(CLOCK_MONOTONIC_COARSE);
     SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
 
     Stopwatch w_proceed_check(CLOCK_MONOTONIC_COARSE);
@@ -114,7 +114,7 @@ void VectorIndexWriterInternal::addBlock(
 
 void VectorIndexWriterInternal::saveToFile(std::string_view path) const
 {
-    Stopwatch w;
+    Stopwatch w(CLOCK_MONOTONIC_COARSE);
     SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
 
     auto result = index.save(unum::usearch::output_file_t(path.data()));
@@ -123,7 +123,7 @@ void VectorIndexWriterInternal::saveToFile(std::string_view path) const
 
 void VectorIndexWriterInternal::saveToBuffer(WriteBuffer & write_buf) const
 {
-    Stopwatch w;
+    Stopwatch w(CLOCK_MONOTONIC_COARSE);
     SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
 
     auto result = index.save_to_stream([&](void const * buffer, std::size_t length) {
