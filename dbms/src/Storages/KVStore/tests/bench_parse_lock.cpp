@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/typeid_cast.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
 #include <benchmark/benchmark.h>
@@ -35,7 +36,7 @@ void parseTest(benchmark::State & state)
         auto lock_for_update_ts = 7777, txn_size = 1;
         const std::vector<std::string> & async_commit = {"s1", "s2"};
         const std::vector<uint64_t> & rollback = {3, 4};
-        auto lock_value2 = encodeFullLockCfValue(
+        auto lock_value2 = RegionBench::encodeFullLockCfValue(
             Region::DelFlag,
             "primary key",
             421321,

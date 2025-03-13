@@ -44,9 +44,6 @@ public:
     ASTPtr table_function;
     ASTPtr partition_expression_list;
 
-    // Set to true if the data should only be inserted into attached views
-    bool no_destination = false;
-
     /// Data to insert
     const char * data = nullptr;
     const char * end = nullptr;
@@ -57,7 +54,7 @@ public:
     bool is_delete = false;
 
     /** Get the text that identifies this element. */
-    String getID() const override { return "InsertQuery_" + database + "_" + table; };
+    String getID() const override { return "InsertQuery_" + database + "_" + table; }
 
     ASTPtr clone() const override
     {

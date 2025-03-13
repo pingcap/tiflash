@@ -14,8 +14,11 @@
 
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
-#include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/DMFileInputStream.h>
+#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB::DM
@@ -30,7 +33,6 @@ DMFileBlockInputStreamBuilder::DMFileBlockInputStreamBuilder(const Context & con
     setCaches(
         global_context.getMarkCache(),
         global_context.getMinMaxIndexCache(),
-        global_context.getLocalIndexCache(),
         global_context.getColumnCacheLongTerm());
     // init from settings
     setFromSettings(context.getSettingsRef());
@@ -137,45 +139,38 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
     const RowKeyRanges & rowkey_ranges,
     const ScanContextPtr & scan_context)
 {
+    if (vec_index_ctx)
+    {
+        // Note: this file may not have index built
+        return tryBuildWithVectorIndex(dmfile, read_columns, rowkey_ranges, scan_context);
+    }
+
+    return buildNoLocalIndex(dmfile, read_columns, rowkey_ranges, scan_context);
+}
+
+SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIndex(
+    const DMFilePtr & dmfile,
+    const ColumnDefines & read_columns,
+    const RowKeyRanges & rowkey_ranges,
+    const ScanContextPtr & scan_context)
+{
+    RUNTIME_CHECK(vec_index_ctx != nullptr);
+    RUNTIME_CHECK(read_columns.size() == vec_index_ctx->col_defs->size());
+
     auto fallback = [&]() {
+        vec_index_ctx->perf->n_from_dmf_noindex += 1;
         return buildNoLocalIndex(dmfile, read_columns, rowkey_ranges, scan_context);
     };
 
-    if (!ann_query_info)
-        return fallback();
-
-    if (!bitmap_filter.has_value())
-        return fallback();
-
-    Block header_layout = toEmptyBlock(read_columns);
-
-    // Copy out the vector column for later use. Copy is intentionally performed after the
-    // fast check so that in fallback conditions we don't need unnecessary copies.
-    std::optional<ColumnDefine> vec_column;
-    ColumnDefines rest_columns{};
-    for (const auto & cd : read_columns)
-    {
-        if (cd.id == ann_query_info->column_id())
-            vec_column.emplace(cd);
-        else
-            rest_columns.emplace_back(cd);
-    }
-
-    // No vector index column is specified, just use the normal logic.
-    if (!vec_column.has_value())
-        return fallback();
-
-    RUNTIME_CHECK(rest_columns.size() + 1 == read_columns.size(), rest_columns.size(), read_columns.size());
-
-    const IndexID ann_query_info_index_id = ann_query_info->index_id() > 0 //
-        ? ann_query_info->index_id()
-        : EmptyIndexID;
-    if (!dmfile->isLocalIndexExist(vec_column->id, ann_query_info_index_id))
+    auto local_index = dmfile->getLocalIndex( //
+        vec_index_ctx->ann_query_info->column_id(),
+        vec_index_ctx->ann_query_info->index_id());
+    if (!local_index.has_value())
         // Vector index is defined but does not exist on the data file,
         // or there is no data at all
         return fallback();
 
-    // All check passed. Let's read via vector index.
+    RUNTIME_CHECK(local_index->index_props().kind() == dtpb::IndexFileKind::VECTOR_INDEX);
 
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
@@ -198,7 +193,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
 
     DMFileReader rest_columns_reader(
         dmfile,
-        rest_columns,
+        *vec_index_ctx->rest_col_defs,
         is_common_handle,
         enable_handle_clean_read,
         enable_del_clean_read,
@@ -222,18 +217,11 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
         // ColumnCacheLongTerm is only filled in Vector Search.
         rest_columns_reader.setColumnCacheLongTerm(column_cache_long_term, pk_col_id);
 
-    DMFileWithVectorIndexBlockInputStreamPtr reader = DMFileWithVectorIndexBlockInputStream::create(
-        ann_query_info,
+    vec_index_ctx->perf->n_from_dmf_index += 1;
+    return DMFileInputStreamProvideVectorIndex::create( //
+        vec_index_ctx,
         dmfile,
-        std::move(header_layout),
-        std::move(rest_columns_reader),
-        std::move(vec_column.value()),
-        scan_context,
-        local_index_cache,
-        bitmap_filter.value(),
-        tracing_id);
-
-    return reader;
+        std::move(rest_columns_reader));
 }
 
 } // namespace DB::DM

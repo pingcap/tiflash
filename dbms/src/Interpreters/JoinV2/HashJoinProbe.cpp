@@ -172,7 +172,7 @@ public:
         {
             context.prefetch_states = decltype(context.prefetch_states)(
                 static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
-                [](void * ptr) { delete static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
+                [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
         }
     }
 

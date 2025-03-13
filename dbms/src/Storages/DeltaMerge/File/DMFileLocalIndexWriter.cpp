@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
@@ -20,7 +21,7 @@
 #include <Storages/DeltaMerge/File/DMFileLocalIndexWriter.h>
 #include <Storages/DeltaMerge/File/DMFileV3IncrementWriter.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Writer.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 #include <Storages/PathPool.h>
@@ -116,7 +117,7 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
         LocalIndexInfo info;
         String index_file_path; // For write out
         String index_file_name; // For meta include
-        VectorIndexBuilderPtr builder_vector;
+        VectorIndexWriterOnDiskPtr builder_vector;
     };
 
     std::unordered_map<ColId, std::vector<IndexToBuild>> index_builders;
@@ -159,7 +160,9 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
             switch (index.info.kind)
             {
             case TiDB::ColumnarIndexKind::Vector:
-                index.builder_vector = VectorIndexBuilder::create(index.info.def_vector_index);
+                index.builder_vector = VectorIndexWriterOnDisk::create( //
+                    index.index_file_path,
+                    index.info.def_vector_index);
                 break;
             default:
                 RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
@@ -245,7 +248,7 @@ size_t DMFileLocalIndexWriter::buildIndexForFile(const DMFilePtr & dm_file_mutab
             {
             case TiDB::ColumnarIndexKind::Vector:
             {
-                index.builder_vector->saveToFile(index.index_file_path);
+                index.builder_vector->finalize();
                 auto * pb_vec_idx = pb_idx->mutable_vector_index();
                 pb_vec_idx->set_format_version(0);
                 pb_vec_idx->set_dimensions(index.info.def_vector_index->dimension);

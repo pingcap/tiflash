@@ -16,7 +16,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyLocalIndexWriter.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Writer.h>
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
 
 
@@ -94,7 +94,7 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
     struct IndexToBuild
     {
         LocalIndexInfo info;
-        VectorIndexBuilderPtr builder_vector;
+        VectorIndexWriterInMemoryPtr builder_vector;
     };
 
     std::unordered_map<ColId, std::vector<IndexToBuild>> index_builders;
@@ -129,7 +129,7 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
             switch (index.info.kind)
             {
             case TiDB::ColumnarIndexKind::Vector:
-                index.builder_vector = VectorIndexBuilder::create(index.info.def_vector_index);
+                index.builder_vector = VectorIndexWriterInMemory::create(index.info.def_vector_index);
                 break;
             default:
                 RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
@@ -200,7 +200,7 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
                 auto index_page_id = options.storage_pool->newLogPageId();
                 MemoryWriteBuffer write_buf;
                 CompressedWriteBuffer compressed(write_buf);
-                index.builder_vector->saveToBuffer(compressed);
+                index.builder_vector->finalize(compressed);
                 compressed.next();
                 auto data_size = write_buf.count();
                 auto buf = write_buf.tryGetReadBuffer();
@@ -229,8 +229,8 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
         }
     }
 
-    if (file->index_infos)
-        file->index_infos->insert(file->index_infos->end(), index_infos->begin(), index_infos->end());
+    if (const auto & file_index_info = file->getIndexInfos(); file_index_info)
+        index_infos->insert(index_infos->end(), file_index_info->begin(), file_index_info->end());
 
     options.wbs.writeLogAndData();
     // Note: The id of the file cannot be changed, otherwise minor compaction will fail.
