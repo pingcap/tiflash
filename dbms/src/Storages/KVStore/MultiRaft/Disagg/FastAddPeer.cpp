@@ -275,12 +275,14 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
                 LOG_INFO(
                     log,
                     "Select checkpoint with data_seq={}, remote_store_id={} elapsed={} size(candidate_store_id)={} "
-                    "region_id={}",
+                    "region_id={} region={} range={}",
                     data_seq,
                     checkpoint_info->remote_store_id,
                     watch.elapsedSeconds(),
                     candidate_store_ids.size(),
-                    region_id);
+                    region_id,
+                    region->getDebugString(),
+                    region->getRange()->toDebugString());
                 GET_METRIC(tiflash_fap_task_duration_seconds, type_select_stage).Observe(watch.elapsedSeconds());
                 return maybe_region_info.value();
             }
@@ -376,6 +378,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     DM::Segments segments;
     try
     {
+        LOG_INFO(log, "FAP begins to build segments, range={}", new_key_range.toDebugString());
         segments = dm_storage->buildSegmentsFromCheckpointInfo(cancel_handle, new_key_range, checkpoint_info, settings);
     }
     catch (...)
