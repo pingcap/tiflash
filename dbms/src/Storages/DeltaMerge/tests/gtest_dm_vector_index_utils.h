@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/InputStream.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -88,6 +89,18 @@ public:
             LocalIndexInfo(EmptyIndexID, vec_column_id, std::make_shared<TiDB::VectorIndexDefinition>(definition)),
         };
         return std::make_shared<LocalIndexInfos>(index_infos);
+    }
+
+    static auto wrapVectorStream(
+        const VectorIndexStreamCtxPtr & ctx,
+        const SkippableBlockInputStreamPtr & inner,
+        const BitmapFilterPtr & filter)
+    {
+        auto stream = ConcatSkippableBlockInputStream<false>::create(
+            /* inputs */ {inner},
+            /* rows */ {filter->size()},
+            /* ScanContext */ nullptr);
+        return VectorIndexInputStream::create(ctx, filter, stream);
     }
 };
 

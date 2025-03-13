@@ -67,7 +67,7 @@ void VectorIndexWriterInternal::addBlock(
 
     index.reserve(unum::usearch::ceil2(index.size() + column.size()));
 
-    Stopwatch w;
+    Stopwatch w(CLOCK_MONOTONIC_COARSE);
     SCOPE_EXIT({ total_duration += w.elapsedSeconds(); });
 
     Stopwatch w_proceed_check(CLOCK_MONOTONIC_COARSE);
@@ -132,7 +132,7 @@ void VectorIndexWriterInternal::saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) c
 
 void VectorIndexWriterOnDisk::saveToFile() const
 {
-    Stopwatch w;
+    Stopwatch w(CLOCK_MONOTONIC_COARSE);
     SCOPE_EXIT({ writer.total_duration += w.elapsedSeconds(); });
 
     auto result = writer.index.save(unum::usearch::output_file_t(index_file.data()));
@@ -141,7 +141,7 @@ void VectorIndexWriterOnDisk::saveToFile() const
 
 void VectorIndexWriterInMemory::saveToBuffer(WriteBuffer & write_buf)
 {
-    Stopwatch w;
+    Stopwatch w(CLOCK_MONOTONIC_COARSE);
     SCOPE_EXIT({ writer.total_duration += w.elapsedSeconds(); });
 
     auto result = writer.index.save_to_stream([&](void const * buffer, std::size_t length) {

@@ -95,14 +95,25 @@ private:
     }
 
     /// Add next contiguous chunk of memory with size not less than specified.
-    void NO_INLINE addChunk(size_t min_size)
+    /// If free_empty_head_chunk is true, empty head will be freed.
+    /// It can avoid mem leak when you want always reuse one chunk.
+    void NO_INLINE addChunk(size_t min_size, bool free_empty_head_chunk)
     {
         if (resize_callback != nullptr)
         {
             if unlikely (!resize_callback())
                 throw ResizeException("Error in arena resize");
         }
-        head = new Chunk(nextSize(min_size), head);
+        const auto next_size = nextSize(min_size);
+        if (free_empty_head_chunk && head->remaining() == head->size())
+        {
+            size_in_bytes -= head->size();
+            auto * old_head = head;
+            head = head->prev;
+            old_head->prev = nullptr;
+            delete old_head;
+        }
+        head = new Chunk(next_size, head);
         size_in_bytes += head->size();
     }
 
@@ -122,7 +133,7 @@ public:
     ~Arena() { delete head; }
 
     /// Get piece of memory with alignment
-    char * alignedAlloc(size_t size, size_t alignment)
+    char * alignedAlloc(size_t size, size_t alignment, bool free_empty_head_chunk = false)
     {
         do
         {
@@ -137,15 +148,15 @@ public:
                 return res;
             }
 
-            addChunk(size + alignment);
+            addChunk(size + alignment, free_empty_head_chunk);
         } while (true);
     }
 
     /// Get piece of memory, without alignment.
-    char * alloc(size_t size)
+    char * alloc(size_t size, bool free_empty_head_chunk = false)
     {
         if (unlikely(head->pos + size > head->end))
-            addChunk(size);
+            addChunk(size, free_empty_head_chunk);
 
         char * res = head->pos;
         head->pos += size;
@@ -156,6 +167,7 @@ public:
       * Must pass size not more that was just allocated.
       */
     void rollback(size_t size) { head->pos -= size; }
+    void rollback() { head->pos = head->begin; }
 
     void setResizeCallback(const ResizeCallback & resize_callback_) { resize_callback = resize_callback_; }
 
@@ -169,7 +181,7 @@ public:
         while (unlikely(head->pos + size > head->end))
         {
             char * prev_end = head->pos;
-            addChunk(size);
+            addChunk(size, false);
 
             if (begin)
                 begin = insert(begin, prev_end - begin);

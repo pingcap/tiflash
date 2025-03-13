@@ -498,7 +498,9 @@ void ColumnString::countSerializeByteSizeForCmp(
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    // Skip decoding collator for bin collator so we can avoid counting code points, which may be slow.
+    // For now, sortKeyReservedSpaceMultipler() of bin collator(padding or non-padding) is 1.
+    // So bin collator will skip to decode collator.
+    // And other collators will first count code point then compute the needed memory.
     if (collator != nullptr && collator->sortKeyReservedSpaceMultipler() > 1)
     {
         if (nullmap != nullptr)

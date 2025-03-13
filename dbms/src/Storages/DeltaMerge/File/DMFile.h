@@ -38,7 +38,6 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args);
 
 namespace DB::DM
 {
-class DMFileWithVectorIndexBlockInputStream;
 namespace tests
 {
 class DMFileTest;
@@ -346,7 +345,7 @@ public:
 #endif
     DMFileMetaPtr meta;
 
-    friend class DMFileVectorIndexReader;
+    friend class VectorIndexReaderFromDMFile;
     friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
     friend class DMFileLocalIndexWriter;
@@ -355,7 +354,7 @@ public:
     friend class ColumnReadStream;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
-    friend class DMFileWithVectorIndexBlockInputStream;
+    friend class DMFileInputStreamProvideVectorIndex;
     friend class tests::DMFileTest;
     friend class tests::DMFileMetaV2Test;
     friend class tests::DMStoreForSegmentReadTaskTest;

@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <IO/BaseFile/fwd.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Settings_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Server/StorageConfigParser.h>
@@ -229,7 +230,12 @@ public:
                                                                              : nullptr;
     }
 
-    static void shutdown() { global_file_cache_instance = nullptr; }
+    static void shutdown()
+    {
+        // wait for all tasks done
+        S3FileCachePool::shutdown();
+        global_file_cache_instance = nullptr;
+    }
 
     FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_);
 
