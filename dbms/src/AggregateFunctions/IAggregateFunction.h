@@ -120,8 +120,11 @@ public:
     virtual void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const = 0;
 
     /// Inserts batch results into a column
-    virtual void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena * arena)
-        const
+    virtual void batchInsertSameResultInto(
+        ConstAggregateDataPtr __restrict place,
+        IColumn & to,
+        size_t num,
+        Arena * arena) const
         = 0;
 
     /** Returns true for aggregate functions of type -State.

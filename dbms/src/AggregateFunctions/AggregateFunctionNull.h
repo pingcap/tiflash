@@ -629,7 +629,8 @@ public:
         }
     }
 
-    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *)
+        const override
     {
         auto & to_concrete = static_cast<ColumnNullable &>(to);
         if (getCounter(place) > 0)

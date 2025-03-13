@@ -131,7 +131,8 @@ public:
         }
     }
 
-    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *) const override
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *)
+        const override
     {
         if constexpr (IsDecimal<TResult>)
         {
