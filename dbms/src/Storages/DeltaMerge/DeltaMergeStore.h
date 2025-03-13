@@ -949,6 +949,8 @@ public:
         bool throw_if_notfound);
     void createFirstSegment(DM::DMContext & dm_context);
 
+    void updateColumnDefines(ColumnDefines && tmp_columns);
+
     Context & global_context;
     std::shared_ptr<StoragePathPool> path_pool;
     Settings settings;
