@@ -654,17 +654,17 @@ ColumnPtr DMFileReader::getColumnFromCache(
     auto mutable_col = type_on_disk->createColumn();
     for (auto & [range, strategy] : read_strategy)
     {
+        size_t rows_count = 0;
+        for (size_t cursor = range.first; cursor < range.second; ++cursor)
+        {
+            rows_count += pack_stats[cursor].rows;
+        }
         if (strategy == ColumnCache::Strategy::Memory)
         {
-            data_cache->getColumn(mutable_col, range.first, range.second, col_id);
+            data_cache->getColumn(mutable_col, range.first, range.second, rows_count, col_id);
         }
         else if (strategy == ColumnCache::Strategy::Disk)
         {
-            size_t rows_count = 0;
-            for (size_t cursor = range.first; cursor < range.second; cursor++)
-            {
-                rows_count += pack_stats[cursor].rows;
-            }
             auto sub_col = on_cache_miss(cd, type_on_disk, range.first, range.second - range.first, rows_count);
             mutable_col->insertRangeFrom(*sub_col, 0, sub_col->size());
         }
