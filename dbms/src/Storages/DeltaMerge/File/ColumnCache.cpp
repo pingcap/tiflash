@@ -164,7 +164,7 @@ ColumnPtr ColumnCache::getColumn(size_t start_pack_id, size_t end_pack_id, size_
             return column->cut(iter->second.rows_offset, read_rows);
 
         auto mut_col = column->cloneEmpty();
-        getColumn(mut_col, start_pack_id, end_pack_id, read_rows, column_id);
+        getColumnImpl(column_caches, mut_col, start_pack_id, end_pack_id, read_rows, column_id);
         return mut_col;
     });
 }
@@ -177,34 +177,45 @@ void ColumnCache::getColumn(
     ColId column_id)
 {
     return column_caches.withShared([&](auto & column_caches) {
-        size_t copied_rows = 0;
-        size_t processed_packs_rows = 0;
-        for (size_t cursor = start_pack_id; cursor < end_pack_id; ++cursor)
-        {
-            if (copied_rows >= read_rows)
-                break;
-
-            auto iter = column_caches.find(cursor);
-            RUNTIME_CHECK_MSG(iter != column_caches.end(), "Cannot find column in cache, pack_id={}", cursor);
-            if (copied_rows > processed_packs_rows)
-            {
-                processed_packs_rows += iter->second.rows_count;
-                continue;
-            }
-            auto & columns = iter->second.columns;
-            auto col_iter = columns.find(column_id);
-            RUNTIME_CHECK_MSG(
-                col_iter != columns.end(),
-                "Cannot find column in cache, pack_id={} column_id={}",
-                start_pack_id,
-                column_id);
-            const auto & column = col_iter->second;
-            size_t to_copied_rows = std::min(column->size() - iter->second.rows_offset, read_rows - copied_rows);
-            result->insertRangeFrom(*column, iter->second.rows_offset, to_copied_rows);
-            copied_rows += to_copied_rows;
-            processed_packs_rows += iter->second.rows_count;
-        }
+        getColumnImpl(column_caches, result, start_pack_id, end_pack_id, read_rows, column_id);
     });
+}
+
+void ColumnCache::getColumnImpl(
+    const std::unordered_map<PackId, ColumnCacheEntry> & column_caches,
+    MutableColumnPtr & result,
+    size_t start_pack_id,
+    size_t end_pack_id,
+    size_t read_rows,
+    ColId column_id)
+{
+    size_t copied_rows = 0;
+    size_t processed_packs_rows = 0;
+    for (size_t cursor = start_pack_id; cursor < end_pack_id; ++cursor)
+    {
+        if (copied_rows >= read_rows)
+            break;
+
+        auto iter = column_caches.find(cursor);
+        RUNTIME_CHECK_MSG(iter != column_caches.end(), "Cannot find column in cache, pack_id={}", cursor);
+        if (copied_rows > processed_packs_rows)
+        {
+            processed_packs_rows += iter->second.rows_count;
+            continue;
+        }
+        const auto & columns = iter->second.columns;
+        auto col_iter = columns.find(column_id);
+        RUNTIME_CHECK_MSG(
+            col_iter != columns.end(),
+            "Cannot find column in cache, pack_id={} column_id={}",
+            start_pack_id,
+            column_id);
+        const auto & column = col_iter->second;
+        size_t to_copied_rows = std::min(column->size() - iter->second.rows_offset, read_rows - copied_rows);
+        result->insertRangeFrom(*column, iter->second.rows_offset, to_copied_rows);
+        copied_rows += to_copied_rows;
+        processed_packs_rows += iter->second.rows_count;
+    }
 }
 
 void ColumnCache::delColumn(ColId column_id, size_t upper_pack_id)
