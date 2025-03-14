@@ -25,6 +25,11 @@
 
 namespace DB
 {
+static constexpr size_t agg_prefetch_step = 16;
+static constexpr size_t agg_mini_batch = 256;
+// 2MB as prefetch threshold, because normally server L2 cache is 1MB.
+static constexpr size_t prefetch_threshold = (2 << 20);
+
 using Sizes = std::vector<size_t>;
 
 /// When packing the values of nullable columns at a given row, we have to
