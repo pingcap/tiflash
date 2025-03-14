@@ -85,6 +85,14 @@ private:
         ColId column_id,
         std::function<bool(size_t, ColId)> is_hit);
     bool isPackInCache(PackId pack_id, ColId column_id);
+    struct ColumnCacheEntry;
+    static void getColumnImpl(
+        const std::unordered_map<PackId, ColumnCacheEntry> & column_caches,
+        MutableColumnPtr & result,
+        size_t start_pack_id,
+        size_t end_pack_id,
+        size_t read_rows,
+        ColId column_id);
 
 private:
     struct ColumnCacheEntry
