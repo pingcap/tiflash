@@ -89,7 +89,7 @@ Block MergeSortingBlockInputStream::readImpl()
 
             SortHelper::removeConstantsFromBlock(block);
             if (block.columns() != header_without_constants.columns())
-                throw Exception("Unexpected number of constant columns in block in MergeSortingBlockInputStream.");
+                throw Exception(ErrorCodes::LOGICAL_ERROR, "Unexpected number of constant columns in block in MergeSortingBlockInputStream, n_block={} n_header={}", block.columns(), header_without_constants.columns());
 
             blocks.push_back(block);
             sum_bytes_in_blocks += block.estimateBytesForSpill();
