@@ -615,13 +615,13 @@ void NO_INLINE Aggregator::executeImpl(
             collect_hit_rate,
             only_lookup,
             /*enable_prefetch=*/false,
-            /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
+            /*enable_agg_batch_get_key_holder=*/false>(method, result, agg_process_info, collators);
     else
         executeImplInner<
             collect_hit_rate,
             only_lookup,
             /*enable_prefetch=*/true,
-            /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
+            /*enable_agg_batch_get_key_holder=*/false>(method, result, agg_process_info, collators);
 #endif
 }
 
