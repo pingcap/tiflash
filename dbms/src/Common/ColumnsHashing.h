@@ -536,9 +536,7 @@ protected:
         for (size_t i = processed_row_idx; i < processed_row_idx + cur_batch_size; ++i)
             mem_size += byte_size[i];
 
-        // 15 is to avoid access invalid memory because memcpySmallAllowReadWriteOverflow15() has been used
-        // when deserialize ColumnString.
-        auto * ptr = static_cast<char *>(pool->alignedAlloc(mem_size + 15, 16, /*free_empty_head_chunk=*/true));
+        auto * ptr = static_cast<char *>(pool->alignedAlloc(mem_size, 16, /*free_empty_head_chunk=*/true));
         for (size_t i = 0; i < cur_batch_size; ++i)
         {
             pos[i] = ptr;
