@@ -22,8 +22,6 @@
 
 #include <magic_enum.hpp>
 
-#include "Common/Exception.h"
-
 namespace DB
 {
 void MergeSortTransformOp::operatePrefixImpl()
