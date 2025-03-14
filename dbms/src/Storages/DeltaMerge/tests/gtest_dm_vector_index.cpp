@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
@@ -61,6 +62,151 @@ extern const char file_cache_fg_download_fail[];
 
 namespace DB::DM::tests
 {
+
+TEST(VectorIndexInputStream, NormalStream)
+try
+{
+    // When a normal stream is provided in the VectorIndexInputStream, BitmapFilter should be applied.
+
+    auto make_block_stream = [] {
+        return NopSkippableBlockInputStream::wrap(std::make_shared<OneBlockInputStream>(Block{createColumns({
+            createColumn<UInt64>({7, 4, 7, 0, 1, 2, 3}, "a"),
+        })}));
+    };
+
+    // VectorIndexInputStream does not need this information, but ctx needs at least a correct vec column.
+    auto ann = std::make_shared<tipb::ANNQueryInfo>();
+    ann->set_column_id(1);
+    auto ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+        ann,
+        std::make_shared<ColumnDefines>(
+            ColumnDefines{ColumnDefine{1, "vec", tests::typeFromString("Array(Float32)")}}));
+
+    auto stream = VectorIndexTestUtils::wrapVectorStream( //
+        ctx,
+        make_block_stream(),
+        std::make_shared<BitmapFilter>(7, true));
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({7, 4, 7, 0, 1, 2, 3}),
+        }));
+
+    stream = VectorIndexTestUtils::wrapVectorStream(ctx, make_block_stream(), std::make_shared<BitmapFilter>(7, false));
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({}),
+        }));
+
+    auto filter = std::make_shared<BitmapFilter>(7, false);
+    filter->set(4, 1);
+    stream = VectorIndexTestUtils::wrapVectorStream(ctx, make_block_stream(), filter);
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({1}),
+        }));
+
+    filter = std::make_shared<BitmapFilter>(7, false);
+    filter->set(4, 1);
+    filter->set(0, 1);
+    stream = VectorIndexTestUtils::wrapVectorStream(ctx, make_block_stream(), filter);
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({7, 1}),
+        }));
+}
+CATCH
+
+TEST(VectorIndexInputStream, MultipleStreams)
+try
+{
+    auto make_multi_stream = [] {
+        auto block1 = std::make_shared<OneBlockInputStream>(Block{createColumns({
+            createColumn<UInt64>({7, 4, 7, 0, 1, 2, 3}, "a"),
+        })});
+        auto block2 = std::make_shared<OneBlockInputStream>(Block{createColumns({
+            createColumn<UInt64>({42, 45, 50, 37}, "a"),
+        })});
+        return ConcatSkippableBlockInputStream<false>::create(
+            {NopSkippableBlockInputStream::wrap(block1), NopSkippableBlockInputStream::wrap(block2)},
+            {7, 4},
+            nullptr);
+    };
+
+    // VectorIndexInputStream does not need this information, but ctx needs at least a correct vec column.
+    auto ann = std::make_shared<tipb::ANNQueryInfo>();
+    ann->set_column_id(1);
+    auto ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+        ann,
+        std::make_shared<ColumnDefines>(
+            ColumnDefines{ColumnDefine{1, "vec", tests::typeFromString("Array(Float32)")}}));
+
+    auto stream = VectorIndexInputStream::create(ctx, std::make_shared<BitmapFilter>(11, true), make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({7, 4, 7, 0, 1, 2, 3, 42, 45, 50, 37}),
+        }));
+
+    stream = VectorIndexInputStream::create(ctx, std::make_shared<BitmapFilter>(11, false), make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({}),
+        }));
+
+    auto filter = std::make_shared<BitmapFilter>(11, false);
+    filter->set(4, 1);
+    stream = VectorIndexInputStream::create(ctx, filter, make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({1}),
+        }));
+
+    filter = std::make_shared<BitmapFilter>(11, false);
+    filter->set(4, 1);
+    filter->set(0, 1);
+    stream = VectorIndexInputStream::create(ctx, filter, make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({7, 1}),
+        }));
+
+    filter = std::make_shared<BitmapFilter>(11, false);
+    filter->set(9, 1);
+    stream = VectorIndexInputStream::create(ctx, filter, make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({50}),
+        }));
+
+    filter = std::make_shared<BitmapFilter>(11, false);
+    filter->set(4, 1);
+    filter->set(9, 1);
+    stream = VectorIndexInputStream::create(ctx, filter, make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({1, 50}),
+        }));
+}
+CATCH
 
 class VectorIndexDMFileTest
     : public VectorIndexTestUtils
@@ -154,22 +300,6 @@ public:
         return new_dmfiles[0];
     }
 
-    static ANNQueryInfoPtr createANNQueryInfo(
-        ColumnID column_id,
-        tipb::VectorDistanceMetric metric,
-        UInt32 topk,
-        const std::vector<float> & ref_vec,
-        IndexID index_id = EmptyIndexID)
-    {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(column_id);
-        ann_query_info->set_distance_metric(metric);
-        ann_query_info->set_top_k(topk);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32(ref_vec));
-        ann_query_info->set_index_id(index_id);
-        return ann_query_info;
-    }
-
     Context & dbContext() { return *db_context; }
 
 protected:
@@ -249,17 +379,28 @@ try
 
     // Read with exact match
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.5});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.5}));
+
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                std::make_shared<BitmapFilter>(3, true)),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({2}),
@@ -269,18 +410,27 @@ try
 
     // Read with approximate match
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                std::make_shared<BitmapFilter>(3, true)),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({2}),
@@ -290,18 +440,27 @@ try
 
     // Read multiple rows
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 2, {1.0, 2.0, 3.8});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(2);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                std::make_shared<BitmapFilter>(3, true)),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({0, 2}),
@@ -311,21 +470,30 @@ try
 
     // Read with MVCC filter
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
         auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
         bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                bitmap_filter),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({0}),
@@ -335,18 +503,27 @@ try
 
     // Query Top K = 0: the pack should be filtered out
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 0, {1.0, 2.0, 3.8});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(0);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                std::make_shared<BitmapFilter>(3, true)),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({}),
@@ -356,18 +533,27 @@ try
 
     // Query Top K > rows
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 10, {1.0, 2.0, 3.8});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(10);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                std::make_shared<BitmapFilter>(3, true)),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({0, 1, 2}),
@@ -377,20 +563,30 @@ try
 
     // Illegal ANNQueryInfo: Ref Vector'dimension is different
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 10, {1.0});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(10);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0}));
+
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
-
+        auto stream2 = VectorIndexTestUtils::wrapVectorStream( //
+            vec_idx_ctx,
+            stream,
+            std::make_shared<BitmapFilter>(3, true));
         try
         {
-            stream->readPrefix();
-            stream->read();
+            stream2->readPrefix();
+            stream2->read();
             FAIL();
         }
         catch (const DB::Exception & ex)
@@ -404,44 +600,59 @@ try
         }
     }
 
-    // Illegal ANNQueryInfo: Referencing a non-existed column. This simply cause vector index not used.
-    // The query will not fail, because ANNQueryInfo is passed globally in the whole read path.
+    // Illegal ANNQueryInfo: Referencing a non-existed column (and the column is not in the read schema).
+    // This will throw exceptions.
     {
-        const auto ann_query_info = createANNQueryInfo(5, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
-        DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
-                          .build(
-                              dm_file,
-                              read_cols,
-                              RowKeyRanges{RowKeyRange::newAll(false, 1)},
-                              std::make_shared<ScanContext>());
-        ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
-            createColumnNames(),
-            createColumnData({
-                createColumn<Int64>({0, 1, 2}),
-                createVecFloat32Column<Array>({{1.0, 2.0, 3.0}, {0.0, 0.0, 0.0}, {1.0, 2.0, 3.5}}),
-            }));
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(5);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+        try
+        {
+            auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+                ann_query_info,
+                std::make_shared<ColumnDefines>(read_cols));
+            FAIL();
+        }
+        catch (const DB::Exception & ex)
+        {
+            EXPECT_TRUE(ex.message().find("Check vec_cd.has_value() failed") != std::string::npos) << ex.message();
+        }
+        catch (...)
+        {
+            FAIL();
+        }
     }
 
     // Illegal ANNQueryInfo: Different distance metric.
     {
-        const auto ann_query_info
-            = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::COSINE, 1, {1.0, 2.0, 3.8});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
 
+        auto stream2 = VectorIndexTestUtils::wrapVectorStream( //
+            vec_idx_ctx,
+            stream,
+            std::make_shared<BitmapFilter>(3, true));
         try
         {
-            stream->readPrefix();
-            stream->read();
+            stream2->readPrefix();
+            stream2->read();
             FAIL();
         }
         catch (const DB::Exception & ex)
@@ -460,18 +671,33 @@ try
     // Illegal ANNQueryInfo: The column exists but is not a vector column.
     // Currently the query is fine and ANNQueryInfo is discarded, because we discovered that this column
     // does not have index at all.
+    if (!test_only_vec_column)
     {
-        const auto ann_query_info = createANNQueryInfo(5, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
+        // Note, in test_only_vec_column mode, column_id becomes a not-found column in read_cols
+        // so that an exception will be raised instead. This case is already checked before.
+        // So here we only check with test_only_vec_column==false.
+
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(MutSup::extra_handle_id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
+
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                std::make_shared<BitmapFilter>(3, true)),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({0, 1, 2}),
@@ -507,38 +733,32 @@ try
     dm_file = restoreDMFile();
     auto index_infos = std::make_shared<LocalIndexInfos>(LocalIndexInfos{
         // index with index_id == 3
-        LocalIndexInfo{
-            .kind = TiDB::ColumnarIndexKind::Vector,
-            .index_id = 3,
-            .column_id = vec_column_id,
-            .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        LocalIndexInfo(
+            3,
+            vec_column_id,
+            std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                 .kind = tipb::VectorIndexKind::HNSW,
                 .dimension = 3,
                 .distance_metric = tipb::VectorDistanceMetric::L2,
-            }),
-        },
+            })),
         // index with index_id == 4
-        LocalIndexInfo{
-            .kind = TiDB::ColumnarIndexKind::Vector,
-            .index_id = 4,
-            .column_id = vec_column_id,
-            .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        LocalIndexInfo(
+            4,
+            vec_column_id,
+            std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                 .kind = tipb::VectorIndexKind::HNSW,
                 .dimension = 3,
                 .distance_metric = tipb::VectorDistanceMetric::COSINE,
-            }),
-        },
+            })),
         // index with index_id == EmptyIndexID, column_id = vec_column_id
-        LocalIndexInfo{
-            .kind = TiDB::ColumnarIndexKind::Vector,
-            .index_id = EmptyIndexID,
-            .column_id = vec_column_id,
-            .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        LocalIndexInfo(
+            EmptyIndexID,
+            vec_column_id,
+            std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                 .kind = tipb::VectorIndexKind::HNSW,
                 .dimension = 3,
                 .distance_metric = tipb::VectorDistanceMetric::L2,
-            }),
-        },
+            })),
     });
     dm_file = buildMultiIndex(index_infos);
 
@@ -553,19 +773,28 @@ try
 
         // Read with approximate match
         {
-            const auto ann_query_info
-                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8}, 3);
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(3);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+            auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+                ann_query_info,
+                std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setAnnQureyInfo(ann_query_info)
-                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+            auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                               .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
                                   std::make_shared<ScanContext>());
             ASSERT_INPUTSTREAM_COLS_UR(
-                stream,
+                VectorIndexTestUtils::wrapVectorStream( //
+                    vec_idx_ctx,
+                    stream,
+                    std::make_shared<BitmapFilter>(3, true)),
                 createColumnNames(),
                 createColumnData({
                     createColumn<Int64>({2}),
@@ -575,19 +804,28 @@ try
 
         // Read multiple rows
         {
-            const auto ann_query_info
-                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 2, {1.0, 2.0, 3.8}, 3);
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(3);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(2);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+            auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+                ann_query_info,
+                std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setAnnQureyInfo(ann_query_info)
-                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+            auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                               .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
                                   std::make_shared<ScanContext>());
             ASSERT_INPUTSTREAM_COLS_UR(
-                stream,
+                VectorIndexTestUtils::wrapVectorStream( //
+                    vec_idx_ctx,
+                    stream,
+                    std::make_shared<BitmapFilter>(3, true)),
                 createColumnNames(),
                 createColumnData({
                     createColumn<Int64>({0, 2}),
@@ -597,22 +835,31 @@ try
 
         // Read with MVCC filter
         {
-            const auto ann_query_info
-                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8}, 3);
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(3);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
             auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
+            auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+                ann_query_info,
+                std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setAnnQureyInfo(ann_query_info)
-                              .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
+            auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                               .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
                                   std::make_shared<ScanContext>());
             ASSERT_INPUTSTREAM_COLS_UR(
-                stream,
+                VectorIndexTestUtils::wrapVectorStream( //
+                    vec_idx_ctx,
+                    stream,
+                    bitmap_filter),
                 createColumnNames(),
                 createColumnData({
                     createColumn<Int64>({0}),
@@ -626,19 +873,28 @@ try
 
         // Read with approximate match
         {
-            const auto ann_query_info
-                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::COSINE, 1, {1.0, 2.0, 3.8}, 4);
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(4);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+            auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+                ann_query_info,
+                std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setAnnQureyInfo(ann_query_info)
-                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+            auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                               .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
                                   std::make_shared<ScanContext>());
             ASSERT_INPUTSTREAM_COLS_UR(
-                stream,
+                VectorIndexTestUtils::wrapVectorStream( //
+                    vec_idx_ctx,
+                    stream,
+                    std::make_shared<BitmapFilter>(3, true)),
                 createColumnNames(),
                 createColumnData({
                     createColumn<Int64>({2}),
@@ -648,19 +904,28 @@ try
 
         // Read multiple rows
         {
-            const auto ann_query_info
-                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::COSINE, 2, {1.0, 2.0, 3.8}, 4);
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(4);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
+            ann_query_info->set_top_k(2);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+            auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+                ann_query_info,
+                std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setAnnQureyInfo(ann_query_info)
-                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+            auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                               .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
                                   std::make_shared<ScanContext>());
             ASSERT_INPUTSTREAM_COLS_UR(
-                stream,
+                VectorIndexTestUtils::wrapVectorStream( //
+                    vec_idx_ctx,
+                    stream,
+                    std::make_shared<BitmapFilter>(3, true)),
                 createColumnNames(),
                 createColumnData({
                     createColumn<Int64>({0, 2}),
@@ -670,22 +935,31 @@ try
 
         // Read with MVCC filter
         {
-            const auto ann_query_info
-                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::COSINE, 1, {1.0, 2.0, 3.8}, 4);
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_index_id(4);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
             auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
+            auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+                ann_query_info,
+                std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setAnnQureyInfo(ann_query_info)
-                              .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
+            auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                               .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
                                   std::make_shared<ScanContext>());
             ASSERT_INPUTSTREAM_COLS_UR(
-                stream,
+                VectorIndexTestUtils::wrapVectorStream( //
+                    vec_idx_ctx,
+                    stream,
+                    bitmap_filter),
                 createColumnNames(),
                 createColumnData({
                     createColumn<Int64>({0}),
@@ -700,19 +974,27 @@ try
 
         // Read with approximate match
         {
-            const auto ann_query_info
-                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+            auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+                ann_query_info,
+                std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setAnnQureyInfo(ann_query_info)
-                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+            auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                               .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
                                   std::make_shared<ScanContext>());
             ASSERT_INPUTSTREAM_COLS_UR(
-                stream,
+                VectorIndexTestUtils::wrapVectorStream( //
+                    vec_idx_ctx,
+                    stream,
+                    std::make_shared<BitmapFilter>(3, true)),
                 createColumnNames(),
                 createColumnData({
                     createColumn<Int64>({2}),
@@ -722,19 +1004,27 @@ try
 
         // Read multiple rows
         {
-            const auto ann_query_info
-                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 2, {1.0, 2.0, 3.8});
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(2);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
+            auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+                ann_query_info,
+                std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setAnnQureyInfo(ann_query_info)
-                              .setBitmapFilter(BitmapFilterView::createWithFilter(3, true))
+            auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                               .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
                                   std::make_shared<ScanContext>());
             ASSERT_INPUTSTREAM_COLS_UR(
-                stream,
+                VectorIndexTestUtils::wrapVectorStream( //
+                    vec_idx_ctx,
+                    stream,
+                    std::make_shared<BitmapFilter>(3, true)),
                 createColumnNames(),
                 createColumnData({
                     createColumn<Int64>({0, 2}),
@@ -744,22 +1034,30 @@ try
 
         // Read with MVCC filter
         {
-            const auto ann_query_info
-                = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.8});
+            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+            ann_query_info->set_column_id(vec_cd.id);
+            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+            ann_query_info->set_top_k(1);
+            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
 
             auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
+            auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+                ann_query_info,
+                std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
-            auto stream = builder.setAnnQureyInfo(ann_query_info)
-                              .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 3))
+            auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                               .build(
                                   dm_file,
                                   read_cols,
                                   RowKeyRanges{RowKeyRange::newAll(false, 1)},
                                   std::make_shared<ScanContext>());
             ASSERT_INPUTSTREAM_COLS_UR(
-                stream,
+                VectorIndexTestUtils::wrapVectorStream( //
+                    vec_idx_ctx,
+                    stream,
+                    bitmap_filter),
                 createColumnNames(),
                 createColumnData({
                     createColumn<Int64>({0}),
@@ -808,11 +1106,17 @@ try
     dm_file = buildIndex(*vector_index);
 
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 4, {1.0, 2.0, 3.5});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(4);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.5}));
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(5, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
@@ -820,7 +1124,10 @@ try
                               std::make_shared<ScanContext>());
 
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                std::make_shared<BitmapFilter>(5, true)),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({0, 1, 3, 4}),
@@ -872,18 +1179,27 @@ try
 
     // Pack #0 is filtered out according to VecIndex
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {5.0, 5.0, 5.5});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({5.0, 5.0, 5.5}));
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                std::make_shared<BitmapFilter>(6, true)),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({3}),
@@ -893,18 +1209,27 @@ try
 
     // Pack #1 is filtered out according to VecIndex
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {1.0, 2.0, 3.0});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.0}));
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                std::make_shared<BitmapFilter>(6, true)),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({0}),
@@ -914,18 +1239,27 @@ try
 
     // Both packs are reserved
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 2, {0.0, 0.0, 0.0});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(2);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({0.0, 0.0, 0.0}));
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView::createWithFilter(6, true))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                std::make_shared<BitmapFilter>(6, true)),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({1, 5}),
@@ -935,21 +1269,30 @@ try
 
     // Pack Filter + MVCC (the matching row #5 is marked as filtered out by MVCC)
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 2, {0.0, 0.0, 0.0});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(2);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({0.0, 0.0, 0.0}));
 
         auto bitmap_filter = std::make_shared<BitmapFilter>(6, true);
         bitmap_filter->set(/* start */ 5, /* limit */ 1, false);
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 6))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
                               dm_file,
                               read_cols,
                               RowKeyRanges{RowKeyRange::newAll(false, 1)},
                               std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                bitmap_filter),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({0, 1}),
@@ -999,7 +1342,11 @@ try
 
     // Pack Filter using RowKeyRange
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 1, {8.0});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(1);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({8.0}));
 
         // This row key range will cause pack#0 and pack#1 reserved, and pack#2 filtered out.
         auto row_key_ranges = RowKeyRanges{RowKeyRange::fromHandleRange(HandleRange(0, 5))};
@@ -1007,12 +1354,17 @@ try
         auto bitmap_filter = std::make_shared<BitmapFilter>(9, false);
         bitmap_filter->set(0, 6); // 0~6 rows are valid, 6~9 rows are invalid due to pack filter.
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                bitmap_filter),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({5}),
@@ -1020,13 +1372,23 @@ try
             }));
 
         // TopK=4
-        const auto ann_query_info2 = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 4, {8.0});
+        ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(4);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({8.0}));
+
+        vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         builder = DMFileBlockInputStreamBuilder(dbContext());
-        stream = builder.setAnnQureyInfo(ann_query_info2)
-                     .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
+        stream = builder.setVecIndexQuery(vec_idx_ctx)
                      .build(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                bitmap_filter),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({2, 3, 4, 5}),
@@ -1036,7 +1398,11 @@ try
 
     // Pack Filter + Bitmap Filter
     {
-        const auto ann_query_info = createANNQueryInfo(vec_cd.id, tipb::VectorDistanceMetric::L2, 3, {8.0});
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_column_id(vec_cd.id);
+        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
+        ann_query_info->set_top_k(3);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({8.0}));
 
         // This row key range will cause pack#0 and pack#1 reserved, and pack#2 filtered out.
         auto row_key_ranges = RowKeyRanges{RowKeyRange::fromHandleRange(HandleRange(0, 5))};
@@ -1046,12 +1412,17 @@ try
         bitmap_filter->set(0, 2);
         bitmap_filter->set(3, 2);
 
+        auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+            ann_query_info,
+            std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.setAnnQureyInfo(ann_query_info)
-                          .setBitmapFilter(BitmapFilterView(bitmap_filter, 0, 9))
+        auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(dm_file, read_cols, row_key_ranges, std::make_shared<ScanContext>());
         ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
+            VectorIndexTestUtils::wrapVectorStream( //
+                vec_idx_ctx,
+                stream,
+                bitmap_filter),
             createColumnNames(),
             createColumnData({
                 createColumn<Int64>({1, 3, 4}),
@@ -1362,20 +1733,21 @@ try
     ensureSegmentStableLocalIndex(DELTA_MERGE_FIRST_SEGMENT_ID, indexInfo());
 
     writeSegment(DELTA_MERGE_FIRST_SEGMENT_ID, 10, /* at */ 20);
+    writeSegmentWithDeleteRange(DELTA_MERGE_FIRST_SEGMENT_ID, /* begin */ 25, /* end */ 27, false, false);
 
     // ANNQuery will be only effective to Stable layer. All delta data will be returned.
 
     auto stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 1, {100.0});
-    assertStreamOut(stream, "[4, 5)|[20, 30)");
+    assertStreamOut(stream, "[4, 5)|[20, 25)|[27, 30)");
 
     stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 2, {10.0});
-    assertStreamOut(stream, "[3, 5)|[20, 30)");
+    assertStreamOut(stream, "[3, 5)|[20, 25)|[27, 30)");
 
     stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 5, {10.0});
-    assertStreamOut(stream, "[0, 5)|[20, 30)");
+    assertStreamOut(stream, "[0, 5)|[20, 25)|[27, 30)");
 
     stream = annQuery(DELTA_MERGE_FIRST_SEGMENT_ID, createQueryColumns(), 10, {10.0});
-    assertStreamOut(stream, "[0, 5)|[20, 30)");
+    assertStreamOut(stream, "[0, 5)|[20, 25)|[27, 30)");
 }
 CATCH
 
@@ -1744,7 +2116,7 @@ public:
 
     static ColumnDefine cdPK() { return getExtraHandleColumnDefine(false); }
 
-    BlockInputStreamPtr createComputeNodeStream(
+    std::pair<BlockInputStreamPtr, DMContextPtr> createComputeNodeStream(
         const SegmentPtr & write_node_segment,
         const ColumnDefines & columns_to_read,
         const PushDownExecutorPtr & filter,
@@ -1788,7 +2160,7 @@ public:
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
 
-        return stream;
+        return {stream, read_dm_context};
     }
 
     static void removeAllFileCache()
@@ -1824,38 +2196,32 @@ public:
         auto dm_files = segment->getStable()->getDMFiles();
         auto index_infos = std::make_shared<LocalIndexInfos>(LocalIndexInfos{
             // index with index_id == 3
-            LocalIndexInfo{
-                .kind = TiDB::ColumnarIndexKind::Vector,
-                .index_id = 3,
-                .column_id = vec_column_id,
-                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+            LocalIndexInfo(
+                3,
+                vec_column_id,
+                std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                     .kind = tipb::VectorIndexKind::HNSW,
                     .dimension = 1,
                     .distance_metric = tipb::VectorDistanceMetric::L2,
-                }),
-            },
+                })),
             // index with index_id == 4
-            LocalIndexInfo{
-                .kind = TiDB::ColumnarIndexKind::Vector,
-                .index_id = 4,
-                .column_id = vec_column_id,
-                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+            LocalIndexInfo(
+                4,
+                vec_column_id,
+                std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                     .kind = tipb::VectorIndexKind::HNSW,
                     .dimension = 1,
                     .distance_metric = tipb::VectorDistanceMetric::COSINE,
-                }),
-            },
+                })),
             // index with index_id == EmptyIndexID, column_id = vec_column_id
-            LocalIndexInfo{
-                .kind = TiDB::ColumnarIndexKind::Vector,
-                .index_id = EmptyIndexID,
-                .column_id = vec_column_id,
-                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+            LocalIndexInfo(
+                EmptyIndexID,
+                vec_column_id,
+                std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                     .kind = tipb::VectorIndexKind::HNSW,
                     .dimension = 1,
                     .distance_metric = tipb::VectorDistanceMetric::L2,
-                }),
-            },
+                })),
         });
         auto build_info = DMFileLocalIndexWriter::getLocalIndexBuildInfo(index_infos, dm_files);
 
@@ -1879,12 +2245,12 @@ public:
         return new_segment;
     }
 
-    BlockInputStreamPtr computeNodeTableScan()
+    std::pair<BlockInputStreamPtr, DMContextPtr> computeNodeTableScan()
     {
         return createComputeNodeStream(wn_segment, {cdPK(), cdVec()}, nullptr);
     }
 
-    BlockInputStreamPtr computeNodeANNQuery(
+    std::pair<BlockInputStreamPtr, DMContextPtr> computeNodeANNQuery(
         const std::vector<Float32> ref_vec,
         IndexID index_id,
         UInt32 top_k = 1,
@@ -1897,12 +2263,11 @@ public:
         ann_query_info->set_top_k(top_k);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32(ref_vec));
 
-        auto stream = createComputeNodeStream(
+        return createComputeNodeStream(
             wn_segment,
             {cdPK(), cdVec()},
             std::make_shared<PushDownExecutor>(ann_query_info),
             read_scan_context);
-        return stream;
     }
 
 protected:
@@ -1958,7 +2323,7 @@ try
     prepareWriteNodeStable();
 
     FileCache::shutdown();
-    auto stream = computeNodeANNQuery({5.0}, EmptyIndexID);
+    auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID);
 
     try
     {
@@ -1986,7 +2351,7 @@ try
         ASSERT_EQ(0, file_cache->getAll().size());
     }
     {
-        auto stream = computeNodeTableScan();
+        auto [stream, rn_dm_ctx] = computeNodeTableScan();
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2013,7 +2378,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2035,7 +2400,7 @@ try
         // Read again, we should be reading from memory cache.
 
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2064,7 +2429,7 @@ try
         IndexID query_index_id = EmptyIndexID;
         {
             auto scan_context = std::make_shared<ScanContext>();
-            auto stream = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
+            auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
             ASSERT_INPUTSTREAM_COLS_UR(
                 stream,
                 Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2086,7 +2451,7 @@ try
             // Read again, we should be reading from memory cache.
 
             auto scan_context = std::make_shared<ScanContext>();
-            auto stream = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
+            auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
             ASSERT_INPUTSTREAM_COLS_UR(
                 stream,
                 Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2105,7 +2470,7 @@ try
         IndexID query_index_id = 3;
         {
             auto scan_context = std::make_shared<ScanContext>();
-            auto stream = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
+            auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
             ASSERT_INPUTSTREAM_COLS_UR(
                 stream,
                 Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2127,7 +2492,7 @@ try
             // Read again, we should be reading from memory cache.
 
             auto scan_context = std::make_shared<ScanContext>();
-            auto stream = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
+            auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, query_index_id, 1, scan_context);
             ASSERT_INPUTSTREAM_COLS_UR(
                 stream,
                 Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2154,7 +2519,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2185,7 +2550,7 @@ try
     {
         // When cache is evicted (but memory cache exists), the query should be fine.
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2202,7 +2567,7 @@ try
         // Read again, we should be reading from memory cache.
 
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2228,7 +2593,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2264,7 +2629,7 @@ try
     {
         // When cache is evicted (and memory cache is dropped), the query should be fine.
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2281,7 +2646,7 @@ try
         // Read again, we should be reading from memory cache.
 
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2307,7 +2672,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2331,7 +2696,7 @@ try
     {
         // Query should be fine.
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2348,7 +2713,7 @@ try
         // Read again, we should be reading from memory cache.
 
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2374,7 +2739,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2404,7 +2769,7 @@ try
     {
         // Query should be fine.
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2421,7 +2786,7 @@ try
         // Read again, we should be reading from memory cache.
 
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2451,7 +2816,7 @@ try
 
     auto th_1 = std::async([&]() {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2473,7 +2838,7 @@ try
 
     auto th_2 = std::async([&]() {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({7.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({7.0}, EmptyIndexID, 1, scan_context);
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name, vec_column_name}),
@@ -2516,7 +2881,7 @@ try
     }
     {
         auto scan_context = std::make_shared<ScanContext>();
-        auto stream = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
+        auto [stream, rn_dm_ctx] = computeNodeANNQuery({5.0}, EmptyIndexID, 1, scan_context);
 
         ASSERT_THROW(
             {

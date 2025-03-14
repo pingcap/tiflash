@@ -860,6 +860,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Vector index memory usage",                                                                                                  \
       Gauge,                                                                                                                        \
       F(type_build, {"type", "build"}),                                                                                             \
+      F(type_load, {"type", "load"}),                                                                                               \
       F(type_view, {"type", "view"}))                                                                                               \
     M(tiflash_vector_index_build_count,                                                                                             \
       "Vector index build count",                                                                                                   \
@@ -870,9 +871,24 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Active Vector index instances",                                                                                              \
       Gauge,                                                                                                                        \
       F(type_build, {"type", "build"}),                                                                                             \
+      F(type_load, {"type", "load"}),                                                                                               \
       F(type_view, {"type", "view"}))                                                                                               \
     M(tiflash_vector_index_duration,                                                                                                \
       "Vector index operation duration",                                                                                            \
+      Histogram,                                                                                                                    \
+      F(type_build, {{"type", "build"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+      F(type_load_cf, {{"type", "load_cf"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+      F(type_load_cache, {{"type", "load_cache"}}, ExpBuckets{0.001, 2, 20}),                                                       \
+      F(type_load_dmfile_local, {{"type", "load_dmfile_local"}}, ExpBuckets{0.001, 2, 20}),                                         \
+      F(type_load_dmfile_s3, {{"type", "load_dmfile_s3"}}, ExpBuckets{0.001, 2, 20}),                                               \
+      F(type_search, {{"type", "search"}}, ExpBuckets{0.001, 2, 20}))                                                               \
+    M(tiflash_inverted_index_active_instances,                                                                                      \
+      "Active Inverted index instances",                                                                                            \
+      Gauge,                                                                                                                        \
+      F(type_build, {"type", "build"}),                                                                                             \
+      F(type_view, {"type", "view"}))                                                                                               \
+    M(tiflash_inverted_index_duration,                                                                                              \
+      "Inverted index operation duration",                                                                                          \
       Histogram,                                                                                                                    \
       F(type_build, {{"type", "build"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
       F(type_download, {{"type", "download"}}, ExpBuckets{0.001, 2, 20}),                                                           \
