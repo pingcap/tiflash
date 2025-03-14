@@ -409,7 +409,8 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
         kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
         if (opt.mock_add_new_peer)
         {
-            *kvs.getRegion(id)->mutMeta().debugMutRegionState().getMutRegion().add_peers() = createPeer(peer_id, true);
+            *kvs.getRegion(id)->mutMeta().debugMutRegionState().getMutRegion().add_peers()
+                = RegionBench::createPeer(peer_id, true);
             proxy_instance->getRegion(id)->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
         }
         persistAfterWrite(global_context, kvs, proxy_instance, page_storage, id, index);
