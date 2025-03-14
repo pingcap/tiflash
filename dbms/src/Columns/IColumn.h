@@ -316,9 +316,9 @@ public:
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
     /// Note:
     /// 1. The pos pointer must not be nullptr.
-    /// 2. The memory of pos must be accessible to overflow 15 bytes(i.e. PaddedPODArray) for speeding up memcpy.(e.g. for ColumnString)
-    /// 3. If use_nt_align_buffer is true and AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes).
-    /// 4. If non-temporal store is used, the data will be copied to a align_buffer firstly and then flush to column data if full. After the
+    /// 2. If use_nt_align_buffer is true and AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes).
+    ///    NOTE: The memory of pos must be accessible to **overflow 15 bytes**(i.e. PaddedPODArray) when use_nt_align_buffer is true.
+    /// 3. If non-temporal store is used, the data will be copied to a align_buffer firstly and then flush to column data if full. After the
     ///    last call, flushNTAlignBuffer must be called to flush the remaining unaligned data from align_buffer into column data. During the
     ///    process, any function that may change the alignment of column data should not be called otherwise a exception will be thrown.
     /// Example:
