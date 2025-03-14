@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Functions/FunctionHelpers.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/ExecutorTestUtils.h>
 #include <TestUtils/mockExecutor.h>
-#include <Functions/FunctionHelpers.h>
 #include <common/types.h>
 
 namespace DB
@@ -202,8 +202,10 @@ try
         std::make_pair("e", true)};
 
     auto request = context.scan("spill_sort_test", "simple_table")
-        .filter(gt(col("d"), lit(toField(static_cast<Int8>(-128)))))
-        .topN(order_by_items, limit_size).project({gt(col("d"), lit(toField(static_cast<Int8>(-128))))}).build(context);
+                       .filter(gt(col("d"), lit(toField(static_cast<Int8>(-128)))))
+                       .topN(order_by_items, limit_size)
+                       .project({gt(col("d"), lit(toField(static_cast<Int8>(-128))))})
+                       .build(context);
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(max_block_size)));
 
     /// disable spill
