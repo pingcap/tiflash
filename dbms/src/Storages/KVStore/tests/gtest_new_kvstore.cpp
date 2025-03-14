@@ -76,13 +76,13 @@ TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
 try
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
-    KVStore & kvs = getKVS();
     {
         auto applied_index = 0;
         auto region_id = 1;
         {
             MockRaftStoreProxy::FailCond cond;
 
+            KVStore & kvs = getKVS();
             proxy_instance->debugAddRegions(
                 kvs,
                 ctx.getTMTContext(),
@@ -118,6 +118,7 @@ try
         auto applied_index = 0;
         auto region_id = 2;
         {
+            KVStore & kvs = getKVS();
             proxy_instance->debugAddRegions(
                 kvs,
                 ctx.getTMTContext(),
@@ -168,6 +169,7 @@ try
         auto applied_index = 0;
         auto region_id = 3;
         {
+            KVStore & kvs = getKVS();
             proxy_instance->debugAddRegions(
                 kvs,
                 ctx.getTMTContext(),
@@ -209,6 +211,7 @@ try
         auto applied_index = 0;
         auto region_id = 4;
         {
+            KVStore & kvs = getKVS();
             proxy_instance->debugAddRegions(
                 kvs,
                 ctx.getTMTContext(),
@@ -257,37 +260,32 @@ TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
 try
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
+    auto region_id = 1;
+    initStorages();
+    KVStore & kvs = getKVS();
+    proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+
+    MockRaftStoreProxy::FailCond cond;
+
+    auto kvr1 = kvs.getRegion(region_id);
+    auto r1 = proxy_instance->getRegion(region_id);
+    ASSERT_NE(r1, nullptr);
+    ASSERT_NE(kvr1, nullptr);
+    ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
     {
-        auto region_id = 1;
-        {
-            initStorages();
-            KVStore & kvs = getKVS();
-            proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
-            proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+        r1->getLatestAppliedIndex();
+        // This key has empty PK which is actually truncated.
+        std::string k = "7480000000000001FFBD5F720000000000FAF9ECEFDC3207FFFC";
+        std::string v = "4486809092ACFEC38906";
+        auto str_key = Redact::hexStringToKey(k.data(), k.size());
+        auto str_val = Redact::hexStringToKey(v.data(), v.size());
 
-            MockRaftStoreProxy::FailCond cond;
-
-            auto kvr1 = kvs.getRegion(region_id);
-            auto r1 = proxy_instance->getRegion(region_id);
-            ASSERT_NE(r1, nullptr);
-            ASSERT_NE(kvr1, nullptr);
-            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
-            {
-                r1->getLatestAppliedIndex();
-                // This key has empty PK which is actually truncated.
-                std::string k = "7480000000000001FFBD5F720000000000FAF9ECEFDC3207FFFC";
-                std::string v = "4486809092ACFEC38906";
-                auto str_key = Redact::hexStringToKey(k.data(), k.size());
-                auto str_val = Redact::hexStringToKey(v.data(), v.size());
-
-                auto [index, term]
-                    = proxy_instance
-                          ->rawWrite(region_id, {str_key}, {str_val}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
-                EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
-                UNUSED(term);
-                EXPECT_THROW(ReadRegionCommitCache(kvr1, true), Exception);
-            }
-        }
+        auto [index, term]
+            = proxy_instance->rawWrite(region_id, {str_key}, {str_val}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+        EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+        UNUSED(term);
+        EXPECT_THROW(ReadRegionCommitCache(kvr1, true), Exception);
     }
 }
 CATCH

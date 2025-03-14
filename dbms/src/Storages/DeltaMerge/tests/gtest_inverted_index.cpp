@@ -152,25 +152,23 @@ public:
                 ASSERT_EQ(bitmap_filter->count(), expected_count);
             };
             std::mt19937 generator;
+            std::uniform_int_distribution<T> distribution_bc(0, block_count);
             std::vector<std::thread> threads;
             {
-                std::uniform_int_distribution<T> distribution(0, block_count);
                 for (UInt32 i = 0; i < 10; ++i)
                 {
-                    threads.emplace_back([&v_search, &generator, &distribution]() {
-                        auto random_v = distribution(generator);
+                    threads.emplace_back([&v_search, &generator, &distribution_bc]() {
+                        auto random_v = distribution_bc(generator);
                         v_search(random_v, block_size);
                     });
                 }
             }
+            std::uniform_int_distribution<T> distribution_fullrange(std::numeric_limits<T>::min(), std::numeric_limits<T>::max());
             {
-                std::uniform_int_distribution<T> distribution(
-                    std::numeric_limits<T>::min(),
-                    std::numeric_limits<T>::max());
                 for (UInt32 i = 0; i < 10; ++i)
                 {
-                    threads.emplace_back([&v_search, &generator, &distribution]() {
-                        auto random_v = distribution(generator);
+                    threads.emplace_back([&v_search, &generator, &distribution_fullrange]() {
+                        auto random_v = distribution_fullrange(generator);
                         v_search(random_v, (random_v >= block_count || random_v < 0) ? 0 : block_size);
                     });
                 }
