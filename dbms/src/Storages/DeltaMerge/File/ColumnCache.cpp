@@ -144,7 +144,7 @@ void ColumnCache::tryPutColumn(
 
 ColumnPtr ColumnCache::getColumn(size_t start_pack_id, size_t end_pack_id, size_t read_rows, ColId column_id)
 {
-    auto column = column_caches.withShared([&](auto & column_caches) -> ColumnPtr {
+    return column_caches.withShared([&](auto & column_caches) -> ColumnPtr {
         auto iter = column_caches.find(start_pack_id);
         RUNTIME_CHECK_MSG(iter != column_caches.end(), "Cannot find column in cache, start_pack_id={}", start_pack_id);
         auto & columns = iter->second.columns;
@@ -163,14 +163,10 @@ ColumnPtr ColumnCache::getColumn(size_t start_pack_id, size_t end_pack_id, size_
         if (column->size() - iter->second.rows_offset >= read_rows)
             return column->cut(iter->second.rows_offset, read_rows);
 
-        return nullptr;
+        auto mut_col = column->cloneEmpty();
+        getColumn(mut_col, start_pack_id, end_pack_id, read_rows, column_id);
+        return mut_col;
     });
-    if (column)
-        return column;
-
-    auto mut_col = column->cloneEmpty();
-    getColumn(mut_col, start_pack_id, end_pack_id, read_rows, column_id);
-    return mut_col;
 }
 
 void ColumnCache::getColumn(
