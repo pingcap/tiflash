@@ -312,6 +312,8 @@ private:
         {
         case TiDB::ColumnarIndexKind::Vector:
             return fmt::format("idx_{}.vector", index_id);
+        case TiDB::ColumnarIndexKind::Inverted:
+            return fmt::format("idx_{}.inverted", index_id);
         default:
             throw Exception(fmt::format("Unsupported index kind: {}", magic_enum::enum_name(kind)));
         }
