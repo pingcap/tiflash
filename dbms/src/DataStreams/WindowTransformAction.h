@@ -51,6 +51,7 @@ public:
     void advanceRangeFrameEndCurrentRowShortcut();
 
     void writeOutCurrentRow();
+    void writeBatchResult();
 
     Block tryGetOutputBlock();
     void releaseAlreadyOutputWindowBlock();
@@ -146,6 +147,7 @@ private:
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
 
+    template <bool need_decrease, bool has_shortcut>
     void tryCalculate();
 
     template <
@@ -318,6 +320,9 @@ public:
     RowNumber prev_frame_end;
 
     bool has_rank_or_dense_rank = false;
+
+    // When preceding and following boundary type are all unbounded we can apply shortcut for agg functions.
+    bool has_shortcut;
 
     std::unique_ptr<Arena> arena;
 };
