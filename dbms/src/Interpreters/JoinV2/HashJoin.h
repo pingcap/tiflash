@@ -27,6 +27,8 @@
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
 
+#include <memory>
+
 
 namespace DB
 {
@@ -78,9 +80,9 @@ private:
 
     void workAfterBuildRowFinish();
 
-    Block handleOtherConditions(size_t stream_index);
-
 private:
+    friend JoinProbeBlockHelper;
+
     const ASTTableJoin::Kind kind;
     const String join_req_id;
 
@@ -125,27 +127,30 @@ private:
     NameSet output_column_names_set_after_finalize;
     NameSet output_columns_names_set_for_other_condition_after_finalize;
     Names required_columns;
+    NameSet required_columns_names_set_for_other_condition;
     bool finalized = false;
 
     /// Row containers
     std::vector<std::unique_ptr<MultipleRowContainer>> multi_row_containers;
 
-    /// Build phase
+    /// Build row phase
     size_t build_concurrency = 0;
     std::vector<JoinBuildWorkerData> build_workers_data;
     std::atomic<size_t> active_build_worker = 0;
+
+    HashJoinPointerTable pointer_table;
 
     /// Probe phase
     size_t probe_concurrency = 0;
     std::vector<JoinProbeWorkerData> probe_workers_data;
     std::atomic<size_t> active_probe_worker = 0;
-
-    HashJoinPointerTable pointer_table;
+    std::unique_ptr<JoinProbeBlockHelper> join_probe_helper;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 
     /// For other condition
     const IColumn::Offsets base_offsets;
+    BoolVec left_required_flag_for_other_condition;
 };
 
 using HashJoinPtr = std::shared_ptr<HashJoin>;

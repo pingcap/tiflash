@@ -19,6 +19,8 @@
 #include <Interpreters/ProbeProcessInfo.h>
 
 #include "Functions/FunctionBinaryArithmetic.h"
+#include "Interpreters/SemiJoinHelper.h"
+#include "Parsers/ASTTablesInSelectQuery.h"
 
 namespace DB
 {
@@ -291,35 +293,17 @@ Block NASemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & ou
         auto result = join_result[i].getResult();
         if constexpr (KIND == ASTTableJoin::Kind::NullAware_Anti)
         {
-            if (result == SemiJoinResultType::TRUE_VALUE)
-            {
-                // If the result is true, this row should be kept.
-                (*filter)[i] = 1;
-                ++rows_for_anti;
-            }
-            else
-            {
-                // If the result is null or false, this row should be filtered.
-                (*filter)[i] = 0;
-            }
+            // If the result is true, this row should be kept.
+            // Otherwise, this row should be filtered.
+            (*filter)[i] = result == SemiJoinResultType::TRUE_VALUE ? 1 : 0;
+            rows_for_anti += (*filter)[i];
         }
         else
         {
-            switch (result)
-            {
-            case SemiJoinResultType::FALSE_VALUE:
-                left_semi_column_data->push_back(0);
-                left_semi_null_map->push_back(0);
-                break;
-            case SemiJoinResultType::TRUE_VALUE:
-                left_semi_column_data->push_back(1);
-                left_semi_null_map->push_back(0);
-                break;
-            case SemiJoinResultType::NULL_VALUE:
-                left_semi_column_data->push_back(0);
-                left_semi_null_map->push_back(1);
-                break;
-            }
+            Int8 res = result == SemiJoinResultType::TRUE_VALUE ? 1 : 0;
+            UInt8 is_null = result == SemiJoinResultType::NULL_VALUE ? 1 : 0;
+            left_semi_column_data->push_back(res);
+            left_semi_null_map->push_back(is_null);
         }
     }
 
