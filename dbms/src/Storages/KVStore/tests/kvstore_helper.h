@@ -61,12 +61,6 @@ extern const char pause_passive_flush_before_persist_region[];
 extern const char force_set_parallel_prehandle_threshold[];
 } // namespace FailPoints
 
-namespace RegionBench
-{
-extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &, const TiKVValue &);
-extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
-} // namespace RegionBench
-
 extern void CheckRegionForMergeCmd(const raft_cmdpb::AdminResponse & response, const RegionState & region_state);
 extern void ChangeRegionStateRange(
     RegionState & region_state,
