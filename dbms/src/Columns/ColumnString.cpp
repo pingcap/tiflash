@@ -1300,7 +1300,7 @@ void ColumnString::deserializeAndInsertFromPosImpl(
         pos[i] += sizeof(UInt32);
 
         chars.resize(char_size + str_size);
-        memcpy(&chars[char_size], pos[i], str_size);
+        std::memcpy(&chars[char_size], pos[i], str_size);
         char_size += str_size;
         offsets[prev_size + i] = char_size;
         pos[i] += str_size;
@@ -1359,7 +1359,7 @@ void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
                 pos[i] += sizeof(UInt32);
 
                 chars.resize(char_size + str_size);
-                memcpy(&chars[char_size], pos[i], str_size);
+                std::memcpy(&chars[char_size], pos[i], str_size);
 
                 char_size += str_size;
                 offsets[j] = char_size;
@@ -1381,7 +1381,7 @@ void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
                 offsets[j] = char_size;
             }
             chars.resize(char_size);
-            memcpy(&chars[prev_char_size], pos[i], char_size - prev_char_size);
+            std::memcpy(&chars[prev_char_size], pos[i], char_size - prev_char_size);
             pos[i] += char_size - prev_char_size;
         }
     }
