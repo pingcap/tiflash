@@ -80,7 +80,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         }
 
         TMTContext & tmt = context.getTMTContext();
-        RegionPtr region = MockTiKV::instance().createRegionCommonHandle(table_info, region_id, start_keys, end_keys);
+        RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
         tmt.getKVStore()
             ->onSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, {}}, nullptr, 0, tmt);
 
@@ -96,7 +96,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         auto end = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
 
         TMTContext & tmt = context.getTMTContext();
-        RegionPtr region = MockTiKV::instance().createRegion(table_id, region_id, start, end);
+        RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
         tmt.getKVStore()->onSnapshot<RegionPtrWithSnapshotFiles>(region, nullptr, 0, tmt);
 
         output(fmt::format(

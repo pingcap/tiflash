@@ -62,7 +62,6 @@ struct RegionMetaSnapshot
 class RegionMeta
 {
 public:
-    // For deserialize from buffer
     RegionMeta(
         metapb::Peer peer_,
         raft_serverpb::RaftApplyState apply_state_,
@@ -157,6 +156,8 @@ private:
     mutable std::condition_variable cv;
     const RegionID region_id;
 };
+
+// TODO: Integrate initialApplyState to MockTiKV
 
 // When we create a region peer, we should initialize its log term/index > 0,
 // so that we can force the follower peer to sync the snapshot first.

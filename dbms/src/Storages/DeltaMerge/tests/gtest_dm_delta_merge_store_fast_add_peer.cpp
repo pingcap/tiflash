@@ -16,7 +16,6 @@
 #include <Common/FailPoint.h>
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
-#include <Debug/MockKVStore/MockUtils.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -33,6 +32,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerCache.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/Page/PageConstants.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
@@ -390,7 +390,9 @@ try
         db_context->getSettingsRef(),
         RowKeyRange::newAll(false, 1),
         checkpoint_info);
-    RegionPtr dummy_region = RegionBench::makeRegionForTable(checkpoint_info->region_id, table_id, 0, 10, nullptr);
+    auto start = RecordKVFormat::genKey(table_id, 0);
+    auto end = RecordKVFormat::genKey(table_id, 10);
+    RegionPtr dummy_region = tests::makeRegion(checkpoint_info->region_id, start, end, nullptr);
     store->ingestSegmentsFromCheckpointInfo(
         *db_context,
         db_context->getSettingsRef(),
@@ -521,7 +523,9 @@ try
             db_context->getSettingsRef(),
             RowKeyRange::fromHandleRange(HandleRange(0, num_rows_write / 2)),
             checkpoint_info);
-        RegionPtr dummy_region = RegionBench::makeRegionForTable(checkpoint_info->region_id, table_id, 0, 10, nullptr);
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, 10);
+        RegionPtr dummy_region = tests::makeRegion(checkpoint_info->region_id, start, end, nullptr);
         store->ingestSegmentsFromCheckpointInfo(
             *db_context,
             db_context->getSettingsRef(),
@@ -544,7 +548,9 @@ try
             db_context->getSettingsRef(),
             RowKeyRange::fromHandleRange(HandleRange(num_rows_write / 2, num_rows_write)),
             checkpoint_info);
-        RegionPtr dummy_region = RegionBench::makeRegionForTable(checkpoint_info->region_id, table_id, 0, 10, nullptr);
+        auto start = RecordKVFormat::genKey(table_id, 0);
+        auto end = RecordKVFormat::genKey(table_id, 10);
+        RegionPtr dummy_region = tests::makeRegion(checkpoint_info->region_id, start, end, nullptr);
         store->ingestSegmentsFromCheckpointInfo(
             *db_context,
             db_context->getSettingsRef(),

@@ -14,7 +14,6 @@
 
 #include <Common/typeid_cast.h>
 #include <Debug/MockKVStore/MockTiKV.h>
-#include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgKVStore/dbgKVStore.h>
 #include <Debug/dbgTools.h>
@@ -46,6 +45,76 @@ namespace RegionBench
 {
 using TiDB::ColumnInfo;
 
+metapb::Region createMetaRegion(TableID table_id, RegionID region_id, HandleID start, HandleID end, UInt64 peer_id)
+{
+    metapb::Region meta;
+    meta.set_id(region_id);
+
+    TiKVKey start_key = RecordKVFormat::genKey(table_id, start);
+    TiKVKey end_key = RecordKVFormat::genKey(table_id, end);
+
+    meta.set_start_key(start_key.getStr());
+    meta.set_end_key(end_key.getStr());
+    auto * peer = meta.add_peers();
+    peer->set_id(peer_id);
+    return meta;
+}
+
+RegionPtr createRegion(
+    TableID table_id,
+    RegionID region_id,
+    const HandleID & start,
+    const HandleID & end,
+    std::optional<uint64_t> index_)
+{
+    // peer_id is a fake number here
+    auto meta_region = createMetaRegion(table_id, region_id, start, end, 1000);
+    metapb::Peer peer;
+    RegionMeta region_meta(std::move(peer), std::move(meta_region), initialApplyState());
+    uint64_t index = MockTiKV::instance().getRaftIndex(region_id);
+    if (index_)
+        index = *index_;
+    region_meta.setApplied(index, RAFT_INIT_LOG_TERM);
+    return makeRegion(std::move(region_meta));
+}
+
+Regions createRegions(
+    TableID table_id,
+    size_t region_num,
+    size_t key_num_each_region,
+    HandleID handle_begin,
+    RegionID new_region_id_begin)
+{
+    Regions regions;
+    for (RegionID region_id = new_region_id_begin; region_id < static_cast<RegionID>(new_region_id_begin + region_num);
+         ++region_id, handle_begin += key_num_each_region)
+    {
+        auto ptr = createRegion(table_id, region_id, handle_begin, handle_begin + key_num_each_region);
+        regions.push_back(ptr);
+    }
+    return regions;
+}
+
+RegionPtr createRegion(
+    const TiDB::TableInfo & table_info,
+    RegionID region_id,
+    std::vector<Field> & start_keys,
+    std::vector<Field> & end_keys)
+{
+    metapb::Region region;
+    metapb::Peer peer;
+    region.set_id(region_id);
+
+    TiKVKey start_key = RecordKVFormat::genKey(table_info, start_keys);
+    TiKVKey end_key = RecordKVFormat::genKey(table_info, end_keys);
+
+    region.set_start_key(start_key.getStr());
+    region.set_end_key(end_key.getStr());
+
+    RegionMeta region_meta(std::move(peer), std::move(region), initialApplyState());
+    region_meta.setApplied(MockTiKV::instance().getRaftIndex(region_id), RAFT_INIT_LOG_TERM);
+    return RegionBench::makeRegion(std::move(region_meta));
+}
 
 void setupPutRequest(raft_cmdpb::Request * req, const std::string & cf, const TiKVKey & key, const TiKVValue & value)
 {
@@ -330,7 +399,7 @@ void insert( //
         *tmt.getKVStore(),
         std::move(request),
         region_id,
-        MockTiKV::instance().getNextRaftIndex(region_id),
+        MockTiKV::instance().getRaftIndex(region_id),
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
 }
@@ -354,7 +423,7 @@ void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID han
         *tmt.getKVStore(),
         std::move(request),
         region_id,
-        MockTiKV::instance().getNextRaftIndex(region_id),
+        MockTiKV::instance().getRaftIndex(region_id),
         MockTiKV::instance().getRaftTerm(region_id),
         tmt);
 }
@@ -486,7 +555,7 @@ void batchInsert(
             *tmt.getKVStore(),
             std::move(request),
             region->id(),
-            MockTiKV::instance().getNextRaftIndex(region->id()),
+            MockTiKV::instance().getRaftIndex(region->id()),
             MockTiKV::instance().getRaftTerm(region->id()),
             tmt);
     }
@@ -517,12 +586,8 @@ void concurrentBatchInsert(
 
 
     auto debug_kvstore = RegionBench::DebugKVStore(*tmt.getKVStore());
-    Regions regions = MockTiKV::instance().createRegions( //
-        table_info.id,
-        concurrent_num,
-        key_num_each_region,
-        handle_begin,
-        curr_max_region_id + 1);
+    Regions regions
+        = createRegions(table_info.id, concurrent_num, key_num_each_region, handle_begin, curr_max_region_id + 1);
     for (const RegionPtr & region : regions)
         debug_kvstore.onSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, {}}, nullptr, 0, tmt);
 

@@ -20,7 +20,6 @@
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
-#include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
@@ -31,6 +30,7 @@
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Decode/RowCodec.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>

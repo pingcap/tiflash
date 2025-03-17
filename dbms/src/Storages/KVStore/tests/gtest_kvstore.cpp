@@ -22,8 +22,6 @@
 namespace DB::tests
 {
 
-using namespace RegionBench;
-
 class RegionKVStoreOldTest : public KVStoreTestBase
 {
 public:
@@ -580,7 +578,11 @@ void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContex
             // add 7 back
             auto task_lock = kvs.genTaskLock();
             auto lock = kvs.genRegionMgrWriteLock(task_lock);
-            auto region = makeRegionForTable(source_region_id, table_id, 0, 5, kvs.getProxyHelper());
+            auto region = makeRegion(
+                source_region_id,
+                RecordKVFormat::genKey(table_id, 0),
+                RecordKVFormat::genKey(table_id, 5),
+                kvs.getProxyHelper());
             lock.regions.emplace(source_region_id, region);
             lock.index.add(region);
         }
@@ -624,6 +626,14 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         std::make_optional(
             std::make_pair(RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 1000))));
     auto region = kvs.getRegion(region_id);
+    {
+        // Test create RegionMeta.
+        auto meta = RegionMeta(
+            createPeer(2, true),
+            createRegionInfo(666, RecordKVFormat::genKey(0, 0), RecordKVFormat::genKey(0, 1000)),
+            initialApplyState());
+        ASSERT_EQ(meta.peerId(), 2);
+    }
     {
         // Test GenRegionReadIndexReq.
         ASSERT_TRUE(region->checkIndex(5));
@@ -1098,7 +1108,11 @@ try
     });
     // Initially region_19 range is [0, 10000)
     {
-        auto region = makeRegionForTable(region_id, table_id, 0, 10000, kvs.getProxyHelper());
+        auto region = makeRegion(
+            region_id,
+            RecordKVFormat::genKey(table_id, 0),
+            RecordKVFormat::genKey(table_id, 10000),
+            kvs.getProxyHelper());
         // Fill data from 20 to 100.
         GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20, 100, 0);
         std::vector<SSTView> sst_views{
@@ -1136,7 +1150,11 @@ try
     }
     // Later, its range is changed to [20000, 50000)
     {
-        auto region = makeRegionForTable(region_id, table_id, 20000, 50000, kvs.getProxyHelper());
+        auto region = makeRegion(
+            region_id,
+            RecordKVFormat::genKey(table_id, 20000),
+            RecordKVFormat::genKey(table_id, 50000),
+            kvs.getProxyHelper());
         // Fill data from 20100 to 20200.
         GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20100, 20200, 0);
         std::vector<SSTView> sst_views{
@@ -1221,7 +1239,11 @@ try
 
     TableID table_id = 1;
     auto region_id = 19;
-    auto region = makeRegionForTable(region_id, table_id, 50, 60, kvs.getProxyHelper());
+    auto region = makeRegion(
+        region_id,
+        RecordKVFormat::genKey(table_id, 50),
+        RecordKVFormat::genKey(table_id, 60),
+        kvs.getProxyHelper());
 
     {
         // Prepare a region with some kvs
@@ -1314,7 +1336,11 @@ try
         // Snapshot will be rejected if region overlaps with existing Region.
         {
             // create an empty region 22, range=[50,100)
-            auto region = makeRegionForTable(22, table_id, 50, 100, kvs.getProxyHelper());
+            auto region = makeRegion(
+                22,
+                RecordKVFormat::genKey(table_id, 50),
+                RecordKVFormat::genKey(table_id, 100),
+                kvs.getProxyHelper());
             auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 9, 5, std::nullopt, ctx.getTMTContext());
             kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
                 RegionPtrWithSnapshotFiles{region, std::move(prehandle_result.ingest_ids)},
@@ -1327,7 +1353,11 @@ try
         try
         {
             // try apply snapshot to region 20, range=[50, 100) that is overlapped with region 22, should be rejected
-            auto region = makeRegionForTable(20, table_id, 50, 100, kvs.getProxyHelper());
+            auto region = makeRegion(
+                20,
+                RecordKVFormat::genKey(table_id, 50),
+                RecordKVFormat::genKey(table_id, 100),
+                kvs.getProxyHelper());
             auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 9, 5, std::nullopt, ctx.getTMTContext());
             kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
                 RegionPtrWithSnapshotFiles{region, std::move(prehandle_result.ingest_ids)},
@@ -1347,7 +1377,11 @@ try
 
         try
         {
-            auto region = makeRegionForTable(20, table_id, 50, 100, kvs.getProxyHelper());
+            auto region = makeRegion(
+                20,
+                RecordKVFormat::genKey(table_id, 50),
+                RecordKVFormat::genKey(table_id, 100),
+                kvs.getProxyHelper());
             // preHandleSnapshotToFiles will assert proxy_ptr is not null.
             auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
             proxy_helper->proxy_ptr.inner = nullptr;
@@ -1369,7 +1403,11 @@ try
             s.set_state(::raft_serverpb::PeerState::Tombstone);
             s;
         }));
-        auto region = makeRegionForTable(20, table_id, 50, 100, kvs.getProxyHelper());
+        auto region = makeRegion(
+            20,
+            RecordKVFormat::genKey(table_id, 50),
+            RecordKVFormat::genKey(table_id, 100),
+            kvs.getProxyHelper());
         auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
         kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
             RegionPtrWithSnapshotFiles{region, std::move(prehandle_result.ingest_ids)},
@@ -1405,7 +1443,8 @@ try
     auto region_id_str = std::to_string(region_id);
     // Prepare a region with some kvs
     {
-        auto region = makeRegionForTable(region_id, 1, 50, 60, kvs.getProxyHelper());
+        auto region
+            = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60), kvs.getProxyHelper());
         auto & mmp = MockSSTReader::getMockSSTData();
         MockSSTReader::getMockSSTData().clear();
         MockSSTReader::Data default_kv_list;
@@ -1503,19 +1542,19 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         const auto & root_map = region_index.getRoot();
         ASSERT_EQ(root_map.size(), 2); // start and end all equals empty
 
-        region_index.add(makeRegionForTable(1, 1, 0, 10));
+        region_index.add(makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)));
 
         ASSERT_EQ(root_map.begin()->second.region_map.size(), 0);
 
-        region_index.add(makeRegionForTable(2, 1, 0, 3));
-        region_index.add(makeRegionForTable(3, 1, 0, 1));
+        region_index.add(makeRegion(2, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 3)));
+        region_index.add(makeRegion(3, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 1)));
 
         auto res = region_index.findByRangeOverlap(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
         ASSERT_EQ(res.size(), 3);
         auto res2 = region_index.findByRangeChecked(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
         ASSERT_TRUE(std::holds_alternative<RegionsRangeIndex::OverlapInfo>(res2));
 
-        region_index.add(makeRegionForTable(4, 1, 1, 4));
+        region_index.add(makeRegion(4, RecordKVFormat::genKey(1, 1), RecordKVFormat::genKey(1, 4)));
 
         // -inf,0,1,3,4,10,inf
         ASSERT_EQ(root_map.size(), 7);
@@ -1581,7 +1620,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
             ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
-        region_index.add(makeRegionForTable(2, 1, 3, 5));
+        region_index.add(makeRegion(2, RecordKVFormat::genKey(1, 3), RecordKVFormat::genKey(1, 5)));
         try
         {
             region_index.remove(
@@ -1640,7 +1679,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
 
         try
         {
-            region_index.add(makeRegionForTable(6, 6, 6, 6));
+            region_index.add(makeRegion(6, RecordKVFormat::genKey(6, 6), RecordKVFormat::genKey(6, 6)));
             assert(false);
         }
         catch (Exception & e)
@@ -1653,9 +1692,9 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
 
         region_index.clear();
 
-        region_index.add(makeRegionForTable(1, 1, 0, 1));
-        region_index.add(makeRegionForTable(2, 1, 1, 2));
-        region_index.add(makeRegionForTable(3, 1, 2, 3));
+        region_index.add(makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 1)));
+        region_index.add(makeRegion(2, RecordKVFormat::genKey(1, 1), RecordKVFormat::genKey(1, 2)));
+        region_index.add(makeRegion(3, RecordKVFormat::genKey(1, 2), RecordKVFormat::genKey(1, 3)));
 
         ASSERT_EQ(root_map.size(), 6);
         region_index.remove(
@@ -1675,31 +1714,30 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
     }
     // Test region range with merge.
     {
-        using RegionBench::createMetaRegionCommonHandle;
         {
             // Compute `source_at_left` by region range.
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createMetaRegionCommonHandle(1, "x", ""),
-                    createMetaRegionCommonHandle(1000, "", "x"))
+                    createRegionInfo(1, "x", ""),
+                    createRegionInfo(1000, "", "x"))
                     .source_at_left,
                 false);
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createMetaRegionCommonHandle(1, "", "x"),
-                    createMetaRegionCommonHandle(1000, "x", ""))
+                    createRegionInfo(1, "", "x"),
+                    createRegionInfo(1000, "x", ""))
                     .source_at_left,
                 true);
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createMetaRegionCommonHandle(1, "x", "y"),
-                    createMetaRegionCommonHandle(1000, "y", "z"))
+                    createRegionInfo(1, "x", "y"),
+                    createRegionInfo(1000, "y", "z"))
                     .source_at_left,
                 true);
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createMetaRegionCommonHandle(1, "y", "z"),
-                    createMetaRegionCommonHandle(1000, "x", "y"))
+                    createRegionInfo(1, "y", "z"),
+                    createRegionInfo(1000, "x", "y"))
                     .source_at_left,
                 false);
         }

@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Debug/MockKVStore/MockUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/LearnerReadWorker.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -76,23 +76,34 @@ try
 
     const TableID table_id = 100;
 
-    using RegionBench::makeRegionForTable;
     LearnerReadSnapshot snapshot{
         {
             region_id_200,
-            RegionLearnerReadSnapshot(makeRegionForTable(region_id_200, table_id, 0, 10000)),
+            RegionLearnerReadSnapshot(makeRegion(
+                region_id_200,
+                RecordKVFormat::genKey(table_id, 0),
+                RecordKVFormat::genKey(table_id, 10000))),
         },
         {
             region_id_201,
-            RegionLearnerReadSnapshot(makeRegionForTable(region_id_201, table_id, 10000, 20000)),
+            RegionLearnerReadSnapshot(makeRegion(
+                region_id_201,
+                RecordKVFormat::genKey(table_id, 10000),
+                RecordKVFormat::genKey(table_id, 20000))),
         },
         {
             region_id_202,
-            RegionLearnerReadSnapshot(makeRegionForTable(region_id_202, table_id, 20000, 30000)),
+            RegionLearnerReadSnapshot(makeRegion(
+                region_id_202,
+                RecordKVFormat::genKey(table_id, 20000),
+                RecordKVFormat::genKey(table_id, 30000))),
         },
         {
             region_id_203,
-            RegionLearnerReadSnapshot(makeRegionForTable(region_id_203, table_id, 30000, 40000)),
+            RegionLearnerReadSnapshot(makeRegion(
+                region_id_203,
+                RecordKVFormat::genKey(table_id, 30000),
+                RecordKVFormat::genKey(table_id, 40000))),
         },
     };
 

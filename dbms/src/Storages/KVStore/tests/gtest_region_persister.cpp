@@ -16,7 +16,6 @@
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/Ctl.h>
-#include <Debug/MockKVStore/MockUtils.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/Buffer/WriteBufferFromFile.h>
 #include <Interpreters/Context.h>
@@ -26,6 +25,7 @@
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
+#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -70,26 +70,10 @@ static ::testing::AssertionResult RegionCompare(
 }
 #define ASSERT_REGION_EQ(val1, val2) ASSERT_PRED_FORMAT2(::DB::tests::RegionCompare, val1, val2)
 
-
-using namespace RegionBench;
-namespace
+static RegionPtr makeTmpRegion()
 {
-RegionMeta createRegionMeta(UInt64 id, DB::TableID table_id)
-{
-    auto meta = RegionBench::createMetaRegion(id, table_id, 0, 300);
-    return RegionMeta(
-        /*peer=*/RegionBench::createPeer(31, true),
-        /*region=*/meta,
-        /*apply_state_=*/initialApplyState());
+    return makeRegion(createRegionMeta(1001, 1));
 }
-
-RegionPtr makeTmpRegion()
-{
-    RegionID region_id = 1001;
-    TableID table_id = 1;
-    return makeRegion(createRegionMeta(region_id, table_id));
-}
-} // namespace
 
 static std::function<size_t(UInt32 &, WriteBuffer &)> mockSerFactory(int value)
 {
@@ -162,7 +146,7 @@ public:
 TEST_F(RegionSeriTest, peer)
 try
 {
-    auto peer = RegionBench::createPeer(100, true);
+    auto peer = createPeer(100, true);
     const auto path = dir_path + "/peer.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
     auto size = writeBinary2(peer, write_buf);
@@ -179,13 +163,7 @@ CATCH
 TEST_F(RegionSeriTest, RegionInfo)
 try
 {
-    {
-        // Test create RegionMeta.
-        RegionMeta meta(createPeer(2, true), RegionBench::createMetaRegion(666, 0, 0, 1000), initialApplyState());
-        ASSERT_EQ(meta.peerId(), 2);
-    }
-
-    auto region_info = RegionBench::createMetaRegion(233, 66, 0, 200);
+    auto region_info = createRegionInfo(233, "", "");
     const auto path = dir_path + "/region_info.test";
     WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
     auto size = writeBinary2(region_info, write_buf);
@@ -295,13 +273,14 @@ try
             apply_state.mutable_truncated_state()->set_index(6672);
             apply_state.mutable_truncated_state()->set_term(6673);
 
-            *region_state.mutable_region() = RegionBench::createMetaRegion(1001, table_id, 0, 300);
+            *region_state.mutable_region()
+                = createRegionInfo(1001, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300));
             region_state.mutable_merge_state()->set_commit(888);
             region_state.mutable_merge_state()->set_min_index(777);
             *region_state.mutable_merge_state()->mutable_target()
-                = RegionBench::createMetaRegion(1111, table_id, 300, 400);
+                = createRegionInfo(1111, RecordKVFormat::genKey(table_id, 300), RecordKVFormat::genKey(table_id, 400));
         }
-        region = makeRegion(RegionMeta(RegionBench::createPeer(31, true), apply_state, 5, region_state));
+        region = makeRegion(RegionMeta(createPeer(31, true), apply_state, 5, region_state));
     }
 
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);

@@ -15,39 +15,15 @@
 #pragma once
 
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
-#include <TiDB/Schema/TiDB_fwd.h>
 
 namespace DB
 {
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-using Regions = std::vector<RegionPtr>;
-
 class MockTiKV : public ext::Singleton<MockTiKV>
 {
     friend class ext::Singleton<MockTiKV>;
 
 public:
-    RegionPtr createRegion( //
-        TableID table_id,
-        RegionID region_id,
-        const HandleID & start,
-        const HandleID & end);
-
-    RegionPtr createRegionCommonHandle(
-        const TiDB::TableInfo & table_info,
-        RegionID region_id,
-        std::vector<Field> & start_keys,
-        std::vector<Field> & end_keys);
-
-    Regions createRegions(
-        TableID table_id,
-        size_t region_num,
-        size_t key_num_each_region,
-        HandleID handle_begin,
-        RegionID new_region_id_begin);
-
-    UInt64 getNextRaftIndex(RegionID region_id)
+    UInt64 getRaftIndex(RegionID region_id)
     {
         std::lock_guard lock(mutex);
         auto it = raft_index.find(region_id);

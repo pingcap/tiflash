@@ -26,8 +26,6 @@
 #include <Storages/RegionQueryInfo.h>
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
 
-#include "Debug/MockKVStore/MockUtils.h"
-
 extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
 extern std::atomic<Int64> real_rss;
 
@@ -280,8 +278,11 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                RegionBench::createPeer(region_id + 1, true),
-                RegionBench::createMetaRegion(region_id2, table_id, 12050, 12099),
+                createPeer(region_id + 1, true),
+                createRegionInfo(
+                    region_id2,
+                    RecordKVFormat::genKey(table_id, 12050),
+                    RecordKVFormat::genKey(table_id, 12099)),
                 initialApplyState()));
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
@@ -324,8 +325,11 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                RegionBench::createPeer(region_id + 1, true),
-                RegionBench::createMetaRegion(region_id2, table_id, 13150, 13199),
+                createPeer(region_id + 1, true),
+                createRegionInfo(
+                    region_id2,
+                    RecordKVFormat::genKey(table_id, 13150),
+                    RecordKVFormat::genKey(table_id, 13199)),
                 initialApplyState()));
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
@@ -546,8 +550,7 @@ std::tuple<RegionPtr, PrehandleResult> genPreHandlingRegion(
     TMTContext & tmt)
 {
     UInt64 peer_id = 100000 + region_id; // gen a fake peer_id
-    std::vector<metapb::Peer> peers = {RegionBench::createPeer(peer_id, true)};
-    auto meta = RegionBench::createMetaRegion(table_id, region_id, start, end, std::nullopt, peers);
+    auto meta = RegionBench::createMetaRegion(table_id, region_id, start, end, peer_id);
     auto new_region = kvs.genRegionPtr(
         std::move(meta),
         peer_id,
