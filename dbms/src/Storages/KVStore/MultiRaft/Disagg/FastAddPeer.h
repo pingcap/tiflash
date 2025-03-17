@@ -16,6 +16,7 @@
 
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
+#include <common/types.h>
 
 namespace DB
 {

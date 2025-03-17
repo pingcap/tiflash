@@ -27,6 +27,7 @@
 #include <Poco/MemoryStream.h>
 #include <Poco/StreamCopier.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 
