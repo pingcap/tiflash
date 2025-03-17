@@ -163,7 +163,9 @@ public:
                     });
                 }
             }
-            std::uniform_int_distribution<T> distribution_fullrange(std::numeric_limits<T>::min(), std::numeric_limits<T>::max());
+            std::uniform_int_distribution<T> distribution_fullrange(
+                std::numeric_limits<T>::min(),
+                std::numeric_limits<T>::max());
             {
                 for (UInt32 i = 0; i < 10; ++i)
                 {
