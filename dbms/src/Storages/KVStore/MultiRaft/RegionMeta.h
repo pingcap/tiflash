@@ -32,7 +32,6 @@ class RegionKVStoreOldTest;
 } // namespace tests
 
 struct RegionMergeResult;
-class Region;
 class MetaRaftCommandDelegate;
 class RegionRaftCommandDelegate;
 

@@ -22,6 +22,7 @@
 #include <Storages/KVStore/BackgroundService.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3GCManager.h>

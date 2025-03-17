@@ -15,13 +15,11 @@
 #pragma once
 
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <TiDB/Schema/TiDB_fwd.h>
 
 namespace DB
 {
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-using Regions = std::vector<RegionPtr>;
 
 class MockTiKV : public ext::Singleton<MockTiKV>
 {

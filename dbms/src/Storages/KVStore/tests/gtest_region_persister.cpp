@@ -26,6 +26,7 @@
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
+#include <Storages/KVStore/Types.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -81,13 +82,6 @@ RegionMeta createRegionMeta(UInt64 id, DB::TableID table_id)
         /*peer=*/RegionBench::createPeer(31, true),
         /*region=*/meta,
         /*apply_state_=*/initialApplyState());
-}
-
-RegionPtr makeTmpRegion()
-{
-    RegionID region_id = 1001;
-    TableID table_id = 1;
-    return makeRegion(createRegionMeta(region_id, table_id));
 }
 } // namespace
 
@@ -155,6 +149,11 @@ public:
     void SetUp() override { clearFileOnDisk(); }
 
     void clearFileOnDisk() { TiFlashTestEnv::tryRemovePath(dir_path, /*recreate=*/true); }
+
+    static RegionPtr makeTmpRegion(RegionID region_id = 1001, TableID table_id = 1)
+    {
+        return makeRegion(createRegionMeta(region_id, table_id));
+    }
 
     const std::string dir_path;
 };

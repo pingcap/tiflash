@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <TiDB/Schema/TiDB_fwd.h>
 #include <kvproto/raft_cmdpb.pb.h>
 
@@ -32,9 +33,6 @@ struct TableInfo;
 namespace DB
 {
 class Context;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-using Regions = std::vector<RegionPtr>;
 class KVStore;
 class TMTContext;
 } // namespace DB

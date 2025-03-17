@@ -17,6 +17,7 @@
 #include <Common/nocopyable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/SSTReader.h>
+#include <Storages/KVStore/Region_fwd.h>
 
 #include <map>
 #include <mutex>
@@ -27,8 +28,6 @@ class KVStore;
 using KVStorePtr = std::shared_ptr<KVStore>;
 
 class RegionTable;
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
 
 /// Some helper structure / functions for IngestSST
 

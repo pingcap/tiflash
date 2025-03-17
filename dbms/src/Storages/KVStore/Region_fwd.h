@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,23 +14,16 @@
 
 #pragma once
 
-#include <Storages/KVStore/MultiRaft/RegionData.h>
-#include <Storages/KVStore/MultiRaft/RegionMeta.h>
-#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/Types.h>
 
-namespace DB::RegionBench
-{
-struct DebugRegion
-{
-    DebugRegion(RegionPtr region_ptr)
-        : region(*region_ptr)
-    {}
-    RegionPtr debugSplitInto(RegionMeta && meta);
-    RegionData & debugData();
-    Region * operator->() { return &region; }
-    Region * operator->() const { return &region; }
+#include <memory>
+#include <unordered_map>
+#include <vector>
 
-private:
-    Region & region;
-};
-} // namespace DB::RegionBench
+namespace DB
+{
+class Region;
+using RegionPtr = std::shared_ptr<Region>;
+using Regions = std::vector<RegionPtr>;
+using RegionMap = std::unordered_map<RegionID, RegionPtr>;
+} // namespace DB
