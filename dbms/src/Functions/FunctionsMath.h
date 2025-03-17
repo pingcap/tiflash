@@ -27,28 +27,6 @@
 #include <common/preciseExp10.h>
 #include <fmt/core.h>
 
-/** More efficient implementations of mathematical functions are possible when using a separate library.
-  * Disabled due to licence compatibility limitations.
-  * To enable: download http://www.agner.org/optimize/vectorclass.zip and unpack to contrib/vectorclass
-  * Then rebuild with -DENABLE_VECTORCLASS=1
-  */
-
-#if USE_VECTORCLASS
-#if __clang__
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wshift-negative-value"
-#endif
-
-#include <vectorf128.h>
-#include <vectormath_exp.h>
-#include <vectormath_trig.h>
-
-#if __clang__
-#pragma clang diagnostic pop
-#endif
-#endif
-
-
 namespace DB
 {
 namespace ErrorCodes
@@ -231,29 +209,8 @@ struct UnaryFunctionPlain
     }
 };
 
-#if USE_VECTORCLASS
-
-template <typename Name, Vec2d(Function)(const Vec2d &)>
-struct UnaryFunctionVectorized
-{
-    static constexpr auto name = Name::name;
-    static constexpr auto rows_per_iteration = 2;
-
-    template <typename T>
-    static void execute(const T * src, Float64 * dst)
-    {
-        const auto result = Function(Vec2d(src[0], src[1]));
-        result.store(dst);
-    }
-};
-
-#else
-
 #define UnaryFunctionVectorized UnaryFunctionPlain
 #define UnaryFunctionNullableVectorized UnaryFunctionNullablePlain
-
-#endif
-
 
 template <typename Impl, bool Nullable = false>
 class FunctionMathBinaryFloat64 : public IFunction
@@ -637,28 +594,7 @@ struct BinaryFunctionPlain
     }
 };
 
-#if USE_VECTORCLASS
-
-template <typename Name, Vec2d(Function)(const Vec2d &, const Vec2d &)>
-struct BinaryFunctionVectorized
-{
-    static constexpr auto name = Name::name;
-    static constexpr auto rows_per_iteration = 2;
-
-    template <typename T1, typename T2>
-    static void execute(const T1 * src_left, const T2 * src_right, Float64 * dst)
-    {
-        const auto result = Function(Vec2d(src_left[0], src_left[1]), Vec2d(src_right[0], src_right[1]));
-        result.store(dst);
-    }
-};
-
-#else
-
 #define BinaryFunctionVectorized BinaryFunctionPlain
-
-#endif
-
 
 struct EImpl
 {
@@ -830,14 +766,7 @@ using FunctionExp10 = FunctionMathUnaryFloat64<UnaryFunctionVectorized<Exp10Name
 using FunctionLog10 = FunctionMathUnaryFloat64Nullable<UnaryFunctionNullableVectorized<Log10Name, DB::log10Nullable>>;
 using FunctionSqrt = FunctionMathUnaryFloat64Nullable<UnaryFunctionNullableVectorized<SqrtName, DB::sqrtNullable>>;
 
-using FunctionCbrt = FunctionMathUnaryFloat64<UnaryFunctionVectorized<
-    CbrtName,
-#if USE_VECTORCLASS
-    Power_rational<1, 3>::pow
-#else
-    cbrt
-#endif
-    >>;
+using FunctionCbrt = FunctionMathUnaryFloat64<UnaryFunctionVectorized<CbrtName, cbrt>>;
 
 using FunctionSin = FunctionMathUnaryFloat64<UnaryFunctionVectorized<SinName, sin>>;
 using FunctionCos = FunctionMathUnaryFloat64<UnaryFunctionVectorized<CosName, cos>>;
