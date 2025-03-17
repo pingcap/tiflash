@@ -733,38 +733,32 @@ try
     dm_file = restoreDMFile();
     auto index_infos = std::make_shared<LocalIndexInfos>(LocalIndexInfos{
         // index with index_id == 3
-        LocalIndexInfo{
-            .kind = TiDB::ColumnarIndexKind::Vector,
-            .index_id = 3,
-            .column_id = vec_column_id,
-            .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        LocalIndexInfo(
+            3,
+            vec_column_id,
+            std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                 .kind = tipb::VectorIndexKind::HNSW,
                 .dimension = 3,
                 .distance_metric = tipb::VectorDistanceMetric::L2,
-            }),
-        },
+            })),
         // index with index_id == 4
-        LocalIndexInfo{
-            .kind = TiDB::ColumnarIndexKind::Vector,
-            .index_id = 4,
-            .column_id = vec_column_id,
-            .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        LocalIndexInfo(
+            4,
+            vec_column_id,
+            std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                 .kind = tipb::VectorIndexKind::HNSW,
                 .dimension = 3,
                 .distance_metric = tipb::VectorDistanceMetric::COSINE,
-            }),
-        },
+            })),
         // index with index_id == EmptyIndexID, column_id = vec_column_id
-        LocalIndexInfo{
-            .kind = TiDB::ColumnarIndexKind::Vector,
-            .index_id = EmptyIndexID,
-            .column_id = vec_column_id,
-            .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+        LocalIndexInfo(
+            EmptyIndexID,
+            vec_column_id,
+            std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                 .kind = tipb::VectorIndexKind::HNSW,
                 .dimension = 3,
                 .distance_metric = tipb::VectorDistanceMetric::L2,
-            }),
-        },
+            })),
     });
     dm_file = buildMultiIndex(index_infos);
 
@@ -2202,38 +2196,32 @@ public:
         auto dm_files = segment->getStable()->getDMFiles();
         auto index_infos = std::make_shared<LocalIndexInfos>(LocalIndexInfos{
             // index with index_id == 3
-            LocalIndexInfo{
-                .kind = TiDB::ColumnarIndexKind::Vector,
-                .index_id = 3,
-                .column_id = vec_column_id,
-                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+            LocalIndexInfo(
+                3,
+                vec_column_id,
+                std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                     .kind = tipb::VectorIndexKind::HNSW,
                     .dimension = 1,
                     .distance_metric = tipb::VectorDistanceMetric::L2,
-                }),
-            },
+                })),
             // index with index_id == 4
-            LocalIndexInfo{
-                .kind = TiDB::ColumnarIndexKind::Vector,
-                .index_id = 4,
-                .column_id = vec_column_id,
-                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+            LocalIndexInfo(
+                4,
+                vec_column_id,
+                std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                     .kind = tipb::VectorIndexKind::HNSW,
                     .dimension = 1,
                     .distance_metric = tipb::VectorDistanceMetric::COSINE,
-                }),
-            },
+                })),
             // index with index_id == EmptyIndexID, column_id = vec_column_id
-            LocalIndexInfo{
-                .kind = TiDB::ColumnarIndexKind::Vector,
-                .index_id = EmptyIndexID,
-                .column_id = vec_column_id,
-                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
+            LocalIndexInfo(
+                EmptyIndexID,
+                vec_column_id,
+                std::make_shared<TiDB::VectorIndexDefinition>(TiDB::VectorIndexDefinition{
                     .kind = tipb::VectorIndexKind::HNSW,
                     .dimension = 1,
                     .distance_metric = tipb::VectorDistanceMetric::L2,
-                }),
-            },
+                })),
         });
         auto build_info = DMFileLocalIndexWriter::getLocalIndexBuildInfo(index_infos, dm_files);
 
