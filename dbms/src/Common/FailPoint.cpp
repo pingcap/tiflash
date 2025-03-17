@@ -420,6 +420,8 @@ void FailPointHelper::wait(const String &) {}
 void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration &, const LoggerPtr &) {}
 
 void FailPointHelper::enableRandomFailPoint(const String &, double) {}
+
+void FailPointHelper::disableRandomFailPoints(Poco::Util::LayeredConfiguration &, const LoggerPtr &) {}
 #endif
 
 } // namespace DB

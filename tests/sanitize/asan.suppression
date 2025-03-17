@@ -1,1 +1,3 @@
 leak:fiu_enable
+# The CppRawPtr in FastAddPeerRes will be automatically deleted in rust
+leak:genFastAddPeerRes
