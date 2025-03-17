@@ -335,16 +335,6 @@ Region::~Region()
     GET_METRIC(tiflash_raft_classes_count, type_region).Decrement();
 }
 
-TableID Region::getMappedTableID() const
-{
-    return mapped_table_id;
-}
-
-KeyspaceID Region::getKeyspaceID() const
-{
-    return keyspace_id;
-}
-
 void Region::setPeerState(raft_serverpb::PeerState state)
 {
     meta.setPeerState(state);
