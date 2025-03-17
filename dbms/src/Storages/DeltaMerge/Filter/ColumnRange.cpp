@@ -92,7 +92,7 @@ BitmapFilterPtr AndColumnRange::check(
         if (!result || !child_result)
             result = child_result;
         else
-            result->intersect(*child_result);
+            result->logicalAnd(*child_result);
     }
     return result;
 }
@@ -168,7 +168,7 @@ BitmapFilterPtr OrColumnRange::check(
         if (!result || !child_result)
             result = child_result;
         else
-            result->merge(*child_result);
+            result->logicalOr(*child_result);
     }
     return result;
 }

@@ -97,7 +97,7 @@ void BitmapFilter::rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) con
     }
 }
 
-void BitmapFilter::merge(const BitmapFilter & other)
+void BitmapFilter::logicalOr(const BitmapFilter & other)
 {
     RUNTIME_CHECK(filter.size() == other.filter.size());
     if (all_match)
@@ -108,9 +108,10 @@ void BitmapFilter::merge(const BitmapFilter & other)
     {
         filter[i] = filter[i] || other.filter[i];
     }
+    all_match = all_match || other.all_match;
 }
 
-void BitmapFilter::intersect(const BitmapFilter & other)
+void BitmapFilter::logicalAnd(const BitmapFilter & other)
 {
     RUNTIME_CHECK(filter.size() == other.filter.size());
     if (all_match)

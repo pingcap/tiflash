@@ -574,7 +574,7 @@ BitmapFilterPtr CompositeSet<T>::search(InvertedIndexReaderPtr inverted_index, s
         case SetType::Range:
         case SetType::Composite:
             auto sub_filter = set->search(inverted_index, size);
-            filter->merge(*sub_filter);
+            filter->logicalOr(*sub_filter);
             break;
         }
     }

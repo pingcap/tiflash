@@ -41,9 +41,9 @@ public:
     void rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
 
     // f = f | other
-    void merge(const BitmapFilter & other);
+    void logicalOr(const BitmapFilter & other);
     // f = f & other
-    void intersect(const BitmapFilter & other);
+    void logicalAnd(const BitmapFilter & other);
 
     void runOptimize();
 
