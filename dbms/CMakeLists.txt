@@ -229,6 +229,7 @@ target_link_libraries (dbms
     absl::synchronization
     tiflash_contrib::aws_s3
     tiflash_vector_search
+    tici_search_lib
 
     etcdpb
     tiflash_parsers
