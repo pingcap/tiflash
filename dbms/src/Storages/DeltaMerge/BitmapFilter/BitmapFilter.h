@@ -44,6 +44,8 @@ public:
     void merge(const BitmapFilter & other);
     // f = f & other
     void intersect(const BitmapFilter & other);
+    // f = f + other
+    void append(const BitmapFilter & other);
 
     void runOptimize();
 

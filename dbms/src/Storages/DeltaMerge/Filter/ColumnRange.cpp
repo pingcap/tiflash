@@ -81,9 +81,7 @@ ColumnRangePtr AndColumnRange::tryOptimize()
     return this->shared_from_this();
 }
 
-BitmapFilterPtr AndColumnRange::check(
-    std::function<BitmapFilterPtr(const ColumnRangePtr &, size_t size)> search,
-    size_t size)
+BitmapFilterPtr AndColumnRange::check(std::function<BitmapFilterPtr(const SingleColumnRangePtr &)> search, size_t size)
 {
     BitmapFilterPtr result = nullptr;
     for (const auto & child : children)
@@ -157,9 +155,7 @@ ColumnRangePtr OrColumnRange::tryOptimize()
     return this->shared_from_this();
 }
 
-BitmapFilterPtr OrColumnRange::check(
-    std::function<BitmapFilterPtr(const ColumnRangePtr &, size_t size)> search,
-    size_t size)
+BitmapFilterPtr OrColumnRange::check(std::function<BitmapFilterPtr(const SingleColumnRangePtr &)> search, size_t size)
 {
     BitmapFilterPtr result = nullptr;
     for (const auto & child : children)

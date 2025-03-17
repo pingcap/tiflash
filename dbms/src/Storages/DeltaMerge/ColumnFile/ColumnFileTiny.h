@@ -37,7 +37,7 @@ class ColumnFileTiny : public ColumnFilePersisted
 public:
     friend class ColumnFileTinyReader;
     friend class ColumnFileTinyLocalIndexWriter;
-    friend class ColumnFileTinyVectorIndexReader;
+    friend class InvertedIndexReaderFromColumnFileTiny;
     friend struct Remote::Serializer;
 
     using IndexInfos = std::vector<dtpb::ColumnFileIndexInfo>;
