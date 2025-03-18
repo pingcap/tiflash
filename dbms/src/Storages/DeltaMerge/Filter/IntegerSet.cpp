@@ -63,7 +63,7 @@ IntegerSetPtr IntegerSet::createValueSet(TypeIndex type_index, const Fields & va
     }
 }
 
-IntegerSetPtr IntegerSet::createLessRangeSet(TypeIndex type_index, Field max, bool not_included)
+IntegerSetPtr IntegerSet::createLessRangeSet(TypeIndex type_index, const Field & max, bool not_included)
 {
     switch (type_index)
     {
@@ -102,7 +102,7 @@ IntegerSetPtr IntegerSet::createLessRangeSet(TypeIndex type_index, Field max, bo
     }
 }
 
-IntegerSetPtr IntegerSet::createGreaterRangeSet(TypeIndex type_index, Field min, bool not_included)
+IntegerSetPtr IntegerSet::createGreaterRangeSet(TypeIndex type_index, const Field & min, bool not_included)
 {
     switch (type_index)
     {

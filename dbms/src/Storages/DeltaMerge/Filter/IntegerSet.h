@@ -43,9 +43,7 @@ enum class SetType : UInt8
 class IntegerSet : public std::enable_shared_from_this<IntegerSet>
 {
 public:
-    explicit IntegerSet(SetType type_)
-        : type(type_)
-    {}
+    IntegerSet() = default;
 
     virtual ~IntegerSet() = default;
 
@@ -72,11 +70,8 @@ public:
     virtual String toDebugString() = 0;
 
     static IntegerSetPtr createValueSet(TypeIndex type_index, const Fields & values);
-    static IntegerSetPtr createLessRangeSet(TypeIndex type_index, Field max, bool not_included = true);
-    static IntegerSetPtr createGreaterRangeSet(TypeIndex type_index, Field min, bool not_included = true);
-
-protected:
-    SetType type;
+    static IntegerSetPtr createLessRangeSet(TypeIndex type_index, const Field & max, bool not_included = true);
+    static IntegerSetPtr createGreaterRangeSet(TypeIndex type_index, const Field & min, bool not_included = true);
 };
 
 class EmptySet final : public IntegerSet
@@ -88,9 +83,7 @@ public:
         return instance;
     }
 
-    EmptySet()
-        : IntegerSet(SetType::Empty)
-    {}
+    EmptySet() = default;
 
     ~EmptySet() override = default;
 
@@ -119,9 +112,7 @@ public:
         return instance;
     }
 
-    AllSet()
-        : IntegerSet(SetType::All)
-    {}
+    AllSet() = default;
 
     ~AllSet() override = default;
 
@@ -146,17 +137,13 @@ template <typename T>
 class ValueSet final : public IntegerSet
 {
 public:
-    explicit ValueSet(std::set<T> values_)
-        : IntegerSet(SetType::Value)
-        , values(values_)
-    {}
+    ValueSet() = default;
 
-    ValueSet()
-        : ValueSet(std::set<T>{})
+    explicit ValueSet(std::set<T> values_)
+        : values(values_)
     {}
 
     explicit ValueSet(const Fields & values_)
-        : IntegerSet(SetType::Value)
     {
         for (const auto & value : values_)
             values.insert(value.get<T>());
@@ -210,8 +197,7 @@ class RangeSet final : public IntegerSet
 
 public:
     explicit RangeSet(T start_, T end_)
-        : IntegerSet(SetType::Range)
-        , start(start_)
+        : start(start_)
         , end(end_)
     {}
 
@@ -250,13 +236,10 @@ class CompositeSet : public IntegerSet
     friend class ValueSet<T>;
 
 public:
-    CompositeSet()
-        : IntegerSet(SetType::Composite)
-    {}
+    CompositeSet() = default;
 
     explicit CompositeSet(std::vector<IntegerSetPtr> sets_)
-        : IntegerSet(SetType::Composite)
-        , sets(sets_)
+        : sets(sets_)
     {}
 
     ~CompositeSet() override = default;
