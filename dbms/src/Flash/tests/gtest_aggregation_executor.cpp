@@ -1349,6 +1349,56 @@ try
 }
 CATCH
 
+TEST_F(AggExecutorTestRunner, TestCountDistinct)
+try
+{
+    std::vector<size_t> max_block_sizes{1, 8, DEFAULT_BLOCK_SIZE};
+    std::vector<size_t> concurrences{1, 8};
+    std::vector<std::vector<String>> count_distinct_keys{
+        // key_int256
+        {"key_decimal256"},
+        // keys128
+        {"key_64", "key_64_1"},
+        // keys256
+        {"key_64", "key_64_1", "key_64_2", "key_64_3"},
+        // nullable_keys128
+        {"key_16", "key_nullable_int64"},
+        // nullable_keys256
+        {"key_64", "key_nullable_int64"},
+    };
+    for (const auto & keys : count_distinct_keys)
+    {
+        MockAstVec key_vec;
+        for (const auto & key : keys)
+            key_vec.push_back(col(key));
+        auto request = context.scan("test_db", "agg_table_with_special_key")
+                           .aggregation({makeASTFunction("uniqExact", key_vec)}, nullptr)
+                           .build(context);
+        context.context->setSetting(
+            "max_block_size",
+            Field(static_cast<UInt64>(tbl_agg_table_with_special_key_unique_rows * 2)));
+        auto reference = executeStreams(request);
+
+        for (auto block_size : max_block_sizes)
+        {
+            for (auto concurrency : concurrences)
+            {
+                context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+                WRAP_FOR_AGG_FAILPOINTS_START
+                auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
+                for (auto & block : blocks)
+                {
+                    block.checkNumberOfRows();
+                    ASSERT(block.rows() <= block_size);
+                }
+                ASSERT_TRUE(
+                    columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
+                WRAP_FOR_AGG_FAILPOINTS_END
+            }
+        }
+    }
+}
+CATCH
 #undef WRAP_FOR_AGG_FAILPOINTS_START
 #undef WRAP_FOR_AGG_FAILPOINTS_END
 
