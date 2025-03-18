@@ -17,6 +17,8 @@
 #include <Storages/KVStore/ProxyStateMachine.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <ext/scope_guard.h>
+
 // TODO: Move ServerInfo into KVStore, to make it more conhensive.
 namespace DB
 {
