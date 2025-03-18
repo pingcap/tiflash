@@ -100,7 +100,11 @@ void TiFlashTestEnv::initializeGlobalContext(
     PageStorageRunMode ps_run_mode,
     uint64_t bg_thread_count)
 {
-    addGlobalContext(DB::Settings(), testdata_path, ps_run_mode, bg_thread_count);
+    // In unit-tests, compare the MVCC bitmap between version chain and delta index, if version chain is enabled.
+    DB::Settings settings;
+    if (settings.enable_version_chain == static_cast<Int64>(DM::VersionChainMode::Enabled))
+        settings.set("enable_version_chain", std::to_string(static_cast<Int64>(DM::VersionChainMode::EnabledForTest)));
+    addGlobalContext(settings, testdata_path, ps_run_mode, bg_thread_count);
 }
 
 void TiFlashTestEnv::addGlobalContext(
