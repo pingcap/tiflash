@@ -222,22 +222,6 @@ public:
         ASSERT_TRUE(new_segment != nullptr);
     }
 
-    static ANNQueryInfoPtr createANNQueryInfo(
-        ColumnID column_id,
-        tipb::VectorDistanceMetric metric,
-        UInt32 topk,
-        const std::vector<float> & ref_vec,
-        IndexID index_id = EmptyIndexID)
-    {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(column_id);
-        ann_query_info->set_distance_metric(metric);
-        ann_query_info->set_top_k(topk);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32(ref_vec));
-        ann_query_info->set_index_id(index_id);
-        return ann_query_info;
-    }
-
 protected:
     DeltaMergeStorePtr store;
 
@@ -278,14 +262,14 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 2, {127.5});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {127.5}, .top_k = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
     }
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 2, {72.1});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {72.1}, .top_k = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
     }
@@ -320,14 +304,14 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 2, {72.1});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {72.1}, .top_k = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
     }
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 2, {127.5});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {127.5}, .top_k = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
     }
@@ -369,7 +353,7 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {72.0});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {72.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 128) with vector index return 72.0, [128, 130) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}, {129.0}}));
@@ -377,7 +361,7 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {72.1});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {72.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 128) with vector index return 72.0, [128, 130) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}, {129.0}}));
@@ -420,7 +404,7 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {1.0});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 4) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
@@ -428,7 +412,7 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {1.1});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {1.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 4) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
@@ -495,14 +479,14 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(left_segment_range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {222.1});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {222.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(left_segment_range, filter, createVecFloat32Column<Array>({{127.0}}));
     }
@@ -522,14 +506,14 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {122.1});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {122.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{122.0}}));
     }
@@ -607,14 +591,14 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(left_segment_range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {222.1});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {222.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(left_segment_range, filter, createVecFloat32Column<Array>({{127.0}}));
     }
@@ -634,14 +618,14 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {122.1});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {122.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{122.0}}));
     }
@@ -714,14 +698,14 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.1});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
@@ -792,14 +776,14 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {222.1});
+        const auto ann_query_info = annQueryInfoTopK({.vec = {222.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{222.0}}));
     }
@@ -868,7 +852,7 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {2.0}, 2);
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1, .index_id = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
@@ -876,7 +860,7 @@ try
 
     // read with ANN query
     {
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {222.1}, 2);
+        const auto ann_query_info = annQueryInfoTopK({.vec = {222.1}, .top_k = 1, .index_id = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{222.0}}));
@@ -963,7 +947,12 @@ try
 
         // read with ANN query
         {
-            const auto ann_query_info = createANNQueryInfo(vec_column_id, metric, 1, {2.0}, index_id);
+            const auto ann_query_info = annQueryInfoTopK({
+                .vec = {2.0},
+                .top_k = 1,
+                .index_id = index_id,
+                .distance_metric = metric,
+            });
             auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
             read(range, filter, createVecFloat32Column<Array>(result_1));
@@ -971,7 +960,12 @@ try
 
         // read with ANN query
         {
-            const auto ann_query_info = createANNQueryInfo(vec_column_id, metric, 1, {222.1}, index_id);
+            const auto ann_query_info = annQueryInfoTopK({
+                .vec = {222.1},
+                .top_k = 1,
+                .index_id = index_id,
+                .distance_metric = metric,
+            });
             auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
             read(range, filter, createVecFloat32Column<Array>(result_2));
