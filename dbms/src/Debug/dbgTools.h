@@ -37,7 +37,6 @@ class KVStore;
 class TMTContext;
 } // namespace DB
 
-
 namespace DB
 {
 using QualifiedName = std::pair<String, String>;

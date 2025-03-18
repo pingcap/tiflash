@@ -40,7 +40,6 @@ extern const int UNKNOWN_TABLE;
 extern const int UNKNOWN_DATABASE;
 } // namespace DB::ErrorCodes
 
-
 namespace DB
 {
 String mappedDatabase(Context & context, const String & database_name)
