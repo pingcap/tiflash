@@ -567,7 +567,7 @@ void NO_INLINE Aggregator::executeImpl(
 {
 #ifndef NDEBUG
     // In debug mode, failpoint disable_agg_batch_get_key_holder can be used.
-    bool disable_prefetch = (method.data.getBufferSizeInBytes() < prefetch_threshold);
+    bool disable_prefetch = (method.data.getBufferSizeInBytes() < agg_prefetch_threshold);
     fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
 
     bool disable_batch_get_key_holder = false;
@@ -604,7 +604,7 @@ void NO_INLINE Aggregator::executeImpl(
                 /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
     }
 #else
-    const bool disable_prefetch = (method.data.getBufferSizeInBytes() < prefetch_threshold);
+    const bool disable_prefetch = (method.data.getBufferSizeInBytes() < agg_prefetch_threshold);
     if (disable_prefetch)
         executeImplInner<
             collect_hit_rate,

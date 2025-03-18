@@ -20,6 +20,7 @@
 #include <AggregateFunctions/UniquesHashSet.h>
 #include <Columns/ColumnString.h>
 #include <Common/CombinedCardinalityEstimator.h>
+#include <Common/FailPoint.h>
 #include <Common/HashTable/HashSet.h>
 #include <Common/HyperLogLogWithSmallSetOptimization.h>
 #include <Common/MemoryTracker.h>
@@ -34,6 +35,10 @@
 
 #include <type_traits>
 
+namespace FailPoints
+{
+extern const char force_agg_prefetch[];
+} // namespace FailPoints
 
 namespace DB
 {
@@ -422,36 +427,31 @@ struct OneAdder
     }
 };
 
-template <typename T, typename Data>
 struct BatchAdder
 {
-    template <bool enable_prefetch, bool has_if_arg_flags>
+    template <bool enable_prefetch, bool has_if_argument_pos_data, typename T, typename Data>
     static void ALWAYS_INLINE addBatchSinglePlace(
             size_t start_offset,
             size_t batch_size,
-            AggregateDataPtr place,
+            Data & agg_data,
             const IColumn ** columns,
-            Arena * arene,
-            const ColumnUInt8::Container * if_arg_flags)
+            const ColumnUInt8::Container * if_argument_pos_data)
     {
-        assert(place);
-
         // Other uniq function not support batch-wise for now.
-        static_assert((std::is_same_v<Data, AggregateFunctionUniqExactData<T>>);
+        static_assert(std::is_same_v<Data, AggregateFunctionUniqExactData<T>>);
 
         const auto & arg_column = *columns[0];
-        std::vector<size_t> hashvasl;
+        std::vector<size_t> hashvals;
         hashvals.reserve(batch_size);
         std::vector<T> keys;
         keys.reserve(batch_size);
 
         const size_t end_row = start_offset + batch_size;
-        Data & agg_data = this->data(place);
         for (size_t row = start_offset; row < end_row; ++row)
         {
-            if constexpr (has_if_argument)
+            if constexpr (has_if_argument_pos_data)
             {
-                if (!(*if_arg_flags)[row])
+                if (!(*if_argument_pos_data)[row])
                 {
                     hashvals.push_back(0);
                     keys.push_back(T{});
@@ -467,7 +467,7 @@ struct BatchAdder
             }
             else
             {
-                StringRef value = column.getDataAt();
+                StringRef value = arg_column.getDataAt(row);
                 value = agg_data.getUpdatedValueForCollator(value, 0);
 
                 UInt128 key;
@@ -484,7 +484,13 @@ struct BatchAdder
 
         for (size_t i = 0; i < batch_size; ++i)
         {
-            const size_t prefetch_i = i + prefetch_step;
+            if constexpr (has_if_argument_pos_data)
+            {
+                if (!(*if_argument_pos_data)[start_offset + i])
+                    continue;
+            }
+
+            const size_t prefetch_i = i + agg_prefetch_step;
             if unlikely (prefetch_i < keys.size())
             {
                 agg_data.set.prefetch(hashvals[prefetch_i]);
@@ -516,29 +522,40 @@ public:
         size_t batch_size,
         AggregateDataPtr place,
         const IColumn ** columns,
-        Arena * arena,
+        Arena *,
         ssize_t if_argument_pos = -1) const override
     {
-#ifndef NDEBUG
-        bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < prefetch_threshold);
-        fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
-#else
-        const bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < prefetch_threshold);
-#endif
-        if (if_argument_pos >= 0)
+        assert(place);
+        auto & agg_data = this->data(place);
+        // todo only String
+        if constexpr (std::is_same_v<Data, AggregateFunctionUniqExactData<String>>)
         {
-            const auto & flags = static_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-            if (disble_prefetch)
-                detail::BatchAdder</*enable_prefetch=*/false, /*has_if_arg=*/true>(start_offset, batch_size, place, columns, arena, &flags);
+#ifndef NDEBUG
+            bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < agg_prefetch_threshold);
+            fiu_do_on(::FailPoints::force_agg_prefetch, { disable_prefetch = false; });
+#else
+            const bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < agg_prefetch_threshold);
+#endif
+            if (if_argument_pos >= 0)
+            {
+                const auto & flags = static_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+                if (disable_prefetch)
+                    detail::BatchAdder::addBatchSinglePlace</*enable_prefetch=*/false, /*has_if_argument_pos_data=*/true, T, Data>(start_offset, batch_size, agg_data, columns,&flags);
+                else
+                    detail::BatchAdder::addBatchSinglePlace</*enable_prefetch=*/true, /*has_if_argument_pos_data=*/true, T, Data>(start_offset, batch_size, agg_data, columns, &flags);
+            }
             else
-                detail::BatchAdder</*enable_prefetch=*/true, /*has_if_arg=*/true>(start_offset, batch_size, place, columns, arena, &flags);
+            {
+                if (disable_prefetch)
+                    detail::BatchAdder::addBatchSinglePlace</*enable_prefetch=*/false, /*has_if_argument_pos_data=*/false, T, Data>(start_offset, batch_size, agg_data, columns, nullptr);
+                else
+                    detail::BatchAdder::addBatchSinglePlace</*enable_prefetch=*/true, /*has_if_argument_pos_data=*/false, T, Data>(start_offset, batch_size, agg_data, columns, nullptr);
+            }
         }
         else
         {
-            if (disble_prefetch)
-                detail::BatchAdder</*enable_prefetch=*/false, /*has_if_arg=*/false>(start_offset, batch_size, place, columns, arena, nullptr);
-            else
-                detail::BatchAdder</*enable_prefetch=*/true, /*has_if_arg=*/false>(start_offset, batch_size, place, columns, arena, nullptr);
+            for (size_t row = start_offset; row < start_offset + batch_size; ++row)
+                detail::OneAdder<T, Data>::add(agg_data, *columns[0], row);
         }
     }
 
