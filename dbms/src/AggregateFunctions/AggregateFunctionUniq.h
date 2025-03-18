@@ -197,7 +197,8 @@ struct AggregateFunctionUniqExactData : AggregationCollatorsWrapper<false>
 
     /// When creating, the hash table must be small.
     // using Set = HashSet<Key, HashCRC32<Key>, HashTableGrower<4>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 4)>>;
-    using Set = HashSet<Key>;
+    // using Set = HashSet<Key>;
+    using Set = HashSet<Key, HashCRC32<Key>>;
 
     Set set;
 
@@ -221,8 +222,7 @@ struct AggregateFunctionUniqExactData<String> : AggregationCollatorsWrapper<true
     using Key = UInt128;
 
     /// When creating, the hash table must be small.
-    using Set
-        = HashSet<Key>;
+    using Set = HashSet<Key>;
         // = HashSet<Key, TrivialHash, HashTableGrower<3>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
 
     Set set;
