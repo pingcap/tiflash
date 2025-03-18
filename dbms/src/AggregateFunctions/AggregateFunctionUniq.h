@@ -427,7 +427,7 @@ struct OneAdder
 struct BatchAdder
 {
     template <bool has_if_argument_pos_data, typename T, typename Data>
-    static void ALWAYS_INLINE addBatchSinglePlaceWithPrefetch(
+    static void addBatchSinglePlaceWithPrefetch(
         size_t start_offset,
         size_t batch_size,
         Data & agg_data,
@@ -494,7 +494,7 @@ struct BatchAdder
     }
 
     template <bool has_if_argument_pos_data, typename T, typename Data>
-    static void ALWAYS_INLINE addBatchSinglePlaceNoPrefetch(
+    static void addBatchSinglePlaceNoPrefetch(
         size_t start_offset,
         size_t batch_size,
         Data & agg_data,
@@ -555,6 +555,7 @@ public:
 #else
             const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
 #endif
+            LOG_DEBUG(Logger::get(), "gjt debug disable_prefetch: {}, batch_size: {}", disable_prefetch, batch_size);
             if (!disable_prefetch)
             {
                 if (flags != nullptr)
