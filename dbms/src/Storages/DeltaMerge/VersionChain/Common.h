@@ -59,17 +59,22 @@ bool inRowKeyRange(const RowKeyRange & range, HandleRefType handle)
 
 RSResults getRSResultsByRanges(const DMContext & dm_context, const DMFilePtr & dmfile, const RowKeyRanges & ranges);
 
-std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
+// Clip RSResults by removing the leading and trailing RSResult::None.
+// Return the clipped RSResults and the pack_id of the first not RSResult::None.
+// Because DMFile of ColumnFileBig only takes packs intersect with the `segment_range`.
+std::pair<RSResults, UInt32> getClippedRSResultsByRange(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range);
 
+// Load max-value of packs of `col_id` from min-max index.
 template <typename T>
-std::vector<T> loadPackMaxValue(const Context & global_context, const DMFile & dmfile, const ColId col_id);
+std::vector<T> loadPackMaxValue(const DMContext & dm_context, const DMFile & dmfile, const ColId col_id);
 
+// Load min-value and max-value of handle column.
 template <ExtraHandleType HandleType>
 std::optional<std::pair<HandleType, HandleType>> loadDMFileHandleRange(
-    const Context & global_context,
+    const DMContext & dm_context,
     const DMFile & dmfile);
 
 } // namespace DB::DM

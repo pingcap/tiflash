@@ -118,7 +118,7 @@ private:
 
     std::vector<HandleType> loadPackIndex(const DMContext & dm_context)
     {
-        auto max_values = loadPackMaxValue<HandleType>(dm_context.global_context, *dmfile, MutSup::extra_handle_id);
+        auto max_values = loadPackMaxValue<HandleType>(dm_context, *dmfile, MutSup::extra_handle_id);
         return std::vector<HandleType>(
             max_values.begin() + clipped_pack_range.start_pack_id,
             max_values.begin() + clipped_pack_range.end_pack_id);
@@ -204,7 +204,7 @@ private:
         if (!rowkey_range)
             return PackRange{.start_pack_id = 0, .end_pack_id = static_cast<UInt32>(dmfile->getPacks())};
 
-        const auto [handle_res, start_pack_id] = getClippedRSResultsByRanges(dm_context, dmfile, rowkey_range);
+        const auto [handle_res, start_pack_id] = getClippedRSResultsByRange(dm_context, dmfile, rowkey_range);
         return PackRange{
             .start_pack_id = start_pack_id,
             .end_pack_id = start_pack_id + static_cast<UInt32>(handle_res.size())};

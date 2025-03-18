@@ -60,9 +60,6 @@ T getMinValue(const MinMaxIndex & minmax_index, size_t i)
         static_assert(false, "Not support type");
 }
 
-// Clip RSResults by removing the leading and trailing RSResult::None.
-// Return the clipped RSResults and the pack_id of the first RSResult::Use.
-// Because DMFile of ColumnFileBig only takes packs intersect with the `segment_range`.
 std::pair<RSResults, UInt32> clipRSResults(const RSResults & rs_results)
 {
     const auto start = std::find_if(rs_results.begin(), rs_results.end(), [](RSResult r) { return r.isUse(); });
@@ -74,7 +71,7 @@ std::pair<RSResults, UInt32> clipRSResults(const RSResults & rs_results)
 }
 } // namespace
 
-std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
+std::pair<RSResults, UInt32> getClippedRSResultsByRange(
     const DMContext & dm_context,
     const DMFilePtr & dmfile,
     const std::optional<RowKeyRange> & segment_range)
@@ -83,64 +80,64 @@ std::pair<RSResults, UInt32> getClippedRSResultsByRanges(
         return std::make_pair(RSResults(dmfile->getPacks(), RSResult::All), 0);
 
     const auto handle_res = getRSResultsByRanges(dm_context, dmfile, {*segment_range});
-
     return clipRSResults(handle_res);
 }
 
 template <typename T>
-std::vector<T> loadPackMaxValue(const Context & global_context, const DMFile & dmfile, const ColId col_id)
+std::vector<T> loadPackMaxValue(const DMContext & dm_context, const DMFile & dmfile, const ColId col_id)
 {
     if (dmfile.getPacks() == 0)
         return {};
 
+    const auto & global_context = dm_context.global_context;
     auto [type, minmax_index] = DMFilePackFilter::loadIndex(
         dmfile,
         global_context.getFileProvider(),
         global_context.getMinMaxIndexCache(),
-        /* set cache*/ true,
+        /*set_cache_if_miss*/ true,
         col_id,
         global_context.getReadLimiter(),
-        /*scan context*/ nullptr);
+        dm_context.scan_context);
 
     auto pack_count = dmfile.getPacks();
     std::vector<T> pack_max_values;
     pack_max_values.reserve(pack_count);
     for (size_t i = 0; i < pack_count; ++i)
-    {
         pack_max_values.push_back(getMaxValue<T>(*minmax_index, i));
-    }
+
     return pack_max_values;
 }
 
 template std::vector<Int64> loadPackMaxValue<Int64>(
-    const Context & global_context,
+    const DMContext & dm_context,
     const DMFile & dmfile,
     const ColId col_id);
 template std::vector<UInt64> loadPackMaxValue<UInt64>(
-    const Context & global_context,
+    const DMContext & dm_context,
     const DMFile & dmfile,
     const ColId col_id);
 template std::vector<String> loadPackMaxValue<String>(
-    const Context & global_context,
+    const DMContext & dm_context,
     const DMFile & dmfile,
     const ColId col_id);
 
 template <ExtraHandleType HandleType>
 std::optional<std::pair<HandleType, HandleType>> loadDMFileHandleRange(
-    const Context & global_context,
+    const DMContext & dm_context,
     const DMFile & dmfile)
 {
     if (dmfile.getPacks() == 0)
         return {};
 
+    const auto & global_context = dm_context.global_context;
     auto [type, minmax_index] = DMFilePackFilter::loadIndex(
         dmfile,
         global_context.getFileProvider(),
         global_context.getMinMaxIndexCache(),
-        /* set cache*/ true,
+        /*set_cache_if_miss*/ true,
         MutSup::extra_handle_id,
         global_context.getReadLimiter(),
-        /*scan context*/ nullptr);
+        dm_context.scan_context);
 
     return std::pair{
         getMinValue<HandleType>(*minmax_index, 0),
@@ -148,9 +145,9 @@ std::optional<std::pair<HandleType, HandleType>> loadDMFileHandleRange(
 }
 
 template std::optional<std::pair<Int64, Int64>> loadDMFileHandleRange<Int64>(
-    const Context & global_context,
+    const DMContext & dm_context,
     const DMFile & dmfile);
 template std::optional<std::pair<String, String>> loadDMFileHandleRange<String>(
-    const Context & global_context,
+    const DMContext & dm_context,
     const DMFile & dmfile);
 } // namespace DB::DM

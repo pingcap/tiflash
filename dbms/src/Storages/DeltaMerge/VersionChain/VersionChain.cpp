@@ -232,7 +232,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     const std::span<const ColumnFilePtr> preceding_cfs,
     std::optional<DeltaValueReader> & delta_reader)
 {
-    auto cf_big_min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, *(cf_big.getFile()));
+    auto cf_big_min_max = loadDMFileHandleRange<HandleType>(dm_context, *(cf_big.getFile()));
     if (!cf_big_min_max) // DMFile is empty.
         return 0;
 
@@ -249,7 +249,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     };
 
     auto is_dmfile_intersect = [&](const DMFile & file) {
-        auto file_min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, file);
+        auto file_min_max = loadDMFileHandleRange<HandleType>(dm_context, file);
         if (!file_min_max)
             return false;
         const auto & [file_min, file_max] = *file_min_max;
