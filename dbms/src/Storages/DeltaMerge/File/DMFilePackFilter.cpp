@@ -173,7 +173,7 @@ DMFilePackFilterResultPtr DMFilePackFilter::load()
         after_pk,
         after_read_packs,
         after_filter,
-        toDebugString(rowkey_ranges),
+        rowkey_ranges,
         ((read_packs == nullptr) ? 0 : read_packs->size()),
         pack_count,
         none_count,

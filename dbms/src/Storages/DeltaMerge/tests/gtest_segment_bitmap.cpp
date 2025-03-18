@@ -273,9 +273,8 @@ protected:
                 ASSERT_EQ(expected_base_versions[i], (*actual_base_versions)[i]) << fmt::format("i={}, {}", i, info);
         }
 
-        const auto read_ranges = Segment::shrinkRowKeyRanges(
-            seg->getRowKeyRange(),
-            opt.read_ranges.value_or(RowKeyRanges{seg->getRowKeyRange()}));
+        const auto read_ranges
+            = shrinkRowKeyRanges(seg->getRowKeyRange(), opt.read_ranges.value_or(RowKeyRanges{seg->getRowKeyRange()}));
 
         const auto & rs_filter_results
             = opt.rs_filter_results.empty() ? loadPackFilterResults(snap, read_ranges) : opt.rs_filter_results;

@@ -1120,7 +1120,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
         "Finish segment create input stream, start_ts={} range_size={} ranges={}",
         start_ts,
         read_ranges.size(),
-        DB::DM::toDebugString(read_ranges));
+        read_ranges);
     return stream;
 }
 
@@ -2685,7 +2685,7 @@ Segment::ReadInfo Segment::getReadInfo(
         "snap={} {}",
         my_delta_index->toString(),
         fully_indexed,
-        DB::DM::toDebugString(read_ranges),
+        read_ranges,
         segment_snap->detailInfo(),
         simpleInfo());
 
@@ -2922,7 +2922,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     LOG_DEBUG(
         segment_snap->log,
         "Finish segment ensurePlace, read_ranges={} placed_items={} shared_delta_index={} my_delta_index={} {}",
-        DB::DM::toDebugString(read_ranges),
+        read_ranges,
         items.size(),
         delta_snap->getSharedDeltaIndex()->toString(),
         my_delta_index->toString(),
@@ -3168,7 +3168,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
         "Finish segment create input stream, start_ts={} range_size={} ranges={}",
         start_ts,
         read_ranges.size(),
-        DB::DM::toDebugString(read_ranges));
+        read_ranges);
 
     // `total_rows` is the rows read for building bitmap
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
@@ -3502,21 +3502,9 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
         dm_context.tracing_id);
 }
 
-RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRange & target_range, const RowKeyRanges & read_ranges)
-{
-    RowKeyRanges real_ranges;
-    for (const auto & read_range : read_ranges)
-    {
-        auto real_range = target_range.shrink(read_range);
-        if (!real_range.none())
-            real_ranges.emplace_back(std::move(real_range));
-    }
-    return real_ranges;
-}
-
 RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const
 {
-    return shrinkRowKeyRanges(rowkey_range, read_ranges);
+    return DB::DM::shrinkRowKeyRanges(rowkey_range, read_ranges);
 }
 
 static bool hasCacheableColumn(const ColumnDefines & columns)
