@@ -3255,6 +3255,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
             "buildMVCCBitmapFilterStableOnly not have use packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
+        bitmap_filter->runOptimize();
         return bitmap_filter;
     }
 
@@ -3691,6 +3692,198 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     }
 
     return mvcc_bitmap_filter;
+}
+
+// `checkMVCCBitmap` is only used for testing.
+// It will check both bitmaps that generating by version chain and delta index.
+// If the bitmaps are not equal, it will throw an exception.
+template <ExtraHandleType HandleType>
+void Segment::checkMVCCBitmap(
+    const DMContext & dm_context,
+    const SegmentSnapshotPtr & segment_snap,
+    const RowKeyRanges & read_ranges,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    size_t expected_block_size,
+    const BitmapFilter & bitmap_filter)
+{
+    auto new_bitmap_filter = buildMVCCBitmapFilter(
+        dm_context,
+        segment_snap,
+        read_ranges,
+        pack_filter_results,
+        start_ts,
+        expected_block_size,
+        /*enable_version_chain*/ false);
+    if (*new_bitmap_filter == bitmap_filter)
+    {
+        LOG_DEBUG(
+            segment_snap->log,
+            "{} success, snapshot={}, dt_bitmap_filter={}/{}, bitmap_filter={}/{}",
+            __FUNCTION__,
+            segment_snap->detailInfo(),
+            new_bitmap_filter->count(),
+            new_bitmap_filter->size(),
+            bitmap_filter.count(),
+            bitmap_filter.size());
+        return;
+    }
+
+    auto print_minmax_ver = [&]() {
+        const auto & global_context = dm_context.global_context;
+        const auto & dmfile = segment_snap->stable->getDMFiles().front();
+        auto [type, minmax_index] = DMFilePackFilter::loadIndex(
+            *dmfile,
+            global_context.getFileProvider(),
+            global_context.getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ true,
+            MutSup::version_col_id,
+            global_context.getReadLimiter(),
+            dm_context.scan_context);
+        for (size_t i = 0; i < dmfile->getPacks(); ++i)
+            LOG_ERROR(
+                segment_snap->log,
+                "pack={} minmax={} minmax2={}",
+                i,
+                minmax_index->getUInt64MinMax(i),
+                minmax_index->getUInt64MinMax2(i));
+    };
+
+    static std::mutex check_mtx;
+    static bool check_failed = false;
+    // To Avoid concurrent check that logs are mixed together.
+    // Since this function is only used for test, we don't need to consider performance.
+    std::lock_guard lock(check_mtx);
+    if (check_failed && std::is_same_v<HandleType, String>)
+    {
+        // Aoid too many logs.
+        LOG_ERROR(segment_snap->log, "{} failed, skip", __FUNCTION__);
+        return;
+    }
+    print_minmax_ver();
+    check_failed = true;
+
+    if (new_bitmap_filter->size() != bitmap_filter.size())
+    {
+        LOG_ERROR(
+            segment_snap->log,
+            "{} failed, snapshot={}, dt_bitmap_filter_size={}, bitmap_filter_size={}",
+            __FUNCTION__,
+            segment_snap->detailInfo(),
+            new_bitmap_filter->size(),
+            bitmap_filter.size());
+        throw Exception("Bitmap size not equal", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (new_bitmap_filter->isAllMatch() != bitmap_filter.isAllMatch())
+    {
+        LOG_ERROR(
+            segment_snap->log,
+            "{} failed, snapshot={}, dt_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
+            __FUNCTION__,
+            segment_snap->detailInfo(),
+            new_bitmap_filter->isAllMatch(),
+            bitmap_filter.isAllMatch());
+        throw Exception("Bitmap all_match not euqal", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    LOG_ERROR(
+        segment_snap->log,
+        "{} failed, snapshot={}, dt_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{} "
+        "read_ranges={}, segment_range={}",
+        __FUNCTION__,
+        segment_snap->detailInfo(),
+        new_bitmap_filter->count(),
+        new_bitmap_filter->size(),
+        bitmap_filter.count(),
+        bitmap_filter.size(),
+        read_ranges,
+        rowkey_range);
+
+    const auto cds = ColumnDefines{
+        getExtraHandleColumnDefine(dm_context.is_common_handle),
+        getVersionColumnDefine(),
+        getTagColumnDefine(),
+    };
+    auto stream = getConcatSkippableBlockInputStream(
+        segment_snap,
+        dm_context,
+        cds,
+        /*read_ranges*/ {},
+        /*pack_filter_results*/ {},
+        start_ts,
+        expected_block_size,
+        ReadTag::Query);
+    Blocks blocks;
+    while (true)
+    {
+        auto block = stream->read();
+        if (!block)
+            break;
+        blocks.emplace_back(std::move(block));
+    }
+    auto block = vstackBlocks(std::move(blocks));
+    RUNTIME_CHECK_MSG(
+        block.rows() == bitmap_filter.size(),
+        "Block rows not equal: block_rows={}, bitmap_size={}",
+        block.rows(),
+        bitmap_filter.size());
+    auto handle_col = block.getByName(MutSup::extra_handle_column_name).column;
+    auto version_col = block.getByName(MutSup::version_column_name).column;
+    auto delmark_col = block.getByName(MutSup::delmark_column_name).column;
+    const auto handles = ColumnView<HandleType>(*handle_col);
+    const auto versions = ColumnView<UInt64>(*version_col);
+    const auto delmarks = ColumnView<UInt8>(*delmark_col);
+    for (UInt32 i = 0; i < bitmap_filter.size(); ++i)
+    {
+        RowKeyValue rowkey;
+        if constexpr (std::is_same_v<HandleType, String>)
+            rowkey = RowKeyValue(dm_context.is_common_handle, std::make_shared<String>(String(handles[i])), 0);
+        else
+            rowkey = RowKeyValue(dm_context.is_common_handle, nullptr, handles[i]);
+
+        if (new_bitmap_filter->get(i) != bitmap_filter.get(i))
+        {
+            LOG_ERROR(
+                segment_snap->log,
+                "{} {} dt={} vc={} handle={} version={} delmark={} version_filter={} "
+                "rowkey_filter={} ver_by_delta={} ver_by_stable={} ver_by_rs={}",
+                __FUNCTION__,
+                i,
+                new_bitmap_filter->get(i),
+                bitmap_filter.get(i),
+                rowkey.toDebugString(),
+                versions[i],
+                delmarks[i],
+                bitmap_filter.version_filter[i],
+                bitmap_filter.rowkey_filter[i],
+                bitmap_filter.version_filter_by_delta[i],
+                bitmap_filter.version_filter_by_stable[i],
+                bitmap_filter.version_filter_by_read_ts[i]);
+            continue;
+        }
+
+        if constexpr (std::is_same_v<HandleType, Int64>)
+        {
+            LOG_INFO(
+                segment_snap->log,
+                "{} {} dt={} vc={} handle={} version={} delmark={} version_filter={} "
+                "rowkey_filter={} ver_by_delta={} ver_by_stable={} ver_by_rs={}",
+                __FUNCTION__,
+                i,
+                new_bitmap_filter->get(i),
+                bitmap_filter.get(i),
+                rowkey.toDebugString(),
+                versions[i],
+                delmarks[i],
+                bitmap_filter.version_filter[i],
+                bitmap_filter.rowkey_filter[i],
+                bitmap_filter.version_filter_by_delta[i],
+                bitmap_filter.version_filter_by_stable[i],
+                bitmap_filter.version_filter_by_read_ts[i]);
+        }
+    }
+    throw Exception("Bitmap not equal", ErrorCodes::LOGICAL_ERROR);
 }
 
 template <bool is_fast_scan>
