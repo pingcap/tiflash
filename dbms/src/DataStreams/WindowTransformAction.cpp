@@ -295,9 +295,6 @@ void WindowTransformAction::initialWorkspaces()
         }
     }
 
-    // Can not have window and agg functions together in one window
-    assert((!aggregation_workspaces.empty() && !window_workspaces.empty()) == false);
-
     has_rank_or_dense_rank = false;
     for (const auto & workspace : window_workspaces)
     {
