@@ -379,16 +379,10 @@ try
 
     // Read with exact match
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.5}));
-
         DMFileBlockInputStreamBuilder builder(dbContext());
 
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {1.0, 2.0, 3.5}, .top_k = 1}),
             std::make_shared<ColumnDefines>(read_cols));
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
                           .build(
@@ -410,14 +404,8 @@ try
 
     // Read with approximate match
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 1}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -440,14 +428,8 @@ try
 
     // Read multiple rows
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 2}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -470,17 +452,11 @@ try
 
     // Read with MVCC filter
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
         auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
         bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 1}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -503,14 +479,8 @@ try
 
     // Query Top K = 0: the pack should be filtered out
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(0);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 0}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -533,14 +503,8 @@ try
 
     // Query Top K > rows
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(10);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 10}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -563,14 +527,8 @@ try
 
     // Illegal ANNQueryInfo: Ref Vector'dimension is different
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(10);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {1.0}, .top_k = 10}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -603,16 +561,10 @@ try
     // Illegal ANNQueryInfo: Referencing a non-existed column (and the column is not in the read schema).
     // This will throw exceptions.
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(5);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
         try
         {
             auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-                ann_query_info,
+                annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 1, .column_id = 5}),
                 std::make_shared<ColumnDefines>(read_cols));
             FAIL();
         }
@@ -628,14 +580,12 @@ try
 
     // Illegal ANNQueryInfo: Different distance metric.
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({
+                .vec = {1.0, 2.0, 3.8},
+                .top_k = 1,
+                .distance_metric = tipb::VectorDistanceMetric::COSINE,
+            }),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -677,14 +627,8 @@ try
         // so that an exception will be raised instead. This case is already checked before.
         // So here we only check with test_only_vec_column==false.
 
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(MutSup::extra_handle_id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 1, .column_id = MutSup::extra_handle_id}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -773,15 +717,8 @@ try
 
         // Read with approximate match
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(3);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
             auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-                ann_query_info,
+                annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 1, .index_id = 3}),
                 std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -804,15 +741,8 @@ try
 
         // Read multiple rows
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(3);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(2);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
             auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-                ann_query_info,
+                annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 2, .index_id = 3}),
                 std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -835,18 +765,11 @@ try
 
         // Read with MVCC filter
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(3);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
             auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
             auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-                ann_query_info,
+                annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 1, .index_id = 3}),
                 std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -873,15 +796,13 @@ try
 
         // Read with approximate match
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(4);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
             auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-                ann_query_info,
+                annQueryInfoTopK({
+                    .vec = {1.0, 2.0, 3.8},
+                    .top_k = 1,
+                    .index_id = 4,
+                    .distance_metric = tipb::VectorDistanceMetric::COSINE,
+                }),
                 std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -904,15 +825,13 @@ try
 
         // Read multiple rows
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(4);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
-            ann_query_info->set_top_k(2);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
             auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-                ann_query_info,
+                annQueryInfoTopK({
+                    .vec = {1.0, 2.0, 3.8},
+                    .top_k = 2,
+                    .index_id = 4,
+                    .distance_metric = tipb::VectorDistanceMetric::COSINE,
+                }),
                 std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -935,18 +854,16 @@ try
 
         // Read with MVCC filter
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_index_id(4);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::COSINE);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
             auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
             auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-                ann_query_info,
+                annQueryInfoTopK({
+                    .vec = {1.0, 2.0, 3.8},
+                    .top_k = 1,
+                    .index_id = 4,
+                    .distance_metric = tipb::VectorDistanceMetric::COSINE,
+                }),
                 std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -974,14 +891,8 @@ try
 
         // Read with approximate match
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
             auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-                ann_query_info,
+                annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 1}),
                 std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1004,14 +915,8 @@ try
 
         // Read multiple rows
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(2);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
             auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-                ann_query_info,
+                annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 2}),
                 std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1034,17 +939,11 @@ try
 
         // Read with MVCC filter
         {
-            auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-            ann_query_info->set_column_id(vec_cd.id);
-            ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-            ann_query_info->set_top_k(1);
-            ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.8}));
-
             auto bitmap_filter = std::make_shared<BitmapFilter>(3, true);
             bitmap_filter->set(/* start */ 2, /* limit */ 1, false);
 
             auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-                ann_query_info,
+                annQueryInfoTopK({.vec = {1.0, 2.0, 3.8}, .top_k = 1}),
                 std::make_shared<ColumnDefines>(read_cols));
             DMFileBlockInputStreamBuilder builder(dbContext());
             auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1106,14 +1005,8 @@ try
     dm_file = buildIndex(*vector_index);
 
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(4);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.5}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {1.0, 2.0, 3.5}, .top_k = 4}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1179,14 +1072,8 @@ try
 
     // Pack #0 is filtered out according to VecIndex
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({5.0, 5.0, 5.5}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {5.0, 5.0, 5.5}, .top_k = 1}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1209,14 +1096,8 @@ try
 
     // Pack #1 is filtered out according to VecIndex
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0, 2.0, 3.0}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {1.0, 2.0, 3.0}, .top_k = 1}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1239,14 +1120,8 @@ try
 
     // Both packs are reserved
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({0.0, 0.0, 0.0}));
-
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {0.0, 0.0, 0.0}, .top_k = 2}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1269,17 +1144,11 @@ try
 
     // Pack Filter + MVCC (the matching row #5 is marked as filtered out by MVCC)
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({0.0, 0.0, 0.0}));
-
         auto bitmap_filter = std::make_shared<BitmapFilter>(6, true);
         bitmap_filter->set(/* start */ 5, /* limit */ 1, false);
 
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {0.0, 0.0, 0.0}, .top_k = 2}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1342,12 +1211,6 @@ try
 
     // Pack Filter using RowKeyRange
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({8.0}));
-
         // This row key range will cause pack#0 and pack#1 reserved, and pack#2 filtered out.
         auto row_key_ranges = RowKeyRanges{RowKeyRange::fromHandleRange(HandleRange(0, 5))};
 
@@ -1355,7 +1218,7 @@ try
         bitmap_filter->set(0, 6); // 0~6 rows are valid, 6~9 rows are invalid due to pack filter.
 
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {8.0}, .top_k = 1}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1372,14 +1235,8 @@ try
             }));
 
         // TopK=4
-        ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(4);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({8.0}));
-
         vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {8.0}, .top_k = 4}),
             std::make_shared<ColumnDefines>(read_cols));
         builder = DMFileBlockInputStreamBuilder(dbContext());
         stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1398,12 +1255,6 @@ try
 
     // Pack Filter + Bitmap Filter
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_cd.id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(3);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({8.0}));
-
         // This row key range will cause pack#0 and pack#1 reserved, and pack#2 filtered out.
         auto row_key_ranges = RowKeyRanges{RowKeyRange::fromHandleRange(HandleRange(0, 5))};
 
@@ -1413,7 +1264,7 @@ try
         bitmap_filter->set(3, 2);
 
         auto vec_idx_ctx = VectorIndexStreamCtx::createForStableOnlyTests(
-            ann_query_info,
+            annQueryInfoTopK({.vec = {8.0}, .top_k = 3}),
             std::make_shared<ColumnDefines>(read_cols));
         DMFileBlockInputStreamBuilder builder(dbContext());
         auto stream = builder.setVecIndexQuery(vec_idx_ctx)
@@ -1453,12 +1304,7 @@ public:
         UInt32 top_k,
         const std::vector<Float32> & ref_vec)
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_column_id(vec_column_id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(top_k);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32(ref_vec));
-        return read(segment_id, begin, end, columns_to_read, ann_query_info);
+        return read(segment_id, begin, end, columns_to_read, annQueryInfoTopK({.vec = ref_vec, .top_k = top_k}));
     }
 
     BlockInputStreamPtr annQuery(
@@ -2256,17 +2102,14 @@ public:
         UInt32 top_k = 1,
         const ScanContextPtr & read_scan_context = nullptr)
     {
-        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-        ann_query_info->set_index_id(index_id);
-        ann_query_info->set_column_id(vec_column_id);
-        ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-        ann_query_info->set_top_k(top_k);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32(ref_vec));
-
         return createComputeNodeStream(
             wn_segment,
             {cdPK(), cdVec()},
-            std::make_shared<PushDownExecutor>(ann_query_info),
+            std::make_shared<PushDownExecutor>(annQueryInfoTopK({
+                .vec = ref_vec,
+                .top_k = top_k,
+                .index_id = index_id,
+            })),
             read_scan_context);
     }
 
