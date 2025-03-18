@@ -106,7 +106,7 @@ void BitmapFilter::logicalOr(const BitmapFilter & other)
     }
     if (other.all_match)
     {
-        filter.assign(filter.size(), true);
+        filter.assign(filter.size(), static_cast<UInt8>(true));
         all_match = true;
         return;
     }

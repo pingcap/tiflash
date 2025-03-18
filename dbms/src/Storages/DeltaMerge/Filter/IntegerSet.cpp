@@ -65,38 +65,48 @@ IntegerSetPtr IntegerSet::createValueSet(TypeIndex type_index, const Fields & va
 
 IntegerSetPtr IntegerSet::createLessRangeSet(TypeIndex type_index, const Field & max, bool not_included)
 {
+    auto func = []<typename T>(const Field & max, bool not_included) -> IntegerSetPtr {
+        auto max_value = max.get<T>();
+        if (max_value == std::numeric_limits<T>::min() && not_included)
+            return EmptySet::instance();
+        else if (max_value == std::numeric_limits<T>::min() && !not_included)
+            return std::make_shared<ValueSet<T>>(std::set<T>{std::numeric_limits<T>::min()});
+        else
+            return std::make_shared<RangeSet<T>>(std::numeric_limits<T>::min(), max_value - not_included);
+    };
+
     switch (type_index)
     {
     case TypeIndex::UInt8:
-        return std::make_shared<RangeSet<UInt8>>(0, max.get<UInt8>() - not_included);
+        return func.template operator()<UInt8>(max, not_included);
     case TypeIndex::UInt16:
-        return std::make_shared<RangeSet<UInt16>>(0, max.get<UInt16>() - not_included);
+        return func.template operator()<UInt16>(max, not_included);
     case TypeIndex::UInt32:
-        return std::make_shared<RangeSet<UInt32>>(0, max.get<UInt32>() - not_included);
+        return func.template operator()<UInt32>(max, not_included);
     case TypeIndex::UInt64:
-        return std::make_shared<RangeSet<UInt64>>(0, max.get<UInt64>() - not_included);
+        return func.template operator()<UInt64>(max, not_included);
     case TypeIndex::Int8:
-        return std::make_shared<RangeSet<Int8>>(std::numeric_limits<Int8>::min(), max.get<Int8>() - not_included);
+        return func.template operator()<Int8>(max, not_included);
     case TypeIndex::Int16:
-        return std::make_shared<RangeSet<Int16>>(std::numeric_limits<Int16>::min(), max.get<Int16>() - not_included);
+        return func.template operator()<Int16>(max, not_included);
     case TypeIndex::Int32:
-        return std::make_shared<RangeSet<Int32>>(std::numeric_limits<Int32>::min(), max.get<Int32>() - not_included);
+        return func.template operator()<Int32>(max, not_included);
     case TypeIndex::Int64:
-        return std::make_shared<RangeSet<Int64>>(std::numeric_limits<Int64>::min(), max.get<Int64>() - not_included);
+        return func.template operator()<Int64>(max, not_included);
     case TypeIndex::Date:
-        return std::make_shared<RangeSet<UInt16>>(0, max.get<UInt16>() - not_included);
+        return func.template operator()<UInt16>(max, not_included);
     case TypeIndex::DateTime:
-        return std::make_shared<RangeSet<UInt32>>(0, max.get<UInt32>() - not_included);
+        return func.template operator()<UInt32>(max, not_included);
     case TypeIndex::Enum8:
-        return std::make_shared<RangeSet<Int8>>(std::numeric_limits<Int8>::min(), max.get<Int8>() - not_included);
+        return func.template operator()<Int8>(max, not_included);
     case TypeIndex::Enum16:
-        return std::make_shared<RangeSet<Int16>>(std::numeric_limits<Int16>::min(), max.get<Int16>() - not_included);
+        return func.template operator()<Int16>(max, not_included);
     case TypeIndex::MyDate:
     case TypeIndex::MyDateTime:
     case TypeIndex::MyTimeStamp:
-        return std::make_shared<RangeSet<UInt64>>(0, max.get<UInt64>() - not_included);
+        return func.template operator()<UInt64>(max, not_included);
     case TypeIndex::MyTime:
-        return std::make_shared<RangeSet<Int64>>(std::numeric_limits<Int64>::min(), max.get<Int64>() - not_included);
+        return func.template operator()<Int64>(max, not_included);
     default:
         return nullptr;
     }
@@ -104,38 +114,48 @@ IntegerSetPtr IntegerSet::createLessRangeSet(TypeIndex type_index, const Field &
 
 IntegerSetPtr IntegerSet::createGreaterRangeSet(TypeIndex type_index, const Field & min, bool not_included)
 {
+    auto func = []<typename T>(const Field & min, bool not_included) -> IntegerSetPtr {
+        auto min_value = min.get<T>();
+        if (min_value == std::numeric_limits<T>::max() && not_included)
+            return EmptySet::instance();
+        else if (min_value == std::numeric_limits<T>::max() && !not_included)
+            return std::make_shared<ValueSet<T>>(std::set<T>{std::numeric_limits<T>::max()});
+        else
+            return std::make_shared<RangeSet<T>>(min_value + not_included, std::numeric_limits<T>::max());
+    };
+
     switch (type_index)
     {
     case TypeIndex::UInt8:
-        return std::make_shared<RangeSet<UInt8>>(min.get<UInt8>() + not_included, std::numeric_limits<UInt8>::max());
+        return func.template operator()<UInt8>(min, not_included);
     case TypeIndex::UInt16:
-        return std::make_shared<RangeSet<UInt16>>(min.get<UInt16>() + not_included, std::numeric_limits<UInt16>::max());
+        return func.template operator()<UInt16>(min, not_included);
     case TypeIndex::UInt32:
-        return std::make_shared<RangeSet<UInt32>>(min.get<UInt32>() + not_included, std::numeric_limits<UInt32>::max());
+        return func.template operator()<UInt32>(min, not_included);
     case TypeIndex::UInt64:
-        return std::make_shared<RangeSet<UInt64>>(min.get<UInt64>() + not_included, std::numeric_limits<UInt64>::max());
+        return func.template operator()<UInt64>(min, not_included);
     case TypeIndex::Int8:
-        return std::make_shared<RangeSet<Int8>>(min.get<Int8>() + not_included, std::numeric_limits<Int8>::max());
+        return func.template operator()<Int8>(min, not_included);
     case TypeIndex::Int16:
-        return std::make_shared<RangeSet<Int16>>(min.get<Int16>() + not_included, std::numeric_limits<Int16>::max());
+        return func.template operator()<Int16>(min, not_included);
     case TypeIndex::Int32:
-        return std::make_shared<RangeSet<Int32>>(min.get<Int32>() + not_included, std::numeric_limits<Int32>::max());
+        return func.template operator()<Int32>(min, not_included);
     case TypeIndex::Int64:
-        return std::make_shared<RangeSet<Int64>>(min.get<Int64>() + not_included, std::numeric_limits<Int64>::max());
+        return func.template operator()<Int64>(min, not_included);
     case TypeIndex::Date:
-        return std::make_shared<RangeSet<UInt16>>(min.get<UInt16>() + not_included, std::numeric_limits<UInt16>::max());
+        return func.template operator()<UInt16>(min, not_included);
     case TypeIndex::DateTime:
-        return std::make_shared<RangeSet<UInt32>>(min.get<UInt32>() + not_included, std::numeric_limits<UInt32>::max());
+        return func.template operator()<UInt32>(min, not_included);
     case TypeIndex::Enum8:
-        return std::make_shared<RangeSet<Int8>>(min.get<Int8>() + not_included, std::numeric_limits<Int8>::max());
+        return func.template operator()<Int8>(min, not_included);
     case TypeIndex::Enum16:
-        return std::make_shared<RangeSet<Int16>>(min.get<Int16>() + not_included, std::numeric_limits<Int16>::max());
+        return func.template operator()<Int16>(min, not_included);
     case TypeIndex::MyDate:
     case TypeIndex::MyDateTime:
     case TypeIndex::MyTimeStamp:
-        return std::make_shared<RangeSet<UInt64>>(min.get<UInt64>() + not_included, std::numeric_limits<UInt64>::max());
+        return func.template operator()<UInt64>(min, not_included);
     case TypeIndex::MyTime:
-        return std::make_shared<RangeSet<Int64>>(min.get<Int64>() + not_included, std::numeric_limits<Int64>::max());
+        return func.template operator()<Int64>(min, not_included);
     default:
         return nullptr;
     }
@@ -426,10 +446,13 @@ IntegerSetPtr RangeSet<T>::unionWithRangeSet(const IntegerSetPtr & lhs, const In
     auto left = std::dynamic_pointer_cast<RangeSet<T>>(lhs);
     auto right = std::dynamic_pointer_cast<RangeSet<T>>(rhs);
 
-    T start = std::min(left->start, right->start);
+    if (left->start > right->start)
+        std::swap(left, right);
+
+    T start = left->start;
     T end = std::max(left->end, right->end);
 
-    if (left->end > right->start && right->end > left->start)
+    if (left->end >= right->start)
         return start == std::numeric_limits<T>::min() && end == std::numeric_limits<T>::max()
             ? AllSet::instance()
             : std::make_shared<RangeSet<T>>(start, end);

@@ -238,6 +238,21 @@ try
     }
 
     {
+        // NotEqual Equal between literal and col
+        auto rs_operator
+            = generateRsOperator(table_info_json, "select * from default.t_111 where -9223372036854775808 != col_2");
+        EXPECT_EQ(rs_operator->name(), "not_equal");
+        EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
+        EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"not_equal\",\"col\":\"col_2\",\"value\":\"-9223372036854775808\"}");
+        auto sets = rs_operator->buildSets(snapshot);
+        EXPECT_TRUE(sets != nullptr);
+        EXPECT_EQ(sets->toDebugString(), "2: [-9223372036854775807, 9223372036854775807]");
+    }
+
+    {
         // NotEqual between literal and col (take care of direction)
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where 667 != col_2");
         EXPECT_EQ(rs_operator->name(), "not_equal");
@@ -370,6 +385,23 @@ try
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: {777, 789}");
+    }
+
+    {
+        // OR
+        auto rs_operator
+            = generateRsOperator(table_info_json, "select * from default.t_111 where col_2 > 789 or col_2 < 791");
+        EXPECT_EQ(rs_operator->name(), "or");
+        EXPECT_EQ(rs_operator->getColumnIDs().size(), 2);
+        EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
+        EXPECT_EQ(rs_operator->getColumnIDs()[1], 2);
+        EXPECT_EQ(
+            rs_operator->toDebugString(),
+            "{\"op\":\"or\",\"children\":[{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"less\","
+            "\"col\":\"col_2\",\"value\":\"791\"}]}");
+        auto sets = rs_operator->buildSets(snapshot);
+        EXPECT_TRUE(sets != nullptr);
+        EXPECT_EQ(sets->toDebugString(), "2: ALL");
     }
 
     // More complicated
