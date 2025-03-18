@@ -164,4 +164,11 @@ inline GenericVersionChain createVersionChain(bool is_common_handle)
         return GenericVersionChain{std::in_place_type<VersionChain<Int64>>};
 }
 
+enum class VersionChainMode : Int64
+{
+    Disabled = 0,
+    Enabled = 1,
+    EnabledForTest = 2,
+};
+
 } // namespace DB::DM
