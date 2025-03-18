@@ -49,7 +49,7 @@ public:
         }
         catch (DB::Exception &)
         {
-            // Maybe another test has already registed, ignore exception here.
+            // Maybe another test has already registered, ignore exception here.
         }
     }
 
@@ -554,16 +554,14 @@ try
 
         auto rs_operator = generateRsOperator(
             table_info_json,
-            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
-                + String("')"),
+            fmt::format("select * from default.t_111 where col_timestamp > cast_string_datetime('{}')", datetime),
             timezone_info);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
-                + String("\"}"));
+            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
@@ -578,16 +576,14 @@ try
 
         auto rs_operator = generateRsOperator(
             table_info_json,
-            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
-                + String("')"),
+            fmt::format("select * from default.t_111 where col_timestamp > cast_string_datetime('{}')", datetime),
             timezone_info);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
-                + String("\"}"));
+            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
@@ -602,16 +598,14 @@ try
 
         auto rs_operator = generateRsOperator(
             table_info_json,
-            String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
-                + String("')"),
+            fmt::format("select * from default.t_111 where col_timestamp > cast_string_datetime('{}')", datetime),
             timezone_info);
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 4);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            String("{\"op\":\"greater\",\"col\":\"col_timestamp\",\"value\":\"") + toString(converted_time)
-                + String("\"}"));
+            fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
@@ -621,15 +615,13 @@ try
         // Greater between Datetime col and Datetime literal
         auto rs_operator = generateRsOperator(
             table_info_json,
-            String("select * from default.t_111 where col_datetime > cast_string_datetime('") + datetime
-                + String("')"));
+            fmt::format("select * from default.t_111 where col_datetime > cast_string_datetime('{}')", datetime));
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 5);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            String("{\"op\":\"greater\",\"col\":\"col_datetime\",\"value\":\"") + toString(origin_time_stamp)
-                + String("\"}"));
+            fmt::format(R"json({{"op":"greater","col":"col_datetime","value":"{}"}})json", origin_time_stamp));
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("5: [{}, 18446744073709551615]", origin_time_stamp + 1));
@@ -639,14 +631,13 @@ try
         // Greater between Date col and Datetime literal
         auto rs_operator = generateRsOperator(
             table_info_json,
-            String("select * from default.t_111 where col_date > cast_string_datetime('") + datetime + String("')"));
+            fmt::format("select * from default.t_111 where col_date > cast_string_datetime('{}')", datetime));
         EXPECT_EQ(rs_operator->name(), "greater");
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 6);
         EXPECT_EQ(
             rs_operator->toDebugString(),
-            String("{\"op\":\"greater\",\"col\":\"col_date\",\"value\":\"") + toString(origin_time_stamp)
-                + String("\"}"));
+            fmt::format(R"json({{"op":"greater","col":"col_date","value":"{}"}})json", origin_time_stamp));
         auto sets = rs_operator->buildSets(snapshot);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("6: [{}, 18446744073709551615]", origin_time_stamp + 1));
