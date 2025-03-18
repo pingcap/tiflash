@@ -32,6 +32,7 @@ public:
     void set(BlockInputStreamPtr & stream);
     // f[start, satrt+limit) = value
     void set(UInt32 start, UInt32 limit, bool value = true);
+    void set(std::span<const UInt32> row_ids, const FilterPtr & f);
     // If return true, all data is match and do not fill the filter.
     bool get(IColumn::Filter & f, UInt32 start, UInt32 limit) const;
     // Caller should ensure n in [0, size).
@@ -48,8 +49,6 @@ public:
     friend class BitmapFilterView;
 
 private:
-    void set(std::span<const UInt32> row_ids, const FilterPtr & f);
-
     IColumn::Filter filter;
     bool all_match;
 };

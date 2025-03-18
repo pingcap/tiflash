@@ -41,6 +41,13 @@ class TMTContext;
 
 namespace DB::RegionBench
 {
+metapb::Region createMetaRegion( //
+    TableID table_id,
+    RegionID region_id,
+    HandleID start,
+    HandleID end,
+    UInt64 peer_id);
+
 RegionPtr createRegion(
     TableID table_id,
     RegionID region_id,

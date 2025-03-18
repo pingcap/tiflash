@@ -88,6 +88,11 @@ Block MergeSortingBlockInputStream::readImpl()
                 return block;
 
             SortHelper::removeConstantsFromBlock(block);
+            RUNTIME_CHECK_MSG(
+                block.columns() == header_without_constants.columns(),
+                "Unexpected number of constant columns in block in MergeSortingBlockInputStream, n_block={}, n_head={}",
+                block.columns(),
+                header_without_constants.columns());
 
             blocks.push_back(block);
             sum_bytes_in_blocks += block.estimateBytesForSpill();
