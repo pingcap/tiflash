@@ -196,7 +196,6 @@ struct AggregateFunctionUniqExactData : AggregationCollatorsWrapper<false>
     using Key = T;
 
     /// When creating, the hash table must be small.
-    using Hash = HashCRC32<Key>;
     using Set = HashSet<Key, Hash, HashTableGrower<4>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 4)>>;
 
     Set set;
@@ -488,9 +487,7 @@ struct BatchAdder
 
             const size_t prefetch_i = i + agg_prefetch_step;
             if unlikely (prefetch_i < keys.size())
-            {
                 agg_data.set.prefetch(hashvals[prefetch_i]);
-            }
 
             agg_data.set.insert(keys[i], hashvals[i]);
         }
@@ -556,7 +553,7 @@ public:
             bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < agg_prefetch_threshold);
             fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
 #else
-            const bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < agg_prefetch_threshold);
+            const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
 #endif
             if (!disable_prefetch)
             {
@@ -592,7 +589,7 @@ public:
                 batch_size,
                 agg_data,
                 columns,
-                flags);
+                nullptr);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
