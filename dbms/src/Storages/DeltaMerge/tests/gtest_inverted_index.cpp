@@ -114,7 +114,7 @@ public:
             };
             std::mt19937 generator;
             {
-                std::uniform_int_distribution<T> distribution(0, block_count);
+                std::uniform_int_distribution<T> distribution(0, block_count - 1);
                 for (UInt32 i = 0; i < 10; ++i)
                     v_search(distribution(generator), block_size);
             }
@@ -158,7 +158,7 @@ public:
                 {
                     threads.emplace_back([&v_search]() {
                         std::mt19937 generator(std::random_device{}());
-                        std::uniform_int_distribution<T> distribution(0, block_count);
+                        std::uniform_int_distribution<T> distribution(0, block_count - 1);
                         auto random_v = distribution(generator);
                         v_search(random_v, block_size);
                     });
