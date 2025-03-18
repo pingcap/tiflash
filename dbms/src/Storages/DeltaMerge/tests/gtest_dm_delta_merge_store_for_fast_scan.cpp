@@ -723,7 +723,7 @@ try
                 return res;
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
-            ASSERT_INPUTSTREAM_COLS_UR(
+            ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
                 createColumns({createColumn<Int64>(pk_coldata)}));
@@ -1148,7 +1148,7 @@ try
                 return res;
             }();
             ASSERT_EQ(pk_coldata.size(), 3 * num_write_rows);
-            ASSERT_INPUTSTREAM_COLS_UR(
+            ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
                 in,
                 Strings({DMTestEnv::pk_name}),
                 createColumns({createColumn<Int64>(pk_coldata)}));

@@ -164,4 +164,15 @@ inline GenericVersionChain createVersionChain(bool is_common_handle)
         return GenericVersionChain{std::in_place_type<VersionChain<Int64>>};
 }
 
+enum class VersionChainMode : Int64
+{
+    // Generating MVCC bitmap by using delta index.
+    Disabled = 0,
+    // Generating MVCC bitmap by using version chain.
+    Enabled = 1,
+    // Generating MVCC bitmap by using version chain and delta index,
+    // then perform comparative verification. Only for test.
+    EnabledForTest = 2,
+};
+
 } // namespace DB::DM

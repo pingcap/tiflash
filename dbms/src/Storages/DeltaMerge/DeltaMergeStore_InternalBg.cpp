@@ -395,6 +395,13 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
         LOG_DEBUG(log, "Task {} GC safe point: {}", magic_enum::enum_name(task.type), task.dm_context->min_version);
     }
 
+    auto update_delta_index_or_version_chain = [](const auto & task) {
+        if (task.dm_context->enableVersionChain())
+            task.segment->replayVersionChain(*task.dm_context);
+        else
+            task.segment->placeDeltaIndex(*task.dm_context);
+    };
+
     SegmentPtr left, right;
     ThreadType type = ThreadType::Write;
     try
@@ -425,8 +432,8 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             task.segment->flushCache(*task.dm_context);
             // After flush cache, try to create delta local index.
             segmentEnsureDeltaLocalIndexAsync(task.segment);
-            // After flush cache, better place delta index.
-            task.segment->placeDeltaIndex(*task.dm_context);
+            // After flush cache, better to update delta index or version chain.
+            update_delta_index_or_version_chain(task);
             left = task.segment;
             type = ThreadType::BG_Flush;
             break;
@@ -436,7 +443,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             break;
         }
         case TaskType::PlaceIndex:
-            task.segment->placeDeltaIndex(*task.dm_context);
+            update_delta_index_or_version_chain(task);
             break;
         default:
             throw Exception(fmt::format("Unsupported task type: {}", magic_enum::enum_name(task.type)));
