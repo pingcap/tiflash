@@ -19,4 +19,4 @@ list(REMOVE_ITEM tiflash_table_functions_sources ITableFunction.cpp TableFunctio
 list(REMOVE_ITEM tiflash_table_functions_headers ITableFunction.h TableFunctionFactory.h)
 
 add_library(tiflash_table_functions ${tiflash_table_functions_sources})
-target_link_libraries(tiflash_table_functions tiflash_storages_system dbms ${Poco_Foundation_LIBRARY})
+target_link_libraries(tiflash_table_functions PRIVATE tiflash_common_io tiflash_storages_system ${Poco_Foundation_LIBRARY})

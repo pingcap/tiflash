@@ -14,13 +14,13 @@
 
 #include <Common/Logger.h>
 #include <Common/typeid_cast.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Disaggregated/S3LockService.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/S3/MockS3Client.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/MockOwnerManager.h>
 #include <TiDB/OwnerManager.h>
 #include <aws/core/client/ClientConfiguration.h>

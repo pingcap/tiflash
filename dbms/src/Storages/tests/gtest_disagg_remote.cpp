@@ -12,12 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/StorageDisaggregatedHelpers.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <kvproto/disaggregated.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Backoff.h>

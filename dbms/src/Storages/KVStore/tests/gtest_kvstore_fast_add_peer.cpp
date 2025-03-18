@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
@@ -28,7 +29,6 @@
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/InputStreamTestUtils.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <common/logger_useful.h>
 

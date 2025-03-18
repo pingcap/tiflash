@@ -28,13 +28,6 @@ option(ENABLE_TIFLASH_CHECKPOINTTOOL "Enable checkpoint tool: tools to debug che
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
-add_library(server_for_test
-    FlashGrpcServerHolder.cpp
-)
-
-target_link_libraries (server_for_test PUBLIC tiflash_common_io tiflash_storages_system)
-target_include_directories (server_for_test PRIVATE ${TiFlash_SOURCE_DIR}/contrib/grpc/)
-
 add_library (tiflash-server-lib
     CertificateReloader.cpp
     MetricsPrometheus.cpp
@@ -50,23 +43,18 @@ add_library (tiflash-server-lib
     UserConfigParser.cpp
     RaftConfigParser.cpp)
 
-target_link_libraries(tiflash-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
-
-target_link_libraries (tiflash-server-lib PUBLIC server_for_test tiflash_common_io daemon tiflash_storages_system tiflash_functions tiflash_aggregate_functions tiflash_table_functions)
-target_include_directories (tiflash-server-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
-target_include_directories (tiflash-server-lib PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
+target_link_libraries (tiflash-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
+target_link_libraries (tiflash-server-lib PRIVATE dbms)
 
 add_library (tiflash-client-lib Client.cpp)
-target_link_libraries (tiflash-client-lib tiflash_functions tiflash_aggregate_functions ${LINE_EDITING_LIBS} ${Boost_PROGRAM_OPTIONS_LIBRARY})
-target_include_directories (tiflash-client-lib PRIVATE ${READLINE_INCLUDE_DIR})
+target_link_libraries (tiflash-client-lib PRIVATE dbms)
 
 add_library(tiflash-dttool-lib ${SPLIT_SHARED} DTTool/DTToolBench.cpp DTTool/DTToolMigrate.cpp DTTool/DTToolInspect.cpp)
-target_link_libraries(tiflash-dttool-lib PUBLIC dbms daemon tiflash_common_io ${Boost_PROGRAM_OPTIONS_LIBRARY})
-target_include_directories(tiflash-dttool-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
+target_link_libraries(tiflash-dttool-lib PRIVATE dbms)
 
 add_library(tiflash-dttool-entry-object STATIC DTTool/DTTool.cpp)
-target_link_libraries(tiflash-dttool-entry-object tiflash-dttool-lib ${TIFLASH_PROXY_LIBRARY})
-target_include_directories(tiflash-dttool-entry-object PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
+target_link_libraries(tiflash-dttool-entry-object PRIVATE tiflash-dttool-lib tiflash_common_io kv_client)
+target_include_directories(tiflash-dttool-entry-object PRIVATE "${TIFLASH_PROXY_INCLUDE_DIR}")
 
 add_executable (tiflash main.cpp)
 
@@ -148,7 +136,7 @@ endif ()
 include(CMakePrintHelpers)
 cmake_print_properties(TARGETS tiflash PROPERTIES BUILD_RPATH INSTALL_RPATH)
 
-target_link_libraries (tiflash tiflash_common_io)
+target_link_libraries (tiflash dbms)
 target_include_directories (tiflash BEFORE PRIVATE ${COMMON_INCLUDE_DIR})
 target_include_directories (tiflash PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 

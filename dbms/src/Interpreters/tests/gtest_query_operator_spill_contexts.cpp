@@ -14,13 +14,13 @@
 
 #include <Common/Logger.h>
 #include <Core/QueryOperatorSpillContexts.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <IO/Encryption/MockKeyManager.h>
 #include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/AggSpillContext.h>
 #include <Interpreters/SortSpillContext.h>
 #include <Poco/File.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 #include <chrono>

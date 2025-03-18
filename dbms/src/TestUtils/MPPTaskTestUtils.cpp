@@ -14,7 +14,7 @@
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
 #include <Debug/dbgQueryExecutor.h>
-#include <Server/FlashGrpcServerHolder.h>
+#include <Flash/FlashGrpcServerHolder.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>

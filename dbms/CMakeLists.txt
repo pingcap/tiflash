@@ -144,6 +144,8 @@ list (APPEND dbms_headers
 list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctions/TableFunctionFactory.cpp)
 list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
 
+list (APPEND dbms_sources src/Server/StorageConfigParser.cpp)
+
 add_library(tiflash_common_io ${SPLIT_SHARED} ${tiflash_common_io_headers} ${tiflash_common_io_sources})
 target_link_libraries(tiflash_common_io PUBLIC process_metrics)
 target_include_directories(tiflash_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR} ${TiFlash_SOURCE_DIR}/libs/libprocess_metrics/include)
@@ -165,7 +167,7 @@ endif ()
 
 target_include_directories(dbms PUBLIC "${TIFLASH_PROXY_INCLUDE_DIR}")
 
-if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")
+if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO")
     # Won't generate debug info for files with heavy template instantiation to achieve faster linking and lower size.
     set_source_files_properties(
         src/Dictionaries/CacheDictionary.cpp
@@ -183,6 +185,7 @@ endif()
 target_link_libraries (tiflash_common_io
     PUBLIC
     common
+    daemon
     string_utils
     ${LINK_LIBRARIES_ONLY_ON_X86_64}
     ${LZ4_LIBRARY}
@@ -200,11 +203,9 @@ target_link_libraries (tiflash_common_io
     prometheus-cpp::pull
     cpptoml
     magic_enum
-    simdjson
     libsymbolization
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
-    fastpforlib
 )
 
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
@@ -215,9 +216,11 @@ add_library(tiflash_vector_search
     ${tiflash_vector_search_sources}
 )
 target_link_libraries(tiflash_vector_search
+    PUBLIC
     tiflash_contrib::usearch
     tiflash_contrib::simsimd
 
+    PRIVATE
     fmt
 )
 
@@ -232,6 +235,10 @@ target_link_libraries (dbms
     tiflash_parsers
     tiflash_common_config
     tiflash_common_io
+    tiflash_storages_system
+    tiflash_table_functions
+    tiflash_functions
+    tiflash_aggregate_functions
     flash_service
     kvproto
     kv_client
@@ -240,10 +247,13 @@ target_link_libraries (dbms
     RemoteTaskProto
     PSCheckpointProto
     kvstore
+    delta_merge
+    fastpforlib
+    simdjson
 )
 
 # always add GmSSL include dir to the include path for static analysis
-target_include_directories(dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
+target_include_directories(dbms PUBLIC ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
 if (USE_GM_SSL)
     target_link_libraries(dbms gmssl)
 endif ()
@@ -344,10 +354,13 @@ if (ENABLE_TESTS)
     )
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
-    target_compile_definitions(dbms PUBLIC DBMS_PUBLIC_GTEST)
-    target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
+    target_compile_definitions(dbms PRIVATE DBMS_PUBLIC_GTEST)
+    target_compile_definitions(dbms PRIVATE MULTIPLE_CONTEXT_GTEST)
 
-    target_link_libraries(gtests_dbms test_util_gtest_main tiflash_functions tiflash-dttool-lib delta_merge kvstore)
+    target_link_libraries(gtests_dbms
+        test_util_gtest_main
+        tiflash-dttool-lib
+    )
 
     install (TARGETS gtests_dbms
             COMPONENT tiflash-gtest
@@ -387,20 +400,10 @@ if (ENABLE_TESTS)
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/UserConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
-        )
+    )
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
     target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
-    target_link_libraries(bench_dbms
-        gtest
-        benchmark
-    
-        dbms
-        test_util_bench_main
-        tiflash_functions
-        server_for_test
-        delta_merge
-        tiflash_aggregate_functions
-        kvstore)
+    target_link_libraries(bench_dbms test_util_bench_main)
 
     if (NOT CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG")
         target_link_libraries(bench_dbms tiflash_contrib::highfive)

@@ -26,8 +26,10 @@ add_subdirectory (./MultiRaft/Disagg)
 
 add_library(kvstore ${kvstore_headers} ${kvstore_sources})
 target_include_directories(kvstore PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
-target_link_libraries(kvstore PRIVATE dbms page KVStoreFastAddPeerProto)
+target_link_libraries(kvstore PRIVATE tiflash_common_io kv_client tipb kvproto etcdpb tiflash_contrib::aws_s3 KVStoreFastAddPeerProto)
+target_include_directories(kvstore PRIVATE "${TIFLASH_PROXY_INCLUDE_DIR}")
 
 if (ENABLE_TESTS)
     add_headers_and_sources(kvstore tests)
+    target_compile_definitions(kvstore PRIVATE DBMS_PUBLIC_GTEST)
 endif ()

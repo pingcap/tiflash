@@ -28,13 +28,13 @@ list(REMOVE_ITEM tiflash_functions_headers IFunction.h FunctionFactory.h Functio
 
 add_library(tiflash_functions ${tiflash_functions_sources})
 
-target_link_libraries(tiflash_functions PUBLIC dbms PRIVATE ${FARMHASH_LIBRARIES} ${METROHASH_LIBRARIES})
+target_link_libraries(tiflash_functions PRIVATE tiflash_common_io kvproto tipb kv_client ${FARMHASH_LIBRARIES} ${METROHASH_LIBRARIES} simdjson)
 
 target_include_directories (tiflash_functions BEFORE PUBLIC ${TiFlash_SOURCE_DIR}/contrib/libfarmhash)
 target_include_directories (tiflash_functions BEFORE PUBLIC ${TiFlash_SOURCE_DIR}/contrib/libmetrohash/src)
 target_include_directories (tiflash_functions BEFORE PUBLIC ${DIVIDE_INCLUDE_DIR})
 
-if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO" OR CMAKE_BUILD_TYPE_UC STREQUAL "MINSIZEREL")
+if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELWITHDEBINFO")
     # Won't generate debug info for files with heavy template instantiation to achieve faster linking and lower size.
     target_compile_options(tiflash_functions PRIVATE "-g0")
 endif ()
