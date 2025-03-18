@@ -46,6 +46,11 @@ metapb::Region createMetaRegionCommonHandle( //
     std::optional<metapb::RegionEpoch> maybe_epoch = std::nullopt,
     std::optional<std::vector<metapb::Peer>> maybe_peers = std::nullopt);
 
+/// Utils to create a RegionPtr for testing.
+/// - If your tests don't care about the raft-index in the created RegionPtr,
+///   use the following `makeRegionForTable`/`makeRegionForRange`/`makeRegion`.
+/// - If raft-index matters, try `MockTiKV::instance().{createRegion,createRegionCommonHandle}`
+
 RegionPtr makeRegionForTable(
     UInt64 region_id,
     TableID table_id,

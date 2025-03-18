@@ -25,6 +25,7 @@ RegionPtr MockTiKV::createRegion(TableID table_id, RegionID region_id, const Han
     auto meta_region = RegionBench::createMetaRegion(region_id, table_id, start, end);
     metapb::Peer peer;
     RegionMeta region_meta(std::move(peer), std::move(meta_region), initialApplyState());
+    // set the index according to mock tikv
     UInt64 index = getNextRaftIndex(region_id);
     region_meta.setApplied(index, RAFT_INIT_LOG_TERM);
     return RegionBench::makeRegion(std::move(region_meta));
@@ -43,6 +44,7 @@ RegionPtr MockTiKV::createRegionCommonHandle(
 
     metapb::Peer peer;
     RegionMeta region_meta(std::move(peer), std::move(region), initialApplyState());
+    // set the index according to mock tikv
     auto index = getNextRaftIndex(region_id);
     region_meta.setApplied(index, RAFT_INIT_LOG_TERM);
     return RegionBench::makeRegion(std::move(region_meta));
