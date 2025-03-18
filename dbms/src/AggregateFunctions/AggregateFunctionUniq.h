@@ -197,8 +197,8 @@ struct AggregateFunctionUniqExactData : AggregationCollatorsWrapper<false>
 
     /// When creating, the hash table must be small.
     // using Set = HashSet<Key, HashCRC32<Key>, HashTableGrower<4>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 4)>>;
-    // using Set = HashSet<Key>;
-    using Set = HashSet<Key, HashCRC32<Key>>;
+    using Set = HashSet<Key>;
+    // using Set = HashSet<Key, HashCRC32<Key>>;
 
     Set set;
 
@@ -430,6 +430,36 @@ struct BatchAdder
 {
     template <bool has_if_argument_pos_data, typename T, typename Data>
     static void addBatchSinglePlaceWithPrefetch(
+        size_t start_offset,
+        size_t batch_size,
+        Data & agg_data,
+        const IColumn ** columns,
+        const ColumnUInt8::Container * if_argument_pos_data)
+    {
+        const size_t mini_batch = 256;
+        size_t mini_batch_idx = start_offset;
+        const size_t end_row = start_offset + batch_size;
+        while (true)
+        {
+            size_t cur_batch_size = mini_batch;
+            if unlikely (mini_batch_idx + cur_batch_size > end_row)
+                cur_batch_size = end_row - mini_batch_idx;
+
+            addBatchSinglePlaceWithPrefetchMiniBatch<has_if_argument_pos_data, T, Data>(
+                    mini_batch_idx,
+                    cur_batch_size,
+                    agg_data,
+                    columns,
+                    if_argument_pos_data);
+
+            mini_batch_idx += cur_batch_size;
+            if unlikely (mini_batch_idx >= end_row)
+                break;
+        }
+    }
+
+    template <bool has_if_argument_pos_data, typename T, typename Data>
+    static void addBatchSinglePlaceWithPrefetchMiniBatch(
         size_t start_offset,
         size_t batch_size,
         Data & agg_data,
