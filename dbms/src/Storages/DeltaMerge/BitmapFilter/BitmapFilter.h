@@ -50,12 +50,23 @@ public:
     bool isAllNotMatch(size_t start, size_t limit) const;
 
     void runOptimize();
+    void setAllMatch(bool all_match_) { all_match = all_match_; }
+    bool isAllMatch() const { return all_match; }
 
     String toDebugString() const;
     size_t count() const;
     inline size_t size() const { return filter.size(); }
 
+    bool operator==(const BitmapFilter & other) const { return filter == other.filter && all_match == other.all_match; }
+    ALWAYS_INLINE auto & operator[](size_t n) { return filter[n]; }
+
     friend class BitmapFilterView;
+
+    void saveRowKeyFilterForDebug() { rowkey_filter.assign(filter); }
+    void saveVersionFilterForDebug() { version_filter.assign(filter); }
+
+    IColumn::Filter rowkey_filter;
+    IColumn::Filter version_filter;
 
 private:
     IColumn::Filter filter;
