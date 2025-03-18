@@ -865,23 +865,10 @@ struct RowKeyRange
     bool operator!=(const RowKeyRange & rhs) const { return !(*this == rhs); }
 }; // struct RowKeyRange
 
+// Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
 inline auto format_as(const RowKeyRange & range)
 {
     return range.toDebugString();
-}
-
-// Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
-inline String toDebugString(const RowKeyRanges & ranges)
-{
-    String s = "{";
-    for (const auto & r : ranges)
-    {
-        s += r.toDebugString() + ",";
-    }
-    if (!ranges.empty())
-        s.erase(s.size() - 1);
-    s += "}";
-    return s;
 }
 
 inline RowKeyRange mergeRanges(const RowKeyRanges & ranges, bool is_common_handle, size_t rowkey_column_size)
@@ -894,5 +881,7 @@ inline RowKeyRange mergeRanges(const RowKeyRanges & ranges, bool is_common_handl
     }
     return range;
 }
+
+RowKeyRanges shrinkRowKeyRanges(const RowKeyRange & target_range, const RowKeyRanges & read_ranges);
 
 } // namespace DB::DM

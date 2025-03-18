@@ -160,7 +160,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
             valid_handle_res[i] = valid_handle_res[i] && !delete_ranges_handle_res[valid_start_pack_id + i];
     }
 
-    auto real_read_ranges = Segment::shrinkRowKeyRanges(cf_big.getRange(), read_ranges);
+    auto real_read_ranges = shrinkRowKeyRanges(cf_big.getRange(), read_ranges);
     {
         auto real_read_ranges_handle_res = getRSResultsByRanges(dm_context, cf_big.getFile(), real_read_ranges);
         for (UInt32 i = 0; i < valid_handle_res.size(); ++i)

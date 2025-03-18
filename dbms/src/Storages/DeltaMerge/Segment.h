@@ -663,8 +663,6 @@ public:
         }
     }
 
-    static RowKeyRanges shrinkRowKeyRanges(const RowKeyRange & target_range, const RowKeyRanges & read_ranges);
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
