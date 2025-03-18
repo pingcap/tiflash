@@ -54,6 +54,7 @@
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
+#include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/dtpb/segment.pb.h>
 #include <Storages/KVStore/KVStore.h>
@@ -118,6 +119,7 @@ extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
 extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
+extern const Metric DT_SnapshotOfReplayVersionChain;
 extern const Metric DT_SnapshotOfSegmentIngest;
 extern const Metric DT_SnapshotOfBitmapFilter;
 } // namespace CurrentMetrics
@@ -2547,8 +2549,9 @@ bool Segment::compactDelta(DMContext & dm_context)
     return delta->compact(dm_context);
 }
 
-void Segment::placeDeltaIndex(DMContext & dm_context) const
+void Segment::placeDeltaIndex(const DMContext & dm_context) const
 {
+    RUNTIME_CHECK(!dm_context.enableVersionChain());
     // Update delta-index with persisted packs. TODO: can use a read snapshot here?
     auto segment_snap = createSnapshot(dm_context, /*for_update=*/true, CurrentMetrics::DT_SnapshotOfPlaceIndex);
     if (!segment_snap)
@@ -2556,7 +2559,7 @@ void Segment::placeDeltaIndex(DMContext & dm_context) const
     placeDeltaIndex(dm_context, segment_snap);
 }
 
-void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
+void Segment::placeDeltaIndex(const DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
 {
     getReadInfo(
         dm_context,
@@ -2564,6 +2567,21 @@ void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr &
         segment_snap,
         {RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
         ReadTag::Internal);
+}
+
+void Segment::replayVersionChain(const DMContext & dm_context)
+{
+    RUNTIME_CHECK(dm_context.enableVersionChain());
+    auto segment_snap
+        = createSnapshot(dm_context, /*for_update=*/false, CurrentMetrics::DT_SnapshotOfReplayVersionChain);
+    if (!segment_snap)
+        return;
+    auto base_versions = std::visit(
+        [&dm_context, &segment_snap](auto & version_chain) {
+            return version_chain.replaySnapshot(dm_context, *segment_snap);
+        },
+        this->version_chain);
+    UNUSED(base_versions);
 }
 
 String Segment::simpleInfo() const
@@ -3073,10 +3091,22 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
-    size_t expected_block_size)
+    size_t expected_block_size,
+    bool use_version_chain)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
+    if (use_version_chain)
+    {
+        return ::DB::DM::buildBitmapFilter(
+            dm_context,
+            *segment_snap,
+            read_ranges,
+            pack_filter_results,
+            start_ts,
+            version_chain);
+    }
+
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
         return buildBitmapFilterStableOnly(
@@ -3229,6 +3259,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
             "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
+        bitmap_filter->runOptimize();
         return bitmap_filter;
     }
 
@@ -3268,6 +3299,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         use_packs,
         segment_snap->stable->getDMFilesRows(),
         elapse_ms);
+    bitmap_filter->runOptimize();
     return bitmap_filter;
 }
 
@@ -3497,6 +3529,140 @@ static bool hasCacheableColumn(const ColumnDefines & columns)
     return std::find_if(columns.begin(), columns.end(), DMFileReader::isCacheableColumn) != columns.end();
 }
 
+void Segment::checkMVCCBitmap(
+    const DMContext & dm_context,
+    const SegmentSnapshotPtr & segment_snap,
+    const RowKeyRanges & read_ranges,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    size_t expected_block_size,
+    const BitmapFilter & bitmap_filter)
+{
+    auto new_bitmap_filter = buildBitmapFilter(
+        dm_context,
+        segment_snap,
+        read_ranges,
+        pack_filter_results,
+        start_ts,
+        expected_block_size,
+        /*enable_version_chain*/ false);
+    if (*new_bitmap_filter == bitmap_filter)
+        return;
+
+    static std::mutex check_mtx;
+    static bool check_failed = false;
+    // To Avoid concurrent check that logs are mixed together.
+    // Since this function is only used for test, we don't need to consider performance.
+    std::lock_guard lock(check_mtx);
+    if (check_failed)
+    {
+        LOG_ERROR(segment_snap->log, "{} failed, skip", __FUNCTION__);
+        return;
+    }
+    check_failed = true;
+
+    if (new_bitmap_filter->size() != bitmap_filter.size())
+    {
+        LOG_ERROR(
+            segment_snap->log,
+            "{} failed, bitmap size not match, new_bitmap_filter_size={}, bitmap_filter_size={}, snapshot_rows={}",
+            __FUNCTION__,
+            new_bitmap_filter->size(),
+            bitmap_filter.size(),
+            segment_snap->getRows());
+        throw Exception("Bitmap size not match", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    if (new_bitmap_filter->isAllMatch() != bitmap_filter.isAllMatch())
+    {
+        LOG_ERROR(
+            segment_snap->log,
+            "{} failed, bitmap all match not match, new_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
+            __FUNCTION__,
+            new_bitmap_filter->isAllMatch(),
+            bitmap_filter.isAllMatch());
+        throw Exception("Bitmap all match not match", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    LOG_ERROR(
+        segment_snap->log,
+        "{} failed, new_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{}, stable={}, delta={}, "
+        "read_ranges={}, segment_range={}",
+        __FUNCTION__,
+        new_bitmap_filter->count(),
+        new_bitmap_filter->size(),
+        bitmap_filter.count(),
+        bitmap_filter.size(),
+        segment_snap->stable->getRows(),
+        segment_snap->delta->getRows(),
+        read_ranges,
+        rowkey_range);
+
+    const auto cds = ColumnDefines{
+        getExtraHandleColumnDefine(dm_context.is_common_handle),
+        getVersionColumnDefine(),
+        getTagColumnDefine(),
+    };
+    auto stream = getConcatSkippableBlockInputStream(
+        segment_snap,
+        dm_context,
+        cds,
+        /*read_ranges*/ {},
+        /*pack_filter_results*/ {},
+        start_ts,
+        expected_block_size,
+        ReadTag::Query);
+    Blocks blocks;
+    while (true)
+    {
+        auto block = stream->read();
+        if (!block)
+            break;
+        blocks.emplace_back(std::move(block));
+    }
+    auto block = vstackBlocks(std::move(blocks));
+    RUNTIME_CHECK_MSG(
+        block.rows() == bitmap_filter.size(),
+        "Block rows not match: block_rows={}, bitmap_size={}",
+        block.rows(),
+        bitmap_filter.size());
+    RUNTIME_CHECK(!dm_context.is_common_handle); // TODO: support common handle
+    auto handle_col = block.getByName(MutSup::extra_handle_column_name).column;
+    auto version_col = block.getByName(MutSup::version_column_name).column;
+    auto delmark_col = block.getByName(MutSup::delmark_column_name).column;
+    const auto & handles = toColumnVectorData<Int64>(handle_col);
+    const auto & versions = toColumnVectorData<UInt64>(version_col);
+    const auto & delmarks = toColumnVectorData<UInt8>(delmark_col);
+    for (UInt32 i = 0; i < bitmap_filter.size(); ++i)
+    {
+        if (new_bitmap_filter->get(i) != bitmap_filter.get(i))
+        {
+            std::string_view filter_by;
+            if (!bitmap_filter.get(i))
+            {
+                if (!bitmap_filter.version_filter[i])
+                    filter_by = "version";
+                else if (!bitmap_filter.rowkey_filter[i])
+                    filter_by = "rowkey";
+                else
+                    filter_by = "delmark";
+            }
+
+            LOG_ERROR(
+                segment_snap->log,
+                "{} {} {} {} {} {}, filter by {}",
+                i,
+                new_bitmap_filter->get(i),
+                bitmap_filter.get(i),
+                handles[i],
+                versions[i],
+                delmarks[i],
+                filter_by);
+        }
+    }
+    throw Exception("Bitmap not match", ErrorCodes::LOGICAL_ERROR);
+}
+
 BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     const DMContext & dm_context,
     const ColumnDefines & columns_to_read,
@@ -3510,13 +3676,30 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
 {
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
 
+    const auto & settings = dm_context.global_context.getSettingsRef();
+    const bool enable_version_chain = settings.enable_version_chain != static_cast<Int64>(VersionChainMode::Disabled);
+    const bool verify_mvcc_bitmap
+        = settings.enable_version_chain == static_cast<Int64>(VersionChainMode::EnabledForTest);
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
         read_ranges,
         pack_filter_results,
         start_ts,
-        build_bitmap_filter_block_rows);
+        build_bitmap_filter_block_rows,
+        enable_version_chain);
+
+    if (unlikely(verify_mvcc_bitmap))
+    {
+        checkMVCCBitmap(
+            dm_context,
+            segment_snap,
+            read_ranges,
+            pack_filter_results,
+            start_ts,
+            build_bitmap_filter_block_rows,
+            *bitmap_filter);
+    }
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
     if (!hasCacheableColumn(columns_to_read))

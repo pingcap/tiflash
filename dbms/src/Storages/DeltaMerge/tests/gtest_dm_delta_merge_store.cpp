@@ -951,13 +951,15 @@ CATCH
 TEST_P(DeltaMergeStoreRWTest, WriteMultipleBlock)
 try
 {
-    const size_t num_write_rows = 32;
+    constexpr size_t num_write_rows = 32;
+    constexpr UInt64 tso1 = 1;
+    constexpr UInt64 tso2 = 100;
 
     // Test write multi blocks without overlap
     {
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false);
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false);
-        Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso1);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso1);
+        Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false, tso2);
         switch (mode)
         {
         case TestMode::PageStorageV2_MemoryOnly:
@@ -1029,10 +1031,8 @@ try
 
     // Test write multi blocks with overlap
     {
-        UInt64 tso1 = 1;
-        UInt64 tso2 = 100;
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso1);
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso1);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso2);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso2);
         Block block3
             = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2, num_write_rows / 2 + num_write_rows, false, tso2);
 
@@ -3150,6 +3150,8 @@ try
 {
     const size_t num_write_rows = 32;
     const size_t rowkey_column_size = 2;
+    constexpr UInt64 tso1 = 1;
+    constexpr UInt64 tso2 = 100;
     auto table_column_defines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
 
     {
@@ -3163,7 +3165,7 @@ try
             0,
             1 * num_write_rows,
             false,
-            2,
+            tso1,
             MutSup::extra_handle_column_name,
             MutSup::extra_handle_id,
             MutSup::getExtraHandleColumnStringType(),
@@ -3173,7 +3175,7 @@ try
             1 * num_write_rows,
             2 * num_write_rows,
             false,
-            2,
+            tso1,
             MutSup::extra_handle_column_name,
             MutSup::extra_handle_id,
             MutSup::getExtraHandleColumnStringType(),
@@ -3183,7 +3185,7 @@ try
             2 * num_write_rows,
             3 * num_write_rows,
             false,
-            2,
+            tso2,
             MutSup::extra_handle_column_name,
             MutSup::extra_handle_id,
             MutSup::getExtraHandleColumnStringType(),
@@ -3234,13 +3236,11 @@ try
 
     // Test write multi blocks with overlap
     {
-        UInt64 tso1 = 1;
-        UInt64 tso2 = 100;
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(
             0,
             1 * num_write_rows,
             false,
-            tso1,
+            tso2,
             MutSup::extra_handle_column_name,
             MutSup::extra_handle_id,
             MutSup::getExtraHandleColumnStringType(),
@@ -3250,7 +3250,7 @@ try
             1 * num_write_rows,
             2 * num_write_rows,
             false,
-            tso1,
+            tso2,
             MutSup::extra_handle_column_name,
             MutSup::extra_handle_id,
             MutSup::getExtraHandleColumnStringType(),
@@ -4016,6 +4016,10 @@ CATCH
 
 void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
 {
+    // This test case is design for delta index.
+    // Always use delta index in this case.
+    auto guard = disableVersionChainTemporary(db_context->getGlobalContext().getSettingsRef());
+
     auto table_column_defines = DMTestEnv::getDefaultColumns();
     store = reload(table_column_defines);
 
