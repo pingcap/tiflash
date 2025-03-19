@@ -34,46 +34,63 @@ extern const int DATA_TYPE_CANNOT_HAVE_ARGUMENTS;
 } // namespace ErrorCodes
 
 
+DataTypePtr DataTypePtrCache::get(const String & full_name) const
+{
+    std::shared_lock lock(rw_lock);
+    if (auto it = cached_types.find(full_name); //
+        it != cached_types.end())
+        return it->second;
+    return nullptr;
+}
+
+void DataTypePtrCache::tryCache(const String & full_name, const DataTypePtr & datatype_ptr)
+{
+    // It can not handle the situation that DataTypePtr sharing between
+    // "Enum16('N' = 1, 'Y' = 2)" and "Enum16('Y' = 2, 'N' = 1)", but should
+    // be good enough.
+    // Avoid big hashmap in rare cases.
+    std::unique_lock lock(rw_lock);
+    if (cached_types.size() < MAX_FULLNAME_TYPES)
+    {
+        // DataTypeEnum may generate too many full_name, so just skip inserting DataTypeEnum into fullname_types when
+        // the capacity limit is almost reached, which ensures that most datatypes can be cached.
+        if (cached_types.size() > FULLNAME_TYPES_HIGH_WATER_MARK
+            && (datatype_ptr->getTypeId() == TypeIndex::Enum8 || datatype_ptr->getTypeId() == TypeIndex::Enum16))
+        {
+            return;
+        }
+        cached_types.emplace(full_name, datatype_ptr);
+    }
+}
+
 DataTypePtr DataTypeFactory::get(const String & full_name) const
 {
     ParserIdentifierWithOptionalParameters parser;
     ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0);
     return get(ast);
 }
-// DataTypeFactory is a Singleton, so need to be protected by lock.
-DataTypePtr DataTypeFactory::getOrSet(const String & full_name)
+
+DataTypePtr DataTypeFactory::getOrSet(const ASTPtr & ast)
 {
-    {
-        std::shared_lock lock(rw_lock);
-        auto it = fullname_types.find(full_name);
-        if (it != fullname_types.end())
-        {
-            return it->second;
-        }
-    }
-    ParserIdentifierWithOptionalParameters parser;
-    ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0);
-    DataTypePtr datatype_ptr = get(ast);
-    // avoid big hashmap in rare cases.
-    std::unique_lock lock(rw_lock);
-    if (fullname_types.size() < MAX_FULLNAME_TYPES)
-    {
-        // DataTypeEnum may generate too many full_name, so just skip inserting DataTypeEnum into fullname_types when
-        // the capacity limit is almost reached, which ensures that most datatypes can be cached.
-        if (fullname_types.size() > FULLNAME_TYPES_HIGH_WATER_MARK
-            && (datatype_ptr->getTypeId() == TypeIndex::Enum8 || datatype_ptr->getTypeId() == TypeIndex::Enum16))
-        {
-            return datatype_ptr;
-        }
-        fullname_types.emplace(full_name, datatype_ptr);
-    }
+    String owned_str_full_name(ast->range.first, ast->range.second);
+    if (auto cached_ptr = fullname_types.get(owned_str_full_name); cached_ptr != nullptr)
+        return cached_ptr;
+
+    auto datatype_ptr = get(ast);
+    fullname_types.tryCache(owned_str_full_name, datatype_ptr);
     return datatype_ptr;
 }
 
-size_t DataTypeFactory::getFullNameCacheSize() const
+DataTypePtr DataTypeFactory::getOrSet(const String & full_name)
 {
-    std::shared_lock lock(rw_lock);
-    return fullname_types.size();
+    if (auto cached_ptr = fullname_types.get(full_name); cached_ptr != nullptr)
+        return cached_ptr;
+
+    ParserIdentifierWithOptionalParameters parser;
+    ASTPtr ast = parseQuery(parser, full_name.data(), full_name.data() + full_name.size(), "data type", 0);
+    auto datatype_ptr = get(ast);
+    fullname_types.tryCache(full_name, datatype_ptr);
+    return datatype_ptr;
 }
 
 DataTypePtr DataTypeFactory::get(const ASTPtr & ast) const
@@ -116,7 +133,7 @@ DataTypePtr DataTypeFactory::get(const String & family_name, const ASTPtr & para
             return it->second(parameters);
     }
 
-    throw Exception("Unknown data type family: " + family_name, ErrorCodes::UNKNOWN_TYPE);
+    throw Exception(ErrorCodes::UNKNOWN_TYPE, "Unknown data type family: {}", family_name);
 }
 
 
@@ -127,21 +144,23 @@ void DataTypeFactory::registerDataType(
 {
     if (creator == nullptr)
         throw Exception(
-            "DataTypeFactory: the data type family " + family_name + " has been provided a null constructor",
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "DataTypeFactory: the data type family {} has been provided a null constructor",
+            family_name);
 
     if (!data_types.emplace(family_name, creator).second)
         throw Exception(
-            "DataTypeFactory: the data type family name '" + family_name + "' is not unique",
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "DataTypeFactory: the data type family name '{}' is not unique",
+            family_name);
 
     String family_name_lowercase = Poco::toLower(family_name);
-
     if (case_sensitiveness == CaseInsensitive
         && !case_insensitive_data_types.emplace(family_name_lowercase, creator).second)
         throw Exception(
-            "DataTypeFactory: the case insensitive data type family name '" + family_name + "' is not unique",
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "DataTypeFactory: the case insensitive data type family name '{}' is not unique",
+            family_name);
 }
 
 
@@ -152,16 +171,18 @@ void DataTypeFactory::registerSimpleDataType(
 {
     if (creator == nullptr)
         throw Exception(
-            "DataTypeFactory: the data type " + name + " has been provided a null constructor",
-            ErrorCodes::LOGICAL_ERROR);
+            ErrorCodes::LOGICAL_ERROR,
+            "DataTypeFactory: the data type {} has been provided a null constructor",
+            name);
 
     registerDataType(
         name,
         [name, creator](const ASTPtr & ast) {
             if (ast)
                 throw Exception(
-                    "Data type " + name + " cannot have arguments",
-                    ErrorCodes::DATA_TYPE_CANNOT_HAVE_ARGUMENTS);
+                    ErrorCodes::DATA_TYPE_CANNOT_HAVE_ARGUMENTS,
+                    "Data type {} cannot have arguments",
+                    name);
             return creator();
         },
         case_sensitiveness);
