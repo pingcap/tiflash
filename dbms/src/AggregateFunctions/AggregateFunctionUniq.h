@@ -469,59 +469,73 @@ struct BatchAdder
         // Other uniq function doesn't support prefetch for now.
         static_assert(std::is_same_v<Data, AggregateFunctionUniqExactData<T>>);
 
+        size_t batch_row_idx = start_offset;
+        const size_t end_row = start_offset + batch_size;
+
         const auto & arg_column = *columns[0];
         std::vector<size_t> hashvals;
-        hashvals.reserve(batch_size);
         std::vector<typename Data::Key> keys;
-        keys.reserve(batch_size);
+        hashvals.resize(agg_mini_batch);
+        keys.resize(agg_mini_batch);
 
-        const size_t end_row = start_offset + batch_size;
-        for (size_t row = start_offset; row < end_row; ++row)
+        while (true)
         {
-            if constexpr (has_if_argument_pos_data)
+            size_t cur_batch_size = agg_mini_batch;
+            if unlikely (batch_row_idx + cur_batch_size > end_row)
+                cur_batch_size = end_row - batch_row_idx;
+
+            for (size_t i = 0; i < cur_batch_size; ++i)
             {
-                if (!(*if_argument_pos_data)[row])
+                const size_t row = batch_row_idx + i;
+                if constexpr (has_if_argument_pos_data)
                 {
-                    hashvals.push_back(0);
-                    keys.push_back(typename Data::Key{});
-                    continue;
+                    if (!(*if_argument_pos_data)[row])
+                    {
+                        hashvals[i] = 0;
+                        keys[i] = typename Data::Key{};
+                        continue;
+                    }
+                }
+
+                if constexpr (!std::is_same_v<T, String>)
+                {
+                    const auto & key = static_cast<const ColumnVector<T> &>(arg_column).getData()[row];
+                    keys[i] = key;
+                    hashvals[i] = agg_data.set.hash(key);
+                }
+                else
+                {
+                    StringRef value = arg_column.getDataAt(row);
+                    value = agg_data.getUpdatedValueForCollator(value, 0);
+
+                    UInt128 key;
+                    SipHash hash;
+                    hash.update(value.data, value.size);
+                    hash.get128(key);
+
+                    keys[i] = key;
+                    hashvals[i] = agg_data.set.hash(key);
                 }
             }
 
-            if constexpr (!std::is_same_v<T, String>)
+            for (size_t i = 0; i < cur_batch_size; ++i)
             {
-                const auto & key = static_cast<const ColumnVector<T> &>(arg_column).getData()[row];
-                keys.push_back(key);
-                hashvals.push_back(agg_data.set.hash(key));
-            }
-            else
-            {
-                StringRef value = arg_column.getDataAt(row);
-                value = agg_data.getUpdatedValueForCollator(value, 0);
+                if constexpr (has_if_argument_pos_data)
+                {
+                    if (!(*if_argument_pos_data)[batch_row_idx + i])
+                        continue;
+                }
 
-                UInt128 key;
-                SipHash hash;
-                hash.update(value.data, value.size);
-                hash.get128(key);
+                const size_t prefetch_i = i + agg_prefetch_step;
+                if unlikely (prefetch_i < keys.size())
+                    agg_data.set.prefetch(hashvals[prefetch_i]);
 
-                keys.push_back(key);
-                hashvals.push_back(agg_data.set.hash(key));
-            }
-        }
-
-        for (size_t i = 0; i < batch_size; ++i)
-        {
-            if constexpr (has_if_argument_pos_data)
-            {
-                if (!(*if_argument_pos_data)[start_offset + i])
-                    continue;
+                agg_data.set.insert(keys[i], hashvals[i]);
             }
 
-            const size_t prefetch_i = i + agg_prefetch_step;
-            if unlikely (prefetch_i < keys.size())
-                agg_data.set.prefetch(hashvals[prefetch_i]);
-
-            agg_data.set.insert(keys[i], hashvals[i]);
+            batch_row_idx += cur_batch_size;
+            if unlikely (batch_row_idx >= end_row)
+                break;
         }
     }
 
@@ -579,36 +593,36 @@ public:
         if (if_argument_pos >= 0)
             flags = &static_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
 
-//         if constexpr (std::is_same_v<Data, AggregateFunctionUniqExactData<T>>)
-//         {
-// #ifndef NDEBUG
-//             bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < agg_prefetch_threshold);
-//             fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
-// #else
-//             // const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
-//             const bool disable_prefetch = true;
-// #endif
-//             LOG_DEBUG(Logger::get(), "gjt debug disable_prefetch: {}, batch_size: {}", disable_prefetch, batch_size);
-//             if (!disable_prefetch)
-//             {
-//                 if (flags != nullptr)
-//                     detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/true, T, Data>(
-//                         start_offset,
-//                         batch_size,
-//                         agg_data,
-//                         columns,
-//                         flags);
-//                 else
-//                     detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/false, T, Data>(
-//                         start_offset,
-//                         batch_size,
-//                         agg_data,
-//                         columns,
-//                         nullptr);
-//                 return;
-//             }
-//             // else { fallback to non-prefetch }
-//         }
+        if constexpr (std::is_same_v<Data, AggregateFunctionUniqExactData<T>>)
+        {
+#ifndef NDEBUG
+            bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < agg_prefetch_threshold);
+            fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
+#else
+            // const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
+            const bool disable_prefetch = true;
+#endif
+            LOG_DEBUG(Logger::get(), "gjt debug disable_prefetch: {}, batch_size: {}", disable_prefetch, batch_size);
+            if (!disable_prefetch)
+            {
+                if (flags != nullptr)
+                    detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/true, T, Data>(
+                        start_offset,
+                        batch_size,
+                        agg_data,
+                        columns,
+                        flags);
+                else
+                    detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/false, T, Data>(
+                        start_offset,
+                        batch_size,
+                        agg_data,
+                        columns,
+                        nullptr);
+                return;
+            }
+            // else { fallback to non-prefetch }
+        }
 
         if (flags != nullptr)
             detail::BatchAdder::addBatchSinglePlaceNoPrefetch</*has_if_argument_pos_data=*/true, T, Data>(
