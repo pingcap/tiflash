@@ -219,9 +219,7 @@ struct AggregateFunctionUniqExactData<String> : AggregationCollatorsWrapper<true
     }
     using Key = UInt128;
 
-    /// When creating, the hash table must be small.
-    using Set = HashSet<Key>;
-    // = HashSet<Key, TrivialHash, HashTableGrower<3>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
+    using Set = HashSet<Key, TrivialHash>;
 
     Set set;
 
@@ -447,7 +445,6 @@ public:
 #else
             const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
 #endif
-            LOG_DEBUG(Logger::get(), "gjt debug disable_prefetch: {}, batch_size: {}", disable_prefetch, batch_size);
             if (!disable_prefetch)
             {
                 if (flags != nullptr)
@@ -571,12 +568,12 @@ private:
         {
             if constexpr (has_if_argument_pos_data)
             {
-                if (!(*if_argument_pos_data)[start_offset + i])
+                if (!((*if_argument_pos_data)[start_offset + i]))
                     continue;
             }
 
             const size_t prefetch_i = i + agg_prefetch_step;
-            if unlikely (prefetch_i < keys.size())
+            if likely (prefetch_i < keys.size())
                 agg_data.set.prefetch(hashvals[prefetch_i]);
 
             agg_data.set.insert(keys[i], hashvals[i]);
@@ -601,6 +598,127 @@ private:
             else
             {
                 detail::OneAdder<T, Data>::add(agg_data, *columns[0], row);
+            }
+        }
+    }
+};
+
+struct BatchAdderVariadic
+{
+public:
+    template <bool is_exact, bool argument_is_tuple, typename T, typename Data>
+    static ALWAYS_INLINE void addBatchSinglePlace(
+        Data & agg_data,
+        size_t start_offset,
+        size_t batch_size,
+        const IColumn ** columns,
+        size_t num_args,
+        ssize_t if_argument_pos = -1)
+    {
+        const ColumnUInt8::Container * flags = nullptr;
+        if (if_argument_pos >= 0)
+            flags = &static_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+
+        if constexpr (is_exact && !argument_is_tuple)
+        {
+#ifndef NDEBUG
+            bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
+            fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
+#else
+            const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
+#endif
+            if (!disable_prefetch)
+            {
+                if (flags != nullptr)
+                    addBatchSinglePlaceWithPrefetch<is_exact, argument_is_tuple, /*has_if_argument_pos_data=*/true>(
+                            start_offset,
+                            batch_size,
+                            agg_data,
+                            columns,
+                            num_args,
+                            flags);
+                else
+                    addBatchSinglePlaceWithPrefetch<is_exact, argument_is_tuple, /*has_if_argument_pos_data=*/false>(
+                            start_offset,
+                            batch_size,
+                            agg_data,
+                            columns,
+                            num_args,
+                            nullptr);
+                return;
+            }
+            // else { fallback to non-prefetch }
+        }
+
+        if (flags != nullptr)
+            addBatchSinglePlaceNoPrefetch<is_exact, argument_is_tuple, /*has_if_argument_pos_data=*/true>(
+                    start_offset,
+                    batch_size,
+                    agg_data,
+                    columns,
+                    num_args,
+                    flags);
+        else
+            addBatchSinglePlaceNoPrefetch<is_exact, argument_is_tuple, /*has_if_argument_pos_data=*/false>(
+                    start_offset,
+                    batch_size,
+                    agg_data,
+                    columns,
+                    num_args,
+                    nullptr);
+    }
+
+private:
+    template <bool is_exact, bool argument_is_tuple, bool has_if_argument_pos_data, typename Data>
+    static void addBatchSinglePlaceWithPrefetch(
+        size_t start_offset,
+        size_t batch_size,
+        Data & agg_data,
+        const IColumn ** columns,
+        size_t num_args,
+        const ColumnUInt8::Container * if_argument_pos_data)
+    {
+        // todo mini batch?
+        const auto & hash_values = UniqVariadicHash<Data, is_exact, argument_is_tuple>::applyBatch(agg_data, num_args, columns, start_offset, batch_size);
+        for (size_t i = 0; i < batch_size; ++i)
+        {
+            const size_t row = start_offset + i;
+            if constexpr (has_if_argument_pos_data)
+            {
+                if (!((*if_argument_pos_data)[row]))
+                    continue;
+            }
+
+            const size_t prefetch_i = i + agg_prefetch_step;
+            // todo trivial hash
+            if likely (prefetch_i < hash_values.size())
+                agg_data.set.prefetch(hash_values[prefetch_i].low);
+
+            agg_data.set.insert(hash_values[i], hash_values[i].low);
+        }
+    }
+
+    template <bool is_exact, bool argument_is_tuple, bool has_if_argument_pos_data, typename Data>
+    static void addBatchSinglePlaceNoPrefetch(
+        size_t start_offset,
+        size_t batch_size,
+        Data & agg_data,
+        const IColumn ** columns,
+        size_t num_args,
+        const ColumnUInt8::Container * if_argument_pos_data)
+    {
+        for (size_t row = start_offset; row < start_offset + batch_size; ++row)
+        {
+            if constexpr (has_if_argument_pos_data)
+            {
+                if ((*if_argument_pos_data)[row])
+                    agg_data.set.insert(
+                            UniqVariadicHash<Data, is_exact, argument_is_tuple>::apply(agg_data, num_args, columns, row));
+            }
+            else
+            {
+                agg_data.set.insert(
+                        UniqVariadicHash<Data, is_exact, argument_is_tuple>::apply(agg_data, num_args, columns, row));
             }
         }
     }
@@ -698,6 +816,19 @@ public:
     {
         this->data(place).set.insert(
             UniqVariadicHash<Data, is_exact, argument_is_tuple>::apply(this->data(place), num_args, columns, row_num));
+    }
+
+    void addBatchSinglePlace(
+        size_t start_offset,
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena *,
+        ssize_t if_argument_pos = -1) const override
+    {
+        assert(place);
+        auto & agg_data = this->data(place);
+        detail::BatchAdderVariadic::addBatchSinglePlace<is_exact, argument_is_tuple, Data>(agg_data, start_offset, batch_size, columns, num_args, if_argument_pos);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override

@@ -123,6 +123,33 @@ struct UniqVariadicHash<Data, true, false>
         hash.get128(key.low, key.high);
         return key;
     }
+
+    static inline std::vector<UInt128> applyBatch(Data & data, size_t num_args, const IColumn ** columns, size_t start_offset, size_t batch_size)
+    {
+        const IColumn ** column = columns;
+        const IColumn ** columns_end = column + num_args;
+
+        PaddedPODArray<SipHash> hash_values;
+        hash_values.resize_fill(batch_size, SipHash());
+
+        while (column < columns_end)
+        {
+            auto collator_and_sort_key_container = data.getCollatorAndSortKeyContainer(column - columns);
+            (*column)->updateHashWithValues(
+                start_offset,
+                batch_size,
+                hash_values,
+                collator_and_sort_key_container.first,
+                *collator_and_sort_key_container.second);
+            ++column;
+        }
+
+        std::vector<UInt128> keys;
+        keys.resize(batch_size);
+        for (size_t i = 0; i < hash_values.size(); ++i)
+            hash_values[i].get128(keys[i].low, keys[i].high);
+        return keys;
+    }
 };
 
 template <typename Data>
