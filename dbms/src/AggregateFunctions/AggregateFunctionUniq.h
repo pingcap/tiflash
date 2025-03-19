@@ -196,7 +196,7 @@ struct AggregateFunctionUniqExactData : AggregationCollatorsWrapper<false>
     using Key = T;
 
     /// When creating, the hash table must be small.
-    using Set = HashSet<Key>;
+    using Set = HashSet<Key, HashCRC32<Key>>;
 
     Set set;
 
