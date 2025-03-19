@@ -579,35 +579,36 @@ public:
         if (if_argument_pos >= 0)
             flags = &static_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
 
-        if constexpr (std::is_same_v<Data, AggregateFunctionUniqExactData<T>>)
-        {
-#ifndef NDEBUG
-            bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < agg_prefetch_threshold);
-            fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
-#else
-            const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
-#endif
-            LOG_DEBUG(Logger::get(), "gjt debug disable_prefetch: {}, batch_size: {}", disable_prefetch, batch_size);
-            if (!disable_prefetch)
-            {
-                if (flags != nullptr)
-                    detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/true, T, Data>(
-                        start_offset,
-                        batch_size,
-                        agg_data,
-                        columns,
-                        flags);
-                else
-                    detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/false, T, Data>(
-                        start_offset,
-                        batch_size,
-                        agg_data,
-                        columns,
-                        nullptr);
-                return;
-            }
-            // else { fallback to non-prefetch }
-        }
+//         if constexpr (std::is_same_v<Data, AggregateFunctionUniqExactData<T>>)
+//         {
+// #ifndef NDEBUG
+//             bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < agg_prefetch_threshold);
+//             fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
+// #else
+//             // const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
+//             const bool disable_prefetch = true;
+// #endif
+//             LOG_DEBUG(Logger::get(), "gjt debug disable_prefetch: {}, batch_size: {}", disable_prefetch, batch_size);
+//             if (!disable_prefetch)
+//             {
+//                 if (flags != nullptr)
+//                     detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/true, T, Data>(
+//                         start_offset,
+//                         batch_size,
+//                         agg_data,
+//                         columns,
+//                         flags);
+//                 else
+//                     detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/false, T, Data>(
+//                         start_offset,
+//                         batch_size,
+//                         agg_data,
+//                         columns,
+//                         nullptr);
+//                 return;
+//             }
+//             // else { fallback to non-prefetch }
+//         }
 
         if (flags != nullptr)
             detail::BatchAdder::addBatchSinglePlaceNoPrefetch</*has_if_argument_pos_data=*/true, T, Data>(
