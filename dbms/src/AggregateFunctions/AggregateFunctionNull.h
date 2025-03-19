@@ -494,6 +494,39 @@ public:
         this->nested_function->add(this->nestedPlace(place), nested_columns, row_num, arena);
     }
 
+    void addBatchSinglePlace(
+        size_t start_offset,
+        size_t batch_size,
+        AggregateDataPtr place,
+        const IColumn ** columns,
+        Arena * arena,
+        ssize_t if_argument_pos = -1) const override
+    {
+        /// This container stores the columns we really pass to the nested function.
+        const IColumn * nested_columns[number_of_arguments];
+
+        for (size_t i = 0; i < number_of_arguments; ++i)
+        {
+            if (is_nullable[i])
+            {
+                const auto & nullable_col = static_cast<const ColumnNullable &>(*columns[i]);
+                // todo handle null, cannot return directly here!!!
+                if (nullable_col.isNullAt(start_offset))
+                {
+                    /// If at least one column has a null value in the current row,
+                    /// we don't process this row.
+                    return;
+                }
+                nested_columns[i] = &nullable_col.getNestedColumn();
+            }
+            else
+                nested_columns[i] = columns[i];
+        }
+
+        this->setFlag(place);
+        this->nested_function->addBatchSinglePlace(start_offset, batch_size, place, nested_columns, arena, if_argument_pos);
+    }
+
     bool allocatesMemoryInArena() const override { return this->nested_function->allocatesMemoryInArena(); }
 
 private:
