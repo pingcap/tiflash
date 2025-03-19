@@ -25,6 +25,11 @@
 namespace DB::DM
 {
 
+namespace tests
+{
+class DMFileHandleIndexTest;
+} // namespace tests
+
 // DMFileHandleIndex encapsulates the handle column of a DMFile
 // and provides interface for locating the position of corresponding handle.
 template <ExtraHandleType HandleType>
@@ -145,7 +150,7 @@ private:
         return pack_offsets;
     }
 
-    static bool isCommonHandle() { return std::is_same_v<HandleType, String>; }
+    constexpr static bool isCommonHandle() { return std::is_same_v<HandleType, String>; }
 
     void loadHandleIfNotLoaded(const DMContext & dm_context)
     {
@@ -231,6 +236,8 @@ private:
     // If clipped_need_read_packs[i] is 1, pack i need to be read.
     // If clipped_need_read_packs is empty, no need to read.
     std::vector<UInt8> clipped_need_read_packs;
+
+    friend class tests::DMFileHandleIndexTest;
 };
 
 } // namespace DB::DM
