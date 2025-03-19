@@ -12,26 +12,83 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <DataTypes/DataTypeFactory.h>
 #include <Storages/DeltaMerge/VersionChain/ColumnView.h>
-#include <TestUtils/ColumnGenerator.h>
+#include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <gtest/gtest.h>
-
-using namespace DB::tests;
 
 namespace DB::DM::tests
 {
-TEST(ColumnView, Basic)
+template <ExtraHandleType HandleType>
+HandleType genHandle(Int64 i)
 {
-    auto str_col = ColumnGenerator::instance().generate({1024, "String", RANDOM}).column;
+    if constexpr (isCommonHandle<HandleType>())
+        return fmt::format("{:0>{}}", i, 3);
+    else
+        return i;
+}
 
-    //auto str_col = makeColumn<String>(MutSup::getExtraHandleColumnStringType(), {"0000", "11", "222", "33333"});
-    ColumnView<String> str_cv(*str_col);
-    for (auto s_itr = str_cv.begin(); s_itr != str_cv.end(); ++s_itr)
+template <ExtraHandleType HandleType>
+ColumnPtr genColumn()
+{
+    MutableColumnPtr col;
+    if constexpr (isCommonHandle<HandleType>())
+        col = DataTypeFactory::instance().getOrSet("String")->createColumn();
+    else
+        col = DataTypeFactory::instance().getOrSet("Int64")->createColumn();
+
+    for (Int64 i = 0; i <= 100; i += 2)
     {
-        ASSERT_EQ(*s_itr, str_col->getDataAt(s_itr - str_cv.begin()).toStringView());
+        Field f = genHandle<HandleType>(i);
+        col->insert(f);
     }
-    //fmt::println("=======================");
-    //auto itr = std::lower_bound(str_cv.begin(), str_cv.end(), "hello");
-    //std::ignore = itr;
+    return col;
+}
+
+template <ExtraHandleType HandleType>
+void testColumnView()
+{
+    auto col = genColumn<HandleType>();
+    ColumnView<HandleType> cv(*col);
+    ASSERT_TRUE(std::is_sorted(cv.begin(), cv.end())) << fmt::format("{}", cv);
+    for (auto itr = cv.begin(); itr != cv.end(); ++itr)
+    {
+        Field f1 = HandleType{*itr};
+        Field f2 = HandleType{cv[itr - cv.begin()]};
+        Field f3 = (*col)[itr - cv.begin()];
+        ASSERT_EQ(f1, f2);
+        ASSERT_EQ(f2, f3);
+
+        ASSERT_EQ(std::find(cv.begin(), cv.end(), *itr), itr);
+        ASSERT_EQ(std::lower_bound(cv.begin(), cv.end(), *itr), itr);
+    }
+
+    for (Int64 i = 0; i <= 100; ++i)
+    {
+        const auto h = genHandle<HandleType>(i);
+        const auto itr1 = std::find(cv.begin(), cv.end(), h);
+        const auto itr2 = std::lower_bound(cv.begin(), cv.end(), h);
+        if (i % 2 == 0)
+        {
+            ASSERT_NE(itr1, cv.end());
+            ASSERT_EQ(itr1, itr2);
+        }
+        else
+        {
+            ASSERT_EQ(itr1, cv.end());
+            ASSERT_NE(itr2, cv.end());
+            ASSERT_EQ(itr2, std::lower_bound(cv.begin(), cv.end(), genHandle<HandleType>(i + 1)));
+        }
+    }
+}
+
+TEST(ColumnView, String)
+{
+    testColumnView<String>();
+}
+
+TEST(ColumnView, Int64)
+{
+    testColumnView<Int64>();
 }
 } // namespace DB::DM::tests

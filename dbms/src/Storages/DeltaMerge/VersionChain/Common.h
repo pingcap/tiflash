@@ -33,9 +33,15 @@ template <typename T>
 concept ExtraHandleType = std::same_as<T, Int64> || std::same_as<T, String>;
 
 template <ExtraHandleType HandleType>
+constexpr bool isCommonHandle()
+{
+    return std::is_same_v<HandleType, String>;
+}
+
+template <ExtraHandleType HandleType>
 ColumnDefine getHandleColumnDefine()
 {
-    return getExtraHandleColumnDefine(std::is_same_v<HandleType, String>);
+    return getExtraHandleColumnDefine(isCommonHandle<HandleType>());
 }
 
 // For ColumnFileReader
