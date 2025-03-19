@@ -150,8 +150,6 @@ private:
         return pack_offsets;
     }
 
-    constexpr static bool isCommonHandle() { return std::is_same_v<HandleType, String>; }
-
     void loadHandleIfNotLoaded(const DMContext & dm_context)
     {
         if (likely(clipped_need_read_packs.empty()))
@@ -175,7 +173,7 @@ private:
         DMFileReader reader(
             dmfile,
             {getHandleColumnDefine<HandleType>()},
-            isCommonHandle(),
+            isCommonHandle<HandleType>(),
             /*enable_handle_clean_read*/ false,
             /*enable_del_clean_read*/ false,
             /*is_fast_scan*/ false,

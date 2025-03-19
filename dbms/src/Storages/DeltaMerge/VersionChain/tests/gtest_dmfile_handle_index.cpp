@@ -25,7 +25,7 @@ protected:
     template <ExtraHandleType HandleType>
     std::vector<HandleType> genHandles(const std::vector<Int64> & int_handles)
     {
-        if constexpr (!DMFileHandleIndex<HandleType>::isCommonHandle())
+        if constexpr (!isCommonHandle<HandleType>())
             return int_handles;
         else
         {
@@ -41,7 +41,7 @@ protected:
     std::vector<std::vector<HandleType>> genHandlePacks(
         const std::vector<std::vector<Int64>> & expected_int_handle_packs)
     {
-        if constexpr (!DMFileHandleIndex<HandleType>::isCommonHandle())
+        if constexpr (!isCommonHandle<HandleType>())
             return expected_int_handle_packs;
         else
         {
@@ -156,7 +156,7 @@ protected:
         for (Int64 h = -10; h < 200; ++h)
         {
             HandleType handle;
-            if constexpr (DMFileHandleIndex<HandleType>::isCommonHandle())
+            if constexpr (isCommonHandle<HandleType>())
                 handle = genMockCommonHandle(h, 1);
             else
                 handle = h;
