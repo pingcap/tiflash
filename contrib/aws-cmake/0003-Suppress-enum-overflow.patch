@@ -1,0 +1,25 @@
+From ab4511229c3cf5c0bd666f4e1c61e16c2fff1bed Mon Sep 17 00:00:00 2001
+From: JaySon-Huang <tshent@qq.com>
+Date: Mon, 3 Mar 2025 14:49:51 +0800
+Subject: [PATCH] Suppress enum overflow
+
+Signed-off-by: JaySon-Huang <tshent@qq.com>
+---
+ .../source/utils/EnumParseOverflowContainer.cpp                 | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/src/aws-cpp-sdk-core/source/utils/EnumParseOverflowContainer.cpp b/src/aws-cpp-sdk-core/source/utils/EnumParseOverflowContainer.cpp
+index eaeba1d9105..4eb02c05d25 100644
+--- a/src/aws-cpp-sdk-core/source/utils/EnumParseOverflowContainer.cpp
++++ b/src/aws-cpp-sdk-core/source/utils/EnumParseOverflowContainer.cpp
+@@ -28,6 +28,6 @@ const Aws::String& EnumParseOverflowContainer::RetrieveOverflow(int hashCode) co
+ void EnumParseOverflowContainer::StoreOverflow(int hashCode, const Aws::String& value)
+ {
+     WriterLockGuard guard(m_overflowLock);
+-    AWS_LOGSTREAM_WARN(LOG_TAG, "Encountered enum member " << value << " which is not modeled in your clients. You should update your clients when you get a chance.");
++    AWS_LOGSTREAM_DEBUG(LOG_TAG, "Encountered enum member " << value << " which is not modeled in your clients. You should update your clients when you get a chance.");
+     m_overflowMap[hashCode] = value;
+ }
+-- 
+2.43.5
+
