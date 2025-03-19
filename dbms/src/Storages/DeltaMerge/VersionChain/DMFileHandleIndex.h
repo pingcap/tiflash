@@ -25,6 +25,8 @@
 namespace DB::DM
 {
 
+// DMFileHandleIndex encapsulates the handle column of a DMFile
+// and provides interface for locating the position of corresponding handle.
 template <ExtraHandleType HandleType>
 class DMFileHandleIndex
 {
@@ -43,7 +45,7 @@ public:
         , clipped_pack_index(loadPackIndex(dm_context_))
         , clipped_pack_offsets(loadPackOffsets())
         , clipped_handle_packs(clipped_pack_range.count())
-        , clipped_need_read_packs(std::vector<UInt8>(clipped_pack_range.count(), 1)) // read all packs by default
+        , clipped_need_read_packs(clipped_pack_range.count(), 1) // read all packs by default
     {
         RUNTIME_CHECK(
             clipped_pack_index.size() == clipped_pack_range.count(),
@@ -55,6 +57,9 @@ public:
             clipped_pack_range.count());
     }
 
+    // Get the base(oldest) version of the given handle.
+    // 1. Get the pack may contain the given handle.
+    // 2. Get the base version of the given handle in the given pack.
     std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRefType h)
     {
         auto clipped_pack_id = getClippedPackId(h);
@@ -66,6 +71,7 @@ public:
         return start_row_id + *row_id;
     }
 
+    // Use to pre-calculate which packs to read.
     template <typename Iterator>
     void calculateReadPacks(Iterator begin, Iterator end)
     {
@@ -80,22 +86,24 @@ public:
             calc_read_packs[*clipped_pack_id] = 1;
             ++calc_read_count;
 
-            // Read too many packs, read all by default
+            // Read too many packs, read all for simplicity.
+            // TODO: optimize the storage format of handle column to improve the performance.
             if (calc_read_count * 4 >= clipped_pack_range.count())
                 return; // return, instead of break, because `clipped_need_read_packs` is read all by default.
         }
-        clipped_need_read_packs->swap(calc_read_packs);
+        clipped_need_read_packs = std::move(calc_read_packs);
     }
 
+    // Release handle column data to save memory.
     void cleanHandleColumn()
     {
-        // Reset handle column data to save memory.
         std::fill(clipped_handle_packs.begin(), clipped_handle_packs.end(), nullptr);
-        clipped_need_read_packs.emplace(clipped_pack_range.count(), 1);
+        clipped_need_read_packs = std::vector<UInt8>(clipped_pack_range.count(), 1);
     }
 
 private:
-    std::optional<UInt32> getClippedPackId(HandleRefType h)
+    // Find the pack may contian the given handle.
+    std::optional<UInt32> getClippedPackId(HandleRefType h) const
     {
         if (unlikely(rowkey_range && !inRowKeyRange(*rowkey_range, h)))
             return {};
@@ -106,6 +114,7 @@ private:
         return itr - clipped_pack_index.begin();
     }
 
+    // Find the base(oldest) version of the given handle in the given pack.
     std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRefType h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded(dm_context);
@@ -116,7 +125,7 @@ private:
         return {};
     }
 
-    std::vector<HandleType> loadPackIndex(const DMContext & dm_context)
+    std::vector<HandleType> loadPackIndex(const DMContext & dm_context) const
     {
         auto max_values = loadPackMaxValue<HandleType>(dm_context, *dmfile, MutSup::extra_handle_id);
         return std::vector<HandleType>(
@@ -124,7 +133,7 @@ private:
             max_values.begin() + clipped_pack_range.end_pack_id);
     }
 
-    std::vector<UInt32> loadPackOffsets()
+    std::vector<UInt32> loadPackOffsets() const
     {
         const auto & pack_stats = dmfile->getPackStats();
         std::vector<UInt32> pack_offsets(clipped_pack_range.count(), 0);
@@ -140,23 +149,22 @@ private:
 
     void loadHandleIfNotLoaded(const DMContext & dm_context)
     {
-        if (likely(!clipped_need_read_packs))
+        if (likely(clipped_need_read_packs.empty()))
             return;
 
         auto read_pack_ids = std::make_shared<IdSet>();
-        const auto & packs = *clipped_need_read_packs;
-        for (UInt32 i = 0; i < packs.size(); ++i)
+        for (UInt32 i = 0; i < clipped_need_read_packs.size(); ++i)
         {
-            if (packs[i])
+            if (clipped_need_read_packs[i])
                 read_pack_ids->insert(i + clipped_pack_range.start_pack_id);
         }
 
         auto pack_filter = DMFilePackFilter::loadFrom(
             dm_context,
             dmfile,
-            true, //set_cache_if_miss
-            {}, // rowkey_ranges, empty means all
-            nullptr, // RSOperatorPtr
+            /*set_cache_if_miss*/ true,
+            /*rowkey_ranges*/ {}, // Empty means all
+            EMPTY_RS_OPERATOR,
             read_pack_ids);
 
         DMFileReader reader(
@@ -181,13 +189,14 @@ private:
             dm_context.scan_context,
             ReadTag::MVCC);
 
-
+        const auto & pack_stats = dmfile->getPackStats();
         for (UInt32 pack_id : *read_pack_ids)
         {
             auto block = reader.read();
+            RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, pack_id, block.rows(), pack_stats[pack_id].rows);
             clipped_handle_packs[pack_id - clipped_pack_range.start_pack_id] = block.begin()->column;
         }
-        clipped_need_read_packs.reset();
+        clipped_need_read_packs.clear();
     }
 
     struct PackRange
@@ -215,11 +224,13 @@ private:
     const std::optional<const RowKeyRange> rowkey_range; // Range of ColumnFileBig or nullopt for Stable DMFile
 
     // Clipped by rowkey_range
-    const PackRange clipped_pack_range;
+    const PackRange clipped_pack_range; // [start_pack_id, end_pack_id)
     const std::vector<HandleType> clipped_pack_index; // max value of each pack
-    const std::vector<UInt32> clipped_pack_offsets; // offset of each pack
+    const std::vector<UInt32> clipped_pack_offsets; // row offset of each pack
     std::vector<ColumnPtr> clipped_handle_packs; // handle column of each pack
-    std::optional<std::vector<UInt8>> clipped_need_read_packs;
+    // If clipped_need_read_packs[i] is 1, pack i need to be read.
+    // If clipped_need_read_packs is empty, no need to read.
+    std::vector<UInt8> clipped_need_read_packs;
 };
 
 } // namespace DB::DM
