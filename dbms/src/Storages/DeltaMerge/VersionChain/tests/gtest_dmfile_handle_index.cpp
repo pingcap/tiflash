@@ -171,16 +171,142 @@ protected:
             ASSERT_EQ(base_version.value(), expected_base_versions[handle]);
         }
     }
+
+    template <ExtraHandleType HandleType>
+    void withRangeTest()
+    {
+        writeSegmentGeneric(
+            "d_tiny:[0, 66)|d_tiny:[44, 107)|d_tiny:[60, 160)|d_tiny:[170, 171)|merge_delta:pack_size_11");
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(seg->getDelta()->getRows(), 0);
+        ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
+        constexpr size_t expected_rows = (66 - 0) + (107 - 44) + (160 - 60) + (171 - 170);
+        ASSERT_EQ(seg->getStable()->getRows(), expected_rows);
+        ASSERT_EQ(seg->getStable()->getDMFiles().size(), 1);
+        auto dmfile = seg->getStable()->getDMFiles()[0];
+        ASSERT_EQ(dmfile->getPacks(), expected_rows / 11 + static_cast<bool>(expected_rows % 11));
+        const auto rowkey_range = buildRowKeyRange(47, 134, is_common_handle);
+        const std::vector<std::vector<Int64>> expected_int_handle_packs = {
+            {44, 44, 45, 45, 46, 46, 47, 47, 48, 48, 49, 49},
+            {50, 50, 51, 51, 52, 52, 53, 53, 54, 54},
+            {55, 55, 56, 56, 57, 57, 58, 58, 59, 59, 60, 60, 60},
+            {61, 61, 61, 62, 62, 62, 63, 63, 63},
+            {64, 64, 64, 65, 65, 65, 66, 66, 67, 67, 68, 68},
+            {69, 69, 70, 70, 71, 71, 72, 72, 73, 73},
+            {74, 74, 75, 75, 76, 76, 77, 77, 78, 78, 79, 79},
+            {80, 80, 81, 81, 82, 82, 83, 83, 84, 84},
+            {85, 85, 86, 86, 87, 87, 88, 88, 89, 89, 90, 90},
+            {91, 91, 92, 92, 93, 93, 94, 94, 95, 95},
+            {96, 96, 97, 97, 98, 98, 99, 99, 100, 100, 101, 101},
+            {102, 102, 103, 103, 104, 104, 105, 105, 106, 106},
+            {107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117},
+            {118, 119, 120, 121, 122, 123, 124, 125, 126, 127, 128},
+            {129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139},
+        };
+        const auto expected_handle_packs = genHandlePacks<HandleType>(expected_int_handle_packs);
+        const auto start_row_id = 1899;
+        std::unordered_map<HandleType, RowID> expected_base_versions;
+        {
+            using HandleRefType =
+                typename std::conditional<std::is_same_v<HandleType, Int64>, Int64, std::string_view>::type;
+            RowID row_id = 0;
+            for (const auto & handles : expected_handle_packs)
+            {
+                for (const auto & h : handles)
+                {
+                    if (!expected_base_versions.contains(h) && inRowKeyRange(rowkey_range, HandleRefType(h)))
+                        expected_base_versions[h] = row_id + start_row_id;
+                    ++row_id;
+                }
+            }
+        }
+
+        DMFileHandleIndex<HandleType> handle_index(*dm_context, dmfile, start_row_id, rowkey_range);
+        {
+            // By default, load data of all packs.
+            handle_index.loadHandleIfNotLoaded(*dm_context);
+            for (size_t i = 0; i < expected_handle_packs.size(); ++i)
+            {
+                const auto & expected_handles = expected_handle_packs[i];
+                const auto handles = ColumnView<HandleType>(*handle_index.clipped_handle_packs[i]);
+                ASSERT_EQ(handles.size(), expected_handles.size());
+                ASSERT_TRUE(std::equal(expected_handles.begin(), expected_handles.end(), handles.begin()));
+            }
+            handle_index.cleanHandleColumn();
+        }
+
+        {
+            // Load less packs.
+            const auto want_read_handles = genHandles<HandleType>({0, 1, 2, 3, 69, 70, 140, 150});
+            const auto expected_read_packs = {5};
+            handle_index.calculateReadPacks(want_read_handles.begin(), want_read_handles.end());
+            handle_index.loadHandleIfNotLoaded(*dm_context);
+            for (size_t i = 0; i < expected_handle_packs.size(); ++i)
+            {
+                if (std::find(expected_read_packs.begin(), expected_read_packs.end(), i) == expected_read_packs.end())
+                {
+                    ASSERT_EQ(handle_index.clipped_handle_packs[i], nullptr);
+                    continue;
+                }
+                const auto & expected_handles = expected_handle_packs[i];
+                const auto handles = ColumnView<HandleType>(*handle_index.clipped_handle_packs[i]);
+                ASSERT_EQ(handles.size(), expected_handles.size());
+                ASSERT_TRUE(std::equal(expected_handles.begin(), expected_handles.end(), handles.begin()));
+            }
+            handle_index.cleanHandleColumn();
+        }
+
+        {
+            // Load all packs.
+            const auto want_read_handles = genHandles<HandleType>({129, 103, 87, 44, 55, 66, 77, 84});
+            handle_index.calculateReadPacks(want_read_handles.begin(), want_read_handles.end());
+            handle_index.loadHandleIfNotLoaded(*dm_context);
+            for (size_t i = 0; i < expected_handle_packs.size(); ++i)
+            {
+                const auto & expected_handles = expected_handle_packs[i];
+                const auto handles = ColumnView<HandleType>(*handle_index.clipped_handle_packs[i]);
+                ASSERT_EQ(handles.size(), expected_handles.size());
+                ASSERT_TRUE(std::equal(expected_handles.begin(), expected_handles.end(), handles.begin()));
+            }
+            handle_index.cleanHandleColumn();
+        }
+
+        for (Int64 h = -10; h < 200; ++h)
+        {
+            HandleType handle;
+            if constexpr (isCommonHandle<HandleType>())
+                handle = genMockCommonHandle(h, 1);
+            else
+                handle = h;
+
+            auto base_version = handle_index.getBaseVersion(*dm_context, handle);
+            if (!expected_base_versions.contains(handle))
+            {
+                ASSERT_FALSE(base_version.has_value());
+                continue;
+            }
+            ASSERT_TRUE(base_version.has_value());
+            ASSERT_EQ(base_version.value(), expected_base_versions[handle]);
+        }
+    }
 };
 
 INSTANTIATE_TEST_CASE_P(VersionChain, DMFileHandleIndexTest, /* is_common_handle */ ::testing::Bool());
 
-TEST_P(DMFileHandleIndexTest, Basic)
+TEST_P(DMFileHandleIndexTest, Normal)
 {
     if (is_common_handle)
         normalTest<String>();
     else
         normalTest<Int64>();
+}
+
+TEST_P(DMFileHandleIndexTest, WithRange)
+{
+    if (is_common_handle)
+        withRangeTest<String>();
+    else
+        withRangeTest<Int64>();
 }
 
 } // namespace DB::DM::tests
