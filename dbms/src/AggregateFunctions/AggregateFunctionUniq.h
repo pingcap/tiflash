@@ -428,38 +428,38 @@ struct OneAdder
 
 struct BatchAdder
 {
+    // template <bool has_if_argument_pos_data, typename T, typename Data>
+    // static void addBatchSinglePlaceWithPrefetch(
+    //     size_t start_offset,
+    //     size_t batch_size,
+    //     Data & agg_data,
+    //     const IColumn ** columns,
+    //     const ColumnUInt8::Container * if_argument_pos_data)
+    // {
+    //     const size_t mini_batch = 256;
+    //     size_t mini_batch_idx = start_offset;
+    //     const size_t end_row = start_offset + batch_size;
+    //     while (true)
+    //     {
+    //         size_t cur_batch_size = mini_batch;
+    //         if unlikely (mini_batch_idx + cur_batch_size > end_row)
+    //             cur_batch_size = end_row - mini_batch_idx;
+
+    //         addBatchSinglePlaceWithPrefetchMiniBatch<has_if_argument_pos_data, T, Data>(
+    //                 mini_batch_idx,
+    //                 cur_batch_size,
+    //                 agg_data,
+    //                 columns,
+    //                 if_argument_pos_data);
+
+    //         mini_batch_idx += cur_batch_size;
+    //         if unlikely (mini_batch_idx >= end_row)
+    //             break;
+    //     }
+    // }
+
     template <bool has_if_argument_pos_data, typename T, typename Data>
     static void addBatchSinglePlaceWithPrefetch(
-        size_t start_offset,
-        size_t batch_size,
-        Data & agg_data,
-        const IColumn ** columns,
-        const ColumnUInt8::Container * if_argument_pos_data)
-    {
-        const size_t mini_batch = 256;
-        size_t mini_batch_idx = start_offset;
-        const size_t end_row = start_offset + batch_size;
-        while (true)
-        {
-            size_t cur_batch_size = mini_batch;
-            if unlikely (mini_batch_idx + cur_batch_size > end_row)
-                cur_batch_size = end_row - mini_batch_idx;
-
-            addBatchSinglePlaceWithPrefetchMiniBatch<has_if_argument_pos_data, T, Data>(
-                    mini_batch_idx,
-                    cur_batch_size,
-                    agg_data,
-                    columns,
-                    if_argument_pos_data);
-
-            mini_batch_idx += cur_batch_size;
-            if unlikely (mini_batch_idx >= end_row)
-                break;
-        }
-    }
-
-    template <bool has_if_argument_pos_data, typename T, typename Data>
-    static void addBatchSinglePlaceWithPrefetchMiniBatch(
         size_t start_offset,
         size_t batch_size,
         Data & agg_data,
@@ -472,15 +472,17 @@ struct BatchAdder
         size_t batch_row_idx = start_offset;
         const size_t end_row = start_offset + batch_size;
 
+        const size_t count_distinct_mini_batch = 256;
+
         const auto & arg_column = *columns[0];
         std::vector<size_t> hashvals;
         std::vector<typename Data::Key> keys;
-        hashvals.resize(agg_mini_batch);
-        keys.resize(agg_mini_batch);
+        hashvals.resize(count_distinct_mini_batch);
+        keys.resize(count_distinct_mini_batch);
 
         while (true)
         {
-            size_t cur_batch_size = agg_mini_batch;
+            size_t cur_batch_size = count_distinct_mini_batch;
             if unlikely (batch_row_idx + cur_batch_size > end_row)
                 cur_batch_size = end_row - batch_row_idx;
 
