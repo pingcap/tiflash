@@ -436,7 +436,7 @@ struct BatchAdder
         const IColumn ** columns,
         const ColumnUInt8::Container * if_argument_pos_data)
     {
-        const size_t mini_batch = 256;
+        const size_t mini_batch = 512;
         size_t mini_batch_idx = start_offset;
         const size_t end_row = start_offset + batch_size;
         while (true)
