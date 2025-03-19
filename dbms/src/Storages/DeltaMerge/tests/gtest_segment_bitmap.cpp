@@ -12,18 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Logger.h>
-#include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
-#include <Storages/DeltaMerge/VersionChain/ColumnView.h>
-#include <Storages/DeltaMerge/VersionChain/Common.h>
-#include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
-#include <Storages/DeltaMerge/tests/gtest_segment_util.h>
-#include <TestUtils/FunctionTestUtils.h>
-#include <TestUtils/TiFlashTestBasic.h>
-#include <common/defines.h>
+#include <Storages/DeltaMerge/tests/gtest_segment_bitmap.h>
 
 using namespace std::chrono_literals;
 using namespace DB::tests;
@@ -31,42 +21,30 @@ using namespace DB::tests;
 namespace DB::DM::tests
 {
 
-class SegmentBitmapFilterTest
-    : public SegmentTestBasic
-    , public testing::WithParamInterface</*is_common_handle*/ bool>
+void SegmentBitmapFilterTest::SetUp()
 {
-public:
-    void SetUp() override
-    {
-        is_common_handle = GetParam();
-        SegmentTestBasic::SetUp(SegmentTestOptions{.is_common_handle = is_common_handle});
-    }
+    is_common_handle = GetParam();
+    SegmentTestBasic::SetUp(SegmentTestOptions{.is_common_handle = is_common_handle});
+}
 
-protected:
-    DB::LoggerPtr log = DB::Logger::get("SegmentBitmapFilterTest");
-    static constexpr auto SEG_ID = DELTA_MERGE_FIRST_SEGMENT_ID;
-    ColumnPtr hold_row_id;
-    ColumnPtr hold_handle;
-    RowKeyRanges read_ranges;
+void SegmentBitmapFilterTest::setRowKeyRange(Int64 begin, Int64 end, bool including_right_boundary)
+{
+    auto itr = segments.find(SEG_ID);
+    RUNTIME_CHECK(itr != segments.end(), SEG_ID);
+    itr->second->rowkey_range = buildRowKeyRange(begin, end, is_common_handle, including_right_boundary);
+}
 
-    void setRowKeyRange(Int64 begin, Int64 end, bool including_right_boundary)
-    {
-        auto itr = segments.find(SEG_ID);
-        RUNTIME_CHECK(itr != segments.end(), SEG_ID);
-        itr->second->rowkey_range = buildRowKeyRange(begin, end, is_common_handle, including_right_boundary);
-    }
+void SegmentBitmapFilterTest::writeSegmentGeneric(
+    std::string_view seg_data,
+    std::optional<std::tuple<Int64, Int64, bool>> rowkey_range)
+{
+    if (is_common_handle)
+        writeSegment<String>(seg_data, rowkey_range);
+    else
+        writeSegment<Int64>(seg_data, rowkey_range);
+}
 
-    void writeSegmentGeneric(
-        std::string_view seg_data,
-        std::optional<std::tuple<Int64, Int64, bool>> rowkey_range = std::nullopt)
-    {
-        if (is_common_handle)
-            writeSegment<String>(seg_data, rowkey_range);
-        else
-            writeSegment<Int64>(seg_data, rowkey_range);
-    }
-
-    /*
+/*
     0----------------stable_rows----------------stable_rows + delta_rows <-- append
     | stable value space | delta value space ..........................  <-- append
     |--------------------|--ColumnFilePersisted--|ColumnFileInMemory...  <-- append
@@ -81,234 +59,193 @@ protected:
 
     Returns {row_id, handle}.
     */
-    template <typename HandleType>
-    std::pair<const PaddedPODArray<UInt32> *, const std::optional<ColumnView<HandleType>>> writeSegment(
-        std::string_view seg_data,
-        std::optional<std::tuple<Int64, Int64, bool>> rowkey_range = std::nullopt)
+template <typename HandleType>
+std::pair<const PaddedPODArray<UInt32> *, const std::optional<ColumnView<HandleType>>> SegmentBitmapFilterTest::
+    writeSegment(std::string_view seg_data, std::optional<std::tuple<Int64, Int64, bool>> rowkey_range)
+{
+    if (rowkey_range)
     {
-        if (rowkey_range)
-        {
-            const auto & [left, right, including_right_boundary] = *rowkey_range;
-            setRowKeyRange(left, right, including_right_boundary);
-        }
-        auto seg_data_units = parseSegData(seg_data);
-        for (const auto & unit : seg_data_units)
-        {
-            writeSegment(unit);
-        }
-        hold_row_id = getSegmentRowId(SEG_ID, read_ranges);
-        hold_handle = getSegmentHandle(SEG_ID, read_ranges);
-        if (hold_row_id == nullptr)
-        {
-            RUNTIME_CHECK(hold_handle == nullptr);
-            return {nullptr, std::nullopt};
-        }
-        else
-        {
-            return {toColumnVectorDataPtr<UInt32>(hold_row_id), ColumnView<HandleType>(*hold_handle)};
-        }
+        const auto & [left, right, including_right_boundary] = *rowkey_range;
+        setRowKeyRange(left, right, including_right_boundary);
+    }
+    auto seg_data_units = parseSegData(seg_data);
+    for (const auto & unit : seg_data_units)
+    {
+        writeSegment(unit);
+    }
+    hold_row_id = getSegmentRowId(SEG_ID, read_ranges);
+    hold_handle = getSegmentHandle(SEG_ID, read_ranges);
+    if (hold_row_id == nullptr)
+    {
+        RUNTIME_CHECK(hold_handle == nullptr);
+        return {nullptr, std::nullopt};
+    }
+    else
+    {
+        return {toColumnVectorDataPtr<UInt32>(hold_row_id), ColumnView<HandleType>(*hold_handle)};
+    }
+}
+
+void SegmentBitmapFilterTest::writeSegment(const SegDataUnit & unit)
+{
+    const auto & type = unit.type;
+    auto [begin, end, including_right_boundary] = unit.range;
+    const auto write_count = end - begin + including_right_boundary;
+    if (type == "d_mem")
+    {
+        SegmentTestBasic::writeToCache(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
+    }
+    else if (type == "d_mem_del")
+    {
+        SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, write_count, begin);
+    }
+    else if (type == "d_tiny")
+    {
+        SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
+        SegmentTestBasic::flushSegmentCache(SEG_ID);
+    }
+    else if (type == "d_tiny_del")
+    {
+        SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, write_count, begin);
+        SegmentTestBasic::flushSegmentCache(SEG_ID);
+    }
+    else if (type == "d_big")
+    {
+        SegmentTestBasic::ingestDTFileIntoDelta(
+            SEG_ID,
+            write_count,
+            begin,
+            false,
+            unit.pack_size,
+            /*check_range*/ false);
+    }
+    else if (type == "d_dr")
+    {
+        SegmentTestBasic::writeSegmentWithDeleteRange(SEG_ID, begin, end, is_common_handle, including_right_boundary);
+    }
+    else if (type == "s")
+    {
+        SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
+        SegmentTestBasic::mergeSegmentDelta(SEG_ID, /*check_rows*/ true, unit.pack_size);
+    }
+    else if (type == "compact_delta")
+    {
+        SegmentTestBasic::compactSegmentDelta(SEG_ID);
+    }
+    else if (type == "flush_cache")
+    {
+        SegmentTestBasic::flushSegmentCache(SEG_ID);
+    }
+    else if (type == "merge_delta")
+    {
+        SegmentTestBasic::mergeSegmentDelta(SEG_ID, /*check_rows*/ true, unit.pack_size);
+    }
+    else
+    {
+        RUNTIME_CHECK(false, type);
+    }
+}
+
+void SegmentBitmapFilterTest::runTestCaseGeneric(
+    TestCase test_case,
+    int caller_line,
+    const std::vector<RowID> & expected_base_versions)
+{
+    if (is_common_handle)
+        runTestCase<String>(test_case, caller_line, expected_base_versions);
+    else
+        runTestCase<Int64>(test_case, caller_line, expected_base_versions);
+}
+
+template <typename HandleType>
+void SegmentBitmapFilterTest::runTestCase(
+    TestCase test_case,
+    int caller_line,
+    const std::vector<RowID> & expected_base_versions)
+{
+    auto info = fmt::format("caller_line={}", caller_line);
+    auto [row_id, handle] = writeSegment<HandleType>(test_case.seg_data, test_case.rowkey_range);
+    if (test_case.expected_size == 0)
+    {
+        ASSERT_EQ(nullptr, row_id) << info;
+        ASSERT_EQ(std::nullopt, handle) << info;
+    }
+    else
+    {
+        ASSERT_EQ(test_case.expected_size, row_id->size()) << info;
+        auto expected_row_id = genSequence<UInt32>(test_case.expected_row_id);
+        ASSERT_TRUE(sequenceEqual(expected_row_id, *row_id)) << info;
+
+        ASSERT_EQ(test_case.expected_size, handle->size()) << info;
+        auto expected_handle = genHandleSequence<HandleType>(test_case.expected_handle);
+        ASSERT_TRUE(sequenceEqual(expected_handle, *handle)) << info;
     }
 
-    void writeSegment(const SegDataUnit & unit)
+    verifyVersionChain(VerifyVersionChainOption{
+        .seg_id = SEG_ID,
+        .caller_line = caller_line,
+        .expected_base_versions = expected_base_versions,
+    });
+}
+
+DMFilePackFilterResults SegmentBitmapFilterTest::loadPackFilterResults(
+    const SegmentSnapshotPtr & snap,
+    const RowKeyRanges & ranges)
+{
+    DMFilePackFilterResults results;
+    results.reserve(snap->stable->getDMFiles().size());
+    for (const auto & file : snap->stable->getDMFiles())
     {
-        const auto & type = unit.type;
-        auto [begin, end, including_right_boundary] = unit.range;
-        const auto write_count = end - begin + including_right_boundary;
-        if (type == "d_mem")
-        {
-            SegmentTestBasic::writeToCache(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
-        }
-        else if (type == "d_mem_del")
-        {
-            SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, write_count, begin);
-        }
-        else if (type == "d_tiny")
-        {
-            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
-            SegmentTestBasic::flushSegmentCache(SEG_ID);
-        }
-        else if (type == "d_tiny_del")
-        {
-            SegmentTestBasic::writeSegmentWithDeletedPack(SEG_ID, write_count, begin);
-            SegmentTestBasic::flushSegmentCache(SEG_ID);
-        }
-        else if (type == "d_big")
-        {
-            SegmentTestBasic::ingestDTFileIntoDelta(
-                SEG_ID,
-                write_count,
-                begin,
-                false,
-                unit.pack_size,
-                /*check_range*/ false);
-        }
-        else if (type == "d_dr")
-        {
-            SegmentTestBasic::writeSegmentWithDeleteRange(
-                SEG_ID,
-                begin,
-                end,
-                is_common_handle,
-                including_right_boundary);
-        }
-        else if (type == "s")
-        {
-            SegmentTestBasic::writeSegment(SEG_ID, write_count, begin, unit.shuffle, unit.ts);
-            SegmentTestBasic::mergeSegmentDelta(SEG_ID, /*check_rows*/ true, unit.pack_size);
-        }
-        else if (type == "compact_delta")
-        {
-            SegmentTestBasic::compactSegmentDelta(SEG_ID);
-        }
-        else if (type == "flush_cache")
-        {
-            SegmentTestBasic::flushSegmentCache(SEG_ID);
-        }
-        else if (type == "merge_delta")
-        {
-            SegmentTestBasic::mergeSegmentDelta(SEG_ID, /*check_rows*/ true, unit.pack_size);
-        }
-        else
-        {
-            RUNTIME_CHECK(false, type);
-        }
+        auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
+        results.push_back(pack_filter);
     }
+    return results;
+}
 
-    struct TestCase
-    {
-        std::string seg_data;
-        size_t expected_size;
-        std::string expected_row_id;
-        std::string expected_handle;
-        std::optional<std::tuple<Int64, Int64, bool>> rowkey_range;
-    };
+void SegmentBitmapFilterTest::verifyVersionChain(const VerifyVersionChainOption & opt)
+{
+    auto info = opt.toDebugString();
+    auto [seg, snap] = getSegmentForRead(opt.seg_id);
 
-    void runTestCaseGeneric(TestCase test_case, int caller_line, const std::vector<RowID> & expected_base_versions)
+    if (opt.expected_base_versions)
     {
-        if (is_common_handle)
-            runTestCase<String>(test_case, caller_line, expected_base_versions);
-        else
-            runTestCase<Int64>(test_case, caller_line, expected_base_versions);
+        const auto & expected_base_versions = *(opt.expected_base_versions);
+        auto actual_base_versions = std::visit(
+            [&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); },
+            seg->version_chain);
+        ASSERT_EQ(expected_base_versions.size(), actual_base_versions->size()) << info;
+        for (size_t i = 0; i < expected_base_versions.size(); ++i)
+            ASSERT_EQ(expected_base_versions[i], (*actual_base_versions)[i]) << fmt::format("i={}, {}", i, info);
     }
+}
 
-    template <typename HandleType>
-    void runTestCase(TestCase test_case, int caller_line, const std::vector<RowID> & expected_base_versions)
+void SegmentBitmapFilterTest::checkHandle(PageIdU64 seg_id, std::string_view seq_ranges, int caller_line)
+{
+    auto info = fmt::format("caller_line={}", caller_line);
+    auto handle = getSegmentHandle(seg_id, {});
+    if (is_common_handle)
     {
-        auto info = fmt::format("caller_line={}", caller_line);
-        auto [row_id, handle] = writeSegment<HandleType>(test_case.seg_data, test_case.rowkey_range);
-        if (test_case.expected_size == 0)
-        {
-            ASSERT_EQ(nullptr, row_id) << info;
-            ASSERT_EQ(std::nullopt, handle) << info;
-        }
-        else
-        {
-            ASSERT_EQ(test_case.expected_size, row_id->size()) << info;
-            auto expected_row_id = genSequence<UInt32>(test_case.expected_row_id);
-            ASSERT_TRUE(sequenceEqual(expected_row_id, *row_id)) << info;
-
-            ASSERT_EQ(test_case.expected_size, handle->size()) << info;
-            auto expected_handle = genHandleSequence<HandleType>(test_case.expected_handle);
-            ASSERT_TRUE(sequenceEqual(expected_handle, *handle)) << info;
-        }
-
-        verifyVersionChain(VerifyVersionChainOption{
-            .seg_id = SEG_ID,
-            .caller_line = caller_line,
-            .expected_base_versions = expected_base_versions,
-        });
+        auto expected_handle = genHandleSequence<String>(seq_ranges);
+        ASSERT_TRUE(sequenceEqual(expected_handle, ColumnView<String>{*handle})) << info;
     }
-
-    auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
+    else
     {
-        DMFilePackFilterResults results;
-        results.reserve(snap->stable->getDMFiles().size());
-        for (const auto & file : snap->stable->getDMFiles())
-        {
-            auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
-            results.push_back(pack_filter);
-        }
-        return results;
+        auto expected_handle = genHandleSequence<Int64>(seq_ranges);
+        ASSERT_TRUE(sequenceEqual(expected_handle, ColumnView<Int64>{*handle})) << info;
     }
+}
 
-    struct VerifyVersionChainOption
-    {
-        const PageIdU64 seg_id;
-        const int caller_line; // For debug
-        const UInt64 read_ts = std::numeric_limits<UInt64>::max();
-        const std::optional<std::vector<RowID>> expected_base_versions;
-        const std::optional<RowKeyRanges> read_ranges;
-        const std::optional<String> expected_bitmap;
-        const DMFilePackFilterResults rs_filter_results;
-
-        String toDebugString() const
-        {
-            // Size of expected_base_versions maybe large.
-            return fmt::format(
-                "seg_id={}, caller_line={}, read_ts={}, read_ranges={}, expected_bitmap={}",
-                seg_id,
-                caller_line,
-                read_ts,
-                read_ranges,
-                expected_bitmap);
-        }
-    };
-
-    void verifyVersionChain(const VerifyVersionChainOption & opt)
-    {
-        auto info = opt.toDebugString();
-        auto [seg, snap] = getSegmentForRead(opt.seg_id);
-
-        if (opt.expected_base_versions)
-        {
-            const auto & expected_base_versions = *(opt.expected_base_versions);
-            auto actual_base_versions = std::visit(
-                [&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); },
-                seg->version_chain);
-            ASSERT_EQ(expected_base_versions.size(), actual_base_versions->size()) << info;
-            for (size_t i = 0; i < expected_base_versions.size(); ++i)
-                ASSERT_EQ(expected_base_versions[i], (*actual_base_versions)[i]) << fmt::format("i={}, {}", i, info);
-        }
-    }
-
-    void checkHandle(PageIdU64 seg_id, std::string_view seq_ranges, int caller_line)
-    {
-        auto info = fmt::format("caller_line={}", caller_line);
-        auto handle = getSegmentHandle(seg_id, {});
-        if (is_common_handle)
-        {
-            auto expected_handle = genHandleSequence<String>(seq_ranges);
-            ASSERT_TRUE(sequenceEqual(expected_handle, ColumnView<String>{*handle})) << info;
-        }
-        else
-        {
-            auto expected_handle = genHandleSequence<Int64>(seq_ranges);
-            ASSERT_TRUE(sequenceEqual(expected_handle, ColumnView<Int64>{*handle})) << info;
-        }
-    }
-
-    struct verifyNotCleanAndDeletedOption
-    {
-        const size_t pack_id;
-        const size_t expected_pack_rows;
-        const size_t expected_not_clean_rows;
-        const size_t expected_deleted_rows;
-        const int caller_line;
-    };
-    void verifyNotCleanAndDeleted(const verifyNotCleanAndDeletedOption & opt)
-    {
-        auto [seg, snap] = getSegmentForRead(SEG_ID);
-        const auto & dmfile = snap->stable->getDMFiles()[0];
-        ASSERT_GT(dmfile->getPacks(), opt.pack_id) << opt.caller_line;
-        const auto & pack_stat = dmfile->getPackStats()[opt.pack_id];
-        const auto & pack_property = dmfile->getPackProperties().property()[opt.pack_id];
-        ASSERT_EQ(pack_stat.rows, opt.expected_pack_rows) << opt.caller_line;
-        ASSERT_EQ(pack_stat.not_clean, opt.expected_not_clean_rows) << opt.caller_line;
-        ASSERT_EQ(pack_property.deleted_rows(), opt.expected_deleted_rows) << opt.caller_line;
-    }
-
-    bool is_common_handle = false;
-};
+void SegmentBitmapFilterTest::verifyNotCleanAndDeleted(const verifyNotCleanAndDeletedOption & opt)
+{
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    const auto & dmfile = snap->stable->getDMFiles()[0];
+    ASSERT_GT(dmfile->getPacks(), opt.pack_id) << opt.caller_line;
+    const auto & pack_stat = dmfile->getPackStats()[opt.pack_id];
+    const auto & pack_property = dmfile->getPackProperties().property()[opt.pack_id];
+    ASSERT_EQ(pack_stat.rows, opt.expected_pack_rows) << opt.caller_line;
+    ASSERT_EQ(pack_stat.not_clean, opt.expected_not_clean_rows) << opt.caller_line;
+    ASSERT_EQ(pack_property.deleted_rows(), opt.expected_deleted_rows) << opt.caller_line;
+}
 
 INSTANTIATE_TEST_CASE_P(MVCC, SegmentBitmapFilterTest, /* is_common_handle */ ::testing::Bool());
 

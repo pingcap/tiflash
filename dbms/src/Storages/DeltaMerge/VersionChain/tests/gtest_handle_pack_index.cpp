@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/DeltaMerge/tests/gtest_segment_bitmap.h>
 #include <Storages/DeltaMerge/VersionChain/ColumnView.h>
 #include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <TestUtils/ColumnGenerator.h>
@@ -22,6 +23,16 @@ using namespace DB::tests;
 
 namespace DB::DM::tests
 {
+
+class DMFileHandleIndexTest : public SegmentBitmapFilterTest {};
+
+INSTANTIATE_TEST_CASE_P(VersionChain, DMFileHandleIndexTest, /* is_common_handle */ ::testing::Bool());
+
+TEST_P(DMFileHandleIndexTest, Basic)
+{
+    fmt::println("is_common_handle={}", is_common_handle);
+}
+
 TEST(HandleIndexTest, Basic)
 {
     [[maybe_unused]] VersionChain<Int64> version_chain_int;
