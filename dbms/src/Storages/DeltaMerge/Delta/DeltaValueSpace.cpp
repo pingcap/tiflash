@@ -455,7 +455,7 @@ bool DeltaValueSpace::compact(DMContext & context)
             LOG_DEBUG(log, "Compact stop because abandoned, delta={}", simpleInfo());
             return false;
         }
-        compaction_task = persisted_file_set->pickUpMinorCompaction(context);
+        compaction_task = persisted_file_set->pickUpMinorCompaction(context.delta_small_column_file_rows);
         if (!compaction_task)
         {
             LOG_DEBUG(log, "Compact cancel because nothing to compact, delta={}", simpleInfo());

@@ -36,7 +36,7 @@ class ColumnFilePersisted : public ColumnFile
 public:
     /// Put the data's page id into the corresponding WriteBatch.
     /// The actual remove will be done later.
-    virtual void removeData(WriteBatches &) const {};
+    virtual void removeData(WriteBatches &) const = 0;
 
     virtual void serializeMetadata(WriteBuffer & buf, bool save_schema) const = 0;
 
