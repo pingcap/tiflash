@@ -196,9 +196,7 @@ struct AggregateFunctionUniqExactData : AggregationCollatorsWrapper<false>
     using Key = T;
 
     /// When creating, the hash table must be small.
-    // using Set = HashSet<Key, HashCRC32<Key>, HashTableGrower<4>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 4)>>;
     using Set = HashSet<Key>;
-    // using Set = HashSet<Key, HashCRC32<Key>>;
 
     Set set;
 
@@ -223,7 +221,7 @@ struct AggregateFunctionUniqExactData<String> : AggregationCollatorsWrapper<true
 
     /// When creating, the hash table must be small.
     using Set = HashSet<Key>;
-        // = HashSet<Key, TrivialHash, HashTableGrower<3>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
+    // = HashSet<Key, TrivialHash, HashTableGrower<3>, HashTableAllocatorWithStackMemory<sizeof(Key) * (1 << 3)>>;
 
     Set set;
 
@@ -428,6 +426,66 @@ struct OneAdder
 
 struct BatchAdder
 {
+public:
+    template <typename T, typename Data>
+    static ALWAYS_INLINE void addBatchSinglePlace(
+        Data & agg_data,
+        size_t start_offset,
+        size_t batch_size,
+        const IColumn ** columns,
+        ssize_t if_argument_pos = -1)
+    {
+        const ColumnUInt8::Container * flags = nullptr;
+        if (if_argument_pos >= 0)
+            flags = &static_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+
+        if constexpr (std::is_same_v<Data, AggregateFunctionUniqExactData<T>>)
+        {
+#ifndef NDEBUG
+            bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
+            fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
+#else
+            const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
+#endif
+            LOG_DEBUG(Logger::get(), "gjt debug disable_prefetch: {}, batch_size: {}", disable_prefetch, batch_size);
+            if (!disable_prefetch)
+            {
+                if (flags != nullptr)
+                    detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/true, T, Data>(
+                        start_offset,
+                        batch_size,
+                        agg_data,
+                        columns,
+                        flags);
+                else
+                    detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/false, T, Data>(
+                        start_offset,
+                        batch_size,
+                        agg_data,
+                        columns,
+                        nullptr);
+                return;
+            }
+            // else { fallback to non-prefetch }
+        }
+
+        if (flags != nullptr)
+            detail::BatchAdder::addBatchSinglePlaceNoPrefetch</*has_if_argument_pos_data=*/true, T, Data>(
+                start_offset,
+                batch_size,
+                agg_data,
+                columns,
+                flags);
+        else
+            detail::BatchAdder::addBatchSinglePlaceNoPrefetch</*has_if_argument_pos_data=*/false, T, Data>(
+                start_offset,
+                batch_size,
+                agg_data,
+                columns,
+                nullptr);
+    }
+
+private:
     template <bool has_if_argument_pos_data, typename T, typename Data>
     static void addBatchSinglePlaceWithPrefetch(
         size_t start_offset,
@@ -446,11 +504,11 @@ struct BatchAdder
                 cur_batch_size = end_row - mini_batch_idx;
 
             addBatchSinglePlaceWithPrefetchMiniBatch<has_if_argument_pos_data, T, Data>(
-                    mini_batch_idx,
-                    cur_batch_size,
-                    agg_data,
-                    columns,
-                    if_argument_pos_data);
+                mini_batch_idx,
+                cur_batch_size,
+                agg_data,
+                columns,
+                if_argument_pos_data);
 
             mini_batch_idx += cur_batch_size;
             if unlikely (mini_batch_idx >= end_row)
@@ -573,56 +631,8 @@ public:
         ssize_t if_argument_pos = -1) const override
     {
         assert(place);
-
         auto & agg_data = this->data(place);
-        const ColumnUInt8::Container * flags = nullptr;
-        if (if_argument_pos >= 0)
-            flags = &static_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
-
-        if constexpr (std::is_same_v<Data, AggregateFunctionUniqExactData<T>>)
-        {
-#ifndef NDEBUG
-            bool disable_prefetch = (this->data(place).set.getBufferSizeInBytes() < agg_prefetch_threshold);
-            fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
-#else
-            const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
-#endif
-            LOG_DEBUG(Logger::get(), "gjt debug disable_prefetch: {}, batch_size: {}", disable_prefetch, batch_size);
-            if (!disable_prefetch)
-            {
-                if (flags != nullptr)
-                    detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/true, T, Data>(
-                        start_offset,
-                        batch_size,
-                        agg_data,
-                        columns,
-                        flags);
-                else
-                    detail::BatchAdder::addBatchSinglePlaceWithPrefetch</*has_if_argument_pos_data=*/false, T, Data>(
-                        start_offset,
-                        batch_size,
-                        agg_data,
-                        columns,
-                        nullptr);
-                return;
-            }
-            // else { fallback to non-prefetch }
-        }
-
-        if (flags != nullptr)
-            detail::BatchAdder::addBatchSinglePlaceNoPrefetch</*has_if_argument_pos_data=*/true, T, Data>(
-                start_offset,
-                batch_size,
-                agg_data,
-                columns,
-                flags);
-        else
-            detail::BatchAdder::addBatchSinglePlaceNoPrefetch</*has_if_argument_pos_data=*/false, T, Data>(
-                start_offset,
-                batch_size,
-                agg_data,
-                columns,
-                nullptr);
+        detail::BatchAdder::addBatchSinglePlace<T, Data>(agg_data, start_offset, batch_size, columns, if_argument_pos);
     }
 
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
