@@ -459,9 +459,10 @@ template <typename T>
         const TiDB::TiDBCollatorPtr & ,
         String & ) const
 {
-    for (size_t i = start; i < start + length; ++i)
+    for (size_t i = 0; i < length; ++i)
     {
-        hash_values[i].update(data[i]);
+        const size_t row = i + start;
+        hash_values[i].update(data[row]);
     }
 }
 

@@ -722,6 +722,17 @@ void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, c
 }
 
 template <typename T>
+void ColumnDecimal<T>::updateHashWithValues(size_t start, size_t length, IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
+    const
+{
+    for (size_t i = 0; i < length; ++i)
+    {
+        const size_t row = i + start;
+        hash_values[i].update(data[row]);
+    }
+}
+
+template <typename T>
 void ColumnDecimal<T>::updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const
 {
     updateWeakHash32Impl<false>(hash, {});
