@@ -678,23 +678,37 @@ private:
         size_t num_args,
         const ColumnUInt8::Container * if_argument_pos_data)
     {
-        // todo mini batch?
-        const auto & hash_values = UniqVariadicHash<Data, is_exact, argument_is_tuple>::applyBatch(agg_data, num_args, columns, start_offset, batch_size);
-        for (size_t i = 0; i < batch_size; ++i)
+        const size_t mini_batch = 512;
+        size_t mini_batch_idx = start_offset;
+        const size_t end_row = start_offset + batch_size;
+
+        while (true)
         {
-            const size_t row = start_offset + i;
-            if constexpr (has_if_argument_pos_data)
+            size_t cur_batch_size = mini_batch;
+            if unlikely (mini_batch_idx + cur_batch_size > end_row)
+                cur_batch_size = end_row - mini_batch_idx;
+
+            const auto & hash_values = UniqVariadicHash<Data, is_exact, argument_is_tuple>::applyBatch(agg_data, num_args, columns, mini_batch_idx, cur_batch_size);
+            for (size_t i = 0; i < cur_batch_size; ++i)
             {
-                if (!((*if_argument_pos_data)[row]))
-                    continue;
+                const size_t row = start_offset + i;
+                if constexpr (has_if_argument_pos_data)
+                {
+                    if (!((*if_argument_pos_data)[row]))
+                        continue;
+                }
+
+                const size_t prefetch_i = i + agg_prefetch_step;
+                // todo trivial hash
+                if likely (prefetch_i < hash_values.size())
+                    agg_data.set.prefetch(hash_values[prefetch_i].low);
+
+                agg_data.set.insert(hash_values[i], hash_values[i].low);
             }
 
-            const size_t prefetch_i = i + agg_prefetch_step;
-            // todo trivial hash
-            if likely (prefetch_i < hash_values.size())
-                agg_data.set.prefetch(hash_values[prefetch_i].low);
-
-            agg_data.set.insert(hash_values[i], hash_values[i].low);
+            mini_batch_idx += cur_batch_size;
+            if unlikely (mini_batch_idx >= end_row)
+                break;
         }
     }
 
