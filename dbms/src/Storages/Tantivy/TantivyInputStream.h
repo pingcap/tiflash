@@ -20,19 +20,10 @@
 #include <fcntl.h>
 #include <fmt/os.h>
 
-#include <filesystem>
-#include <iostream>
-#include <memory>
-
-#include "Columns/ColumnString.h"
-#include "Columns/ColumnVector.h"
-#include "Common/Exception.h"
 #include "Common/Logger.h"
-#include "Common/assert_cast.h"
-#include "Core/ColumnsWithTypeAndName.h"
-#include "DataTypes/DataTypeString.h"
-#include "DataTypes/DataTypesNumber.h"
+#include "Core/NamesAndTypes.h"
 #include "common/logger_useful.h"
+#include "common/types.h"
 #include "tici-search-lib/src/lib.rs.h"
 
 namespace DB::TS
@@ -42,10 +33,9 @@ class TantivyInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "TantivyInputStream";
 
 public:
-    TantivyInputStream(LoggerPtr log_, const String & uri_, const String & file_type_)
-        : uri(uri_)
-        , file_type(file_type_)
-        , log(log_)
+    TantivyInputStream(LoggerPtr log_, const String &, const String &, NamesAndTypes name_and_types_)
+        : log(log_)
+        , names_and_types(name_and_types_)
     {}
 
     String getName() const override { return NAME; }
@@ -66,72 +56,50 @@ public:
 protected:
     Block readFromFile()
     {
-        rust::Vec<FieldMapping> field_mappings;
-        field_mappings.push_back(FieldMapping{"_docId", FieldType::IntField});
-        field_mappings.push_back(FieldMapping{"title", FieldType::TextField});
-        field_mappings.push_back(FieldMapping{"body", FieldType::TextField});
-        rust::Vec<rust::String> search_fields = {"title", "body"};
+        rust::Vec<rust::String> query_fields;
+        query_fields.push_back("column_id_2");
+        query_fields.push_back("column_id_3");
+
+        rust::Vec<rust::String> search_fields = {};
+        for (auto & name_and_type : names_and_types)
+        {
+            LOG_INFO(log, name_and_type.name);
+            search_fields.push_back(name_and_type.name);
+        }
 
         auto search_param = SearchParam{20};
-        rust::Vec<IdDocument> documents = search2(
-            "/home/wshwsh12/project/ticilib/tmp/searcher/",
-            field_mappings,
-            "sea task",
-            search_fields,
-            search_param);
+        rust::Vec<IdDocument> documents
+            = search("/home/wshwsh12/project/ticilib/tmp/searcher/", "sea", query_fields, search_fields, search_param);
 
-        Block res;
-
+        Block res(names_and_types);
+        int i = 0;
+        for (auto & name_and_type : names_and_types)
         {
-            auto internal_type = std::make_shared<DataTypeString>();
-            auto internal_column = internal_type->createColumn();
-            PaddedPODArray<UInt8> & column_chars_t = assert_cast<ColumnString &>(*internal_column).getChars();
-            PaddedPODArray<UInt64> & column_offsets = assert_cast<ColumnString &>(*internal_column).getOffsets();
-
-            for (IdDocument & doc : documents)
+            auto col = res.getByName(name_and_type.name).column->assumeMutable();
+            if (name_and_type.type->isStringOrFixedString())
             {
-                auto t = doc.fieldValues[0];
-                LOG_INFO(log, t.field_name.c_str());
-                LOG_INFO(log, t.field_value.c_str());
-                column_chars_t.insert(t.field_value.begin(), t.field_value.end());
-                column_chars_t.emplace_back('\0');
-                column_offsets.emplace_back(column_chars_t.size());
+                for (auto & doc : documents)
+                {
+                    col->insert(Field(String(doc.fieldValues[i].string_value.c_str())));
+                }
             }
-
-            res.insert({std::move(internal_column), std::move(internal_type), "test"});
-        }
-
-        {
-            auto internal_type = std::make_shared<DataTypeString>();
-            auto internal_column = internal_type->createColumn();
-            PaddedPODArray<UInt8> & column_chars_t = assert_cast<ColumnString &>(*internal_column).getChars();
-            PaddedPODArray<UInt64> & column_offsets = assert_cast<ColumnString &>(*internal_column).getOffsets();
-
-            for (IdDocument & doc : documents)
+            if (name_and_type.type->isInteger())
             {
-                auto t = doc.fieldValues[1];
-                LOG_INFO(log, t.field_name.c_str());
-                LOG_INFO(log, t.field_value.c_str());
-                column_chars_t.insert(t.field_value.begin(), t.field_value.end());
-                column_chars_t.emplace_back('\0');
-                column_offsets.emplace_back(column_chars_t.size());
+                for (auto & doc : documents)
+                {
+                    col->insert(Field(doc.fieldValues[i].int_value));
+                }
             }
-
-            res.insert({std::move(internal_column), std::move(internal_type), "test2"});
+            i++;
         }
-
-
         return res;
     }
 
 private:
-    [[maybe_unused]] const String & uri;
-    [[maybe_unused]] const String & file_type;
-
-
     Block header;
     bool done = false;
     LoggerPtr log;
+    NamesAndTypes names_and_types;
 };
 
 } // namespace DB::TS

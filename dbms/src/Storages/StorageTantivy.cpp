@@ -59,31 +59,7 @@ BlockInputStreams StorageTantivy::read(
     [[maybe_unused]] size_t max_block_size,
     [[maybe_unused]] unsigned int num_streams)
 {
-    DAGPipeline pipeline;
-    for (const auto & uri : uris)
-        pipeline.streams.push_back(std::make_shared<TS::TantivyInputStream>(log, uri, "parquet"));
-
-    auto source_header = pipeline.firstStream()->getHeader();
-    NamesAndTypesList input_column;
-    for (const auto & column : source_header)
-        input_column.emplace_back(column.name, column.type);
-
-    Names column_name;
-
-
-    ExpressionActionsPtr project = std::make_shared<ExpressionActions>(input_column);
-    project->add(ExpressionAction::project(column_name));
-
-    pipeline.transform([&](auto & stream) {
-        stream = std::make_shared<ExpressionBlockInputStream>(stream, project, log->identifier());
-    });
-
-    auto header = pipeline.firstStream()->getHeader();
-    NamesAndTypes names_and_types;
-    for (const auto & t : header.getNamesAndTypesList())
-        names_and_types.emplace_back(t.name, t.type);
-    analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(names_and_types), context);
-    return pipeline.streams;
+    return {};
 }
 
 } // namespace DB

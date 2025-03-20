@@ -91,13 +91,10 @@ void PhysicalTiCIScan::buildPipeline(
 {
     // For building PipelineExec in compile time.
     StorageTantivyIterpreter storage_interpreter(context, tici_scan, filter_conditions, context.getMaxStreams());
-    LOG_INFO(log, "333333333333333333333333333333");
     storage_interpreter.execute(exec_context, pipeline_exec_builder);
     buildProjection(exec_context, pipeline_exec_builder);
 
-    LOG_INFO(log, "8888888888888888888888888888");
     PhysicalPlanNode::buildPipeline(builder, context, exec_context);
-    LOG_INFO(log, "99999999999999999999999999");
 }
 
 void PhysicalTiCIScan::finalizeImpl(const Names & parent_require)

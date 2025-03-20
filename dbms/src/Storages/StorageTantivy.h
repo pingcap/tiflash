@@ -24,11 +24,13 @@
 
 #include <cstdlib>
 
+#include "Core/NamesAndTypes.h"
 #include "Core/Types.h"
+#include "Flash/Coprocessor/GenSchemaAndColumn.h"
 #include "Flash/Coprocessor/TiCIScan.h"
-#include "Flash/Coprocessor/TiDBTableScan.h"
 #include "IO/WriteHelpers.h"
 #include "Operators/TantivyReaderSourceOp.h"
+#include "TiDB/Schema/TiDB.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -36,6 +38,8 @@
 #include <tipb/executor.pb.h>
 #pragma GCC diagnostic pop
 
+#include <Flash/Coprocessor/DAGQueryInfo.h>
+#include <Storages/SelectQueryInfo.h>
 namespace DB
 {
 class StorageTantivy : public IStorage
@@ -59,14 +63,16 @@ public:
     void read(
         PipelineExecutorContext & exec_status,
         PipelineExecGroupBuilder & group_builder,
-        [[maybe_unused]] const Names & name,
+        [[maybe_unused]] const Names & column_names,
         [[maybe_unused]] const SelectQueryInfo & info,
         [[maybe_unused]] const Context & context,
         [[maybe_unused]] size_t max_block_size,
         [[maybe_unused]] unsigned num_streams) override
     {
-        LOG_INFO(log, "55555555555555555555555");
-        group_builder.addConcurrency(std::make_unique<TantivyReaderSourceOp>(exec_status, log->identifier()));
+        auto names_and_types = genNamesAndTypesForTiCI(tici_scan.getColumns(), "column_id");
+
+        group_builder.addConcurrency(
+            std::make_unique<TantivyReaderSourceOp>(exec_status, log->identifier(), names_and_types));
     }
 
     // Members will be transferred to DAGQueryBlockInterpreter after execute

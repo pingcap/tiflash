@@ -11,12 +11,12 @@ TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id
     //, query_json_str(tici_scan->tici_scan().query_json_str())
     //, limit(tici_scan->tici_scan().limit())
 
-    , table_id(0)
+    , table_id(tici_scan_->tbl_scan().table_id())
     , index_id(0)
     , columns(TiDB::toTiDBColumnInfos(tici_scan->tbl_scan().columns()))
     , query_type(tipb::TiCIScanQueryType::QueryMatch)
-    , query_json_str("a")
-    , limit(0)
+    , query_json_str(test_query)
+    , limit(test_limit)
 {}
 
 } // namespace DB

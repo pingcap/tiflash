@@ -24,6 +24,9 @@
 #include <algorithm>
 
 #include "Core/Names.h"
+#include "Core/NamesAndTypes.h"
+#include "Flash/Coprocessor/DAGContext.h"
+#include "Flash/Coprocessor/GenSchemaAndColumn.h"
 #include "Flash/Coprocessor/TiCIScan.h"
 #include "Storages/SelectQueryInfo.h"
 
@@ -42,39 +45,29 @@ public:
         , storage(std::make_unique<StorageTantivy>(context_, tici_scan_))
         , max_streams(max_streams_)
         , log(Logger::get(context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
+        , tici_scan(tici_scan_)
         , filter_conditions(filter_conditions_)
     {}
 
-    void execute(DAGPipeline & pipeline)
-    {
-        auto stage = QueryProcessingStage::Enum::FetchColumns;
-        pipeline.streams = storage->read(Names(), SelectQueryInfo(), context, stage, 0, max_streams);
-        analyzer = std::move(storage->analyzer);
-
-        /// handle filter conditions for local and remote table scan.
-        if (filter_conditions.hasValue())
-        {
-            //        recordProfileStreams(pipeline, filter_conditions.executor_id);
-            auto & profile_streams = (*context.getDAGContext()).getProfileStreamsMap()[filter_conditions.executor_id];
-            pipeline.transform([&profile_streams](auto & stream) { profile_streams.push_back(stream); });
-        }
-    }
+    void execute(DAGPipeline &) {}
 
     void execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
     {
-        LOG_INFO(log, "44444444444444444444444444444");
-        storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, 0);
+        storage->read(exec_context, group_builder, Names(), query_info, context, 0, 0);
     }
 
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
+    void generateSelectQueryInfos();
     Context & context;
     std::unique_ptr<StorageTantivy> storage;
-    size_t max_streams;
+    [[maybe_unused]] size_t max_streams;
 
     LoggerPtr log;
-    const FilterConditions & filter_conditions;
+    const TiCIScan tici_scan;
+    [[maybe_unused]] const FilterConditions & filter_conditions;
+    SelectQueryInfo query_info;
 };
 } // namespace DB
