@@ -97,12 +97,17 @@ protected:
         ASSERT_TRUE(handle_index.handle_to_row_id.empty());
     }
 
-    void testString() {}
+    void testString()
+    {
+        // Create delta for NewHandleIndex<String>
+        writeSegmentGeneric("d_tiny:[0, 66):shuffle:ts_1|d_tiny:[44, 107):shuffle:ts_2|d_tiny:[60, "
+                            "160):shuffle:ts_3|d_tiny:[170, 171):shuffle:ts_4");
+    }
 };
 
 INSTANTIATE_TEST_CASE_P(VersionChain, NewHandleIndexTest, /* is_common_handle */ ::testing::Bool());
 
-TEST_P(NewHandleIndexTest, Int64)
+TEST_P(NewHandleIndexTest, Normal)
 try
 {
     if (is_common_handle)
