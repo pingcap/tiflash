@@ -445,6 +445,8 @@ public:
 #else
             const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
 #endif
+            LOG_DEBUG(Logger::get(), "gjt debug BatchAdder: disable_prefetch: {}, size: {}",
+                    disable_prefetch, agg_data.set.getBufferSizeInBytes());
             if (!disable_prefetch)
             {
                 if (flags != nullptr)
@@ -627,6 +629,8 @@ public:
 #else
             const bool disable_prefetch = (agg_data.set.getBufferSizeInBytes() < agg_prefetch_threshold);
 #endif
+            LOG_DEBUG(Logger::get(), "gjt debug BatchAdder: disable_prefetch: {}, size: {}",
+                    disable_prefetch, agg_data.set.getBufferSizeInBytes());
             if (!disable_prefetch)
             {
                 if (flags != nullptr)
