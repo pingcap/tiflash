@@ -11,3 +11,26 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+
+#include <Storages/DeltaMerge/VersionChain/NewHandleIndex.h>
+#include <Storages/DeltaMerge/tests/gtest_segment_bitmap.h>
+
+using namespace DB::tests;
+
+namespace DB::DM::tests
+{
+
+class NewHandleIndexTest : public SegmentBitmapFilterTest
+{
+};
+
+INSTANTIATE_TEST_CASE_P(VersionChain, NewHandleIndexTest, /* is_common_handle */ ::testing::Bool());
+
+TEST_P(NewHandleIndexTest, Int64)
+try
+{
+    fmt::println("is_common_handle: {}", is_common_handle);
+}
+CATCH
+
+} // namespace DB::DM::tests
