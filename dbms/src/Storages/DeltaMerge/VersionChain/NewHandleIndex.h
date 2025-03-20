@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/VersionChain/ColumnView.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 
 #pragma clang diagnostic push
@@ -25,12 +26,22 @@
 
 namespace DB::DM
 {
+namespace tests
+{
+class NewHandleIndexTest;
+}
+
+// NewHandleIndex maintains the **newly inserted** records in the delta: handle -> row_id.
 template <typename T>
 class NewHandleIndex
 {
     static_assert(false, "Only support Int64 and String");
 };
 
+// NewHandleIndex<Int64> is specialized for Int64 handle.
+// It uses a absl::btree_map to store the handle -> row_id mapping.
+// Why use absl::btree_map instead of std::map, std::unordered_map, or absl::hash_map?
+// Because absl::btree_map is more memory-efficient and offers better performance than std::map.
 template <>
 class NewHandleIndex<Int64>
 {
@@ -62,12 +73,14 @@ public:
         const UInt32 /*stable_rows*/)
     {
         auto itr = handle_to_row_id.lower_bound(range.start.int_value);
-        while (itr != handle_to_row_id.end() && itr->first < range.end.int_value)
+        while (itr != handle_to_row_id.end() && inRowKeyRange(range, itr->first))
             itr = handle_to_row_id.erase(itr);
     }
 
 private:
     absl::btree_map<Int64, RowID> handle_to_row_id;
+
+    friend class tests::NewHandleIndexTest;
 };
 
 template <>
