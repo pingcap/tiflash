@@ -86,7 +86,6 @@ extern const int TOO_DEEP_SUBQUERIES;
 extern const int THERE_IS_NO_COLUMN;
 extern const int SAMPLING_NOT_SUPPORTED;
 extern const int ILLEGAL_FINAL;
-extern const int ILLEGAL_PREWHERE;
 extern const int TOO_MANY_COLUMNS;
 extern const int LOGICAL_ERROR;
 extern const int NOT_IMPLEMENTED;
@@ -204,12 +203,6 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
             throw Exception(
                 (!input && storage) ? "Storage " + storage->getName() + " doesn't support FINAL" : "Illegal FINAL",
                 ErrorCodes::ILLEGAL_FINAL);
-
-        if (query.prewhere_expression && (input || !storage || !storage->supportsPrewhere()))
-            throw Exception(
-                (!input && storage) ? "Storage " + storage->getName() + " doesn't support PREWHERE"
-                                    : "Illegal PREWHERE",
-                ErrorCodes::ILLEGAL_PREWHERE);
 
         /// Save the new temporary tables in the query context
         for (const auto & it : query_analyzer->getExternalTables())
@@ -762,9 +755,9 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
      *  then as the block size we will use limit + offset (not to read more from the table than requested),
      *  and also set the number of threads to 1.
      */
-    if (!query.distinct && !query.prewhere_expression && !query.where_expression && !query.group_expression_list
-        && !query.having_expression && !query.order_expression_list && !query.limit_by_expression_list
-        && query.limit_length && !query_analyzer->hasAggregation() && limit_length + limit_offset < max_block_size)
+    if (!query.distinct && !query.where_expression && !query.group_expression_list && !query.having_expression
+        && !query.order_expression_list && !query.limit_by_expression_list && query.limit_length
+        && !query_analyzer->hasAggregation() && limit_length + limit_offset < max_block_size)
     {
         max_block_size = limit_length + limit_offset;
         max_streams = 1;

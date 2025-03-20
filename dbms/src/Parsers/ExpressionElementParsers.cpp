@@ -647,9 +647,9 @@ bool ParserLiteral::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
 
 
 const char * ParserAliasBase::restricted_keywords[]
-    = {"FROM",   "FINAL", "SAMPLE",   "ARRAY",  "LEFT",  "RIGHT",    "INNER",     "FULL",    "CROSS", "JOIN",
-       "GLOBAL", "ANY",   "ALL",      "ON",     "USING", "PREWHERE", "WHERE",     "GROUP",   "WITH",  "HAVING",
-       "ORDER",  "LIMIT", "SETTINGS", "FORMAT", "UNION", "INTO",     "PARTITION", "SEGMENT", nullptr};
+    = {"FROM",   "FINAL", "SAMPLE",   "ARRAY",  "LEFT",  "RIGHT", "INNER",     "FULL",    "CROSS",  "JOIN",
+       "GLOBAL", "ANY",   "ALL",      "ON",     "USING", "WHERE", "GROUP",     "WITH",    "HAVING", //
+       "ORDER",  "LIMIT", "SETTINGS", "FORMAT", "UNION", "INTO",  "PARTITION", "SEGMENT", nullptr};
 
 template <typename ParserIdentifier>
 bool ParserAliasImpl<ParserIdentifier>::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)

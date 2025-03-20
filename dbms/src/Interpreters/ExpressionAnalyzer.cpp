@@ -1127,8 +1127,6 @@ void ExpressionAnalyzer::normalizeTreeImpl(
     /// If the WHERE clause or HAVING consists of a single alias, the reference must be replaced not only in children, but also in where_expression and having_expression.
     if (auto * select = typeid_cast<ASTSelectQuery *>(ast.get()))
     {
-        if (select->prewhere_expression)
-            normalizeTreeImpl(select->prewhere_expression, finished_asts, current_asts, current_alias, level + 1);
         if (select->where_expression)
             normalizeTreeImpl(select->where_expression, finished_asts, current_asts, current_alias, level + 1);
         if (select->having_expression)
@@ -1771,11 +1769,10 @@ void ExpressionAnalyzer::getActionsImpl(
 
 void ExpressionAnalyzer::getAggregates(const ASTPtr & ast, ExpressionActionsPtr & actions)
 {
-    /// There can not be aggregate functions inside the WHERE and PREWHERE.
-    if (select_query
-        && (ast.get() == select_query->where_expression.get() || ast.get() == select_query->prewhere_expression.get()))
+    /// There can not be aggregate functions inside the WHERE.
+    if (select_query && ast.get() == select_query->where_expression.get())
     {
-        assertNoAggregates(ast, "in WHERE or PREWHERE");
+        assertNoAggregates(ast, "in WHERE");
         return;
     }
 

@@ -381,12 +381,10 @@ void LogicalExpressionsOptimizer::fixBrokenOrExpressions()
                 parent->children.erase(first_erased, parent->children.end());
             }
 
-            /// If the OR node was the root of the WHERE, PREWHERE, or HAVING expression, then update this root.
+            /// If the OR node was the root of the WHERE, or HAVING expression, then update this root.
             /// Due to the fact that we are dealing with a directed acyclic graph, we must check all cases.
             if (select_query->where_expression && (or_function == &*(select_query->where_expression)))
                 select_query->where_expression = operands[0];
-            if (select_query->prewhere_expression && (or_function == &*(select_query->prewhere_expression)))
-                select_query->prewhere_expression = operands[0];
             if (select_query->having_expression && (or_function == &*(select_query->having_expression)))
                 select_query->having_expression = operands[0];
         }

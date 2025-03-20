@@ -79,16 +79,13 @@ public:
     /** Returns true if the storage supports queries with the FINAL section. */
     virtual bool supportsFinal() const { return false; }
 
-    /** Returns true if the storage supports queries with the PREWHERE section. */
-    virtual bool supportsPrewhere() const { return false; }
-
     /** Returns true if the storage replicates SELECT, INSERT and ALTER commands among replicas. */
     virtual bool supportsReplication() const { return false; }
 
     /** Returns true if the storage supports UPSERT, DELETE or UPDATE. */
     virtual bool supportsModification() const { return false; }
 
-    /// Lock table for share. This lock must be acuqired if you want to be sure,
+    /// Lock table for share. This lock must be acquired if you want to be sure,
     /// that table will be not dropped while you holding this lock. It's used in
     /// variety of cases starting from SELECT queries to background merges in
     /// MergeTree.
@@ -96,7 +93,7 @@ public:
         const String & query_id,
         const std::chrono::milliseconds & acquire_timeout = std::chrono::milliseconds(0));
 
-    /// Lock table for alter. This lock must be acuqired in ALTER queries to be
+    /// Lock table for alter. This lock must be acquired in ALTER queries to be
     /// sure, that we execute only one simultaneous alter. Doesn't affect share lock.
     TableLockHolder lockForAlter(
         const String & query_id,
