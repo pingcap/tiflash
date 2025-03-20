@@ -203,11 +203,6 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
             throw Exception(
                 (!input && storage) ? "Storage " + storage->getName() + " doesn't support FINAL" : "Illegal FINAL",
                 ErrorCodes::ILLEGAL_FINAL);
-
-        /// Save the new temporary tables in the query context
-        for (const auto & it : query_analyzer->getExternalTables())
-            if (!context.tryGetExternalTable(it.first))
-                context.addExternalTable(it.first, it.second);
     }
 }
 

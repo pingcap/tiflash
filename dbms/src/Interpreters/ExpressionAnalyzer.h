@@ -109,10 +109,6 @@ public:
       */
     SubqueriesForSets getSubqueriesForSets() const { return subqueries_for_sets; }
 
-    /** Tables that will need to be sent to remote servers for distributed query processing.
-      */
-    const Tables & getExternalTables() const { return external_tables; }
-
 private:
     ASTPtr ast;
     ASTSelectQuery * select_query;
@@ -161,9 +157,6 @@ private:
     using SetOfASTs = std::set<const IAST *>;
     using MapOfASTs = std::map<ASTPtr, ASTPtr>;
 
-    /// All new temporary tables obtained by performing the GLOBAL IN/JOIN subqueries.
-    Tables external_tables;
-
     /** Remove all unnecessary columns from the list of all available columns of the table (`columns`).
       * At the same time, form a set of unknown columns (`unknown_required_source_columns`),
       * as well as the columns added by JOIN (`columns_added_by_join`).
@@ -208,9 +201,6 @@ private:
     /// Replacing scalar subqueries with constant values.
     void executeScalarSubqueries();
     void executeScalarSubqueriesImpl(ASTPtr & ast);
-
-    /// Finds in the query the usage of external tables (as table identifiers). Fills in external_tables.
-    void findExternalTables(ASTPtr & ast);
 
     void addJoinAction(ExpressionActionsPtr & actions, bool only_types) const;
 

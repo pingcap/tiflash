@@ -215,17 +215,7 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     /// Delete the unnecessary from `source_columns` list. Create `unknown_required_source_columns`. Form `columns_added_by_join`.
     collectUsedColumns();
 
-    /// external_tables, subqueries_for_sets for global subqueries.
-    /// Adds existing external tables (not subqueries) to the external_tables dictionary.
-    findExternalTables(ast);
-
     /// has_aggregation, aggregation_keys, aggregate_descriptions, aggregated_columns.
-    /// This analysis should be performed after processing global subqueries, because otherwise,
-    /// if the aggregate function contains a global subquery, then `analyzeAggregation` method will save
-    /// in `aggregate_descriptions` the information about the parameters of this aggregate function, among which
-    /// global subquery. Then, when you call `initGlobalSubqueriesAndExternalTables` method, this
-    /// the global subquery will be replaced with a temporary table, resulting in aggregate_descriptions
-    /// will contain out-of-date information, which will lead to an error when the query is executed.
     analyzeAggregation();
 }
 
@@ -580,22 +570,6 @@ void ExpressionAnalyzer::analyzeAggregation()
         aggregated_columns = temp_actions->getSampleBlock().getNamesAndTypesList();
     }
 }
-
-void ExpressionAnalyzer::findExternalTables(ASTPtr & ast)
-{
-    /// Traverse from the bottom. Intentionally go into subqueries.
-    for (auto & child : ast->children)
-        findExternalTables(child);
-
-    /// If table type identifier
-    StoragePtr external_storage;
-
-    if (auto * node = typeid_cast<ASTIdentifier *>(ast.get()))
-        if (node->kind == ASTIdentifier::Table)
-            if ((external_storage = context.tryGetExternalTable(node->name)))
-                external_tables[node->name] = external_storage;
-}
-
 
 static std::pair<String, String> getDatabaseAndTableNameFromIdentifier(const ASTIdentifier & identifier)
 {
