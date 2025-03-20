@@ -32,7 +32,7 @@ class NewHandleIndexTest;
 }
 
 // NewHandleIndex maintains the **newly inserted** records in the delta: handle -> row_id.
-template <typename T>
+template <typename T, typename Hash = absl::Hash<std::string_view>>
 class NewHandleIndex
 {
     static_assert(false, "Only support Int64 and String");
@@ -42,8 +42,8 @@ class NewHandleIndex
 // It uses a absl::btree_map to store the handle -> row_id mapping.
 // Why use absl::btree_map instead of std::map, std::unordered_map, or absl::hash_map?
 // Because absl::btree_map is more memory-efficient and offers better performance than std::map.
-template <>
-class NewHandleIndex<Int64>
+template <typename Hash>
+class NewHandleIndex<Int64, Hash>
 {
 public:
     std::optional<RowID> find(
@@ -83,10 +83,14 @@ private:
     friend class tests::NewHandleIndexTest;
 };
 
-template <>
-class NewHandleIndex<String>
+// NewHandleIndex<String> is specialized for String handle.
+// It uses a absl::btree_multimap to store the hash_value_of_handle -> row_id mapping.
+template <typename Hash>
+class NewHandleIndex<String, Hash>
 {
 public:
+    // Different handles may have hash collisions, so during the lookup process, after finding a matching hash value,
+    // it is necessary to use the delta_reader to read the actual data for verification.
     std::optional<RowID> find(
         std::string_view handle,
         std::optional<DeltaValueReader> & delta_reader,
@@ -97,6 +101,10 @@ public:
         const auto [start, end] = handle_to_row_id.equal_range(hash_value);
         for (auto itr = start; itr != end; ++itr)
         {
+            // TODO: Maybe we can support readRows in batch.
+            // But hash collision is rare.
+            // And the distribution of these conflicting values is typically scattered.
+            // The benefits should be quite limited, so it's not a high priority.
             MutableColumns mut_cols(1);
             mut_cols[0] = ColumnString::create();
             const auto read_rows = delta_reader->readRows(
@@ -116,6 +124,10 @@ public:
         std::ignore = handle_to_row_id.insert(std::pair{hasher(handle), row_id});
     }
 
+    // The hash value of a handle cannot reflect the order of handles,
+    // so data can only be deleted by traversing the entire structure.
+    // First, collect all row_ids in the index and sort them.
+    // Then, read the handles in batches from the delta, and check if the handles in the delete range.
     void deleteRange(
         const RowKeyRange & range,
         std::optional<DeltaValueReader> & delta_reader,
@@ -165,15 +177,10 @@ public:
     }
 
 private:
-#ifdef DBMS_PUBLIC_GTEST
-    std::function<Int64(std::string_view)> hasher = [](std::string_view s) {
-        static absl::Hash<std::string_view> h;
-        return h(s);
-    };
-#else
-    absl::Hash<std::string_view> hasher;
-#endif
+    Hash hasher;
     absl::btree_multimap<Int64, RowID> handle_to_row_id;
+
+    friend class tests::NewHandleIndexTest;
 };
 
 
