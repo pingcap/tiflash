@@ -32,12 +32,11 @@ protected:
         // Insert duplicate handle is not allowed
         ASSERT_THROW(handle_index.insert(0, 100), DB::Exception);
 
-        std::optional<DeltaValueReader> unused_delta_reader;
-        UInt32 unused_stable_rows = 0;
-
+        std::optional<DeltaValueReader> delta_reader;
+        UInt32 stable_rows = 0;
         for (UInt32 i = 0; i <= 100; ++i)
         {
-            auto row_id = handle_index.find(i, unused_delta_reader, unused_stable_rows);
+            auto row_id = handle_index.find(i, delta_reader, stable_rows);
             if (i % 2 == 0)
                 ASSERT_EQ(row_id.value(), i / 2) << i;
             else
@@ -49,78 +48,52 @@ protected:
         handle_index.insert(std::numeric_limits<Int64>::max() - 1, 1001);
         handle_index.insert(std::numeric_limits<Int64>::min(), 1002);
         handle_index.insert(std::numeric_limits<Int64>::min() + 1, 1003);
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::max(), unused_delta_reader, unused_stable_rows).value(),
-            1000);
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::max() - 1, unused_delta_reader, unused_stable_rows).value(),
-            1001);
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::min(), unused_delta_reader, unused_stable_rows).value(),
-            1002);
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::min() + 1, unused_delta_reader, unused_stable_rows).value(),
-            1003);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::max(), delta_reader, stable_rows).value(), 1000);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::max() - 1, delta_reader, stable_rows).value(), 1001);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::min(), delta_reader, stable_rows).value(), 1002);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::min() + 1, delta_reader, stable_rows).value(), 1003);
 
         // Delete range test
         const auto delete_range_normal = buildRowKeyRange(47, 134, is_common_handle);
-        handle_index.deleteRange(delete_range_normal, unused_delta_reader, unused_stable_rows);
+        handle_index.deleteRange(delete_range_normal, delta_reader, stable_rows);
         for (Int64 i = 0; i <= 100; ++i)
         {
-            auto row_id = handle_index.find(i, unused_delta_reader, unused_stable_rows);
+            auto row_id = handle_index.find(i, delta_reader, stable_rows);
             if (i % 2 == 0 && !inRowKeyRange(delete_range_normal, i))
                 ASSERT_EQ(row_id.value(), i / 2) << i;
             else
                 ASSERT_FALSE(row_id.has_value()) << i;
         }
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::max(), unused_delta_reader, unused_stable_rows).value(),
-            1000);
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::max() - 1, unused_delta_reader, unused_stable_rows).value(),
-            1001);
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::min(), unused_delta_reader, unused_stable_rows).value(),
-            1002);
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::min() + 1, unused_delta_reader, unused_stable_rows).value(),
-            1003);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::max(), delta_reader, stable_rows).value(), 1000);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::max() - 1, delta_reader, stable_rows).value(), 1001);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::min(), delta_reader, stable_rows).value(), 1002);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::min() + 1, delta_reader, stable_rows).value(), 1003);
 
         const auto delete_range_right_bounary = buildRowKeyRange(
             std::numeric_limits<Int64>::max() - 1,
             std::numeric_limits<Int64>::max(),
             is_common_handle,
             /* including_right_boundary */ true);
-        handle_index.deleteRange(delete_range_right_bounary, unused_delta_reader, unused_stable_rows);
+        handle_index.deleteRange(delete_range_right_bounary, delta_reader, stable_rows);
         for (Int64 i = 0; i <= 100; ++i)
         {
-            auto row_id = handle_index.find(i, unused_delta_reader, unused_stable_rows);
+            auto row_id = handle_index.find(i, delta_reader, stable_rows);
             if (i % 2 == 0 && !inRowKeyRange(delete_range_normal, i))
                 ASSERT_EQ(row_id.value(), i / 2) << i;
             else
                 ASSERT_FALSE(row_id.has_value()) << i;
         }
-        ASSERT_FALSE(
-            handle_index.find(std::numeric_limits<Int64>::max(), unused_delta_reader, unused_stable_rows).has_value());
-        ASSERT_FALSE(handle_index.find(std::numeric_limits<Int64>::max() - 1, unused_delta_reader, unused_stable_rows)
-                         .has_value());
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::min(), unused_delta_reader, unused_stable_rows).value(),
-            1002);
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::min() + 1, unused_delta_reader, unused_stable_rows).value(),
-            1003);
+        ASSERT_FALSE(handle_index.find(std::numeric_limits<Int64>::max(), delta_reader, stable_rows).has_value());
+        ASSERT_FALSE(handle_index.find(std::numeric_limits<Int64>::max() - 1, delta_reader, stable_rows).has_value());
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::min(), delta_reader, stable_rows).value(), 1002);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::min() + 1, delta_reader, stable_rows).value(), 1003);
 
         handle_index.insert(std::numeric_limits<Int64>::max(), 1000);
         handle_index.insert(std::numeric_limits<Int64>::max() - 1, 1001);
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::max(), unused_delta_reader, unused_stable_rows).value(),
-            1000);
-        ASSERT_EQ(
-            handle_index.find(std::numeric_limits<Int64>::max() - 1, unused_delta_reader, unused_stable_rows).value(),
-            1001);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::max(), delta_reader, stable_rows).value(), 1000);
+        ASSERT_EQ(handle_index.find(std::numeric_limits<Int64>::max() - 1, delta_reader, stable_rows).value(), 1001);
         const auto delete_range_all = RowKeyRange::newAll(is_common_handle, 1);
-        handle_index.deleteRange(delete_range_all, unused_delta_reader, unused_stable_rows);
+        handle_index.deleteRange(delete_range_all, delta_reader, stable_rows);
         ASSERT_TRUE(handle_index.handle_to_row_id.empty());
     }
 
