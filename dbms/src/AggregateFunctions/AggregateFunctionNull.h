@@ -504,28 +504,46 @@ public:
     {
         /// This container stores the columns we really pass to the nested function.
         const IColumn * nested_columns[number_of_arguments];
+        bool has_nullable_col = false;
 
         for (size_t i = 0; i < number_of_arguments; ++i)
         {
             if (is_nullable[i])
             {
+                has_nullable_col = true;
                 const auto & nullable_col = static_cast<const ColumnNullable &>(*columns[i]);
-                // todo handle null, cannot return directly here!!!
-                if (nullable_col.isNullAt(start_offset))
-                {
-                    /// If at least one column has a null value in the current row,
-                    /// we don't process this row.
-                    return;
-                }
                 nested_columns[i] = &nullable_col.getNestedColumn();
             }
             else
                 nested_columns[i] = columns[i];
         }
 
-        this->setFlag(place);
-        this->nested_function
-            ->addBatchSinglePlace(start_offset, batch_size, place, nested_columns, arena, if_argument_pos);
+        if (has_nullable_col)
+        {
+            // Need to merge the nullmaps of columns into a final nullmap,
+            // then call nested_function->addBatchSinglePlaceNotNull() if you want to use batch interface.
+            // For code simplicity, use row-wise interface instead.
+            if (if_argument_pos > 0)
+            {
+                const auto & flags = assert_cast<const ColumnUInt8 &>(*columns[if_argument_pos]).getData();
+                for (size_t i = start_offset; i < start_offset + batch_size; ++i)
+                {
+                    if (flags[i])
+                        this->add(place, columns, i, arena);
+                }
+            }
+            else
+            {
+                for (size_t i = start_offset; i < start_offset + batch_size; ++i)
+                    this->add(place, columns, i, arena);
+            }
+        }
+        else
+        {
+            this->setFlag(place);
+            this->nested_function
+                ->addBatchSinglePlace(start_offset, batch_size, place, nested_columns, arena, if_argument_pos);
+        }
     }
 
     bool allocatesMemoryInArena() const override { return this->nested_function->allocatesMemoryInArena(); }
