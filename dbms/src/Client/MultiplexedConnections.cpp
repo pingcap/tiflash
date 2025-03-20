@@ -75,8 +75,7 @@ void MultiplexedConnections::sendQuery(
     const String & query,
     const String & query_id,
     UInt64 stage,
-    const ClientInfo * client_info,
-    bool with_pending_data)
+    const ClientInfo * client_info)
 {
     std::lock_guard lock(cancel_mutex);
 
@@ -93,7 +92,7 @@ void MultiplexedConnections::sendQuery(
             if (connection == nullptr)
                 throw Exception("MultiplexedConnections: Internal error", ErrorCodes::LOGICAL_ERROR);
 
-            connection->sendQuery(query, query_id, stage, &query_settings, client_info, with_pending_data);
+            connection->sendQuery(query, query_id, stage, &query_settings, client_info);
         }
     }
     else
@@ -102,7 +101,7 @@ void MultiplexedConnections::sendQuery(
         if (connection == nullptr)
             throw Exception("MultiplexedConnections: Internal error", ErrorCodes::LOGICAL_ERROR);
 
-        connection->sendQuery(query, query_id, stage, &settings, client_info, with_pending_data);
+        connection->sendQuery(query, query_id, stage, &settings, client_info);
     }
 
     sent_query = true;

@@ -161,8 +161,7 @@ public:
         const String & query_id_ = "",
         UInt64 stage = QueryProcessingStage::Complete,
         const Settings * settings = nullptr,
-        const ClientInfo * client_info = nullptr,
-        bool with_pending_data = false);
+        const ClientInfo * client_info = nullptr);
 
     void sendCancel();
     /// Send block of data; if name is specified, server will write it to external (temporary) table of that name.

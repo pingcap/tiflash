@@ -732,8 +732,7 @@ private:
     /// Process the query that doesn't require transfering data blocks to the server.
     void processOrdinaryQuery()
     {
-        connection
-            ->sendQuery(query, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr, true);
+        connection->sendQuery(query, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr);
         receiveResult();
     }
 
@@ -754,8 +753,7 @@ private:
             query_id,
             QueryProcessingStage::Complete,
             &context->getSettingsRef(),
-            nullptr,
-            true);
+            nullptr);
 
         /// Receive description of table structure.
         Block sample;

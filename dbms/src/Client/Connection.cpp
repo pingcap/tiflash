@@ -298,8 +298,7 @@ void Connection::sendQuery(
     const String & query_id_,
     UInt64 stage,
     const Settings * settings,
-    const ClientInfo * client_info,
-    bool with_pending_data)
+    const ClientInfo * client_info)
 {
     if (!connected)
         connect();
@@ -349,11 +348,8 @@ void Connection::sendQuery(
     block_out.reset();
 
     /// Send empty block which means end of data.
-    if (!with_pending_data)
-    {
-        sendData(Block());
-        out->next();
-    }
+    sendData(Block());
+    out->next();
 }
 
 
