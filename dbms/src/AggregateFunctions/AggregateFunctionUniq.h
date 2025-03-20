@@ -195,7 +195,6 @@ struct AggregateFunctionUniqExactData : AggregationCollatorsWrapper<false>
     }
     using Key = T;
 
-    /// When creating, the hash table must be small.
     using Set = HashSet<Key, HashCRC32<Key>>;
 
     Set set;
@@ -491,24 +490,23 @@ private:
         const IColumn ** columns,
         const ColumnUInt8::Container * if_argument_pos_data)
     {
-        const size_t mini_batch = 512;
-        size_t mini_batch_idx = start_offset;
+        size_t batch_row_idx = start_offset;
         const size_t end_row = start_offset + batch_size;
         while (true)
         {
-            size_t cur_batch_size = mini_batch;
-            if unlikely (mini_batch_idx + cur_batch_size > end_row)
-                cur_batch_size = end_row - mini_batch_idx;
+            size_t cur_batch_size = agg_mini_batch;
+            if unlikely (batch_row_idx + cur_batch_size > end_row)
+                cur_batch_size = end_row - batch_row_idx;
 
             addBatchSinglePlaceWithPrefetchMiniBatch<has_if_argument_pos_data, T, Data>(
-                mini_batch_idx,
+                batch_row_idx,
                 cur_batch_size,
                 agg_data,
                 columns,
                 if_argument_pos_data);
 
-            mini_batch_idx += cur_batch_size;
-            if unlikely (mini_batch_idx >= end_row)
+            batch_row_idx += cur_batch_size;
+            if unlikely (batch_row_idx >= end_row)
                 break;
         }
     }
@@ -678,21 +676,20 @@ private:
         size_t num_args,
         const ColumnUInt8::Container * if_argument_pos_data)
     {
-        const size_t mini_batch = 512;
-        size_t mini_batch_idx = start_offset;
+        size_t batch_row_idx = start_offset;
         const size_t end_row = start_offset + batch_size;
 
         while (true)
         {
-            size_t cur_batch_size = mini_batch;
-            if unlikely (mini_batch_idx + cur_batch_size > end_row)
-                cur_batch_size = end_row - mini_batch_idx;
+            size_t cur_batch_size = agg_mini_batch;
+            if unlikely (batch_row_idx + cur_batch_size > end_row)
+                cur_batch_size = end_row - batch_row_idx;
 
             const auto & hash_values = UniqVariadicHash<Data, is_exact, argument_is_tuple>::applyBatch(
                 agg_data,
                 num_args,
                 columns,
-                mini_batch_idx,
+                batch_row_idx,
                 cur_batch_size);
             for (size_t i = 0; i < cur_batch_size; ++i)
             {
@@ -711,8 +708,8 @@ private:
                 agg_data.set.insert(hash_values[i], hash_values[i].low);
             }
 
-            mini_batch_idx += cur_batch_size;
-            if unlikely (mini_batch_idx >= end_row)
+            batch_row_idx += cur_batch_size;
+            if unlikely (batch_row_idx >= end_row)
                 break;
         }
     }

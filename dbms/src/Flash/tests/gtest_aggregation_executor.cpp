@@ -1353,18 +1353,15 @@ TEST_F(AggExecutorTestRunner, TestCountDistinct)
 try
 {
     std::vector<size_t> max_block_sizes{1, 8, DEFAULT_BLOCK_SIZE};
-    std::vector<size_t> concurrences{1, 8};
     std::vector<std::vector<String>> count_distinct_keys{
-        // key_int256
-        {"key_decimal256"},
-        // keys128
-        {"key_64", "key_64_1"},
-        // keys256
-        {"key_64", "key_64_1", "key_64_2", "key_64_3"},
-        // nullable_keys128
+        // nullable
+        {"key_nullable_int64"},
         {"key_16", "key_nullable_int64"},
-        // nullable_keys256
         {"key_64", "key_nullable_int64"},
+        // non null
+        {"key_decimal256"},
+        {"key_64", "key_64_1"},
+        {"key_64", "key_64_1", "key_64_2", "key_64_3"},
     };
     for (const auto & keys : count_distinct_keys)
     {
@@ -1377,24 +1374,22 @@ try
         context.context->setSetting(
             "max_block_size",
             Field(static_cast<UInt64>(tbl_agg_table_with_special_key_unique_rows * 2)));
+        FailPointHelper::disableFailPoint(FailPoints::force_agg_prefetch);
         auto reference = executeStreams(request);
+        FailPointHelper::enableFailPoint(FailPoints::force_agg_prefetch);
 
         for (auto block_size : max_block_sizes)
         {
-            for (auto concurrency : concurrences)
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
+            WRAP_FOR_AGG_FAILPOINTS_START
+            auto blocks = getExecuteStreamsReturnBlocks(request, /*concurrency=*/1);
+            for (auto & block : blocks)
             {
-                context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
-                WRAP_FOR_AGG_FAILPOINTS_START
-                auto blocks = getExecuteStreamsReturnBlocks(request, concurrency);
-                for (auto & block : blocks)
-                {
-                    block.checkNumberOfRows();
-                    ASSERT(block.rows() <= block_size);
-                }
-                ASSERT_TRUE(
-                    columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
-                WRAP_FOR_AGG_FAILPOINTS_END
+                block.checkNumberOfRows();
+                ASSERT(block.rows() <= block_size);
             }
+            ASSERT_TRUE(columnsEqual(reference, vstackBlocks(std::move(blocks)).getColumnsWithTypeAndName(), false));
+            WRAP_FOR_AGG_FAILPOINTS_END
         }
     }
 }

@@ -502,7 +502,6 @@ public:
         Arena * arena,
         ssize_t if_argument_pos = -1) const override
     {
-        /// This container stores the columns we really pass to the nested function.
         const IColumn * nested_columns[number_of_arguments];
         bool has_nullable_col = false;
 
