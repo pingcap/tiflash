@@ -124,7 +124,12 @@ struct UniqVariadicHash<Data, true, false>
         return key;
     }
 
-    static inline std::vector<UInt128> applyBatch(Data & data, size_t num_args, const IColumn ** columns, size_t start_offset, size_t batch_size)
+    static inline std::vector<UInt128> applyBatch(
+        Data & data,
+        size_t num_args,
+        const IColumn ** columns,
+        size_t start_offset,
+        size_t batch_size)
     {
         const IColumn ** column = columns;
         const IColumn ** columns_end = column + num_args;

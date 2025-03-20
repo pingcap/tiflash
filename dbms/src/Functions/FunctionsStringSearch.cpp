@@ -166,7 +166,7 @@ struct MatchImpl
             {
                 auto matcher = collator->pattern();
                 matcher->compile(orig_pattern, escape_char);
-                LoopOneColumn(data, offsets, offsets.size(), [&](const std::string_view & view, size_t i) {
+                LoopOneColumn(data, offsets, [&](const std::string_view & view, size_t i) {
                     res[i] = revert ^ matcher->match(view.data(), view.size());
                 });
             }

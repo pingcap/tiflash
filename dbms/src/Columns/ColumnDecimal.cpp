@@ -712,24 +712,27 @@ void ColumnDecimal<T>::updateHashWithValue(size_t n, SipHash & hash, const TiDB:
 }
 
 template <typename T>
-void ColumnDecimal<T>::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
-    const
+void ColumnDecimal<T>::updateHashWithValues(
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
-    for (size_t i = 0; i < data.size(); ++i)
-    {
-        hash_values[i].update(data[i]);
-    }
+    updateHashWithValues(0, size(), hash_values, collator, sort_key_container);
 }
 
 template <typename T>
-void ColumnDecimal<T>::updateHashWithValues(size_t start, size_t length, IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
-    const
+void ColumnDecimal<T>::updateHashWithValues(
+    size_t start,
+    size_t length,
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr &,
+    String &) const
 {
-    for (size_t i = 0; i < length; ++i)
-    {
-        const size_t row = i + start;
+    RUNTIME_CHECK(size() >= start + length);
+    RUNTIME_CHECK(hash_values.size() >= length);
+
+    for (size_t i = 0, row = start; i < length; ++i, ++row)
         hash_values[i].update(data[row]);
-    }
 }
 
 template <typename T>

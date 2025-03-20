@@ -378,11 +378,7 @@ public:
         HashValues & /* hash_values */,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String & /* sort_key_container */) const
-    {
-        throw Exception(
-            fmt::format("Method compareAt with collation is not supported for {}", getName()),
-            ErrorCodes::NOT_IMPLEMENTED);
-    }
+        = 0;
     void updateHashWithValues(HashValues & hash_values) const
     {
         updateHashWithValues(hash_values, nullptr, TiDB::dummy_sort_key_contaner);

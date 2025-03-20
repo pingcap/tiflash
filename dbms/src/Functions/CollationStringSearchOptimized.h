@@ -220,7 +220,7 @@ struct BinStrPattern
             }
         }
         return true;
-    };
+    }
 
     // match from end exactly
     // - return true if meet %
@@ -265,7 +265,7 @@ struct BinStrPattern
             }
         }
         return true;
-    };
+    }
 
     // search by pattern `...%..%`
     // - return true if meet %
@@ -336,7 +336,7 @@ struct BinStrPattern
                 }
             }
         }
-    };
+    }
 
     ALWAYS_INLINE inline bool match(std::string_view src) const
     {
@@ -412,7 +412,7 @@ inline void BinStringPatternMatch(
 {
     TiDB::BinStrPattern<utf8> matcher;
     matcher.compile(pattern_str, escape_char);
-    LoopOneColumn(a_data, a_offsets, a_offsets.size(), [&](const std::string_view & view, size_t i) {
+    LoopOneColumn(a_data, a_offsets, [&](const std::string_view & view, size_t i) {
         c[i] = revert ^ matcher.match(view);
     });
 }

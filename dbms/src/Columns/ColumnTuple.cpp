@@ -180,8 +180,21 @@ void ColumnTuple::updateHashWithValues(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
+    updateHashWithValues(0, size(), hash_values, collator, sort_key_container);
+}
+
+void ColumnTuple::updateHashWithValues(
+    size_t start,
+    size_t length,
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
+{
+    RUNTIME_CHECK(size() >= start + length);
+    RUNTIME_CHECK(hash_values.size() >= length);
+
     for (const auto & column : columns)
-        column->updateHashWithValues(hash_values, collator, sort_key_container);
+        column->updateHashWithValues(start, length, hash_values, collator, sort_key_container);
 }
 
 void ColumnTuple::updateWeakHash32(

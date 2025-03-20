@@ -405,8 +405,8 @@ public:
         size_t start,
         size_t length,
         IColumn::HashValues & hash_values,
-        const TiDB::TiDBCollatorPtr & collator,
-        String & sort_key_container) const override;
+        const TiDB::TiDBCollatorPtr &,
+        String &) const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateWeakHash32(WeakHash32 & hash, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective & selective)
         const override;

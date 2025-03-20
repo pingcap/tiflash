@@ -148,13 +148,26 @@ void ColumnAggregateFunction::updateHashWithValue(size_t n, SipHash & hash, cons
 
 void ColumnAggregateFunction::updateHashWithValues(
     IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
+{
+    updateHashWithValues(0, size(), hash_values, collator, sort_key_container);
+}
+
+void ColumnAggregateFunction::updateHashWithValues(
+    size_t start,
+    size_t length,
+    IColumn::HashValues & hash_values,
     const TiDB::TiDBCollatorPtr &,
     String &) const
 {
-    for (size_t i = 0, size = getData().size(); i < size; ++i)
+    RUNTIME_CHECK(size() >= start + length);
+    RUNTIME_CHECK(hash_values.size() >= length);
+
+    for (size_t i = 0, row = start; i < length; ++i, ++row)
     {
         WriteBufferFromOwnString wbuf;
-        func->serialize(getData()[i], wbuf);
+        func->serialize(getData()[row], wbuf);
         hash_values[i].update(wbuf.str().c_str(), wbuf.str().size());
     }
 }

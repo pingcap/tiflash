@@ -524,7 +524,8 @@ public:
         }
 
         this->setFlag(place);
-        this->nested_function->addBatchSinglePlace(start_offset, batch_size, place, nested_columns, arena, if_argument_pos);
+        this->nested_function
+            ->addBatchSinglePlace(start_offset, batch_size, place, nested_columns, arena, if_argument_pos);
     }
 
     bool allocatesMemoryInArena() const override { return this->nested_function->allocatesMemoryInArena(); }
