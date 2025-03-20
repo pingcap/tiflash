@@ -29,6 +29,31 @@ class SpillHandler;
 class CachedSpillHandler;
 using CachedSpillHandlerPtr = std::shared_ptr<CachedSpillHandler>;
 
+class SpillerMgr
+{
+public:
+    explicit SpillerMgr(uint64_t max_spill_bytes_)
+        : max_spill_bytes(max_spill_bytes_)
+    {}
+
+    // return <ok_to_spill, cur_spilled_bytes, max_allowed_bytes>
+    std::tuple<bool, uint64_t, uint64_t> okToSpill(uint64_t bytes)
+    {
+        std::lock_guard<std::mutex> guard(lock);
+        if (cur_spilled_bytes + bytes >= max_spill_bytes)
+            return {false, cur_spilled_bytes, max_spill_bytes};
+        cur_spilled_bytes += bytes;
+        return {true, cur_spilled_bytes, max_spill_bytes};
+    }
+
+    static std::unique_ptr<SpillerMgr> instance;
+
+private:
+    std::mutex lock;
+    uint64_t max_spill_bytes = std::numeric_limits<uint64_t>::max();
+    uint64_t cur_spilled_bytes = 0;
+};
+
 struct SpillDetails
 {
     UInt64 rows = 0;
@@ -113,7 +138,7 @@ public:
         bool append_dummy_read_stream = false);
     UInt64 spilledRows(UInt64 partition_id);
     void finishSpill();
-    bool hasSpilledData() const { return has_spilled_data; };
+    bool hasSpilledData() const { return has_spilled_data; }
     /// only for test now
     bool releaseSpilledFileOnRestore() const { return release_spilled_file_on_restore; }
     void removeConstantColumns(Block & block) const;

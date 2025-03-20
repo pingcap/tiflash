@@ -36,6 +36,7 @@
 #include <Common/getNumberOfCPUCores.h>
 #include <Common/grpcpp.h>
 #include <Common/setThreadName.h>
+#include <Core/Spiller.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
@@ -1074,6 +1075,10 @@ try
             DynamicThreadPool::global_instance.reset();
         }
     });
+
+    int64_t max_spill_bytes = settings.max_spill_bytes;
+    SpillerMgr::instance
+        = std::make_unique<SpillerMgr>(max_spill_bytes > 0 ? max_spill_bytes : std::numeric_limits<uint64_t>::max());
 
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
     if (not_disagg_mode || /*has_been_bootstrap*/ store_ident.has_value())

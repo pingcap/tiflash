@@ -132,6 +132,23 @@ void SpillHandler::spillBlocks(Blocks && blocks)
         else
         {
             Stopwatch watch;
+
+            size_t bytes = 0;
+            for (auto & block : blocks)
+            {
+                if (unlikely(!block || block.rows() == 0))
+                    continue;
+                bytes += block.estimateBytesForSpill();
+            }
+            auto [ok_to_spill, cur_spilled_bytes, max_bytes] = SpillerMgr::instance->okToSpill(bytes);
+            if (!ok_to_spill)
+                throw Exception(fmt::format(
+                    "Failed to spill {} bytes to disk because exceeds max_allowed_spill_bytes({}), cur_spilled_bytes: "
+                    "{}",
+                    bytes,
+                    max_bytes,
+                    cur_spilled_bytes));
+
             auto block_size = blocks.size();
             LOG_DEBUG(spiller->logger, "Spilling {} blocks data", block_size);
 
