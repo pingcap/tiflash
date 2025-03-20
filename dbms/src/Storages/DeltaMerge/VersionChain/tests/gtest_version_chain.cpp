@@ -45,7 +45,7 @@ INSTANTIATE_TEST_CASE_P(VersionChain, VersionChainTest, /* is_common_handle */ :
 TEST_P(VersionChainTest, InMemory1)
 try
 {
-    std::vector<RowID> excepted_base_versions;
+    std::vector<RowID> excepted_base_versions(1000, NotExistRowID);
     runVersionChainTest(TestOptions{
         .seg_data = "d_mem:[0, 1000)",
         .expected_base_versions = excepted_base_versions,
@@ -59,11 +59,10 @@ try
     std::vector<RowID> excepted_base_versions(2000);
     std::fill(excepted_base_versions.begin(), excepted_base_versions.begin() + 1000, NotExistRowID); // d_mem:[0, 1000)
     std::iota(excepted_base_versions.begin() + 1000, excepted_base_versions.end(), 0); // d_mem:[0, 1000)
-    runVersionChainTest(
-        TestOptions{
-            .seg_data = "d_mem:[0, 1000)|d_mem:[0, 1000)",
-            .expected_base_versions = excepted_base_versions,
-            .caller_line = __LINE__}, );
+    runVersionChainTest(TestOptions{
+        .seg_data = "d_mem:[0, 1000)|d_mem:[0, 1000)",
+        .expected_base_versions = excepted_base_versions,
+        .caller_line = __LINE__});
 }
 CATCH
 
