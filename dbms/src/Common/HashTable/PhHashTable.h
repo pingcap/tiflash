@@ -127,7 +127,7 @@ public:
 
     ALWAYS_INLINE inline size_t getBufferSizeInCells() const
     {
-        // TODO correctness for ctro?
+        // TODO correctness for ctor?
         return capacity();
     }
 

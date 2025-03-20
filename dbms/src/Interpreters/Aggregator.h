@@ -32,6 +32,7 @@
 #include <Interpreters/AggSpillContext.h>
 #include <Interpreters/AggregateDescription.h>
 #include <Interpreters/AggregationCommon.h>
+#include <Interpreters/AggregatedDataPhMap.h>
 #include <Interpreters/CancellationHook.h>
 #include <TiDB/Collation/Collator.h>
 #include <common/StringRef.h>
@@ -476,6 +477,18 @@ struct AggregatedDataVariants : private boost::noncopyable
     // This is done both for better performance and because currently, batch and non-batch methods are not compatible.
     bool batch_get_key_holder = false;
 
+    // phmap begin
+    using AggregationMethod_key32_phmap = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt32KeyPhMap>;
+    using AggregationMethod_key64_phmap = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyPhMap>;
+    using AggregationMethod_keys128_phmap = AggregationMethodKeysFixed<AggregatedDataWithKeys128PhMap>;
+    using AggregationMethod_serialized_phmap = AggregationMethodSerialized<AggregatedDataWithStringKeyPhMap>;
+
+    using AggregationMethod_key32_phmap_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt32KeyTwoLevelPhMap>;
+    using AggregationMethod_key64_phmap_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevelPhMap>;
+    using AggregationMethod_keys128_phmap_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevelPhMap>;
+    using AggregationMethod_serialized_phmap_two_level = AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevelPhMap>;
+    // phmap end
+
     using AggregationMethod_key8 = AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key, false>;
     using AggregationMethod_key16 = AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16Key, false>;
     using AggregationMethod_key32 = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key>;
@@ -562,6 +575,10 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(serialized_hash64, false)                    \
     M(nullable_keys128, false)                     \
     M(nullable_keys256, false)                     \
+    M(key32_phmap, false)                                \
+    M(key64_phmap, false)                                \
+    M(keys128_phmap, false)                              \
+    M(serialized_phmap, false)                           \
     M(key32_two_level, true)                       \
     M(key64_two_level, true)                       \
     M(key_int256_two_level, true)                  \
@@ -583,7 +600,11 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(keys128_magic_hash_two_level, true)          \
     M(keys256_magic_hash_two_level, true)          \
     M(nullable_keys128_magic_hash_two_level, true) \
-    M(nullable_keys256_magic_hash_two_level, true)
+    M(nullable_keys256_magic_hash_two_level, true) \
+    M(key32_phmap_two_level, true)                                \
+    M(key64_phmap_two_level, true)                                \
+    M(keys128_phmap_two_level, true)                              \
+    M(serialized_phmap_two_level, true)
 
     enum class Type
     {
@@ -733,7 +754,11 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(keys128_magic_hash)                              \
     M(keys256_magic_hash)                              \
     M(nullable_keys128_magic_hash)                     \
-    M(nullable_keys256_magic_hash)
+    M(nullable_keys256_magic_hash) \
+    M(key32_phmap)                                           \
+    M(key64_phmap)                                           \
+    M(keys128_phmap)                                         \
+    M(serialized_phmap)
 
 
 #define APPLY_FOR_VARIANTS_NOT_CONVERTIBLE_TO_TWO_LEVEL(M) \
@@ -792,7 +817,11 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(keys128_magic_hash_two_level)          \
     M(keys256_magic_hash_two_level)          \
     M(nullable_keys128_magic_hash_two_level) \
-    M(nullable_keys256_magic_hash_two_level)
+    M(nullable_keys256_magic_hash_two_level) \
+    M(key32_phmap_two_level)                       \
+    M(key64_phmap_two_level)                       \
+    M(keys128_phmap_two_level)                     \
+    M(serialized_phmap_two_level)                  
 };
 
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
@@ -872,6 +901,7 @@ public:
         TiDB::TiDBCollators collators;
 
         bool use_magic_hash;
+        bool use_phmap;
 
         Params(
             const Block & src_header_,
@@ -886,6 +916,7 @@ public:
             const SpillConfig & spill_config_,
             UInt64 max_block_size_,
             bool use_magic_hash_,
+            bool use_phmap_,
             const TiDB::TiDBCollators & collators_ = TiDB::dummy_collators)
             : src_header(src_header_)
             , keys(keys_)
@@ -899,6 +930,7 @@ public:
             , max_block_size(max_block_size_)
             , collators(collators_)
             , use_magic_hash(use_magic_hash_)
+            , use_phmap(use_phmap_)
             , group_by_two_level_threshold(group_by_two_level_threshold_)
             , group_by_two_level_threshold_bytes(group_by_two_level_threshold_bytes_)
             , max_bytes_before_external_group_by(max_bytes_before_external_group_by_)
@@ -942,7 +974,8 @@ public:
         size_t concurrency,
         const RegisterOperatorSpillContext & register_operator_spill_context,
         bool is_auto_pass_through_,
-        bool use_magic_hash_);
+        bool use_magic_hash_,
+        bool use_phmap_);
 
     /// Aggregate the source. Get the result in the form of one of the data structures.
     void execute(const BlockInputStreamPtr & stream, AggregatedDataVariants & result, size_t thread_num);
@@ -1102,6 +1135,7 @@ protected:
 
     const bool is_auto_pass_through;
     const bool use_magic_hash;
+    const bool use_phmap;
 
     /// For external aggregation.
     AggSpillContextPtr agg_spill_context;
@@ -1109,6 +1143,7 @@ protected:
 
     /** Select the aggregation method based on the number and types of keys. */
     AggregatedDataVariants::Type chooseAggregationMethod();
+    AggregatedDataVariants::Type chooseAggregationMethodPhMap();
     AggregatedDataVariants::Type chooseAggregationMethodInner();
 
     /** Create states of aggregate functions for one key.
