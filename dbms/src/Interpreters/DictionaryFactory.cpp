@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Dictionaries/CacheDictionary.h>
-#include <Dictionaries/ComplexKeyCacheDictionary.h>
 #include <Dictionaries/DictionaryFactory.h>
 #include <Dictionaries/DictionarySourceFactory.h>
 #include <Dictionaries/DictionaryStructure.h>
@@ -59,32 +58,7 @@ DictionaryPtr DictionaryFactory::create(
 
     const auto & layout_type = keys.front();
 
-    if ("complex_key_cache" == layout_type)
-    {
-        if (!dict_struct.key)
-            throw Exception{
-                "'key' is required for dictionary of layout 'complex_key_hashed'",
-                ErrorCodes::BAD_ARGUMENTS};
-
-        const auto size = config.getInt(layout_prefix + ".complex_key_cache.size_in_cells");
-        if (size == 0)
-            throw Exception{
-                name + ": dictionary of layout 'cache' cannot have 0 cells",
-                ErrorCodes::TOO_SMALL_BUFFER_SIZE};
-
-        if (require_nonempty)
-            throw Exception{
-                name + ": dictionary of layout 'cache' cannot have 'require_nonempty' attribute set",
-                ErrorCodes::BAD_ARGUMENTS};
-
-        return std::make_unique<ComplexKeyCacheDictionary>(
-            name,
-            dict_struct,
-            std::move(source_ptr),
-            dict_lifetime,
-            size);
-    }
-    else if ("ip_trie" == layout_type)
+    if ("ip_trie" == layout_type)
     {
         if (!dict_struct.key)
             throw Exception{"'key' is required for dictionary of layout 'ip_trie'", ErrorCodes::BAD_ARGUMENTS};
@@ -129,7 +103,7 @@ DictionaryPtr DictionaryFactory::create(
     }
 
     throw Exception{name + ": unknown dictionary layout type: " + layout_type, ErrorCodes::UNKNOWN_ELEMENT_IN_CONFIG};
-};
+}
 
 
 } // namespace DB
