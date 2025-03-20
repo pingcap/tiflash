@@ -16,19 +16,12 @@
 
 #include <memory>
 #include <string>
-#include <unordered_map>
 
 namespace DB
 {
 
 class IAST;
 using ASTPtr = std::shared_ptr<IAST>;
-
-class Set;
-using SetPtr = std::shared_ptr<Set>;
-
-/// Information about calculated sets in right hand side of IN.
-using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 
 struct MvccQueryInfo;
 struct DAGQueryInfo;
@@ -41,10 +34,6 @@ struct DAGQueryInfo;
 struct SelectQueryInfo
 {
     ASTPtr query;
-
-    /// Prepared sets are used for indices by storage engine.
-    /// Example: x IN (1, 2, 3)
-    PreparedSets sets;
 
     std::unique_ptr<MvccQueryInfo> mvcc_query_info;
 
@@ -61,7 +50,7 @@ struct SelectQueryInfo
     SelectQueryInfo(const SelectQueryInfo & rhs);
     SelectQueryInfo(SelectQueryInfo && rhs) noexcept;
 
-    bool fromAST() const { return dag_query == nullptr; };
+    bool fromAST() const { return dag_query == nullptr; }
 };
 
 } // namespace DB

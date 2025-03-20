@@ -794,11 +794,8 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
         if (max_streams == 0)
             throw Exception("Logical error: zero number of streams requested", ErrorCodes::LOGICAL_ERROR);
 
-        query_analyzer->makeSetsForIndex();
-
         SelectQueryInfo query_info;
         query_info.query = query_ptr;
-        query_info.sets = query_analyzer->getPreparedSets();
         auto scan_context = std::make_shared<DM::ScanContext>();
         query_info.mvcc_query_info
             = std::make_unique<MvccQueryInfo>(settings.resolve_locks, settings.read_tso, scan_context);
