@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <DataStreams/ConcatBlockInputStream.h>
-#include <DataStreams/CreatingSetsBlockInputStream.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>

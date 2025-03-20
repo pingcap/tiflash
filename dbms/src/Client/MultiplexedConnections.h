@@ -45,9 +45,6 @@ public:
         const ThrottlerPtr & throttler_,
         bool append_extra_info);
 
-    /// Send all content of external tables to replicas.
-    void sendExternalTablesData(std::vector<ExternalTablesData> & data);
-
     /// Send request to replicas.
     void sendQuery(
         const String & query,
