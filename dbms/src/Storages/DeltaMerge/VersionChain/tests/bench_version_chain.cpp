@@ -17,7 +17,6 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
-#include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
 #include <Storages/DeltaMerge/VersionChain/tests/mvcc_test_utils.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/PathPool.h>
@@ -132,65 +131,6 @@ try
                 RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows);
                 buildVersionChain(*dm_context, *segment_snapshot, version_chain);
                 RUNTIME_ASSERT(version_chain.getReplayedRows() == prepared_delta_rows + incremental_delta_rows);
-            }
-        };
-        if (is_common_handle)
-            bench_impl(String{});
-        else
-            bench_impl(Int64{});
-    }
-}
-CATCH
-
-template <typename... Args>
-void MVCCBuildBitmap(benchmark::State & state, Args &&... args)
-try
-{
-    const auto [type, write_load, is_common_handle] = std::make_tuple(std::move(args)...);
-    const UInt32 delta_rows = state.range(0);
-    auto [context, dm_context, cols, segment, segment_snapshot, write_seq]
-        = initialize(write_load, is_common_handle, delta_rows);
-    SCOPE_EXIT({ context->shutdown(); });
-
-    auto rs_results = loadPackFilterResults(*dm_context, segment_snapshot, {segment->getRowKeyRange()});
-
-    if (type == BenchType::DeltaIndex)
-    {
-        RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == 0);
-        auto delta_index = buildDeltaIndex(*dm_context, *cols, segment_snapshot, *segment);
-        RUNTIME_ASSERT(delta_index->getPlacedStatus().first == delta_rows);
-        segment_snapshot->delta->getSharedDeltaIndex()->updateIfAdvanced(*delta_index);
-        RUNTIME_ASSERT(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first == delta_rows);
-
-        for (auto _ : state)
-        {
-            auto bitmap_filter = segment->buildBitmapFilter(
-                *dm_context,
-                segment_snapshot,
-                {segment->getRowKeyRange()},
-                rs_results,
-                std::numeric_limits<UInt64>::max(),
-                DEFAULT_BLOCK_SIZE,
-                false);
-            benchmark::DoNotOptimize(bitmap_filter);
-        }
-    }
-    else if (type == BenchType::VersionChain)
-    {
-        auto bench_impl = [&](auto handle_type) {
-            VersionChain<decltype(handle_type)> version_chain;
-            buildVersionChain(*dm_context, *segment_snapshot, version_chain);
-            RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
-            for (auto _ : state)
-            {
-                auto bitmap_filter = buildBitmapFilter<decltype(handle_type)>(
-                    *dm_context,
-                    *segment_snapshot,
-                    {segment->getRowKeyRange()},
-                    rs_results,
-                    std::numeric_limits<UInt64>::max(),
-                    version_chain);
-                benchmark::DoNotOptimize(bitmap_filter);
             }
         };
         if (is_common_handle)
@@ -341,5 +281,4 @@ CATCH
 
 MVCC_BENCHMARK(MVCCFullBuild)
 MVCC_BENCHMARK2(MVCCIncrementalBuild)
-MVCC_BENCHMARK(MVCCBuildBitmap)
 } // namespace
