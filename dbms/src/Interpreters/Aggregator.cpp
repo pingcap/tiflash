@@ -433,7 +433,7 @@ AggregatedDataVariants::Type Aggregator::chooseAggregationMethodPhMap()
         case AggregatedDataVariants::Type::key64:
             return AggregatedDataVariants::Type::key64_phmap;
         case AggregatedDataVariants::Type::keys128:
-            return AggregatedDataVariants::Type::keys128_phamp;
+            return AggregatedDataVariants::Type::keys128_phmap;
         case AggregatedDataVariants::Type::serialized:
             return AggregatedDataVariants::Type::serialized_phmap;
         default:

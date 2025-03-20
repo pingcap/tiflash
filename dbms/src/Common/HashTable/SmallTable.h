@@ -87,6 +87,7 @@ public:
 
     static constexpr bool is_string_hash_map = false;
     static constexpr bool is_two_level = false;
+    static constexpr bool is_phmap = false;
 
     class Reader final : private Cell::State
     {

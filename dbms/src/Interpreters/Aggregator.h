@@ -478,32 +478,33 @@ struct AggregatedDataVariants : private boost::noncopyable
     bool batch_get_key_holder = false;
 
     // phmap begin
-    using AggregationMethod_key32_phmap = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt32KeyPhMap>;
-    using AggregationMethod_key64_phmap = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyPhMap>;
-    using AggregationMethod_keys128_phmap = AggregationMethodKeysFixed<AggregatedDataWithKeys128PhMap>;
+    // disable consecutive cache because phmap will use const key.
+    using AggregationMethod_key32_phmap = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt32KeyPhMap, false>;
+    using AggregationMethod_key64_phmap = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyPhMap, false>;
+    using AggregationMethod_keys128_phmap = AggregationMethodKeysFixed<AggregatedDataWithKeys128PhMap, false, false>;
     using AggregationMethod_serialized_phmap = AggregationMethodSerialized<AggregatedDataWithStringKeyPhMap>;
 
-    using AggregationMethod_key32_phmap_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt32KeyTwoLevelPhMap>;
-    using AggregationMethod_key64_phmap_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevelPhMap>;
-    using AggregationMethod_keys128_phmap_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevelPhMap>;
+    using AggregationMethod_key32_phmap_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt32KeyTwoLevelPhMap, false>;
+    using AggregationMethod_key64_phmap_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevelPhMap, false>;
+    using AggregationMethod_keys128_phmap_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevelPhMap, false, false>;
     using AggregationMethod_serialized_phmap_two_level = AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevelPhMap>;
     // phmap end
 
     using AggregationMethod_key8 = AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key, false>;
     using AggregationMethod_key16 = AggregationMethodOneNumber<UInt16, AggregatedDataWithUInt16Key, false>;
-    using AggregationMethod_key32 = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key>;
-    using AggregationMethod_key64 = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key>;
+    using AggregationMethod_key32 = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64Key, false>;
+    using AggregationMethod_key64 = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64Key, false>;
     using AggregationMethod_key_int256 = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256Key>;
     using AggregationMethod_key_string = AggregationMethodString<AggregatedDataWithShortStringKey, false>;
     using AggregationMethod_key_fixed_string = AggregationMethodFixedString<AggregatedDataWithShortStringKey, false>;
     using AggregationMethod_keys16 = AggregationMethodKeysFixed<AggregatedDataWithUInt16Key, false, false>;
     using AggregationMethod_keys32 = AggregationMethodKeysFixed<AggregatedDataWithUInt32Key>;
     using AggregationMethod_keys64 = AggregationMethodKeysFixed<AggregatedDataWithUInt64Key>;
-    using AggregationMethod_keys128 = AggregationMethodKeysFixed<AggregatedDataWithKeys128>;
+    using AggregationMethod_keys128 = AggregationMethodKeysFixed<AggregatedDataWithKeys128, false, false>;
     using AggregationMethod_keys256 = AggregationMethodKeysFixed<AggregatedDataWithKeys256>;
     using AggregationMethod_serialized = AggregationMethodSerialized<AggregatedDataWithStringKey>;
-    using AggregationMethod_key32_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel>;
-    using AggregationMethod_key64_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel>;
+    using AggregationMethod_key32_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel, false>;
+    using AggregationMethod_key64_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel, false>;
     using AggregationMethod_key_int256_two_level
         = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>;
     using AggregationMethod_key_string_two_level
@@ -512,7 +513,7 @@ struct AggregatedDataVariants : private boost::noncopyable
         = AggregationMethodFixedString<AggregatedDataWithShortStringKeyTwoLevel, false>;
     using AggregationMethod_keys32_two_level = AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyTwoLevel>;
     using AggregationMethod_keys64_two_level = AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyTwoLevel>;
-    using AggregationMethod_keys128_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel>;
+    using AggregationMethod_keys128_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel, false, false>;
     using AggregationMethod_keys256_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>;
     using AggregationMethod_serialized_two_level = AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>;
     using AggregationMethod_key64_hash64 = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyHash64>;

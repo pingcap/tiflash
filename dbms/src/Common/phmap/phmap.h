@@ -1592,6 +1592,18 @@ public:
         __builtin_prefetch(static_cast<const void*>(slots_ + seq.offset()));
 #endif // __GNUC__
     }
+    void prefetch(size_t hashval) const {
+        (void)hashval;
+#if defined(_MSC_VER) && (defined(_M_X64) || defined(_M_IX86))
+        auto seq = probe(hashval);
+        _mm_prefetch((const char*)(ctrl_ + seq.offset()), _MM_HINT_NTA);
+        _mm_prefetch((const char*)(slots_ + seq.offset()), _MM_HINT_NTA);
+#elif defined(__GNUC__)
+        auto seq = probe(hashval);
+        __builtin_prefetch(static_cast<const void*>(ctrl_ + seq.offset()));
+        __builtin_prefetch(static_cast<const void*>(slots_ + seq.offset()));
+#endif // __GNUC__
+    }
 
     template <class K = key_type>
     void prefetch(const key_arg<K>& key) const {

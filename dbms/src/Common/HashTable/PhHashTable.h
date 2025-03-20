@@ -5,8 +5,9 @@ template <typename KeyType, typename Mapped, typename Hash>
 class PhHashTable : public phmap::flat_hash_map<KeyType, Mapped, Hash>
 {
 public:
-    static constexpr bool isPhMap = true;
-    static constexpr bool isNestedMap = false;
+    static constexpr bool is_string_hash_map = false;
+    static constexpr bool is_two_level = false;
+    static constexpr bool is_phmap = true;
 
     using Self = PhHashTable;
     using Base = phmap::flat_hash_map<KeyType, Mapped, Hash>;
@@ -241,8 +242,9 @@ class PhHashTableWithSavedHash
           phmap::priv::Allocator<typename FlatHashMapWithSavedHashPolicy<KeyType, Mapped>::slot_type>>
 {
 public:
-    static constexpr bool isPhMap = true;
-    static constexpr bool isNestedMap = false;
+    static constexpr bool is_string_hash_map = false;
+    static constexpr bool is_two_level = false;
+    static constexpr bool is_phmap = true;
 
     using Self = PhHashTableWithSavedHash;
     using Policy = FlatHashMapWithSavedHashPolicy<KeyType, Mapped>;
