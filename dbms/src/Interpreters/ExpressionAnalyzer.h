@@ -139,9 +139,6 @@ private:
     NamesAndTypesList aggregation_keys;
     AggregateDescriptions aggregate_descriptions;
 
-    /// Do I need to prepare for execution global subqueries when analyzing the query.
-    bool do_global;
-
     SubqueriesForSets subqueries_for_sets;
 
     /// NOTE: So far, only one JOIN per query is supported.
@@ -166,7 +163,6 @@ private:
 
     /// All new temporary tables obtained by performing the GLOBAL IN/JOIN subqueries.
     Tables external_tables;
-    size_t external_table_id = 1;
 
     /** Remove all unnecessary columns from the list of all available columns of the table (`columns`).
       * At the same time, form a set of unknown columns (`unknown_required_source_columns`),
@@ -213,17 +209,8 @@ private:
     void executeScalarSubqueries();
     void executeScalarSubqueriesImpl(ASTPtr & ast);
 
-    /// Find global subqueries in the GLOBAL IN/JOIN sections. Fills in external_tables.
-    void initGlobalSubqueriesAndExternalTables();
-    void initGlobalSubqueries(ASTPtr & ast);
-
     /// Finds in the query the usage of external tables (as table identifiers). Fills in external_tables.
     void findExternalTables(ASTPtr & ast);
-
-    /** Initialize InterpreterSelectQuery for a subquery in the GLOBAL IN/JOIN section,
-      * create a temporary table of type Memory and store it in the external_tables dictionary.
-      */
-    void addExternalStorage(ASTPtr & subquery_or_table_name);
 
     void addJoinAction(ExpressionActionsPtr & actions, bool only_types) const;
 

@@ -737,18 +737,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
     size_t limit_offset = 0;
     getLimitLengthAndOffset(query, limit_length, limit_offset);
 
-    /** With distributed query processing, almost no computations are done in the threads,
-     *  but wait and receive data from remote servers.
-     *  If we have 20 remote servers, and max_threads = 8, then it would not be very good
-     *  connect and ask only 8 servers at a time.
-     *  To simultaneously query more remote servers,
-     *  instead of max_threads, max_distributed_connections is used.
-     */
-    if (storage && storage->isRemote())
-    {
-        max_streams = settings.max_distributed_connections;
-    }
-
     size_t max_block_size = settings.max_block_size;
 
     /** Optimization - if not specified DISTINCT, WHERE, GROUP, HAVING, ORDER, LIMIT BY but LIMIT is specified, and limit + offset < max_block_size,

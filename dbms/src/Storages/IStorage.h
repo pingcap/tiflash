@@ -70,17 +70,11 @@ public:
       */
     virtual std::string getTableName() const = 0;
 
-    /** Returns true if the storage receives data from a remote server or servers. */
-    virtual bool isRemote() const { return false; }
-
     /** Returns true if the storage supports queries with the SAMPLE section. */
     virtual bool supportsSampling() const { return false; }
 
     /** Returns true if the storage supports queries with the FINAL section. */
     virtual bool supportsFinal() const { return false; }
-
-    /** Returns true if the storage replicates SELECT, INSERT and ALTER commands among replicas. */
-    virtual bool supportsReplication() const { return false; }
 
     /** Returns true if the storage supports UPSERT, DELETE or UPDATE. */
     virtual bool supportsModification() const { return false; }
