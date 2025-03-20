@@ -51,7 +51,7 @@ public:
     void advanceRangeFrameEndCurrentRowShortcut();
 
     void writeOutCurrentRow();
-    void writeBatchResult();
+    RowNumber writeBatchResult();
 
     Block tryGetOutputBlock();
     void releaseAlreadyOutputWindowBlock();
@@ -322,7 +322,7 @@ public:
     bool has_rank_or_dense_rank = false;
 
     // When preceding and following boundary type are all unbounded we can apply shortcut for agg functions.
-    bool has_shortcut;
+    bool has_shortcut = false;
 
     std::unique_ptr<Arena> arena;
 };

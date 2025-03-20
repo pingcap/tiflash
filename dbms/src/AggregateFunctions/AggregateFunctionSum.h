@@ -454,11 +454,10 @@ public:
     {
         if constexpr (IsDecimal<TResult>)
         {
-            // TODO refine it
             auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
-            container.reserve(container.size() + num);
-            for (size_t i = 0; i < num; ++i)
-                static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(this->data(place).get(), result_scale);
+            container.resize_fill(
+                container.size() + num,
+                DecimalPaddedPODArray<TResult>(this->data(place).get(), result_scale));
         }
         else
         {

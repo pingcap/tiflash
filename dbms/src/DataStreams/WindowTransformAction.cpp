@@ -1297,7 +1297,7 @@ void WindowTransformAction::writeOutCurrentRow()
     }
 }
 
-void WindowTransformAction::writeBatchResult()
+RowNumber WindowTransformAction::writeBatchResult()
 {
     assert(partition_ended);
     assert(current_row < partition_end);
@@ -1328,7 +1328,7 @@ void WindowTransformAction::writeBatchResult()
         agg_func->batchInsertSameResultInto(buf, *result_column, insert_row_num, nullptr);
     }
 
-    current_row = tmp_row;
+    return tmp_row;
 }
 
 
@@ -1568,7 +1568,7 @@ void WindowTransformAction::tryCalculate()
             {
                 // When we reach here, partition must be ended
                 assert(partition_ended);
-                writeBatchResult();
+                current_row = writeBatchResult();
             }
             else
             {
