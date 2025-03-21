@@ -146,9 +146,7 @@ void SegmentBitmapFilterTest::writeSegment(const SegDataUnit & unit)
     }
 }
 
-void SegmentBitmapFilterTest::runTestCaseGeneric(
-    TestCase test_case,
-    int caller_line)
+void SegmentBitmapFilterTest::runTestCaseGeneric(TestCase test_case, int caller_line)
 {
     if (is_common_handle)
         runTestCase<String>(test_case, caller_line);
@@ -157,9 +155,7 @@ void SegmentBitmapFilterTest::runTestCaseGeneric(
 }
 
 template <typename HandleType>
-void SegmentBitmapFilterTest::runTestCase(
-    TestCase test_case,
-    int caller_line)
+void SegmentBitmapFilterTest::runTestCase(TestCase test_case, int caller_line)
 {
     auto info = fmt::format("caller_line={}", caller_line);
     auto [row_id, handle] = writeSegment<HandleType>(test_case.seg_data, test_case.rowkey_range);
