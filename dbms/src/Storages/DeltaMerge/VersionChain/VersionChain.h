@@ -36,6 +36,11 @@ namespace tests
 class NewHandleIndexTest;
 } // namespace tests
 
+// VersionChain is to maintain the position of the base version corresponding to each version in the Delta.
+// If a handle A has three versions exists, from the oldest to the newest, they are A1, A2, A3.
+// For a normal version chain, it looks like: A3 -> A2 -> A1.
+// The version chain here is a little different, it looks like: A2 -> A1; A3 -> A1. This is mainly to save memory.
+// The oldest existing version is called `base version` and the `base version` is the pivot of the version chain.
 template <ExtraHandleType HandleType>
 class VersionChain
 {
@@ -47,6 +52,11 @@ public:
         : base_versions(std::make_shared<std::vector<RowID>>())
     {}
 
+    // Traverse the snapshot data in chronological order from the oldest to the newest,
+    // and apply them to update the version chain.
+    // `replayed_rows_and_deletes` is the number of rows and deletes has been replayed.
+    // So data before `replayed_rows_and_deletes` will be skipped.
+    // The return value is the `base_versions` that not older than the data of `snapshot`.
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshot(
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
@@ -80,6 +90,7 @@ private:
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
 
+    // Handling normal write requests. Mainly for ColumnFileInMemory and ColumnFileTiny.
     [[nodiscard]] UInt32 replayBlock(
         const DMContext & dm_context,
         const IColumnFileDataProviderPtr & data_provider,
@@ -133,7 +144,7 @@ private:
     // (*base_versions)[n] is the row id of the oldest version of the n-th record in delta.
     // And different versions of the same record has the same base version except the base version itself.
     // The base version of the base version is NotExistRowID.
-    // Therefore, base version of a record acts as a pivot, like the primary key in trancation.
+    // Therefore, base version of a record acts as a pivot.
     std::shared_ptr<std::vector<RowID>> base_versions;
     NewHandleIndex<HandleType> new_handle_to_row_ids;
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
@@ -150,10 +161,4 @@ inline GenericVersionChain createVersionChain(bool is_common_handle)
         return GenericVersionChain{std::in_place_type<VersionChain<Int64>>};
 }
 
-enum class VersionChainMode : Int64
-{
-    Disabled = 0,
-    Enabled = 1,
-    EnabledForTest = 2,
-};
 } // namespace DB::DM
