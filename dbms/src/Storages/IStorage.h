@@ -292,12 +292,6 @@ public:
 
     bool is_dropped{false};
 
-    /// Does table support index for IN sections
-    virtual bool supportsIndexForIn() const { return false; }
-
-    /// Provides a hint that the storage engine may evaluate the IN-condition by using an index.
-    virtual bool mayBenefitFromIndexForIn(const ASTPtr & /* left_in_operand */) const { return false; }
-
     /// Checks validity of the data
     virtual bool checkData() const
     {

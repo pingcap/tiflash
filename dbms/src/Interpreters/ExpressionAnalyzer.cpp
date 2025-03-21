@@ -1282,17 +1282,6 @@ void ExpressionAnalyzer::optimizeLimitBy()
         elems = unique_elems;
 }
 
-
-void ExpressionAnalyzer::makeSetsForIndex()
-{
-    if (storage && select_query && storage->supportsIndexForIn())
-    {
-        if (select_query->where_expression)
-            makeSetsForIndexImpl(select_query->where_expression, storage->getSampleBlock());
-    }
-}
-
-
 void ExpressionAnalyzer::tryMakeSetFromSubquery(const ASTPtr & subquery_or_table_name)
 {
     BlockIO res = interpretSubquery(subquery_or_table_name, context, subquery_depth + 1, {})->execute();
@@ -1310,56 +1299,6 @@ void ExpressionAnalyzer::tryMakeSetFromSubquery(const ASTPtr & subquery_or_table
 
     prepared_sets[subquery_or_table_name.get()] = std::move(set);
 }
-
-
-void ExpressionAnalyzer::makeSetsForIndexImpl(const ASTPtr & node, const Block & sample_block)
-{
-    for (auto & child : node->children)
-    {
-        /// Don't descent into subqueries.
-        if (typeid_cast<ASTSubquery *>(child.get()))
-            continue;
-
-        /// Don't dive into lambda functions
-        const auto * func = typeid_cast<const ASTFunction *>(child.get());
-        if (func && func->name == "lambda")
-            continue;
-
-        makeSetsForIndexImpl(child, sample_block);
-    }
-
-    const auto * func = typeid_cast<const ASTFunction *>(node.get());
-    if (func && functionIsInOperator(func->name))
-    {
-        const IAST & args = *func->arguments;
-
-        if (storage && storage->mayBenefitFromIndexForIn(args.children.at(0)))
-        {
-            const ASTPtr & arg = args.children.at(1);
-
-            if (!prepared_sets.count(arg.get())) /// Not already prepared.
-            {
-                if (typeid_cast<ASTSubquery *>(arg.get()) || typeid_cast<ASTIdentifier *>(arg.get()))
-                {
-                    if (settings.use_index_for_in_with_subqueries)
-                        tryMakeSetFromSubquery(arg);
-                }
-                else
-                {
-                    NamesAndTypesList temp_columns = source_columns;
-                    temp_columns.insert(temp_columns.end(), columns_added_by_join.begin(), columns_added_by_join.end());
-                    ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(temp_columns);
-                    getRootActions(func->arguments->children.at(0), true, false, temp_actions);
-
-                    Block sample_block_with_calculated_columns = temp_actions->getSampleBlock();
-                    if (sample_block_with_calculated_columns.has(args.children.at(0)->getColumnName()))
-                        makeExplicitSet(func, sample_block_with_calculated_columns, true);
-                }
-            }
-        }
-    }
-}
-
 
 void ExpressionAnalyzer::makeSet(const ASTFunction * node, const Block & sample_block)
 {

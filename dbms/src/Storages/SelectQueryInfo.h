@@ -42,7 +42,7 @@ struct SelectQueryInfo
 {
     ASTPtr query;
 
-    /// Prepared sets are used for indices by storage engine.
+    /// Prepared sets are used for handling queries with `IN` section.
     /// Example: x IN (1, 2, 3)
     PreparedSets sets;
 
