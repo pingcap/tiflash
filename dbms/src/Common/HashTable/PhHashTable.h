@@ -1,205 +1,15 @@
 #include <Common/HashTable/HashTable.h>
 #include <Common/phmap/phmap.h>
 
-template <typename KeyType, typename Mapped, typename Hash>
-class PhHashTable : public phmap::flat_hash_map<KeyType, Mapped, Hash>
-{
-public:
-    static constexpr bool is_string_hash_map = false;
-    static constexpr bool is_two_level = false;
-    static constexpr bool is_phmap = true;
-
-    using Self = PhHashTable;
-    using Base = phmap::flat_hash_map<KeyType, Mapped, Hash>;
-    using Cell = typename Base::slot_type;
-    using cell_type = Cell;
-    using Key = typename Base::key_type;
-    using mapped_type = Mapped;
-
-    using LookupResult = Cell *;
-    using ConstLookupResult = const Cell *;
-
-    using typename Base::key_type;
-    using typename Base::value_type;
-
-    using Base::begin;
-    using Base::capacity;
-    using Base::clear;
-    using Base::empty;
-    using Base::end;
-    using Base::find_impl;
-    using Base::find_or_prepare_insert;
-    using Base::hash;
-    using Base::hash_function;
-    using Base::lazy_emplace;
-    using Base::lazy_emplace_with_hash;
-    using Base::prefetch;
-    using Base::size;
-    using Base::slot_at;
-
-    template <typename KeyHolder>
-    ALWAYS_INLINE inline void emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted)
-    {
-        const auto & key = keyHolderGetKey(key_holder);
-        auto iter = lazy_emplace(key, [&](const auto & ctor) { // TODO init inserted as false
-            inserted = true;
-            ctor(key, nullptr);
-            keyHolderPersistKey(key_holder);
-        });
-        it = iter.getPtr();
-        if (!inserted)
-            keyHolderDiscardKey(key_holder);
-    }
-
-    template <typename KeyHolder>
-    ALWAYS_INLINE inline void emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted, size_t hashval)
-    {
-        const auto & key = keyHolderGetKey(key_holder);
-        auto iter = lazy_emplace_with_hash(key, hashval, [&](const auto & ctor) {
-            inserted = true;
-            ctor(key, nullptr);
-            keyHolderPersistKey(key_holder);
-        });
-        it = iter.getPtr();
-        if (!inserted)
-            keyHolderDiscardKey(key_holder);
-    }
-
-    ALWAYS_INLINE inline LookupResult find(const KeyType & key, size_t hashval)
-    {
-        size_t offset;
-        if (find_impl(key, hashval, offset))
-            return slot_at(offset);
-        else
-            return nullptr;
-    }
-
-    ALWAYS_INLINE inline LookupResult find(const KeyType & key)
-    {
-        const auto hashval = this->hash(key);
-        find(key, hashval);
-    }
-
-    ALWAYS_INLINE inline ConstLookupResult find(const KeyType & key, size_t hashval) const
-    {
-        return const_cast<std::decay_t<decltype(*this)> *>(this)->find(key, hashval);
-    }
-
-    ALWAYS_INLINE inline ConstLookupResult find(const KeyType & key) const
-    {
-        return const_cast<std::decay_t<decltype(*this)> *>(this)->find(key);
-    }
-
-    template <typename Func>
-    void forEachValue(Func && func)
-    {
-        for (auto iter = begin(); iter != end(); ++iter)
-        {
-            func(iter->first, iter->second);
-        }
-    }
-
-    template <typename Func>
-    void forEachMapped(Func && func)
-    {
-        for (auto iter = begin(); iter != end(); ++iter)
-        {
-            func(iter->second);
-        }
-    }
-
-    ALWAYS_INLINE inline typename Base::mapped_type & operator[](const Key & key)
-    {
-        LookupResult it = nullptr;
-        bool inserted = false;
-        emplace(key, it, inserted);
-
-        if (inserted)
-            new (&it->getMapped())(typename Base::mapped_type)();
-
-        return it->getMapped();
-    }
-
-    ALWAYS_INLINE inline size_t getBufferSizeInBytes() const
-    {
-        // TODO correctness for ctro?
-        return capacity() * (sizeof(typename Base::slot_type) + sizeof(typename phmap::priv::ctrl_t));
-    }
-
-    ALWAYS_INLINE inline size_t getBufferSizeInCells() const
-    {
-        // TODO correctness for ctor?
-        return capacity();
-    }
-
-    ALWAYS_INLINE inline void clearAndShrink() { clear(); }
-
-    void write(DB::WriteBuffer &) const
-    {
-        // DB::writeBinary(value.first, wb);
-        // DB::writeBinary(value.second, wb);
-    }
-
-    void writeText(DB::WriteBuffer &) const
-    {
-        // DB::writeDoubleQuoted(value.first, wb);
-        // DB::writeChar(',', wb);
-        // DB::writeDoubleQuoted(value.second, wb);
-    }
-
-    /// Deserialization, in binary and text form.
-    void read(DB::ReadBuffer &)
-    {
-        // DB::readBinary(value.first, rb);
-        // DB::readBinary(value.second, rb);
-    }
-
-    void readText(DB::ReadBuffer &)
-    {
-        // TODO
-        // DB::readDoubleQuoted(value.first, rb);
-        // DB::assertChar(',', rb);
-        // DB::readDoubleQuoted(value.second, rb);
-    }
-    // TODO insertUniqueNonZero()
-    // TODO lazy_emplace_with_hash
-    void setResizeCallback(const ResizeCallback &)
-    {
-        // TODO
-    }
-
-    template <typename Func>
-    ALWAYS_INLINE inline void mergeToViaEmplace(Self & that, Func && func)
-    {
-        for (auto it = begin(), end = this->end(); it != end; ++it)
-        {
-            typename Self::LookupResult res_it;
-            bool inserted;
-            that.emplace(it->first, res_it, inserted);
-            func(res_it->getMapped(), it->second, inserted);
-        }
-    }
-
-    template <typename Func>
-    ALWAYS_INLINE inline void mergeToViaFind(Self & that, Func && func)
-    {
-        for (auto it = begin(), end = this->end(); it != end; ++it)
-        {
-            auto res_it = that.find(it->first);
-            if (!res_it)
-                func(it->second, it->second, false);
-            else
-                func(res_it->getMapped(), it->second, true);
-        }
-    }
-};
+#include <tuple>
 
 template <typename K, typename V>
 struct MapSlotWithSavedHashType
 {
+    // variable name obeys the style of phmap.
+    static constexpr bool with_saved_hash = true;
     MapSlotWithSavedHashType()
-        : hashval(0)
-    {}
+        : hashval(0) {}
     ~MapSlotWithSavedHashType() = delete;
     MapSlotWithSavedHashType(const MapSlotWithSavedHashType &) = delete;
     MapSlotWithSavedHashType & operator=(const MapSlotWithSavedHashType &) = delete;
@@ -216,14 +26,24 @@ struct MapSlotWithSavedHashType
     const std::pair<K, V> & getValue() { return value; }
     void setHash(size_t hashval_) { hashval = hashval_; }
 
-    // TODO padding
-    size_t hashval;
+    using value_type = std::pair<const K, V>;
+    using mutable_value_type = std::pair<K, V>;
+
+    template <typename T>
+    static K & getKey(const T & x)
+    {
+        static_assert(std::is_same_v<std::decay_t<T>, value_type> ||
+                std::is_same_v<std::decay_t<T>, mutable_value_type>);
+        return x.second;
+    }
+
     union
     {
         std::pair<const K, V> value;
         std::pair<K, V> mutable_value;
         K key;
     };
+    size_t hashval;
 };
 
 template <typename K, typename V>
@@ -232,51 +52,37 @@ using MapSlotWithSavedHashPolicy = phmap::priv::map_slot_policy<K, V, MapSlotWit
 template <typename K, typename V>
 using FlatHashMapWithSavedHashPolicy = phmap::priv::FlatHashMapPolicy<K, V, MapSlotWithSavedHashPolicy<K, V>>;
 
-// TODO handle duplicated code with PhHashTable
-template <typename KeyType, typename Mapped, typename Hash>
-class PhHashTableWithSavedHash
-    : public phmap::priv::raw_hash_map<
-          FlatHashMapWithSavedHashPolicy<KeyType, Mapped>,
-          Hash,
-          phmap::priv::hash_default_eq<KeyType>,
-          phmap::priv::Allocator<typename FlatHashMapWithSavedHashPolicy<KeyType, Mapped>::slot_type>>
+template <typename TKey, typename TMapped, typename Hash, typename Base>
+class PhHashTableTemplate : public Base
 {
 public:
-    static constexpr bool is_string_hash_map = false;
-    static constexpr bool is_two_level = false;
     static constexpr bool is_phmap = true;
+    static constexpr bool is_string_hash_map = false;
 
-    using Self = PhHashTableWithSavedHash;
-    using Policy = FlatHashMapWithSavedHashPolicy<KeyType, Mapped>;
-    using Base = phmap::priv::raw_hash_map<
-        Policy,
-        Hash,
-        phmap::priv::hash_default_eq<KeyType>,
-        phmap::priv::Allocator<typename FlatHashMapWithSavedHashPolicy<KeyType, Mapped>::slot_type>>;
+    using Self = PhHashTableTemplate;
+
     using Cell = typename Base::slot_type;
     using cell_type = Cell;
     using Key = typename Base::key_type;
-    using mapped_type = Mapped;
+    using mapped_type = TMapped;
+    using typename Base::key_type;
+    using typename Base::value_type;
 
     using LookupResult = Cell *;
     using ConstLookupResult = const Cell *;
 
-    using typename Base::key_type;
-    using typename Base::value_type;
-
     using Base::begin;
-    using Base::capacity;
+    using Base::end;
     using Base::clear;
     using Base::empty;
-    using Base::end;
     using Base::find_impl;
-    using Base::find_or_prepare_insert;
     using Base::hash;
-    using Base::hash_function;
     using Base::lazy_emplace;
     using Base::lazy_emplace_with_hash;
     using Base::prefetch;
+    using Base::prefetch_hash;
     using Base::size;
+    using Base::capacity;
     using Base::slot_at;
 
     template <typename KeyHolder>
@@ -284,38 +90,33 @@ public:
     {
         const auto & key = keyHolderGetKey(key_holder);
         const auto hashval = this->hash(key);
-        auto iter = lazy_emplace_with_hash(key, hashval, [&](const auto & ctor) { // TODO init inserted as false
-            inserted = true;
-            ctor(key, Mapped());
-            keyHolderPersistKey(key_holder);
-        });
-        it = iter.getPtr();
-        if (!inserted)
-        {
-            keyHolderDiscardKey(key_holder);
-            it->setHash(hashval);
-        }
+        emplaceWithHash(key, key_holder, it, inserted, hashval);
     }
 
     template <typename KeyHolder>
     ALWAYS_INLINE inline void emplace(KeyHolder && key_holder, LookupResult & it, bool & inserted, size_t hashval)
     {
         const auto & key = keyHolderGetKey(key_holder);
-        auto iter = lazy_emplace_with_hash(key, hashval, [&](const auto & ctor) {
-            inserted = true;
-            // TODO std::piecewise_construct
-            ctor(key, Mapped());
-            keyHolderPersistKey(key_holder);
-        });
-        it = iter.getPtr();
-        if (!inserted)
-        {
-            keyHolderDiscardKey(key_holder);
-            it->setHash(hashval);
-        }
+        emplaceWithHash(key, key_holder, it, inserted, hashval);
     }
 
-    ALWAYS_INLINE inline LookupResult find(const KeyType & key, size_t hashval)
+    ALWAYS_INLINE inline LookupResult find(const TKey & key)
+    {
+        const auto hashval = this->hash(key);
+        return find(key, hashval);
+    }
+
+    ALWAYS_INLINE inline ConstLookupResult find(const TKey & key, size_t hashval) const
+    {
+        return const_cast<std::decay_t<decltype(*this)> *>(this)->find(key, hashval);
+    }
+
+    ALWAYS_INLINE inline ConstLookupResult find(const TKey & key) const
+    {
+        return const_cast<std::decay_t<decltype(*this)> *>(this)->find(key);
+    }
+
+    ALWAYS_INLINE inline LookupResult find(const TKey & key, size_t hashval)
     {
         size_t offset;
         if (find_impl(key, hashval, offset))
@@ -324,24 +125,8 @@ public:
             return nullptr;
     }
 
-    ALWAYS_INLINE inline LookupResult find(const KeyType & key)
-    {
-        const auto hashval = this->hash(key);
-        return find(key, hashval);
-    }
-
-    ALWAYS_INLINE inline ConstLookupResult find(const KeyType & key, size_t hashval) const
-    {
-        return const_cast<std::decay_t<decltype(*this)> *>(this)->find(key, hashval);
-    }
-
-    ALWAYS_INLINE inline ConstLookupResult find(const KeyType & key) const
-    {
-        return const_cast<std::decay_t<decltype(*this)> *>(this)->find(key);
-    }
-
     template <typename Func>
-    void forEachValue(Func && func)
+    ALWAYS_INLINE inline void forEachValue(Func && func)
     {
         for (auto iter = begin(); iter != end(); ++iter)
         {
@@ -350,7 +135,7 @@ public:
     }
 
     template <typename Func>
-    void forEachMapped(Func && func)
+    ALWAYS_INLINE inline void forEachMapped(Func && func)
     {
         for (auto iter = begin(); iter != end(); ++iter)
         {
@@ -363,29 +148,21 @@ public:
         LookupResult it = nullptr;
         bool inserted = false;
         emplace(key, it, inserted);
-
-        if (inserted)
-            new (&it->getMapped())(typename Base::mapped_type)();
-
         return it->getMapped();
     }
 
     ALWAYS_INLINE inline size_t getBufferSizeInBytes() const
     {
-        // TODO correctness for ctro?
         return capacity() * (sizeof(typename Base::slot_type) + sizeof(typename phmap::priv::ctrl_t));
     }
 
-    ALWAYS_INLINE inline size_t getBufferSizeInCells() const
-    {
-        // TODO correctness for ctro?
-        return capacity();
-    }
+    ALWAYS_INLINE inline size_t getBufferSizeInCells() const { return capacity(); }
 
     ALWAYS_INLINE inline void clearAndShrink() { clear(); }
 
     void write(DB::WriteBuffer &) const
     {
+        // TODO
         // DB::writeBinary(value.first, wb);
         // DB::writeBinary(value.second, wb);
     }
@@ -406,13 +183,11 @@ public:
 
     void readText(DB::ReadBuffer &)
     {
-        // TODO
         // DB::readDoubleQuoted(value.first, rb);
         // DB::assertChar(',', rb);
         // DB::readDoubleQuoted(value.second, rb);
     }
-    // TODO insertUniqueNonZero()
-    // TODO lazy_emplace_with_hash
+
     void setResizeCallback(const ResizeCallback &)
     {
         // TODO
@@ -423,8 +198,8 @@ public:
     {
         for (auto it = begin(), end = this->end(); it != end; ++it)
         {
-            typename Self::LookupResult res_it;
-            bool inserted;
+            typename Self::LookupResult res_it = nullptr;
+            bool inserted = false;
             that.emplace(it->first, res_it, inserted);
             func(res_it->getMapped(), it->second, inserted);
         }
@@ -442,4 +217,43 @@ public:
                 func(res_it->getMapped(), it->second, true);
         }
     }
+
+private:
+    template <typename Key, typename KeyHolder>
+    ALWAYS_INLINE inline void emplaceWithHash(
+            Key && key,
+            KeyHolder && key_holder,
+            LookupResult & it,
+            bool & inserted,
+            size_t hashval)
+    {
+        inserted = false;
+        auto iter = lazy_emplace_with_hash(key, hashval, [&](const auto & ctor) {
+            inserted = true;
+            // NOTE: remember to persiste key before call ctor, because ArenaKehHolder will change key.data when calling.
+            keyHolderPersistKey(key_holder);
+            ctor(std::piecewise_construct, std::forward_as_tuple(key), std::forward_as_tuple());
+        });
+        it = iter.getPtr();
+        if (inserted)
+            it->setHash(hashval);
+        else
+            keyHolderDiscardKey(key_holder);
+    }
 };
+
+template <typename Key, typename Mapped, typename Hash>
+using PhHashTableBase = phmap::flat_hash_map<Key, Mapped, Hash>;
+
+template <typename Key, typename Mapped, typename Hash>
+using PhHashTableWithSavedHashBase = phmap::priv::raw_hash_map<
+     FlatHashMapWithSavedHashPolicy<Key, Mapped>,
+     Hash,
+     phmap::priv::hash_default_eq<Key>,
+     phmap::priv::Allocator<typename FlatHashMapWithSavedHashPolicy<Key, Mapped>::slot_type>>;
+
+template <typename Key, typename Mapped, typename Hash>
+using PhHashTable = PhHashTableTemplate<Key, Mapped, Hash, PhHashTableBase<Key, Mapped, Hash>>;
+
+template <typename Key, typename Mapped, typename Hash> 
+using PhHashTableWithSavedHash = PhHashTableTemplate<Key, Mapped, Hash, PhHashTableWithSavedHashBase<Key, Mapped, Hash>>;
