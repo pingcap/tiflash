@@ -30,6 +30,8 @@ tipb::ANNQueryInfo getAnnQueryInfoFromTableScanExecutor(const tipb::Executor * t
         if (table_scan->partition_table_scan().has_deprecated_ann_query())
             return table_scan->partition_table_scan().deprecated_ann_query();
         const auto & used_columnar_indexes = table_scan->partition_table_scan().used_columnar_indexes();
+        if (used_columnar_indexes.empty())
+            return {};
         RUNTIME_CHECK_MSG(
             used_columnar_indexes.size() == 1,
             "Only support using one vector index at one query for now.");
@@ -41,6 +43,8 @@ tipb::ANNQueryInfo getAnnQueryInfoFromTableScanExecutor(const tipb::Executor * t
         if (table_scan->tbl_scan().has_deprecated_ann_query())
             return table_scan->tbl_scan().deprecated_ann_query();
         const auto & used_columnar_indexes = table_scan->tbl_scan().used_columnar_indexes();
+        if (used_columnar_indexes.empty())
+            return {};
         RUNTIME_CHECK_MSG(
             used_columnar_indexes.size() == 1,
             "Only support using one vector index at one query for now.");
