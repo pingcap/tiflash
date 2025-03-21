@@ -27,6 +27,8 @@ class Context;
 class ExpressionActions;
 struct ExpressionActionsChain;
 
+using PreparedSets = std::unordered_map<IAST *, SetPtr>;
+
 using Tables = std::map<String, StoragePtr>;
 
 class ASTFunction;
@@ -109,6 +111,11 @@ public:
       */
     SubqueriesForSets getSubqueriesForSets() const { return subqueries_for_sets; }
 
+    PreparedSets getPreparedSets() { return prepared_sets; }
+
+    /// Create Set-s that we can from IN section to use the index on them.
+    void makeSetsForIndex();
+
 private:
     ASTPtr ast;
     ASTSelectQuery * select_query;
@@ -136,6 +143,8 @@ private:
     AggregateDescriptions aggregate_descriptions;
 
     SubqueriesForSets subqueries_for_sets;
+
+    PreparedSets prepared_sets;
 
     /// NOTE: So far, only one JOIN per query is supported.
 
@@ -195,6 +204,8 @@ private:
     void optimizeIfWithConstantConditionImpl(ASTPtr & current_ast, Aliases & aliases) const;
     bool tryExtractConstValueFromCondition(const ASTPtr & condition, bool & value) const;
 
+    void makeSet(const ASTFunction * node, const Block & sample_block);
+
     /// Adds a list of ALIAS columns from the table.
     void addAliasColumns();
 
@@ -238,6 +249,19 @@ private:
 
     void assertSelect() const;
     void assertAggregation() const;
+
+    /** Create Set from an explicit enumeration of values in the query.
+      * If create_ordered_set = true - create a data structure suitable for using the index.
+      */
+    void makeExplicitSet(const ASTFunction * node, const Block & sample_block, bool create_ordered_set);
+
+    /**
+      * Create Set from a subuqery or a table expression in the query. The created set is suitable for using the index.
+      * The set will not be created if its size hits the limit.
+      */
+    void tryMakeSetFromSubquery(const ASTPtr & subquery_or_table_name);
+
+    void makeSetsForIndexImpl(const ASTPtr & node, const Block & sample_block);
 
     /** Translate qualified names such as db.table.column, table.column, table_alias.column
       *  to unqualified names. This is done in a poor transitional way:

@@ -25,6 +25,7 @@ SelectQueryInfo::~SelectQueryInfo() = default;
 
 SelectQueryInfo::SelectQueryInfo(const SelectQueryInfo & rhs)
     : query(rhs.query)
+    , sets(rhs.sets)
     , mvcc_query_info(rhs.mvcc_query_info != nullptr ? std::make_unique<MvccQueryInfo>(*rhs.mvcc_query_info) : nullptr)
     , dag_query(rhs.dag_query != nullptr ? std::make_unique<DAGQueryInfo>(*rhs.dag_query) : nullptr)
     , req_id(rhs.req_id)
@@ -34,6 +35,7 @@ SelectQueryInfo::SelectQueryInfo(const SelectQueryInfo & rhs)
 
 SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
     : query(std::move(rhs.query))
+    , sets(std::move(rhs.sets))
     , mvcc_query_info(std::move(rhs.mvcc_query_info))
     , dag_query(std::move(rhs.dag_query))
     , req_id(std::move(rhs.req_id))
