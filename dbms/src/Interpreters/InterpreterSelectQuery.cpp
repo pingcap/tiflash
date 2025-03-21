@@ -86,7 +86,6 @@ extern const int TOO_DEEP_SUBQUERIES;
 extern const int THERE_IS_NO_COLUMN;
 extern const int SAMPLING_NOT_SUPPORTED;
 extern const int ILLEGAL_FINAL;
-extern const int ILLEGAL_PREWHERE;
 extern const int TOO_MANY_COLUMNS;
 extern const int LOGICAL_ERROR;
 extern const int NOT_IMPLEMENTED;
@@ -204,17 +203,6 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
             throw Exception(
                 (!input && storage) ? "Storage " + storage->getName() + " doesn't support FINAL" : "Illegal FINAL",
                 ErrorCodes::ILLEGAL_FINAL);
-
-        if (query.prewhere_expression && (input || !storage || !storage->supportsPrewhere()))
-            throw Exception(
-                (!input && storage) ? "Storage " + storage->getName() + " doesn't support PREWHERE"
-                                    : "Illegal PREWHERE",
-                ErrorCodes::ILLEGAL_PREWHERE);
-
-        /// Save the new temporary tables in the query context
-        for (const auto & it : query_analyzer->getExternalTables())
-            if (!context.tryGetExternalTable(it.first))
-                context.addExternalTable(it.first, it.second);
     }
 }
 
@@ -744,27 +732,15 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
     size_t limit_offset = 0;
     getLimitLengthAndOffset(query, limit_length, limit_offset);
 
-    /** With distributed query processing, almost no computations are done in the threads,
-     *  but wait and receive data from remote servers.
-     *  If we have 20 remote servers, and max_threads = 8, then it would not be very good
-     *  connect and ask only 8 servers at a time.
-     *  To simultaneously query more remote servers,
-     *  instead of max_threads, max_distributed_connections is used.
-     */
-    if (storage && storage->isRemote())
-    {
-        max_streams = settings.max_distributed_connections;
-    }
-
     size_t max_block_size = settings.max_block_size;
 
     /** Optimization - if not specified DISTINCT, WHERE, GROUP, HAVING, ORDER, LIMIT BY but LIMIT is specified, and limit + offset < max_block_size,
      *  then as the block size we will use limit + offset (not to read more from the table than requested),
      *  and also set the number of threads to 1.
      */
-    if (!query.distinct && !query.prewhere_expression && !query.where_expression && !query.group_expression_list
-        && !query.having_expression && !query.order_expression_list && !query.limit_by_expression_list
-        && query.limit_length && !query_analyzer->hasAggregation() && limit_length + limit_offset < max_block_size)
+    if (!query.distinct && !query.where_expression && !query.group_expression_list && !query.having_expression
+        && !query.order_expression_list && !query.limit_by_expression_list && query.limit_length
+        && !query_analyzer->hasAggregation() && limit_length + limit_offset < max_block_size)
     {
         max_block_size = limit_length + limit_offset;
         max_streams = 1;
@@ -793,8 +769,6 @@ QueryProcessingStage::Enum InterpreterSelectQuery::executeFetchColumns(Pipeline 
 
         if (max_streams == 0)
             throw Exception("Logical error: zero number of streams requested", ErrorCodes::LOGICAL_ERROR);
-
-        query_analyzer->makeSetsForIndex();
 
         SelectQueryInfo query_info;
         query_info.query = query_ptr;

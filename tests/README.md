@@ -1,6 +1,6 @@
 ## How to run test cases in local
 
-For running intergration test cases (defined in `./fullstack-test`, `./fullstack-test-dt`, `./new_collation_fullstack`), you should define a TiDB cluster with TiFlash node (1 PD, 1 TiKV, 1 TiDB, 1 TiFlash at least).
+For running integration test cases (defined in `./fullstack-test`, `./fullstack-test-dt`, `./new_collation_fullstack`), you should define a TiDB cluster with TiFlash node (1 PD, 1 TiKV, 1 TiDB, 1 TiFlash at least).
 
 1. Build your own TiFlash binary using debug profile:
 
@@ -10,7 +10,7 @@ For running intergration test cases (defined in `./fullstack-test`, `./fullstack
     ```
 
 2. Install [tiup](https://tiup.io/)
-3. Use `tiup playground` (recommanded) or `tiup cluster` to start a tidb cluster
+3. Use `tiup playground` (recommended) or `tiup cluster` to start a tidb cluster
 
     ```bash
     export TIDB_PORT=4000

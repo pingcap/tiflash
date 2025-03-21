@@ -42,7 +42,7 @@ struct SelectQueryInfo
 {
     ASTPtr query;
 
-    /// Prepared sets are used for indices by storage engine.
+    /// Prepared sets are used for handling queries with `IN` section.
     /// Example: x IN (1, 2, 3)
     PreparedSets sets;
 
@@ -61,7 +61,7 @@ struct SelectQueryInfo
     SelectQueryInfo(const SelectQueryInfo & rhs);
     SelectQueryInfo(SelectQueryInfo && rhs) noexcept;
 
-    bool fromAST() const { return dag_query == nullptr; };
+    bool fromAST() const { return dag_query == nullptr; }
 };
 
 } // namespace DB

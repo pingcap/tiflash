@@ -78,19 +78,17 @@ static ASTPtr buildWhereExpression(const ASTs & functions)
 void filterBlockWithQuery(const ASTPtr & query, Block & block, const Context & context)
 {
     const auto & select = typeid_cast<const ASTSelectQuery &>(*query);
-    if (!select.where_expression && !select.prewhere_expression)
+    if (!select.where_expression)
         return;
 
     NameSet columns;
     for (const auto & it : block.getNamesAndTypesList())
         columns.insert(it.name);
 
-    /// We will create an expression that evaluates the expressions in WHERE and PREWHERE, depending only on the existing columns.
+    /// We will create an expression that evaluates the expressions in WHERE, depending only on the existing columns.
     std::vector<ASTPtr> functions;
     if (select.where_expression)
         extractFunctions(select.where_expression, columns, functions);
-    if (select.prewhere_expression)
-        extractFunctions(select.prewhere_expression, columns, functions);
 
     ASTPtr expression_ast = buildWhereExpression(functions);
     if (!expression_ast)
