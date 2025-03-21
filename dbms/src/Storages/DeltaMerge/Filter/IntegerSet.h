@@ -139,8 +139,8 @@ class ValueSet final : public IntegerSet
 public:
     ValueSet() = default;
 
-    explicit ValueSet(std::set<T> values_)
-        : values(values_)
+    explicit ValueSet(std::set<T> && values_)
+        : values(std::move(values_))
     {}
 
     explicit ValueSet(const Fields & values_)
@@ -171,19 +171,7 @@ public:
 
     BitmapFilterPtr search(InvertedIndexReaderPtr inverted_index, size_t size) override;
 
-    String toDebugString() override
-    {
-        FmtBuffer buf;
-        buf.append("{");
-        buf.joinStr(
-            values.begin(),
-            values.end(),
-            [](const auto & value, FmtBuffer & fb) { fb.fmtAppend("{}", value); },
-            ", ");
-        buf.append("}");
-
-        return buf.toString();
-    }
+    String toDebugString() override { return fmt::format("{{{}}}", values); }
 
 private:
     std::set<T> values;
