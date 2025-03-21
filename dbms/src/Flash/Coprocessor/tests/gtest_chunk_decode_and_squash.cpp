@@ -14,13 +14,13 @@
 
 #include <DataStreams/SquashingTransform.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Coprocessor/CHBlockChunkCodec.h>
 #include <Flash/Coprocessor/CHBlockChunkCodecV1.h>
 #include <Flash/Coprocessor/ChunkDecodeAndSquash.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/TiDB.h>
 #include <gtest/gtest.h>
 

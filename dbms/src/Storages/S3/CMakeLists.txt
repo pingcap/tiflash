@@ -1,4 +1,4 @@
-# Copyright 2023 PingCAP, Inc.
+# Copyright 2025 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,9 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include_directories (${CMAKE_CURRENT_BINARY_DIR})
+add_headers_and_sources(storage_s3 .)
 
-add_library (page-ctl-lib MainEntry.cpp PageStorageCtlV3.cpp PageStorageCtlV2.cpp ${page-ctl-src})
-target_include_directories (page-ctl-lib PRIVATE ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
-target_link_libraries (page-ctl-lib PRIVATE dbms page tiflash-dttool-entry-object)
-target_compile_options(page-ctl-lib PRIVATE -Wno-format)
+add_library(storage_s3 ${storage_s3_headers} ${storage_s3_sources})
+target_link_libraries(storage_s3 PUBLIC tiflash_common_io tiflash_contrib::aws_s3 kv_client tipb etcdpb)

@@ -19,11 +19,11 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/Context.h>
 #include <Operators/AutoPassThroughHashAggHelper.h>
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 namespace DB

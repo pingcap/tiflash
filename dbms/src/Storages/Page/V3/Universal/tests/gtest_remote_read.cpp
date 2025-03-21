@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/Ctl.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Flash/Disaggregated/S3LockClient.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
@@ -34,7 +35,6 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/DeleteBucketRequest.h>

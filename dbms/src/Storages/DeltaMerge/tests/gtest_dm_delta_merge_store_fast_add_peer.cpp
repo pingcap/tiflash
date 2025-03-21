@@ -17,6 +17,7 @@
 #include <DataStreams/BlocksListBlockInputStream.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Debug/MockKVStore/MockUtils.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -40,7 +41,6 @@
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/InputStreamTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 
 

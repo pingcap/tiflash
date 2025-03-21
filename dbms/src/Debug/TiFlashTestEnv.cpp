@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/UnifiedLogFormatter.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <IO/Encryption/MockKeyManager.h>
 #include <IO/FileProvider/FileProvider.h>
@@ -27,7 +28,6 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <aws/s3/model/DeleteBucketRequest.h>

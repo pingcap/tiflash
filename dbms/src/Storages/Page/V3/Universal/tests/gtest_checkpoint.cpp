@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/SyncPoint/SyncPoint.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
@@ -31,7 +32,6 @@
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/S3Client.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 

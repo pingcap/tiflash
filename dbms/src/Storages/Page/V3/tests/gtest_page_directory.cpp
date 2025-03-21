@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/SyncPoint/Ctl.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <IO/FileProvider/FileProvider.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/Page/Page.h>
@@ -34,7 +35,6 @@
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <common/UInt128.h>
 #include <common/logger_useful.h>
 #include <common/types.h>

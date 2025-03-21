@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Flash/FlashGrpcServerHolder.h>
 #include <Flash/Mpp/MPPTaskId.h>
-#include <Server/FlashGrpcServerHolder.h>
 
 namespace DB
 {

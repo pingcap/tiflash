@@ -29,4 +29,4 @@ mysql> use test; set @@tidb_isolation_read_engines='tiflash'; select count(disti
 +--------------------+-----------+--------------+----------+
 
 # Clean up.
- mysql> drop table if exists test.a
+mysql> drop table if exists test.a

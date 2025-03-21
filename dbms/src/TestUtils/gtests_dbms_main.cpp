@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/UniThreadPool.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Poco/Environment.h>
@@ -23,7 +24,6 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 #include <signal.h>
 

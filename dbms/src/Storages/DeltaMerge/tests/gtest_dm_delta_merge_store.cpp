@@ -18,6 +18,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Core/Defines.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -35,7 +36,6 @@
 #include <Storages/PathPool.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <gtest/gtest.h>

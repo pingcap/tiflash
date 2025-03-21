@@ -17,7 +17,7 @@
 #include <AggregateFunctions/AggregateFunctionFactory.h>
 #include <AggregateFunctions/IAggregateFunction.h>
 #include <AggregateFunctions/registerAggregateFunctions.h>
-#include <TestUtils/TiFlashTestEnv.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests

@@ -14,6 +14,7 @@
 
 #include <Common/Logger.h>
 #include <Common/Stopwatch.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <IO/IOThreadPools.h>
 #include <Interpreters/Context.h>
 #include <Server/StorageConfigParser.h>
@@ -25,7 +26,6 @@
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3WritableFile.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <fmt/compile.h>
 #include <gtest/gtest.h>

@@ -23,7 +23,6 @@
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Decode/RowCodec.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 

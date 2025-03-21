@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/Logger.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <Storages/Page/V3/PageDirectory.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
@@ -22,7 +23,6 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <gtest/gtest.h>
 

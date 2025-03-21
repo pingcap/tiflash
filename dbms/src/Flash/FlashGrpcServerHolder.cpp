@@ -15,8 +15,8 @@
 #include <Common/CPUAffinityManager.h>
 #include <Debug/MockExecutor/AstToPBUtils.h>
 #include <Flash/EstablishCall.h>
+#include <Flash/FlashGrpcServerHolder.h>
 #include <Interpreters/Context.h>
-#include <Server/FlashGrpcServerHolder.h>
 
 // In order to include grpc::SecureServerCredentials which used in
 // sslServerCredentialsWithFetcher()

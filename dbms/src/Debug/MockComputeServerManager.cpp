@@ -15,13 +15,11 @@
 #include <Common/FmtUtils.h>
 #include <Debug/MockComputeServerManager.h>
 #include <Debug/MockStorage.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <TestUtils/TiFlashTestEnv.h>
 
-#include <chrono>
-#include <thread>
 namespace DB
 {
 namespace ErrorCodes
