@@ -962,9 +962,14 @@ public:
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.
     std::pair<LookupResult, bool> ALWAYS_INLINE insert(const value_type & x)
     {
+        size_t hash_value = hash(Cell::getKey(x));
+        return insert(x, hash_value);
+    }
+
+    std::pair<LookupResult, bool> ALWAYS_INLINE insert(const value_type & x, size_t hash_value)
+    {
         std::pair<LookupResult, bool> res;
 
-        size_t hash_value = hash(Cell::getKey(x));
         if (!emplaceIfZero(Cell::getKey(x), res.first, res.second, hash_value))
         {
             emplaceNonZero(Cell::getKey(x), res.first, res.second, hash_value);
