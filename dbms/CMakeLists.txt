@@ -84,7 +84,6 @@ add_headers_and_sources(dbms src/Interpreters/SharedContexts)
 add_headers_and_sources(dbms src/Interpreters/JoinV2)
 add_headers_and_sources(dbms src/Columns)
 add_headers_and_sources(dbms src/Storages)
-add_headers_and_sources(dbms src/Storages/S3)
 add_headers_and_sources(dbms src/WindowFunctions)
 add_headers_and_sources(dbms src/TiDB/Decode)
 add_headers_and_sources(dbms src/TiDB/Collation)
@@ -92,7 +91,6 @@ add_headers_and_sources(dbms src/TiDB/Schema)
 add_headers_and_sources(dbms src/TiDB/Etcd)
 add_headers_and_sources(dbms src/TiDB)
 add_headers_and_sources(dbms src/Client)
-add_headers_only(dbms src/Flash/Coprocessor)
 add_headers_only(dbms src/Server)
 
 add_headers_and_sources(tiflash_vector_search src/VectorSearch)
@@ -185,7 +183,6 @@ endif()
 target_link_libraries (tiflash_common_io
     PUBLIC
     common
-    daemon
     string_utils
     ${LINK_LIBRARIES_ONLY_ON_X86_64}
     ${LZ4_LIBRARY}
@@ -228,24 +225,13 @@ target_link_libraries (dbms
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
     absl::synchronization
-    tiflash_contrib::aws_s3
-    tiflash_vector_search
 
-    etcdpb
     tiflash_parsers
     tiflash_common_config
-    tiflash_common_io
-    tiflash_storages_system
     tiflash_table_functions
     tiflash_functions
     tiflash_aggregate_functions
     flash_service
-    kvproto
-    kv_client
-    tipb
-    dtpb
-    RemoteTaskProto
-    PSCheckpointProto
     kvstore
     delta_merge
     fastpforlib

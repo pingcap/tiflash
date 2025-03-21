@@ -28,7 +28,7 @@ list(REMOVE_ITEM tiflash_functions_headers IFunction.h FunctionFactory.h Functio
 
 add_library(tiflash_functions ${tiflash_functions_sources})
 
-target_link_libraries(tiflash_functions PRIVATE tiflash_common_io kvproto tipb kv_client ${FARMHASH_LIBRARIES} ${METROHASH_LIBRARIES} simdjson)
+target_link_libraries(tiflash_functions PRIVATE tiflash_common_io tipb kv_client simdjson ${FARMHASH_LIBRARIES} ${METROHASH_LIBRARIES})
 
 target_include_directories (tiflash_functions BEFORE PUBLIC ${TiFlash_SOURCE_DIR}/contrib/libfarmhash)
 target_include_directories (tiflash_functions BEFORE PUBLIC ${TiFlash_SOURCE_DIR}/contrib/libmetrohash/src)

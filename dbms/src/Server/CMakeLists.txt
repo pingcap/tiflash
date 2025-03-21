@@ -44,13 +44,13 @@ add_library (tiflash-server-lib
     RaftConfigParser.cpp)
 
 target_link_libraries (tiflash-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
-target_link_libraries (tiflash-server-lib PRIVATE dbms)
+target_link_libraries (tiflash-server-lib PRIVATE dbms PUBLIC daemon)
 
 add_library (tiflash-client-lib Client.cpp)
 target_link_libraries (tiflash-client-lib PRIVATE dbms)
 
 add_library(tiflash-dttool-lib ${SPLIT_SHARED} DTTool/DTToolBench.cpp DTTool/DTToolMigrate.cpp DTTool/DTToolInspect.cpp)
-target_link_libraries(tiflash-dttool-lib PRIVATE dbms)
+target_link_libraries(tiflash-dttool-lib PRIVATE dbms PUBLIC daemon)
 
 add_library(tiflash-dttool-entry-object STATIC DTTool/DTTool.cpp)
 target_link_libraries(tiflash-dttool-entry-object PRIVATE tiflash-dttool-lib tiflash_common_io kv_client)

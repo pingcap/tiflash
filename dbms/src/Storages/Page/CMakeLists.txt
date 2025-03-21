@@ -31,7 +31,7 @@ add_headers_and_sources(page ./V3/CheckpointFile)
 add_headers_and_sources(page ./V3/WAL)
 
 add_library(page ${page_headers} ${page_sources})
-target_link_libraries(page PRIVATE dbms)
+target_link_libraries(page PUBLIC tiflash_common_io kv_client tipb etcdpb tiflash_contrib::aws_s3)
 
 add_subdirectory(workload)
 add_subdirectory(tools)

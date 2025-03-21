@@ -36,7 +36,7 @@ add_headers_and_sources(delta_merge ./Decode)
 add_headers_and_sources(delta_merge ./StoragePool)
 
 add_library(delta_merge ${delta_merge_headers} ${delta_merge_sources})
-target_link_libraries(delta_merge PRIVATE tiflash_common_io kv_client tipb kvproto etcdpb tiflash_contrib::aws_s3 page)
+target_link_libraries(delta_merge PRIVATE page storage_s3 dtpb RemoteTaskProto PSCheckpointProto PUBLIC tiflash_vector_search)
 target_include_directories(delta_merge PRIVATE "${TIFLASH_PROXY_INCLUDE_DIR}")
 
 add_subdirectory(workload)
