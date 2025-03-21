@@ -297,6 +297,7 @@ Segment::Segment( //
     , stable(stable_)
     , parent_log(parent_log_)
     , log(parent_log_->getChild(fmt::format("segment_id={} epoch={}", segment_id, epoch)))
+    , version_chain(createVersionChain(is_common_handle))
 {
     if (delta != nullptr)
         delta->resetLogger(log);
@@ -924,7 +925,7 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
     return std::make_shared<SegmentSnapshot>(
         std::move(delta_snap),
         std::move(stable_snap),
-        Logger::get(dm_context.tracing_id));
+        Logger::get(fmt::format("{} seg_id={}", dm_context.tracing_id, segment_id)));
 }
 
 // The `read_ranges` must be included by `segment_rowkey_range`. Usually this step is
@@ -1118,7 +1119,7 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
         "Finish segment create input stream, start_ts={} range_size={} ranges={}",
         start_ts,
         read_ranges.size(),
-        DB::DM::toDebugString(read_ranges));
+        read_ranges);
     return stream;
 }
 
@@ -2683,7 +2684,7 @@ Segment::ReadInfo Segment::getReadInfo(
         "snap={} {}",
         my_delta_index->toString(),
         fully_indexed,
-        DB::DM::toDebugString(read_ranges),
+        read_ranges,
         segment_snap->detailInfo(),
         simpleInfo());
 
@@ -2920,7 +2921,7 @@ std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     LOG_DEBUG(
         segment_snap->log,
         "Finish segment ensurePlace, read_ranges={} placed_items={} shared_delta_index={} my_delta_index={} {}",
-        DB::DM::toDebugString(read_ranges),
+        read_ranges,
         items.size(),
         delta_snap->getSharedDeltaIndex()->toString(),
         my_delta_index->toString(),
@@ -3154,7 +3155,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
         "Finish segment create input stream, start_ts={} range_size={} ranges={}",
         start_ts,
         read_ranges.size(),
-        DB::DM::toDebugString(read_ranges));
+        read_ranges);
 
     // `total_rows` is the rows read for building bitmap
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
@@ -3488,14 +3489,7 @@ BlockInputStreamPtr Segment::getLateMaterializationStream(
 
 RowKeyRanges Segment::shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const
 {
-    RowKeyRanges real_ranges;
-    for (const auto & read_range : read_ranges)
-    {
-        auto real_range = rowkey_range.shrink(read_range);
-        if (!real_range.none())
-            real_ranges.emplace_back(std::move(real_range));
-    }
-    return real_ranges;
+    return DB::DM::shrinkRowKeyRanges(rowkey_range, read_ranges);
 }
 
 static bool hasCacheableColumn(const ColumnDefines & columns)
