@@ -206,18 +206,6 @@ void SegmentBitmapFilterTest::checkHandle(PageIdU64 seg_id, std::string_view seq
     }
 }
 
-void SegmentBitmapFilterTest::verifyNotCleanAndDeleted(const verifyNotCleanAndDeletedOption & opt)
-{
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-    const auto & dmfile = snap->stable->getDMFiles()[0];
-    ASSERT_GT(dmfile->getPacks(), opt.pack_id) << opt.caller_line;
-    const auto & pack_stat = dmfile->getPackStats()[opt.pack_id];
-    const auto & pack_property = dmfile->getPackProperties().property()[opt.pack_id];
-    ASSERT_EQ(pack_stat.rows, opt.expected_pack_rows) << opt.caller_line;
-    ASSERT_EQ(pack_stat.not_clean, opt.expected_not_clean_rows) << opt.caller_line;
-    ASSERT_EQ(pack_property.deleted_rows(), opt.expected_deleted_rows) << opt.caller_line;
-}
-
 INSTANTIATE_TEST_CASE_P(MVCC, SegmentBitmapFilterTest, /* is_common_handle */ ::testing::Bool());
 
 TEST_P(SegmentBitmapFilterTest, InMemory1)

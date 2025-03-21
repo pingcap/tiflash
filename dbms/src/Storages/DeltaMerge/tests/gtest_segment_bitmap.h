@@ -84,15 +84,5 @@ protected:
     DMFilePackFilterResults loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges);
 
     void checkHandle(PageIdU64 seg_id, std::string_view seq_ranges, int caller_line);
-
-    struct verifyNotCleanAndDeletedOption
-    {
-        const size_t pack_id;
-        const size_t expected_pack_rows;
-        const size_t expected_not_clean_rows;
-        const size_t expected_deleted_rows;
-        const int caller_line;
-    };
-    void verifyNotCleanAndDeleted(const verifyNotCleanAndDeletedOption & opt);
 };
 } // namespace DB::DM::tests
