@@ -76,37 +76,12 @@ protected:
         std::optional<std::tuple<Int64, Int64, bool>> rowkey_range;
     };
 
-    void runTestCaseGeneric(TestCase test_case, int caller_line, const std::vector<RowID> & expected_base_versions);
+    void runTestCaseGeneric(TestCase test_case, int caller_line);
 
     template <typename HandleType>
-    void runTestCase(TestCase test_case, int caller_line, const std::vector<RowID> & expected_base_versions);
+    void runTestCase(TestCase test_case, int caller_line);
 
     DMFilePackFilterResults loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges);
-
-    struct VerifyVersionChainOption
-    {
-        const PageIdU64 seg_id;
-        const int caller_line; // For debug
-        const UInt64 read_ts = std::numeric_limits<UInt64>::max();
-        const std::optional<std::vector<RowID>> expected_base_versions;
-        const std::optional<RowKeyRanges> read_ranges;
-        const std::optional<String> expected_bitmap;
-        const DMFilePackFilterResults rs_filter_results;
-
-        String toDebugString() const
-        {
-            // Size of expected_base_versions maybe large.
-            return fmt::format(
-                "seg_id={}, caller_line={}, read_ts={}, read_ranges={}, expected_bitmap={}",
-                seg_id,
-                caller_line,
-                read_ts,
-                read_ranges,
-                expected_bitmap);
-        }
-    };
-
-    void verifyVersionChain(const VerifyVersionChainOption & opt);
 
     void checkHandle(PageIdU64 seg_id, std::string_view seq_ranges, int caller_line);
 
