@@ -86,6 +86,12 @@ public:
     }
 
     size_t getTinyDataSize(PageId) const override { RUNTIME_CHECK_MSG(false, "ColumnFileDataProviderNop cannot read"); }
+
+    static IColumnFileDataProviderPtr instance()
+    {
+        static auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
+        return empty_data_provider;
+    }
 };
 
 } // namespace DB::DM
