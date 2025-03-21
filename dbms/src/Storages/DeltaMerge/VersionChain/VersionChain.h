@@ -33,8 +33,7 @@ class ColumnFileDeleteRange;
 
 namespace tests
 {
-class SegmentBitmapFilterTest_NewHandleIndex_Test;
-class SegmentBitmapFilterTest_NewHandleIndex_CommonHandle_Test;
+class NewHandleIndexTest;
 } // namespace tests
 
 template <ExtraHandleType HandleType>
@@ -120,12 +119,11 @@ private:
         const UInt32 stable_rows,
         std::optional<DeltaValueReader> & delta_reader);
 
-    std::optional<DeltaValueReader> createDeltaValueReaderIfCommonHandle(
+    static std::optional<DeltaValueReader> createDeltaValueReaderIfCommonHandle(
         const DMContext & dm_context,
         const DeltaSnapshotPtr & delta_snap);
 
-    friend class tests::SegmentBitmapFilterTest_NewHandleIndex_Test;
-    friend class tests::SegmentBitmapFilterTest_NewHandleIndex_CommonHandle_Test;
+    friend class tests::NewHandleIndexTest;
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
