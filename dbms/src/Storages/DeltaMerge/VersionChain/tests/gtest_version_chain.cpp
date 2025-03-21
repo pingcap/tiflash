@@ -27,6 +27,7 @@ protected:
     {
         PageIdU64 seg_id = SEG_ID;
         std::string_view seg_data;
+        std::optional<std::tuple<Int64, Int64, bool>> rowkey_range;
         std::vector<RowID> expected_base_versions;
         int caller_line;
     };
@@ -34,7 +35,7 @@ protected:
     void runVersionChainTest(const TestOptions & opts)
     {
         if (!opts.seg_data.empty())
-            writeSegmentGeneric(opts.seg_data);
+            writeSegmentGeneric(opts.seg_data, opts.rowkey_range);
 
         auto [seg, snap] = getSegmentForRead(opts.seg_id);
         auto actual_base_versions = std::visit(
@@ -345,6 +346,7 @@ try
     // Packs in rowkey_range: [270, 280)|[280, 290)|[290, 300)
     runVersionChainTest(TestOptions{
         .seg_data = "d_big:[250, 1000):pack_size_10",
+        .rowkey_range = std::make_tuple(275, 295, /*including_right_boundary*/ false),
         .expected_base_versions = std::vector<RowID>(30, NotExistRowID),
         .caller_line = __LINE__,
     });
