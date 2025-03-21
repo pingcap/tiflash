@@ -171,7 +171,7 @@ public:
 
     BitmapFilterPtr search(InvertedIndexReaderPtr inverted_index, size_t size) override;
 
-    String toDebugString() override { return fmt::format("{{{}}}", values); }
+    String toDebugString() override { return fmt::format("{}", values); }
 
 private:
     std::set<T> values;
