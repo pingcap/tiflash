@@ -120,6 +120,8 @@ void BitmapFilter::logicalOr(const BitmapFilter & other)
 void BitmapFilter::logicalAnd(const BitmapFilter & other)
 {
     RUNTIME_CHECK(filter.size() == other.filter.size());
+    if (other.all_match)
+        return;
     if (all_match)
     {
         std::copy(other.filter.cbegin(), other.filter.cend(), filter.begin());
