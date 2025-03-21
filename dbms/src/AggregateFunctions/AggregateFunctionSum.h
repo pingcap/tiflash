@@ -455,9 +455,7 @@ public:
         if constexpr (IsDecimal<TResult>)
         {
             auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
-            container.resize_fill(
-                container.size() + num,
-                DecimalPaddedPODArray<TResult>(this->data(place).get(), result_scale));
+            container.resize_fill(container.size() + num, this->data(place).get());
         }
         else
         {
