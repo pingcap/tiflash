@@ -65,6 +65,7 @@
 #include <Server/BgStorageInit.h>
 #include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
+#include <Server/FlashGrpcServerHolder.h>
 #include <Server/MetricsPrometheus.h>
 #include <Server/RaftConfigParser.h>
 #include <Server/Server.h>

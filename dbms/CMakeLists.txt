@@ -397,7 +397,7 @@ if (ENABLE_TESTS)
         dbms
         test_util_bench_main
         tiflash_functions
-        server_for_test
+        grpc_server_holder
         delta_merge
         tiflash_aggregate_functions
         kvstore)

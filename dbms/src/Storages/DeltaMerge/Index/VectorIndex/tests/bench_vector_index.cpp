@@ -15,9 +15,9 @@
 // Comment out this file for too many compilation issues.
 // If you resolve these compilation issues, remove these comments.
 #if 0
+#include <Debug/TiFlashTestEnv.h>
 #include <Storages/DeltaMerge/Index/VectorIndexHNSW/Index.h>
 #include <Storages/DeltaMerge/tests/bench_vector_index_utils.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <gtest/gtest.h>
 
 namespace DB::DM::bench

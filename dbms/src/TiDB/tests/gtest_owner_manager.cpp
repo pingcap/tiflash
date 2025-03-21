@@ -13,9 +13,9 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Poco/Environment.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Etcd/Client.h>
 #include <TiDB/OwnerInfo.h>
 #include <TiDB/OwnerManager.h>
