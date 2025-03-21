@@ -35,6 +35,21 @@ public:
         std::transform(results.begin(), results.end(), results.begin(), [](RSResult result) { return !result; });
         return results;
     }
+
+    ColumnRangePtr buildSets(const LocalIndexInfosSnapshot & index_info) override
+    {
+        auto less = IntegerSet::createLessRangeSet(attr.type->getTypeId(), value, /*not_included=*/true);
+        auto greater = IntegerSet::createGreaterRangeSet(attr.type->getTypeId(), value, /*not_included=*/true);
+        if (less && greater)
+        {
+            auto iter = std::find_if(index_info->begin(), index_info->end(), [&](const auto & info) {
+                return info.column_id == attr.col_id && info.kind == TiDB::ColumnarIndexKind::Inverted;
+            });
+            if (iter != index_info->end())
+                return SingleColumnRange::create(iter->column_id, iter->index_id, less->unionWith(greater));
+        }
+        return UnsupportedColumnRange::create();
+    }
 };
 
 } // namespace DB::DM

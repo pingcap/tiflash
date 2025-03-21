@@ -97,6 +97,42 @@ void BitmapFilter::rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) con
     }
 }
 
+void BitmapFilter::merge(const BitmapFilter & other)
+{
+    RUNTIME_CHECK(filter.size() == other.filter.size());
+    if (all_match)
+    {
+        return;
+    }
+    for (UInt32 i = 0; i < filter.size(); ++i)
+    {
+        filter[i] = filter[i] || other.filter[i];
+    }
+}
+
+void BitmapFilter::intersect(const BitmapFilter & other)
+{
+    RUNTIME_CHECK(filter.size() == other.filter.size());
+    if (all_match)
+    {
+        std::copy(other.filter.cbegin(), other.filter.cend(), filter.begin());
+        all_match = other.all_match;
+        return;
+    }
+    for (UInt32 i = 0; i < filter.size(); ++i)
+    {
+        filter[i] = filter[i] && other.filter[i];
+    }
+    all_match = all_match && other.all_match;
+}
+
+void BitmapFilter::append(const BitmapFilter & other)
+{
+    filter.reserve(filter.size() + other.filter.size());
+    std::copy(other.filter.cbegin(), other.filter.cend(), std::back_inserter(filter));
+    all_match = all_match && other.all_match;
+}
+
 void BitmapFilter::runOptimize()
 {
     all_match = std::find(filter.begin(), filter.end(), static_cast<UInt8>(false)) == filter.end();
@@ -105,14 +141,14 @@ void BitmapFilter::runOptimize()
 String BitmapFilter::toDebugString() const
 {
     String s(filter.size(), '1');
-    for (UInt32 i = 0; i < filter.size(); i++)
+    for (UInt32 i = 0; i < filter.size(); ++i)
     {
         if (!filter[i])
         {
             s[i] = '0';
         }
     }
-    return fmt::format("{}", s);
+    return s;
 }
 
 size_t BitmapFilter::count() const
