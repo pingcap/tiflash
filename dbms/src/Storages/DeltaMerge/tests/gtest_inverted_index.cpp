@@ -151,6 +151,7 @@ public:
                 viewer->search(bitmap_filter, key);
                 ASSERT_EQ(bitmap_filter->count(), expected_count);
             };
+
             std::vector<std::thread> threads;
             {
                 for (UInt32 i = 0; i < 10; ++i)
