@@ -16,9 +16,12 @@
 
 #include <Common/FieldVisitors.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/Filter/ColumnRange.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/RSIndex.h>
 #include <Storages/DeltaMerge/Index/RSResult.h>
+#include <TiDB/Schema/TiDB.h>
 
 namespace DB
 {
@@ -51,6 +54,8 @@ public:
     virtual RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) = 0;
 
     virtual ColIds getColumnIDs() = 0;
+
+    virtual ColumnRangePtr buildSets(const LocalIndexInfosSnapshot & index_info) = 0;
 
     static RSOperatorPtr build(
         const std::unique_ptr<DAGQueryInfo> & dag_query,

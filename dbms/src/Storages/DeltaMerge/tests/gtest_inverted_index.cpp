@@ -114,7 +114,7 @@ public:
             };
             std::mt19937 generator;
             {
-                std::uniform_int_distribution<T> distribution(0, block_count);
+                std::uniform_int_distribution<T> distribution(0, block_count - 1);
                 for (UInt32 i = 0; i < 10; ++i)
                     v_search(distribution(generator), block_size);
             }
@@ -151,26 +151,28 @@ public:
                 viewer->search(bitmap_filter, key);
                 ASSERT_EQ(bitmap_filter->count(), expected_count);
             };
-            std::mt19937 generator;
-            std::uniform_int_distribution<T> distribution_bc(0, block_count);
             std::vector<std::thread> threads;
             {
                 for (UInt32 i = 0; i < 10; ++i)
                 {
-                    threads.emplace_back([&v_search, &generator, &distribution_bc]() {
-                        auto random_v = distribution_bc(generator);
+                    threads.emplace_back([&v_search]() {
+                        std::mt19937 generator(std::random_device{}());
+                        std::uniform_int_distribution<T> distribution(0, block_count - 1);
+                        auto random_v = distribution(generator);
                         v_search(random_v, block_size);
                     });
                 }
             }
-            std::uniform_int_distribution<T> distribution_fullrange(
-                std::numeric_limits<T>::min(),
-                std::numeric_limits<T>::max());
+
             {
                 for (UInt32 i = 0; i < 10; ++i)
                 {
-                    threads.emplace_back([&v_search, &generator, &distribution_fullrange]() {
-                        auto random_v = distribution_fullrange(generator);
+                    threads.emplace_back([&v_search]() {
+                        std::mt19937 generator(std::random_device{}());
+                        std::uniform_int_distribution<T> distribution(
+                            std::numeric_limits<T>::min(),
+                            std::numeric_limits<T>::max());
+                        auto random_v = distribution(generator);
                         v_search(random_v, (random_v >= block_count || random_v < 0) ? 0 : block_size);
                     });
                 }

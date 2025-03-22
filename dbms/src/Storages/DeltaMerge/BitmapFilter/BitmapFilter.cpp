@@ -97,6 +97,44 @@ void BitmapFilter::rangeAnd(IColumn::Filter & f, UInt32 start, UInt32 limit) con
     }
 }
 
+void BitmapFilter::logicalOr(const BitmapFilter & other)
+{
+    RUNTIME_CHECK(filter.size() == other.filter.size());
+    if (all_match)
+    {
+        return;
+    }
+    if (other.all_match)
+    {
+        filter.assign(filter.size(), static_cast<UInt8>(true));
+        all_match = true;
+        return;
+    }
+    for (UInt32 i = 0; i < filter.size(); i++)
+    {
+        filter[i] = filter[i] || other.filter[i];
+    }
+    all_match = all_match || other.all_match;
+}
+
+void BitmapFilter::logicalAnd(const BitmapFilter & other)
+{
+    RUNTIME_CHECK(filter.size() == other.filter.size());
+    if (other.all_match)
+        return;
+    if (all_match)
+    {
+        std::copy(other.filter.cbegin(), other.filter.cend(), filter.begin());
+        all_match = other.all_match;
+        return;
+    }
+    for (UInt32 i = 0; i < filter.size(); i++)
+    {
+        filter[i] = filter[i] && other.filter[i];
+    }
+    all_match = all_match && other.all_match;
+}
+
 void BitmapFilter::runOptimize()
 {
     all_match = std::find(filter.begin(), filter.end(), static_cast<UInt8>(false)) == filter.end();
