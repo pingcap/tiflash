@@ -498,7 +498,9 @@ void ColumnString::countSerializeByteSizeForCmp(
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
-    // Skip decoding collator for bin collator so we can avoid counting code points, which may be slow.
+    // For now, sortKeyReservedSpaceMultipler() of bin collator(padding or non-padding) is 1.
+    // So bin collator will skip to decode collator.
+    // And other collators will first count code point then compute the needed memory.
     if (collator != nullptr && collator->sortKeyReservedSpaceMultipler() > 1)
     {
         if (nullmap != nullptr)
@@ -1298,7 +1300,7 @@ void ColumnString::deserializeAndInsertFromPosImpl(
         pos[i] += sizeof(UInt32);
 
         chars.resize(char_size + str_size);
-        memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
+        inline_memcpy(&chars[char_size], pos[i], str_size);
         char_size += str_size;
         offsets[prev_size + i] = char_size;
         pos[i] += str_size;
@@ -1357,7 +1359,7 @@ void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
                 pos[i] += sizeof(UInt32);
 
                 chars.resize(char_size + str_size);
-                memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
+                inline_memcpy(&chars[char_size], pos[i], str_size);
 
                 char_size += str_size;
                 offsets[j] = char_size;
@@ -1379,7 +1381,7 @@ void ColumnString::deserializeAndInsertFromPosForColumnArrayImpl(
                 offsets[j] = char_size;
             }
             chars.resize(char_size);
-            memcpySmallAllowReadWriteOverflow15(&chars[prev_char_size], pos[i], char_size - prev_char_size);
+            inline_memcpy(&chars[prev_char_size], pos[i], char_size - prev_char_size);
             pos[i] += char_size - prev_char_size;
         }
     }

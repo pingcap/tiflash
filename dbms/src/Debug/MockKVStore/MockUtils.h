@@ -14,90 +14,60 @@
 
 #pragma once
 
+#include <Parsers/IAST_fwd.h>
+#include <RaftStoreProxyFFI/ProxyFFI.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 
+namespace DB
+{
+class KVStore;
+class TMTContext;
+} // namespace DB
+
 namespace DB::RegionBench
 {
+metapb::Peer createPeer(UInt64 id, bool);
 
-
-inline metapb::Peer createPeer(UInt64 id, bool)
-{
-    metapb::Peer peer;
-    peer.set_id(id);
-    return peer;
-}
-
-inline metapb::Region createRegionInfo(
-    UInt64 id,
-    const std::string start_key,
-    const std::string end_key,
+metapb::Region createMetaRegion( //
+    RegionID region_id,
+    TableID table_id,
+    HandleID start,
+    HandleID end,
     std::optional<metapb::RegionEpoch> maybe_epoch = std::nullopt,
-    std::optional<std::vector<metapb::Peer>> maybe_peers = std::nullopt)
-{
-    metapb::Region region_info;
-    region_info.set_id(id);
-    region_info.set_start_key(start_key);
-    region_info.set_end_key(end_key);
-    if (maybe_epoch)
-    {
-        *region_info.mutable_region_epoch() = (maybe_epoch.value());
-    }
-    else
-    {
-        region_info.mutable_region_epoch()->set_version(5);
-        region_info.mutable_region_epoch()->set_version(6);
-    }
-    if (maybe_peers)
-    {
-        const auto & peers = maybe_peers.value();
-        for (const auto & peer : peers)
-        {
-            *(region_info.mutable_peers()->Add()) = peer;
-        }
-    }
-    else
-    {
-        *(region_info.mutable_peers()->Add()) = createPeer(1, true);
-        *(region_info.mutable_peers()->Add()) = createPeer(2, false);
-    }
+    std::optional<std::vector<metapb::Peer>> maybe_peers = std::nullopt);
 
-    return region_info;
-}
+metapb::Region createMetaRegionCommonHandle( //
+    RegionID region_id,
+    const std::string & start_key,
+    const std::string & end_key,
+    std::optional<metapb::RegionEpoch> maybe_epoch = std::nullopt,
+    std::optional<std::vector<metapb::Peer>> maybe_peers = std::nullopt);
 
-inline RegionMeta createRegionMeta(
+/// Utils to create a RegionPtr for testing.
+/// - If your tests don't care about the raft-index in the created RegionPtr,
+///   use the following `makeRegionForTable`/`makeRegionForRange`/`makeRegion`.
+/// - If raft-index matters, try `MockTiKV::instance().{createRegion,createRegionCommonHandle}`
+
+RegionPtr makeRegionForTable(
+    UInt64 region_id,
+    TableID table_id,
+    HandleID start,
+    HandleID end,
+    const TiFlashRaftProxyHelper * proxy_helper = nullptr);
+
+RegionPtr makeRegionForRange(
     UInt64 id,
-    DB::TableID table_id,
-    std::optional<raft_serverpb::RaftApplyState> apply_state = std::nullopt)
-{
-    return RegionMeta(
-        /*peer=*/createPeer(31, true),
-        /*region=*/createRegionInfo(id, RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 300)),
-        /*apply_state_=*/apply_state.value_or(initialApplyState()));
-}
+    std::string start_key,
+    std::string end_key,
+    const TiFlashRaftProxyHelper * proxy_helper = nullptr);
 
-inline RegionPtr makeRegion(
-    UInt64 id,
-    const std::string start_key,
-    const std::string end_key,
-    const TiFlashRaftProxyHelper * proxy_helper = nullptr)
-{
-    return std::make_shared<Region>(
-        RegionMeta(
-            createPeer(2, true),
-            createRegionInfo(id, std::move(start_key), std::move(end_key)),
-            initialApplyState()),
-        proxy_helper);
-}
-
-inline RegionPtr makeRegion(RegionMeta && meta)
-{
-    return std::make_shared<Region>(std::move(meta), nullptr);
-}
+RegionPtr makeRegion(RegionMeta && meta);
 
 // Generates a lock value which fills all fields, only for test use.
-inline TiKVValue encodeFullLockCfValue(
+TiKVValue encodeFullLockCfValue(
     UInt8 lock_type,
     const String & primary,
     Timestamp ts,
@@ -108,58 +78,77 @@ inline TiKVValue encodeFullLockCfValue(
     uint64_t txn_size,
     const std::vector<std::string> & async_commit,
     const std::vector<uint64_t> & rollback,
-    UInt64 generation = 0)
-{
-    auto lock_value = RecordKVFormat::encodeLockCfValue(lock_type, primary, ts, ttl, short_value, min_commit_ts);
-    WriteBufferFromOwnString res;
-    res.write(lock_value.getStr().data(), lock_value.getStr().size());
-    {
-        res.write(RecordKVFormat::MIN_COMMIT_TS_PREFIX);
-        RecordKVFormat::encodeUInt64(min_commit_ts, res);
-    }
-    {
-        res.write(RecordKVFormat::FOR_UPDATE_TS_PREFIX);
-        RecordKVFormat::encodeUInt64(for_update_ts, res);
-    }
-    {
-        res.write(RecordKVFormat::TXN_SIZE_PREFIX);
-        RecordKVFormat::encodeUInt64(txn_size, res);
-    }
-    {
-        res.write(RecordKVFormat::ROLLBACK_TS_PREFIX);
-        TiKV::writeVarUInt(rollback.size(), res);
-        for (auto ts : rollback)
-        {
-            RecordKVFormat::encodeUInt64(ts, res);
-        }
-    }
-    {
-        res.write(RecordKVFormat::ASYNC_COMMIT_PREFIX);
-        TiKV::writeVarUInt(async_commit.size(), res);
-        for (const auto & s : async_commit)
-        {
-            writeVarInt(s.size(), res);
-            res.write(s.data(), s.size());
-        }
-    }
-    {
-        res.write(RecordKVFormat::LAST_CHANGE_PREFIX);
-        RecordKVFormat::encodeUInt64(12345678, res);
-        TiKV::writeVarUInt(87654321, res);
-    }
-    {
-        res.write(RecordKVFormat::TXN_SOURCE_PREFIX_FOR_LOCK);
-        TiKV::writeVarUInt(876543, res);
-    }
-    {
-        res.write(RecordKVFormat::PESSIMISTIC_LOCK_WITH_CONFLICT_PREFIX);
-    }
-    if (generation > 0)
-    {
-        res.write(RecordKVFormat::GENERATION_PREFIX);
-        RecordKVFormat::encodeUInt64(generation, res);
-    }
-    return TiKVValue(res.releaseStr());
-}
+    UInt64 generation = 0);
+
+void setupPutRequest(raft_cmdpb::Request * req, const std::string & cf, const TiKVKey & key, const TiKVValue & value);
+void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
+
+void encodeRow(const TiDB::TableInfo & table_info, const std::vector<Field> & fields, WriteBuffer & ss);
+
+void insert(
+    const TiDB::TableInfo & table_info,
+    RegionID region_id,
+    HandleID handle_id,
+    ASTs::const_iterator begin,
+    ASTs::const_iterator end,
+    Context & context,
+    const std::optional<std::tuple<Timestamp, UInt8>> & tso_del = {});
+
+void addRequestsToRaftCmd(
+    raft_cmdpb::RaftCmdRequest & request,
+    const TiKVKey & key,
+    const TiKVValue & value,
+    UInt64 prewrite_ts,
+    UInt64 commit_ts,
+    bool del,
+    const String & pk = "pk");
+
+void concurrentBatchInsert(
+    const TiDB::TableInfo & table_info,
+    Int64 concurrent_num,
+    Int64 flush_num,
+    Int64 batch_num,
+    UInt64 min_strlen,
+    UInt64 max_strlen,
+    Context & context);
+
+void remove(const TiDB::TableInfo & table_info, RegionID region_id, HandleID handle_id, Context & context);
+
+Int64 concurrentRangeOperate(
+    const TiDB::TableInfo & table_info,
+    HandleID start_handle,
+    HandleID end_handle,
+    Context & context,
+    Int64 magic_num,
+    bool del);
+
+Field convertField(const TiDB::ColumnInfo & column_info, const Field & field);
+
+TableID getTableID(
+    Context & context,
+    const std::string & database_name,
+    const std::string & table_name,
+    const std::string & partition_id);
+
+const TiDB::TableInfo & getTableInfo(Context & context, const String & database_name, const String & table_name);
+
+EngineStoreApplyRes applyWriteRaftCmd(
+    KVStore & kvstore,
+    raft_cmdpb::RaftCmdRequest && request,
+    UInt64 region_id,
+    UInt64 index,
+    UInt64 term,
+    TMTContext & tmt,
+    ::DB::DM::WriteResult * write_result_ptr = nullptr);
+
+void handleApplySnapshot(
+    KVStore & kvstore,
+    metapb::Region && region,
+    uint64_t peer_id,
+    SSTViewVec,
+    uint64_t index,
+    uint64_t term,
+    std::optional<uint64_t>,
+    TMTContext & tmt);
 
 } // namespace DB::RegionBench

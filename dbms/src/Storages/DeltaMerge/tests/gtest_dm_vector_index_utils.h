@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/InputStream.h>
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -66,6 +67,28 @@ public:
         return wb.str();
     }
 
+    struct AnnQueryInfoTopKOptions
+    {
+        std::vector<float> vec;
+        UInt32 top_k;
+        Int64 column_id = 100; // vec_column_id
+        Int64 index_id = 0;
+        tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::L2;
+    };
+
+    static ANNQueryInfoPtr annQueryInfoTopK(AnnQueryInfoTopKOptions options)
+    {
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_query_type(tipb::ANNQueryType::OrderBy);
+        ann_query_info->set_column_id(options.column_id);
+        ann_query_info->set_distance_metric(options.distance_metric);
+        ann_query_info->set_top_k(options.top_k);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32(options.vec));
+        if (options.index_id != 0)
+            ann_query_info->set_index_id(options.index_id);
+        return ann_query_info;
+    }
+
     ColumnDefine cdVec() const
     {
         // When used in read, no need to assign vector_index.
@@ -82,17 +105,24 @@ public:
             .kind = tipb::VectorIndexKind::HNSW,
             .dimension = 1,
             .distance_metric = tipb::VectorDistanceMetric::L2,
-        })
+        }) const
     {
         const LocalIndexInfos index_infos = LocalIndexInfos{
-            LocalIndexInfo{
-                .kind = TiDB::ColumnarIndexKind::Vector,
-                .index_id = EmptyIndexID,
-                .column_id = vec_column_id,
-                .def_vector_index = std::make_shared<TiDB::VectorIndexDefinition>(definition),
-            },
+            LocalIndexInfo(EmptyIndexID, vec_column_id, std::make_shared<TiDB::VectorIndexDefinition>(definition)),
         };
         return std::make_shared<LocalIndexInfos>(index_infos);
+    }
+
+    static auto wrapVectorStream(
+        const VectorIndexStreamCtxPtr & ctx,
+        const SkippableBlockInputStreamPtr & inner,
+        const BitmapFilterPtr & filter)
+    {
+        auto stream = ConcatSkippableBlockInputStream<false>::create(
+            /* inputs */ {inner},
+            /* rows */ {filter->size()},
+            /* ScanContext */ nullptr);
+        return VectorIndexInputStream::create(ctx, filter, stream);
     }
 };
 

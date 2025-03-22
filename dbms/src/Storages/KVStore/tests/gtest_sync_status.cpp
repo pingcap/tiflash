@@ -15,6 +15,7 @@
 #include <Common/FailPoint.h>
 #include <Common/StringUtils/StringRefUtils.h>
 #include <Databases/DatabaseTiFlash.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterCreateQuery.h>
 #include <Interpreters/InterpreterDropQuery.h>
@@ -29,7 +30,6 @@
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TMTStorages.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
@@ -183,8 +183,7 @@ void createRegions(size_t region_num, TableID table_id)
     auto & tmt = TiFlashTestEnv::getContext()->getTMTContext();
     for (size_t i = 0; i < region_num; i++)
     {
-        auto region
-            = makeRegion(i, RecordKVFormat::genKey(table_id, i), RecordKVFormat::genKey(table_id, i + region_num + 10));
+        auto region = RegionBench::makeRegionForTable(i, table_id, i, i + region_num + 10);
         tmt.getRegionTable().shrinkRegionRange(*region);
     }
 }

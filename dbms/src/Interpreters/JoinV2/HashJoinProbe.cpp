@@ -13,15 +13,18 @@
 // limitations under the License.
 
 #include <Columns/ColumnUtils.h>
+#include <Columns/countBytesInFilter.h>
+#include <Columns/filterColumn.h>
 #include <Common/PODArray.h>
 #include <Common/Stopwatch.h>
 #include <DataStreams/materializeBlock.h>
 #include <Interpreters/JoinUtils.h>
+#include <Interpreters/JoinV2/HashJoin.h>
 #include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/NullableUtils.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 
-#include "Columns/IColumn.h"
-#include "Parsers/ASTTablesInSelectQuery.h"
+#include <ext/scope_guard.h>
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 ASSERT_USE_AVX2_COMPILE_FLAG
@@ -32,9 +35,18 @@ namespace DB
 
 using enum ASTTableJoin::Kind;
 
-bool JoinProbeContext::isCurrentProbeFinished() const
+bool JoinProbeContext::isProbeFinished() const
 {
-    return start_row_idx >= rows && prefetch_active_states == 0 && rows_is_matched.empty();
+    return start_row_idx >= rows
+        // For prefetching
+        && prefetch_active_states == 0;
+}
+
+bool JoinProbeContext::isAllFinished() const
+{
+    return isProbeFinished()
+        // For left outer with other conditions
+        && rows_not_matched.empty();
 }
 
 void JoinProbeContext::resetBlock(Block & block_)
@@ -45,7 +57,6 @@ void JoinProbeContext::resetBlock(Block & block_)
     start_row_idx = 0;
     current_row_ptr = nullptr;
     current_row_is_matched = false;
-    rows_is_matched.clear();
 
     prefetch_active_states = 0;
 
@@ -71,7 +82,12 @@ void JoinProbeContext::prepareForHashProbe(
         return;
 
     key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names);
-    /// Some useless columns maybe key columns so they must be removed after extracting key columns.
+    /// Keys with NULL value in any column won't join to anything.
+    extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
+    /// reuse null_map to record the filtered rows, the rows contains NULL or does not
+    /// match the join filter won't join to anything
+    recordFilteredRows(block, filter_column, null_map_holder, null_map);
+    /// Some useless columns maybe key columns and filter column so they must be removed after extracting key columns and filter column.
     for (size_t pos = 0; pos < block.columns();)
     {
         if (!probe_output_name_set.contains(block.getByPosition(pos).name))
@@ -79,12 +95,6 @@ void JoinProbeContext::prepareForHashProbe(
         else
             ++pos;
     }
-
-    /// Keys with NULL value in any column won't join to anything.
-    extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
-    /// reuse null_map to record the filtered rows, the rows contains NULL or does not
-    /// match the join filter won't join to anything
-    recordFilteredRows(block, filter_column, null_map_holder, null_map);
 
     if unlikely (!key_getter)
         key_getter = createHashJoinKeyGetter(method, collators);
@@ -102,306 +112,384 @@ void JoinProbeContext::prepareForHashProbe(
 
     assertBlocksHaveEqualStructure(block, sample_block_pruned, "Join Probe");
 
-    if ((kind == LeftOuter || kind == Semi || kind == Anti) && has_other_condition)
+    if (kind == LeftOuter && has_other_condition)
     {
-        rows_is_matched.clear();
-        rows_is_matched.resize_fill_zero(block.rows());
+        rows_not_matched.clear();
+        rows_not_matched.resize_fill(block.rows(), 1);
+        not_matched_offsets_idx = -1;
+        not_matched_offsets.clear();
     }
 
     is_prepared = true;
 }
 
-#define PREFETCH_READ(ptr) __builtin_prefetch((ptr), 0 /* rw==read */, 3 /* locality */)
-
-/// The implemtation of prefetching in join probe process is inspired by a paper named
-/// `Asynchronous Memory Access Chaining` in vldb-15.
-/// Ref: https://www.vldb.org/pvldb/vol9/p252-kocberber.pdf
-enum class ProbePrefetchStage : UInt8
+template <bool has_null_key, bool has_other_condition, bool late_materialization>
+struct ProbeAdder<Inner, has_null_key, has_other_condition, late_materialization>
 {
-    None,
-    FindHeader,
-    FindNext,
-};
+    static constexpr bool need_not_matched = false;
 
-template <typename KeyGetter>
-struct ProbePrefetchState
-{
-    using KeyGetterType = typename KeyGetter::Type;
-    using KeyType = typename KeyGetterType::KeyType;
-    using HashValueType = typename KeyGetter::HashValueType;
-
-    ProbePrefetchStage stage = ProbePrefetchStage::None;
-    bool is_matched = false;
-    UInt16 hash_tag = 0;
-    HashValueType hash = 0;
-    size_t index = 0;
-    union
-    {
-        RowPtr ptr = nullptr;
-        std::atomic<RowPtr> * pointer_ptr;
-    };
-    KeyType key{};
-};
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-class JoinProbeBlockHelper
-{
-public:
-    using KeyGetterType = typename KeyGetter::Type;
-    using KeyType = typename KeyGetterType::KeyType;
-    using Hash = typename KeyGetter::Hash;
-    using HashValueType = typename KeyGetter::HashValueType;
-
-    JoinProbeBlockHelper(
-        JoinProbeContext & context,
+    static bool ALWAYS_INLINE addMatched(
+        JoinProbeBlockHelper & helper,
+        JoinProbeContext &,
         JoinProbeWorkerData & wd,
-        HashJoinKeyMethod method,
-        ASTTableJoin::Kind kind,
-        const JoinNonEqualConditions & non_equal_conditions,
-        const HashJoinSettings & settings,
-        const HashJoinPointerTable & pointer_table,
-        const HashJoinRowLayout & row_layout,
         MutableColumns & added_columns,
-        size_t added_rows)
-        : context(context)
-        , wd(wd)
-        , method(method)
-        , kind(kind)
-        , non_equal_conditions(non_equal_conditions)
-        , settings(settings)
-        , pointer_table(pointer_table)
-        , row_layout(row_layout)
-        , added_columns(added_columns)
-        , added_rows(added_rows)
+        size_t idx,
+        size_t & current_offset,
+        RowPtr row_ptr,
+        size_t ptr_offset)
     {
-        wd.insert_batch.clear();
-        wd.insert_batch.reserve(settings.probe_insert_batch_size);
-        wd.selective_offsets.clear();
-        wd.selective_offsets.reserve(settings.max_block_size);
-        if constexpr (late_materialization)
-        {
-            wd.row_ptrs_for_lm.clear();
-            wd.row_ptrs_for_lm.reserve(settings.max_block_size);
-        }
-
-        if (pointer_table.enableProbePrefetch() && !context.prefetch_states)
-        {
-            context.prefetch_states = decltype(context.prefetch_states)(
-                static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
-                [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
-        }
-
-        if constexpr (late_materialization)
-        {
-            RUNTIME_CHECK(
-                added_columns.size()
-                == row_layout.raw_required_key_column_indexes.size()
-                    + row_layout.other_required_count_for_other_condition);
-        }
-        else
-        {
-            RUNTIME_CHECK(
-                added_columns.size()
-                == row_layout.raw_required_key_column_indexes.size() + row_layout.other_required_column_indexes.size());
-        }
+        ++current_offset;
+        wd.selective_offsets.push_back(idx);
+        helper.insertRowToBatch<has_null_key, late_materialization>(wd, added_columns, row_ptr + ptr_offset);
+        return current_offset >= helper.settings.max_block_size;
     }
 
-    void joinProbeBlockImpl();
-
-private:
-    void NO_INLINE joinProbeBlockInner();
-    void NO_INLINE joinProbeBlockInnerPrefetch();
-
-    void NO_INLINE joinProbeBlockLeftOuter();
-    void NO_INLINE joinProbeBlockLeftOuterPrefetch();
-
-    void NO_INLINE joinProbeBlockSemi();
-    void NO_INLINE joinProbeBlockSemiPrefetch();
-
-    void NO_INLINE joinProbeBlockAnti();
-    void NO_INLINE joinProbeBlockAntiPrefetch();
-
-    void NO_INLINE joinProbeBlockRightOuter();
-    void NO_INLINE joinProbeBlockRightOuterPrefetch();
-
-    void NO_INLINE joinProbeBlockRightSemi();
-    void NO_INLINE joinProbeBlockRightSemiPrefetch();
-
-    void NO_INLINE joinProbeBlockRightAnti();
-    void NO_INLINE joinProbeBlockRightAntiPrefetch();
-
-    bool ALWAYS_INLINE joinKeyIsEqual(
-        KeyGetterType & key_getter,
-        const KeyType & key1,
-        const KeyType & key2,
-        HashValueType hash1,
-        RowPtr row_ptr) const
+    static bool ALWAYS_INLINE
+    addNotMatched(JoinProbeBlockHelper &, JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &)
     {
-        if constexpr (KeyGetterType::joinKeyCompareHashFirst())
-        {
-            auto hash2 = unalignedLoad<HashValueType>(row_ptr + sizeof(RowPtr));
-            if (hash1 != hash2)
-                return false;
-        }
-        return key_getter.joinKeyIsEqual(key1, key2);
+        return false;
     }
 
-    void ALWAYS_INLINE insertRowToBatch(KeyGetterType & key_getter, RowPtr row_ptr, const KeyType & key) const
+    static void flush(JoinProbeBlockHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
-        wd.insert_batch.push_back(row_ptr + key_getter.getRequiredKeyOffset(key));
-        flushBatchIfNecessary<false>();
+        helper.flushBatchIfNecessary<has_null_key, late_materialization, true>(wd, added_columns);
+        helper.fillNullMapWithZero<has_null_key>(added_columns);
     }
-
-    template <bool force>
-    void ALWAYS_INLINE flushBatchIfNecessary() const
-    {
-        if constexpr (!force)
-        {
-            if likely (wd.insert_batch.size() < settings.probe_insert_batch_size)
-                return;
-        }
-        if constexpr (late_materialization)
-        {
-            size_t idx = 0;
-            for (auto [_, is_nullable] : row_layout.raw_required_key_column_indexes)
-            {
-                IColumn * column = added_columns[idx].get();
-                if (has_null_map && is_nullable)
-                    column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
-                column->deserializeAndInsertFromPos(wd.insert_batch, true);
-                ++idx;
-            }
-            for (size_t i = 0; i < row_layout.other_required_count_for_other_condition; ++i)
-                added_columns[idx++]->deserializeAndInsertFromPos(wd.insert_batch, true);
-
-            wd.row_ptrs_for_lm.insert(wd.insert_batch.begin(), wd.insert_batch.end());
-        }
-        else
-        {
-            for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
-            {
-                IColumn * column = added_columns[column_index].get();
-                if (has_null_map && is_nullable)
-                    column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-                column->deserializeAndInsertFromPos(wd.insert_batch, true);
-            }
-            for (auto [column_index, _] : row_layout.other_required_column_indexes)
-                added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch, true);
-        }
-
-        if constexpr (force)
-        {
-            if constexpr (late_materialization)
-            {
-                size_t idx = 0;
-                for (auto [_, is_nullable] : row_layout.raw_required_key_column_indexes)
-                {
-                    IColumn * column = added_columns[idx].get();
-                    if (has_null_map && is_nullable)
-                        column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
-                    column->flushNTAlignBuffer();
-                    ++idx;
-                }
-                for (size_t i = 0; i < row_layout.other_required_count_for_other_condition; ++i)
-                    added_columns[idx++]->flushNTAlignBuffer();
-            }
-            else
-            {
-                for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
-                {
-                    IColumn * column = added_columns[column_index].get();
-                    if (has_null_map && is_nullable)
-                        column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-                    column->flushNTAlignBuffer();
-                }
-                for (auto [column_index, _] : row_layout.other_required_column_indexes)
-                    added_columns[column_index]->flushNTAlignBuffer();
-            }
-        }
-
-        wd.insert_batch.clear();
-    }
-
-    void ALWAYS_INLINE fillNullMapWithZero(size_t size) const
-    {
-        if constexpr (has_null_map)
-        {
-            for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
-            {
-                if (is_nullable)
-                {
-                    auto & null_map_vec
-                        = static_cast<ColumnNullable &>(*added_columns[column_index]).getNullMapColumn().getData();
-                    null_map_vec.resize_fill_zero(null_map_vec.size() + size);
-                }
-            }
-        }
-    }
-
-private:
-    JoinProbeContext & context;
-    JoinProbeWorkerData & wd;
-    const HashJoinKeyMethod method;
-    const ASTTableJoin::Kind kind;
-    const JoinNonEqualConditions & non_equal_conditions;
-    const HashJoinSettings & settings;
-    const HashJoinPointerTable & pointer_table;
-    const HashJoinRowLayout & row_layout;
-    MutableColumns & added_columns;
-    size_t added_rows;
 };
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockImpl()
+template <bool has_null_key, bool has_other_condition, bool late_materialization>
+struct ProbeAdder<LeftOuter, has_null_key, has_other_condition, late_materialization>
 {
-#define CALL(JoinType)                            \
-    {                                             \
-        if (pointer_table.enableProbePrefetch())  \
-            joinProbeBlock##JoinType##Prefetch(); \
-        else                                      \
-            joinProbeBlock##JoinType();           \
+    static constexpr bool need_not_matched = !has_other_condition;
+
+    static bool ALWAYS_INLINE addMatched(
+        JoinProbeBlockHelper & helper,
+        JoinProbeContext &,
+        JoinProbeWorkerData & wd,
+        MutableColumns & added_columns,
+        size_t idx,
+        size_t & current_offset,
+        RowPtr row_ptr,
+        size_t ptr_offset)
+    {
+        ++current_offset;
+        wd.selective_offsets.push_back(idx);
+        helper.insertRowToBatch<has_null_key, late_materialization>(wd, added_columns, row_ptr + ptr_offset);
+        return current_offset >= helper.settings.max_block_size;
     }
 
-    if (kind == Inner)
-        CALL(Inner)
-    else if (kind == LeftOuter)
-        CALL(LeftOuter)
-    else if (kind == Semi)
-        CALL(Semi)
-    else if (kind == Anti)
-        CALL(Anti)
-    else if (kind == RightOuter)
-        CALL(RightOuter)
-    else if (kind == RightSemi)
-        CALL(RightSemi)
-    else if (kind == RightAnti)
-        CALL(RightAnti)
-    else
-        throw Exception("Logical error: unknown combination of JOIN", ErrorCodes::LOGICAL_ERROR);
+    static bool ALWAYS_INLINE addNotMatched(
+        JoinProbeBlockHelper & helper,
+        JoinProbeContext &,
+        JoinProbeWorkerData & wd,
+        MutableColumns &,
+        size_t idx,
+        size_t & current_offset)
+    {
+        if constexpr (!has_other_condition)
+        {
+            ++current_offset;
+            wd.not_matched_selective_offsets.push_back(idx);
+            return current_offset >= helper.settings.max_block_size;
+        }
+        return false;
+    }
 
-#undef CALL2
+    static void flush(JoinProbeBlockHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
+    {
+        helper.flushBatchIfNecessary<has_null_key, late_materialization, true>(wd, added_columns);
+        helper.fillNullMapWithZero<has_null_key>(added_columns);
+
+        if constexpr (!has_other_condition)
+        {
+            if (!wd.not_matched_selective_offsets.empty())
+            {
+                size_t null_size = wd.not_matched_selective_offsets.size();
+                for (auto & column : added_columns)
+                    column->insertManyDefaults(null_size);
+                wd.selective_offsets.insert(
+                    wd.not_matched_selective_offsets.begin(),
+                    wd.not_matched_selective_offsets.end());
+                wd.not_matched_selective_offsets.clear();
+            }
+        }
+    }
+};
+
+JoinProbeBlockHelper::JoinProbeBlockHelper(const HashJoin * join, bool late_materialization)
+    : join(join)
+    , settings(join->settings)
+    , pointer_table(join->pointer_table)
+    , row_layout(join->row_layout)
+{
+#define CALL3(KeyGetter, JoinType, has_other_condition, late_materialization, tagged_pointer)                       \
+    {                                                                                                               \
+        func_ptr_has_null                                                                                           \
+            = &JoinProbeBlockHelper::                                                                               \
+                  probeImpl<KeyGetter, JoinType, true, has_other_condition, late_materialization, tagged_pointer>;  \
+        func_ptr_no_null                                                                                            \
+            = &JoinProbeBlockHelper::                                                                               \
+                  probeImpl<KeyGetter, JoinType, false, has_other_condition, late_materialization, tagged_pointer>; \
+    }
+
+#define CALL2(KeyGetter, JoinType, has_other_condition, late_materialization)            \
+    {                                                                                    \
+        if (pointer_table.enableTaggedPointer())                                         \
+            CALL3(KeyGetter, JoinType, has_other_condition, late_materialization, true)  \
+        else                                                                             \
+            CALL3(KeyGetter, JoinType, has_other_condition, late_materialization, false) \
+    }
+
+#define CALL1(KeyGetter, JoinType)                      \
+    {                                                   \
+        if (join->has_other_condition)                  \
+        {                                               \
+            if (late_materialization)                   \
+                CALL2(KeyGetter, JoinType, true, true)  \
+            else                                        \
+                CALL2(KeyGetter, JoinType, true, false) \
+        }                                               \
+        else                                            \
+            CALL2(KeyGetter, JoinType, false, false)    \
+    }
+
+#define CALL(KeyGetter)                                                                                              \
+    {                                                                                                                \
+        auto kind = join->kind;                                                                                      \
+        /*bool has_other_condition = join->has_other_condition;*/                                                    \
+        if (kind == Inner)                                                                                           \
+            CALL1(KeyGetter, Inner)                                                                                  \
+        else if (kind == LeftOuter)                                                                                  \
+            CALL1(KeyGetter, LeftOuter)                                                                              \
+        /*else if (kind == Semi && !has_other_condition)                                                           \
+            CALL2(KeyGetter, Semi, false, false)                                                                 \
+        else if (kind == Anti && !has_other_condition)                                                           \
+            CALL2(KeyGetter, Anti, false, false)*/ \
+        else                                                                                                         \
+            throw Exception(                                                                                         \
+                fmt::format("Logical error: unknown combination of JOIN {}", magic_enum::enum_name(join->kind)),     \
+                ErrorCodes::LOGICAL_ERROR);                                                                          \
+    }
+
+    switch (join->method)
+    {
+#define M(METHOD)                                                                          \
+    case HashJoinKeyMethod::METHOD:                                                        \
+        using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>; \
+        CALL(KeyGetterType##METHOD);                                                       \
+        break;
+        APPLY_FOR_HASH_JOIN_VARIANTS(M)
+#undef M
+
+    default:
+        throw Exception(
+            fmt::format("Unknown JOIN keys variant {}.", magic_enum::enum_name(join->method)),
+            ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+    }
 #undef CALL
+#undef CALL1
+#undef CALL2
+#undef CALL3
 }
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockInner()
+Block JoinProbeBlockHelper::probe(JoinProbeContext & context, JoinProbeWorkerData & wd)
 {
+    if (context.null_map)
+        return (this->*func_ptr_has_null)(context, wd);
+    else
+        return (this->*func_ptr_no_null)(context, wd);
+}
+
+JOIN_PROBE_TEMPLATE
+Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd)
+{
+    static_assert(has_other_condition || !late_materialization);
+
+    if unlikely (context.rows == 0)
+        return join->output_block_after_finalize;
+
+    if constexpr (kind == LeftOuter && has_other_condition)
+    {
+        if (context.isProbeFinished())
+            return fillNotMatchedRowsForLeftOuter(context, wd);
+    }
+
+    wd.insert_batch.clear();
+    wd.insert_batch.reserve(settings.probe_insert_batch_size);
+    wd.selective_offsets.clear();
+    wd.selective_offsets.reserve(settings.max_block_size);
+    if constexpr (kind == LeftOuter && !has_other_condition)
+    {
+        wd.not_matched_selective_offsets.clear();
+        wd.not_matched_selective_offsets.reserve(settings.max_block_size);
+    }
+    if constexpr (late_materialization)
+    {
+        wd.row_ptrs_for_lm.clear();
+        wd.row_ptrs_for_lm.reserve(settings.max_block_size);
+    }
+
+    size_t left_columns = join->left_sample_block_pruned.columns();
+    size_t right_columns = join->right_sample_block_pruned.columns();
+    if (!wd.result_block)
+    {
+        RUNTIME_CHECK(left_columns + right_columns == join->all_sample_block_pruned.columns());
+        for (size_t i = 0; i < left_columns + right_columns; ++i)
+        {
+            ColumnWithTypeAndName new_column = join->all_sample_block_pruned.safeGetByPosition(i).cloneEmpty();
+            new_column.column->assumeMutable()->reserveAlign(settings.max_block_size, FULL_VECTOR_SIZE_AVX2);
+            wd.result_block.insert(std::move(new_column));
+        }
+    }
+
+    MutableColumns added_columns;
+    if constexpr (late_materialization)
+    {
+        for (auto [column_index, _] : row_layout.raw_key_column_indexes)
+            added_columns.emplace_back(
+                wd.result_block.safeGetByPosition(left_columns + column_index).column->assumeMutable());
+        for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
+        {
+            size_t column_index = row_layout.other_column_indexes[i].first;
+            added_columns.emplace_back(
+                wd.result_block.safeGetByPosition(left_columns + column_index).column->assumeMutable());
+        }
+    }
+    else
+    {
+        added_columns.resize(right_columns);
+        for (size_t i = 0; i < right_columns; ++i)
+            added_columns[i] = wd.result_block.safeGetByPosition(left_columns + i).column->assumeMutable();
+    }
+
+    Stopwatch watch;
+    if (pointer_table.enableProbePrefetch())
+        probeFillColumnsPrefetch<
+            KeyGetter,
+            kind,
+            has_null_map,
+            has_other_condition,
+            late_materialization,
+            tagged_pointer>(context, wd, added_columns);
+    else
+        probeFillColumns<KeyGetter, kind, has_null_map, has_other_condition, late_materialization, tagged_pointer>(
+            context,
+            wd,
+            added_columns);
+
+    wd.probe_hash_table_time += watch.elapsedFromLastTime();
+
+    if constexpr (late_materialization)
+    {
+        size_t idx = 0;
+        for (auto [column_index, _] : row_layout.raw_key_column_indexes)
+            wd.result_block.safeGetByPosition(left_columns + column_index).column = std::move(added_columns[idx++]);
+        for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
+        {
+            size_t column_index = row_layout.other_column_indexes[i].first;
+            wd.result_block.safeGetByPosition(left_columns + column_index).column = std::move(added_columns[idx++]);
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < right_columns; ++i)
+            wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
+    }
+
+    if (wd.selective_offsets.empty())
+        return join->output_block_after_finalize;
+
+    if constexpr (has_other_condition)
+    {
+        // Always using late materialization for left side
+        for (size_t i = 0; i < left_columns; ++i)
+        {
+            if (!join->left_required_flag_for_other_condition[i])
+                continue;
+            wd.result_block.safeGetByPosition(i).column->assumeMutable()->insertSelectiveFrom(
+                *context.block.safeGetByPosition(i).column.get(),
+                wd.selective_offsets);
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < left_columns; ++i)
+        {
+            wd.result_block.safeGetByPosition(i).column->assumeMutable()->insertSelectiveFrom(
+                *context.block.safeGetByPosition(i).column.get(),
+                wd.selective_offsets);
+        }
+    }
+
+    wd.replicate_time += watch.elapsedFromLastTime();
+
+    if constexpr (has_other_condition)
+    {
+        auto res_block = handleOtherConditions(context, wd, kind, late_materialization);
+        wd.other_condition_time += watch.elapsedFromLastTime();
+        return res_block;
+    }
+
+    if (wd.result_block.rows() >= settings.max_block_size)
+    {
+        auto res_block = join->removeUselessColumnForOutput(wd.result_block);
+        wd.result_block = {};
+        return res_block;
+    }
+    return join->output_block_after_finalize;
+}
+
+JOIN_PROBE_TEMPLATE
+void JoinProbeBlockHelper::probeFillColumns(
+    JoinProbeContext & context,
+    JoinProbeWorkerData & wd,
+    MutableColumns & added_columns)
+{
+    using KeyGetterType = typename KeyGetter::Type;
+    using Hash = typename KeyGetter::Hash;
+    using HashValueType = typename KeyGetter::HashValueType;
+    constexpr bool has_null_key = has_null_map || kind == LeftOuter;
+    if constexpr (!has_null_key)
+    {
+        for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
+            RUNTIME_CHECK_MSG(!is_nullable, "has_null_key is false but a key column is nullable");
+    }
+    using Adder = ProbeAdder<kind, has_null_key, has_other_condition, late_materialization>;
+
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
-    size_t current_offset = added_rows;
-    auto & selective_offsets = wd.selective_offsets;
+    size_t current_offset = wd.result_block.rows();
     size_t idx = context.start_row_idx;
     RowPtr ptr = context.current_row_ptr;
+    bool is_matched = context.current_row_is_matched;
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
     if constexpr (KeyGetterType::joinKeyCompareHashFirst())
     {
         key_offset += sizeof(HashValueType);
     }
+
+#define NOT_MATCHED(not_matched)                                                                        \
+    if constexpr (Adder::need_not_matched)                                                              \
+    {                                                                                                   \
+        assert(ptr == nullptr);                                                                         \
+        if (not_matched)                                                                                \
+        {                                                                                               \
+            bool is_end = Adder::addNotMatched(*this, context, wd, added_columns, idx, current_offset); \
+            if unlikely (is_end)                                                                        \
+            {                                                                                           \
+                ++idx;                                                                                  \
+                break;                                                                                  \
+            }                                                                                           \
+        }                                                                                               \
+    }
+
     for (; idx < context.rows; ++idx)
     {
         if (has_null_map && (*context.null_map)[idx])
+        {
+            NOT_MATCHED(true)
             continue;
+        }
 
         const auto & key = key_getter.getJoinKey(idx);
         auto hash = static_cast<HashValueType>(Hash()(key));
@@ -410,17 +498,23 @@ JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materializati
         {
             ptr = pointer_table.getHeadPointer(hash);
             if (ptr == nullptr)
+            {
+                NOT_MATCHED(true)
                 continue;
+            }
 
             if constexpr (tagged_pointer)
             {
                 if (!containOtherTag(ptr, hash_tag))
                 {
                     ptr = nullptr;
+                    NOT_MATCHED(true)
                     continue;
                 }
                 ptr = removeRowPtrTag(ptr);
             }
+            if constexpr (Adder::need_not_matched)
+                is_matched = false;
         }
         while (true)
         {
@@ -429,51 +523,95 @@ JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materializati
             collision += !key_is_equal;
             if (key_is_equal)
             {
-                ++current_offset;
-                selective_offsets.push_back(idx);
-                insertRowToBatch(key_getter, ptr + key_offset, key2);
-                if unlikely (current_offset >= settings.max_block_size)
+                if constexpr (Adder::need_not_matched)
+                    is_matched = true;
+
+                bool is_end = Adder::addMatched(
+                    *this,
+                    context,
+                    wd,
+                    added_columns,
+                    idx,
+                    current_offset,
+                    ptr,
+                    key_offset + key_getter.getRequiredKeyOffset(key2));
+
+                if unlikely (is_end)
                     break;
             }
 
-            ptr = HashJoinRowLayout::getNextRowPtr(ptr);
+            ptr = getNextRowPtr(ptr);
             if (ptr == nullptr)
                 break;
         }
         if unlikely (ptr != nullptr)
         {
-            ptr = HashJoinRowLayout::getNextRowPtr(ptr);
+            ptr = getNextRowPtr(ptr);
             if (ptr == nullptr)
                 ++idx;
             break;
         }
+        if constexpr (Adder::need_not_matched)
+        {
+            NOT_MATCHED(!is_matched)
+        }
     }
-    flushBatchIfNecessary<true>();
-    fillNullMapWithZero(current_offset - added_rows);
+
+    Adder::flush(*this, wd, added_columns);
 
     context.start_row_idx = idx;
     context.current_row_ptr = ptr;
+    context.current_row_is_matched = is_matched;
     wd.collision += collision;
+
+#undef NOT_MATCHED
 }
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockInnerPrefetch()
+#define PREFETCH_READ(ptr) __builtin_prefetch((ptr), 0 /* rw==read */, 3 /* locality */)
+
+JOIN_PROBE_TEMPLATE
+void JoinProbeBlockHelper::probeFillColumnsPrefetch(
+    JoinProbeContext & context,
+    JoinProbeWorkerData & wd,
+    MutableColumns & added_columns)
 {
+    using KeyGetterType = typename KeyGetter::Type;
+    using Hash = typename KeyGetter::Hash;
+    using HashValueType = typename KeyGetter::HashValueType;
+    constexpr bool has_null_key = has_null_map || kind == LeftOuter;
+    if constexpr (!has_null_key)
+    {
+        for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
+            RUNTIME_CHECK_MSG(!is_nullable, "has_null_key is false but a key column is nullable");
+    }
+    using Adder = ProbeAdder<kind, has_null_key, has_other_condition, late_materialization>;
+
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
+    initPrefetchStates<KeyGetter>(context);
     auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(context.prefetch_states.get());
-    auto & selective_offsets = wd.selective_offsets;
 
     size_t idx = context.start_row_idx;
     size_t active_states = context.prefetch_active_states;
     size_t k = context.prefetch_iter;
-    size_t current_offset = added_rows;
+    size_t current_offset = wd.result_block.rows();
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
     if constexpr (KeyGetterType::joinKeyCompareHashFirst())
     {
         key_offset += sizeof(HashValueType);
     }
+
+#define NOT_MATCHED(not_matched, idx)                                                                   \
+    if constexpr (Adder::need_not_matched)                                                              \
+    {                                                                                                   \
+        if (not_matched)                                                                                \
+        {                                                                                               \
+            bool is_end = Adder::addNotMatched(*this, context, wd, added_columns, idx, current_offset); \
+            if unlikely (is_end)                                                                        \
+                break;                                                                                  \
+        }                                                                                               \
+    }
+
     const size_t probe_prefetch_step = settings.probe_prefetch_step;
     while (idx < context.rows || active_states > 0)
     {
@@ -482,7 +620,7 @@ JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materializati
         if (state->stage == ProbePrefetchStage::FindNext)
         {
             RowPtr ptr = state->ptr;
-            RowPtr next_ptr = HashJoinRowLayout::getNextRowPtr(ptr);
+            RowPtr next_ptr = getNextRowPtr(ptr);
             if (next_ptr)
             {
                 state->ptr = next_ptr;
@@ -494,10 +632,19 @@ JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materializati
             collision += !key_is_equal;
             if (key_is_equal)
             {
-                ++current_offset;
-                selective_offsets.push_back(state->index);
-                insertRowToBatch(key_getter, ptr + key_offset, key2);
-                if unlikely (current_offset >= settings.max_block_size)
+                if constexpr (Adder::need_not_matched)
+                    state->is_matched = true;
+
+                bool is_end = Adder::addMatched(
+                    *this,
+                    context,
+                    wd,
+                    added_columns,
+                    state->index,
+                    current_offset,
+                    ptr,
+                    key_offset + key_getter.getRequiredKeyOffset(key2));
+                if unlikely (is_end)
                 {
                     if (!next_ptr)
                     {
@@ -516,6 +663,8 @@ JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materializati
 
             state->stage = ProbePrefetchStage::None;
             --active_states;
+
+            NOT_MATCHED(!state->is_matched, state->index);
         }
         else if (state->stage == ProbePrefetchStage::FindHeader)
         {
@@ -542,17 +691,36 @@ JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materializati
 
             state->stage = ProbePrefetchStage::None;
             --active_states;
+
+            NOT_MATCHED(true, state->index);
         }
 
         assert(state->stage == ProbePrefetchStage::None);
 
         if constexpr (has_null_map)
         {
+            bool is_end = false;
             while (idx < context.rows)
             {
                 if (!(*context.null_map)[idx])
                     break;
+
+                if constexpr (Adder::need_not_matched)
+                {
+                    is_end = Adder::addNotMatched(*this, context, wd, added_columns, idx, current_offset);
+                    if unlikely (is_end)
+                    {
+                        ++idx;
+                        break;
+                    }
+                }
+
                 ++idx;
+            }
+            if constexpr (Adder::need_not_matched)
+            {
+                if unlikely (is_end)
+                    break;
             }
         }
 
@@ -569,6 +737,8 @@ JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materializati
         PREFETCH_READ(state->pointer_ptr);
 
         state->key = key;
+        if constexpr (Adder::need_not_matched)
+            state->is_matched = false;
         if constexpr (tagged_pointer)
             state->hash_tag = hash & ROW_PTR_TAG_MASK;
         if constexpr (KeyGetterType::joinKeyCompareHashFirst())
@@ -580,153 +750,371 @@ JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materializati
         ++k;
     }
 
-    flushBatchIfNecessary<true>();
-    fillNullMapWithZero(current_offset - added_rows);
+    Adder::flush(*this, wd, added_columns);
 
     context.start_row_idx = idx;
     context.prefetch_active_states = active_states;
     context.prefetch_iter = k;
     wd.collision += collision;
+
+#undef NOT_MATCHED
 }
 
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockLeftOuter()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockLeftOuterPrefetch()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockSemi()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockSemiPrefetch()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockAnti()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockAntiPrefetch()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightOuter()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightOuterPrefetch()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightSemi()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightSemiPrefetch()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightAnti()
-{}
-
-template <typename KeyGetter, bool has_null_map, bool tagged_pointer, bool late_materialization>
-void NO_INLINE
-JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>::joinProbeBlockRightAntiPrefetch()
-{}
-
-void joinProbeBlock(
+Block JoinProbeBlockHelper::handleOtherConditions(
     JoinProbeContext & context,
     JoinProbeWorkerData & wd,
-    HashJoinKeyMethod method,
     ASTTableJoin::Kind kind,
-    bool late_materialization,
-    const JoinNonEqualConditions & non_equal_conditions,
-    const HashJoinSettings & settings,
-    const HashJoinPointerTable & pointer_table,
-    const HashJoinRowLayout & row_layout,
-    MutableColumns & added_columns,
-    size_t added_rows)
+    bool late_materialization)
 {
-    if (context.rows == 0)
-        return;
+    const auto & left_sample_block_pruned = join->left_sample_block_pruned;
+    const auto & right_sample_block_pruned = join->right_sample_block_pruned;
+    const auto & output_block_after_finalize = join->output_block_after_finalize;
+    const auto & non_equal_conditions = join->non_equal_conditions;
+    const auto & output_column_indexes = join->output_column_indexes;
+    const auto & left_required_flag_for_other_condition = join->left_required_flag_for_other_condition;
 
-    switch (method)
+    size_t left_columns = left_sample_block_pruned.columns();
+    size_t right_columns = right_sample_block_pruned.columns();
+    // Some columns in wd.result_block may be empty so need to create another block to execute other condition expressions
+    Block exec_block;
+    RUNTIME_CHECK(wd.result_block.columns() == left_columns + right_columns);
+    for (size_t i = 0; i < left_columns; ++i)
     {
-#define CALL(KeyGetter, has_null_map, tagged_pointer, late_materialization)              \
-    JoinProbeBlockHelper<KeyGetter, has_null_map, tagged_pointer, late_materialization>( \
-        context,                                                                         \
-        wd,                                                                              \
-        method,                                                                          \
-        kind,                                                                            \
-        non_equal_conditions,                                                            \
-        settings,                                                                        \
-        pointer_table,                                                                   \
-        row_layout,                                                                      \
-        added_columns,                                                                   \
-        added_rows)                                                                      \
-        .joinProbeBlockImpl();
-
-#define CALL3(KeyGetter, has_null_map, tagged_pointer)        \
-    if (late_materialization)                                 \
-    {                                                         \
-        CALL(KeyGetter, has_null_map, tagged_pointer, true);  \
-    }                                                         \
-    else                                                      \
-    {                                                         \
-        CALL(KeyGetter, has_null_map, tagged_pointer, false); \
+        if (left_required_flag_for_other_condition[i])
+            exec_block.insert(wd.result_block.getByPosition(i));
+    }
+    if (late_materialization)
+    {
+        for (auto [column_index, _] : row_layout.raw_key_column_indexes)
+            exec_block.insert(wd.result_block.getByPosition(left_columns + column_index));
+        for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
+        {
+            size_t column_index = row_layout.other_column_indexes[i].first;
+            exec_block.insert(wd.result_block.getByPosition(left_columns + column_index));
+        }
+    }
+    else
+    {
+        for (size_t i = 0; i < right_columns; ++i)
+            exec_block.insert(wd.result_block.getByPosition(left_columns + i));
     }
 
-#define CALL2(KeyGetter, has_null_map)         \
-    if (pointer_table.enableTaggedPointer())   \
-    {                                          \
-        CALL3(KeyGetter, has_null_map, true);  \
-    }                                          \
-    else                                       \
-    {                                          \
-        CALL3(KeyGetter, has_null_map, false); \
+    non_equal_conditions.other_cond_expr->execute(exec_block);
+
+    size_t rows = exec_block.rows();
+    // Ensure BASE_OFFSETS is accessed within bound.
+    // It must be true because max_block_size <= BASE_OFFSETS.size(HASH_JOIN_MAX_BLOCK_SIZE_UPPER_BOUND).
+    RUNTIME_CHECK_MSG(
+        rows <= BASE_OFFSETS.size(),
+        "exec_block rows {} > base_offsets size {}",
+        rows,
+        BASE_OFFSETS.size());
+
+    wd.filter.clear();
+    mergeNullAndFilterResult(exec_block, wd.filter, non_equal_conditions.other_cond_name, false);
+    exec_block.clear();
+
+    if (kind == LeftOuter)
+    {
+        RUNTIME_CHECK(wd.selective_offsets.size() == rows);
+        RUNTIME_CHECK(wd.filter.size() == rows);
+        for (size_t i = 0; i < rows; ++i)
+        {
+            size_t idx = wd.selective_offsets[i];
+            bool is_matched = wd.filter[i];
+            context.rows_not_matched[idx] &= !is_matched;
+        }
     }
 
-#define CALL1(KeyGetter)         \
-    if (context.null_map)        \
-    {                            \
-        CALL2(KeyGetter, true);  \
-    }                            \
-    else                         \
-    {                            \
-        CALL2(KeyGetter, false); \
+    join->initOutputBlock(wd.result_block_for_other_condition);
+
+    RUNTIME_CHECK_MSG(
+        wd.result_block_for_other_condition.rows() < settings.max_block_size,
+        "result_block_for_other_condition rows {} >= max_block_size {}",
+        wd.result_block_for_other_condition.rows(),
+        settings.max_block_size);
+    size_t remaining_insert_size = settings.max_block_size - wd.result_block_for_other_condition.rows();
+    size_t result_size = countBytesInFilter(wd.filter);
+
+    bool filter_offsets_is_initialized = false;
+    auto init_filter_offsets = [&]() {
+        RUNTIME_CHECK(wd.filter.size() == rows);
+        wd.filter_offsets.clear();
+        wd.filter_offsets.reserve(result_size);
+        filterImpl(&wd.filter[0], &wd.filter[rows], &BASE_OFFSETS[0], wd.filter_offsets);
+        RUNTIME_CHECK(wd.filter_offsets.size() == result_size);
+        filter_offsets_is_initialized = true;
+    };
+
+    bool filter_selective_offsets_is_initialized = false;
+    auto init_filter_selective_offsets = [&]() {
+        RUNTIME_CHECK(wd.selective_offsets.size() == rows);
+        wd.filter_selective_offsets.clear();
+        wd.filter_selective_offsets.reserve(result_size);
+        filterImpl(&wd.filter[0], &wd.filter[rows], &wd.selective_offsets[0], wd.filter_selective_offsets);
+        RUNTIME_CHECK(wd.filter_selective_offsets.size() == result_size);
+        filter_selective_offsets_is_initialized = true;
+    };
+
+    bool filter_row_ptrs_for_lm_is_initialized = false;
+    auto init_filter_row_ptrs_for_lm = [&]() {
+        RUNTIME_CHECK(wd.row_ptrs_for_lm.size() == rows);
+        wd.filter_row_ptrs_for_lm.clear();
+        wd.filter_row_ptrs_for_lm.reserve(result_size);
+        filterImpl(&wd.filter[0], &wd.filter[rows], &wd.row_ptrs_for_lm[0], wd.filter_row_ptrs_for_lm);
+        RUNTIME_CHECK(wd.filter_row_ptrs_for_lm.size() == result_size);
+        filter_row_ptrs_for_lm_is_initialized = true;
+    };
+
+    auto fill_matched = [&](size_t start, size_t length) {
+        if (length == 0)
+            return;
+
+        if (late_materialization)
+        {
+            for (auto [column_index, _] : row_layout.raw_key_column_indexes)
+            {
+                auto output_index = output_column_indexes.at(left_columns + column_index);
+                if (output_index < 0)
+                    continue;
+                if unlikely (!filter_offsets_is_initialized)
+                    init_filter_offsets();
+                auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
+                auto & src_column = wd.result_block.safeGetByPosition(left_columns + column_index);
+                des_column.column->assumeMutable()
+                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
+            }
+            for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
+            {
+                size_t column_index = row_layout.other_column_indexes[i].first;
+                auto output_index = output_column_indexes.at(left_columns + column_index);
+                if (output_index < 0)
+                    continue;
+                if unlikely (!filter_offsets_is_initialized)
+                    init_filter_offsets();
+                auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
+                auto & src_column = wd.result_block.safeGetByPosition(left_columns + column_index);
+                des_column.column->assumeMutable()
+                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
+            }
+
+            if (!filter_row_ptrs_for_lm_is_initialized)
+                init_filter_row_ptrs_for_lm();
+
+            if (row_layout.other_column_count_for_other_condition < row_layout.other_column_indexes.size())
+            {
+                auto other_column_indexes_start = row_layout.other_column_count_for_other_condition;
+                auto other_column_indexes_size = row_layout.other_column_indexes.size();
+                // Sanity check: all columns after other_column_indexes_start should be included in wd.result_block_for_other_condition.
+                for (size_t i = other_column_indexes_start; i < other_column_indexes_size; ++i)
+                {
+                    size_t column_index = row_layout.other_column_indexes[i].first;
+                    auto output_index = output_column_indexes.at(left_columns + column_index);
+                    RUNTIME_CHECK(output_index >= 0);
+                    RUNTIME_CHECK(static_cast<size_t>(output_index) < wd.result_block_for_other_condition.columns());
+                }
+                constexpr size_t step = 256;
+                for (size_t pos = start; pos < start + length; pos += step)
+                {
+                    size_t end = pos + step > start + length ? start + length : pos + step;
+                    wd.insert_batch.clear();
+                    wd.insert_batch.insert(&wd.row_ptrs_for_lm[pos], &wd.row_ptrs_for_lm[end]);
+                    for (size_t i = other_column_indexes_start; i < other_column_indexes_size; ++i)
+                    {
+                        size_t column_index = row_layout.other_column_indexes[i].first;
+                        auto output_index = output_column_indexes[left_columns + column_index];
+                        auto & des_column = wd.result_block_for_other_condition.getByPosition(output_index);
+                        des_column.column->assumeMutable()->deserializeAndInsertFromPos(wd.insert_batch, true);
+                    }
+                }
+                for (size_t i = other_column_indexes_start; i < other_column_indexes_size; ++i)
+                {
+                    size_t column_index = row_layout.other_column_indexes[i].first;
+                    auto output_index = output_column_indexes[left_columns + column_index];
+                    auto & des_column = wd.result_block_for_other_condition.getByPosition(output_index);
+                    des_column.column->assumeMutable()->flushNTAlignBuffer();
+                }
+            }
+        }
+        else
+        {
+            for (size_t i = 0; i < right_columns; ++i)
+            {
+                auto output_index = output_column_indexes.at(left_columns + i);
+                if (output_index == -1)
+                    continue;
+                if unlikely (!filter_offsets_is_initialized)
+                    init_filter_offsets();
+                auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
+                auto & src_column = wd.result_block.safeGetByPosition(left_columns + i);
+                des_column.column->assumeMutable()
+                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
+            }
+        }
+
+        for (size_t i = 0; i < left_columns; ++i)
+        {
+            auto output_index = output_column_indexes.at(i);
+            if (output_index == -1)
+                continue;
+            auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
+            if (left_required_flag_for_other_condition[i])
+            {
+                if unlikely (!filter_offsets_is_initialized && !filter_selective_offsets_is_initialized)
+                    init_filter_selective_offsets();
+                if (filter_offsets_is_initialized)
+                {
+                    auto & src_column = wd.result_block.safeGetByPosition(i);
+                    des_column.column->assumeMutable()
+                        ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
+                }
+                else
+                {
+                    auto & src_column = context.block.safeGetByPosition(i);
+                    des_column.column->assumeMutable()->insertSelectiveRangeFrom(
+                        *src_column.column.get(),
+                        wd.filter_selective_offsets,
+                        start,
+                        length);
+                }
+                continue;
+            }
+            if unlikely (!filter_selective_offsets_is_initialized)
+                init_filter_selective_offsets();
+            auto & src_column = context.block.safeGetByPosition(i);
+            des_column.column->assumeMutable()
+                ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_selective_offsets, start, length);
+        }
+    };
+
+    SCOPE_EXIT({
+        RUNTIME_CHECK(wd.result_block.columns() == left_columns + right_columns);
+        /// Clear the data in result_block.
+        for (size_t i = 0; i < left_columns + right_columns; ++i)
+        {
+            auto column = wd.result_block.getByPosition(i).column->assumeMutable();
+            column->popBack(column->size());
+            wd.result_block.getByPosition(i).column = std::move(column);
+        }
+    });
+
+    size_t length = std::min(result_size, remaining_insert_size);
+    fill_matched(0, length);
+    if (result_size >= remaining_insert_size)
+    {
+        Block res_block;
+        res_block.swap(wd.result_block_for_other_condition);
+        if (result_size > remaining_insert_size)
+        {
+            join->initOutputBlock(wd.result_block_for_other_condition);
+            fill_matched(remaining_insert_size, result_size - remaining_insert_size);
+        }
+
+        return res_block;
     }
 
-#define M(METHOD)                                                                          \
-    case HashJoinKeyMethod::METHOD:                                                        \
-        using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>; \
-        CALL1(KeyGetterType##METHOD);                                                      \
-        break;
-        APPLY_FOR_HASH_JOIN_VARIANTS(M)
-#undef M
+    if (kind == LeftOuter)
+        return fillNotMatchedRowsForLeftOuter(context, wd);
 
-#undef CALL1
-#undef CALL2
-#undef CALL3
-#undef CALL
+    return output_block_after_finalize;
+}
 
-    default:
-        throw Exception(
-            fmt::format("Unknown JOIN keys variant {}.", magic_enum::enum_name(method)),
-            ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
+Block JoinProbeBlockHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context, JoinProbeWorkerData & wd)
+{
+    RUNTIME_CHECK(join->kind == LeftOuter);
+    RUNTIME_CHECK(join->has_other_condition);
+    RUNTIME_CHECK(context.isProbeFinished());
+    if (context.not_matched_offsets_idx < 0)
+    {
+        size_t rows = context.rows;
+        size_t not_matched_result_size = countBytesInFilter(context.rows_not_matched);
+        auto & offsets = context.not_matched_offsets;
+
+        offsets.clear();
+        offsets.reserve(not_matched_result_size);
+        if likely (rows <= BASE_OFFSETS.size())
+        {
+            filterImpl(&context.rows_not_matched[0], &context.rows_not_matched[rows], &BASE_OFFSETS[0], offsets);
+            RUNTIME_CHECK(offsets.size() == not_matched_result_size);
+        }
+        else
+        {
+            for (size_t i = 0; i < rows; ++i)
+            {
+                if (context.rows_not_matched[i])
+                    offsets.push_back(i);
+            }
+        }
+
+        context.not_matched_offsets_idx = 0;
     }
+    const auto & output_block_after_finalize = join->output_block_after_finalize;
+
+    if (static_cast<size_t>(context.not_matched_offsets_idx) >= context.not_matched_offsets.size())
+    {
+        // JoinProbeContext::isAllFinished checks if all not matched rows have been output
+        // by verifying whether rows_not_matched is empty.
+        context.rows_not_matched.clear();
+        return output_block_after_finalize;
+    }
+
+    join->initOutputBlock(wd.result_block_for_other_condition);
+
+    size_t left_columns = join->left_sample_block_pruned.columns();
+    size_t right_columns = join->right_sample_block_pruned.columns();
+
+    if (wd.result_block_for_other_condition.rows() >= settings.max_block_size)
+    {
+        Block res_block;
+        res_block.swap(wd.result_block_for_other_condition);
+        return res_block;
+    }
+
+    size_t remaining_insert_size = settings.max_block_size - wd.result_block_for_other_condition.rows();
+    ;
+    size_t result_size = context.not_matched_offsets.size() - context.not_matched_offsets_idx;
+    size_t length = std::min(result_size, remaining_insert_size);
+
+    const auto & output_column_indexes = join->output_column_indexes;
+    for (size_t i = 0; i < right_columns; ++i)
+    {
+        auto output_index = output_column_indexes.at(left_columns + i);
+        if (output_index == -1)
+            continue;
+        auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
+        des_column.column->assumeMutable()->insertManyDefaults(length);
+    }
+
+    for (size_t i = 0; i < left_columns; ++i)
+    {
+        auto output_index = output_column_indexes.at(i);
+        if (output_index == -1)
+            continue;
+        auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
+        auto & src_column = context.block.safeGetByPosition(i);
+        des_column.column->assumeMutable()->insertSelectiveRangeFrom(
+            *src_column.column.get(),
+            context.not_matched_offsets,
+            context.not_matched_offsets_idx,
+            length);
+    }
+    context.not_matched_offsets_idx += length;
+
+    if (static_cast<size_t>(context.not_matched_offsets_idx) >= context.not_matched_offsets.size())
+    {
+        // JoinProbeContext::isAllFinished checks if all not matched rows have been output
+        // by verifying whether rows_not_matched is empty.
+        context.rows_not_matched.clear();
+    }
+
+    if (result_size >= remaining_insert_size)
+    {
+        Block res_block;
+        res_block.swap(wd.result_block_for_other_condition);
+        return res_block;
+    }
+
+    return output_block_after_finalize;
 }
 
 } // namespace DB

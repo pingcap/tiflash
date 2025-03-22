@@ -19,6 +19,7 @@
 #include <Common/typeid_cast.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
 #include <Debug/MockKVStore/MockTiKV.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgKVStore/dbgFuncMockRaftCommand.h>
 #include <Debug/dbgKVStore/dbgFuncRegion.h>
@@ -41,9 +42,9 @@
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <fmt/core.h>
 
@@ -81,7 +82,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
     {
         auto start = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[3]).value));
         auto end = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[4]).value));
-        region = RegionBench::createRegion(table_id, region_id, start, end);
+        region = MockTiKV::instance().createRegion(table_id, region_id, start, end);
     }
     else
     {
@@ -102,7 +103,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
             TiDB::DatumBumpy end_datum = TiDB::DatumBumpy(end_field, column_info.tp);
             end_keys.emplace_back(end_datum.field());
         }
-        region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
+        region = MockTiKV::instance().createRegionCommonHandle(table_info, region_id, start_keys, end_keys);
     }
 
     auto args_begin = args.begin() + 3 + handle_column_size * 2;
@@ -160,7 +161,7 @@ RegionPtr GenDbgRegionSnapshotWithData(Context & context, const ASTs & args)
                 std::move(commit_key),
                 std::move(commit_value));
         }
-        MockTiKV::instance().getRaftIndex(region_id);
+        MockTiKV::instance().getNextRaftIndex(region_id);
     }
     return region;
 }
@@ -213,11 +214,8 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
 
     TMTContext & tmt = context.getTMTContext();
 
-    metapb::Region region_info;
-
     TiKVKey start_key;
     TiKVKey end_key;
-    region_info.set_id(region_id);
     if (table_info.is_common_handle)
     {
         // Get start key and end key form multiple column if it is clustered_index.
@@ -247,10 +245,13 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         start_key = RecordKVFormat::genKey(table_id, start);
         end_key = RecordKVFormat::genKey(table_id, end);
     }
-    region_info.set_start_key(start_key.toString());
-    region_info.set_end_key(end_key.toString());
-    *region_info.add_peers() = tests::createPeer(1, true);
-    *region_info.add_peers() = tests::createPeer(2, true);
+    metapb::Region region_info = RegionBench::createMetaRegionCommonHandle(
+        region_id,
+        start_key.toString(),
+        end_key.toString(),
+        std::nullopt,
+        std::vector<metapb::Peer>{RegionBench::createPeer(1, true), RegionBench::createPeer(2, true)});
+
     auto peer_id = 1;
     auto start_decoded_key = RecordKVFormat::decodeTiKVKey(start_key);
     auto end_decoded_key = RecordKVFormat::decodeTiKVKey(end_key);
@@ -261,7 +262,7 @@ void MockRaftCommand::dbgFuncRegionSnapshot(Context & context, const ASTs & args
         std::move(region_info),
         peer_id,
         SSTViewVec{nullptr, 0},
-        MockTiKV::instance().getRaftIndex(region_id),
+        MockTiKV::instance().getNextRaftIndex(region_id),
         RAFT_INIT_LOG_TERM,
         std::nullopt,
         tmt);
@@ -474,7 +475,7 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
         kvstore->handleIngestSST(
             region_id,
             SSTViewVec{sst_views.data(), sst_views.size()},
-            MockTiKV::instance().getRaftIndex(region_id),
+            MockTiKV::instance().getNextRaftIndex(region_id),
             MockTiKV::instance().getRaftTerm(region_id),
             tmt);
     }
@@ -489,7 +490,7 @@ void MockRaftCommand::dbgFuncIngestSST(Context & context, const ASTs & args, DBG
         kvstore->handleIngestSST(
             region_id,
             SSTViewVec{sst_views.data(), sst_views.size()},
-            MockTiKV::instance().getRaftIndex(region_id),
+            MockTiKV::instance().getNextRaftIndex(region_id),
             MockTiKV::instance().getRaftTerm(region_id),
             tmt);
     }
@@ -595,8 +596,8 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFiles(
 
     // We may call this function mutiple time to mock some situation, try to reuse the region in `GLOBAL_REGION_MAP`
     // so that we can collect uncommitted data.
-    UInt64 index = MockTiKV::instance().getRaftIndex(region_id) + 1;
-    RegionPtr new_region = RegionBench::createRegion(table->id(), region_id, start_handle, end_handle + 10000, index);
+    RegionPtr new_region = MockTiKV::instance().createRegion(table->id(), region_id, start_handle, end_handle + 10000);
+    UInt64 index = new_region->appliedIndex() + 1;
 
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
     RegionMockTest mock_test(kvstore.get(), new_region);
@@ -698,11 +699,11 @@ void MockRaftCommand::dbgFuncRegionSnapshotPreHandleDTFilesWithHandles(
 
     // We may call this function mutiple time to mock some situation, try to reuse the region in `GLOBAL_REGION_MAP`
     // so that we can collect uncommitted data.
-    UInt64 index = MockTiKV::instance().getRaftIndex(region_id) + 1;
     UInt64 region_start_handle = handles[0];
     UInt64 region_end_handle = handles.back() + 10000;
     RegionPtr new_region
-        = RegionBench::createRegion(table->id(), region_id, region_start_handle, region_end_handle, index);
+        = MockTiKV::instance().createRegion(table->id(), region_id, region_start_handle, region_end_handle);
+    UInt64 index = new_region->appliedIndex() + 1;
 
     // Register some mock SST reading methods so that we can decode data in `MockSSTReader::MockSSTData`
     RegionMockTest mock_test(kvstore.get(), new_region);

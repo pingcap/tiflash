@@ -151,6 +151,21 @@ public:
         }
     }
 
+    void triggerFlushCache() const
+    {
+        std::vector<SegmentPtr> all_segments;
+        {
+            std::shared_lock lock(store->read_write_mutex);
+            for (const auto & [_, segment] : store->id_to_segment)
+                all_segments.push_back(segment);
+        }
+        auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
+        for (const auto & segment : all_segments)
+        {
+            ASSERT_TRUE(segment->flushCache(*dm_context));
+        }
+    }
+
     void triggerCompactDelta() const
     {
         std::vector<SegmentPtr> all_segments;
@@ -245,24 +260,16 @@ try
         read(range, EMPTY_FILTER, colVecFloat32("[64, 256)", vec_column_name, vec_column_id));
     }
 
-    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-    ann_query_info->set_column_id(vec_column_id);
-    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-
     // read with ANN query
     {
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({127.5}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {127.5}, .top_k = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
     }
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {72.1}, .top_k = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
     }
@@ -295,24 +302,16 @@ try
         read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
     }
 
-    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-    ann_query_info->set_column_id(vec_column_id);
-    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-
     // read with ANN query
     {
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {72.1}, .top_k = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {73.0}}));
     }
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(2);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({127.5}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {127.5}, .top_k = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         read(range, filter, createVecFloat32Column<Array>({{127.0}, {128.0}}));
     }
@@ -352,15 +351,9 @@ try
         read(range, EMPTY_FILTER, colVecFloat32("[0, 130)", vec_column_name, vec_column_id));
     }
 
-    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-    ann_query_info->set_column_id(vec_column_id);
-    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.0}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {72.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 128) with vector index return 72.0, [128, 130) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}, {129.0}}));
@@ -368,9 +361,7 @@ try
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({72.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {72.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 128) with vector index return 72.0, [128, 130) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{72.0}, {128.0}, {129.0}}));
@@ -411,15 +402,9 @@ try
         read(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
     }
 
-    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-    ann_query_info->set_column_id(vec_column_id);
-    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.0}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 4) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
@@ -427,9 +412,7 @@ try
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({1.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {1.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
         // [0, 4) without vector index return all.
         read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
@@ -494,27 +477,17 @@ try
             colVecFloat32(fmt::format("[0, {})", num_rows_write), vec_column_name, vec_column_id));
     }
 
-    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-    ann_query_info->set_column_id(vec_column_id);
-    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(left_segment_range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {222.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(left_segment_range, filter, createVecFloat32Column<Array>({{127.0}}));
     }
 
@@ -533,21 +506,15 @@ try
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({122.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {122.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(range, filter, createVecFloat32Column<Array>({{122.0}}));
     }
 }
@@ -622,27 +589,17 @@ try
             colVecFloat32(fmt::format("[0, {})", num_rows_write), vec_column_name, vec_column_id));
     }
 
-    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-    ann_query_info->set_column_id(vec_column_id);
-    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(left_segment_range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {222.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(left_segment_range, filter, createVecFloat32Column<Array>({{127.0}}));
     }
 
@@ -661,21 +618,15 @@ try
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({122.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {122.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(range, filter, createVecFloat32Column<Array>({{122.0}}));
     }
 }
@@ -745,27 +696,17 @@ try
         read(range, EMPTY_FILTER, colVecFloat32("[0, 128)", vec_column_name, vec_column_id));
     }
 
-    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-    ann_query_info->set_column_id(vec_column_id);
-    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 }
@@ -833,27 +774,17 @@ try
         read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
     }
 
-    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-    ann_query_info->set_column_id(vec_column_id);
-    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
     }
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {222.1}, .top_k = 1});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
         read(range, filter, createVecFloat32Column<Array>({{222.0}}));
     }
 }
@@ -877,6 +808,9 @@ try
 
     // write [128, 256) to store
     write(num_rows_write, num_rows_write * 2);
+
+    // trigger FlushCache for all segments
+    triggerFlushCache();
 
     {
         // Add vecotr index
@@ -904,9 +838,6 @@ try
         ASSERT_EQ(store->local_index_infos->size(), 1);
     }
 
-    // trigger FlushCache for all segments
-    triggerFlushCacheAndEnsureDeltaLocalIndex();
-
     // check delta index has built for all segments
     waitDeltaIndexReady();
     // check stable index has built for all segments
@@ -919,16 +850,9 @@ try
         read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
     }
 
-    auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
-    ann_query_info->set_index_id(2);
-    ann_query_info->set_column_id(vec_column_id);
-    ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
-
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({2.0}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {2.0}, .top_k = 1, .index_id = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{2.0}}));
@@ -936,13 +860,126 @@ try
 
     // read with ANN query
     {
-        ann_query_info->set_top_k(1);
-        ann_query_info->set_ref_vec_f32(encodeVectorFloat32({222.1}));
-
+        const auto ann_query_info = annQueryInfoTopK({.vec = {222.1}, .top_k = 1, .index_id = 2});
         auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
 
         read(range, filter, createVecFloat32Column<Array>({{222.0}}));
     }
+
+    {
+        // vector index is dropped
+        TiDB::TableInfo new_table_info_with_vector_index;
+        TiDB::ColumnInfo column_info;
+        column_info.name = VectorIndexTestUtils::vec_column_name;
+        column_info.id = VectorIndexTestUtils::vec_column_id;
+        new_table_info_with_vector_index.columns.emplace_back(column_info);
+        // apply local index change, shuold drop the local index
+        store->applyLocalIndexChange(new_table_info_with_vector_index);
+        ASSERT_EQ(store->local_index_infos->size(), 0);
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreVectorTest, DDLAddMultipleVectorIndex)
+try
+{
+    {
+        auto indexes = std::make_shared<LocalIndexInfos>();
+        store = reload(indexes);
+        ASSERT_EQ(store->getLocalIndexInfosSnapshot(), nullptr);
+    }
+
+    const size_t num_rows_write = 128;
+
+    // write [0, 128) to store
+    write(0, num_rows_write);
+    // trigger mergeDelta for all segments
+    triggerMergeDelta();
+
+    // write [128, 256) to store
+    write(num_rows_write, num_rows_write * 2);
+
+    // trigger FlushCache for all segments
+    triggerFlushCache();
+
+    auto add_vector_index = [&](std::vector<IndexID> index_id, std::vector<tipb::VectorDistanceMetric> metrics) {
+        TiDB::TableInfo new_table_info_with_vector_index;
+        TiDB::ColumnInfo column_info;
+        column_info.name = VectorIndexTestUtils::vec_column_name;
+        column_info.id = VectorIndexTestUtils::vec_column_id;
+        new_table_info_with_vector_index.columns.emplace_back(column_info);
+        TiDB::IndexColumnInfo index_col_info;
+        index_col_info.name = VectorIndexTestUtils::vec_column_name;
+        index_col_info.offset = 0;
+        for (size_t i = 0; i < index_id.size(); ++i)
+        {
+            TiDB::IndexInfo index;
+            index.id = index_id[i];
+            index.idx_cols.push_back(index_col_info);
+            index.vector_index = TiDB::VectorIndexDefinitionPtr(new TiDB::VectorIndexDefinition{
+                .kind = tipb::VectorIndexKind::HNSW,
+                .dimension = 1,
+                .distance_metric = metrics[i],
+            });
+            new_table_info_with_vector_index.index_infos.emplace_back(index);
+        }
+        // apply local index change, should
+        // - create the local index
+        // - generate the background tasks for building index on stable and delta
+        store->applyLocalIndexChange(new_table_info_with_vector_index);
+        ASSERT_EQ(store->local_index_infos->size(), index_id.size());
+
+        // check delta index has built for all segments
+        waitDeltaIndexReady();
+        // check stable index has built for all segments
+        waitStableLocalIndexReady();
+    };
+
+    const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+    auto query = [&](IndexID index_id,
+                     tipb::VectorDistanceMetric metric,
+                     const InferredDataVector<Array> & result_1,
+                     const InferredDataVector<Array> & result_2) {
+        // read from store
+        {
+            read(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
+        }
+
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({
+                .vec = {2.0},
+                .top_k = 1,
+                .index_id = index_id,
+                .distance_metric = metric,
+            });
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+
+            read(range, filter, createVecFloat32Column<Array>(result_1));
+        }
+
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({
+                .vec = {222.1},
+                .top_k = 1,
+                .index_id = index_id,
+                .distance_metric = metric,
+            });
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+
+            read(range, filter, createVecFloat32Column<Array>(result_2));
+        }
+    };
+
+    // Add COSINE vector index
+    add_vector_index({1}, {tipb::VectorDistanceMetric::COSINE});
+    query(1, tipb::VectorDistanceMetric::COSINE, {{129.0}}, {{129.0}});
+
+    // Add L2 vector index
+    add_vector_index({1, 2}, {tipb::VectorDistanceMetric::COSINE, tipb::VectorDistanceMetric::L2});
+    query(1, tipb::VectorDistanceMetric::COSINE, {{129.0}}, {{129.0}});
+    query(2, tipb::VectorDistanceMetric::L2, {{2.0}}, {{222.0}});
 
     {
         // vector index is dropped

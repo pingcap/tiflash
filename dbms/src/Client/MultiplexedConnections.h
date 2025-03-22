@@ -45,16 +45,12 @@ public:
         const ThrottlerPtr & throttler_,
         bool append_extra_info);
 
-    /// Send all content of external tables to replicas.
-    void sendExternalTablesData(std::vector<ExternalTablesData> & data);
-
     /// Send request to replicas.
     void sendQuery(
         const String & query,
         const String & query_id = "",
         UInt64 stage = QueryProcessingStage::Complete,
-        const ClientInfo * client_info = nullptr,
-        bool with_pending_data = false);
+        const ClientInfo * client_info = nullptr);
 
     /// Get packet from any replica.
     Connection::Packet receivePacket();

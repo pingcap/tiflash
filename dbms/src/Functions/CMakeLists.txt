@@ -38,7 +38,3 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
     # Won't generate debug info for files with heavy template instantiation to achieve faster linking and lower size.
     target_compile_options(tiflash_functions PRIVATE "-g0")
 endif ()
-
-if (USE_VECTORCLASS)
-    target_include_directories (tiflash_functions BEFORE PUBLIC ${VECTORCLASS_INCLUDE_DIR})
-endif ()

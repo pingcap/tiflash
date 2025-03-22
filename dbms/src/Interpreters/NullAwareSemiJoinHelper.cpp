@@ -17,10 +17,7 @@
 #include <Interpreters/JoinPartition.h>
 #include <Interpreters/NullAwareSemiJoinHelper.h>
 #include <Interpreters/ProbeProcessInfo.h>
-
-#include "Functions/FunctionBinaryArithmetic.h"
-#include "Interpreters/SemiJoinHelper.h"
-#include "Parsers/ASTTablesInSelectQuery.h"
+#include <Interpreters/SemiJoinHelper.h>
 
 namespace DB
 {

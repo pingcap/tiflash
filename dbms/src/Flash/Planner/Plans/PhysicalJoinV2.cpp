@@ -209,7 +209,7 @@ bool PhysicalJoinV2::isSupported(const tipb::Join & join)
     switch (tiflash_join.kind)
     {
     case Inner:
-        //case LeftOuter:
+    case LeftOuter:
         //case Semi:
         //case Anti:
         //case RightOuter:

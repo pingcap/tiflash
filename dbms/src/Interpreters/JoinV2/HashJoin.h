@@ -27,6 +27,8 @@
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
 
+#include <memory>
+
 
 namespace DB
 {
@@ -61,8 +63,10 @@ public:
     Block probeLastResultBlock(size_t stream_index);
 
     void removeUselessColumn(Block & block) const;
+    /// Block's schema must be all_sample_block_pruned.
     Block removeUselessColumnForOutput(const Block & block) const;
 
+    void initOutputBlock(Block & block) const;
     const Block & getOutputBlock() const { return finalized ? output_block_after_finalize : output_block; }
     const Names & getRequiredColumns() const { return required_columns; }
     void finalize(const Names & parent_require);
@@ -78,9 +82,9 @@ private:
 
     void workAfterBuildRowFinish();
 
-    Block handleOtherConditions(JoinProbeContext & context, JoinProbeWorkerData & wd, bool late_materialization);
-
 private:
+    friend JoinProbeBlockHelper;
+
     const ASTTableJoin::Kind kind;
     const String join_req_id;
 
@@ -118,6 +122,10 @@ private:
     /// Block with columns from left-side and right-side table.
     Block all_sample_block_pruned;
 
+    /// Maps each column in all_sample_block_pruned to its index in output_block_after_finalize.
+    // <= 0 means the column is not in the output_block_after_finalize.
+    std::vector<ssize_t> output_column_indexes;
+
     NamesAndTypes output_columns;
     Block output_block;
     NamesAndTypes output_columns_after_finalize;
@@ -131,22 +139,22 @@ private:
     /// Row containers
     std::vector<std::unique_ptr<MultipleRowContainer>> multi_row_containers;
 
-    /// Build phase
+    /// Build row phase
     size_t build_concurrency = 0;
     std::vector<JoinBuildWorkerData> build_workers_data;
     std::atomic<size_t> active_build_worker = 0;
+
+    HashJoinPointerTable pointer_table;
 
     /// Probe phase
     size_t probe_concurrency = 0;
     std::vector<JoinProbeWorkerData> probe_workers_data;
     std::atomic<size_t> active_probe_worker = 0;
-
-    HashJoinPointerTable pointer_table;
+    std::unique_ptr<JoinProbeBlockHelper> join_probe_helper;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 
     /// For other condition
-    const IColumn::Offsets base_offsets;
     BoolVec left_required_flag_for_other_condition;
 };
 

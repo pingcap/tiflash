@@ -135,7 +135,7 @@ bool HashJoinPointerTable::buildImpl(
             {
                 UInt16 tag = (hash & ROW_PTR_TAG_MASK) | getRowPtrTag(old_head);
                 pointer_table[bucket].fetch_or(
-                    static_cast<uintptr_t>(tag) << (64 - ROW_PTR_TAG_BITS),
+                    static_cast<uintptr_t>(tag) << ROW_PTR_TAG_SHIFT,
                     std::memory_order_relaxed);
                 old_head = removeRowPtrTag(old_head);
             }

@@ -12,12 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Debug/MockKVStore/MockSSTGenerator.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/MockTiDB.h>
+#include <Debug/dbgTools.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
+#include <Storages/KVStore/Decode/RegionDataRead.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/RegionQueryInfo.h>
 #include <common/config_common.h> // Included for `USE_JEMALLOC`
@@ -106,7 +112,7 @@ try
         ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
     }
     {
-        // lock with largetxn
+        // lock with large txn
         root_of_kvstore_mem_trackers->reset();
         RegionID region_id = 4300;
         auto [start, end] = getStartEnd(region_id);
@@ -118,7 +124,7 @@ try
         auto kvr2 = kvs.getRegion(4200);
         auto kvr3 = kvs.getRegion(region_id);
         ASSERT_NE(kvr3, nullptr);
-        std::string shor_value = "value";
+        std::string short_value = "value";
         auto lock_for_update_ts = 7777, txn_size = 1;
         const std::vector<std::string> & async_commit = {"s1", "s2"};
         const std::vector<uint64_t> & rollback = {3, 4};
@@ -127,7 +133,7 @@ try
             "primary key",
             421321,
             std::numeric_limits<UInt64>::max(),
-            &shor_value,
+            &short_value,
             66666,
             lock_for_update_ts,
             txn_size,
@@ -151,7 +157,7 @@ try
         // insert & remove
         root_of_kvstore_mem_trackers->reset();
         RegionID region_id = 5000;
-        auto originTableSize = region_table.getTableRegionSize(NullspaceID, table_id);
+        auto origin_table_size = region_table.getTableRegionSize(NullspaceID, table_id);
         auto [start, end] = getStartEnd(region_id);
         auto str_key = pickKey(region_id, 1);
         auto [str_val_write, str_val_default] = pickWriteDefault(region_id, 1);
@@ -161,12 +167,12 @@ try
         region->insertFromSnap(tmt, "default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
         auto delta = str_key.dataSize() + str_val_default.size();
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), delta);
-        ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), originTableSize + delta);
+        ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), origin_table_size + delta);
         region->removeDebug("default", TiKVKey::copyFrom(str_key));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
         ASSERT_EQ(region->dataSize(), root_of_kvstore_mem_trackers->get());
         ASSERT_EQ(region->dataSize(), region->getData().totalSize());
-        ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), originTableSize);
+        ASSERT_EQ(region_table.getTableRegionSize(NullspaceID, table_id), origin_table_size);
         ASSERT_EQ(kvs.debug_memory_limit_warning_count, 1);
     }
     ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
@@ -274,11 +280,8 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                createPeer(region_id + 1, true),
-                createRegionInfo(
-                    region_id2,
-                    RecordKVFormat::genKey(table_id, 12050),
-                    RecordKVFormat::genKey(table_id, 12099)),
+                RegionBench::createPeer(region_id + 1, true),
+                RegionBench::createMetaRegion(region_id2, table_id, 12050, 12099),
                 initialApplyState()));
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
@@ -321,11 +324,8 @@ try
         auto new_region = splitRegion(
             region,
             RegionMeta(
-                createPeer(region_id + 1, true),
-                createRegionInfo(
-                    region_id2,
-                    RecordKVFormat::genKey(table_id, 13150),
-                    RecordKVFormat::genKey(table_id, 13199)),
+                RegionBench::createPeer(region_id + 1, true),
+                RegionBench::createMetaRegion(region_id2, table_id, 13150, 13199),
                 initialApplyState()));
         ASSERT_EQ(original_size, region_table.getTableRegionSize(NullspaceID, table_id));
         ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
@@ -535,6 +535,169 @@ try
 }
 CATCH
 
+
+std::tuple<RegionPtr, PrehandleResult> genPreHandlingRegion(
+    KVStore & kvs,
+    RegionID region_id,
+    TableID table_id,
+    HandleID start,
+    HandleID end,
+    RegionTable & region_table,
+    TMTContext & tmt)
+{
+    UInt64 peer_id = 100000 + region_id; // gen a fake peer_id
+    auto meta = RegionBench::createMetaRegion(
+        region_id,
+        table_id,
+        start,
+        end,
+        /*maybe_epoch=*/std::nullopt,
+        /*maybe_peers=*/std::vector<metapb::Peer>{RegionBench::createPeer(peer_id, true)});
+    auto new_region = kvs.genRegionPtr(
+        std::move(meta),
+        peer_id,
+        /*index*/ RAFT_INIT_LOG_INDEX,
+        /*term*/ RAFT_INIT_LOG_TERM,
+        region_table);
+    // empty snapshot
+    SSTViewVec snaps{.views = nullptr, .len = 0};
+    auto prehandle_result = kvs.preHandleSnapshotToFiles(new_region, snaps, 20, RAFT_INIT_LOG_TERM, std::nullopt, tmt);
+    return {new_region, prehandle_result};
+}
+
+// A unit test that Region being removed/created concurrently
+TEST_F(RegionKVStoreTest, RegionTableBeingRecreated)
+try
+{
+    LoggerPtr log = Logger::get();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
+    auto & tmt = ctx.getTMTContext();
+    initStorages();
+    KVStore & kvs = getKVS();
+    ctx.getTMTContext().debugSetKVStore(kvstore);
+    const auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+
+    auto & region_table = ctx.getTMTContext().getRegionTable();
+    auto get_start_end = [&](Int64 range_beg, Int64 range_end) {
+        return std::make_pair(RecordKVFormat::genKey(table_id, range_beg), RecordKVFormat::genKey(table_id, range_end));
+    };
+
+    const RegionID region_id_0 = 7000;
+    {
+        // Step 1: Generate a Region with region_id = 7000, range[100, 200)
+        LOG_INFO(log, "Step 1");
+        root_of_kvstore_mem_trackers->reset();
+        region_table.debugClearTableRegionSize(NullspaceID, table_id);
+        auto [start, end] = get_start_end(100, 200);
+        proxy_instance->debugAddRegions(kvs, tmt, {region_id_0}, {{start, end}});
+
+        root_of_kvstore_mem_trackers->reset();
+
+        RegionPtr region = kvs.getRegion(region_id_0);
+        auto str_key = RecordKVFormat::genKey(table_id, 105, 111);
+        auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
+        auto str_lock_value
+            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", region_id_0, 999)
+                  .toString();
+        region->insertDebug("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+        tryPersistRegion(kvs, region_id_0);
+        LOG_INFO(log, "Step 1: table_size: {}", region->getRegionTableSize());
+    }
+
+    RegionID pre_handle_region_id_1 = 7001;
+    RegionID pre_handle_region_id_2 = 7002;
+    {
+        // Step 2: Mock that Region with region_id = 7001, range[200, 300) being pre-handle
+        LOG_INFO(log, "Step 2");
+        auto && [new_region_1, pre_handle_res_1]
+            = genPreHandlingRegion(kvs, pre_handle_region_id_1, table_id, 200, 300, region_table, tmt);
+        ASSERT_NE(new_region_1, nullptr);
+
+        {
+            // check that Region 7000 and pre-handle Region 7001 should share the same table_ctx
+            auto region_0 = kvs.getRegion(region_id_0);
+            ASSERT_NE(region_0, nullptr);
+            ASSERT_EQ(region_0->getRegionTableSize(), new_region_1->getRegionTableSize());
+            ASSERT_EQ(region_0->getRegionTableCtx().get(), new_region_1->getRegionTableCtx().get());
+            LOG_INFO(log, "Step 2: table_size: {}", region_0->getRegionTableSize());
+        }
+
+        {
+            // Step 3: Mock that Region with region_id = 7000 is removed
+            // (This could lead to the RegionTable::Table instance being removed
+            // because no known Region belong to the table_id).
+            LOG_INFO(log, "Step 3");
+            kvs.removeRegion(
+                region_id_0,
+                /*remove_data*/ true,
+                region_table,
+                kvs.genTaskLock(),
+                kvs.region_manager.genRegionTaskLock(region_id_0));
+        }
+
+        // Step 4: Mock that Region with region_id = 7002, range[300, 400) being pre-handle
+        // after region 7000 is removed.
+        LOG_INFO(log, "Step 4");
+        auto && [new_region_2, pre_handle_res_2]
+            = genPreHandlingRegion(kvs, pre_handle_region_id_2, table_id, 300, 400, region_table, tmt);
+        ASSERT_NE(new_region_2, nullptr);
+        // Step 5: apply the pre-handle-region-1 and pre-handle-region-2
+        kvs.applyPreHandledSnapshot(
+            RegionPtrWithSnapshotFiles{new_region_2, std::move(pre_handle_res_2.ingest_ids)},
+            tmt);
+        kvs.applyPreHandledSnapshot(
+            RegionPtrWithSnapshotFiles{new_region_1, std::move(pre_handle_res_1.ingest_ids)},
+            tmt);
+        {
+            // check that Region 7001 and Region 7002 should share the same table_ctx
+            ASSERT_EQ(new_region_2->getRegionTableSize(), new_region_1->getRegionTableSize());
+            ASSERT_EQ(new_region_2->getRegionTableCtx().get(), new_region_1->getRegionTableCtx().get());
+            LOG_INFO(log, "Step 5: table_size: {}", new_region_2->getRegionTableSize());
+        }
+    }
+    RegionID region_id_3 = 7003;
+    {
+        // Step 6: Mock that new Region is added after all
+        LOG_INFO(log, "Step 5");
+        auto [start, end] = get_start_end(300, 400);
+        proxy_instance->debugAddRegions(kvs, tmt, {region_id_3}, {{start, end}});
+
+        {
+            // check that Region 7001, 7002, 7003 should share the same table_ctx
+            auto pre_handle_region_1 = kvs.getRegion(pre_handle_region_id_1);
+            auto pre_handle_region_2 = kvs.getRegion(pre_handle_region_id_2);
+            ASSERT_EQ(pre_handle_region_1->getRegionTableSize(), pre_handle_region_2->getRegionTableSize());
+            ASSERT_EQ(pre_handle_region_1->getRegionTableCtx().get(), pre_handle_region_2->getRegionTableCtx().get());
+            auto region_3 = kvs.getRegion(region_id_3);
+            ASSERT_EQ(pre_handle_region_1->getRegionTableSize(), region_3->getRegionTableSize());
+            ASSERT_EQ(pre_handle_region_1->getRegionTableCtx().get(), region_3->getRegionTableCtx().get());
+            LOG_INFO(log, "Step 6: table_size: {}", region_3->getRegionTableSize());
+        }
+    }
+    {
+        // Step 7: If we insert some data into Region 7003, the size of table_ctx of all Region should be updated
+        RegionPtr region = kvs.getRegion(region_id_3);
+        auto str_key = RecordKVFormat::genKey(table_id, 105, 120);
+        auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(120, 999);
+        auto str_lock_value
+            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", region_id_0, 999)
+                  .toString();
+        region->insertDebug("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
+        LOG_INFO(log, "Step 7: table_size: {}", region->getRegionTableSize());
+        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
+        {
+            // check that Region 7001, 7002, 7003 should share the same table_ctx
+            auto region_1 = kvs.getRegion(pre_handle_region_id_1);
+            auto region_2 = kvs.getRegion(pre_handle_region_id_2);
+            auto region_3 = kvs.getRegion(region_id_3);
+            auto region_tbl_size = region_1->getRegionTableSize();
+            ASSERT_EQ(region_tbl_size, region_2->getRegionTableSize());
+            ASSERT_EQ(region_tbl_size, region_3->getRegionTableSize());
+        }
+    }
+}
+CATCH
 
 #if USE_JEMALLOC // following tests depends on jemalloc
 TEST(FFIJemallocTest, JemallocThread)

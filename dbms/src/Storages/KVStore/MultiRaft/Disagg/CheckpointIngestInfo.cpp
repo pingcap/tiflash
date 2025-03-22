@@ -21,6 +21,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/KVStore/MultiRaft/RegionPersister.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/V3/Universal/RaftDataReader.h>

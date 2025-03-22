@@ -28,7 +28,6 @@
 #include <Server/ServerInfo.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler_fwd.h>
 #include <Storages/KVStore/Types.h>
-#include <common/MultiVersion.h>
 
 #include <chrono>
 #include <condition_variable>
@@ -123,10 +122,6 @@ using GlobalPageIdAllocatorPtr = std::shared_ptr<GlobalPageIdAllocator>;
 /// (database name, table name)
 using DatabaseAndTableName = std::pair<String, String>;
 
-/// Table -> set of table-views that make SELECT from it.
-using ViewDependencies = std::map<DatabaseAndTableName, std::set<DatabaseAndTableName>>;
-using Dependencies = std::vector<DatabaseAndTableName>;
-
 using TableAndCreateAST = std::pair<StoragePtr, ASTPtr>;
 using TableAndCreateASTs = std::map<String, TableAndCreateAST>;
 
@@ -158,7 +153,6 @@ private:
     /// Format, used when server formats data by itself and if query does not have FORMAT specification.
     /// Thus, used in HTTP interface. If not specified - then some globally default format is used.
     String default_format;
-    TableAndCreateASTs external_tables; /// Temporary tables.
     Tables table_function_results; /// Temporary tables obtained by execution of table functions. Keyed by AST tree id.
     Context * query_context = nullptr;
     Context * session_context = nullptr; /// Session context or nullptr. Could be equal to this.
@@ -223,7 +217,6 @@ public:
     void setPath(const String & path);
     void setTemporaryPath(const String & path);
     void setFlagsPath(const String & path);
-    void setUserFilesPath(const String & path);
 
     void setPathPool(
         const Strings & main_data_paths,
@@ -238,6 +231,11 @@ public:
     void setConfig(const ConfigurationPtr & config);
     Poco::Util::AbstractConfiguration & getConfigRef() const;
 
+    using ConfigReloadCallback = std::function<void()>;
+    void setConfigReloadCallback(ConfigReloadCallback && callback);
+    void reloadConfig() const;
+    void reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config);
+
     /** Take the list of users, quotas and configuration profiles from this config.
       * The list of users is completely replaced.
       * The accumulated quota values are not reset if the quota is not deleted.
@@ -245,9 +243,11 @@ public:
     void setUsersConfig(const ConfigurationPtr & config);
     ConfigurationPtr getUsersConfig();
 
+    /// Sets default_profile, must be called once during the initialization
+    void setDefaultProfiles();
+
     /// Security configuration settings.
     void setSecurityConfig(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
-
     TiFlashSecurityConfigPtr getSecurityConfig();
 
     /// Must be called before getClientInfo.
@@ -269,14 +269,9 @@ public:
         const Poco::Net::IPAddress & address);
     QuotaForIntervals & getQuota();
 
-    void addDependency(const DatabaseAndTableName & from, const DatabaseAndTableName & where);
-    void removeDependency(const DatabaseAndTableName & from, const DatabaseAndTableName & where);
-    Dependencies getDependencies(const String & database_name, const String & table_name) const;
-
     /// Checking the existence of the table/database. Database can be empty - in this case the current database is used.
     bool isTableExist(const String & database_name, const String & table_name) const;
     bool isDatabaseExist(const String & database_name) const;
-    bool isExternalTableExist(const String & table_name) const;
     void assertTableExists(const String & database_name, const String & table_name) const;
 
     /** The parameter check_database_access_rights exists to not check the permissions of the database again,
@@ -292,17 +287,17 @@ public:
     void assertDatabaseDoesntExist(const String & database_name) const;
     void checkDatabaseAccessRights(const std::string & database_name) const;
 
-    Tables getExternalTables() const;
-    StoragePtr tryGetExternalTable(const String & table_name) const;
     StoragePtr getTable(const String & database_name, const String & table_name) const;
     StoragePtr tryGetTable(const String & database_name, const String & table_name) const;
-    void addExternalTable(const String & table_name, const StoragePtr & storage, const ASTPtr & ast = {});
-    StoragePtr tryRemoveExternalTable(const String & table_name);
 
     StoragePtr executeTableFunction(const ASTPtr & table_expression);
 
     void addDatabase(const String & database_name, const DatabasePtr & database);
     DatabasePtr detachDatabase(const String & database_name);
+
+    DatabasePtr getDatabase(const String & database_name) const;
+    DatabasePtr tryGetDatabase(const String & database_name) const;
+    Databases getDatabases() const;
 
     /// Get an object that protects the table from concurrently executing multiple DDL operations.
     /// If such an object already exists, an exception is thrown.
@@ -322,11 +317,12 @@ public:
     void setDefaultFormat(const String & name);
 
     Settings getSettings() const;
-    void setSettings(const Settings & settings_);
+    const Settings & getSettingsRef() const;
+    Settings & getSettingsRef();
 
+    void setSettings(const Settings & settings_);
     /// Set a setting by name.
     void setSetting(const String & name, const Field & value);
-
     /// Set a setting by name. Read the value in text form from a string (for example, from a config, or from a URL parameter).
     void setSetting(const String & name, const std::string & value);
 
@@ -338,17 +334,9 @@ public:
         size_t max_block_size) const;
     BlockOutputStreamPtr getOutputFormat(const String & name, WriteBuffer & buf, const Block & sample) const;
 
-    /// The port that the server listens for executing SQL queries.
-    UInt16 getTCPPort() const;
-
     /// Get query for the CREATE table.
     ASTPtr getCreateTableQuery(const String & database_name, const String & table_name) const;
-    ASTPtr getCreateExternalTableQuery(const String & table_name) const;
     ASTPtr getCreateDatabaseQuery(const String & database_name) const;
-
-    DatabasePtr getDatabase(const String & database_name) const;
-    DatabasePtr tryGetDatabase(const String & database_name) const;
-    Databases getDatabases() const;
 
     std::shared_ptr<Context> acquireSession(
         const String & session_id,
@@ -376,9 +364,6 @@ public:
     void setQueryContext(Context & context_) { query_context = &context_; }
     void setSessionContext(Context & context_) { session_context = &context_; }
     void setGlobalContext(Context & context_) { global_context = &context_; }
-    const Settings & getSettingsRef() const;
-    Settings & getSettingsRef();
-
 
     void setProgressCallback(ProgressCallback callback);
     /// Used in InterpreterSelectQuery to pass it to the IProfilingBlockInputStream.
@@ -509,14 +494,7 @@ public:
     /// Get the server uptime in seconds.
     time_t getUptimeSeconds() const;
 
-    using ConfigReloadCallback = std::function<void()>;
-    void setConfigReloadCallback(ConfigReloadCallback && callback);
-    void reloadConfig() const;
-
     void shutdown();
-
-    /// Sets default_profile, must be called once during the initialization
-    void setDefaultProfiles();
 
     void setServerInfo(const ServerInfo & server_info);
     const std::optional<ServerInfo> & getServerInfo() const;
@@ -528,8 +506,6 @@ public:
 
     /// User name and session identifier. Named sessions are local to users.
     using SessionKey = std::pair<String, String>;
-
-    void reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config);
 
     size_t getMaxStreams() const;
 
@@ -557,8 +533,8 @@ public:
     void initKeyspaceBlocklist(const std::unordered_set<KeyspaceID> & keyspace_ids);
     bool isKeyspaceInBlocklist(KeyspaceID keyspace_id);
     void initRegionBlocklist(const std::unordered_set<RegionID> & region_ids);
-    bool isRegionInBlocklist(RegionID region_id);
-    bool isRegionsContainsInBlocklist(const std::vector<RegionID> & regions);
+    bool isRegionInBlocklist(RegionID region_id) const;
+    bool isRegionsContainsInBlocklist(const std::vector<RegionID> & regions) const;
 
     bool initializeStoreIdBlockList(const String &);
     const std::unordered_set<uint64_t> * getStoreIdBlockList() const;
