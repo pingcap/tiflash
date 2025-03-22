@@ -922,14 +922,18 @@ void ColumnDecimal<T>::insertManyFrom(const IColumn & src, size_t position, size
 }
 
 template <typename T>
-void ColumnDecimal<T>::insertSelectiveFrom(const IColumn & src, const IColumn::Offsets & selective_offsets)
+void ColumnDecimal<T>::insertSelectiveRangeFrom(
+    const IColumn & src,
+    const IColumn::Offsets & selective_offsets,
+    size_t start,
+    size_t length)
 {
+    RUNTIME_CHECK(selective_offsets.size() >= start + length);
     const auto & src_data = static_cast<const ColumnDecimal &>(src).data;
     size_t old_size = data.size();
-    size_t to_add_size = selective_offsets.size();
-    data.resize(old_size + to_add_size);
-    for (size_t i = 0; i < to_add_size; ++i)
-        data[i + old_size] = src_data[selective_offsets[i]];
+    data.resize(old_size + length);
+    for (size_t i = 0; i < length; ++i)
+        data[i + old_size] = src_data[selective_offsets[i + start]];
 }
 
 #pragma GCC diagnostic pop

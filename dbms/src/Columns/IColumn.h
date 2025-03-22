@@ -156,7 +156,16 @@ public:
     /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertSelectiveFrom(ConstColumnXXX, ...)
     using Offset = UInt64;
     using Offsets = PaddedPODArray<Offset>;
-    virtual void insertSelectiveFrom(const IColumn & src, const Offsets & selective_offsets) = 0;
+    void insertSelectiveFrom(const IColumn & src, const Offsets & selective_offsets)
+    {
+        insertSelectiveRangeFrom(src, selective_offsets, 0, selective_offsets.size());
+    }
+    virtual void insertSelectiveRangeFrom(
+        const IColumn & src,
+        const Offsets & selective_offsets,
+        size_t start,
+        size_t length)
+        = 0;
 
     /// Appends one field multiple times. Can be optimized in inherited classes.
     virtual void insertMany(const Field & field, size_t length)
@@ -246,12 +255,12 @@ public:
 
     /// Count the serialize byte size and added to the byte_size.
     /// The byte_size.size() must be equal to the column size.
+    virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
     virtual void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & /* byte_size */,
         const NullMap * /*nullmap*/,
         const TiDB::TiDBCollatorPtr & /* collator */) const
         = 0;
-    virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
 
     /// Count the serialize byte size and added to the byte_size called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
@@ -331,20 +340,20 @@ public:
     ///     }
     ///     for (auto & column_ptr : mutable_columns)
     ///         column_ptr->flushNTAlignBuffer();
+    virtual void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) = 0;
     virtual void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */)
         = 0;
-    virtual void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) = 0;
 
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
     /// Only called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
-    virtual void deserializeForCmpAndInsertFromPosColumnArray(
+    virtual void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         const Offsets & /* array_offsets */,
         bool /* use_nt_align_buffer */)
         = 0;
-    virtual void deserializeAndInsertFromPosForColumnArray(
+    virtual void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & /* pos */,
         const Offsets & /* array_offsets */,
         bool /* use_nt_align_buffer */)
