@@ -39,9 +39,6 @@ class NewHandleIndex
 };
 
 // NewHandleIndex<Int64> is specialized for Int64 handle.
-// It uses a absl::btree_map to store the handle -> row_id mapping.
-// Why use absl::btree_map instead of std::map, std::unordered_map, or absl::hash_map?
-// Because absl::btree_map is more memory-efficient and offers better performance than std::map.
 template <typename Hash>
 class NewHandleIndex<Int64, Hash>
 {
@@ -84,7 +81,7 @@ private:
 };
 
 // NewHandleIndex<String> is specialized for String handle.
-// It uses a absl::btree_multimap to store the hash_value_of_handle -> row_id mapping.
+// In order to save memory, it stores the hash value of the handle instead of the handle itself.
 template <typename Hash>
 class NewHandleIndex<String, Hash>
 {
