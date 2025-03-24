@@ -31,7 +31,7 @@ template <>
 class ColumnView<Int64>
 {
 public:
-    ColumnView(const IColumn & col)
+    explicit ColumnView(const IColumn & col)
         : data(toColumnVectorData<Int64>(col))
     {}
 
@@ -55,7 +55,7 @@ template <>
 class ColumnView<String>
 {
 public:
-    ColumnView(const IColumn & col)
+    explicit ColumnView(const IColumn & col)
         : offsets(typeid_cast<const ColumnString &>(col).getOffsets())
         , chars(typeid_cast<const ColumnString &>(col).getChars())
     {}

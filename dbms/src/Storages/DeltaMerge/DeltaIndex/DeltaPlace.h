@@ -19,15 +19,11 @@
 #include <DataStreams/IBlockOutputStream.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
+#include <Storages/DeltaMerge/RowKeyFilter.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <common/logger_useful.h>
 
-#include <type_traits>
-
-
-namespace DB
-{
-namespace DM
+namespace DB::DM
 {
 inline int compareTuple(
     const Columns & left,
@@ -310,5 +306,4 @@ bool placeDelete(
     return rows == limit;
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

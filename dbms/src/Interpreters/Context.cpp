@@ -51,7 +51,7 @@
 #include <Server/ServerInfo.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
-#include <Storages/DeltaMerge/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>

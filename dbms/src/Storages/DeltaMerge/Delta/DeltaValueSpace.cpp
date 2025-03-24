@@ -21,7 +21,7 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
