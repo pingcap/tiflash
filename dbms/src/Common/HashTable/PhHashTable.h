@@ -56,6 +56,11 @@ template <typename TKey, typename TMapped, typename Hash, typename Base>
 class PhHashTableTemplate : public Base
 {
 public:
+    PhHashTableTemplate()
+    {
+        this->reserve(256);
+    }
+
     static constexpr bool is_phmap = true;
     static constexpr bool is_string_hash_map = false;
 
