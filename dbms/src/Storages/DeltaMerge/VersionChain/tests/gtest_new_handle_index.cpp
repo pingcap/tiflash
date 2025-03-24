@@ -98,35 +98,32 @@ void testInt64()
         ASSERT_TRUE(handle_index.handle_to_row_id.empty());
     }
 #endif
-    template <typename Hash>
-    void testString()
+
+    template <ExtraHandleType HandleType, typename Hash = absl::Hash<typename ExtraHandleRefType<HandleType>::type>>
+    void testNewHandleIndex()
     {
-        // Create delta for NewHandleIndex<String>
         writeSegmentGeneric("d_tiny:[0, 66):shuffle:ts_1|d_tiny:[44, 107):shuffle:ts_2|d_tiny:[60, "
                             "160):shuffle:ts_3|d_tiny:[170, 171):shuffle:ts_4");
         auto [seg, snap] = getSegmentForRead(SEG_ID);
         auto delta_rows = snap->delta->getRows();
-        auto delta_reader = VersionChain<String>::createDeltaValueReader(*dm_context, snap->delta);
+        auto delta_reader = VersionChain<HandleType>::createDeltaValueReader(*dm_context, snap->delta);
         UInt32 stable_rows = 0;
 
         MutableColumns mut_cols(1);
-        mut_cols[0] = ColumnString::create();
+        mut_cols[0] = NewHandleIndex<HandleType, Hash>::createHandleColumn();
         const auto read_rows = delta_reader.readRows(mut_cols, /*offset*/ 0, /*limit*/ delta_rows, /*range*/ nullptr);
         ASSERT_EQ(read_rows, delta_rows);
-        ColumnView<String> handles(*(mut_cols[0]));
-
-        std::map<std::string_view, UInt32> base_handle_to_row_id;
-        std::multimap<std::string_view, UInt32> all_handle_to_row_id;
+        ColumnView<HandleType> handles(*(mut_cols[0]));
+        using HandleRefType = typename ExtraHandleRefType<HandleType>::type;
+        std::map<HandleRefType, UInt32> base_handle_to_row_id;
         for (UInt32 i = 0; i < handles.size(); ++i)
         {
             auto handle = handles[i];
             if (!base_handle_to_row_id.contains(handle))
                 base_handle_to_row_id.emplace(handle, i + stable_rows);
-
-            all_handle_to_row_id.emplace(handle, i + stable_rows);
         }
 
-        NewHandleIndex<String, Hash> handle_index;
+        NewHandleIndex<HandleType, Hash> handle_index;
         for (UInt32 i = 0; i < handles.size(); ++i)
         {
             auto handle = handles[i];
@@ -145,9 +142,15 @@ void testInt64()
             ASSERT_EQ(actual_row_id.value(), expected_row_id) << i;
         }
 
+        auto get_handle = [](Int64 i) {
+            if constexpr (std::is_same_v<HandleType, String>)
+                return genMockCommonHandle(i, 1);
+            else
+                return i;
+        };
         for (Int64 i = 160; i < 170; ++i)
         {
-            auto handle = genMockCommonHandle(i, 1);
+            auto handle = get_handle(i);
             auto row_id = handle_index.find(handle, delta_reader, stable_rows);
             ASSERT_FALSE(row_id.has_value()) << i;
         }
@@ -171,9 +174,11 @@ void testInt64()
         }
     }
 
+    template <typename T>
     struct HighCollisionHash
     {
         size_t operator()(std::string_view handle) const { return decodeMockCommonHandle(String(handle)) % 3; }
+        size_t operator()(Int64 handle) const { return handle % 3; }
     };
 };
 
@@ -184,13 +189,14 @@ try
 {
     if (is_common_handle)
     {
-        // The default hash type.
-        testString<absl::Hash<std::string_view>>();
-        // Use a hash function with high collision rate.
-        testString<NewHandleIndexTest::HighCollisionHash>();
+        testNewHandleIndex<String>();
+        testNewHandleIndex<String, NewHandleIndexTest::HighCollisionHash<std::string_view>>();
     }
-    //else
-    //  testInt64();
+    else
+    {
+        testNewHandleIndex<Int64>();
+        testNewHandleIndex<Int64, NewHandleIndexTest::HighCollisionHash<Int64>>();
+    }
 }
 CATCH
 
