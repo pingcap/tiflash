@@ -9,7 +9,8 @@ struct MapSlotWithSavedHashType
     // variable name obeys the style of phmap.
     static constexpr bool with_saved_hash = true;
     MapSlotWithSavedHashType()
-        : hashval(0) {}
+        : hashval(0)
+    {}
     ~MapSlotWithSavedHashType() = delete;
     MapSlotWithSavedHashType(const MapSlotWithSavedHashType &) = delete;
     MapSlotWithSavedHashType & operator=(const MapSlotWithSavedHashType &) = delete;
@@ -32,8 +33,8 @@ struct MapSlotWithSavedHashType
     template <typename T>
     static K & getKey(const T & x)
     {
-        static_assert(std::is_same_v<std::decay_t<T>, value_type> ||
-                std::is_same_v<std::decay_t<T>, mutable_value_type>);
+        static_assert(
+            std::is_same_v<std::decay_t<T>, value_type> || std::is_same_v<std::decay_t<T>, mutable_value_type>);
         return x.second;
     }
 
@@ -56,10 +57,7 @@ template <typename TKey, typename TMapped, typename Hash, typename Base>
 class PhHashTableTemplate : public Base
 {
 public:
-    PhHashTableTemplate()
-    {
-        this->reserve(256);
-    }
+    PhHashTableTemplate() { this->reserve(256); }
 
     static constexpr bool is_phmap = true;
     static constexpr bool is_string_hash_map = false;
@@ -77,9 +75,10 @@ public:
     using ConstLookupResult = const Cell *;
 
     using Base::begin;
-    using Base::end;
+    using Base::capacity;
     using Base::clear;
     using Base::empty;
+    using Base::end;
     using Base::find_impl;
     using Base::hash;
     using Base::lazy_emplace;
@@ -87,7 +86,6 @@ public:
     using Base::prefetch;
     using Base::prefetch_hash;
     using Base::size;
-    using Base::capacity;
     using Base::slot_at;
 
     template <typename KeyHolder>
@@ -226,11 +224,11 @@ public:
 private:
     template <typename Key, typename KeyHolder>
     ALWAYS_INLINE inline void emplaceWithHash(
-            Key && key,
-            KeyHolder && key_holder,
-            LookupResult & it,
-            bool & inserted,
-            size_t hashval)
+        Key && key,
+        KeyHolder && key_holder,
+        LookupResult & it,
+        bool & inserted,
+        size_t hashval)
     {
         inserted = false;
         auto iter = lazy_emplace_with_hash(key, hashval, [&](const auto & ctor) {
@@ -252,13 +250,14 @@ using PhHashTableBase = phmap::flat_hash_map<Key, Mapped, Hash>;
 
 template <typename Key, typename Mapped, typename Hash>
 using PhHashTableWithSavedHashBase = phmap::priv::raw_hash_map<
-     FlatHashMapWithSavedHashPolicy<Key, Mapped>,
-     Hash,
-     phmap::priv::hash_default_eq<Key>,
-     phmap::priv::Allocator<typename FlatHashMapWithSavedHashPolicy<Key, Mapped>::slot_type>>;
+    FlatHashMapWithSavedHashPolicy<Key, Mapped>,
+    Hash,
+    phmap::priv::hash_default_eq<Key>,
+    phmap::priv::Allocator<typename FlatHashMapWithSavedHashPolicy<Key, Mapped>::slot_type>>;
 
 template <typename Key, typename Mapped, typename Hash>
 using PhHashTable = PhHashTableTemplate<Key, Mapped, Hash, PhHashTableBase<Key, Mapped, Hash>>;
 
-template <typename Key, typename Mapped, typename Hash> 
-using PhHashTableWithSavedHash = PhHashTableTemplate<Key, Mapped, Hash, PhHashTableWithSavedHashBase<Key, Mapped, Hash>>;
+template <typename Key, typename Mapped, typename Hash>
+using PhHashTableWithSavedHash
+    = PhHashTableTemplate<Key, Mapped, Hash, PhHashTableWithSavedHashBase<Key, Mapped, Hash>>;

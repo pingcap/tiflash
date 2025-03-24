@@ -144,10 +144,10 @@
 // ----------------------------------------------------------------
 #ifdef PHMAP_HAVE_STD_IS_TRIVIALLY_DESTRUCTIBLE
 #error PHMAP_HAVE_STD_IS_TRIVIALLY_DESTRUCTIBLE cannot be directly set
-#elif defined(_LIBCPP_VERSION) ||                                            \
-        (!defined(__clang__) && defined(__GNUC__) && defined(__GLIBCXX__) && \
-         (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8))) ||        \
-        defined(_MSC_VER)
+#elif defined(_LIBCPP_VERSION)                                           \
+    || (!defined(__clang__) && defined(__GNUC__) && defined(__GLIBCXX__) \
+        && (__GNUC__ > 4 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 8)))     \
+    || defined(_MSC_VER)
 #define PHMAP_HAVE_STD_IS_TRIVIALLY_DESTRUCTIBLE 1
 #endif
 
@@ -159,10 +159,10 @@
 #error PHMAP_HAVE_STD_IS_TRIVIALLY_CONSTRUCTIBLE cannot be directly set
 #elif defined(PHMAP_HAVE_STD_IS_TRIVIALLY_ASSIGNABLE)
 #error PHMAP_HAVE_STD_IS_TRIVIALLY_ASSIGNABLE cannot directly set
-#elif (defined(__clang__) && defined(_LIBCPP_VERSION)) ||                                                        \
-        (!defined(__clang__) && defined(__GNUC__) && (__GNUC__ > 5 || (__GNUC__ == 5 && __GNUC_MINOR__ >= 1)) && \
-         (defined(_LIBCPP_VERSION) || defined(__GLIBCXX__))) ||                                                  \
-        (defined(_MSC_VER) && !defined(__NVCC__))
+#elif (defined(__clang__) && defined(_LIBCPP_VERSION))                                                       \
+    || (!defined(__clang__) && defined(__GNUC__) && (__GNUC__ > 5 || (__GNUC__ == 5 && __GNUC_MINOR__ >= 1)) \
+        && (defined(_LIBCPP_VERSION) || defined(__GLIBCXX__)))                                               \
+    || (defined(_MSC_VER) && !defined(__NVCC__))
 #define PHMAP_HAVE_STD_IS_TRIVIALLY_CONSTRUCTIBLE 1
 #define PHMAP_HAVE_STD_IS_TRIVIALLY_ASSIGNABLE 1
 #endif
@@ -187,8 +187,8 @@
 #include <android/ndk-version.h>
 #endif // __has_include(<android/ndk-version.h>)
 
-#if defined(__ANDROID__) && defined(__clang__) && defined(__NDK_MAJOR__) && defined(__NDK_MINOR__) && \
-        ((__NDK_MAJOR__ < 12) || ((__NDK_MAJOR__ == 12) && (__NDK_MINOR__ < 1)))
+#if defined(__ANDROID__) && defined(__clang__) && defined(__NDK_MAJOR__) && defined(__NDK_MINOR__) \
+    && ((__NDK_MAJOR__ < 12) || ((__NDK_MAJOR__ == 12) && (__NDK_MINOR__ < 1)))
 #undef PHMAP_HAVE_TLS
 #undef PHMAP_HAVE_THREAD_LOCAL
 #endif
@@ -201,9 +201,9 @@
 #ifdef PHMAP_HAVE_INTRINSIC_INT128
 #error PHMAP_HAVE_INTRINSIC_INT128 cannot be directly set
 #elif defined(__SIZEOF_INT128__)
-#if (defined(__clang__) && !defined(_WIN32) && !defined(__aarch64__)) || \
-        (defined(__CUDACC__) && __CUDACC_VER_MAJOR__ >= 9) ||            \
-        (defined(__GNUC__) && !defined(__clang__) && !defined(__CUDACC__))
+#if (defined(__clang__) && !defined(_WIN32) && !defined(__aarch64__)) \
+    || (defined(__CUDACC__) && __CUDACC_VER_MAJOR__ >= 9)             \
+    || (defined(__GNUC__) && !defined(__clang__) && !defined(__CUDACC__))
 #define PHMAP_HAVE_INTRINSIC_INT128 1
 #elif defined(__CUDACC__)
 #if __CUDACC_VER__ >= 70000
@@ -221,9 +221,9 @@
 #if defined(__EXCEPTIONS) && __has_feature(cxx_exceptions)
 #define PHMAP_HAVE_EXCEPTIONS 1
 #endif // defined(__EXCEPTIONS) && __has_feature(cxx_exceptions)
-#elif !(defined(__GNUC__) && (__GNUC__ < 5) && !defined(__EXCEPTIONS)) &&        \
-        !(defined(__GNUC__) && (__GNUC__ >= 5) && !defined(__cpp_exceptions)) && \
-        !(defined(_MSC_VER) && !defined(_CPPUNWIND))
+#elif !(defined(__GNUC__) && (__GNUC__ < 5) && !defined(__EXCEPTIONS))       \
+    && !(defined(__GNUC__) && (__GNUC__ >= 5) && !defined(__cpp_exceptions)) \
+    && !(defined(_MSC_VER) && !defined(_CPPUNWIND))
 #define PHMAP_HAVE_EXCEPTIONS 1
 #endif
 
@@ -233,9 +233,9 @@
 // -----------------------------------------------------------------------
 #ifdef PHMAP_HAVE_MMAP
 #error PHMAP_HAVE_MMAP cannot be directly set
-#elif defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__ros__) ||            \
-        defined(__native_client__) || defined(__asmjs__) || defined(__wasm__) || defined(__Fuchsia__) || \
-        defined(__sun) || defined(__ASYLO__)
+#elif defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__) || defined(__ros__)                             \
+    || defined(__native_client__) || defined(__asmjs__) || defined(__wasm__) || defined(__Fuchsia__) || defined(__sun) \
+    || defined(__ASYLO__)
 #define PHMAP_HAVE_MMAP 1
 #endif
 
@@ -260,8 +260,8 @@
 #error "phmap endian detection needs to be set up for your compiler"
 #endif
 
-#if defined(__APPLE__) && defined(_LIBCPP_VERSION) && defined(__MAC_OS_X_VERSION_MIN_REQUIRED__) && \
-        __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 101400
+#if defined(__APPLE__) && defined(_LIBCPP_VERSION) && defined(__MAC_OS_X_VERSION_MIN_REQUIRED__) \
+    && __ENVIRONMENT_MAC_OS_X_VERSION_MIN_REQUIRED__ < 101400
 #define PHMAP_INTERNAL_MACOS_CXX17_TYPES_UNAVAILABLE 1
 #else
 #define PHMAP_INTERNAL_MACOS_CXX17_TYPES_UNAVAILABLE 0
@@ -421,8 +421,8 @@
 #define PHMAP_HAVE_ATTRIBUTE_NO_TAIL_CALL 0
 #endif
 
-#if (PHMAP_HAVE_ATTRIBUTE(weak) || (defined(__GNUC__) && !defined(__clang__))) && \
-        !(defined(__llvm__) && defined(_WIN32))
+#if (PHMAP_HAVE_ATTRIBUTE(weak) || (defined(__GNUC__) && !defined(__clang__))) \
+    && !(defined(__llvm__) && defined(_WIN32))
 #undef PHMAP_ATTRIBUTE_WEAK
 #define PHMAP_ATTRIBUTE_WEAK __attribute__((weak))
 #define PHMAP_HAVE_ATTRIBUTE_WEAK 1
@@ -481,8 +481,8 @@
 #define PHMAP_ATTRIBUTE_NO_SANITIZE_SAFESTACK
 #endif
 
-#if PHMAP_HAVE_ATTRIBUTE(returns_nonnull) || \
-        (defined(__GNUC__) && (__GNUC__ > 5 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9)) && !defined(__clang__))
+#if PHMAP_HAVE_ATTRIBUTE(returns_nonnull) \
+    || (defined(__GNUC__) && (__GNUC__ > 5 || (__GNUC__ == 4 && __GNUC_MINOR__ >= 9)) && !defined(__clang__))
 #define PHMAP_ATTRIBUTE_RETURNS_NONNULL __attribute__((returns_nonnull))
 #else
 #define PHMAP_ATTRIBUTE_RETURNS_NONNULL
@@ -490,8 +490,8 @@
 
 #ifdef PHMAP_HAVE_ATTRIBUTE_SECTION
 #error PHMAP_HAVE_ATTRIBUTE_SECTION cannot be directly set
-#elif (PHMAP_HAVE_ATTRIBUTE(section) || (defined(__GNUC__) && !defined(__clang__))) && !defined(__APPLE__) && \
-        PHMAP_HAVE_ATTRIBUTE_WEAK
+#elif (PHMAP_HAVE_ATTRIBUTE(section) || (defined(__GNUC__) && !defined(__clang__))) && !defined(__APPLE__) \
+    && PHMAP_HAVE_ATTRIBUTE_WEAK
 #define PHMAP_HAVE_ATTRIBUTE_SECTION 1
 #ifndef PHMAP_ATTRIBUTE_SECTION
 #define PHMAP_ATTRIBUTE_SECTION(name) __attribute__((section(#name))) __attribute__((noinline))
@@ -508,8 +508,8 @@
 #define PHMAP_INIT_ATTRIBUTE_SECTION_VARS(name)
 #define PHMAP_DEFINE_ATTRIBUTE_SECTION_VARS(name)
 #endif
-#define PHMAP_ATTRIBUTE_SECTION_START(name) (reinterpret_cast<void*>(__start_##name))
-#define PHMAP_ATTRIBUTE_SECTION_STOP(name) (reinterpret_cast<void*>(__stop_##name))
+#define PHMAP_ATTRIBUTE_SECTION_START(name) (reinterpret_cast<void *>(__start_##name))
+#define PHMAP_ATTRIBUTE_SECTION_STOP(name) (reinterpret_cast<void *>(__stop_##name))
 #else // !PHMAP_HAVE_ATTRIBUTE_SECTION
 #define PHMAP_HAVE_ATTRIBUTE_SECTION 0
 #define PHMAP_ATTRIBUTE_SECTION(name)
@@ -517,8 +517,8 @@
 #define PHMAP_INIT_ATTRIBUTE_SECTION_VARS(name)
 #define PHMAP_DEFINE_ATTRIBUTE_SECTION_VARS(name)
 #define PHMAP_DECLARE_ATTRIBUTE_SECTION_VARS(name)
-#define PHMAP_ATTRIBUTE_SECTION_START(name) (reinterpret_cast<void*>(0))
-#define PHMAP_ATTRIBUTE_SECTION_STOP(name) (reinterpret_cast<void*>(0))
+#define PHMAP_ATTRIBUTE_SECTION_START(name) (reinterpret_cast<void *>(0))
+#define PHMAP_ATTRIBUTE_SECTION_STOP(name) (reinterpret_cast<void *>(0))
 #endif // PHMAP_ATTRIBUTE_SECTION
 
 #if PHMAP_HAVE_ATTRIBUTE(force_align_arg_pointer) || (defined(__GNUC__) && !defined(__clang__))
@@ -643,8 +643,10 @@
 // mistake, you will get a compile-time error.
 #define PHMAP_ARRAYSIZE(array) (sizeof(::phmap::macros_internal::ArraySizeHelper(array)))
 
-namespace phmap {
-namespace macros_internal {
+namespace phmap
+{
+namespace macros_internal
+{
 // Note: this internal template function declaration is used by PHMAP_ARRAYSIZE.
 // The function doesn't need a definition, as we only use its type.
 template <typename T, size_t N>
@@ -663,7 +665,8 @@ auto ArraySizeHelper(const T (&array)[N]) -> char (&)[N];
 
 #ifndef PHMAP_FALLTHROUGH_INTENDED
 #define PHMAP_FALLTHROUGH_INTENDED \
-    do {                           \
+    do                             \
+    {                              \
     } while (0)
 #endif
 
@@ -729,20 +732,25 @@ auto ArraySizeHelper(const T (&array)[N]) -> char (&)[N];
 #if defined(NDEBUG)
 #define PHMAP_ASSERT(expr) (false ? (void)(expr) : (void)0)
 #else
-#define PHMAP_ASSERT(expr) (PHMAP_PREDICT_TRUE((expr)) ? (void)0 : [] { assert(false && #expr); }()) // NOLINT
+#define PHMAP_ASSERT(expr)                       \
+    (PHMAP_PREDICT_TRUE((expr)) ? (void)0 : [] { \
+        assert(false && #expr);                  \
+    }()) // NOLINT
 #endif
 
 #ifdef PHMAP_HAVE_EXCEPTIONS
 #define PHMAP_INTERNAL_TRY try
 #define PHMAP_INTERNAL_CATCH_ANY catch (...)
 #define PHMAP_INTERNAL_RETHROW \
-    do {                       \
+    do                         \
+    {                          \
         throw;                 \
     } while (false)
 #else // PHMAP_HAVE_EXCEPTIONS
 #define PHMAP_INTERNAL_TRY if (true)
 #define PHMAP_INTERNAL_CATCH_ANY else if (false)
 #define PHMAP_INTERNAL_RETHROW \
-    do {                       \
+    do                         \
+    {                          \
     } while (false)
 #endif // PHMAP_HAVE_EXCEPTIONS

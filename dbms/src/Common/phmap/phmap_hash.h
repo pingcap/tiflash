@@ -57,8 +57,10 @@
 #include <string_view>
 #endif
 
-namespace phmap {
-namespace priv {
+namespace phmap
+{
+namespace priv
+{
 // --------------------------------------------------------------------------
 //  hash_default
 // --------------------------------------------------------------------------
@@ -67,90 +69,118 @@ namespace priv {
 
 // support char16_t wchar_t ....
 template <class CharT>
-struct StringHashT {
+struct StringHashT
+{
     using is_transparent = void;
 
-    size_t operator()(std::basic_string_view<CharT> v) const {
-        std::string_view bv{reinterpret_cast<const char*>(v.data()), v.size() * sizeof(CharT)};
+    size_t operator()(std::basic_string_view<CharT> v) const
+    {
+        std::string_view bv{reinterpret_cast<const char *>(v.data()), v.size() * sizeof(CharT)};
         return std::hash<std::string_view>()(bv);
     }
 };
 
 // Supports heterogeneous lookup for basic_string<T>-like elements.
 template <class CharT>
-struct StringHashEqT {
+struct StringHashEqT
+{
     using Hash = StringHashT<CharT>;
 
-    struct Eq {
+    struct Eq
+    {
         using is_transparent = void;
 
-        bool operator()(std::basic_string_view<CharT> lhs, std::basic_string_view<CharT> rhs) const {
+        bool operator()(std::basic_string_view<CharT> lhs, std::basic_string_view<CharT> rhs) const
+        {
             return lhs == rhs;
         }
     };
 };
 
 template <>
-struct HashEq<std::string> : StringHashEqT<char> {};
+struct HashEq<std::string> : StringHashEqT<char>
+{
+};
 
 template <>
-struct HashEq<std::string_view> : StringHashEqT<char> {};
+struct HashEq<std::string_view> : StringHashEqT<char>
+{
+};
 
 // char16_t
 template <>
-struct HashEq<std::u16string> : StringHashEqT<char16_t> {};
+struct HashEq<std::u16string> : StringHashEqT<char16_t>
+{
+};
 
 template <>
-struct HashEq<std::u16string_view> : StringHashEqT<char16_t> {};
+struct HashEq<std::u16string_view> : StringHashEqT<char16_t>
+{
+};
 
 // wchar_t
 template <>
-struct HashEq<std::wstring> : StringHashEqT<wchar_t> {};
+struct HashEq<std::wstring> : StringHashEqT<wchar_t>
+{
+};
 
 template <>
-struct HashEq<std::wstring_view> : StringHashEqT<wchar_t> {};
+struct HashEq<std::wstring_view> : StringHashEqT<wchar_t>
+{
+};
 
 #endif
 
 // Supports heterogeneous lookup for pointers and smart pointers.
 // -------------------------------------------------------------
 template <class T>
-struct HashEq<T*> {
-    struct Hash {
+struct HashEq<T *>
+{
+    struct Hash
+    {
         using is_transparent = void;
         template <class U>
-        size_t operator()(const U& ptr) const {
-            return phmap::Hash<const T*>{}(HashEq::ToPtr(ptr));
+        size_t operator()(const U & ptr) const
+        {
+            return phmap::Hash<const T *>{}(HashEq::ToPtr(ptr));
         }
     };
 
-    struct Eq {
+    struct Eq
+    {
         using is_transparent = void;
         template <class A, class B>
-        bool operator()(const A& a, const B& b) const {
+        bool operator()(const A & a, const B & b) const
+        {
             return HashEq::ToPtr(a) == HashEq::ToPtr(b);
         }
     };
 
 private:
-    static const T* ToPtr(const T* ptr) { return ptr; }
+    static const T * ToPtr(const T * ptr) { return ptr; }
 
     template <class U, class D>
-    static const T* ToPtr(const std::unique_ptr<U, D>& ptr) {
+    static const T * ToPtr(const std::unique_ptr<U, D> & ptr)
+    {
         return ptr.get();
     }
 
     template <class U>
-    static const T* ToPtr(const std::shared_ptr<U>& ptr) {
+    static const T * ToPtr(const std::shared_ptr<U> & ptr)
+    {
         return ptr.get();
     }
 };
 
 template <class T, class D>
-struct HashEq<std::unique_ptr<T, D>> : HashEq<T*> {};
+struct HashEq<std::unique_ptr<T, D>> : HashEq<T *>
+{
+};
 
 template <class T>
-struct HashEq<std::shared_ptr<T>> : HashEq<T*> {};
+struct HashEq<std::shared_ptr<T>> : HashEq<T *>
+{
+};
 
 } // namespace priv
 } // namespace phmap

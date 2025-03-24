@@ -406,6 +406,7 @@ public:
     static constexpr bool is_two_level = false;
 
     static constexpr bool is_phmap = false;
+
 protected:
     friend class const_iterator;
     friend class iterator;

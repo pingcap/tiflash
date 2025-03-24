@@ -35,13 +35,15 @@
 #include <utility>
 
 #if defined(PHMAP_USE_ABSL_HASH) && !defined(ABSL_HASH_HASH_H_)
-namespace absl {
+namespace absl
+{
 template <class T>
 struct Hash;
 };
 #endif
 
-namespace phmap {
+namespace phmap
+{
 
 #if defined(PHMAP_USE_ABSL_HASH)
 template <class T>
@@ -62,11 +64,13 @@ using Pair = typename std::pair<T1, T2>;
 
 class NullMutex;
 
-namespace priv {
+namespace priv
+{
 
 // The hash of an object of type T is computed by using phmap::Hash.
 template <class T, class E = void>
-struct HashEq {
+struct HashEq
+{
     using Hash = phmap::Hash<T>;
     using Eq = phmap::EqualTo<T>;
 };
@@ -88,48 +92,74 @@ using Pair = typename phmap::Pair<T1, T2>;
 } // namespace priv
 
 // ------------- forward declarations for hash containers ----------------------------------
-template <class T, class Hash = phmap::priv::hash_default_hash<T>, class Eq = phmap::priv::hash_default_eq<T>,
-          class Alloc = phmap::priv::Allocator<T>> // alias for std::allocator
+template <
+    class T,
+    class Hash = phmap::priv::hash_default_hash<T>,
+    class Eq = phmap::priv::hash_default_eq<T>,
+    class Alloc = phmap::priv::Allocator<T>> // alias for std::allocator
 class flat_hash_set;
 
-template <class K, class V, class Hash = phmap::priv::hash_default_hash<K>, class Eq = phmap::priv::hash_default_eq<K>,
-          class Alloc = phmap::priv::Allocator<phmap::priv::Pair<const K, V>>> // alias for std::allocator
+template <
+    class K,
+    class V,
+    class Hash = phmap::priv::hash_default_hash<K>,
+    class Eq = phmap::priv::hash_default_eq<K>,
+    class Alloc = phmap::priv::Allocator<phmap::priv::Pair<const K, V>>> // alias for std::allocator
 class flat_hash_map;
 
-template <class T, class Hash = phmap::priv::hash_default_hash<T>, class Eq = phmap::priv::hash_default_eq<T>,
-          class Alloc = phmap::priv::Allocator<T>> // alias for std::allocator
+template <
+    class T,
+    class Hash = phmap::priv::hash_default_hash<T>,
+    class Eq = phmap::priv::hash_default_eq<T>,
+    class Alloc = phmap::priv::Allocator<T>> // alias for std::allocator
 class node_hash_set;
 
-template <class Key, class Value, class Hash = phmap::priv::hash_default_hash<Key>,
-          class Eq = phmap::priv::hash_default_eq<Key>,
-          class Alloc = phmap::priv::Allocator<phmap::priv::Pair<const Key, Value>>> // alias for std::allocator
+template <
+    class Key,
+    class Value,
+    class Hash = phmap::priv::hash_default_hash<Key>,
+    class Eq = phmap::priv::hash_default_eq<Key>,
+    class Alloc = phmap::priv::Allocator<phmap::priv::Pair<const Key, Value>>> // alias for std::allocator
 class node_hash_map;
 
-template <class T, class Hash = phmap::priv::hash_default_hash<T>, class Eq = phmap::priv::hash_default_eq<T>,
-          class Alloc = phmap::priv::Allocator<T>, // alias for std::allocator
-          size_t N = 4,                            // 2**N submaps
-          class Mutex = phmap::NullMutex,          // use std::mutex to enable internal locks
-          bool balance = true>
+template <
+    class T,
+    class Hash = phmap::priv::hash_default_hash<T>,
+    class Eq = phmap::priv::hash_default_eq<T>,
+    class Alloc = phmap::priv::Allocator<T>, // alias for std::allocator
+    size_t N = 4, // 2**N submaps
+    class Mutex = phmap::NullMutex, // use std::mutex to enable internal locks
+    bool balance = true>
 class parallel_flat_hash_set;
 
-template <class K, class V, class Hash = phmap::priv::hash_default_hash<K>, class Eq = phmap::priv::hash_default_eq<K>,
-          class Alloc = phmap::priv::Allocator<phmap::priv::Pair<const K, V>>, // alias for std::allocator
-          size_t N = 4,                                                        // 2**N submaps
-          class Mutex = phmap::NullMutex, // use std::mutex to enable internal locks
-          bool balance = true>
+template <
+    class K,
+    class V,
+    class Hash = phmap::priv::hash_default_hash<K>,
+    class Eq = phmap::priv::hash_default_eq<K>,
+    class Alloc = phmap::priv::Allocator<phmap::priv::Pair<const K, V>>, // alias for std::allocator
+    size_t N = 4, // 2**N submaps
+    class Mutex = phmap::NullMutex, // use std::mutex to enable internal locks
+    bool balance = true>
 class parallel_flat_hash_map;
 
-template <class T, class Hash = phmap::priv::hash_default_hash<T>, class Eq = phmap::priv::hash_default_eq<T>,
-          class Alloc = phmap::priv::Allocator<T>, // alias for std::allocator
-          size_t N = 4,                            // 2**N submaps
-          class Mutex = phmap::NullMutex>          // use std::mutex to enable internal locks
+template <
+    class T,
+    class Hash = phmap::priv::hash_default_hash<T>,
+    class Eq = phmap::priv::hash_default_eq<T>,
+    class Alloc = phmap::priv::Allocator<T>, // alias for std::allocator
+    size_t N = 4, // 2**N submaps
+    class Mutex = phmap::NullMutex> // use std::mutex to enable internal locks
 class parallel_node_hash_set;
 
-template <class Key, class Value, class Hash = phmap::priv::hash_default_hash<Key>,
-          class Eq = phmap::priv::hash_default_eq<Key>,
-          class Alloc = phmap::priv::Allocator<phmap::priv::Pair<const Key, Value>>, // alias for std::allocator
-          size_t N = 4,                                                              // 2**N submaps
-          class Mutex = phmap::NullMutex> // use std::mutex to enable internal locks
+template <
+    class Key,
+    class Value,
+    class Hash = phmap::priv::hash_default_hash<Key>,
+    class Eq = phmap::priv::hash_default_eq<Key>,
+    class Alloc = phmap::priv::Allocator<phmap::priv::Pair<const Key, Value>>, // alias for std::allocator
+    size_t N = 4, // 2**N submaps
+    class Mutex = phmap::NullMutex> // use std::mutex to enable internal locks
 class parallel_node_hash_map;
 
 // ------------- forward declarations for btree containers ----------------------------------
@@ -139,12 +169,18 @@ class btree_set;
 template <typename Key, typename Compare = phmap::Less<Key>, typename Alloc = phmap::Allocator<Key>>
 class btree_multiset;
 
-template <typename Key, typename Value, typename Compare = phmap::Less<Key>,
-          typename Alloc = phmap::Allocator<phmap::priv::Pair<const Key, Value>>>
+template <
+    typename Key,
+    typename Value,
+    typename Compare = phmap::Less<Key>,
+    typename Alloc = phmap::Allocator<phmap::priv::Pair<const Key, Value>>>
 class btree_map;
 
-template <typename Key, typename Value, typename Compare = phmap::Less<Key>,
-          typename Alloc = phmap::Allocator<phmap::priv::Pair<const Key, Value>>>
+template <
+    typename Key,
+    typename Value,
+    typename Compare = phmap::Less<Key>,
+    typename Alloc = phmap::Allocator<phmap::priv::Pair<const Key, Value>>>
 class btree_multimap;
 
 } // namespace phmap

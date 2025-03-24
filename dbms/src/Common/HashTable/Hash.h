@@ -437,7 +437,7 @@ inline uint64_t umul128(uint64_t v, uint64_t kmul, uint64_t * high)
     *high = static_cast<uint64_t>(res >> 64);
     return static_cast<uint64_t>(res);
 }
-}
+} // namespace detail
 
 template <typename T>
 inline void hash_combine(uint64_t & seed, const T & val)

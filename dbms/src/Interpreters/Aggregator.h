@@ -31,8 +31,8 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <Interpreters/AggSpillContext.h>
 #include <Interpreters/AggregateDescription.h>
-#include <Interpreters/AggregationCommon.h>
 #include <Interpreters/AggregatedDataPhMap.h>
+#include <Interpreters/AggregationCommon.h>
 #include <Interpreters/CancellationHook.h>
 #include <TiDB/Collation/Collator.h>
 #include <common/StringRef.h>
@@ -484,10 +484,14 @@ struct AggregatedDataVariants : private boost::noncopyable
     using AggregationMethod_keys128_phmap = AggregationMethodKeysFixed<AggregatedDataWithKeys128PhMap, false, false>;
     using AggregationMethod_serialized_phmap = AggregationMethodSerialized<AggregatedDataWithStringKeyPhMap>;
 
-    using AggregationMethod_key32_phmap_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt32KeyTwoLevelPhMap, false>;
-    using AggregationMethod_key64_phmap_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevelPhMap, false>;
-    using AggregationMethod_keys128_phmap_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevelPhMap, false, false>;
-    using AggregationMethod_serialized_phmap_two_level = AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevelPhMap>;
+    using AggregationMethod_key32_phmap_two_level
+        = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt32KeyTwoLevelPhMap, false>;
+    using AggregationMethod_key64_phmap_two_level
+        = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevelPhMap, false>;
+    using AggregationMethod_keys128_phmap_two_level
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevelPhMap, false, false>;
+    using AggregationMethod_serialized_phmap_two_level
+        = AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevelPhMap>;
     // phmap end
 
     using AggregationMethod_key8 = AggregationMethodOneNumber<UInt8, AggregatedDataWithUInt8Key, false>;
@@ -503,8 +507,10 @@ struct AggregatedDataVariants : private boost::noncopyable
     using AggregationMethod_keys128 = AggregationMethodKeysFixed<AggregatedDataWithKeys128, false, false>;
     using AggregationMethod_keys256 = AggregationMethodKeysFixed<AggregatedDataWithKeys256>;
     using AggregationMethod_serialized = AggregationMethodSerialized<AggregatedDataWithStringKey>;
-    using AggregationMethod_key32_two_level = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel, false>;
-    using AggregationMethod_key64_two_level = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel, false>;
+    using AggregationMethod_key32_two_level
+        = AggregationMethodOneNumber<UInt32, AggregatedDataWithUInt64KeyTwoLevel, false>;
+    using AggregationMethod_key64_two_level
+        = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyTwoLevel, false>;
     using AggregationMethod_key_int256_two_level
         = AggregationMethodOneNumber<Int256, AggregatedDataWithInt256KeyTwoLevel>;
     using AggregationMethod_key_string_two_level
@@ -513,7 +519,8 @@ struct AggregatedDataVariants : private boost::noncopyable
         = AggregationMethodFixedString<AggregatedDataWithShortStringKeyTwoLevel, false>;
     using AggregationMethod_keys32_two_level = AggregationMethodKeysFixed<AggregatedDataWithUInt32KeyTwoLevel>;
     using AggregationMethod_keys64_two_level = AggregationMethodKeysFixed<AggregatedDataWithUInt64KeyTwoLevel>;
-    using AggregationMethod_keys128_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel, false, false>;
+    using AggregationMethod_keys128_two_level
+        = AggregationMethodKeysFixed<AggregatedDataWithKeys128TwoLevel, false, false>;
     using AggregationMethod_keys256_two_level = AggregationMethodKeysFixed<AggregatedDataWithKeys256TwoLevel>;
     using AggregationMethod_serialized_two_level = AggregationMethodSerialized<AggregatedDataWithStringKeyTwoLevel>;
     using AggregationMethod_key64_hash64 = AggregationMethodOneNumber<UInt64, AggregatedDataWithUInt64KeyHash64>;
@@ -576,10 +583,10 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(serialized_hash64, false)                    \
     M(nullable_keys128, false)                     \
     M(nullable_keys256, false)                     \
-    M(key32_phmap, false)                                \
-    M(key64_phmap, false)                                \
-    M(keys128_phmap, false)                              \
-    M(serialized_phmap, false)                           \
+    M(key32_phmap, false)                          \
+    M(key64_phmap, false)                          \
+    M(keys128_phmap, false)                        \
+    M(serialized_phmap, false)                     \
     M(key32_two_level, true)                       \
     M(key64_two_level, true)                       \
     M(key_int256_two_level, true)                  \
@@ -602,9 +609,9 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(keys256_magic_hash_two_level, true)          \
     M(nullable_keys128_magic_hash_two_level, true) \
     M(nullable_keys256_magic_hash_two_level, true) \
-    M(key32_phmap_two_level, true)                                \
-    M(key64_phmap_two_level, true)                                \
-    M(keys128_phmap_two_level, true)                              \
+    M(key32_phmap_two_level, true)                 \
+    M(key64_phmap_two_level, true)                 \
+    M(keys128_phmap_two_level, true)               \
     M(serialized_phmap_two_level, true)
 
     enum class Type
@@ -755,10 +762,10 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(keys128_magic_hash)                              \
     M(keys256_magic_hash)                              \
     M(nullable_keys128_magic_hash)                     \
-    M(nullable_keys256_magic_hash) \
-    M(key32_phmap)                                           \
-    M(key64_phmap)                                           \
-    M(keys128_phmap)                                         \
+    M(nullable_keys256_magic_hash)                     \
+    M(key32_phmap)                                     \
+    M(key64_phmap)                                     \
+    M(keys128_phmap)                                   \
     M(serialized_phmap)
 
 
@@ -819,10 +826,10 @@ struct AggregatedDataVariants : private boost::noncopyable
     M(keys256_magic_hash_two_level)          \
     M(nullable_keys128_magic_hash_two_level) \
     M(nullable_keys256_magic_hash_two_level) \
-    M(key32_phmap_two_level)                       \
-    M(key64_phmap_two_level)                       \
-    M(keys128_phmap_two_level)                     \
-    M(serialized_phmap_two_level)                  
+    M(key32_phmap_two_level)                 \
+    M(key64_phmap_two_level)                 \
+    M(keys128_phmap_two_level)               \
+    M(serialized_phmap_two_level)
 };
 
 using AggregatedDataVariantsPtr = std::shared_ptr<AggregatedDataVariants>;
