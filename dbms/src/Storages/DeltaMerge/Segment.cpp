@@ -38,6 +38,7 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromSegment.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/ColumnFileInputStream.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
@@ -70,6 +71,7 @@
 #include <fiu.h>
 #include <fmt/core.h>
 
+#include <algorithm>
 #include <ext/scope_guard.h>
 #include <memory>
 
@@ -3067,6 +3069,35 @@ bool Segment::placeDelete(
     return fully_indexed;
 }
 
+namespace
+{
+
+inline bool readStableOnly(const DMContext & dm_context, const SegmentSnapshotPtr & segment_snap)
+{
+    return dm_context.read_stable_only
+        || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0);
+}
+
+// Modify pack_filter_results according to the bitmap_filter.
+size_t modifyPackFilterResults(
+    const SegmentSnapshotPtr & segment_snap,
+    const DMFilePackFilterResults & pack_filter_results,
+    const BitmapFilterPtr & bitmap_filter)
+{
+    const auto & dmfiles = segment_snap->stable->getDMFiles();
+    size_t offset = 0;
+    size_t skipped_pack = 0;
+    for (size_t i = 0; i < dmfiles.size(); ++i)
+    {
+        const auto & dmfile = dmfiles[i];
+        skipped_pack += pack_filter_results[i]->modify(dmfile, bitmap_filter, offset);
+        offset += dmfile->getRows();
+    }
+    return skipped_pack;
+}
+
+} // namespace
+
 BitmapFilterPtr Segment::buildBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshotPtr & segment_snap,
@@ -3077,7 +3108,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
-    if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
+    if (readStableOnly(dm_context, segment_snap))
     {
         return buildBitmapFilterStableOnly(
             dm_context,
@@ -3510,13 +3541,74 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
 {
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
 
-    auto bitmap_filter = buildBitmapFilter(
+    BitmapFilterPtr bitmap_filter = nullptr;
+    if (executor && executor->column_range && executor->column_range->type != ColumnRangeType::Unsupported)
+    {
+        bool all_dmfile_packs_skipped
+            = std::any_of(pack_filter_results.begin(), pack_filter_results.end(), [](const auto & res) {
+                  return res->countUsePack() == 0;
+              });
+        if (!all_dmfile_packs_skipped)
+        {
+            bitmap_filter = InvertedIndexReaderFromSegment::loadStable(
+                segment_snap,
+                executor->column_range,
+                dm_context.global_context.getLightLocalIndexCache());
+            size_t skipped_pack = modifyPackFilterResults(segment_snap, pack_filter_results, bitmap_filter);
+            LOG_DEBUG(
+                segment_snap->log,
+                "Finish load inverted index, column_range={}, bitmap_filter={}/{}, skipped_pack={}",
+                executor->column_range->toDebugString(),
+                bitmap_filter->count(),
+                bitmap_filter->size(),
+                skipped_pack);
+        }
+        else
+        {
+            LOG_DEBUG(
+                segment_snap->log,
+                "Skip load inverted index, all dmfile packs are skipped, column_range={}",
+                executor->column_range->toDebugString());
+        }
+    }
+
+    auto mvcc_bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
         read_ranges,
         pack_filter_results,
         start_ts,
         build_bitmap_filter_block_rows);
+    if (bitmap_filter)
+    {
+        if (!readStableOnly(dm_context, segment_snap))
+        {
+            auto delta_index_bitmap = InvertedIndexReaderFromSegment::loadDelta(
+                segment_snap,
+                executor->column_range,
+                dm_context.global_context.getLightLocalIndexCache());
+            bitmap_filter->append(*delta_index_bitmap);
+        }
+
+        bitmap_filter->logicalAnd(*mvcc_bitmap_filter);
+        bitmap_filter->runOptimize();
+
+        // TODO:
+        // 1. Only support skip pack for stable files now, need to support delta files.
+        // 2. If all filter conditions of a query can use inverted index, we can set RSResult of returned blocks to RSResult::All to skip filtering.
+        size_t skipped_pack = modifyPackFilterResults(segment_snap, pack_filter_results, bitmap_filter);
+        LOG_DEBUG(
+            segment_snap->log,
+            "Finish build MVCC bitmap filter, bitmap_filter={}/{}, skipped_pack={}",
+            bitmap_filter->count(),
+            bitmap_filter->size(),
+            skipped_pack);
+    }
+    else
+    {
+        bitmap_filter = mvcc_bitmap_filter;
+    }
+
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
     if (!hasCacheableColumn(columns_to_read))

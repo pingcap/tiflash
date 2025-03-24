@@ -35,6 +35,7 @@
 
 #include <regex>
 
+
 namespace DB::tests
 {
 
@@ -106,10 +107,12 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     const auto ann_query_info = tipb::ANNQueryInfo{};
     const auto runtime_filter_ids = std::vector<int>();
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{}; // don't care pushed down filters
+    const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{}; // don't care used indexes
     std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
         conditions,
         ann_query_info,
         pushed_down_filters,
+        empty_used_indexes,
         table_info.columns,
         runtime_filter_ids, // don't care runtime filter
         0,

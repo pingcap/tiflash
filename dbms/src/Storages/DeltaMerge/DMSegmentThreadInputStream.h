@@ -17,7 +17,7 @@
 #include <Common/FailPoint.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <Interpreters/Context.h>
-#include <Storages/DeltaMerge/DMContext_fwd.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
@@ -42,7 +42,7 @@ public:
         const SegmentReadTaskPoolPtr & task_pool_,
         AfterSegmentRead after_segment_read_,
         const ColumnDefines & columns_to_read_,
-        const PushDownExecutorPtr & filter_,
+        const PushDownExecutorPtr & executor_,
         UInt64 start_ts_,
         size_t expected_block_size_,
         ReadMode read_mode_,
@@ -51,7 +51,7 @@ public:
         , task_pool(task_pool_)
         , after_segment_read(after_segment_read_)
         , columns_to_read(columns_to_read_)
-        , filter(filter_)
+        , executor(executor_)
         , header(toEmptyBlock(columns_to_read))
         , start_ts(start_ts_)
         , expected_block_size(expected_block_size_)
@@ -96,7 +96,7 @@ protected:
                     columns_to_read,
                     task->read_snapshot,
                     task->ranges,
-                    filter,
+                    executor,
                     start_ts,
                     block_size);
                 LOG_TRACE(log, "Start to read segment, segment={}", cur_segment->simpleInfo());
@@ -127,7 +127,7 @@ private:
     SegmentReadTaskPoolPtr task_pool;
     AfterSegmentRead after_segment_read;
     ColumnDefines columns_to_read;
-    PushDownExecutorPtr filter;
+    PushDownExecutorPtr executor;
     Block header;
     const UInt64 start_ts;
     const size_t expected_block_size;

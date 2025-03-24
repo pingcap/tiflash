@@ -141,6 +141,15 @@ void BitmapFilter::append(const BitmapFilter & other)
     all_match = all_match && other.all_match;
 }
 
+bool BitmapFilter::isAllNotMatch(size_t offset, size_t limit) const
+{
+    if (all_match)
+    {
+        return false;
+    }
+    return std::all_of(filter.cbegin() + offset, filter.cbegin() + offset + limit, [](const auto a) { return !a; });
+}
+
 void BitmapFilter::runOptimize()
 {
     all_match = std::find(filter.begin(), filter.end(), static_cast<UInt8>(false)) == filter.end();
