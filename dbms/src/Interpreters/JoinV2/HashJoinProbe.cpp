@@ -153,7 +153,7 @@ struct ProbeAdder<Inner, has_null_key, has_other_condition, late_materialization
     static void flush(JoinProbeBlockHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
         helper.flushBatchIfNecessary<has_null_key, late_materialization, true>(wd, added_columns);
-        helper.fillNullMapWithZero<has_null_key>(added_columns);
+        helper.fillNullMapWithZero<has_null_key, late_materialization>(added_columns);
     }
 };
 
@@ -198,7 +198,7 @@ struct ProbeAdder<LeftOuter, has_null_key, has_other_condition, late_materializa
     static void flush(JoinProbeBlockHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
         helper.flushBatchIfNecessary<has_null_key, late_materialization, true>(wd, added_columns);
-        helper.fillNullMapWithZero<has_null_key>(added_columns);
+        helper.fillNullMapWithZero<has_null_key, late_materialization>(added_columns);
 
         if constexpr (!has_other_condition)
         {
@@ -918,7 +918,7 @@ Block JoinProbeBlockHelper::handleOtherConditions(
                 {
                     size_t end = pos + step > start + length ? start + length : pos + step;
                     wd.insert_batch.clear();
-                    wd.insert_batch.insert(&wd.row_ptrs_for_lm[pos], &wd.row_ptrs_for_lm[end]);
+                    wd.insert_batch.insert(&wd.filter_row_ptrs_for_lm[pos], &wd.filter_row_ptrs_for_lm[end]);
                     for (size_t i = other_column_indexes_start; i < other_column_indexes_size; ++i)
                     {
                         size_t column_index = row_layout.other_column_indexes[i].first;
@@ -1013,7 +1013,7 @@ Block JoinProbeBlockHelper::handleOtherConditions(
         return res_block;
     }
 
-    if (kind == LeftOuter)
+    if (kind == LeftOuter && context.isProbeFinished())
         return fillNotMatchedRowsForLeftOuter(context, wd);
 
     return output_block_after_finalize;
@@ -1071,7 +1071,6 @@ Block JoinProbeBlockHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & co
     }
 
     size_t remaining_insert_size = settings.max_block_size - wd.result_block_for_other_condition.rows();
-    ;
     size_t result_size = context.not_matched_offsets.size() - context.not_matched_offsets_idx;
     size_t length = std::min(result_size, remaining_insert_size);
 

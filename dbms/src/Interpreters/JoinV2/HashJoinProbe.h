@@ -269,21 +269,28 @@ private:
         wd.insert_batch.clear();
     }
 
-    template <bool has_null_key>
+    template <bool has_null_key, bool late_materialization>
     void ALWAYS_INLINE fillNullMapWithZero(MutableColumns & added_columns) const
     {
         if constexpr (has_null_key)
         {
+            size_t idx = 0;
             for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
             {
                 if (is_nullable)
                 {
-                    auto & nullable_column = static_cast<ColumnNullable &>(*added_columns[column_index]);
+                    size_t index;
+                    if constexpr (late_materialization)
+                        index = idx;
+                    else
+                        index = column_index;
+                    auto & nullable_column = static_cast<ColumnNullable &>(*added_columns[index]);
                     size_t data_size = nullable_column.getNestedColumn().size();
                     size_t nullmap_size = nullable_column.getNullMapColumn().size();
                     RUNTIME_CHECK(nullmap_size <= data_size);
                     nullable_column.getNullMapColumn().getData().resize_fill_zero(data_size);
                 }
+                ++idx;
             }
         }
     }

@@ -42,12 +42,10 @@ public:
 
     struct JoinTestConfig
     {
-        JoinTestConfig(bool enable_pipeline_, bool enable_join_v2_, UInt64 prefetch_threshold_)
-            : enable_pipeline(enable_pipeline_)
-            , enable_join_v2(enable_join_v2_)
+        JoinTestConfig(bool enable_join_v2_, UInt64 prefetch_threshold_)
+            : enable_join_v2(enable_join_v2_)
             , join_v2_prefetch_threshold(prefetch_threshold_)
         {}
-        bool enable_pipeline;
         bool enable_join_v2;
         UInt64 join_v2_prefetch_threshold;
         bool join_v2_enable_lm = false;
@@ -58,34 +56,26 @@ public:
     template <bool can_enable_lm>
     static void initJoinTestConfig(std::vector<JoinTestConfig> & cfgs)
     {
-        for (auto enable_pipeline : {false, true})
+        for (auto enable_join_v2 : {false, true})
         {
-            if (enable_pipeline)
+            if (enable_join_v2)
             {
-                for (auto enable_join_v2 : {false, true})
+                for (UInt64 prefetch_threshold : {0, 100000000})
                 {
-                    if (enable_join_v2)
-                    {
-                        for (UInt64 prefetch_threshold : {0, 100000000})
-                        {
-                            std::vector<bool> enable_lm_vec;
-                            if constexpr (can_enable_lm)
-                                enable_lm_vec = {false, true};
-                            else
-                                enable_lm_vec = {false};
-                            for (auto enable_lm : enable_lm_vec)
-                            {
-                                cfgs.emplace_back(enable_pipeline, enable_join_v2, prefetch_threshold);
-                                cfgs.back().join_v2_enable_lm = enable_lm;
-                            }
-                        }
-                    }
+                    std::vector<bool> enable_lm_vec;
+                    if constexpr (can_enable_lm)
+                        enable_lm_vec = {false, true};
                     else
-                        cfgs.emplace_back(enable_pipeline, enable_join_v2, 0);
+                        enable_lm_vec = {false};
+                    for (auto enable_lm : enable_lm_vec)
+                    {
+                        cfgs.emplace_back(enable_join_v2, prefetch_threshold);
+                        cfgs.back().join_v2_enable_lm = enable_lm;
+                    }
                 }
             }
             else
-                cfgs.emplace_back(enable_pipeline, false, 0);
+                cfgs.emplace_back(enable_join_v2, 0);
         }
     }
 };
@@ -93,16 +83,14 @@ public:
 #define WRAP_FOR_JOIN_TEST_BEGIN                                                    \
     for (auto cfg : configs)                                                        \
     {                                                                               \
-        enablePipeline(cfg.enable_pipeline);                                        \
         context.context->getSettingsRef().enable_hash_join_v2 = cfg.enable_join_v2; \
         context.context->getSettingsRef().join_v2_probe_enable_prefetch_threshold = cfg.join_v2_prefetch_threshold;
 
 #define WRAP_FOR_JOIN_TEST_END }
 
 #define WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN                                                                \
-    for (auto cfg : configs)                                                                                        \
+    for (auto cfg : enable_lm_configs)                                                                              \
     {                                                                                                               \
-        enablePipeline(cfg.enable_pipeline);                                                                        \
         context.context->getSettingsRef().enable_hash_join_v2 = cfg.enable_join_v2;                                 \
         context.context->getSettingsRef().join_v2_probe_enable_prefetch_threshold = cfg.join_v2_prefetch_threshold; \
         if (cfg.enable_join_v2)                                                                                     \
@@ -2019,7 +2007,7 @@ CATCH
 TEST_F(JoinExecutorTestRunner, LeftJoinAggWithOtherCondition)
 try
 {
-    auto request_column
+    auto request
         = context.scan("test_db", "l_table")
               .join(
                   context.scan("test_db", "r_table"),
@@ -2032,7 +2020,170 @@ try
               .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
               .build(context);
     WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
-    ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request_column, 2));
+    ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request, 2));
+    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, LeftOuterJoin)
+try
+{
+    context.addMockTable(
+        {"test_db", "lj_r_table"},
+        {
+            {"r1", TiDB::TP::TypeString},
+            {"k1", TiDB::TP::TypeLongLong},
+            {"k2", TiDB::TP::TypeShort},
+            {"r2", TiDB::TP::TypeString},
+            {"r3", TiDB::TP::TypeLong},
+        },
+        {
+            toVec<String>("r1", {"apple", "banana", "cat", "dog", "elephant", "frag"}),
+            toVec<Int64>("k1", {1, 1, 2, 3, 2, 4}),
+            toVec<Int16>("k2", {1, 1, 2, 3, 2, 5}),
+            toVec<String>("r2", {"aaa", "bbb", "ccc", "ddd", "eee", "fff"}),
+            toVec<Int32>("r3", {1, 2, 3, 4, 5, 6}),
+        });
+
+    context.addMockTable(
+        {"test_db", "lj_l_table"},
+        {
+            {"l1", TiDB::TP::TypeString},
+            {"k1", TiDB::TP::TypeLongLong},
+            {"k2", TiDB::TP::TypeShort},
+            {"l2", TiDB::TP::TypeLong},
+            {"l3", TiDB::TP::TypeLong},
+            {"l4", TiDB::TP::TypeLongLong},
+        },
+        {
+            toVec<String>("l1", {"AAA", "BBB", "CCC", "DDD", "EEE", "FFF", "GGG", "HHH", "III", "JJJ", "KKK", "LLL"}),
+            toNullableVec<Int64>("k1", {1, 1, 2, 2, {}, 3, 3, 3, 2, 3, 1, 2}),
+            toNullableVec<Int16>("k2", {1, {}, 2, 9, 2, 3, 3, 3, 2, 3, 1, 2}),
+            toVec<Int32>("l2", {1, 2, 3, 4, 5, 6, 6, 6, 7, 8, 9, 10}),
+            toNullableVec<Int32>("l3", {1, 2, 3, 4, 5, 0, {}, 6, 7, 8, 9, 10}),
+            toNullableVec<Int64>("l4", {3, 1, 2, 0, 2, 3, 3, {}, 4, 5, 0, 6}),
+        });
+
+    // No other condition
+    auto request = context.scan("test_db", "lj_l_table")
+                       .join(
+                           context.scan("test_db", "lj_r_table"),
+                           tipb::JoinType::TypeLeftOuterJoin,
+                           {col("k1"), col("k2")},
+                           {eq(col("lj_l_table.l2"), col("lj_l_table.l3"))},
+                           {},
+                           {},
+                           {})
+                       .project(
+                           {"lj_r_table.r1",
+                            "lj_r_table.r2",
+                            "lj_r_table.r3",
+                            "lj_r_table.k2",
+                            "lj_l_table.k2",
+                            "lj_l_table.l1",
+                            "lj_l_table.l2",
+                            "lj_l_table.l4"})
+                       .build(context);
+    WRAP_FOR_JOIN_TEST_BEGIN
+    executeAndAssertColumnsEqual(
+        request,
+        {
+            toNullableVec<String>(
+                {"apple",
+                 "banana",
+                 {},
+                 "cat",
+                 "elephant",
+                 {},
+                 {},
+                 {},
+                 {},
+                 "dog",
+                 "cat",
+                 "elephant",
+                 "dog",
+                 "apple",
+                 "banana",
+                 "cat",
+                 "elephant"}),
+            toNullableVec<String>(
+                {"aaa",
+                 "bbb",
+                 {},
+                 "ccc",
+                 "eee",
+                 {},
+                 {},
+                 {},
+                 {},
+                 "ddd",
+                 "ccc",
+                 "eee",
+                 "ddd",
+                 "aaa",
+                 "bbb",
+                 "ccc",
+                 "eee"}),
+            toNullableVec<Int32>({1, 2, {}, 3, 5, {}, {}, {}, {}, 4, 3, 5, 4, 1, 2, 3, 5}),
+            toNullableVec<Int16>({1, 1, {}, 2, 2, {}, {}, {}, {}, 3, 2, 2, 3, 1, 1, 2, 2}),
+            toNullableVec<Int16>({1, 1, {}, 2, 2, 9, 2, 3, 3, 3, 2, 2, 3, 1, 1, 2, 2}),
+            toNullableVec<String>(
+                {"AAA",
+                 "AAA",
+                 "BBB",
+                 "CCC",
+                 "CCC",
+                 "DDD",
+                 "EEE",
+                 "FFF",
+                 "GGG",
+                 "HHH",
+                 "III",
+                 "III",
+                 "JJJ",
+                 "KKK",
+                 "KKK",
+                 "LLL",
+                 "LLL"}),
+            toNullableVec<Int32>({1, 1, 2, 3, 3, 4, 5, 6, 6, 6, 7, 7, 8, 9, 9, 10, 10}),
+            toNullableVec<Int64>({3, 3, 1, 2, 2, 0, 2, 3, 3, {}, 4, 4, 5, 0, 0, 6, 6}),
+        });
+    WRAP_FOR_JOIN_TEST_END
+
+    // Has other condition
+    request = context.scan("test_db", "lj_l_table")
+                  .join(
+                      context.scan("test_db", "lj_r_table"),
+                      tipb::JoinType::TypeLeftOuterJoin,
+                      {col("k1"), col("k2")},
+                      {eq(col("lj_l_table.l2"), col("lj_l_table.l3"))},
+                      {},
+                      {gt(col("lj_l_table.l4"), col("lj_r_table.r3"))},
+                      {})
+                  .project(
+                      {"lj_r_table.r1",
+                       "lj_r_table.r2",
+                       "lj_r_table.r3",
+                       "lj_r_table.k2",
+                       "lj_l_table.k2",
+                       "lj_l_table.l1",
+                       "lj_l_table.l2",
+                       "lj_l_table.l4"})
+                  .build(context);
+    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
+    executeAndAssertColumnsEqual(
+        request,
+        {
+            toNullableVec<String>({"apple", "banana", {}, {}, {}, {}, {}, {}, {}, "cat", "dog", {}, "cat", "elephant"}),
+            toNullableVec<String>({"aaa", "bbb", {}, {}, {}, {}, {}, {}, {}, "ccc", "ddd", {}, "ccc", "eee"}),
+            toNullableVec<Int32>({1, 2, {}, {}, {}, {}, {}, {}, {}, 3, 4, {}, 3, 5}),
+            toNullableVec<Int16>({1, 1, {}, {}, {}, {}, {}, {}, {}, 2, 3, {}, 2, 2}),
+            toNullableVec<Int16>({1, 1, {}, 2, 9, 2, 3, 3, 3, 2, 3, 1, 2, 2}),
+            toNullableVec<String>(
+                {"AAA", "AAA", "BBB", "CCC", "DDD", "EEE", "FFF", "GGG", "HHH", "III", "JJJ", "KKK", "LLL", "LLL"}),
+            toNullableVec<Int32>({1, 1, 2, 3, 4, 5, 6, 6, 6, 7, 8, 9, 10, 10}),
+            toNullableVec<Int64>({3, 3, 1, 2, 0, 2, 3, 3, {}, 4, 5, 0, 6, 6}),
+        });
     WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
 }
 CATCH

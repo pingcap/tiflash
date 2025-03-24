@@ -466,7 +466,7 @@ void HashJoin::workAfterBuildRowFinish()
 
     LOG_DEBUG(
         log,
-        "allocate pointer table and init join probe helerp cost {}ms, rows {}, pointer table size {}, "
+        "allocate pointer table and init join probe helper cost {}ms, rows {}, pointer table size {}, "
         "added column num {}, enable prefetch {}, enable tagged pointer {}, "
         "enable late materialization {}(avg size {})",
         watch.elapsedMilliseconds(),
