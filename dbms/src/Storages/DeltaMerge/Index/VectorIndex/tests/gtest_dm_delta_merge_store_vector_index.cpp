@@ -99,7 +99,7 @@ public:
         store->write(*db_context, db_context->getSettingsRef(), block);
     }
 
-    void read(const RowKeyRange & range, const PushDownExecutorPtr & filter, const ColumnWithTypeAndName & out)
+    void read(const RowKeyRange & range, const PushDownExecutorPtr & executor, const ColumnWithTypeAndName & out)
     {
         auto in = store->read(
             *db_context,
@@ -108,7 +108,7 @@ public:
             {range},
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
-            filter,
+            executor,
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,

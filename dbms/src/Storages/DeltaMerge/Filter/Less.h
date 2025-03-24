@@ -38,7 +38,7 @@ public:
 
     ColumnRangePtr buildSets(const LocalIndexInfosSnapshot & index_info) override
     {
-        if (auto set = IntegerSet::createLessRangeSet(attr.type->getTypeId(), value, /*not_included=*/true); set)
+        if (auto set = IntegerSet::createLessRangeSet(attr.type, value, /*not_included=*/true); set)
         {
             auto iter = std::find_if(index_info->begin(), index_info->end(), [&](const auto & info) {
                 return info.column_id == attr.col_id && info.kind == TiDB::ColumnarIndexKind::Inverted;

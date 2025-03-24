@@ -38,8 +38,8 @@ public:
 
     ColumnRangePtr buildSets(const LocalIndexInfosSnapshot & index_info) override
     {
-        auto less = IntegerSet::createLessRangeSet(attr.type->getTypeId(), value, /*not_included=*/true);
-        auto greater = IntegerSet::createGreaterRangeSet(attr.type->getTypeId(), value, /*not_included=*/true);
+        auto less = IntegerSet::createLessRangeSet(attr.type, value, /*not_included=*/true);
+        auto greater = IntegerSet::createGreaterRangeSet(attr.type, value, /*not_included=*/true);
         if (less && greater)
         {
             auto iter = std::find_if(index_info->begin(), index_info->end(), [&](const auto & info) {

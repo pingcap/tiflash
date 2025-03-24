@@ -22,35 +22,31 @@ namespace DB
 namespace
 {
 
-tipb::ANNQueryInfo getAnnQueryInfoFromTableScanExecutor(const tipb::Executor * table_scan)
+tipb::ANNQueryInfo extractAnnQuery(const tipb::Executor * table_scan)
 {
     bool is_partition_table_scan = table_scan->tp() == tipb::TypePartitionTableScan;
+    // Try to compatible with old protocol.
     if (is_partition_table_scan)
     {
         if (table_scan->partition_table_scan().has_deprecated_ann_query())
             return table_scan->partition_table_scan().deprecated_ann_query();
-        const auto & used_columnar_indexes = table_scan->partition_table_scan().used_columnar_indexes();
-        if (used_columnar_indexes.empty())
-            return {};
-        RUNTIME_CHECK_MSG(
-            used_columnar_indexes.size() == 1,
-            "Only support using one vector index at one query for now.");
-        RUNTIME_CHECK(used_columnar_indexes[0].index_type() == tipb::ColumnarIndexType::TypeVector);
-        return used_columnar_indexes[0].ann_query_info();
     }
     else
     {
         if (table_scan->tbl_scan().has_deprecated_ann_query())
             return table_scan->tbl_scan().deprecated_ann_query();
-        const auto & used_columnar_indexes = table_scan->tbl_scan().used_columnar_indexes();
-        if (used_columnar_indexes.empty())
-            return {};
-        RUNTIME_CHECK_MSG(
-            used_columnar_indexes.size() == 1,
-            "Only support using one vector index at one query for now.");
-        RUNTIME_CHECK(used_columnar_indexes[0].index_type() == tipb::ColumnarIndexType::TypeVector);
-        return used_columnar_indexes[0].ann_query_info();
     }
+
+    // Deal with new protocol.
+    const auto & used_columnar_indexes = is_partition_table_scan
+        ? table_scan->partition_table_scan().used_columnar_indexes()
+        : table_scan->tbl_scan().used_columnar_indexes();
+    if (used_columnar_indexes.size() != 1)
+        return {};
+    if (used_columnar_indexes[0].index_type() != tipb::ColumnarIndexType::TypeVector)
+        return {};
+    RUNTIME_CHECK(used_columnar_indexes[0].has_ann_query_info());
+    return used_columnar_indexes[0].ann_query_info();
 }
 
 void copyUsedColumnarIndexesFromPartitionTableScan(
@@ -88,7 +84,10 @@ TiDBTableScan::TiDBTableScan(
     , pushed_down_filters(
           is_partition_table_scan ? table_scan->partition_table_scan().pushed_down_filter_conditions()
                                   : table_scan->tbl_scan().pushed_down_filter_conditions())
-    , ann_query_info(getAnnQueryInfoFromTableScanExecutor(table_scan))
+    , used_indexes(
+          is_partition_table_scan ? table_scan->partition_table_scan().used_columnar_indexes()
+                                  : table_scan->tbl_scan().used_columnar_indexes())
+    , ann_query_info(extractAnnQuery(table_scan))
     // Only No-partition table need keep order when tablescan executor required keep order.
     // If keep_order is not set, keep order for safety.
     , keep_order(
@@ -156,6 +155,8 @@ void TiDBTableScan::constructTableScanForRemoteRead(tipb::TableScan * tipb_table
             *tipb_table_scan->add_columns() = column;
         for (const auto & filter : partition_table_scan.pushed_down_filter_conditions())
             *tipb_table_scan->add_pushed_down_filter_conditions() = filter;
+        for (const auto & index : partition_table_scan.used_columnar_indexes())
+            *tipb_table_scan->add_used_columnar_indexes() = index;
         tipb_table_scan->set_desc(partition_table_scan.desc());
         for (auto id : partition_table_scan.primary_column_ids())
             tipb_table_scan->add_primary_column_ids(id);

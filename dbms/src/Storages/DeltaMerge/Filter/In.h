@@ -62,7 +62,7 @@ public:
 
     ColumnRangePtr buildSets(const LocalIndexInfosSnapshot & index_info) override
     {
-        if (auto set = IntegerSet::createValueSet(attr.type->getTypeId(), values); set)
+        if (auto set = IntegerSet::createValueSet(attr.type, values); set)
         {
             auto iter = std::find_if(index_info->begin(), index_info->end(), [&](const auto & info) {
                 return info.column_id == attr.col_id && info.kind == TiDB::ColumnarIndexKind::Inverted;
