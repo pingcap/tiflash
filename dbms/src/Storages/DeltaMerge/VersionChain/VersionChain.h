@@ -36,11 +36,15 @@ namespace tests
 class NewHandleIndexTest;
 } // namespace tests
 
-// VersionChain is to maintain the position of the base version corresponding to each version in the Delta.
+// VersionChain is to maintain the position of the base(oldest) version corresponding to each version in the Delta.
 // If a handle A has three versions exists, from the oldest to the newest, they are A1, A2, A3.
 // For a normal version chain, it looks like: A3 -> A2 -> A1.
-// The version chain here is a little different, it looks like: A2 -> A1; A3 -> A1. This is mainly to save memory.
+// The version chain here is a little different, it looks like: A2 -> A1; A3 -> A1.
 // The oldest existing version is called `base version` and the `base version` is the pivot of the version chain.
+
+// In order to find the base version of a handle, we introduce `NewHandleIndex` and `DMFileHandleIndex` to help.
+// - `NewHandleIndex` maintains the base versions in the delta, like `newly_inserted_handle -> row_id`.
+// - DMFileHandleIndex encapsulates the handle column of a DMFile and provides interface for locating the position of corresponding handle.
 template <ExtraHandleType HandleType>
 class VersionChain
 {
