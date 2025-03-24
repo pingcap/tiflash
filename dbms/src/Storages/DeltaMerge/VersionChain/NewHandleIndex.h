@@ -101,7 +101,7 @@ public:
             // TODO: Maybe we can support readRows in batch.
             // But hash collision is rare.
             // And the distribution of these conflicting values is typically scattered.
-            // The benefits should be quite limited, so it's not a high priority.
+            // The benefits should be quite small, so it's not a high priority.
             MutableColumns mut_cols(1);
             mut_cols[0] = ColumnString::create();
             const auto read_rows = delta_reader->readRows(
