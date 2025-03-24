@@ -21,6 +21,8 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_semi_join_time_exceed[];
+extern const char force_join_v2_probe_enable_lm[];
+extern const char force_join_v2_probe_disable_lm[];
 } // namespace FailPoints
 namespace tests
 {
@@ -34,6 +36,28 @@ public:
         /// disable spill
         context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
 
+        initJoinTestConfig<false>(configs);
+        initJoinTestConfig<true>(enable_lm_configs);
+    }
+
+    struct JoinTestConfig
+    {
+        JoinTestConfig(bool enable_pipeline_, bool enable_join_v2_, UInt64 prefetch_threshold_)
+            : enable_pipeline(enable_pipeline_)
+            , enable_join_v2(enable_join_v2_)
+            , join_v2_prefetch_threshold(prefetch_threshold_)
+        {}
+        bool enable_pipeline;
+        bool enable_join_v2;
+        UInt64 join_v2_prefetch_threshold;
+        bool join_v2_enable_lm = false;
+    };
+    std::vector<JoinTestConfig> configs;
+    std::vector<JoinTestConfig> enable_lm_configs;
+
+    template <bool can_enable_lm>
+    static void initJoinTestConfig(std::vector<JoinTestConfig> & cfgs)
+    {
         for (auto enable_pipeline : {false, true})
         {
             if (enable_pipeline)
@@ -43,29 +67,27 @@ public:
                     if (enable_join_v2)
                     {
                         for (UInt64 prefetch_threshold : {0, 100000000})
-                            configs.emplace_back(enable_pipeline, enable_join_v2, prefetch_threshold);
+                        {
+                            std::vector<bool> enable_lm_vec;
+                            if constexpr (can_enable_lm)
+                                enable_lm_vec = {false, true};
+                            else
+                                enable_lm_vec = {false};
+                            for (auto enable_lm : enable_lm_vec)
+                            {
+                                cfgs.emplace_back(enable_pipeline, enable_join_v2, prefetch_threshold);
+                                cfgs.back().join_v2_enable_lm = enable_lm;
+                            }
+                        }
                     }
                     else
-                        configs.emplace_back(enable_pipeline, enable_join_v2, 0);
+                        cfgs.emplace_back(enable_pipeline, enable_join_v2, 0);
                 }
             }
             else
-                configs.emplace_back(enable_pipeline, false, 0);
+                cfgs.emplace_back(enable_pipeline, false, 0);
         }
     }
-
-    struct JoinTestConfig
-    {
-        JoinTestConfig(bool enable_pipeline_, bool enable_join_v2_, UInt64 prefetch_threshold_)
-            : enable_pipeline(enable_pipeline_)
-            , enable_join_v2(enable_join_v2_)
-            , prefetch_threshold(prefetch_threshold_)
-        {}
-        bool enable_pipeline;
-        bool enable_join_v2;
-        UInt64 prefetch_threshold;
-    };
-    std::vector<JoinTestConfig> configs;
 };
 
 #define WRAP_FOR_JOIN_TEST_BEGIN                                                    \
@@ -73,9 +95,33 @@ public:
     {                                                                               \
         enablePipeline(cfg.enable_pipeline);                                        \
         context.context->getSettingsRef().enable_hash_join_v2 = cfg.enable_join_v2; \
-        context.context->getSettingsRef().join_v2_probe_enable_prefetch_threshold = cfg.prefetch_threshold;
+        context.context->getSettingsRef().join_v2_probe_enable_prefetch_threshold = cfg.join_v2_prefetch_threshold;
 
 #define WRAP_FOR_JOIN_TEST_END }
+
+#define WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN                                                                \
+    for (auto cfg : configs)                                                                                        \
+    {                                                                                                               \
+        enablePipeline(cfg.enable_pipeline);                                                                        \
+        context.context->getSettingsRef().enable_hash_join_v2 = cfg.enable_join_v2;                                 \
+        context.context->getSettingsRef().join_v2_probe_enable_prefetch_threshold = cfg.join_v2_prefetch_threshold; \
+        if (cfg.enable_join_v2)                                                                                     \
+        {                                                                                                           \
+            if (cfg.join_v2_enable_lm)                                                                              \
+                FailPointHelper::enableFailPoint(FailPoints::force_join_v2_probe_enable_lm);                        \
+            else                                                                                                    \
+                FailPointHelper::enableFailPoint(FailPoints::force_join_v2_probe_disable_lm);                       \
+        }
+
+#define WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END                                         \
+    if (cfg.enable_join_v2)                                                                \
+    {                                                                                      \
+        if (cfg.join_v2_enable_lm)                                                         \
+            FailPointHelper::disableFailPoint(FailPoints::force_join_v2_probe_enable_lm);  \
+        else                                                                               \
+            FailPointHelper::disableFailPoint(FailPoints::force_join_v2_probe_disable_lm); \
+    }                                                                                      \
+    }
 
 TEST_F(JoinExecutorTestRunner, SimpleJoin)
 try
@@ -191,7 +237,6 @@ try
          toNullableVec<Int8>({0, 0, 0, 1, 1})},
     };
 
-    WRAP_FOR_JOIN_TEST_BEGIN
     std::vector<UInt64> probe_cache_column_threshold{2, 1000};
     for (size_t i = 0; i < join_type_num; ++i)
     {
@@ -210,14 +255,16 @@ try
                 context.context->setSetting(
                     "join_probe_cache_columns_threshold",
                     Field(static_cast<UInt64>(threshold)));
+
+                WRAP_FOR_JOIN_TEST_BEGIN
                 executeAndAssertColumnsEqual(request, expected_cols[i * simple_test_num + j]);
                 ASSERT_COLUMNS_EQ_UR(
                     genScalarCountResults(expected_cols[i * simple_test_num + j]),
                     executeStreams(request_column_prune, 2));
+                WRAP_FOR_JOIN_TEST_END
             }
         }
     }
-    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -590,7 +637,6 @@ try
          toNullableVec<Int8>({0, 0, 0})},
     };
 
-    WRAP_FOR_JOIN_TEST_BEGIN
     /// select * from (t1 JT1 t2 using (a)) JT2 (t3 JT1 t4 using (a)) using (b)
     for (auto [i, jt1] : ext::enumerate(join_types))
     {
@@ -604,7 +650,9 @@ try
                 auto request
                     = t1.join(t2, jt1, {col("a")}).join(t3.join(t4, jt1, {col("a")}), jt2, {col("b")}).build(context);
 
+                WRAP_FOR_JOIN_TEST_BEGIN
                 executeAndAssertColumnsEqual(request, expected_cols[i * join_type_num + j]);
+                WRAP_FOR_JOIN_TEST_END
             }
             {
                 auto t1 = context.scan("multi_test", "t1");
@@ -615,13 +663,14 @@ try
                                                 .join(t3.join(t4, jt1, {col("a")}), jt2, {col("b")})
                                                 .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
                                                 .build(context);
+                WRAP_FOR_JOIN_TEST_BEGIN
                 ASSERT_COLUMNS_EQ_UR(
                     genScalarCountResults(expected_cols[i * join_type_num + j]),
                     executeStreams(request_column_prune, 2));
+                WRAP_FOR_JOIN_TEST_END
             }
         }
     }
-    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -640,8 +689,6 @@ try
             .build(context);
     };
 
-    WRAP_FOR_JOIN_TEST_BEGIN
-
     ColumnsWithTypeAndName column_prune_ref_columns;
     column_prune_ref_columns.push_back(toVec<UInt64>({1}));
 
@@ -650,64 +697,80 @@ try
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeFloat}}, {toVec<Float32>("a", {1.0})});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float32>({1.0})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
+    WRAP_FOR_JOIN_TEST_END
 
     /// int(1) == double(1.0)
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble}}, {toVec<Float64>("a", {1.0})});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float64>({1.0})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
+    WRAP_FOR_JOIN_TEST_END
 
     /// float(1) == double(1.0)
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeFloat}}, {toVec<Float32>("a", {1})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble}}, {toVec<Float64>("a", {1})});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Float32>({1}), toNullableVec<Float64>({1})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
+    WRAP_FOR_JOIN_TEST_END
 
     /// varchar('x') == char('x')
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeString}}, {toVec<String>("a", {"x"})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
+    WRAP_FOR_JOIN_TEST_END
 
     /// tinyblob('x') == varchar('x')
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeTinyBlob}}, {toVec<String>("a", {"x"})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
+    WRAP_FOR_JOIN_TEST_END
 
     /// mediumBlob('x') == varchar('x')
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeMediumBlob}}, {toVec<String>("a", {"x"})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
+    WRAP_FOR_JOIN_TEST_END
 
     /// blob('x') == varchar('x')
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeBlob}}, {toVec<String>("a", {"x"})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
+    WRAP_FOR_JOIN_TEST_END
 
     /// longBlob('x') == varchar('x')
     context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLongBlob}}, {toVec<String>("a", {"x"})});
 
     context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
+    WRAP_FOR_JOIN_TEST_END
 
     /// decimal with different scale
     context.addMockTable(
@@ -722,11 +785,13 @@ try
         {{"a", TiDB::TP::TypeNewDecimal}},
         {createColumn<Decimal256>(std::make_tuple(9, 3), {"0.12"}, "a")});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     executeAndAssertColumnsEqual(
         cast_request(),
         {createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}),
          createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
+    WRAP_FOR_JOIN_TEST_END
 
     /// datetime(1970-01-01 00:00:01) == timestamp(1970-01-01 00:00:01)
     context.addMockTable(
@@ -752,12 +817,11 @@ try
             .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
             .build(context);
     };
+    WRAP_FOR_JOIN_TEST_BEGIN
     executeAndAssertColumnsEqual(
         cast_request_1(),
         {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0), createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
-
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request_1(), 2));
-
     WRAP_FOR_JOIN_TEST_END
 }
 CATCH
@@ -799,7 +863,6 @@ try
          toNullableVec<Int32>({1, 4})},
     };
 
-    WRAP_FOR_JOIN_TEST_BEGIN
     for (auto [i, tp] : ext::enumerate(join_types))
     {
         auto request = context.scan("join_agg", "t1")
@@ -807,9 +870,10 @@ try
                            .aggregation({Max(col("a")), Min(col("a")), Count(col("a"))}, {col("b")})
                            .build(context);
 
+        WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(request, expected_cols[i]);
+        WRAP_FOR_JOIN_TEST_END
     }
-    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -1512,7 +1576,6 @@ try
         {{"id", TiDB::TP::TypeLongLong}, {"probe_value", TiDB::TP::TypeLongLong}},
         {probe_key, probe_col});
 
-    WRAP_FOR_JOIN_TEST_BEGIN
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(90)));
     {
         auto anti_join_request = context.scan("issue_8791", "probe_table")
@@ -1528,7 +1591,9 @@ try
                                      .build(context);
 
         auto expected_columns = {toVec<UInt64>({16})};
+        WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
         ASSERT_COLUMNS_EQ_UR(expected_columns, executeStreams(anti_join_request, 1));
+        WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
     }
     {
         auto inner_join_request = context.scan("issue_8791", "probe_table")
@@ -1544,9 +1609,10 @@ try
                                       .build(context);
 
         auto expected_columns = {toVec<UInt64>({240})};
+        WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
         ASSERT_COLUMNS_EQ_UR(expected_columns, executeStreams(inner_join_request, 1));
+        WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
     }
-    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -1911,6 +1977,7 @@ try
               .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
               .build(context);
     {
+        WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(
             request,
             {toNullableVec<String>({"banana", "banana"}),
@@ -1918,6 +1985,7 @@ try
              toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"})});
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request_column_prune, 2));
+        WRAP_FOR_JOIN_TEST_END
     }
 
     request = context.scan("test_db", "l_table")
@@ -1925,21 +1993,25 @@ try
                   .project({"s", "join_c"})
                   .build(context);
     {
+        WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(
             request,
             {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+        WRAP_FOR_JOIN_TEST_END
     }
 
     request = context.scan("test_db", "l_table")
                   .join(context.scan("test_db", "r_table_2"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                   .build(context);
     {
+        WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(
             request,
             {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
              toNullableVec<String>({"apple", "apple", "apple", "banana"}),
              toNullableVec<String>({"banana", "banana", "banana", {}}),
              toNullableVec<String>({"apple", "apple", "apple", {}})});
+        WRAP_FOR_JOIN_TEST_END
     }
 }
 CATCH
@@ -1959,9 +2031,9 @@ try
                   {})
               .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
               .build(context);
-    WRAP_FOR_JOIN_TEST_BEGIN
+    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
     ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request_column, 2));
-    WRAP_FOR_JOIN_TEST_END
+    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
 }
 CATCH
 
@@ -2022,24 +2094,31 @@ try
     std::shared_ptr<tipb::DAGRequest> request;
     std::shared_ptr<tipb::DAGRequest> request_column_prune;
 
-    WRAP_FOR_JOIN_TEST_BEGIN
     // inner join
     {
         // null table join non-null table
         request = context.scan("null_test", "null_table")
                       .join(context.scan("null_test", "t"), tipb::JoinType::TypeInnerJoin, {col("a")})
                       .build(context);
-        executeAndAssertColumnsEqual(request, {});
         request_column_prune = context.scan("null_test", "null_table")
                                    .join(context.scan("null_test", "t"), tipb::JoinType::TypeInnerJoin, {col("a")})
                                    .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
                                    .build(context);
+        WRAP_FOR_JOIN_TEST_BEGIN
+        executeAndAssertColumnsEqual(request, {});
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(0), executeStreams(request_column_prune, 2));
+        WRAP_FOR_JOIN_TEST_END
 
         // non-null table join null table
         request = context.scan("null_test", "t")
                       .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
                       .build(context);
+        request_column_prune
+            = context.scan("null_test", "t")
+                  .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
+                  .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
+                  .build(context);
+        WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(
             request,
             {toNullableVec<Int32>({}),
@@ -2048,24 +2127,22 @@ try
              toNullableVec<Int32>({}),
              toNullableVec<Int32>({}),
              toNullableVec<Int32>({})});
-        request_column_prune
-            = context.scan("null_test", "t")
-                  .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
-                  .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
-                  .build(context);
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(0), executeStreams(request_column_prune, 2));
+        WRAP_FOR_JOIN_TEST_END
 
         // null table join null table
         request = context.scan("null_test", "null_table")
                       .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
                       .build(context);
-        executeAndAssertColumnsEqual(request, {});
         request_column_prune
             = context.scan("null_test", "null_table")
                   .join(context.scan("null_test", "null_table"), tipb::JoinType::TypeInnerJoin, {col("a")})
                   .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
                   .build(context);
+        WRAP_FOR_JOIN_TEST_BEGIN
+        executeAndAssertColumnsEqual(request, {});
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(0), executeStreams(request_column_prune, 2));
+        WRAP_FOR_JOIN_TEST_END
     }
 
     // cross join
@@ -2519,7 +2596,6 @@ try
                                    .build(context);
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(0), executeStreams(request_column_prune, 2));
     }
-    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -4531,6 +4607,9 @@ CATCH
 
 #undef WRAP_FOR_JOIN_TEST_BEGIN
 #undef WRAP_FOR_JOIN_TEST_END
+
+#undef WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
+#undef WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
 
 } // namespace tests
 } // namespace DB
