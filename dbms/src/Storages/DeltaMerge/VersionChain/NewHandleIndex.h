@@ -32,64 +32,17 @@ class NewHandleIndexTest;
 }
 
 // NewHandleIndex maintains the **newly inserted** records in the delta: handle -> row_id.
-template <typename T, typename Hash = absl::Hash<std::string_view>>
+// In order to save memory, it stores the hash value of the handle instead of the handle itself.
+template <ExtraHandleType HandleType, typename Hash = absl::Hash<typename ExtraHandleRefType<HandleType>::type>>
 class NewHandleIndex
 {
-    static_assert(false, "Only support Int64 and String");
-};
-
-// NewHandleIndex<Int64> is specialized for Int64 handle.
-template <typename Hash>
-class NewHandleIndex<Int64, Hash>
-{
 public:
-    std::optional<RowID> find(
-        Int64 handle,
-        std::optional<DeltaValueReader> & /*delta_reader*/,
-        const UInt32 /*stable_rows*/) const
-    {
-        if (auto itr = handle_to_row_id.find(handle); itr != handle_to_row_id.end())
-            return itr->second;
-        return {};
-    }
+    using HandleRefType = typename ExtraHandleRefType<HandleType>::type;
 
-    void insert(Int64 handle, RowID row_id)
-    {
-        auto [itr, inserted] = handle_to_row_id.try_emplace(handle, row_id);
-        RUNTIME_CHECK_MSG(
-            inserted,
-            "Insert failed! handle={}, row_id={}, already exist row_id={}",
-            handle,
-            row_id,
-            itr->second);
-    }
-
-    void deleteRange(
-        const RowKeyRange & range,
-        std::optional<DeltaValueReader> & /*delta_reader*/,
-        const UInt32 /*stable_rows*/)
-    {
-        auto itr = handle_to_row_id.lower_bound(range.start.int_value);
-        while (itr != handle_to_row_id.end() && inRowKeyRange(range, itr->first))
-            itr = handle_to_row_id.erase(itr);
-    }
-
-private:
-    absl::btree_map<Int64, RowID> handle_to_row_id;
-
-    friend class tests::NewHandleIndexTest;
-};
-
-// NewHandleIndex<String> is specialized for String handle.
-// In order to save memory, it stores the hash value of the handle instead of the handle itself.
-template <typename Hash>
-class NewHandleIndex<String, Hash>
-{
-public:
     // Different handles may have hash collisions, so during the lookup process, after finding a matching hash value,
     // it is necessary to use the delta_reader to read the actual data for verification.
     std::optional<RowID> find(
-        std::string_view handle,
+        HandleRefType handle,
         std::optional<DeltaValueReader> & delta_reader,
         const UInt32 stable_rows) const
     {
@@ -110,13 +63,14 @@ public:
                 /*limit*/ 1,
                 /*range*/ nullptr);
             RUNTIME_CHECK(read_rows == 1, itr->second, stable_rows, read_rows);
-            if (mut_cols[0]->getDataAt(0) == handle)
+            ColumnView<HandleType> handles(*(mut_cols[0]));
+            if (handles[0] == handle)
                 return itr->second;
         }
         return {};
     }
 
-    void insert(std::string_view handle, RowID row_id)
+    void insert(HandleRefType handle, RowID row_id)
     {
         std::ignore = handle_to_row_id.insert(std::pair{hasher(handle), row_id});
     }
@@ -141,7 +95,7 @@ public:
 
         std::sort(row_ids.begin(), row_ids.end());
 
-        absl::btree_multimap<Int64, RowID> t;
+        absl::btree_multimap<UInt32, RowID> t;
         auto begin = row_ids.begin();
         auto end = row_ids.end();
         auto get_next_continuous_size = [](auto begin, auto end) {
@@ -159,7 +113,7 @@ public:
             const auto read_rows
                 = delta_reader->readRows(mut_cols, /*offset*/ *begin, /*limit*/ size, /*range*/ nullptr);
             RUNTIME_CHECK(std::cmp_equal(read_rows, size), *begin, size, read_rows);
-            ColumnView<String> handles(*(mut_cols[0]));
+            ColumnView<HandleType> handles(*(mut_cols[0]));
             for (size_t i = 0; i < read_rows; ++i)
             {
                 auto h = handles[i];
@@ -175,7 +129,7 @@ public:
 
 private:
     Hash hasher;
-    absl::btree_multimap<Int64, RowID> handle_to_row_id;
+    absl::btree_multimap<UInt32, RowID> handle_to_row_id;
 
     friend class tests::NewHandleIndexTest;
 };

@@ -33,6 +33,12 @@ template <typename T>
 concept ExtraHandleType = std::same_as<T, Int64> || std::same_as<T, String>;
 
 template <ExtraHandleType HandleType>
+struct ExtraHandleRefType
+{
+    using type = typename std::conditional<std::is_same_v<HandleType, Int64>, Int64, std::string_view>::type;
+};
+
+template <ExtraHandleType HandleType>
 constexpr bool isCommonHandle()
 {
     return std::is_same_v<HandleType, String>;
