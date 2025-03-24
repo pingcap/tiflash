@@ -102,8 +102,9 @@ void testInt64()
     template <ExtraHandleType HandleType, typename Hash = absl::Hash<typename ExtraHandleRefType<HandleType>::type>>
     void testNewHandleIndex()
     {
-        writeSegmentGeneric("d_tiny:[0, 66):shuffle:ts_1|d_tiny:[44, 107):shuffle:ts_2|d_tiny:[60, "
-                            "160):shuffle:ts_3|d_tiny:[170, 171):shuffle:ts_4");
+        writeSegmentGeneric("d_tiny:[0, 66):shuffle:ts_1|d_tiny:[44, 107):shuffle:ts_2|d_tiny:[60, 160):shuffle:ts_3|"
+                            "d_tiny:[170, 171):shuffle:ts_4|d_tiny:[-9223372036854775808, -9223372036854775807]:ts_5|"
+                            "d_tiny:[9223372036854775806, 9223372036854775807]:ts_6");
         auto [seg, snap] = getSegmentForRead(SEG_ID);
         auto delta_rows = snap->delta->getRows();
         auto delta_reader = VersionChain<HandleType>::createDeltaValueReader(*dm_context, snap->delta);
@@ -161,6 +162,28 @@ void testInt64()
         {
             auto handle = handles[i];
             if (inRowKeyRange(delete_range, handle))
+            {
+                auto row_id = handle_index.find(handle, delta_reader, stable_rows);
+                ASSERT_FALSE(row_id.has_value()) << i;
+            }
+            else
+            {
+                auto expected_row_id = base_handle_to_row_id.find(handle)->second;
+                auto actual_row_id = handle_index.find(handle, delta_reader, stable_rows);
+                ASSERT_EQ(actual_row_id.value(), expected_row_id) << i;
+            }
+        }
+
+        const auto delete_range_right_bounary = buildRowKeyRange(
+            std::numeric_limits<Int64>::max() - 1,
+            std::numeric_limits<Int64>::max(),
+            is_common_handle,
+            /* including_right_boundary */ true);
+        handle_index.deleteRange(delete_range_right_bounary, delta_reader, stable_rows);
+        for (UInt32 i = 0; i < handles.size(); ++i)
+        {
+            auto handle = handles[i];
+            if (inRowKeyRange(delete_range, handle) || inRowKeyRange(delete_range_right_bounary, handle))
             {
                 auto row_id = handle_index.find(handle, delta_reader, stable_rows);
                 ASSERT_FALSE(row_id.has_value()) << i;
