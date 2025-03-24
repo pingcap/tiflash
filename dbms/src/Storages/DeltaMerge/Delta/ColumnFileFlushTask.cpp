@@ -45,7 +45,7 @@ DeltaIndex::Updates ColumnFileFlushTask::prepare(WriteBatches & wbs)
         if (!task.block_data)
             continue;
 
-        if (!context.global_context.getSettingsRef().enable_version_chain)
+        if (!context.enableVersionChain())
         {
             IColumn::Permutation perm;
             task.sorted = sortBlockByPk(getExtraHandleColumnDefine(context.is_common_handle), task.block_data, perm);

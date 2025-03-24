@@ -70,4 +70,8 @@ DMContext::DMContext(
     , scan_context(scan_context_ ? scan_context_ : std::make_shared<ScanContext>())
 {}
 
+bool DMContext::enableVersionChain() const
+{
+    return global_context.getSettingsRef().enable_version_chain;
+}
 } // namespace DB::DM

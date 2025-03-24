@@ -119,6 +119,7 @@ extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
 extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
+extern const Metric DT_SnapshotOfReplayVersionChain;
 extern const Metric DT_SnapshotOfSegmentIngest;
 extern const Metric DT_SnapshotOfBitmapFilter;
 } // namespace CurrentMetrics
@@ -2548,7 +2549,7 @@ bool Segment::compactDelta(DMContext & dm_context)
     return delta->compact(dm_context);
 }
 
-void Segment::placeDeltaIndex(DMContext & dm_context) const
+void Segment::placeDeltaIndex(const DMContext & dm_context) const
 {
     // Update delta-index with persisted packs. TODO: can use a read snapshot here?
     auto segment_snap = createSnapshot(dm_context, /*for_update=*/true, CurrentMetrics::DT_SnapshotOfPlaceIndex);
@@ -2557,14 +2558,30 @@ void Segment::placeDeltaIndex(DMContext & dm_context) const
     placeDeltaIndex(dm_context, segment_snap);
 }
 
-void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
+void Segment::placeDeltaIndex(const DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
 {
+    RUNTIME_CHECK(!dm_context.enableVersionChain());
     getReadInfo(
         dm_context,
         /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
         segment_snap,
         {RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
         ReadTag::Internal);
+}
+
+void Segment::replayVersionChain(const DMContext & dm_context)
+{
+    RUNTIME_CHECK(dm_context.enableVersionChain());
+    auto segment_snap
+        = createSnapshot(dm_context, /*for_update=*/false, CurrentMetrics::DT_SnapshotOfReplayVersionChain);
+    if (!segment_snap)
+        return;
+    auto base_versions = std::visit(
+        [&dm_context, &segment_snap](auto & version_chain) {
+            return version_chain.replaySnapshot(dm_context, *segment_snap);
+        },
+        this->version_chain);
+    UNUSED(base_versions);
 }
 
 String Segment::simpleInfo() const
