@@ -45,7 +45,7 @@ template <ExtraHandleType HandleType>
 class VersionChain
 {
 private:
-    using HandleRefType = typename std::conditional<std::is_same_v<HandleType, Int64>, Int64, std::string_view>::type;
+    using HandleRefType = typename ExtraHandleRefType<HandleType>::type;
 
 public:
     VersionChain()
@@ -60,15 +60,6 @@ public:
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshot(
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
-
-    void reset()
-    {
-        std::lock_guard lock(mtx);
-        replayed_rows_and_deletes = 0;
-        base_versions = std::make_shared<std::vector<RowID>>();
-        new_handle_to_row_ids = NewHandleIndex<HandleType>{};
-        dmfile_or_delete_range_list = std::vector<DMFileOrDeleteRange>{};
-    }
 
 #ifdef DBMS_PUBLIC_GTEST
     [[nodiscard]] auto getReplayedRows() const { return base_versions->size(); }
@@ -89,6 +80,13 @@ private:
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshotImpl(
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
+    void resetImpl()
+    {
+        replayed_rows_and_deletes = 0;
+        base_versions = std::make_shared<std::vector<RowID>>();
+        new_handle_to_row_ids = NewHandleIndex<HandleType>{};
+        dmfile_or_delete_range_list = std::vector<DMFileOrDeleteRange>{};
+    }
 
     // Handling normal write requests. Mainly for ColumnFileInMemory and ColumnFileTiny.
     [[nodiscard]] UInt32 replayBlock(
@@ -98,7 +96,7 @@ private:
         const UInt32 offset,
         const UInt32 stable_rows,
         const bool calculate_read_packs,
-        std::optional<DeltaValueReader> & delta_reader);
+        DeltaValueReader & delta_reader);
 
     [[nodiscard]] UInt32 replayColumnFileBig(
         const DMContext & dm_context,
@@ -106,11 +104,11 @@ private:
         const UInt32 stable_rows,
         const StableValueSpace::Snapshot & stable,
         const std::span<const ColumnFilePtr> preceding_cfs,
-        std::optional<DeltaValueReader> & delta_reader);
+        DeltaValueReader & delta_reader);
 
     [[nodiscard]] UInt32 replayDeleteRange(
         const ColumnFileDeleteRange & cf_delete_range,
-        std::optional<DeltaValueReader> & delta_reader,
+        DeltaValueReader & delta_reader,
         const UInt32 stable_rows);
 
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
@@ -128,11 +126,9 @@ private:
         Iter begin,
         Iter end,
         const UInt32 stable_rows,
-        std::optional<DeltaValueReader> & delta_reader);
+        DeltaValueReader & delta_reader);
 
-    static std::optional<DeltaValueReader> createDeltaValueReaderIfCommonHandle(
-        const DMContext & dm_context,
-        const DeltaSnapshotPtr & delta_snap);
+    static DeltaValueReader createDeltaValueReader(const DMContext & dm_context, const DeltaSnapshotPtr & delta_snap);
 
     friend class tests::NewHandleIndexTest;
 

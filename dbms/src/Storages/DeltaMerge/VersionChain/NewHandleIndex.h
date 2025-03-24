@@ -41,23 +41,19 @@ public:
 
     // Different handles may have hash collisions, so during the lookup process, after finding a matching hash value,
     // it is necessary to use the delta_reader to read the actual data for verification.
-    std::optional<RowID> find(
-        HandleRefType handle,
-        std::optional<DeltaValueReader> & delta_reader,
-        const UInt32 stable_rows) const
+    std::optional<RowID> find(HandleRefType handle, DeltaValueReader & delta_reader, const UInt32 stable_rows) const
     {
-        RUNTIME_CHECK_MSG(delta_reader.has_value(), "DeltaValueReader is required for common handle");
         const auto hash_value = hasher(handle);
         const auto [start, end] = handle_to_row_id.equal_range(hash_value);
+        MutableColumns mut_cols(1);
         for (auto itr = start; itr != end; ++itr)
         {
             // TODO: Maybe we can support readRows in batch.
             // But hash collision is rare.
             // And the distribution of these conflicting values is typically scattered.
             // The benefits should be quite small, so it's not a high priority.
-            MutableColumns mut_cols(1);
-            mut_cols[0] = ColumnString::create();
-            const auto read_rows = delta_reader->readRows(
+            mut_cols[0] = createHandleColumn();
+            const auto read_rows = delta_reader.readRows(
                 mut_cols,
                 /*offset*/ itr->second - stable_rows,
                 /*limit*/ 1,
@@ -79,12 +75,8 @@ public:
     // so data can only be deleted by traversing the entire structure.
     // First, collect all row_ids in the index and sort them.
     // Then, read the handles in batches from the delta, and check if the handles in the delete range.
-    void deleteRange(
-        const RowKeyRange & range,
-        std::optional<DeltaValueReader> & delta_reader,
-        const UInt32 stable_rows)
+    void deleteRange(const RowKeyRange & range, DeltaValueReader & delta_reader, const UInt32 stable_rows)
     {
-        RUNTIME_CHECK_MSG(delta_reader.has_value(), "DeltaValueReader is required for common handle");
         if (handle_to_row_id.empty())
             return;
 
@@ -109,9 +101,9 @@ public:
         {
             const auto size = get_next_continuous_size(begin, end);
             MutableColumns mut_cols(1);
-            mut_cols[0] = ColumnString::create();
+            mut_cols[0] = createHandleColumn();
             const auto read_rows
-                = delta_reader->readRows(mut_cols, /*offset*/ *begin, /*limit*/ size, /*range*/ nullptr);
+                = delta_reader.readRows(mut_cols, /*offset*/ *begin, /*limit*/ size, /*range*/ nullptr);
             RUNTIME_CHECK(std::cmp_equal(read_rows, size), *begin, size, read_rows);
             ColumnView<HandleType> handles(*(mut_cols[0]));
             for (size_t i = 0; i < read_rows; ++i)
@@ -128,6 +120,14 @@ public:
     }
 
 private:
+    static MutableColumnPtr createHandleColumn()
+    {
+        if constexpr (std::is_same_v<HandleType, String>)
+            return ColumnString::create();
+        else
+            return ColumnInt64::create();
+    }
+
     Hash hasher;
     absl::btree_multimap<UInt32, RowID> handle_to_row_id;
 
