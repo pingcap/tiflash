@@ -131,19 +131,23 @@ protected:
 
 INSTANTIATE_TEST_CASE_P(VersionChain, NewHandleIndexTest, /* is_common_handle */ ::testing::Bool());
 
-TEST_P(NewHandleIndexTest, Normal)
+TEST_P(NewHandleIndexTest, Default)
 try
 {
     if (is_common_handle)
-    {
         testNewHandleIndex<String>();
-        testNewHandleIndex<String, NewHandleIndexTest::HighCollisionHash<std::string_view>>();
-    }
     else
-    {
         testNewHandleIndex<Int64>();
+}
+CATCH
+
+TEST_P(NewHandleIndexTest, Collision)
+try
+{
+    if (is_common_handle)
+        testNewHandleIndex<String, NewHandleIndexTest::HighCollisionHash<std::string_view>>();
+    else
         testNewHandleIndex<Int64, NewHandleIndexTest::HighCollisionHash<Int64>>();
-    }
 }
 CATCH
 
