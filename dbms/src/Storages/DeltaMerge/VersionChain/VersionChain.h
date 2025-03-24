@@ -35,31 +35,33 @@ namespace tests
 {
 class SegmentBitmapFilterTest_NewHandleIndex_Test;
 class SegmentBitmapFilterTest_NewHandleIndex_CommonHandle_Test;
+class NewHandleIndexTest;
 } // namespace tests
 
+// VersionChain is to maintain the position of the base version corresponding to each version in the Delta.
+// If a handle A has three versions exists, from the oldest to the newest, they are A1, A2, A3.
+// For a normal version chain, it looks like: A3 -> A2 -> A1.
+// The version chain here is a little different, it looks like: A2 -> A1; A3 -> A1. This is mainly to save memory.
+// The oldest existing version is called `base version` and the `base version` is the pivot of the version chain.
 template <ExtraHandleType HandleType>
 class VersionChain
 {
 private:
-    using HandleRefType = typename std::conditional<std::is_same_v<HandleType, Int64>, Int64, std::string_view>::type;
+    using HandleRefType = typename ExtraHandleRefType<HandleType>::type;
 
 public:
     VersionChain()
         : base_versions(std::make_shared<std::vector<RowID>>())
     {}
 
+    // Traverse the snapshot data in chronological order from the oldest to the newest,
+    // and apply them to update the version chain.
+    // `replayed_rows_and_deletes` is the number of rows and deletes has been replayed.
+    // So data before `replayed_rows_and_deletes` will be skipped.
+    // The return value is the `base_versions` that not older than the data of `snapshot`.
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshot(
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
-
-    void reset()
-    {
-        std::lock_guard lock(mtx);
-        replayed_rows_and_deletes = 0;
-        base_versions = std::make_shared<std::vector<RowID>>();
-        new_handle_to_row_ids = NewHandleIndex<HandleType>{};
-        dmfile_or_delete_range_list = std::vector<DMFileOrDeleteRange>{};
-    }
 
 #ifdef DBMS_PUBLIC_GTEST
     [[nodiscard]] auto getReplayedRows() const { return base_versions->size(); }
@@ -80,7 +82,15 @@ private:
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshotImpl(
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
+    void resetImpl()
+    {
+        replayed_rows_and_deletes = 0;
+        base_versions = std::make_shared<std::vector<RowID>>();
+        new_handle_to_row_ids = NewHandleIndex<HandleType>{};
+        dmfile_or_delete_range_list = std::vector<DMFileOrDeleteRange>{};
+    }
 
+    // Handling normal write requests. Mainly for ColumnFileInMemory and ColumnFileTiny.
     [[nodiscard]] UInt32 replayBlock(
         const DMContext & dm_context,
         const IColumnFileDataProviderPtr & data_provider,
@@ -88,7 +98,7 @@ private:
         const UInt32 offset,
         const UInt32 stable_rows,
         const bool calculate_read_packs,
-        std::optional<DeltaValueReader> & delta_reader);
+        DeltaValueReader & delta_reader);
 
     [[nodiscard]] UInt32 replayColumnFileBig(
         const DMContext & dm_context,
@@ -96,11 +106,11 @@ private:
         const UInt32 stable_rows,
         const StableValueSpace::Snapshot & stable,
         const std::span<const ColumnFilePtr> preceding_cfs,
-        std::optional<DeltaValueReader> & delta_reader);
+        DeltaValueReader & delta_reader);
 
     [[nodiscard]] UInt32 replayDeleteRange(
         const ColumnFileDeleteRange & cf_delete_range,
-        std::optional<DeltaValueReader> & delta_reader,
+        DeltaValueReader & delta_reader,
         const UInt32 stable_rows);
 
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
@@ -118,14 +128,13 @@ private:
         Iter begin,
         Iter end,
         const UInt32 stable_rows,
-        std::optional<DeltaValueReader> & delta_reader);
+        DeltaValueReader & delta_reader);
 
-    std::optional<DeltaValueReader> createDeltaValueReaderIfCommonHandle(
-        const DMContext & dm_context,
-        const DeltaSnapshotPtr & delta_snap);
+    static DeltaValueReader createDeltaValueReader(const DMContext & dm_context, const DeltaSnapshotPtr & delta_snap);
 
     friend class tests::SegmentBitmapFilterTest_NewHandleIndex_Test;
     friend class tests::SegmentBitmapFilterTest_NewHandleIndex_CommonHandle_Test;
+    friend class tests::NewHandleIndexTest;
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
@@ -135,7 +144,7 @@ private:
     // (*base_versions)[n] is the row id of the oldest version of the n-th record in delta.
     // And different versions of the same record has the same base version except the base version itself.
     // The base version of the base version is NotExistRowID.
-    // Therefore, base version of a record acts as a pivot, like the primary key in trancation.
+    // Therefore, base version of a record acts as a pivot.
     std::shared_ptr<std::vector<RowID>> base_versions;
     NewHandleIndex<HandleType> new_handle_to_row_ids;
     using DMFileOrDeleteRange = std::variant<RowKeyRange, DMFileHandleIndex<HandleType>>;
@@ -158,4 +167,5 @@ enum class VersionChainMode : Int64
     Enabled = 1,
     EnabledForTest = 2,
 };
+
 } // namespace DB::DM

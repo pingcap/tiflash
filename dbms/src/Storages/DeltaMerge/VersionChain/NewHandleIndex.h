@@ -15,12 +15,14 @@
 #pragma once
 
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
+#include <Storages/DeltaMerge/VersionChain/ColumnView.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-builtins"
 #include <absl/container/btree_map.h>
 #include <absl/hash/hash.h>
+#pragma clang diagnostic pop
 
 namespace DB::DM
 {
@@ -28,94 +30,55 @@ namespace tests
 {
 class SegmentBitmapFilterTest_NewHandleIndex_Test;
 class SegmentBitmapFilterTest_NewHandleIndex_CommonHandle_Test;
+class NewHandleIndexTest;
 } // namespace tests
 
-template <typename T>
+// NewHandleIndex maintains the **newly inserted** records in the delta: handle -> row_id.
+// In order to save memory, it stores the hash value of the handle instead of the handle itself.
+template <ExtraHandleType HandleType, typename Hash = absl::Hash<typename ExtraHandleRefType<HandleType>::type>>
 class NewHandleIndex
 {
-    static_assert(false, "Only support Int64 and String");
-};
-
-template <>
-class NewHandleIndex<Int64>
-{
 public:
-    std::optional<RowID> find(
-        Int64 handle,
-        std::optional<DeltaValueReader> & /*delta_reader*/,
-        const UInt32 /*stable_rows*/) const
+    using HandleRefType = typename ExtraHandleRefType<HandleType>::type;
+
+    // Different handles may have hash collisions, so during the lookup process, after finding a matching hash value,
+    // it is necessary to use the delta_reader to read the actual data for verification.
+    std::optional<RowID> find(HandleRefType handle, DeltaValueReader & delta_reader, const UInt32 stable_rows) const
     {
-        if (auto itr = handle_to_row_id.find(handle); itr != handle_to_row_id.end())
-            return itr->second;
-        return {};
-    }
-
-    void insert(Int64 handle, RowID row_id)
-    {
-        auto [itr, inserted] = handle_to_row_id.try_emplace(handle, row_id);
-        RUNTIME_CHECK_MSG(
-            inserted,
-            "Insert failed! handle={}, row_id={}, already exist row_id={}",
-            handle,
-            row_id,
-            itr->second);
-    }
-
-    void deleteRange(
-        const RowKeyRange & range,
-        std::optional<DeltaValueReader> & /*delta_reader*/,
-        const UInt32 /*stable_rows*/)
-    {
-        auto itr = handle_to_row_id.lower_bound(range.start.int_value);
-        while (itr != handle_to_row_id.end() && itr->first < range.end.int_value)
-            itr = handle_to_row_id.erase(itr);
-    }
-
-private:
-    absl::btree_map<Int64, RowID> handle_to_row_id;
-
-    friend class tests::SegmentBitmapFilterTest_NewHandleIndex_Test;
-};
-
-template <>
-class NewHandleIndex<String>
-{
-public:
-    std::optional<RowID> find(
-        std::string_view handle,
-        std::optional<DeltaValueReader> & delta_reader,
-        const UInt32 stable_rows) const
-    {
-        RUNTIME_CHECK_MSG(delta_reader.has_value(), "DeltaValueReader is required for common handle");
         const auto hash_value = hasher(handle);
         const auto [start, end] = handle_to_row_id.equal_range(hash_value);
+        MutableColumns mut_cols(1);
         for (auto itr = start; itr != end; ++itr)
         {
-            MutableColumns mut_cols(1);
-            mut_cols[0] = ColumnString::create();
-            const auto read_rows = delta_reader->readRows(
+            // TODO: Maybe we can support readRows in batch.
+            // But hash collision is rare.
+            // And the distribution of these conflicting values is typically scattered.
+            // The benefits should be quite small, so it's not a high priority.
+            mut_cols[0] = createHandleColumn();
+            const auto read_rows = delta_reader.readRows(
                 mut_cols,
                 /*offset*/ itr->second - stable_rows,
                 /*limit*/ 1,
                 /*range*/ nullptr);
             RUNTIME_CHECK(read_rows == 1, itr->second, stable_rows, read_rows);
-            if (mut_cols[0]->getDataAt(0) == handle)
+            ColumnView<HandleType> handles(*(mut_cols[0]));
+            if (handles[0] == handle)
                 return itr->second;
         }
         return {};
     }
 
-    void insert(std::string_view handle, RowID row_id)
+    void insert(HandleRefType handle, RowID row_id)
     {
         std::ignore = handle_to_row_id.insert(std::pair{hasher(handle), row_id});
     }
 
-    void deleteRange(
-        const RowKeyRange & range,
-        std::optional<DeltaValueReader> & delta_reader,
-        const UInt32 stable_rows)
+    // The hash value of a handle cannot reflect the order of handles,
+    // so data can only be deleted by traversing the entire structure.
+    // First, collect all row_ids in the index and sort them.
+    // Then, read the handles in batches from the delta, and check if the handles in the delete range.
+    void deleteRange(const RowKeyRange & range, DeltaValueReader & delta_reader, const UInt32 stable_rows)
     {
-        RUNTIME_CHECK_MSG(delta_reader.has_value(), "DeltaValueReader is required for common handle");
         if (handle_to_row_id.empty())
             return;
 
@@ -126,7 +89,7 @@ public:
 
         std::sort(row_ids.begin(), row_ids.end());
 
-        absl::btree_multimap<Int64, RowID> t;
+        absl::btree_multimap<UInt32, RowID> t;
         auto begin = row_ids.begin();
         auto end = row_ids.end();
         auto get_next_continuous_size = [](auto begin, auto end) {
@@ -140,11 +103,11 @@ public:
         {
             const auto size = get_next_continuous_size(begin, end);
             MutableColumns mut_cols(1);
-            mut_cols[0] = ColumnString::create();
+            mut_cols[0] = createHandleColumn();
             const auto read_rows
-                = delta_reader->readRows(mut_cols, /*offset*/ *begin, /*limit*/ size, /*range*/ nullptr);
+                = delta_reader.readRows(mut_cols, /*offset*/ *begin, /*limit*/ size, /*range*/ nullptr);
             RUNTIME_CHECK(std::cmp_equal(read_rows, size), *begin, size, read_rows);
-            ColumnView<String> handles(*(mut_cols[0]));
+            ColumnView<HandleType> handles(*(mut_cols[0]));
             for (size_t i = 0; i < read_rows; ++i)
             {
                 auto h = handles[i];
@@ -159,17 +122,20 @@ public:
     }
 
 private:
-#ifdef DBMS_PUBLIC_GTEST
-    std::function<Int64(std::string_view)> hasher = [](std::string_view s) {
-        static absl::Hash<std::string_view> h;
-        return h(s);
-    };
-#else
-    absl::Hash<std::string_view> hasher;
-#endif
-    absl::btree_multimap<Int64, RowID> handle_to_row_id;
+    static MutableColumnPtr createHandleColumn()
+    {
+        if constexpr (std::is_same_v<HandleType, String>)
+            return ColumnString::create();
+        else
+            return ColumnInt64::create();
+    }
 
+    Hash hasher;
+    absl::btree_multimap<UInt32, RowID> handle_to_row_id;
+
+    friend class tests::SegmentBitmapFilterTest_NewHandleIndex_Test;
     friend class tests::SegmentBitmapFilterTest_NewHandleIndex_CommonHandle_Test;
+    friend class tests::NewHandleIndexTest;
 };
 
 

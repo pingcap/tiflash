@@ -118,7 +118,7 @@ UInt32 buildDeleteMarkFilterColumnFileBig(
     BitmapFilter & filter)
 {
     auto [valid_handle_res, valid_start_pack_id]
-        = getClippedRSResultsByRanges(dm_context, cf_big.getFile(), cf_big.getRange());
+        = getClippedRSResultsByRange(dm_context, cf_big.getFile(), cf_big.getRange());
     if (valid_handle_res.empty())
         return 0;
     return buildDeleteMarkFilterDMFile(

@@ -1,4 +1,4 @@
-// Copyright 2024 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -44,20 +44,20 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     }
     catch (DB::Exception & e)
     {
-        reset();
         LOG_ERROR(snapshot.log, "errmsg: {}", e.message());
+        resetImpl();
         throw;
     }
     catch (std::exception & e)
     {
-        reset();
         LOG_ERROR(snapshot.log, "errmsg: {}", e.what());
+        resetImpl();
         throw;
     }
     catch (...)
     {
-        reset();
         tryLogCurrentException(__PRETTY_FUNCTION__);
+        resetImpl();
         throw;
     }
 }
@@ -108,7 +108,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         && dmfile_or_delete_range_list.size() == 1;
     SCOPE_EXIT({ cleanHandleColumn(); });
 
-    auto delta_reader = createDeltaValueReaderIfCommonHandle(dm_context, snapshot.delta);
+    auto delta_reader = createDeltaValueReader(dm_context, snapshot.delta);
 
     UInt32 curr_replayed_rows = 0;
     UInt32 curr_replayed_deletes = 0;
@@ -168,7 +168,7 @@ void VersionChain<HandleType>::replayHandles(
     Iter begin,
     Iter end,
     const UInt32 stable_rows,
-    std::optional<DeltaValueReader> & delta_reader)
+    DeltaValueReader & delta_reader)
 {
     for (auto itr = begin; itr != end; ++itr)
     {
@@ -198,7 +198,7 @@ UInt32 VersionChain<HandleType>::replayBlock(
     const UInt32 offset,
     const UInt32 stable_rows,
     const bool calculate_read_packs,
-    std::optional<DeltaValueReader> & delta_reader)
+    DeltaValueReader & delta_reader)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
 
@@ -230,9 +230,9 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     const UInt32 stable_rows,
     const StableValueSpace::Snapshot & stable,
     const std::span<const ColumnFilePtr> preceding_cfs,
-    std::optional<DeltaValueReader> & delta_reader)
+    DeltaValueReader & delta_reader)
 {
-    auto cf_big_min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, *(cf_big.getFile()));
+    auto cf_big_min_max = loadDMFileHandleRange<HandleType>(dm_context, *(cf_big.getFile()));
     if (!cf_big_min_max) // DMFile is empty.
         return 0;
 
@@ -249,7 +249,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     };
 
     auto is_dmfile_intersect = [&](const DMFile & file) {
-        auto file_min_max = loadDMFileHandleRange<HandleType>(dm_context.global_context, file);
+        auto file_min_max = loadDMFileHandleRange<HandleType>(dm_context, file);
         if (!file_min_max)
             return false;
         const auto & [file_min, file_max] = *file_min_max;
@@ -312,7 +312,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
 template <ExtraHandleType HandleType>
 UInt32 VersionChain<HandleType>::replayDeleteRange(
     const ColumnFileDeleteRange & cf_delete_range,
-    std::optional<DeltaValueReader> & delta_reader,
+    DeltaValueReader & delta_reader,
     const UInt32 stable_rows)
 {
     new_handle_to_row_ids.deleteRange(cf_delete_range.getDeleteRange(), delta_reader, stable_rows);
@@ -362,19 +362,16 @@ void VersionChain<HandleType>::cleanHandleColumn()
 }
 
 template <ExtraHandleType HandleType>
-std::optional<DeltaValueReader> VersionChain<HandleType>::createDeltaValueReaderIfCommonHandle(
+DeltaValueReader VersionChain<HandleType>::createDeltaValueReader(
     const DMContext & dm_context,
     const DeltaSnapshotPtr & delta_snap)
 {
-    if constexpr (std::is_same_v<HandleType, String>)
-        return DeltaValueReader{
-            dm_context,
-            delta_snap,
-            getHandleColumnDefinesPtr<HandleType>(),
-            /*range*/ {},
-            ReadTag::MVCC};
-    else
-        return std::nullopt;
+    return DeltaValueReader{
+        dm_context,
+        delta_snap,
+        getHandleColumnDefinesPtr<HandleType>(),
+        /*range*/ {},
+        ReadTag::MVCC};
 }
 
 template class VersionChain<Int64>;

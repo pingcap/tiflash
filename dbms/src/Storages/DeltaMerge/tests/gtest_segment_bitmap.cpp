@@ -1859,7 +1859,7 @@ try
     });
 }
 CATCH
-
+#if 0
 TEST_P(SegmentBitmapFilterTest, NewHandleIndex)
 try
 {
@@ -2029,7 +2029,7 @@ try
     }
 }
 CATCH
-
+#endif
 TEST_P(SegmentBitmapFilterTest, DupHandle)
 try
 {

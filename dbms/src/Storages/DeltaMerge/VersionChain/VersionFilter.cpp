@@ -124,7 +124,7 @@ template <ExtraHandleType HandleType>
     const ssize_t start_row_id,
     BitmapFilter & filter)
 {
-    const auto max_versions = loadPackMaxValue<UInt64>(dm_context.global_context, *dmfile, MutSup::version_col_id);
+    const auto max_versions = loadPackMaxValue<UInt64>(dm_context, *dmfile, MutSup::version_col_id);
 
     auto need_read_packs = std::make_shared<IdSet>();
     std::unordered_map<UInt32, UInt32> start_row_id_of_need_read_packs; // pack_id -> start_row_id
@@ -247,7 +247,7 @@ template <ExtraHandleType HandleType>
     // `valid_handle_res` is the filter results of the rowkey range. The packs that do not intersect at both ends have been cut off.
     // `valid_start_pack_id` is the first pack that intersects with the rowkey range in DMFile.
     auto [valid_handle_res, valid_start_pack_id]
-        = getClippedRSResultsByRanges(dm_context, cf_big.getFile(), cf_big.getRange());
+        = getClippedRSResultsByRange(dm_context, cf_big.getFile(), cf_big.getRange());
     if (valid_handle_res.empty())
         return 0;
 
