@@ -14,8 +14,8 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/Page/PageDefinesBase.h>
 namespace DB::DM

@@ -33,7 +33,7 @@ extern const char delta_tree_create_node_fail[];
 namespace DB::ErrorCodes
 {
 extern const int FAIL_POINT_ERROR;
-};
+}
 
 namespace DB::DM
 {

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/Segment.h>
 
 namespace CurrentMetrics
