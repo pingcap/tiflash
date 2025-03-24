@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader.h>
-#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ColumnFileTiny.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromColumnFileTiny.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 
 namespace DB::DM
@@ -40,9 +40,7 @@ InvertedIndexReaderFromColumnFileTiny::InvertedIndexReaderFromColumnFileTiny(
 
 BitmapFilterPtr InvertedIndexReaderFromColumnFileTiny::load()
 {
-    if (loaded)
-        return nullptr;
-
+    RUNTIME_CHECK(!loaded);
     Stopwatch watch;
 
     auto sorted_results = column_range->check(
@@ -64,8 +62,13 @@ BitmapFilterPtr InvertedIndexReaderFromColumnFileTiny::load(const SingleColumnRa
     const auto info_iter = std::find_if(index_infos->cbegin(), index_infos->cend(), [index_id](const auto & info) {
         return info.index_props().index_id() == index_id;
     });
-    if (info_iter == index_infos->cend() || info_iter->index_props().kind() != dtpb::IndexFileKind::INVERTED_INDEX)
+    if (info_iter == index_infos->cend())
         return nullptr;
+    RUNTIME_CHECK_MSG(
+        info_iter->index_props().kind() == dtpb::IndexFileKind::INVERTED_INDEX,
+        "Unexpected index, kind={} index_id={}",
+        magic_enum::enum_name(info_iter->index_props().kind()),
+        index_id);
     const auto & inverted_index = info_iter->index_props();
     auto index_page_id = info_iter->index_page_id();
 
@@ -94,9 +97,6 @@ BitmapFilterPtr InvertedIndexReaderFromColumnFileTiny::load(const SingleColumnRa
         double elapsed = w.elapsedSecondsFromLastTime();
         if (is_load_from_storage)
         {
-            // it could be possible that s3=true but load_from_file=false, it means we download a file
-            // and then reuse the memory cache. The majority time comes from s3 download
-            // so we still count it as s3 download.
             GET_METRIC(tiflash_inverted_index_duration, type_load_cf).Observe(elapsed);
         }
         else

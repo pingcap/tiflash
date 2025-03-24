@@ -12,9 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ColumnFileTiny.h>
-#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/DMFile.h>
-#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/Segment.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromColumnFileTiny.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromDMFile.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromSegment.h>
 #include <Storages/DeltaMerge/Segment.h>
 
 namespace DB::DM

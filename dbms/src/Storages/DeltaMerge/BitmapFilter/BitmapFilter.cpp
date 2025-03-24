@@ -137,8 +137,7 @@ void BitmapFilter::logicalAnd(const BitmapFilter & other)
 
 void BitmapFilter::append(const BitmapFilter & other)
 {
-    filter.reserve(filter.size() + other.filter.size());
-    std::copy(other.filter.cbegin(), other.filter.cend(), std::back_inserter(filter));
+    filter.insert(filter.end(), other.filter.cbegin(), other.filter.cend());
     all_match = all_match && other.all_match;
 }
 

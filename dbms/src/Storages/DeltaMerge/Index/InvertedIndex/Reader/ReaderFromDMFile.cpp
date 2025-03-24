@@ -16,7 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader.h>
-#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/DMFile.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromDMFile.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/FileCachePerf.h>

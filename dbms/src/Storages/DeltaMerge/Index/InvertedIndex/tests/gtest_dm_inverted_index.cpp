@@ -19,8 +19,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyLocalIndexWriter.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/File/DMFileLocalIndexWriter.h>
-#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ColumnFileTiny.h>
-#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/DMFile.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromColumnFileTiny.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromDMFile.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
