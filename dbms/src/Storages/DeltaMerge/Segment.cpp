@@ -2551,6 +2551,7 @@ bool Segment::compactDelta(DMContext & dm_context)
 
 void Segment::placeDeltaIndex(const DMContext & dm_context) const
 {
+    RUNTIME_CHECK(!dm_context.enableVersionChain());
     // Update delta-index with persisted packs. TODO: can use a read snapshot here?
     auto segment_snap = createSnapshot(dm_context, /*for_update=*/true, CurrentMetrics::DT_SnapshotOfPlaceIndex);
     if (!segment_snap)
@@ -2560,7 +2561,6 @@ void Segment::placeDeltaIndex(const DMContext & dm_context) const
 
 void Segment::placeDeltaIndex(const DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
 {
-    RUNTIME_CHECK(!dm_context.enableVersionChain());
     getReadInfo(
         dm_context,
         /*read_columns=*/{getExtraHandleColumnDefine(is_common_handle)},
