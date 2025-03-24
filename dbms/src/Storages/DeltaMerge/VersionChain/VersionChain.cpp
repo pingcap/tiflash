@@ -104,6 +104,9 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     // Only ColumnFileInMemory or ColumnFileTiny can be half replayed.
     RUNTIME_CHECK(offset == 0 || (*pos)->isInMemoryFile() || (*pos)->isTinyFile(), offset, (*pos)->toString());
 
+    // If calculate_read_packs is true, we will calculate which packs in DMFile to read first.
+    // Or we will read all packs in DMFile.
+    // This is used to optimize scenarios where there are fewer delta records that need to be replayed.
     const bool calculate_read_packs = (cfs.end() - pos == 1) && ((*pos)->isInMemoryFile() || (*pos)->isTinyFile())
         && dmfile_or_delete_range_list.size() == 1;
     SCOPE_EXIT({ cleanHandleColumn(); });
@@ -173,10 +176,9 @@ void VersionChain<HandleType>::replayHandles(
     for (auto itr = begin; itr != end; ++itr)
     {
         const auto h = *itr;
-        const RowID curr_row_id = base_versions->size() + stable_rows;
-        if (auto t = new_handle_to_row_ids.find(h, delta_reader, stable_rows); t)
+        if (auto row_id = new_handle_to_row_ids.find(h, delta_reader, stable_rows); row_id)
         {
-            base_versions->push_back(*t);
+            base_versions->push_back(*row_id);
             continue;
         }
         if (auto row_id = findBaseVersionFromDMFileOrDeleteRangeList(dm_context, h); row_id)
@@ -184,7 +186,7 @@ void VersionChain<HandleType>::replayHandles(
             base_versions->push_back(*row_id);
             continue;
         }
-
+        const RowID curr_row_id = base_versions->size() + stable_rows;
         new_handle_to_row_ids.insert(h, curr_row_id);
         base_versions->push_back(NotExistRowID);
     }
@@ -239,7 +241,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     HandleRefType cf_big_min = cf_big_min_max->first;
     HandleRefType cf_big_max = cf_big_min_max->second;
 
-    // If a ColumnFileBig is apply snapshot or ingest sst, there is no data locally that intersects with it.
+    // If a ColumnFileBig is ingested by apply snapshot, its preceding should be a ColumnFileDeleteRange.
     auto is_apply_snapshot = [&]() {
         if (dmfile_or_delete_range_list.empty())
             return false;
@@ -255,7 +257,8 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
         const auto & [file_min, file_max] = *file_min_max;
         return cf_big_min <= file_max && file_min <= cf_big_max;
     };
-
+    // If a ColumnFileBig is ingested by ingest sst, it should not intersect with any preceding ColumnFile.
+    // Also, it should not have other ColumnFileTiny, ColumnFileInMemory or ColumnFileDeleteRange.
     auto is_ingest_sst = [&]() {
         for (const auto & file : stable.getDMFiles())
             if (is_dmfile_intersect(*file))
@@ -284,8 +287,8 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
             DMFileHandleIndex<HandleType>{dm_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
         return rows;
     }
-
-    // Replay dmfile as normal write. At present, only testing may take this path.
+    // If a ColumnFileBig is not ingested by apply snapshot or ingest sst, it should be replayed as normal write.
+    // At present, only testing may take this path.
     LOG_WARNING(
         Logger::get(dm_context.tracing_id),
         "ColumnFileBig={} is neither apply snapshot nor ingest sst",
