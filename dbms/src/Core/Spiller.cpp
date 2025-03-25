@@ -48,6 +48,7 @@ SpilledFile::~SpilledFile()
     {
         auto file_path = path();
         file_provider->deleteRegularFile(file_path, EncryptionPath(file_path, ""));
+        SpillLimiter::instance->minusSpilledBytes(details.data_bytes_compressed);
     }
     catch (...)
     {
@@ -57,9 +58,6 @@ SpilledFile::~SpilledFile()
             path(),
             getCurrentExceptionMessage(false, false));
     }
-
-    // todo try catch
-    SpillLimiter::instance->minusSpilledBytes(details.data_bytes_compressed);
 }
 
 void SpilledFiles::commitSpilledFiles(std::vector<std::unique_ptr<SpilledFile>> && spilled_files)

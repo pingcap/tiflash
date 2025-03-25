@@ -67,7 +67,7 @@ private:
             RUNTIME_CHECK_MSG(
                 written_rows >= last_detail.rows && compressed_buf.count() >= last_detail.data_bytes_uncompressed
                     && file_buf.count() >= last_detail.data_bytes_compressed,
-                "check spill detail failed, rows: {}, {}, bytes_uncompressed: {}, {}, compressed: {}, {}",
+                "check spill detail failed, rows: {}, {}, bytes uncompressed: {}, {}, bytes compressed: {}, {}",
                 written_rows,
                 last_detail.rows,
                 compressed_buf.count(),
