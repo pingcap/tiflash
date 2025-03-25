@@ -131,10 +131,12 @@ public:
             insertFrom(src_, n);
     }
 
-    void insertSelectiveFrom(const IColumn & src_, const Offsets & selective_offsets) override
+    void insertSelectiveRangeFrom(const IColumn & src_, const Offsets & selective_offsets, size_t start, size_t length)
+        override
     {
-        for (auto position : selective_offsets)
-            insertFrom(src_, position);
+        RUNTIME_CHECK(selective_offsets.size() >= start + length);
+        for (size_t i = start; i < start + length; ++i)
+            insertFrom(src_, selective_offsets[i]);
     }
 
     void insertFrom(ConstAggregateDataPtr __restrict place);
@@ -165,6 +167,10 @@ public:
 
     const char * deserializeAndInsertFromArena(const char * src_arena, const TiDB::TiDBCollatorPtr &) override;
 
+    void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const override
+    {
+        throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
     void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & /* byte_size */,
         const NullMap * /*nullmap*/,
@@ -174,9 +180,14 @@ public:
             "Method countSerializeByteSizeForCmp is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-    void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const override
+
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const IColumn::Offsets & /* offsets */) const override
     {
-        throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method countSerializeByteSizeForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
@@ -188,15 +199,15 @@ public:
             "Method countSerializeByteSizeForCmpColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-    void countSerializeByteSizeForColumnArray(
-        PaddedPODArray<size_t> & /* byte_size */,
-        const IColumn::Offsets & /* offsets */) const override
-    {
-        throw Exception(
-            "Method countSerializeByteSizeForColumnArray is not supported for " + getName(),
-            ErrorCodes::NOT_IMPLEMENTED);
-    }
 
+    void serializeToPos(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */) const override
+    {
+        throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
     void serializeToPosForCmp(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
@@ -208,13 +219,17 @@ public:
     {
         throw Exception("Method serializeToPosForCmp is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
-    void serializeToPos(
+
+    void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
-        bool /* has_null */) const override
+        bool /* has_null */,
+        const IColumn::Offsets & /* offsets */) const override
     {
-        throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method serializeToPosForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
     void serializeToPosForCmpColumnArray(
         PaddedPODArray<char *> & /* pos */,
@@ -230,40 +245,20 @@ public:
             "Method serializeToPosForCmpColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-    void serializeToPosForColumnArray(
-        PaddedPODArray<char *> & /* pos */,
-        size_t /* start */,
-        size_t /* length */,
-        bool /* has_null */,
-        const IColumn::Offsets & /* offsets */) const override
-    {
-        throw Exception(
-            "Method serializeToPosForColumnArray is not supported for " + getName(),
-            ErrorCodes::NOT_IMPLEMENTED);
-    }
 
-    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) override
-    {
-        throw Exception(
-            "Method deserializeForCmpAndInsertFromPos is not supported for " + getName(),
-            ErrorCodes::NOT_IMPLEMENTED);
-    }
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) override
     {
         throw Exception(
             "Method deserializeAndInsertFromPos is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-
-    void deserializeForCmpAndInsertFromPosColumnArray(
-        PaddedPODArray<char *> & /* pos */,
-        const IColumn::Offsets & /* array_offsets */,
-        bool /* use_nt_align_buffer */) override
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) override
     {
         throw Exception(
-            "Method deserializeForCmpAndInsertFromPosColumnArray is not supported for " + getName(),
+            "Method deserializeForCmpAndInsertFromPos is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
+
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         const IColumn::Offsets & /* array_offsets */,
@@ -271,6 +266,15 @@ public:
     {
         throw Exception(
             "Method deserializeAndInsertFromPosForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+    void deserializeForCmpAndInsertFromPosColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const IColumn::Offsets & /* array_offsets */,
+        bool /* use_nt_align_buffer */) override
+    {
+        throw Exception(
+            "Method deserializeForCmpAndInsertFromPosColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
 

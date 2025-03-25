@@ -437,17 +437,15 @@ void ColumnNullable::insertManyFrom(const IColumn & src, size_t n, size_t length
     map.resize_fill(map.size() + length, src_concrete.getNullMapData()[n]);
 }
 
-void ColumnNullable::insertSelectiveFrom(const IColumn & src, const Offsets & selective_offsets)
+void ColumnNullable::insertSelectiveRangeFrom(
+    const IColumn & src,
+    const Offsets & selective_offsets,
+    size_t start,
+    size_t length)
 {
     const auto & src_concrete = static_cast<const ColumnNullable &>(src);
-    getNestedColumn().insertSelectiveFrom(src_concrete.getNestedColumn(), selective_offsets);
-    auto & map = getNullMapData();
-    const auto & src_map = src_concrete.getNullMapData();
-    size_t old_size = map.size();
-    size_t to_add_size = selective_offsets.size();
-    map.resize(old_size + to_add_size);
-    for (size_t i = 0; i < to_add_size; ++i)
-        map[i + old_size] = src_map[selective_offsets[i]];
+    getNestedColumn().insertSelectiveRangeFrom(src_concrete.getNestedColumn(), selective_offsets, start, length);
+    getNullMapColumn().insertSelectiveRangeFrom(src_concrete.getNullMapColumn(), selective_offsets, start, length);
 }
 
 void ColumnNullable::popBack(size_t n)

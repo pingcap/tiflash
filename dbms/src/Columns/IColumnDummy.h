@@ -88,6 +88,10 @@ public:
         return pos;
     }
 
+    void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const override
+    {
+        throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
     void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & /* byte_size */,
         const NullMap * /*nullmap*/,
@@ -97,11 +101,15 @@ public:
             "Method countSerializeByteSizeForCmp is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-    void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const override
-    {
-        throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
-    }
 
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const IColumn::Offsets & /* array_offsets */) const override
+    {
+        throw Exception(
+            "Method countSerializeByteSizeForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const IColumn::Offsets & /* array_offsets */,
@@ -112,15 +120,15 @@ public:
             "Method countSerializeByteSizeForCmpColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-    void countSerializeByteSizeForColumnArray(
-        PaddedPODArray<size_t> & /* byte_size */,
-        const IColumn::Offsets & /* array_offsets */) const override
-    {
-        throw Exception(
-            "Method countSerializeByteSizeForColumnArray is not supported for " + getName(),
-            ErrorCodes::NOT_IMPLEMENTED);
-    }
 
+    void serializeToPos(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */) const override
+    {
+        throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
     void serializeToPosForCmp(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
@@ -132,15 +140,18 @@ public:
     {
         throw Exception("Method serializeToPosForCmp is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
-    void serializeToPos(
+
+    void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
         size_t /* length */,
-        bool /* has_null */) const override
+        bool /* has_null */,
+        const IColumn::Offsets & /* array_offsets */) const override
     {
-        throw Exception("Method serializeToPos is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+        throw Exception(
+            "Method serializeToPosForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
     }
-
     void serializeToPosForCmpColumnArray(
         PaddedPODArray<char *> & /* pos */,
         size_t /* start */,
@@ -155,40 +166,20 @@ public:
             "Method serializeToPosForCmpColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-    void serializeToPosForColumnArray(
-        PaddedPODArray<char *> & /* pos */,
-        size_t /* start */,
-        size_t /* length */,
-        bool /* has_null */,
-        const IColumn::Offsets & /* array_offsets */) const override
-    {
-        throw Exception(
-            "Method serializeToPosForColumnArray is not supported for " + getName(),
-            ErrorCodes::NOT_IMPLEMENTED);
-    }
 
-    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) override
-    {
-        throw Exception(
-            "Method deserializeForCmpAndInsertFromPos is not supported for " + getName(),
-            ErrorCodes::NOT_IMPLEMENTED);
-    }
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) override
     {
         throw Exception(
             "Method deserializeAndInsertFromPos is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
-
-    void deserializeForCmpAndInsertFromPosColumnArray(
-        PaddedPODArray<char *> & /* pos */,
-        const IColumn::Offsets & /* array_offsets */,
-        bool /* use_nt_align_buffer */) override
+    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) override
     {
         throw Exception(
-            "Method deserializeForCmpAndInsertFromPosColumnArray is not supported for " + getName(),
+            "Method deserializeForCmpAndInsertFromPos is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
+
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
         const IColumn::Offsets & /* array_offsets */,
@@ -196,6 +187,15 @@ public:
     {
         throw Exception(
             "Method deserializeAndInsertFromPosForColumnArray is not supported for " + getName(),
+            ErrorCodes::NOT_IMPLEMENTED);
+    }
+    void deserializeForCmpAndInsertFromPosColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const IColumn::Offsets & /* array_offsets */,
+        bool /* use_nt_align_buffer */) override
+    {
+        throw Exception(
+            "Method deserializeForCmpAndInsertFromPosColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
 
@@ -217,10 +217,7 @@ public:
 
     void insertManyFrom(const IColumn &, size_t, size_t length) override { s += length; }
 
-    void insertSelectiveFrom(const IColumn &, const Offsets & selective_offsets) override
-    {
-        s += selective_offsets.size();
-    }
+    void insertSelectiveRangeFrom(const IColumn &, const Offsets &, size_t, size_t length) override { s += length; }
 
     void insertRangeFrom(const IColumn & /*src*/, size_t /*start*/, size_t length) override { s += length; }
 
