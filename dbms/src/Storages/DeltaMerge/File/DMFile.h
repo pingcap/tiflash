@@ -211,10 +211,6 @@ public:
     UInt32 metaVersion() const { return meta->metaVersion(); }
 
     bool isColIndexExist(const ColId & col_id) const;
-    static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
-    {
-        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
-    }
 
 private:
     DMFile(
@@ -303,6 +299,11 @@ private:
     EncryptionPath encryptionDataPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionIndexPath(const FileNameBase & file_name_base) const;
     EncryptionPath encryptionMarkPath(const FileNameBase & file_name_base) const;
+
+    static FileNameBase getFileNameBase(ColId col_id, const IDataType::SubstreamPath & substream = {})
+    {
+        return IDataType::getFileNameForStream(DB::toString(col_id), substream);
+    }
 
     static String localIndexFileName(IndexID index_id, TiDB::ColumnarIndexKind kind)
     {
