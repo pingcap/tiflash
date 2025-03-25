@@ -122,13 +122,8 @@ public:
         String * sort_key_container) const override;
 
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
-    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
 
     void deserializeAndInsertFromPosForColumnArray(
-        PaddedPODArray<char *> & pos,
-        const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer) override;
-    void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override;

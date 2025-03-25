@@ -162,7 +162,6 @@ public:
     }
 
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
-    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
 
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
@@ -171,15 +170,6 @@ public:
     {
         throw Exception(
             "Method deserializeAndInsertFromPosForColumnArray is not supported for " + getName(),
-            ErrorCodes::NOT_IMPLEMENTED);
-    }
-    void deserializeForCmpAndInsertFromPosColumnArray(
-        PaddedPODArray<char *> & /* pos */,
-        const IColumn::Offsets & /* array_offsets */,
-        bool /* use_nt_align_buffer */) override
-    {
-        throw Exception(
-            "Method deserializeForCmpAndInsertFromPosColumnArray is not supported for " + getName(),
             ErrorCodes::NOT_IMPLEMENTED);
     }
 

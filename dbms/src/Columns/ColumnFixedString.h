@@ -177,22 +177,11 @@ public:
         String *) const override;
 
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
-    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
-    {
-        deserializeAndInsertFromPos(pos, use_nt_align_buffer);
-    }
 
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override;
-    void deserializeForCmpAndInsertFromPosColumnArray(
-        PaddedPODArray<char *> & pos,
-        const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer) override
-    {
-        deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
-    }
 
     void flushNTAlignBuffer() override {}
 

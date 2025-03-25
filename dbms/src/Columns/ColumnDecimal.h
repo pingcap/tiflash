@@ -211,13 +211,8 @@ public:
         const NullMap * nullmap) const;
 
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
-    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
 
     void deserializeAndInsertFromPosForColumnArray(
-        PaddedPODArray<char *> & pos,
-        const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer) override;
-    void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override;

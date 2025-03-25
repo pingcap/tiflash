@@ -183,11 +183,6 @@ public:
         for (auto & column : columns)
             column->assumeMutableRef().deserializeAndInsertFromPos(pos, use_nt_align_buffer);
     }
-    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
-    {
-        for (auto & column : columns)
-            column->assumeMutableRef().deserializeForCmpAndInsertFromPos(pos, use_nt_align_buffer);
-    }
 
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & pos,
@@ -196,17 +191,6 @@ public:
     {
         for (auto & column : columns)
             column->assumeMutableRef().deserializeAndInsertFromPosForColumnArray(
-                pos,
-                array_offsets,
-                use_nt_align_buffer);
-    }
-    void deserializeForCmpAndInsertFromPosColumnArray(
-        PaddedPODArray<char *> & pos,
-        const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer) override
-    {
-        for (auto & column : columns)
-            column->assumeMutableRef().deserializeForCmpAndInsertFromPosColumnArray(
                 pos,
                 array_offsets,
                 use_nt_align_buffer);

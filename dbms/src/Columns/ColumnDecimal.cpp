@@ -305,9 +305,14 @@ void ColumnDecimal<T>::serializeToPosForCmpColumnArray(
     const TiDB::TiDBCollatorPtr &,
     String *) const
 {
-#define CALL(has_null, has_nullmap)                                                                                \
-    {                                                                                                              \
-        serializeToPosForColumnArrayImpl<has_null, true, has_nullmap>(pos, start, length, array_offsets, nullmap); \
+#define CALL(has_null, has_nullmap)                                                          \
+    {                                                                                        \
+        serializeToPosForColumnArrayImpl<has_null, /*compare_semantics=*/true, has_nullmap>( \
+            pos,                                                                             \
+            start,                                                                           \
+            length,                                                                          \
+            array_offsets,                                                                   \
+            nullmap);                                                                        \
     }
 
     if (has_null)
@@ -391,14 +396,16 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
         }
 
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+        auto start_idx = array_offsets[start + i - 1];
         if constexpr (compare_semantics && is_Decimal256)
         {
             auto * p = pos[i];
             for (size_t j = 0; j < len; ++j)
             {
-                // Clear the value and only set the necessary parts for compare semantic
+                // Clear the value and only set the necessary parts for compare semantics
                 memset(static_cast<void *>(&tmp_val), 0, sizeof(T));
-                tmp_val.value.backend().assign(data[start + i].value.backend());
+                tmp_val.value.backend().assign(data[start_idx + j].value.backend());
+
                 tiflash_compiler_builtin_memcpy(p, &tmp_val, sizeof(T));
                 p += sizeof(T);
             }
@@ -406,7 +413,6 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
         }
         else
         {
-            auto start_idx = array_offsets[start + i - 1];
             if (len <= 4)
             {
                 auto * p = pos[i];
@@ -522,12 +528,6 @@ void ColumnDecimal<T>::deserializeAndInsertFromPos(
 }
 
 template <typename T>
-void ColumnDecimal<T>::deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
-{
-    deserializeAndInsertFromPos(pos, use_nt_align_buffer);
-}
-
-template <typename T>
 void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
     PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
@@ -571,15 +571,6 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
             pos[i] += len * sizeof(T);
         }
     }
-}
-
-template <typename T>
-void ColumnDecimal<T>::deserializeForCmpAndInsertFromPosColumnArray(
-    PaddedPODArray<char *> & pos,
-    const IColumn::Offsets & array_offsets,
-    bool use_nt_align_buffer)
-{
-    deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
 }
 
 template <typename T>

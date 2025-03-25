@@ -341,19 +341,12 @@ public:
     ///     for (auto & column_ptr : mutable_columns)
     ///         column_ptr->flushNTAlignBuffer();
     virtual void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) = 0;
-    virtual void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */)
-        = 0;
 
     /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
     /// Only called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
     virtual void deserializeAndInsertFromPosForColumnArray(
-        PaddedPODArray<char *> & /* pos */,
-        const Offsets & /* array_offsets */,
-        bool /* use_nt_align_buffer */)
-        = 0;
-    virtual void deserializeForCmpAndInsertFromPosColumnArray(
         PaddedPODArray<char *> & /* pos */,
         const Offsets & /* array_offsets */,
         bool /* use_nt_align_buffer */)

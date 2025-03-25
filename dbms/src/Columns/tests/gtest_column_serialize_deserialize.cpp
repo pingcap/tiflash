@@ -393,7 +393,7 @@ public:
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-        new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -414,7 +414,7 @@ public:
             collator,
             sort_key_container);
 
-        new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
 
         current_size = 0;
         pos.clear();
@@ -428,7 +428,7 @@ public:
             ori_pos.push_back(ptr);
 
         column_ptr->serializeToPosForCmp(pos, 0, byte_size.size(), false, nullptr, collator, sort_key_container);
-        new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
 
         if (use_nt_align_buffer)
             new_col_ptr->flushNTAlignBuffer();
@@ -642,18 +642,7 @@ try
                                           .column;
         testCountSerializeByteSize(col_nullable_decimal_0, {49, 49, 49, 49, 49});
         testSerializeAndDeserialize(col_nullable_decimal_0);
-        // nullable + bool + size_t + n * 8
-        testCountSerializeByteSize(
-            col_nullable_decimal_0,
-            {
-                1 + 1 + 8 + 1 * 8,
-                1 + 1 + 8 + 2 * 8,
-                1 + 1 + 8 + 1 * 8,
-                1 + 1 + 8 + 1 * 8,
-                1 + 1 + 8 + 2 * 8,
-            },
-            true,
-            nullptr);
+        testCountSerializeByteSize(col_nullable_decimal_0, {49, 49, 49, 49, 49}, true, nullptr);
         testSerializeAndDeserialize(col_nullable_decimal_0, true, nullptr, nullptr);
     }
 
@@ -742,13 +731,7 @@ try
         auto col_nullable_array_dec = ColumnNullable::create(col_array_dec, createColumn<UInt8>({1, 0, 1}).column);
         testCountSerializeByteSize(col_nullable_array_dec, {1 + 4 + 48, 1 + 4 + 48 * 2, 1 + 4 + 48 * 3});
         testSerializeAndDeserialize(col_nullable_array_dec);
-        // 100.1111111111: (1 + 8 + 2 * 8)
-        // -11111111111111111111: (1 + 8 + 3 * 8)
-        testCountSerializeByteSize(
-            col_nullable_array_dec,
-            {1 + 4, 1 + 4 + (1 + 8 + 2 * 8) + (1 + 8 + 3 * 8), 1 + 4},
-            true,
-            nullptr);
+        testCountSerializeByteSize(col_nullable_array_dec, {1 + 4, 1 + 4 + 48 * 2, 1 + 4}, true, nullptr);
         testSerializeAndDeserialize(col_nullable_array_dec, true, nullptr, nullptr);
     }
 
