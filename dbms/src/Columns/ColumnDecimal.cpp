@@ -396,7 +396,7 @@ void ColumnDecimal<T>::serializeToPosForColumnArrayImpl(
         }
 
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
-        auto start_idx = array_offsets[start + i - 1];
+        size_t start_idx = array_offsets[start + i - 1];
         if constexpr (compare_semantics && is_Decimal256)
         {
             auto * p = pos[i];
@@ -554,7 +554,7 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
     for (size_t i = 0; i < size; ++i)
     {
         size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        auto start_idx = array_offsets[start_point + i - 1];
+        size_t start_idx = array_offsets[start_point + i - 1];
         if (len <= 4)
         {
             auto * p = pos[i];

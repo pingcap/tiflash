@@ -138,13 +138,33 @@ const char * ColumnFixedString::deserializeAndInsertFromArena(const char * pos, 
     return pos + n;
 }
 
-void ColumnFixedString::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const
+void ColumnFixedString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
     size_t size = byte_size.size();
     for (size_t i = 0; i < size; ++i)
         byte_size[i] += n;
+}
+
+void ColumnFixedString::countSerializeByteSizeForCmp(
+    PaddedPODArray<size_t> & byte_size,
+    const NullMap * /*nullmap*/,
+    const TiDB::TiDBCollatorPtr & collator) const
+{
+    // collator->sortKey() will change the string length, which may exceeds n.
+    RUNTIME_CHECK_MSG(
+        !collator,
+        "{} doesn't support countSerializeByteSizeForCmp when collator is not null",
+        getName());
+    countSerializeByteSize(byte_size);
+}
+
+void ColumnFixedString::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
 }
 
 void ColumnFixedString::countSerializeByteSizeForCmpColumnArray(
@@ -161,13 +181,6 @@ void ColumnFixedString::countSerializeByteSizeForCmpColumnArray(
         countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets, nullmap);
     else
         countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
-}
-
-void ColumnFixedString::countSerializeByteSizeForColumnArray(
-    PaddedPODArray<size_t> & byte_size,
-    const IColumn::Offsets & array_offsets) const
-{
-    countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
 }
 
 template <bool has_nullmap>
@@ -194,6 +207,14 @@ void ColumnFixedString::countSerializeByteSizeForColumnArrayImpl(
     }
 }
 
+void ColumnFixedString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+{
+    if (has_null)
+        serializeToPosImpl<true, false>(pos, start, length, nullptr);
+    else
+        serializeToPosImpl<false, false>(pos, start, length, nullptr);
+}
+
 void ColumnFixedString::serializeToPosForCmp(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -218,14 +239,6 @@ void ColumnFixedString::serializeToPosForCmp(
         else
             serializeToPosImpl<false, false>(pos, start, length, nullptr);
     }
-}
-
-void ColumnFixedString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
-{
-    if (has_null)
-        serializeToPosImpl<true, false>(pos, start, length, nullptr);
-    else
-        serializeToPosImpl<false, false>(pos, start, length, nullptr);
 }
 
 template <bool has_null, bool has_nullmap>
@@ -261,6 +274,19 @@ void ColumnFixedString::serializeToPosImpl(
     }
 }
 
+void ColumnFixedString::serializeToPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const IColumn::Offsets & array_offsets) const
+{
+    if (has_null)
+        serializeToPosForColumnArrayImpl<true, false>(pos, start, length, array_offsets, nullptr);
+    else
+        serializeToPosForColumnArrayImpl<false, false>(pos, start, length, array_offsets, nullptr);
+}
+
 void ColumnFixedString::serializeToPosForCmpColumnArray(
     PaddedPODArray<char *> & pos,
     size_t start,
@@ -289,19 +315,6 @@ void ColumnFixedString::serializeToPosForCmpColumnArray(
         else
             serializeToPosForColumnArrayImpl<false, false>(pos, start, length, array_offsets, nullptr);
     }
-}
-
-void ColumnFixedString::serializeToPosForColumnArray(
-    PaddedPODArray<char *> & pos,
-    size_t start,
-    size_t length,
-    bool has_null,
-    const IColumn::Offsets & array_offsets) const
-{
-    if (has_null)
-        serializeToPosForColumnArrayImpl<true, false>(pos, start, length, array_offsets, nullptr);
-    else
-        serializeToPosForColumnArrayImpl<false, false>(pos, start, length, array_offsets, nullptr);
 }
 
 template <bool has_null, bool has_nullmap>

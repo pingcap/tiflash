@@ -262,7 +262,7 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
                 continue;
         }
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
-        auto start_idx = array_offsets[start + i - 1];
+        size_t start_idx = array_offsets[start + i - 1];
         if (len <= 4)
         {
             auto * p = pos[i];
@@ -403,7 +403,7 @@ void ColumnVector<T>::deserializeAndInsertFromPosForColumnArray(
     for (size_t i = 0; i < size; ++i)
     {
         size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
-        auto start_idx = array_offsets[start_point + i - 1];
+        size_t start_idx = array_offsets[start_point + i - 1];
         if (len <= 4)
         {
             auto * p = pos[i];

@@ -352,6 +352,7 @@ public:
         bool /* use_nt_align_buffer */)
         = 0;
 
+    /// Flush the non-temporal align buffer if any.
     virtual void flushNTAlignBuffer() = 0;
 
     /// Update state of hash function with value of n-th element.

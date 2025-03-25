@@ -44,24 +44,6 @@ private:
 
     ColumnArray(const ColumnArray &) = default;
 
-    template <bool compare_semantics>
-    void countSerializeByteSizeImpl(
-        PaddedPODArray<size_t> & byte_size,
-        const NullMap * nullmap,
-        const TiDB::TiDBCollatorPtr & collator) const;
-
-    template <bool has_null, bool compare_semantics, bool has_nullmap>
-    void serializeToPosImpl(
-        PaddedPODArray<char *> & pos,
-        size_t start,
-        size_t length,
-        const TiDB::TiDBCollatorPtr & collator,
-        String * sort_key_container,
-        const NullMap * nullmap) const;
-
-    template <bool compare_semantics>
-    void deserializeAndInsertFromPosImpl(PaddedPODArray<char *> & pos, bool use_nt_align_buffer);
-
 public:
     /** Create immutable column using immutable arguments. This arguments may be shared with other columns.
       * Use IColumn::mutate in order to make mutable column and mutate shared nested columns.
@@ -105,6 +87,11 @@ public:
         PaddedPODArray<size_t> & byte_size,
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator) const override;
+    template <bool compare_semantics>
+    void countSerializeByteSizeImpl(
+        PaddedPODArray<size_t> & byte_size,
+        const NullMap * nullmap,
+        const TiDB::TiDBCollatorPtr & collator) const;
 
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
@@ -134,6 +121,14 @@ public:
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator,
         String * sort_key_container) const override;
+    template <bool has_null, bool compare_semantics, bool has_nullmap>
+    void serializeToPosImpl(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        const TiDB::TiDBCollatorPtr & collator,
+        String * sort_key_container,
+        const NullMap * nullmap) const;
 
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & /* pos */,
