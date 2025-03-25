@@ -69,6 +69,14 @@ void ColumnVector<T>::countSerializeByteSize(PaddedPODArray<size_t> & byte_size)
 }
 
 template <typename T>
+void ColumnVector<T>::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
+{
+    countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
+}
+
+template <typename T>
 void ColumnVector<T>::countSerializeByteSizeForCmpColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets,
@@ -79,14 +87,6 @@ void ColumnVector<T>::countSerializeByteSizeForCmpColumnArray(
         countSerializeByteSizeForColumnArrayImpl<true>(byte_size, array_offsets, nullmap);
     else
         countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
-}
-
-template <typename T>
-void ColumnVector<T>::countSerializeByteSizeForColumnArray(
-    PaddedPODArray<size_t> & byte_size,
-    const IColumn::Offsets & array_offsets) const
-{
-    countSerializeByteSizeForColumnArrayImpl<false>(byte_size, array_offsets, nullptr);
 }
 
 template <typename T>
@@ -262,19 +262,22 @@ void ColumnVector<T>::serializeToPosForColumnArrayImpl(
                 continue;
         }
         size_t len = array_offsets[start + i] - array_offsets[start + i - 1];
+        auto start_idx = array_offsets[start + i - 1];
         if (len <= 4)
         {
+            auto * p = pos[i];
             for (size_t j = 0; j < len; ++j)
-                tiflash_compiler_builtin_memcpy(
-                    pos[i] + j * sizeof(T),
-                    &data[array_offsets[start + i - 1] + j],
-                    sizeof(T));
+            {
+                tiflash_compiler_builtin_memcpy(p, &data[start_idx + j], sizeof(T));
+                p += sizeof(T);
+            }
+            pos[i] = p;
         }
         else
         {
-            inline_memcpy(pos[i], &data[array_offsets[start + i - 1]], len * sizeof(T));
+            inline_memcpy(pos[i], &data[start_idx], len * sizeof(T));
+            pos[i] += len * sizeof(T);
         }
-        pos[i] += len * sizeof(T);
     }
 }
 
@@ -400,19 +403,22 @@ void ColumnVector<T>::deserializeAndInsertFromPosForColumnArray(
     for (size_t i = 0; i < size; ++i)
     {
         size_t len = array_offsets[start_point + i] - array_offsets[start_point + i - 1];
+        auto start_idx = array_offsets[start_point + i - 1];
         if (len <= 4)
         {
+            auto * p = pos[i];
             for (size_t j = 0; j < len; ++j)
-                tiflash_compiler_builtin_memcpy(
-                    &data[array_offsets[start_point + i - 1] + j],
-                    pos[i] + j * sizeof(T),
-                    sizeof(T));
+            {
+                tiflash_compiler_builtin_memcpy(&data[start_idx + j], p, sizeof(T));
+                p += sizeof(T);
+            }
+            pos[i] = p;
         }
         else
         {
-            inline_memcpy(&data[array_offsets[start_point + i - 1]], pos[i], len * sizeof(T));
+            inline_memcpy(&data[start_idx], pos[i], len * sizeof(T));
+            pos[i] += len * sizeof(T);
         }
-        pos[i] += len * sizeof(T);
     }
 }
 
