@@ -55,23 +55,14 @@ BitmapFilterPtr InvertedIndexReaderFromColumnFileTiny::load(const SingleColumnRa
 {
     Stopwatch w(CLOCK_MONOTONIC_COARSE);
 
-    const auto & index_infos = tiny_file.getIndexInfos();
-    if (!index_infos || index_infos->empty())
-        return nullptr;
-    auto index_id = column_range->index_id;
-    const auto info_iter = std::find_if(index_infos->cbegin(), index_infos->cend(), [index_id](const auto & info) {
-        return info.index_props().index_id() == index_id;
-    });
-    if (info_iter == index_infos->cend())
-        return nullptr;
-    RUNTIME_CHECK_MSG(
-        info_iter->index_props().kind() == dtpb::IndexFileKind::INVERTED_INDEX,
-        "Unexpected index, kind={} index_id={}",
-        magic_enum::enum_name(info_iter->index_props().kind()),
-        index_id);
-    const auto & inverted_index = info_iter->index_props();
-    auto index_page_id = info_iter->index_page_id();
+    const auto index_id = column_range->index_id;
+    const auto * index_info = tiny_file.findIndexInfo(index_id);
+    RUNTIME_CHECK(index_info != nullptr);
+    RUNTIME_CHECK(index_info->index_props().kind() == dtpb::IndexFileKind::INVERTED_INDEX);
+    RUNTIME_CHECK(index_info->index_props().has_inverted_index());
 
+    const auto & inverted_index = index_info->index_props();
+    auto index_page_id = index_info->index_page_id();
     bool is_load_from_storage = false;
     auto load_from_page_storage = [&]() {
         is_load_from_storage = true;
