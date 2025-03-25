@@ -1076,9 +1076,7 @@ try
         }
     });
 
-    int64_t max_spilled_bytes = settings.max_spilled_bytes;
-    SpillLimiter::instance = std::make_unique<SpillLimiter>(
-        max_spilled_bytes > 0 ? max_spilled_bytes : std::numeric_limits<uint64_t>::max());
+    SpillLimiter::instance = std::make_unique<SpillLimiter>(settings.max_spilled_bytes);
 
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
     if (not_disagg_mode || /*has_been_bootstrap*/ store_ident.has_value())

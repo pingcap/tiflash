@@ -32,23 +32,20 @@ using CachedSpillHandlerPtr = std::shared_ptr<CachedSpillHandler>;
 class SpillLimiter
 {
 public:
-    explicit SpillLimiter(uint64_t max_spilled_bytes_)
+    explicit SpillLimiter(int64_t max_spilled_bytes_)
         : max_spilled_bytes(max_spilled_bytes_)
     {}
 
     // return <ok_to_spill, current_spilled_bytes, max_spilled_bytes>
-    std::tuple<bool, uint64_t, uint64_t> okToSpill(uint64_t bytes)
+    std::tuple<bool, uint64_t, int64_t> okToSpill()
     {
         std::lock_guard<std::mutex> guard(lock);
-        const bool ok = current_spilled_bytes + bytes < max_spilled_bytes;
-        return {ok, current_spilled_bytes, max_spilled_bytes};
-    }
-
-    std::tuple<bool, uint64_t, uint64_t> okToSpill()
-    {
-        std::lock_guard<std::mutex> guard(lock);
-        const bool ok = current_spilled_bytes < max_spilled_bytes;
-        return {ok, current_spilled_bytes, max_spilled_bytes};
+        if (max_spilled_bytes < 0)
+            return {true, current_spilled_bytes, max_spilled_bytes};
+        return {
+            current_spilled_bytes < static_cast<uint64_t>(max_spilled_bytes),
+            current_spilled_bytes,
+            max_spilled_bytes};
     }
 
     void addSpilledBytes(uint64_t bytes)
@@ -70,7 +67,7 @@ public:
 
 private:
     std::mutex lock;
-    uint64_t max_spilled_bytes = std::numeric_limits<uint64_t>::max();
+    int64_t max_spilled_bytes;
     uint64_t current_spilled_bytes = 0;
 };
 
