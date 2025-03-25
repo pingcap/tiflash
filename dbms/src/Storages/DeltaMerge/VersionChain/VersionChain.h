@@ -56,6 +56,10 @@ public:
         : base_versions(std::make_shared<std::vector<RowID>>())
     {}
 
+    VersionChain & operator=(const VersionChain &) = delete;
+    VersionChain(VersionChain &&) = delete;
+    VersionChain & operator=(VersionChain &&) = delete;
+
     // Traverse the snapshot data in chronological order from the oldest to the newest,
     // and apply them to update the version chain.
     // `replayed_rows_and_deletes` is the number of rows and deletes has been replayed.
@@ -77,9 +81,6 @@ private:
         , new_handle_to_row_ids(other.new_handle_to_row_ids)
         , dmfile_or_delete_range_list(other.dmfile_or_delete_range_list)
     {}
-    VersionChain & operator=(const VersionChain &) = delete;
-    VersionChain(VersionChain &&) = delete;
-    VersionChain & operator=(VersionChain &&) = delete;
 
     [[nodiscard]] std::shared_ptr<const std::vector<RowID>> replaySnapshotImpl(
         const DMContext & dm_context,
@@ -97,23 +98,23 @@ private:
         const DMContext & dm_context,
         const IColumnFileDataProviderPtr & data_provider,
         const ColumnFile & cf,
-        const UInt32 offset,
-        const UInt32 stable_rows,
-        const bool calculate_read_packs,
+        UInt32 offset,
+        UInt32 stable_rows,
+        bool calculate_read_packs,
         DeltaValueReader & delta_reader);
 
     [[nodiscard]] UInt32 replayColumnFileBig(
         const DMContext & dm_context,
         const ColumnFileBig & cf_big,
-        const UInt32 stable_rows,
+        UInt32 stable_rows,
         const StableValueSpace::Snapshot & stable,
-        const std::span<const ColumnFilePtr> preceding_cfs,
+        std::span<const ColumnFilePtr> preceding_cfs,
         DeltaValueReader & delta_reader);
 
     [[nodiscard]] UInt32 replayDeleteRange(
         const ColumnFileDeleteRange & cf_delete_range,
         DeltaValueReader & delta_reader,
-        const UInt32 stable_rows);
+        UInt32 stable_rows);
 
     [[nodiscard]] std::optional<RowID> findBaseVersionFromDMFileOrDeleteRangeList(
         const DMContext & dm_context,
@@ -129,7 +130,7 @@ private:
         const DMContext & dm_context,
         Iter begin,
         Iter end,
-        const UInt32 stable_rows,
+        UInt32 stable_rows,
         DeltaValueReader & delta_reader);
 
     static DeltaValueReader createDeltaValueReader(const DMContext & dm_context, const DeltaSnapshotPtr & delta_snap);

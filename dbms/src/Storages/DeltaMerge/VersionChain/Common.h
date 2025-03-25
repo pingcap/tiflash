@@ -81,7 +81,7 @@ std::pair<RSResults, UInt32> getClippedRSResultsByRange(
 
 // Load max-value of packs of `col_id` from min-max index.
 template <typename T>
-std::vector<T> loadPackMaxValue(const DMContext & dm_context, const DMFile & dmfile, const ColId col_id);
+std::vector<T> loadPackMaxValue(const DMContext & dm_context, const DMFile & dmfile, ColId col_id);
 
 // Load min-value and max-value of handle column.
 template <ExtraHandleType HandleType>
