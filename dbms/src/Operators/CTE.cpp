@@ -15,18 +15,20 @@
 
 #include <Operators/CTE.h>
 
+#include <mutex>
 #include <shared_mutex>
+#include <utility>
 
 namespace DB
 {
-Block CTE::tryGetBlockAt(size_t idx)
+std::pair<bool, Block> CTE::tryGetBlockAt(size_t idx)
 {
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
-    auto block_num = this->blocks.size(); // TODO maybe in the disk
+    auto block_num = this->blocks.size(); // TODO maybe blocks are in disk
     if (block_num <= idx)
-        return Block();
+        return {this->is_eof, Block()};
     // TODO maybe fetch block from disk
-    return this->blocks[idx];
+    return {false, this->blocks[idx]};
 }
 
 void CTE::pushBlock(const Block & block)
@@ -34,5 +36,11 @@ void CTE::pushBlock(const Block & block)
     // TODO track memory
     std::unique_lock<std::shared_mutex> lock(this->rw_lock);
     this->blocks.push_back(block); // TODO consider spill
+}
+
+void CTE::notifyEOF()
+{
+    std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+    this->is_eof = true;
 }
 } // namespace DB

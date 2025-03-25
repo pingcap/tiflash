@@ -12,27 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma once
-
-#include <Core/Block.h>
-#include <Common/RWLock.h>
-
-#include <shared_mutex>
-#include <utility>
+#include <Operators/CTESinkOp.h>
 
 namespace DB
 {
-class CTE
+void CTESinkOp::operateSuffixImpl()
 {
-public:
-    std::pair<bool, Block> tryGetBlockAt(size_t idx);
-    void pushBlock(const Block & block);
-    void notifyEOF();
-private:
-    std::shared_mutex rw_lock;
-    Blocks blocks;
+    LOG_DEBUG(log, "finish write with {} rows", this->total_rows);
+}
 
-    bool is_eof = false;
-    // TODO spill
-};
+OperatorStatus CTESinkOp::writeImpl(Block && block)
+{
+    this->cte->pushBlock(block);
+    return 
+}
 } // namespace DB

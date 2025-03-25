@@ -15,37 +15,34 @@
 #pragma once
 
 #include <Operators/Operator.h>
+#include <Operators/CTE.h>
 
 namespace DB
 {
+// TODO handle selective block
 class CTESinkOp : public SinkOp
 {
 public:
-CTESinkOp(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id)
-        : SinkOp(exec_context_, req_id)
-    {}
+    CTESinkOp(
+            PipelineExecutorContext & exec_context_,
+            const String & req_id)
+            : SinkOp(exec_context_, req_id)
+        {}
 
     String getName() const override { return "CTESinkOp"; }
-
     bool canHandleSelectiveBlock() const override { return true; }
 
 protected:
-    void operatePrefixImpl() override;
     void operateSuffixImpl() override;
-
     OperatorStatus writeImpl(Block && block) override;
-
-    OperatorStatus prepareImpl() override;
-
     OperatorStatus awaitImpl() override;
 
 private:
-    OperatorStatus waitForWriter() const;
-
-private:
+    std::shared_ptr<CTE> cte;
     size_t total_rows = 0;
     bool input_done = false;
+
+    // When spill is triggered in CTE, we need to temporarily save the block
+    Block tmp_block;
 };
 } // namespace DB
