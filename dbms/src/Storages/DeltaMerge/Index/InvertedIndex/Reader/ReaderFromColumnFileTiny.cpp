@@ -17,10 +17,11 @@
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Compression/CompressedReadBuffer.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
-#include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
+#include <Storages/DeltaMerge/Filter/ColumnRange.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromColumnFileTiny.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
+
 
 namespace DB::DM
 {
@@ -41,7 +42,6 @@ InvertedIndexReaderFromColumnFileTiny::InvertedIndexReaderFromColumnFileTiny(
 BitmapFilterPtr InvertedIndexReaderFromColumnFileTiny::load()
 {
     RUNTIME_CHECK(!loaded);
-    Stopwatch watch;
 
     auto sorted_results = column_range->check(
         [&](const SingleColumnRangePtr & column_range) { return load(column_range); },
@@ -93,7 +93,9 @@ BitmapFilterPtr InvertedIndexReaderFromColumnFileTiny::load(const SingleColumnRa
     else
         index_reader = load_from_page_storage();
 
-    { // Statistics
+    {
+        // Statistics
+        // TODO: add more statistics to ScanContext
         double elapsed = w.elapsedSecondsFromLastTime();
         if (is_load_from_storage)
         {

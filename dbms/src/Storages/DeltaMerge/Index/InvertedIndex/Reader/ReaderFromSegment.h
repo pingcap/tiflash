@@ -14,7 +14,8 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/Filter/ColumnRange.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
+#include <Storages/DeltaMerge/Filter/ColumnRange_fwd.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache_fwd.h>
 
 namespace DB::DM
@@ -30,7 +31,6 @@ private:
     const ColumnRangePtr column_range;
     // Global local index cache
     const LocalIndexCachePtr local_index_cache;
-    LoggerPtr log;
 
 public:
     InvertedIndexReaderFromSegment(
@@ -40,7 +40,6 @@ public:
         : snapshot(snapshot_)
         , column_range(column_range_)
         , local_index_cache(local_index_cache_)
-        , log(Logger::get())
     {}
 
     static BitmapFilterPtr loadStable(

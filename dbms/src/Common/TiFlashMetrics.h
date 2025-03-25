@@ -887,7 +887,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       Gauge,                                                                                                                        \
       F(type_build, {"type", "build"}),                                                                                             \
       F(type_memory_reader, {"type", "memory_reader"}),                                                                             \
-      F(type_disk_reader, {"type", "disk-reader"}))                                                                                 \
+      F(type_disk_reader, {"type", "disk_reader"}))                                                                                 \
     M(tiflash_inverted_index_duration,                                                                                              \
       "Inverted index operation duration",                                                                                          \
       Histogram,                                                                                                                    \

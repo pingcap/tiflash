@@ -15,6 +15,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Filter/ColumnRange.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromDMFile.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
@@ -48,8 +49,7 @@ InvertedIndexReaderFromDMFile::~InvertedIndexReaderFromDMFile()
 
 BitmapFilterPtr InvertedIndexReaderFromDMFile::load()
 {
-    if (loaded)
-        return nullptr;
+    RUNTIME_CHECK(!loaded);
 
     auto sorted_results = column_range->check(
         [&](const SingleColumnRangePtr & column_range) { return load(column_range); },
@@ -85,7 +85,7 @@ BitmapFilterPtr InvertedIndexReaderFromDMFile::load(const SingleColumnRangePtr &
     String local_index_file_path;
     if (auto s3_file_name = S3::S3FilenameView::fromKeyWithPrefix(index_file_path); s3_file_name.isValid())
     {
-        // Disaggregated mod
+        // Disaggregated mode
         auto * file_cache = FileCache::instance();
         RUNTIME_CHECK_MSG(file_cache, "Must enable S3 file cache to use vector index");
 
@@ -143,7 +143,9 @@ BitmapFilterPtr InvertedIndexReaderFromDMFile::load(const SingleColumnRangePtr &
         inverted_index = load_from_file();
     }
 
-    { // Statistics
+    {
+        // Statistics
+        // TODO: add more statistics to ScanContext
         double elapsed = w.elapsedSecondsFromLastTime();
         if (has_s3_download)
         {

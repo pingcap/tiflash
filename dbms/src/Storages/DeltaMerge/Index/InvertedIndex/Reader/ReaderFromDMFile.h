@@ -15,8 +15,9 @@
 #pragma once
 
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
-#include <Storages/DeltaMerge/Filter/ColumnRange.h>
+#include <Storages/DeltaMerge/Filter/ColumnRange_fwd.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache_fwd.h>
+#include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 
 namespace DB::DM
 {

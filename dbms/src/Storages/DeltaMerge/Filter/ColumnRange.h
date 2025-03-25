@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/Filter/ColumnRange_fwd.h>
 #include <Storages/DeltaMerge/Filter/IntegerSet.h>
 #include <Storages/KVStore/Types.h>
 
@@ -24,13 +25,6 @@ namespace DB::DM
 
 using IndexID = DB::IndexID;
 using ColumnID = DB::ColumnID;
-
-class ColumnRange;
-using ColumnRangePtr = std::shared_ptr<ColumnRange>;
-using ColumnRanges = std::vector<ColumnRangePtr>;
-
-class SingleColumnRange;
-using SingleColumnRangePtr = std::shared_ptr<SingleColumnRange>;
 
 enum class ColumnRangeType
 {
