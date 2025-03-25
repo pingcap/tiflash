@@ -57,8 +57,10 @@ try
             RANDOM,
             column_info.name};
         column_data.push_back(ColumnGenerator::instance().generate(opts));
-        total_data_size += column_data.back().column->byteSize();
     }
+    for (const auto & column : column_data)
+        total_data_size += column.column->estimateByteSizeForSpill();
+
     context.addMockTable("spill_sort_test", "simple_table", column_infos, column_data, 8);
 
     // <max_spilled_bytes, expect_error>

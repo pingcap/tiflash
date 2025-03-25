@@ -55,14 +55,13 @@ void SpillHandler::SpillWriter::finishWrite(std::unique_ptr<SpilledFile> & spill
     file_buf.next();
     out->writeSuffix();
 
-    recordSpillStats(spilled_file);
+    recordSpillStats(0, spilled_file);
 }
 
 void SpillHandler::SpillWriter::write(const Block & block, std::unique_ptr<SpilledFile> & spilled_file)
 {
-    written_rows += block.rows();
     out->write(block);
-    recordSpillStats(spilled_file);
+    recordSpillStats(block.rows(), spilled_file);
 }
 
 SpillHandler::SpillHandler(Spiller * spiller_, size_t partition_id_)
@@ -147,13 +146,7 @@ void SpillHandler::spillBlocks(Blocks && blocks)
                 if (unlikely(writer == nullptr))
                     std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
 
-                auto [ok_to_spill, cur_spilled_bytes, max_bytes] = SpillLimiter::instance->okToSpill();
-                if (!ok_to_spill)
-                    throw Exception(fmt::format(
-                        "Failed to spill bytes to disk because exceeds max_spilled_bytes({}), cur_spilled_bytes: "
-                        "{}",
-                        max_bytes,
-                        cur_spilled_bytes));
+                checkOkToSpill();
 
                 /// erase constant column
                 spiller->removeConstantColumns(block);
@@ -192,14 +185,7 @@ void SpillHandler::spillBlocks(Blocks && blocks)
     }
     catch (...)
     {
-        /// mark the spill handler invalid
-        writer = nullptr;
-        spilled_files.clear();
-        current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
-        throw Exception(fmt::format(
-            "Failed to spill blocks to disk for file {}, error: {}",
-            current_spill_file_name,
-            getCurrentExceptionMessage(false, false)));
+        markAsInvalidAndRethrow();
     }
 }
 
@@ -210,6 +196,16 @@ void SpillHandler::finish()
     {
         if (writer != nullptr)
         {
+            // check again before finishWrite().
+            try
+            {
+                checkOkToSpill();
+            }
+            catch (...)
+            {
+                markAsInvalidAndRethrow();
+            }
+
             writer->finishWrite(spilled_files[current_spilled_file_index]);
             auto current_spill_details = spilled_files[current_spilled_file_index]->getSpillDetails();
             if (!spiller->enable_append_write
