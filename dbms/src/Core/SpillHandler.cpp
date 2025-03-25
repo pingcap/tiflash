@@ -143,14 +143,13 @@ void SpillHandler::spillBlocks(Blocks && blocks)
                 if (unlikely(!block || block.rows() == 0))
                     continue;
 
-                if (unlikely(writer == nullptr))
-                    std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
-
                 checkOkToSpill();
 
                 /// erase constant column
                 spiller->removeConstantColumns(block);
                 RUNTIME_CHECK(block.columns() > 0);
+                if (unlikely(writer == nullptr))
+                    std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
                 auto rows = block.rows();
                 total_rows += rows;
                 rows_in_file += rows;
