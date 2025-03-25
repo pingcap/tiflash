@@ -39,6 +39,25 @@ ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
 #define WRAP_FOR_TEST_END }
 
+#define SPILL_LIMITER_TEST_BEGIN                                             \
+    for (const auto & pair : max_spilled_bytes)                              \
+    {                                                                        \
+        bool error_cached = false;                                           \
+        SpillLimiter::instance = std::make_unique<SpillLimiter>(pair.first); \
+        try                                                                  \
+        {
+#define SPILL_LIMITER_TEST_END                                                  \
+    }                                                                           \
+    catch (const ::DB::Exception & e)                                           \
+    {                                                                           \
+        ASSERT_TRUE(e.message().contains("because exceeds max_spilled_bytes")); \
+        error_cached = true;                                                    \
+    }                                                                           \
+    ASSERT_EQ(pair.second, error_cached);                                       \
+    }                                                                           \
+    ASSERT_EQ(SpillLimiter::instance->getCurrentSpilledBytes(), 0);             \
+    SpillLimiter::instance = std::make_unique<SpillLimiter>(-1);
+
 class ExecutorTest : public ::testing::Test
 {
 protected:

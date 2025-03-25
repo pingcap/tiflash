@@ -48,10 +48,39 @@ private:
             bool append_write,
             const Block & header,
             size_t spill_version);
-        SpillDetails finishWrite();
-        void write(const Block & block);
+        void finishWrite(std::unique_ptr<SpilledFile> & spilled_file);
+        void write(const Block & block, std::unique_ptr<SpilledFile> & spilled_file);
 
     private:
+        void recordSpillStats(const std::unique_ptr<SpilledFile> & spilled_file)
+        {
+            // Use file_buf.count() (a.k.a. compressed data size) instead of uncompressed data size
+            // because we want to record the real bytes written to files.
+            const auto & delta = getDeltaSpillDetails(spilled_file);
+            spilled_file->updateSpillDetails(delta);
+            SpillLimiter::instance->addSpilledBytes(delta.data_bytes_compressed);
+        }
+
+        SpillDetails getDeltaSpillDetails(const std::unique_ptr<SpilledFile> & spilled_file) const
+        {
+            const auto & last_detail = spilled_file->getSpillDetails();
+            RUNTIME_CHECK_MSG(
+                written_rows >= last_detail.rows && compressed_buf.count() >= last_detail.data_bytes_uncompressed
+                    && file_buf.count() >= last_detail.data_bytes_compressed,
+                "check spill detail failed, rows: {}, {}, bytes_uncompressed: {}, {}, compressed: {}, {}",
+                written_rows,
+                last_detail.rows,
+                compressed_buf.count(),
+                last_detail.data_bytes_uncompressed,
+                file_buf.count(),
+                last_detail.data_bytes_compressed);
+
+            return {
+                written_rows - last_detail.rows,
+                compressed_buf.count() - last_detail.data_bytes_uncompressed,
+                file_buf.count() - last_detail.data_bytes_compressed};
+        }
+
         WriteBufferFromWritableFile file_buf;
         CompressedWriteBuffer<> compressed_buf;
         std::unique_ptr<IBlockOutputStream> out;

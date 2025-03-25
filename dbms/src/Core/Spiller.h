@@ -29,29 +29,49 @@ class SpillHandler;
 class CachedSpillHandler;
 using CachedSpillHandlerPtr = std::shared_ptr<CachedSpillHandler>;
 
-class SpillerMgr
+class SpillLimiter
 {
 public:
-    explicit SpillerMgr(uint64_t max_spill_bytes_)
-        : max_spill_bytes(max_spill_bytes_)
+    explicit SpillLimiter(uint64_t max_spilled_bytes_)
+        : max_spilled_bytes(max_spilled_bytes_)
     {}
 
-    // return <ok_to_spill, cur_spilled_bytes, max_allowed_bytes>
+    // return <ok_to_spill, current_spilled_bytes, max_spilled_bytes>
     std::tuple<bool, uint64_t, uint64_t> okToSpill(uint64_t bytes)
     {
         std::lock_guard<std::mutex> guard(lock);
-        if (cur_spilled_bytes + bytes >= max_spill_bytes)
-            return {false, cur_spilled_bytes, max_spill_bytes};
-        cur_spilled_bytes += bytes;
-        return {true, cur_spilled_bytes, max_spill_bytes};
+        const bool ok = current_spilled_bytes + bytes < max_spilled_bytes;
+        return {ok, current_spilled_bytes, max_spilled_bytes};
     }
 
-    static std::unique_ptr<SpillerMgr> instance;
+    std::tuple<bool, uint64_t, uint64_t> okToSpill()
+    {
+        std::lock_guard<std::mutex> guard(lock);
+        const bool ok = current_spilled_bytes < max_spilled_bytes;
+        return {ok, current_spilled_bytes, max_spilled_bytes};
+    }
+
+    void addSpilledBytes(uint64_t bytes)
+    {
+        std::lock_guard<std::mutex> guard(lock);
+        current_spilled_bytes += bytes;
+    }
+
+    void minusSpilledBytes(uint64_t bytes)
+    {
+        std::lock_guard<std::mutex> guard(lock);
+        RUNTIME_CHECK(current_spilled_bytes >= bytes);
+        current_spilled_bytes -= bytes;
+    }
+
+    uint64_t getCurrentSpilledBytes() const { return current_spilled_bytes; }
+
+    static std::unique_ptr<SpillLimiter> instance;
 
 private:
     std::mutex lock;
-    uint64_t max_spill_bytes = std::numeric_limits<uint64_t>::max();
-    uint64_t cur_spilled_bytes = 0;
+    uint64_t max_spilled_bytes = std::numeric_limits<uint64_t>::max();
+    uint64_t current_spilled_bytes = 0;
 };
 
 struct SpillDetails

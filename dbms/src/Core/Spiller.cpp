@@ -57,6 +57,9 @@ SpilledFile::~SpilledFile()
             path(),
             getCurrentExceptionMessage(false, false));
     }
+
+    // todo try catch
+    SpillLimiter::instance->minusSpilledBytes(details.data_bytes_compressed);
 }
 
 void SpilledFiles::commitSpilledFiles(std::vector<std::unique_ptr<SpilledFile>> && spilled_files)
@@ -413,5 +416,6 @@ String Spiller::nextSpillFileName(UInt64 partition_id)
 }
 
 std::atomic<Int64> Spiller::tmp_file_index = 0;
+auto SpillLimiter::instance = std::make_unique<SpillLimiter>(-1);
 
 } // namespace DB
