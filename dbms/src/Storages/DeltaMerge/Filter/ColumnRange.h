@@ -48,6 +48,9 @@ public:
 
     virtual String toDebugString() = 0;
 
+    // @return a bitmap filter that represents the result of the range check
+    // @param search: a function to search the inverted index for a single column range
+    // @param size: the size of the bitmap filter
     virtual BitmapFilterPtr check(std::function<BitmapFilterPtr(const SingleColumnRangePtr &)> search, size_t size) = 0;
 
 public:
