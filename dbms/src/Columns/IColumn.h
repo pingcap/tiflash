@@ -258,22 +258,22 @@ public:
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
     virtual void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & /* byte_size */,
-        const NullMap * /*nullmap*/,
+        const NullMap * /* nullmap */,
         const TiDB::TiDBCollatorPtr & /* collator */) const
         = 0;
 
     /// Count the serialize byte size and added to the byte_size called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The byte_size.size() must be equal to the array_offsets.size().
-    virtual void countSerializeByteSizeForCmpColumnArray(
-        PaddedPODArray<size_t> & /* byte_size */,
-        const Offsets & /* array_offsets */,
-        const NullMap * /*nullmap*/,
-        const TiDB::TiDBCollatorPtr & /* collator */) const
-        = 0;
     virtual void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const Offsets & /* array_offsets */) const
+        = 0;
+    virtual void countSerializeByteSizeForCmpColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const Offsets & /* array_offsets */,
+        const NullMap * /* nullmap */,
+        const TiDB::TiDBCollatorPtr & /* collator */) const
         = 0;
 
     /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
@@ -295,7 +295,7 @@ public:
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */,
-        const NullMap * /*nullmap*/,
+        const NullMap * /* nullmap */,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /* sort_key_container */) const
         = 0;
@@ -316,7 +316,7 @@ public:
         size_t /* start */,
         size_t /* length */,
         bool /* has_null */,
-        const NullMap * /*nullmap*/,
+        const NullMap * /* nullmap */,
         const Offsets & /* array_offsets */,
         const TiDB::TiDBCollatorPtr & /* collator */,
         String * /* sort_key_container */) const
