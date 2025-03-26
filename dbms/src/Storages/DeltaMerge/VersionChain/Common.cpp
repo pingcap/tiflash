@@ -79,7 +79,9 @@ std::pair<RSResults, UInt32> getClippedRSResultsByRange(
     if (start == handle_res.end())
         return {};
 
-    const auto end = std::find_if(start, handle_res.end(), [](RSResult r) { return !r.isUse(); });
+    const auto rend = std::find_if(handle_res.rbegin(), handle_res.rend(), [](RSResult r) { return r.isUse(); });
+    assert(rend.base() != handle_res.end());
+    const auto end = rend.base() + 1;
     const auto start_pack_id = start - handle_res.begin();
     return std::pair{RSResults(start, end), start_pack_id};
 }
