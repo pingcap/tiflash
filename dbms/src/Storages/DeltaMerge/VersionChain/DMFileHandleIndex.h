@@ -49,7 +49,6 @@ public:
         , clipped_pack_range(getPackRange(dm_context_))
         , clipped_pack_index(loadPackIndex(dm_context_))
         , clipped_pack_offsets(loadPackOffsets())
-        , clipped_handle_packs(clipped_pack_range.count())
         , clipped_need_read_packs(clipped_pack_range.count(), 1) // read all packs by default
     {
         RUNTIME_CHECK(
@@ -102,8 +101,8 @@ public:
     // Release handle column data to save memory.
     void cleanHandleColumn()
     {
-        std::fill(clipped_handle_packs.begin(), clipped_handle_packs.end(), nullptr);
-        clipped_need_read_packs = std::vector<UInt8>(clipped_pack_range.count(), 1);
+        clipped_handle_packs.clear();
+        std::fill(clipped_need_read_packs.begin(), clipped_need_read_packs.end(), 1); // reset to read all packs.
     }
 
 private:
@@ -152,7 +151,7 @@ private:
 
     void loadHandleIfNotLoaded(const DMContext & dm_context)
     {
-        if (likely(clipped_need_read_packs.empty()))
+        if (likely(!clipped_handle_packs.empty()))
             return;
 
         auto read_pack_ids = std::make_shared<IdSet>();
@@ -193,13 +192,13 @@ private:
             ReadTag::MVCC);
 
         const auto & pack_stats = dmfile->getPackStats();
+        clipped_handle_packs.resize(clipped_pack_range.count());
         for (UInt32 pack_id : *read_pack_ids)
         {
             auto block = reader.read();
             RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, pack_id, block.rows(), pack_stats[pack_id].rows);
             clipped_handle_packs[pack_id - clipped_pack_range.start_pack_id] = block.begin()->column;
         }
-        clipped_need_read_packs.clear();
     }
 
     struct PackRange
