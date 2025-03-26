@@ -46,9 +46,9 @@ public:
         : dmfile(dmfile_)
         , start_row_id(start_row_id_)
         , rowkey_range(std::move(rowkey_range_))
-        , clipped_pack_range(getPackRange(dm_context_))
-        , clipped_pack_index(loadPackIndex(dm_context_))
-        , clipped_pack_offsets(loadPackOffsets())
+        , clipped_pack_range(getClippedPackRange(dm_context_, dmfile, rowkey_range))
+        , clipped_pack_index(loadPackIndex(dm_context_, *dmfile, clipped_pack_range))
+        , clipped_pack_offsets(loadPackOffsets(dmfile->getPackStats(), clipped_pack_range))
         , clipped_need_read_packs(clipped_pack_range.count, 1) // read all packs by default
     {
         RUNTIME_CHECK(
@@ -129,26 +129,6 @@ private:
         return {};
     }
 
-    std::vector<HandleType> loadPackIndex(const DMContext & dm_context) const
-    {
-        auto max_values = loadPackMaxValue<HandleType>(dm_context, *dmfile, MutSup::extra_handle_id);
-        return std::vector<HandleType>(
-            max_values.begin() + clipped_pack_range.start_pack_id,
-            max_values.begin() + clipped_pack_range.start_pack_id + clipped_pack_range.count);
-    }
-
-    std::vector<UInt32> loadPackOffsets() const
-    {
-        const auto & pack_stats = dmfile->getPackStats();
-        std::vector<UInt32> pack_offsets(clipped_pack_range.count, 0);
-        for (UInt32 clipped_pack_id = 1; clipped_pack_id < pack_offsets.size(); ++clipped_pack_id)
-        {
-            UInt32 real_pack_id = clipped_pack_id + clipped_pack_range.start_pack_id;
-            pack_offsets[clipped_pack_id] = pack_offsets[clipped_pack_id - 1] + pack_stats[real_pack_id - 1].rows;
-        }
-        return pack_offsets;
-    }
-
     void loadHandleIfNotLoaded(const DMContext & dm_context)
     {
         if (likely(!clipped_handle_packs.empty()))
@@ -201,19 +181,46 @@ private:
         }
     }
 
-    struct PackRange
+    struct ClippedPackRange
     {
         UInt32 start_pack_id;
         UInt32 count;
     };
 
-    PackRange getPackRange(const DMContext & dm_context)
+    static ClippedPackRange getClippedPackRange(
+        const DMContext & dm_context,
+        const DMFilePtr & dmfile,
+        const std::optional<const RowKeyRange> & rowkey_range)
     {
         if (!rowkey_range)
-            return PackRange{.start_pack_id = 0, .count = static_cast<UInt32>(dmfile->getPacks())};
+            return ClippedPackRange{.start_pack_id = 0, .count = static_cast<UInt32>(dmfile->getPacks())};
 
         const auto [handle_res, start_pack_id] = getClippedRSResultsByRange(dm_context, dmfile, rowkey_range);
-        return PackRange{.start_pack_id = start_pack_id, .count = static_cast<UInt32>(handle_res.size())};
+        return ClippedPackRange{.start_pack_id = start_pack_id, .count = static_cast<UInt32>(handle_res.size())};
+    }
+
+    static std::vector<HandleType> loadPackIndex(
+        const DMContext & dm_context,
+        const DMFile & dmfile,
+        ClippedPackRange clipped_pack_range)
+    {
+        auto max_values = loadPackMaxValue<HandleType>(dm_context, dmfile, MutSup::extra_handle_id);
+        return std::vector<HandleType>(
+            max_values.begin() + clipped_pack_range.start_pack_id,
+            max_values.begin() + clipped_pack_range.start_pack_id + clipped_pack_range.count);
+    }
+
+    static std::vector<UInt32> loadPackOffsets(
+        const DMFileMeta::PackStats & pack_stats,
+        ClippedPackRange clipped_pack_range)
+    {
+        std::vector<UInt32> pack_offsets(clipped_pack_range.count, 0);
+        for (UInt32 clipped_pack_id = 1; clipped_pack_id < pack_offsets.size(); ++clipped_pack_id)
+        {
+            UInt32 real_pack_id = clipped_pack_id + clipped_pack_range.start_pack_id;
+            pack_offsets[clipped_pack_id] = pack_offsets[clipped_pack_id - 1] + pack_stats[real_pack_id - 1].rows;
+        }
+        return pack_offsets;
     }
 
     const DMFilePtr dmfile;
@@ -221,7 +228,7 @@ private:
     const std::optional<const RowKeyRange> rowkey_range; // Range of ColumnFileBig or nullopt for Stable DMFile
 
     // Clipped by rowkey_range
-    const PackRange clipped_pack_range;
+    const ClippedPackRange clipped_pack_range;
     const std::vector<HandleType> clipped_pack_index; // max value of each pack
     const std::vector<UInt32> clipped_pack_offsets; // row offset of each pack
     std::vector<ColumnPtr> clipped_handle_packs; // handle column of each pack
