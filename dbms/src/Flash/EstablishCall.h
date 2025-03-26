@@ -66,6 +66,19 @@ public:
     void setToWaitingTunnelState() { state = WAIT_TUNNEL; }
     bool isWaitingTunnelState() { return state == WAIT_TUNNEL; }
 
+    // Let's implement a state machine with the following states.
+    enum CallStatus
+    {
+        NEW_REQUEST,
+        WAIT_TUNNEL,
+        WAIT_WRITE,
+        WAIT_IN_QUEUE,
+        WAIT_WRITE_ERR,
+        FINISH
+    };
+
+    static void decreaseMetricsWithState(CallStatus status);
+
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
     // EstablishCallData will handle its lifecycle by itself.
@@ -119,16 +132,6 @@ private:
     // The means to get back to the client.
     grpc::ServerAsyncWriter<mpp::MPPDataPacket> responder;
 
-    // Let's implement a state machine with the following states.
-    enum CallStatus
-    {
-        NEW_REQUEST,
-        WAIT_TUNNEL,
-        WAIT_WRITE,
-        WAIT_POP_FROM_QUEUE,
-        WAIT_WRITE_ERR,
-        FINISH
-    };
     // The current serving state.
     CallStatus state;
 

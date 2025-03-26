@@ -23,6 +23,7 @@
 #include <DataStreams/materializeBlock.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
 #include <Functions/FunctionHelpers.h>
 #include <Interpreters/CrossJoinProbeHelper.h>
@@ -133,8 +134,8 @@ Join::Join(
     : restore_config(restore_config_)
     , match_helper_name(match_helper_name_)
     , flag_mapped_entry_helper_name(flag_mapped_entry_helper_name_)
-    , wait_build_finished_future(std::make_shared<OneTimeNotifyFuture>())
-    , wait_probe_finished_future(std::make_shared<OneTimeNotifyFuture>())
+    , wait_build_finished_future(std::make_shared<OneTimeNotifyFuture>(NotifyType::WAIT_ON_JOIN_BUILD_FINISH))
+    , wait_probe_finished_future(std::make_shared<OneTimeNotifyFuture>(NotifyType::WAIT_ON_JOIN_PROBE_FINISH))
     , kind(kind_)
     , join_req_id(req_id)
     , may_probe_side_expanded_after_join(mayProbeSideExpandedAfterJoin(kind))
