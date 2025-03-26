@@ -142,26 +142,86 @@ void ColumnCache::tryPutColumn(
     });
 }
 
-ColumnCacheElement ColumnCache::getColumn(size_t pack_id, ColId column_id)
+ColumnPtr ColumnCache::getColumn(size_t start_pack_id, size_t end_pack_id, size_t read_rows, ColId column_id)
+{
+    return column_caches.withShared([&](auto & column_caches) -> ColumnPtr {
+        auto iter = column_caches.find(start_pack_id);
+        RUNTIME_CHECK_MSG(iter != column_caches.end(), "Cannot find column in cache, start_pack_id={}", start_pack_id);
+        const auto & columns = iter->second.columns;
+        auto col_iter = columns.find(column_id);
+        RUNTIME_CHECK_MSG(
+            col_iter != columns.end(),
+            "Cannot find column in cache, pack_id={} column_id={}",
+            start_pack_id,
+            column_id);
+        const auto & column = col_iter->second;
+        // Optimization for some special cases:
+        // 1. The requested column is exactly the same as the cached column, return directly without copying.
+        if (iter->second.rows_offset == 0 && column->size() == read_rows)
+            return column;
+        // 2. The requested column is a subset of the cached column, cut the cached column and return.
+        assert(column->size() >= iter->second.rows_offset);
+        if (column->size() - iter->second.rows_offset >= read_rows)
+            return column->cut(iter->second.rows_offset, read_rows);
+
+        // Otherwise, we need to copy data from multiple cached columns.
+        auto mut_col = column->cloneEmpty();
+        getColumnImpl(column_caches, mut_col, start_pack_id, end_pack_id, read_rows, column_id);
+        return mut_col;
+    });
+}
+
+void ColumnCache::getColumn(
+    MutableColumnPtr & result,
+    size_t start_pack_id,
+    size_t end_pack_id,
+    size_t read_rows,
+    ColId column_id)
 {
     return column_caches.withShared([&](auto & column_caches) {
-        if (auto iter = column_caches.find(pack_id); iter != column_caches.end())
-        {
-            auto & column_cache_entry = iter->second;
-            auto & columns = column_cache_entry.columns;
-            if (auto column_iter = columns.find(column_id); column_iter != columns.end())
-            {
-                return std::make_pair(
-                    column_iter->second,
-                    std::make_pair(column_cache_entry.rows_offset, column_cache_entry.rows_count));
-            }
-        }
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Cannot find column in cache for pack id: {}, column id: {}",
-            pack_id,
-            column_id);
+        getColumnImpl(column_caches, result, start_pack_id, end_pack_id, read_rows, column_id);
     });
+}
+
+void ColumnCache::getColumnImpl(
+    const std::unordered_map<PackId, ColumnCacheEntry> & column_caches,
+    MutableColumnPtr & result,
+    size_t start_pack_id,
+    size_t end_pack_id,
+    size_t read_rows,
+    ColId column_id)
+{
+    size_t copied_rows = 0;
+    size_t processed_packs_rows = 0;
+    for (size_t cursor = start_pack_id; cursor < end_pack_id; ++cursor)
+    {
+        if (copied_rows >= read_rows)
+            break;
+
+        auto iter = column_caches.find(cursor);
+        RUNTIME_CHECK_MSG(iter != column_caches.end(), "Cannot find column in cache, pack_id={}", cursor);
+        if (copied_rows > processed_packs_rows)
+        {
+            // It could be that multiple cache_entries shared the same column ptr, and the rows has been copied
+            // in the previous loop.
+            processed_packs_rows += iter->second.rows_count;
+            continue;
+        }
+        const auto & columns = iter->second.columns;
+        auto col_iter = columns.find(column_id);
+        RUNTIME_CHECK_MSG(
+            col_iter != columns.end(),
+            "Cannot find column in cache, pack_id={} column_id={}",
+            start_pack_id,
+            column_id);
+        const auto & column = col_iter->second;
+        // Not that to_copied_rows could be larger than iter->second.rows_count, because the column ptr
+        // could be shared between multiple cache_entries.
+        size_t to_copied_rows = std::min(column->size() - iter->second.rows_offset, read_rows - copied_rows);
+        result->insertRangeFrom(*column, iter->second.rows_offset, to_copied_rows);
+        copied_rows += to_copied_rows;
+        processed_packs_rows += iter->second.rows_count;
+    }
 }
 
 void ColumnCache::delColumn(ColId column_id, size_t upper_pack_id)

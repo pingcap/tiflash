@@ -13,6 +13,7 @@
 // limitations under the License.
 
 
+#include <Columns/ColumnUtil.h>
 #include <Columns/ColumnVector.h>
 #include <Columns/countBytesInFilter.h>
 #include <Columns/filterColumn.h>
@@ -130,6 +131,72 @@ ColumnPtr filterAVX2(ColumnPtr & col, IColumn::Filter & filt, ssize_t result_siz
     const UInt8 * filt_end = filt_pos + size;
     const Int64 * data_pos = &data[0];
 
+    const UInt8 * filt_end_aligned = filt_pos + (filt_end - filt_pos) / FILTER_SIMD_BYTES * FILTER_SIMD_BYTES;
+    while (filt_pos < filt_end_aligned)
+    {
+        UInt64 mask = ToBits64(filt_pos);
+        if likely (0 != mask)
+        {
+            if (const UInt8 prefix_to_copy = prefixToCopy(mask); 0xFF != prefix_to_copy)
+            {
+                res_data.insert(data_pos, data_pos + prefix_to_copy);
+            }
+            else
+            {
+                if (const UInt8 suffix_to_copy = suffixToCopy(mask); 0xFF != suffix_to_copy)
+                {
+                    res_data.insert(data_pos + FILTER_SIMD_BYTES - suffix_to_copy, data_pos + FILTER_SIMD_BYTES);
+                }
+                else
+                {
+                    while (mask)
+                    {
+                        size_t index = std::countr_zero(mask);
+                        res_data.push_back(data_pos[index]);
+                        mask &= mask - 1;
+                    }
+                }
+            }
+        }
+
+        filt_pos += FILTER_SIMD_BYTES;
+        data_pos += FILTER_SIMD_BYTES;
+    }
+
+    /// Process the tail.
+    while (filt_pos < filt_end)
+    {
+        if (*filt_pos)
+            res_data.push_back(*data_pos);
+        ++filt_pos;
+        ++data_pos;
+    }
+
+    return res;
+}
+
+ColumnPtr filterCurrent(ColumnPtr & col, IColumn::Filter & filt, ssize_t result_size_hint)
+{
+    const auto & data = typeid_cast<const ColumnVector<Int64> *>(col.get())->getData();
+    size_t size = col->size();
+    if (size != filt.size())
+        throw Exception("Size of filter doesn't match size of column.", ErrorCodes::SIZES_OF_COLUMNS_DOESNT_MATCH);
+
+    auto res = ColumnVector<Int64>::create();
+    using Container = ColumnVector<Int64>::Container;
+    Container & res_data = res->getData();
+
+    if (result_size_hint)
+    {
+        if (result_size_hint < 0)
+            result_size_hint = countBytesInFilter(filt);
+        res_data.reserve(result_size_hint);
+    }
+
+    const UInt8 * filt_pos = &filt[0];
+    const UInt8 * filt_end = filt_pos + size;
+    const Int64 * data_pos = &data[0];
+
     filterImpl(filt_pos, filt_end, data_pos, res_data);
 
     return res;
@@ -139,6 +206,7 @@ enum class FilterVersion
 {
     SSE2,
     AVX2,
+    Current,
 };
 
 template <typename... Args>
@@ -158,7 +226,15 @@ void columnFilter(benchmark::State & state, Args &&... args)
     {
         for (auto _ : state)
         {
-            auto t = filterSSE2(col, filter, set_n * sizeof(Int64));
+            auto t = filterSSE2(col, filter, set_n);
+            benchmark::DoNotOptimize(t);
+        }
+    }
+    else if (version == FilterVersion::AVX2)
+    {
+        for (auto _ : state)
+        {
+            auto t = filterAVX2(col, filter, set_n);
             benchmark::DoNotOptimize(t);
         }
     }
@@ -166,7 +242,7 @@ void columnFilter(benchmark::State & state, Args &&... args)
     {
         for (auto _ : state)
         {
-            auto t = filterAVX2(col, filter, set_n * sizeof(Int64));
+            auto t = filterCurrent(col, filter, set_n);
             benchmark::DoNotOptimize(t);
         }
     }
@@ -174,29 +250,42 @@ void columnFilter(benchmark::State & state, Args &&... args)
 
 BENCHMARK_CAPTURE(columnFilter, sse2_00, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.00);
 BENCHMARK_CAPTURE(columnFilter, avx2_00, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.00);
+BENCHMARK_CAPTURE(columnFilter, cur_00, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.00);
 BENCHMARK_CAPTURE(columnFilter, sse2_01, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.01);
 BENCHMARK_CAPTURE(columnFilter, avx2_01, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.01);
+BENCHMARK_CAPTURE(columnFilter, cur_01, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.01);
 BENCHMARK_CAPTURE(columnFilter, sse2_10, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.10);
 BENCHMARK_CAPTURE(columnFilter, avx2_10, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.10);
+BENCHMARK_CAPTURE(columnFilter, cur_10, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.10);
 BENCHMARK_CAPTURE(columnFilter, sse2_20, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.20);
 BENCHMARK_CAPTURE(columnFilter, avx2_20, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.20);
+BENCHMARK_CAPTURE(columnFilter, cur_20, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.20);
 BENCHMARK_CAPTURE(columnFilter, sse2_30, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.30);
 BENCHMARK_CAPTURE(columnFilter, avx2_30, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.30);
+BENCHMARK_CAPTURE(columnFilter, cur_30, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.30);
 BENCHMARK_CAPTURE(columnFilter, sse2_40, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.40);
 BENCHMARK_CAPTURE(columnFilter, avx2_40, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.40);
+BENCHMARK_CAPTURE(columnFilter, cur_40, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.40);
 BENCHMARK_CAPTURE(columnFilter, sse2_50, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.50);
 BENCHMARK_CAPTURE(columnFilter, avx2_50, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.50);
+BENCHMARK_CAPTURE(columnFilter, cur_50, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.50);
 BENCHMARK_CAPTURE(columnFilter, sse2_60, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.60);
 BENCHMARK_CAPTURE(columnFilter, avx2_60, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.60);
+BENCHMARK_CAPTURE(columnFilter, cur_60, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.60);
 BENCHMARK_CAPTURE(columnFilter, sse2_70, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.70);
 BENCHMARK_CAPTURE(columnFilter, avx2_70, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.70);
+BENCHMARK_CAPTURE(columnFilter, cur_70, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.70);
 BENCHMARK_CAPTURE(columnFilter, sse2_80, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.80);
 BENCHMARK_CAPTURE(columnFilter, avx2_80, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.80);
+BENCHMARK_CAPTURE(columnFilter, cur_80, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.80);
 BENCHMARK_CAPTURE(columnFilter, sse2_90, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.90);
 BENCHMARK_CAPTURE(columnFilter, avx2_90, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.90);
+BENCHMARK_CAPTURE(columnFilter, cur_90, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.90);
 BENCHMARK_CAPTURE(columnFilter, sse2_99, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 0.99);
 BENCHMARK_CAPTURE(columnFilter, avx2_99, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 0.99);
+BENCHMARK_CAPTURE(columnFilter, cur_99, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 0.99);
 BENCHMARK_CAPTURE(columnFilter, sse2_100, FilterVersion::SSE2, DEFAULT_BLOCK_SIZE, 1.00);
 BENCHMARK_CAPTURE(columnFilter, avx2_100, FilterVersion::AVX2, DEFAULT_BLOCK_SIZE, 1.00);
+BENCHMARK_CAPTURE(columnFilter, cur_100, FilterVersion::Current, DEFAULT_BLOCK_SIZE, 1.00);
 
 } // namespace bench
