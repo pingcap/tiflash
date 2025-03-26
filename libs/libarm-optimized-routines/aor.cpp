@@ -15,7 +15,7 @@
 #include "aor.h"
 
 /// NOTE Some functions like `strchr` can't be dispatched, because:
-/// 1. They have C++ linkage
+/// 1. They have C++ linkage.
 /// 2. They are **defined** in string.h.
 /// So we could only dispatch functions that only declared in string.h, and has C linkage.
 
