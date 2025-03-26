@@ -46,21 +46,24 @@ public:
         const auto hash_value = hasher(handle);
         const auto [start, end] = handle_to_row_id.equal_range(hash_value);
         MutableColumns mut_cols(1);
+        mut_cols[0] = createHandleColumn();
+        mut_cols[0]->reserve(std::distance(start, end));
+        size_t total_read_rows = 0;
         for (auto itr = start; itr != end; ++itr)
         {
             // TODO: Maybe we can support readRows in batch.
             // But hash collision is rare.
             // And the distribution of these conflicting values is typically scattered.
             // The benefits should be quite small, so it's not a high priority.
-            mut_cols[0] = createHandleColumn();
             const auto read_rows = delta_reader.readRows(
                 mut_cols,
                 /*offset*/ itr->second - stable_rows,
                 /*limit*/ 1,
                 /*range*/ nullptr);
             RUNTIME_CHECK(read_rows == 1, itr->second, stable_rows, read_rows);
+            ++total_read_rows;
             ColumnView<HandleType> handles(*(mut_cols[0]));
-            if (handles[0] == handle)
+            if (handles[total_read_rows - 1] == handle)
                 return itr->second;
         }
         return {};
