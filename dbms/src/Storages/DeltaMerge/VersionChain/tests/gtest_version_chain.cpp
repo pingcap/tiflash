@@ -339,7 +339,7 @@ try
 }
 CATCH
 
-TEST_P(VersionChainTest, BigPart)
+TEST_P(VersionChainTest, BigPart_Middle)
 try
 {
     // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
@@ -353,4 +353,31 @@ try
 }
 CATCH
 
+TEST_P(VersionChainTest, BigPart_Left)
+try
+{
+    // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
+    // Packs in rowkey_range: [240, 250)|[250, 260)|[270, 280)|[280, 290)|[290, 300)
+    runVersionChainTest(TestOptions{
+        .seg_data = "d_big:[250, 1000):pack_size_10",
+        .rowkey_range = std::make_tuple(240, 295, /*including_right_boundary*/ false),
+        .expected_base_versions = std::vector<RowID>(50, NotExistRowID),
+        .caller_line = __LINE__,
+    });
+}
+CATCH
+
+TEST_P(VersionChainTest, BigPart_Right)
+try
+{
+    // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
+    // Packs in rowkey_range: [940, 950)|[950, 960)|[960, 970)|[970, 980)|[980, 990)|[990, 1000)
+    runVersionChainTest(TestOptions{
+        .seg_data = "d_big:[250, 1000):pack_size_10",
+        .rowkey_range = std::make_tuple(940, 995, /*including_right_boundary*/ false),
+        .expected_base_versions = std::vector<RowID>(60, NotExistRowID),
+        .caller_line = __LINE__,
+    });
+}
+CATCH
 } // namespace DB::DM::tests
