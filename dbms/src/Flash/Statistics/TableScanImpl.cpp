@@ -33,7 +33,7 @@ String LocalTableScanDetail::toJson() const
 String RemoteTableScanDetail::toJson() const
 {
     return fmt::format(
-        R"({{"type:":"{}","packets":{},"bytes":{},"type:":"{}","packets":{},"bytes":{},{}}})",
+        R"({{"{}":{{"packets":{},"bytes":{}}},"{}":{{"packets":{},"bytes":{}}},{}}})",
         inner_zone_conn_profile_info.getTypeString(),
         inner_zone_conn_profile_info.packets,
         inner_zone_conn_profile_info.bytes,
