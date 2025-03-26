@@ -24,13 +24,12 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
+#include <Core/Defines.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/Endian.h>
 #include <IO/WriteHelpers.h>
 #include <string.h> // memcpy
-
-#include "Core/Defines.h"
 
 
 namespace DB
