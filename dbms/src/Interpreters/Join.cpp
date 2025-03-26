@@ -2119,6 +2119,7 @@ void Join::waitUntilAllBuildFinished() const
 
 bool Join::finishOneProbe(size_t stream_index)
 {
+    LOG_INFO(log, "finish one probe, stream index: {}", stream_index);
     std::unique_lock lock(build_probe_mutex);
     if (active_probe_threads == 1)
     {

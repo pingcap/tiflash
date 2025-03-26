@@ -267,6 +267,7 @@ public:
     }
     void setProbeConcurrency(size_t concurrency)
     {
+        LOG_INFO(log, "Join set probe concurrency: {}", concurrency);
         std::unique_lock lock(build_probe_mutex);
         probe_concurrency = concurrency;
         active_probe_threads = probe_concurrency;
