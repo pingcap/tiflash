@@ -322,7 +322,7 @@ public:
         String * /* sort_key_container */) const
         = 0;
 
-    /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
+    /// Deserialize and insert data from pos and advance each pointer in pos to the end of serialized data.
     /// Note:
     /// 1. The pos pointer must not be nullptr.
     /// 2. If use_nt_align_buffer is true and AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes).
@@ -342,7 +342,7 @@ public:
     ///         column_ptr->flushNTAlignBuffer();
     virtual void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) = 0;
 
-    /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
+    /// Deserialize and insert data from pos and advance each pointer in pos to the end of serialized data.
     /// Only called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
@@ -352,8 +352,25 @@ public:
         bool /* use_nt_align_buffer */)
         = 0;
 
-    /// Flush the non-temporal align buffer if any.
+    /// Flush any remaining data in the non-temporal align buffer into the column data.
+    /// This function must be called after all deserializeAndInsertFromPos calls when use_nt_align_buffer is enabled.
     virtual void flushNTAlignBuffer() = 0;
+
+    /// Deserialize from pos and advance each pointer in pos to the end of serialized data.
+    virtual void deserializeAndAdvancePos(PaddedPODArray<char *> & /* pos */) const = 0;
+    /// Advance each pointer in 'pos' by a fixed offset.
+    static void advancePosByOffset(PaddedPODArray<char *> & pos, size_t offset)
+    {
+        for (auto & p : pos)
+            p += offset;
+    }
+
+    /// Deserialize from pos and advance each pointer in pos to the end of serialized data.
+    /// Only called by ColumnArray.
+    virtual void deserializeAndAdvancePosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const Offsets & /* array_offsets */) const
+        = 0;
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,

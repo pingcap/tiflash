@@ -533,6 +533,9 @@ void ColumnDecimal<T>::deserializeAndInsertFromPosForColumnArray(
     const IColumn::Offsets & array_offsets,
     bool use_nt_align_buffer [[maybe_unused]])
 {
+    // Check if pos is empty is necessary.
+    // If pos is not empty, then array_offsets is not empty either due to pos.size() <= array_offsets.size().
+    // Then reading array_offsets[-1] and array_offsets.back() is valid.
     if unlikely (pos.empty())
         return;
     RUNTIME_CHECK_MSG(
@@ -590,6 +593,24 @@ void ColumnDecimal<T>::flushNTAlignBuffer()
         align_buffer_ptr.reset();
     }
 #endif
+}
+
+template <typename T>
+void ColumnDecimal<T>::deserializeAndAdvancePosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(
+        pos.size() == array_offsets.size(),
+        "size of pos({}) != size of array_offsets({})",
+        pos.size(),
+        array_offsets.size());
+    size_t size = pos.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t len = array_offsets[i] - array_offsets[i - 1];
+        pos[i] += len * sizeof(T);
+    }
 }
 
 template <typename T>

@@ -169,6 +169,11 @@ public:
 
     void flushNTAlignBuffer() override {}
 
+    void deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const override { IColumn::advancePosByOffset(pos, n); }
+
+    void deserializeAndAdvancePosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
+        const override;
+
     void updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)

@@ -392,6 +392,20 @@ void ColumnNullable::flushNTAlignBuffer()
     getNestedColumn().flushNTAlignBuffer();
 }
 
+void ColumnNullable::deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const
+{
+    getNullMapColumn().deserializeAndAdvancePos(pos);
+    getNestedColumn().deserializeAndAdvancePos(pos);
+}
+
+void ColumnNullable::deserializeAndAdvancePosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets) const
+{
+    getNullMapColumn().deserializeAndAdvancePosForColumnArray(pos, array_offsets);
+    getNestedColumn().deserializeAndAdvancePosForColumnArray(pos, array_offsets);
+}
+
 void ColumnNullable::insertRangeFrom(const IColumn & src, size_t start, size_t length)
 {
     const auto & nullable_col = static_cast<const ColumnNullable &>(src);

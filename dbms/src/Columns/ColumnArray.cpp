@@ -30,6 +30,8 @@
 #include <IO/WriteHelpers.h>
 #include <string.h> // memcpy
 
+#include "Core/Defines.h"
+
 
 namespace DB
 {
@@ -397,6 +399,30 @@ void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool
 void ColumnArray::flushNTAlignBuffer()
 {
     getData().flushNTAlignBuffer();
+}
+
+void ColumnArray::deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const
+{
+    static thread_local IColumn::Offsets offsets;
+
+    size_t size = pos.size();
+    offsets.resize(size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt32 len;
+        tiflash_compiler_builtin_memcpy(&len, pos[i], sizeof(UInt32));
+        pos[i] += sizeof(UInt32);
+        offsets[i] = offsets[i - 1] + len;
+    }
+
+    getData().deserializeAndAdvancePosForColumnArray(pos, offsets);
+
+    // Free the memory of offsets if the size of pos is too large.
+    if unlikely (offsets.size() > DEFAULT_BLOCK_SIZE)
+    {
+        IColumn::Offsets tmp_offsets;
+        offsets.swap(tmp_offsets);
+    }
 }
 
 void ColumnArray::updateHashWithValue(

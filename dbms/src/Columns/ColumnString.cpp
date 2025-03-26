@@ -1188,6 +1188,41 @@ void ColumnString::flushNTAlignBuffer()
 #endif
 }
 
+void ColumnString::deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const
+{
+    size_t size = pos.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt32 str_size;
+        tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+        pos[i] += sizeof(UInt32) + str_size;
+    }
+}
+
+void ColumnString::deserializeAndAdvancePosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(
+        pos.size() == array_offsets.size(),
+        "size of pos({}) != size of array_offsets({})",
+        pos.size(),
+        array_offsets.size());
+    size_t size = pos.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t char_size = 0;
+        for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+        {
+            UInt32 str_size;
+            tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+            pos[i] += sizeof(UInt32);
+            char_size += str_size;
+        }
+        pos[i] += char_size;
+    }
+}
+
 void updateWeakHash32BinPadding(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)
 {
     auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());

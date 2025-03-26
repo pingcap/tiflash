@@ -202,6 +202,19 @@ public:
             column->assumeMutableRef().flushNTAlignBuffer();
     }
 
+    void deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const override
+    {
+        for (const auto & column : columns)
+            column->deserializeAndAdvancePos(pos);
+    }
+
+    void deserializeAndAdvancePosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
+        const override
+    {
+        for (const auto & column : columns)
+            column->deserializeAndAdvancePosForColumnArray(pos, array_offsets);
+    }
+
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
         const override;

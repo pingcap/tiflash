@@ -74,35 +74,21 @@ private:
 
     void ALWAYS_INLINE insertFromImpl(const ColumnString & src, size_t n)
     {
-        if likely (n != 0)
+        const size_t size_to_append = src.sizeAt(n);
+        if (size_to_append == 1)
         {
-            const size_t size_to_append = src.offsets[n] - src.offsets[n - 1];
-
-            if (size_to_append == 1)
-            {
-                /// shortcut for empty string
-                chars.push_back(0);
-                offsets.push_back(chars.size());
-            }
-            else
-            {
-                const size_t old_size = chars.size();
-                const size_t offset = src.offsets[n - 1];
-                const size_t new_size = old_size + size_to_append;
-
-                chars.resize(new_size);
-                memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[offset], size_to_append);
-                offsets.push_back(new_size);
-            }
+            /// shortcut for empty string
+            chars.push_back(0);
+            offsets.push_back(chars.size());
         }
         else
         {
             const size_t old_size = chars.size();
-            const size_t size_to_append = src.offsets[0];
+            const size_t offset = src.offsets[n - 1];
             const size_t new_size = old_size + size_to_append;
 
             chars.resize(new_size);
-            memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[0], size_to_append);
+            memcpySmallAllowReadWriteOverflow15(&chars[old_size], &src.chars[offset], size_to_append);
             offsets.push_back(new_size);
         }
     }
@@ -329,6 +315,11 @@ public:
         bool use_nt_align_buffer) override;
 
     void flushNTAlignBuffer() override;
+
+    void deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const override;
+
+    void deserializeAndAdvancePosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
+        const override;
 
     void updateHashWithValue(
         size_t n,
