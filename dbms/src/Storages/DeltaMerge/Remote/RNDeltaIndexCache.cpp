@@ -14,7 +14,7 @@
 
 #include <Common/CurrentMetrics.h>
 #include <Common/TiFlashMetrics.h>
-#include <Storages/DeltaMerge/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndex.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 namespace CurrentMetrics
 {

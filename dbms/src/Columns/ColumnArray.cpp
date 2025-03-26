@@ -24,6 +24,7 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
+#include <Core/Defines.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/Endian.h>
@@ -376,18 +377,7 @@ void ColumnArray::serializeToPosImpl(
         getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
 }
 
-void ColumnArray::deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
-{
-    deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer);
-}
-
 void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
-{
-    deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
-}
-
-template <bool compare_semantics>
-void ColumnArray::deserializeAndInsertFromPosImpl(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
 {
     auto & offsets = getOffsets();
     size_t prev_size = offsets.size();
@@ -402,15 +392,36 @@ void ColumnArray::deserializeAndInsertFromPosImpl(PaddedPODArray<char *> & pos, 
         pos[i] += sizeof(UInt32);
     }
 
-    if constexpr (compare_semantics)
-        getData().deserializeForCmpAndInsertFromPosColumnArray(pos, offsets, use_nt_align_buffer);
-    else
-        getData().deserializeAndInsertFromPosForColumnArray(pos, offsets, use_nt_align_buffer);
+    getData().deserializeAndInsertFromPosForColumnArray(pos, offsets, use_nt_align_buffer);
 }
 
 void ColumnArray::flushNTAlignBuffer()
 {
     getData().flushNTAlignBuffer();
+}
+
+void ColumnArray::deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const
+{
+    static thread_local IColumn::Offsets offsets;
+
+    size_t size = pos.size();
+    offsets.resize(size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt32 len;
+        tiflash_compiler_builtin_memcpy(&len, pos[i], sizeof(UInt32));
+        pos[i] += sizeof(UInt32);
+        offsets[i] = offsets[i - 1] + len;
+    }
+
+    getData().deserializeAndAdvancePosForColumnArray(pos, offsets);
+
+    // Free the memory of offsets if the size of pos is too large.
+    if unlikely (offsets.size() > DEFAULT_BLOCK_SIZE)
+    {
+        IColumn::Offsets tmp_offsets;
+        offsets.swap(tmp_offsets);
+    }
 }
 
 void ColumnArray::updateHashWithValue(
