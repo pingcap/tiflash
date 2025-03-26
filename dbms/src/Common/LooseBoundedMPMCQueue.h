@@ -16,6 +16,7 @@
 
 #include <Common/MPMCQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <condition_variable>
 #include <deque>
@@ -50,12 +51,13 @@ public:
         , push_callback(std::move(push_callback_))
     {}
 
-    void registerPipeReadTask(TaskPtr && task)
+    void registerPipeReadTask(TaskPtr && task, NotifyType type)
     {
         {
             std::lock_guard lock(mu);
             if (queue.empty() && status == MPMCQueueStatus::NORMAL)
             {
+                task->setNotifyType(type);
                 pipe_reader_cv.registerTask(std::move(task));
                 return;
             }
@@ -63,12 +65,13 @@ public:
         PipeConditionVariable::notifyTaskDirectly(std::move(task));
     }
 
-    void registerPipeWriteTask(TaskPtr && task)
+    void registerPipeWriteTask(TaskPtr && task, NotifyType type)
     {
         {
             std::lock_guard lock(mu);
             if (isFullWithoutLock() && status == MPMCQueueStatus::NORMAL)
             {
+                task->setNotifyType(type);
                 pipe_writer_cv.registerTask(std::move(task));
                 return;
             }

@@ -28,6 +28,7 @@
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/StringRef.h>
 #include <common/defines.h>
@@ -197,7 +198,10 @@ public:
 
     bool isWritable() const override { return send_queue.isWritable(); }
 
-    void registerTask(TaskPtr && task) override { send_queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        send_queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
+    }
 
 private:
     friend class tests::TestMPPTunnel;
@@ -260,7 +264,10 @@ public:
 
     void subDataSizeMetric(size_t size) { ::DB::MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, size); }
 
-    void registerTask(TaskPtr && task) override { queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
+    }
 
 private:
     GRPCSendQueue<TrackedMppDataPacketPtr> queue;
@@ -322,11 +329,11 @@ public:
     void registerTask(TaskPtr && task) override
     {
         if constexpr (local_only)
-            local_request_handler.registerPipeWriteTask(std::move(task));
+            local_request_handler.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
         else
         {
             std::lock_guard lock(mu);
-            local_request_handler.registerPipeWriteTask(std::move(task));
+            local_request_handler.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
         }
     }
 
@@ -424,7 +431,10 @@ public:
 
     bool isWritable() const override { return send_queue.isWritable(); }
 
-    void registerTask(TaskPtr && task) override { send_queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        send_queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
+    }
 
 private:
     bool cancel_reason_sent = false;

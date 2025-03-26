@@ -43,7 +43,7 @@ EstablishCallData::EstablishCallData(
     , responder(&ctx)
     , state(NEW_REQUEST)
 {
-    GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Increment();
+    GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Increment();
     // As part of the initial CREATE state, we *request* that the system
     // start processing requests. In this request, "asGRPCKickTag" acts are
     // the tag uniquely identifying the request.
@@ -57,11 +57,38 @@ EstablishCallData::EstablishCallData()
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
     , responder(&ctx)
     , state(NEW_REQUEST)
-{}
+{
+    GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Increment();
+}
+
+void EstablishCallData::decreaseMetricsWithState(CallStatus status)
+{
+    switch (status)
+    {
+    case NEW_REQUEST:
+        GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Decrement();
+        break;
+    case WAIT_TUNNEL:
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_tunnel_calldata).Decrement();
+        break;
+    case WAIT_WRITE:
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_calldata).Decrement();
+        break;
+    case WAIT_IN_QUEUE:
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_in_queue_calldata).Decrement();
+        break;
+    case WAIT_WRITE_ERR:
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_err_calldata).Decrement();
+        break;
+    case FINISH:
+        GET_METRIC(tiflash_establish_calldata_count, type_finish_calldata).Decrement();
+        break;
+    }
+}
 
 EstablishCallData::~EstablishCallData()
 {
-    GET_METRIC(tiflash_object_count, type_count_of_establish_calldata).Decrement();
+    decreaseMetricsWithState(state);
     if (stopwatch)
     {
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
@@ -94,7 +121,7 @@ void EstablishCallData::execute(bool ok)
         break;
     }
     case WAIT_WRITE:
-    case WAIT_POP_FROM_QUEUE:
+    case WAIT_IN_QUEUE:
     {
         if unlikely (is_shutdown->load(std::memory_order_relaxed))
         {
@@ -227,7 +254,9 @@ void EstablishCallData::write(const mpp::MPPDataPacket & packet)
 
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
+    decreaseMetricsWithState(state);
     state = WAIT_WRITE_ERR;
+    GET_METRIC(tiflash_establish_calldata_count, type_wait_write_err_calldata).Increment();
     write(packet);
 }
 
@@ -239,7 +268,9 @@ static LoggerPtr & getLogger()
 
 void EstablishCallData::writeDone(String msg, const grpc::Status & status)
 {
+    decreaseMetricsWithState(state);
     state = FINISH;
+    GET_METRIC(tiflash_establish_calldata_count, type_finish_calldata).Increment();
 
     if (async_tunnel_sender)
     {
@@ -295,7 +326,6 @@ void EstablishCallData::unexpectedWriteDone()
 void EstablishCallData::trySendOneMsg()
 {
     TrackedMppDataPacketPtr packet;
-    state = WAIT_POP_FROM_QUEUE;
     auto res = async_tunnel_sender->popWithTag(packet, asGRPCKickTag());
     switch (res)
     {
@@ -306,7 +336,9 @@ void EstablishCallData::trySendOneMsg()
         /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
         /// is destructed which may cause the memory tracker in `res` become invalid
         packet->switchMemTracker(nullptr);
+        decreaseMetricsWithState(state);
         state = WAIT_WRITE;
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_calldata).Increment();
         write(packet->packet);
         return;
     case MPMCQueueResult::FINISHED:
@@ -317,6 +349,9 @@ void EstablishCallData::trySendOneMsg()
         writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
         return;
     case MPMCQueueResult::EMPTY:
+        decreaseMetricsWithState(state);
+        state = WAIT_IN_QUEUE;
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_in_queue_calldata).Increment();
         // No new message.
         return;
     default:
