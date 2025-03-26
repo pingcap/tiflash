@@ -45,6 +45,9 @@ public:
     {
         const auto hash_value = hasher(handle);
         const auto [start, end] = handle_to_row_id.equal_range(hash_value);
+        if (start == end)
+            return {};
+
         MutableColumns mut_cols(1);
         mut_cols[0] = createHandleColumn();
         mut_cols[0]->reserve(std::distance(start, end));
