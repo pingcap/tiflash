@@ -20,7 +20,7 @@ namespace DB
 String ExchangeReceiveDetail::toJson() const
 {
     return fmt::format(
-        R"({{"receiver_source_task_id":{},"conn_type":{},"packets":{},"bytes":{}}})",
+        R"({{"receiver_source_task_id":{},"conn_type":"{}","packets":{},"bytes":{}}})",
         receiver_source_task_id,
         conn_profile_info.getTypeString(),
         conn_profile_info.packets,
