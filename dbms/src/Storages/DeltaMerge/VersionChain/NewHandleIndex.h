@@ -100,11 +100,12 @@ public:
             return itr - begin;
         };
 
+        MutableColumns mut_cols(1);
         while (begin != end)
         {
             const auto size = get_next_continuous_size(begin, end);
-            MutableColumns mut_cols(1);
             mut_cols[0] = createHandleColumn();
+            mut_cols[0]->reserve(size);
             const auto read_rows
                 = delta_reader.readRows(mut_cols, /*offset*/ *begin, /*limit*/ size, /*range*/ nullptr);
             RUNTIME_CHECK(std::cmp_equal(read_rows, size), *begin, size, read_rows);
