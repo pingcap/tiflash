@@ -231,6 +231,7 @@ public:
 
     static constexpr bool is_string_hash_map = true;
     static constexpr bool is_two_level = false;
+    static constexpr bool is_phmap = false;
 
     StringHashTable() = default;
 
