@@ -59,16 +59,6 @@ T getMinValue(const MinMaxIndex & minmax_index, size_t i)
     else
         static_assert(false, "Not support type");
 }
-
-std::pair<RSResults, UInt32> clipRSResults(const RSResults & rs_results)
-{
-    const auto start = std::find_if(rs_results.begin(), rs_results.end(), [](RSResult r) { return r.isUse(); });
-    if (start == rs_results.end())
-        return {};
-    const auto end = std::find_if(start, rs_results.end(), [](RSResult r) { return !r.isUse(); });
-    const auto start_pack_id = start - rs_results.begin();
-    return std::pair{RSResults(start, end), start_pack_id};
-}
 } // namespace
 
 std::pair<RSResults, UInt32> getClippedRSResultsByRange(
@@ -80,7 +70,18 @@ std::pair<RSResults, UInt32> getClippedRSResultsByRange(
         return std::make_pair(RSResults(dmfile->getPacks(), RSResult::All), 0);
 
     const auto handle_res = getRSResultsByRanges(dm_context, dmfile, {*segment_range});
-    return clipRSResults(handle_res);
+
+    // Clip the RSResults to remove the None at the beginning and end.
+    // For example: [None, None, Some, All, All, Some, None] => {[Some, All, All, Some], start_pack_id = 2}
+    // Since DMFile is sorted by handle, None can only appear at the ends, not between Some and All.
+    // For example, [None, Some, None, All, Some, None] is invalid.
+    const auto start = std::find_if(handle_res.begin(), handle_res.end(), [](RSResult r) { return r.isUse(); });
+    if (start == handle_res.end())
+        return {};
+
+    const auto end = std::find_if(start, handle_res.end(), [](RSResult r) { return !r.isUse(); });
+    const auto start_pack_id = start - handle_res.begin();
+    return std::pair{RSResults(start, end), start_pack_id};
 }
 
 template <typename T>
