@@ -89,7 +89,8 @@ std::pair<RSResults, UInt32> getClippedRSResultsByRange(
 template <typename T>
 std::vector<T> loadPackMaxValue(const DMContext & dm_context, const DMFile & dmfile, const ColId col_id)
 {
-    if (dmfile.getPacks() == 0)
+    const auto pack_count = dmfile.getPacks();
+    if (pack_count == 0)
         return {};
 
     const auto & global_context = dm_context.global_context;
@@ -102,11 +103,9 @@ std::vector<T> loadPackMaxValue(const DMContext & dm_context, const DMFile & dmf
         global_context.getReadLimiter(),
         dm_context.scan_context);
 
-    auto pack_count = dmfile.getPacks();
-    std::vector<T> pack_max_values;
-    pack_max_values.reserve(pack_count);
+    std::vector<T> pack_max_values(pack_count);
     for (size_t i = 0; i < pack_count; ++i)
-        pack_max_values.push_back(getMaxValue<T>(*minmax_index, i));
+        pack_max_values[i] = getMaxValue<T>(*minmax_index, i);
 
     return pack_max_values;
 }
@@ -129,7 +128,8 @@ std::optional<std::pair<HandleType, HandleType>> loadDMFileHandleRange(
     const DMContext & dm_context,
     const DMFile & dmfile)
 {
-    if (dmfile.getPacks() == 0)
+    const auto pack_count = dmfile.getPacks();
+    if (pack_count == 0)
         return {};
 
     const auto & global_context = dm_context.global_context;
@@ -142,9 +142,7 @@ std::optional<std::pair<HandleType, HandleType>> loadDMFileHandleRange(
         global_context.getReadLimiter(),
         dm_context.scan_context);
 
-    return std::pair{
-        getMinValue<HandleType>(*minmax_index, 0),
-        getMaxValue<HandleType>(*minmax_index, dmfile.getPacks() - 1)};
+    return std::pair{getMinValue<HandleType>(*minmax_index, 0), getMaxValue<HandleType>(*minmax_index, pack_count - 1)};
 }
 
 template std::optional<std::pair<Int64, Int64>> loadDMFileHandleRange<Int64>(
