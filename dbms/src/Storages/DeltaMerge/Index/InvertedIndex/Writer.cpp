@@ -125,6 +125,8 @@ void InvertedIndexWriterInternal<T>::saveToBuffer(WriteBuffer & write_buf) const
 
     // 5. record uncompressed size
     uncompressed_size = write_buf.count();
+
+    write_buf.next();
 }
 
 template <typename T>
