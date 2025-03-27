@@ -63,7 +63,7 @@ public:
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
     void startEstablishConnection();
-    void setToWaitingTunnelState() { state = WAIT_TUNNEL; }
+    void setToWaitingTunnelState();
     bool isWaitingTunnelState() { return state == WAIT_TUNNEL; }
 
     // Let's implement a state machine with the following states.
