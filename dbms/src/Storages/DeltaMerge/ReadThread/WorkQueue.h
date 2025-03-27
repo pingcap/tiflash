@@ -14,6 +14,7 @@
 #pragma once
 
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <stdint.h>
 
 #include <cassert>
@@ -71,12 +72,13 @@ public:
         , pop_empty_times(0)
     {}
 
-    void registerPipeTask(TaskPtr && task)
+    void registerPipeTask(TaskPtr && task, NotifyType type)
     {
         {
             std::lock_guard lock(mu);
             if (queue.empty() && !done)
             {
+                task->setNotifyType(type);
                 pipe_cv.registerTask(std::move(task));
                 return;
             }

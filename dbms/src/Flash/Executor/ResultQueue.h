@@ -20,6 +20,8 @@
 
 #include <memory>
 
+#include "Flash/Pipeline/Schedule/Tasks/Task.h"
+
 namespace DB
 {
 class ResultQueue : public NotifyFuture
@@ -35,7 +37,10 @@ public:
     // write
     MPMCQueueResult push(Block && block) { return queue.push(block); }
     MPMCQueueResult tryPush(Block && block) { return queue.tryPush(block); }
-    void registerTask(TaskPtr && task) override { queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_RESULT_QUEUE_WRITE);
+    }
 
     // finish/cancel
     bool finish() { return queue.finish(); }

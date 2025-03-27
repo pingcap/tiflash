@@ -22,6 +22,7 @@
 #include <Flash/Mpp/ReceivedMessage.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <memory>
 #include <utility>
@@ -67,7 +68,10 @@ public:
         : GRPCRecvQueue<ReceivedMessagePtr>(log_, std::forward<Args>(args)...)
     {}
 
-    void registerTask(TaskPtr && task) override { registerPipeReadTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        registerPipeReadTask(std::move(task), NotifyType::WAIT_ON_GRPC_RECV_READ);
+    }
 };
 
 class MSGUnboundedQueue final
@@ -79,7 +83,10 @@ public:
         : LooseBoundedMPMCQueue<ReceivedMessagePtr>(std::numeric_limits<size_t>::max())
     {}
 
-    void registerTask(TaskPtr && task) override { registerPipeReadTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        registerPipeReadTask(std::move(task), NotifyType::WAIT_ON_GRPC_RECV_READ);
+    }
 };
 
 class ReceivedMessageQueue
@@ -127,7 +134,10 @@ public:
     bool isWritable() const { return grpc_recv_queue.isWritable(); }
     void notifyNextPipelineWriter() { grpc_recv_queue.notifyNextPipelineWriter(); }
 
-    void registerPipeWriteTask(TaskPtr && task) { grpc_recv_queue.registerPipeWriteTask(std::move(task)); }
+    void registerPipeWriteTask(TaskPtr && task, NotifyType type)
+    {
+        grpc_recv_queue.registerPipeWriteTask(std::move(task), type);
+    }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

@@ -14,6 +14,7 @@
 
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Events/Impls/LoadBucketEvent.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Interpreters/Aggregator.h>
 #include <Operators/SharedAggregateRestorer.h>
 
@@ -158,6 +159,7 @@ void SharedSpilledBucketDataLoader::registerTask(TaskPtr && task)
         std::lock_guard lock(mu);
         if (!is_cancelled && bucket_data_queue.empty() && status != SharedLoaderStatus::finished)
         {
+            task->setNotifyType(NotifyType::WAIT_ON_SPILL_BUCKET_READ);
             pipe_read_cv.registerTask(std::move(task));
             return;
         }
