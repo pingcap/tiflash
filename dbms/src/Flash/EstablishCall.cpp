@@ -97,6 +97,21 @@ EstablishCallData::~EstablishCallData()
     }
 }
 
+void EstablishCallData::setToWaitingTunnelState()
+{
+    if likely (state == NEW_REQUEST)
+    {
+        // should always be true
+        GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Decrement();
+    }
+    else
+    {
+        decreaseMetricsWithState(state);
+    }
+    state = WAIT_TUNNEL;
+    GET_METRIC(tiflash_establish_calldata_count, type_wait_tunnel_calldata).Increment();
+}
+
 void EstablishCallData::execute(bool ok)
 {
     switch (state)
