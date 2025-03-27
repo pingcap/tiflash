@@ -4944,7 +4944,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_establish_calldata_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance, type)",
+              "expr": "max(tiflash_establish_calldata_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type != \"new_request_calldata\"}) by (instance, type)",
               "format": "time_series",
               "interval": "",
               "intervalFactor": 1,
