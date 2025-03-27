@@ -43,6 +43,7 @@ inline size_t getJoinBuildPartitionNum(HashValueType hash)
 struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
 {
     std::unique_ptr<void, std::function<void(void *)>> key_getter;
+    /// Count of not-null rows
     size_t row_count = 0;
 
     RowPtr null_rows_list_head = nullptr;
@@ -66,6 +67,10 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
     size_t all_size = 0;
 
     bool enable_tagged_pointer = true;
+
+    /// Used for checking if late materialization will be enabled.
+    size_t lm_row_size = 0;
+    size_t lm_row_count = 0;
 };
 
 void insertBlockToRowContainers(
@@ -77,7 +82,8 @@ void insertBlockToRowContainers(
     ConstNullMapPtr null_map,
     const HashJoinRowLayout & row_layout,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
-    JoinBuildWorkerData & worker_data);
+    JoinBuildWorkerData & worker_data,
+    bool check_lm_row_size);
 
 
 } // namespace DB
