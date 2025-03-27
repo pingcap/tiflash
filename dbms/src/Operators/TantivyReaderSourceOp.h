@@ -19,7 +19,9 @@
 #include <Operators/Operator.h>
 #include <pingcap/coprocessor/Client.h>
 
+#include "Core/NamesAndTypes.h"
 #include "Storages/Tantivy/TantivyInputStream.h"
+#include "common/types.h"
 
 namespace DB
 {
@@ -27,7 +29,15 @@ namespace DB
 class TantivyReaderSourceOp : public SourceOp
 {
 public:
-    TantivyReaderSourceOp(PipelineExecutorContext & exec_context_, const String & req_id);
+    TantivyReaderSourceOp(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const Int64 & table_id,
+        const Int64 & index_id,
+        const NamesAndTypes & query_columns,
+        const NamesAndTypes & return_columns,
+        const String & query_json_str,
+        const UInt64 & limit);
 
     String getName() const override;
 

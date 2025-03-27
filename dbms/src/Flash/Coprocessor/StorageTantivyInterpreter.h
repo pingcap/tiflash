@@ -53,14 +53,13 @@ public:
 
     void execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
     {
-        storage->read(exec_context, group_builder, Names(), query_info, context, 0, 0);
+        storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, 0);
     }
 
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
-    void generateSelectQueryInfos();
     Context & context;
     std::unique_ptr<StorageTantivy> storage;
     [[maybe_unused]] size_t max_streams;
@@ -68,6 +67,5 @@ private:
     LoggerPtr log;
     const TiCIScan tici_scan;
     [[maybe_unused]] const FilterConditions & filter_conditions;
-    SelectQueryInfo query_info;
 };
 } // namespace DB

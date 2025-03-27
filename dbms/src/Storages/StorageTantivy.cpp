@@ -46,20 +46,40 @@ StorageTantivy::StorageTantivy(Context & context_, const TiCIScan & tici_scan_)
     , tici_scan(tici_scan_)
     , context(context_)
     , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
-{
-    for (const auto & uri : uris)
-        std::cout << "test1 : " + uri << std::endl;
-}
+{}
 
 BlockInputStreams StorageTantivy::read(
     const Names &,
     const SelectQueryInfo &,
-    [[maybe_unused]] const Context & context,
-    [[maybe_unused]] QueryProcessingStage::Enum & processed_stage,
-    [[maybe_unused]] size_t max_block_size,
-    [[maybe_unused]] unsigned int num_streams)
+    const Context &,
+    QueryProcessingStage::Enum &,
+    size_t,
+    unsigned int)
 {
     return {};
+}
+
+void StorageTantivy::read(
+    PipelineExecutorContext & exec_status,
+    PipelineExecGroupBuilder & group_builder,
+    [[maybe_unused]] const Names & column_names,
+    [[maybe_unused]] const SelectQueryInfo & info,
+    [[maybe_unused]] const Context & context,
+    [[maybe_unused]] size_t max_block_size,
+    [[maybe_unused]] unsigned num_streams)
+{
+    auto query_columns = genNamesAndTypesForTiCI(tici_scan.getQueryColumns(), "column");
+    auto return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
+
+    group_builder.addConcurrency(std::make_unique<TantivyReaderSourceOp>(
+        exec_status,
+        log->identifier(),
+        tici_scan.getTableId(),
+        tici_scan.getIndexId(),
+        query_columns,
+        return_columns,
+        tici_scan.getQuery(),
+        tici_scan.getLimit()));
 }
 
 } // namespace DB

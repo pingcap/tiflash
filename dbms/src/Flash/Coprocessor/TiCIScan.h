@@ -8,25 +8,26 @@ namespace DB
 {
 class DAGContext;
 
-const int test_limit = 10;
-const std::string test_query = "sea";
-
 class TiCIScan
 {
 public:
     TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id_, const DAGContext & dag_context);
+    explicit TiCIScan(const tipb::Executor * tici_scan_);
 
-    const TiDB::ColumnInfos & getColumns() const { return columns; }
+    const TiDB::ColumnInfos & getQueryColumns() const { return query_columns; }
+    const TiDB::ColumnInfos & getReturnColumns() const { return return_columns; }
     const int & getTableId() const { return table_id; }
+    const int & getIndexId() const { return index_id; }
     const std::string & getQuery() const { return query_json_str; }
     const int & getLimit() const { return limit; }
 
 private:
-    [[maybe_unused]] const tipb::Executor * tici_scan;
+    const tipb::Executor * tici_scan;
     [[maybe_unused]] String executor_id;
     const int table_id;
-    [[maybe_unused]] int index_id;
-    const TiDB::ColumnInfos columns;
+    const int index_id;
+    TiDB::ColumnInfos return_columns;
+    TiDB::ColumnInfos query_columns;
     [[maybe_unused]] tipb::TiCIScanQueryType query_type;
     const std::string query_json_str;
     const int limit;

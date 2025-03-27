@@ -1,8 +1,8 @@
-set(TICI_PROJECT_DIR "${CMAKE_SOURCE_DIR}/contrib/tici")
+set(TICI_PROJECT_DIR "${CMAKE_SOURCE_DIR}/contrib/tici/components/searchlib")
 set(TICI_LIB_NAME "tici_search_lib") 
 set(TICI_LIB "${CMAKE_CURRENT_BINARY_DIR}/release/${CMAKE_STATIC_LIBRARY_PREFIX}${TICI_LIB_NAME}${CMAKE_STATIC_LIBRARY_SUFFIX}")
 
-file(GLOB LIB_SOURCE_FILES "${TICI_PROJECT_DIR}/components/searchlib/src/*")
+file(GLOB LIB_SOURCE_FILES "${TICI_PROJECT_DIR}/src/*")
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/cxxbridge)
 
 add_custom_command(

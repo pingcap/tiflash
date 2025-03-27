@@ -49,7 +49,7 @@ public:
 
     std::string getName() const override { return "StorageTantivy"; }
 
-    std::string getTableName() const override { return "StorageTantivy_file_num_" + toString(uris.size()); }
+    std::string getTableName() const override { return "StorageTantivy"; }
 
     BlockInputStreams read(
         const Names & column_names,
@@ -67,21 +67,13 @@ public:
         [[maybe_unused]] const SelectQueryInfo & info,
         [[maybe_unused]] const Context & context,
         [[maybe_unused]] size_t max_block_size,
-        [[maybe_unused]] unsigned num_streams) override
-    {
-        auto names_and_types = genNamesAndTypesForTiCI(tici_scan.getColumns(), "column_id");
-
-        group_builder.addConcurrency(
-            std::make_unique<TantivyReaderSourceOp>(exec_status, log->identifier(), names_and_types));
-    }
-
+        [[maybe_unused]] unsigned num_streams) override;
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
 private:
     const TiCIScan tici_scan;
     [[maybe_unused]] Context & context;
-    const Strings uris;
     LoggerPtr log;
 };
 } // namespace DB

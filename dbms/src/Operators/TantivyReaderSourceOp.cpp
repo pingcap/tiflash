@@ -12,28 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <DataStreams/IBlockInputStream.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Operators/TantivyReaderSourceOp.h>
 
-#include "DataTypes/DataTypeFactory.h"
-#include "DataTypes/DataTypeNullable.h"
+#include "Core/NamesAndTypes.h"
 #include "Operators/Operator.h"
 #include "Storages/Tantivy/TantivyInputStream.h"
+#include "common/types.h"
 
 namespace DB
 {
-TantivyReaderSourceOp::TantivyReaderSourceOp(PipelineExecutorContext & exec_context_, const String & req_id)
+TantivyReaderSourceOp::TantivyReaderSourceOp(
+    PipelineExecutorContext & exec_context_,
+    const String & req_id,
+    const Int64 & table_id,
+    const Int64 & index_id,
+    const NamesAndTypes & query_columns,
+    const NamesAndTypes & return_columns,
+    const String & query_json_str,
+    const UInt64 & limit)
     : SourceOp(exec_context_, req_id)
 {
-    LOG_INFO(log, "6666666666666666666666666666666666");
-    NamesAndTypes names_and_types;
-    auto tp = DataTypeFactory::instance().get("StringV2");
-    names_and_types.emplace_back("test", tp);
-    names_and_types.emplace_back("test2", tp);
-    setHeader(Block(getColumnWithTypeAndName(names_and_types)));
-    input = std::make_shared<TS::TantivyInputStream>(log, "", "parquet");
+    setHeader(Block(getColumnWithTypeAndName(return_columns)));
+    input = std::make_shared<TS::TantivyInputStream>(
+        log,
+        table_id,
+        index_id,
+        query_columns,
+        return_columns,
+        query_json_str,
+        limit);
 }
 
 String TantivyReaderSourceOp::getName() const
@@ -43,12 +52,12 @@ String TantivyReaderSourceOp::getName() const
 
 void TantivyReaderSourceOp::operatePrefixImpl()
 {
-    LOG_DEBUG(log, "start reading from remote coprocessor", total_rows);
+    LOG_DEBUG(log, "start reading from TantivyReaderSourceOp", total_rows);
 }
 
 void TantivyReaderSourceOp::operateSuffixImpl()
 {
-    LOG_DEBUG(log, "finish read {} rows from remote coprocessor", total_rows);
+    LOG_DEBUG(log, "finish read {} rows from TantivyReaderSourceOp", total_rows);
 }
 
 Block TantivyReaderSourceOp::popFromBlockQueue()
@@ -61,7 +70,6 @@ Block TantivyReaderSourceOp::popFromBlockQueue()
 
 OperatorStatus TantivyReaderSourceOp::readImpl(Block & block)
 {
-    LOG_INFO(log, "666666666666666666666");
     if (!block_queue.empty())
     {
         block = popFromBlockQueue();

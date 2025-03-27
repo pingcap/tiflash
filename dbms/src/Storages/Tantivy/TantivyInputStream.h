@@ -22,6 +22,7 @@
 
 #include "Common/Logger.h"
 #include "Core/NamesAndTypes.h"
+#include "DataTypes/DataTypeNullable.h"
 #include "common/logger_useful.h"
 #include "common/types.h"
 #include "tici-search-lib/src/lib.rs.h"
@@ -33,9 +34,21 @@ class TantivyInputStream : public IProfilingBlockInputStream
     static constexpr auto NAME = "TantivyInputStream";
 
 public:
-    TantivyInputStream(LoggerPtr log_, const String &, const String &, NamesAndTypes name_and_types_)
+    TantivyInputStream(
+        LoggerPtr log_,
+        Int64 table_id_,
+        Int64 index_id_,
+        NamesAndTypes query_columns_,
+        NamesAndTypes return_columns_,
+        String query_json_str_,
+        UInt64 limit_)
         : log(log_)
-        , names_and_types(name_and_types_)
+        , table_id(table_id_)
+        , index_id(index_id_)
+        , query_columns(query_columns_)
+        , return_columns(return_columns_)
+        , query_json_str(query_json_str_)
+        , limit(limit_)
     {}
 
     String getName() const override { return NAME; }
@@ -44,50 +57,56 @@ public:
 
     Block readImpl() override
     {
-        LOG_INFO(log, "7777777777777777777777");
         if (done)
         {
             return {};
         }
         done = true;
-        return readFromFile();
+        return readFromS3();
     }
 
 protected:
-    Block readFromFile()
+    Block readFromS3()
     {
         rust::Vec<rust::String> query_fields;
-        query_fields.push_back("column_id_2");
-        query_fields.push_back("column_id_3");
-
-        rust::Vec<rust::String> search_fields = {};
-        for (auto & name_and_type : names_and_types)
+        for (auto & name_and_type : query_columns)
         {
             LOG_INFO(log, name_and_type.name);
-            search_fields.push_back(name_and_type.name);
+            query_fields.push_back(name_and_type.name);
         }
 
-        auto search_param = SearchParam{20};
-        rust::Vec<IdDocument> documents
-            = search("/home/wshwsh12/project/ticilib/tmp/searcher/", "sea", query_fields, search_fields, search_param);
-
-        Block res(names_and_types);
-        int i = 0;
-        for (auto & name_and_type : names_and_types)
+        rust::Vec<rust::String> return_fields = {};
+        for (auto & name_and_type : return_columns)
         {
+            LOG_INFO(log, name_and_type.name);
+            return_fields.push_back(name_and_type.name);
+        }
+
+        auto search_param = SearchParam{static_cast<size_t>(limit)};
+        rust::Vec<IdDocument> documents
+            = search(table_id, index_id, query_fields, return_fields, query_json_str, search_param);
+
+        Block res(return_columns);
+        int i = 0;
+        for (auto & name_and_type : return_columns)
+        {
+            LOG_INFO(log, name_and_type.name);
+            LOG_INFO(log, name_and_type.type->getName());
             auto col = res.getByName(name_and_type.name).column->assumeMutable();
-            if (name_and_type.type->isStringOrFixedString())
+            if (removeNullable(name_and_type.type)->isStringOrFixedString())
             {
                 for (auto & doc : documents)
                 {
                     col->insert(Field(String(doc.fieldValues[i].string_value.c_str())));
+                    LOG_INFO(log, doc.fieldValues[i].string_value.c_str());
                 }
             }
-            if (name_and_type.type->isInteger())
+            if (removeNullable(name_and_type.type)->isInteger())
             {
                 for (auto & doc : documents)
                 {
                     col->insert(Field(doc.fieldValues[i].int_value));
+                    LOG_INFO(log, "{}", doc.fieldValues[i].int_value);
                 }
             }
             i++;
@@ -99,7 +118,12 @@ private:
     Block header;
     bool done = false;
     LoggerPtr log;
-    NamesAndTypes names_and_types;
+    Int64 table_id;
+    Int64 index_id;
+    NamesAndTypes query_columns;
+    NamesAndTypes return_columns;
+    String query_json_str;
+    UInt64 limit;
 };
 
 } // namespace DB::TS

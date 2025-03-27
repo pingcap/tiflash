@@ -96,6 +96,7 @@ void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Execut
 void PhysicalPlan::buildTiCIScan(const String & executor_id, const tipb::Executor * executor)
 {
     TiCIScan tici_scan(executor, executor_id, dagContext());
+    //TiCIScan tici_scan(executor);
     LOG_INFO(log, "build TiCI Scan");
     pushBack(PhysicalTiCIScan::build(executor_id, log, tici_scan));
     dagContext().table_scan_executor_id = executor_id;
@@ -204,8 +205,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         break;
     case tipb::ExecType::TypeTableScan:
         GET_METRIC(tiflash_coprocessor_executor_count, type_ts).Increment();
-        //        buildTableScan(executor_id, executor);
-        buildTiCIScan(executor_id, executor);
+        buildTableScan(executor_id, executor);
         break;
     case tipb::ExecType::TypePartitionTableScan:
         GET_METRIC(tiflash_coprocessor_executor_count, type_partition_ts).Increment();
