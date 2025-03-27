@@ -44,6 +44,8 @@ public:
     void logicalOr(const BitmapFilter & other);
     // f = f & other
     void logicalAnd(const BitmapFilter & other);
+    // f = f + other
+    void append(const BitmapFilter & other);
 
     void runOptimize();
 
