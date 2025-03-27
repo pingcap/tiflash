@@ -17,10 +17,9 @@
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <memory>
-
-#include "Flash/Pipeline/Schedule/Tasks/Task.h"
 
 namespace DB
 {
