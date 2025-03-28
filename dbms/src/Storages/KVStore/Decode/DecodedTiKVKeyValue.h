@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Storages/KVStore/TiKVHelpers/TiKVKeyValue.h>
+#include <Common/RedactHelpers.h>
 #include <Storages/KVStore/Types.h>
 
 namespace DB
