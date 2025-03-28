@@ -72,10 +72,7 @@ public:
         return {};
     }
 
-    void insert(HandleRefType handle, RowID row_id)
-    {
-        std::ignore = handle_to_row_id.emplace(hasher(handle), row_id);
-    }
+    void insert(HandleRefType handle, RowID row_id) { std::ignore = handle_to_row_id.emplace(hasher(handle), row_id); }
 
     // The hash value of a handle cannot reflect the order of handles,
     // so data can only be deleted by traversing the entire structure.
