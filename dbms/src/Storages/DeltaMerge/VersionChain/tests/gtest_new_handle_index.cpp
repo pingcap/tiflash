@@ -141,6 +141,7 @@ try
 }
 CATCH
 
+// Ensure the correctness if the hash function meets collision
 TEST_P(NewHandleIndexTest, Collision)
 try
 {
