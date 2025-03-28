@@ -97,6 +97,12 @@ void WindowDescription::initNeedDecrease(bool has_agg)
         return;
     }
 
+    if (frame.begin_type == WindowFrame::BoundaryType::Current && (frame.end_type == WindowFrame::BoundaryType::Current || frame.end_type == WindowFrame::BoundaryType::Unbounded))
+    {
+        need_decrease = false;
+        return;
+    }
+
     if (frame.type == WindowFrame::FrameType::Rows)
     {
         if ((frame.begin_offset == 0 && frame.end_offset == 0)

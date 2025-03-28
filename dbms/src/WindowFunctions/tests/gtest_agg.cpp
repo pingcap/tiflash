@@ -365,6 +365,39 @@ try
             false);
         desc.initNeedDecrease(true);
         ASSERT_FALSE(desc.need_decrease);
+
+        desc.frame = WindowFrame(
+            type,
+            WindowFrame::BoundaryType::Current,
+            0,
+            true,
+            WindowFrame::BoundaryType::Unbounded,
+            0,
+            false);
+        desc.initNeedDecrease(true);
+        ASSERT_TRUE(desc.need_decrease);
+
+        desc.frame = WindowFrame(
+            type,
+            WindowFrame::BoundaryType::Unbounded,
+            0,
+            true,
+            WindowFrame::BoundaryType::Current,
+            0,
+            false);
+        desc.initNeedDecrease(true);
+        ASSERT_FALSE(desc.need_decrease);
+
+        desc.frame = WindowFrame(
+            type,
+            WindowFrame::BoundaryType::Current,
+            0,
+            true,
+            WindowFrame::BoundaryType::Current,
+            0,
+            false);
+        desc.initNeedDecrease(true);
+        ASSERT_FALSE(desc.need_decrease);
     }
 
     desc.frame = WindowFrame(
