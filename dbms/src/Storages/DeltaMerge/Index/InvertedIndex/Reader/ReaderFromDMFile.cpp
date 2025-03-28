@@ -87,35 +87,18 @@ BitmapFilterPtr InvertedIndexReaderFromDMFile::load(const SingleColumnRangePtr &
     {
         // Disaggregated mode
         auto * file_cache = FileCache::instance();
-        RUNTIME_CHECK_MSG(file_cache, "Must enable S3 file cache to use vector index");
-
-        auto perf_begin = PerfContext::file_cache;
-
-        // If download file failed, retry a few times.
-        for (auto i = 3; i > 0; --i)
+        RUNTIME_CHECK_MSG(file_cache, "Must enable S3 file cache to use inverted index");
+        if (auto [file_seg, downloaded]
+            = file_cache->downloadFileForLocalReadWithRetry(s3_file_name, index_props.file_size(), 3);
+            file_seg)
         {
-            try
-            {
-                if (auto file_guard = file_cache->downloadFileForLocalRead(s3_file_name, index_props.file_size());
-                    file_guard)
-                {
-                    local_index_file_path = file_guard->getLocalFileName();
-                    break; // Successfully downloaded index into local cache
-                }
-
-                throw Exception(ErrorCodes::S3_ERROR, "Failed to download vector index file {}", index_file_path);
-            }
-            catch (...)
-            {
-                if (i <= 1)
-                    throw;
-            }
+            local_index_file_path = file_seg->getLocalFileName();
+            has_s3_download = downloaded;
         }
-
-        if ( //
-            PerfContext::file_cache.fg_download_from_s3 > perf_begin.fg_download_from_s3 || //
-            PerfContext::file_cache.fg_wait_download_from_s3 > perf_begin.fg_wait_download_from_s3)
-            has_s3_download = true;
+        else
+        {
+            throw Exception(ErrorCodes::S3_ERROR, "Failed to download inverted index file {}", index_file_path);
+        }
     }
     else
     {
