@@ -185,7 +185,7 @@ protected:
         ASSERT_EQ(seg->getStable()->getDMFiles().size(), 1);
         auto dmfile = seg->getStable()->getDMFiles()[0];
         ASSERT_EQ(dmfile->getPacks(), expected_rows / 11 + static_cast<bool>(expected_rows % 11));
-        const auto rowkey_range = buildRowKeyRange(47, 134, is_common_handle);
+        const auto rowkey_range = buildRowKeyRange(47, 134, is_common_handle); // with a range that not all packs are valid
         const std::vector<std::vector<Int64>> expected_int_handle_packs = {
             {44, 44, 45, 45, 46, 46, 47, 47, 48, 48, 49, 49},
             {50, 50, 51, 51, 52, 52, 53, 53, 54, 54},
