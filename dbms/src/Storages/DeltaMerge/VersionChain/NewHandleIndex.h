@@ -117,7 +117,7 @@ public:
                 if (inRowKeyRange(range, h))
                     continue; // deleted
 
-                std::ignore = t.insert(std::pair{hasher(h), *begin + i + stable_rows});
+                std::ignore = t.emplace(hasher(h), *begin + i + stable_rows);
             }
             begin += size;
         }
