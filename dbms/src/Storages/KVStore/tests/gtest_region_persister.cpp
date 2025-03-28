@@ -257,10 +257,18 @@ try
 {
     TableID table_id = 100;
     auto region = makeTmpRegion();
+
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
     region->insertDebug("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
     region->insertDebug("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
     region->insertDebug("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
+
+    TiKVKey large_value_key = RecordKVFormat::genKey(table_id, 324, 9983);
+    region->insertDebug(
+        "default",
+        TiKVKey::copyFrom(large_value_key),
+        // slightly less than `TIKV_MAX_VALUE_SIZE` for other key-values
+        TiKVValue(String(static_cast<size_t>(TIKV_MAX_VALUE_SIZE - 1024), 'v')));
 
     region->updateRaftLogEagerIndex(1024);
 
