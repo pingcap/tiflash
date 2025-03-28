@@ -187,11 +187,14 @@ std::tuple<FileSegmentPtr, bool> FileCache::downloadFileForLocalReadWithRetry(
     {
         try
         {
-            auto seg = downloadFileForLocalRead(s3_fname, filesize);
-            if (PerfContext::file_cache.fg_download_from_s3 > perf_begin.fg_download_from_s3 || //
-                PerfContext::file_cache.fg_wait_download_from_s3 > perf_begin.fg_wait_download_from_s3)
-                has_s3_download = true;
-            return {seg, has_s3_download};
+            if (auto seg = downloadFileForLocalRead(s3_fname, filesize); seg)
+            {
+                if (PerfContext::file_cache.fg_download_from_s3 > perf_begin.fg_download_from_s3 || //
+                    PerfContext::file_cache.fg_wait_download_from_s3 > perf_begin.fg_wait_download_from_s3)
+                    has_s3_download = true;
+
+                return {seg, has_s3_download};
+            }
         }
         catch (...)
         {
