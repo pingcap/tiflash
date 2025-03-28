@@ -34,7 +34,8 @@
 #include <iterator>
 #include <type_traits>
 
-#define DEFAULT_MAX_STRING_SIZE 0x00FFFFFFULL
+static constexpr UInt64 DEFAULT_MAX_STRING_SIZE = 0x00FFFFFFULL; // 16777215, 16MiB-1
+static constexpr UInt64 TIKV_MAX_VALUE_SIZE = 125829120;
 
 namespace DB
 {
