@@ -34,6 +34,7 @@ class ColumnFileDeleteRange;
 namespace tests
 {
 class NewHandleIndexTest;
+class VersionChainTest;
 } // namespace tests
 
 // VersionChain is to maintain the position of the base(oldest) version corresponding to each version in the Delta.
@@ -136,6 +137,7 @@ private:
     static DeltaValueReader createDeltaValueReader(const DMContext & dm_context, const DeltaSnapshotPtr & delta_snap);
 
     friend class tests::NewHandleIndexTest;
+    friend class tests::VersionChainTest;
 
     std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()

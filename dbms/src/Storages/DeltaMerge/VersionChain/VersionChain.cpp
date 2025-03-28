@@ -242,15 +242,6 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     HandleRefType cf_big_min = cf_big_min_max->first;
     HandleRefType cf_big_max = cf_big_min_max->second;
 
-    // If a ColumnFileBig is ingested by apply snapshot, its preceding should be a ColumnFileDeleteRange.
-    auto is_apply_snapshot = [&]() {
-        if (dmfile_or_delete_range_list.empty())
-            return false;
-        if (auto * delete_range = std::get_if<RowKeyRange>(&dmfile_or_delete_range_list.back()); delete_range)
-            return inRowKeyRange(*delete_range, cf_big_min) && inRowKeyRange(*delete_range, cf_big_max);
-        return false;
-    };
-
     auto is_dmfile_intersect = [&](const DMFile & file) {
         auto file_min_max = loadDMFileHandleRange<HandleType>(dm_context, file);
         if (!file_min_max)
@@ -258,27 +249,45 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
         const auto & [file_min, file_max] = *file_min_max;
         return cf_big_min <= file_max && file_min <= cf_big_max;
     };
-    // If a ColumnFileBig is ingested by ingest sst, it should not intersect with any preceding ColumnFile.
-    // Also, it should not have other ColumnFileTiny, ColumnFileInMemory or ColumnFileDeleteRange.
-    auto is_ingest_sst = [&]() {
-        for (const auto & file : stable.getDMFiles())
-            if (is_dmfile_intersect(*file))
-                return false;
 
-        for (const auto & cf : preceding_cfs)
-        {
-            if (const auto * t = cf->tryToBigFile(); t)
-            {
-                if (is_dmfile_intersect(*(t->getFile())))
-                    return false;
-            }
-            else
-                return false;
-        }
-        return true;
+    auto is_delete_range_include = [&](const RowKeyRange & delete_range) {
+        return inRowKeyRange(delete_range, cf_big_min) && inRowKeyRange(delete_range, cf_big_max);
     };
 
-    if (likely(is_apply_snapshot() || is_ingest_sst()))
+    auto is_intersect_with_others = [&]() {
+        // Check preceding data from new to old to handle delete ranges.
+        for (const auto & preceding_cf : preceding_cfs | std::views::reverse)
+        {
+            if (const auto * preceding_cf_big = preceding_cf->tryToBigFile(); preceding_cf_big)
+            {
+                if (is_dmfile_intersect(*(preceding_cf_big->getFile())))
+                    return true;
+            }
+            else if (const auto * preceding_cf_delete_range = preceding_cf->tryToDeleteRange();
+                     preceding_cf_delete_range)
+            {
+                if (is_delete_range_include(preceding_cf_delete_range->getDeleteRange()))
+                    return false; // Data older than this delete range and intersect with cf_big should be deleted.
+            }
+            else
+            {
+                // For cf_tiny and cf_in_memory, it does not have a range now.
+                // So we treat it as intersect with cf_big_range for safety.
+                // TODO: add range to cf_tiny and cf_in_memory.
+                return true;
+            }
+        }
+
+        for (const auto & file : stable.getDMFiles())
+            if (is_dmfile_intersect(*file))
+                return true;
+
+        return false;
+    };
+
+    // This is a optimized path for ColumnFileBig.
+    // If a cf_big does not intersect with preceding cfs and stable, there is no version older than its handles.
+    if (likely(!is_intersect_with_others()))
     {
         const UInt32 rows = cf_big.getRows();
         const UInt32 start_row_id = base_versions->size() + stable_rows;
@@ -288,8 +297,11 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
             DMFileHandleIndex<HandleType>{dm_context, cf_big.getFile(), start_row_id, cf_big.getRange()});
         return rows;
     }
-    // If a ColumnFileBig is not ingested by apply snapshot or ingest sst, it should be replayed as normal write.
-    // At present, only testing may take this path.
+    // If the range of cf_big is intersect with other, treat it as normal write for safty.
+    // There maybe false positive, for exmaple,
+    // 1. Ingest [0, 10), [20, 30)
+    // 2. Delta merge into [0, 30)
+    // 3. Ingest [10, 20)
     LOG_WARNING(
         Logger::get(dm_context.tracing_id),
         "ColumnFileBig={} is neither apply snapshot nor ingest sst",

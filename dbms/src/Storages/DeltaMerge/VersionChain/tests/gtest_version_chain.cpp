@@ -43,6 +43,21 @@ protected:
             seg->version_chain);
         ASSERT_EQ(opts.expected_base_versions, *actual_base_versions) << "caller_line=" << opts.caller_line;
     }
+
+    void checkHandleIndex(size_t expected_new_handle_count, size_t expected_dmfile_or_delete_range_count)
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        auto [actutal_new_handle_count, actual_dmfile_or_delete_range_count] = std::visit(
+            [&](auto & version_chain) {
+                return std::pair{
+                    version_chain.new_handle_to_row_ids.handle_to_row_id.size(),
+                    version_chain.dmfile_or_delete_range_list.size(),
+                };
+            },
+            seg->version_chain);
+        ASSERT_EQ(actutal_new_handle_count, expected_new_handle_count);
+        ASSERT_EQ(actual_dmfile_or_delete_range_count, expected_dmfile_or_delete_range_count);
+    }
 };
 
 INSTANTIATE_TEST_CASE_P(VersionChain, VersionChainTest, /* is_common_handle */ ::testing::Bool());
@@ -380,4 +395,47 @@ try
     });
 }
 CATCH
+
+TEST_P(VersionChainTest, Big_NoIntersection)
+{
+    runVersionChainTest(TestOptions{
+        .seg_data = "d_big:[0, 10):pack_size_3|d_big:[20, 30):pack_size_3|d_big:[10, 20):pack_size_3",
+        .expected_base_versions = std::vector<RowID>(30, NotExistRowID),
+        .caller_line = __LINE__,
+    });
+    checkHandleIndex(0, 4); // 3 cf_big + 1 stable dmfile
+}
+
+TEST_P(VersionChainTest, Big_Intersection_FalsePositive)
+{
+    runVersionChainTest(TestOptions{
+        .seg_data = "d_big:[0, 10):pack_size_3|d_big:[20, 30):pack_size_3|merge_delta|d_big:[10, 20):pack_size_3",
+        .expected_base_versions = std::vector<RowID>(10, NotExistRowID),
+        .caller_line = __LINE__,
+    });
+    // d_big:[0, 10) + d_big:[20, 30) => stable: [0, 30)
+    // d_big[10, 20) is intersect with stable.
+    checkHandleIndex(10, 1); // 1 stable dmfile
+}
+
+TEST_P(VersionChainTest, Big_Intersection_DeleteRange)
+{
+    runVersionChainTest(TestOptions{
+        .seg_data
+        = "d_big:[0, 10):pack_size_3|d_big:[20, 30):pack_size_3|merge_delta|d_dr:[10, 20)|d_big:[10, 20):pack_size_3",
+        .expected_base_versions = std::vector<RowID>(10, NotExistRowID),
+        .caller_line = __LINE__,
+    });
+    checkHandleIndex(0, 3); // 1 cf_big + 1 delete range + 1 stable dmfile
+}
+
+TEST_P(VersionChainTest, Big_NoIntersection_Tiny)
+{
+    runVersionChainTest(TestOptions{
+        .seg_data = "d_big:[0, 10):pack_size_3|d_tiny:[10, 20)|d_big:[20, 30):pack_size_3",
+        .expected_base_versions = std::vector<RowID>(30, NotExistRowID),
+        .caller_line = __LINE__,
+    });
+    checkHandleIndex(20, 2); // 1 cf_big + 1 stable dmfile
+}
 } // namespace DB::DM::tests

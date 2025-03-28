@@ -29,7 +29,8 @@ namespace DB::DM
 namespace tests
 {
 class NewHandleIndexTest;
-}
+class VersionChainTest;
+} // namespace tests
 
 // NewHandleIndex maintains the **newly inserted** records in the delta: handle -> row_id.
 // In order to save memory, it stores the hash value of the handle instead of the handle itself.
@@ -136,6 +137,7 @@ private:
     absl::btree_multimap<UInt32, RowID> handle_to_row_id;
 
     friend class tests::NewHandleIndexTest;
+    friend class tests::VersionChainTest;
 };
 
 
