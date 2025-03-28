@@ -152,6 +152,12 @@ try
          toNullableVec<Int8>({0, 0, 0, 1, 1})},
     };
 
+    // <max_spilled_bytes, expect_error>
+    std::vector<std::pair<int64_t, bool>> max_spilled_bytes = {
+        {-1, false},
+        {1, true},
+    };
+
     WRAP_FOR_SPILL_TEST_BEGIN
     for (size_t i = 0; i < join_type_num; ++i)
     {
@@ -182,6 +188,13 @@ try
                     genScalarCountResults(expected_cols[i * simple_test_num + j]),
                     executeStreams(request_column_prune, 2));
             }
+
+
+            SPILL_LIMITER_TEST_BEGIN
+            ASSERT_COLUMNS_EQ_UR(expected_cols[i * simple_test_num + j], executeStreams(request, 5))
+                << "join_type = " << magic_enum::enum_name(join_type) << ", simple_test_index = " << j
+                << ", concurrency = " << 5;
+            SPILL_LIMITER_TEST_END
         }
     }
     WRAP_FOR_SPILL_TEST_END

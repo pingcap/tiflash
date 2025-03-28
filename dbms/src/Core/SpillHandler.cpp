@@ -48,19 +48,20 @@ SpillHandler::SpillWriter::SpillWriter(
     out->writePrefix();
 }
 
-SpillDetails SpillHandler::SpillWriter::finishWrite()
+void SpillHandler::SpillWriter::finishWrite(std::unique_ptr<SpilledFile> & spilled_file)
 {
     out->flush();
     compressed_buf.next();
     file_buf.next();
     out->writeSuffix();
-    return {written_rows, compressed_buf.count(), file_buf.count()};
+
+    recordSpillStats(0, spilled_file);
 }
 
-void SpillHandler::SpillWriter::write(const Block & block)
+void SpillHandler::SpillWriter::write(const Block & block, std::unique_ptr<SpilledFile> & spilled_file)
 {
-    written_rows += block.rows();
     out->write(block);
+    recordSpillStats(block.rows(), spilled_file);
 }
 
 SpillHandler::SpillHandler(Spiller * spiller_, size_t partition_id_)
@@ -99,7 +100,6 @@ bool SpillHandler::isSpilledFileFull(UInt64 spilled_rows, UInt64 spilled_bytes)
 
 void SpillHandler::spillBlocks(Blocks && blocks)
 {
-    ///  todo check the disk usage
     if (unlikely(blocks.empty()))
         return;
 
@@ -142,22 +142,23 @@ void SpillHandler::spillBlocks(Blocks && blocks)
             {
                 if (unlikely(!block || block.rows() == 0))
                     continue;
+
+                checkOkToSpill();
+
                 /// erase constant column
                 spiller->removeConstantColumns(block);
                 RUNTIME_CHECK(block.columns() > 0);
                 if (unlikely(writer == nullptr))
-                {
                     std::tie(rows_in_file, bytes_in_file) = setUpNextSpilledFile();
-                }
                 auto rows = block.rows();
                 total_rows += rows;
                 rows_in_file += rows;
                 bytes_in_file += block.estimateBytesForSpill();
-                writer->write(block);
+                writer->write(block, spilled_files[current_spilled_file_index]);
                 block.clear();
                 if (spiller->enable_append_write && isSpilledFileFull(rows_in_file, bytes_in_file))
                 {
-                    spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
+                    writer->finishWrite(spilled_files[current_spilled_file_index]);
                     spilled_files[current_spilled_file_index]->markFull();
                     writer = nullptr;
                 }
@@ -183,14 +184,7 @@ void SpillHandler::spillBlocks(Blocks && blocks)
     }
     catch (...)
     {
-        /// mark the spill handler invalid
-        writer = nullptr;
-        spilled_files.clear();
-        current_spilled_file_index = INVALID_CURRENT_SPILLED_FILE_INDEX;
-        throw Exception(fmt::format(
-            "Failed to spill blocks to disk for file {}, error: {}",
-            current_spill_file_name,
-            getCurrentExceptionMessage(false, false)));
+        markAsInvalidAndRethrow();
     }
 }
 
@@ -201,7 +195,17 @@ void SpillHandler::finish()
     {
         if (writer != nullptr)
         {
-            spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
+            // check again before finishWrite().
+            try
+            {
+                checkOkToSpill();
+            }
+            catch (...)
+            {
+                markAsInvalidAndRethrow();
+            }
+
+            writer->finishWrite(spilled_files[current_spilled_file_index]);
             auto current_spill_details = spilled_files[current_spilled_file_index]->getSpillDetails();
             if (!spiller->enable_append_write
                 || isSpilledFileFull(current_spill_details.rows, current_spill_details.data_bytes_uncompressed))
