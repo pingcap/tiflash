@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <DataTypes/DataTypeFactory.h>
+#include <DataTypes/DataTypeString.h>
 #include <Storages/DeltaMerge/VersionChain/ColumnView.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <gtest/gtest.h>
