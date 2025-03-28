@@ -16,6 +16,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
@@ -126,14 +127,7 @@ protected:
         auto indexes = std::make_shared<ColumnFileTiny::IndexInfos>();
         for (const auto pid : idx_page_ids)
         {
-            dtpb::ColumnFileIndexInfo idx;
-            idx.set_index_page_id(pid);
-            auto * idx_props = idx.mutable_index_props();
-            idx_props->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
-            idx_props->set_index_id(1);
-            idx_props->set_file_size(1024);
-            auto * vec_idx = idx_props->mutable_vector_index();
-            vec_idx->set_format_version(0);
+            ColumnFileTiny::IndexInfo idx(pid, std::nullopt);
             indexes->emplace_back(std::move(idx));
         }
         return indexes;

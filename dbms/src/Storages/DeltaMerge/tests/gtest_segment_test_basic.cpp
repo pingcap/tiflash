@@ -18,6 +18,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
+#include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyVectorIndexWriter.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
@@ -825,7 +826,7 @@ bool SegmentTestBasic::ensureSegmentDeltaLocalIndex(PageIdU64 segment_id, const 
     auto persisted_files_snap = delta->getPersistedFileSet()->createSnapshot(data_from_storage_snap);
     WriteBatches wbs(*storage_pool, nullptr);
     // Build index
-    ColumnFileTinyLocalIndexWriter iw(ColumnFileTinyLocalIndexWriter::Options{
+    ColumnFileTinyVectorIndexWriter iw(ColumnFileTinyVectorIndexWriter::Options{
         .storage_pool = storage_pool,
         .write_limiter = nullptr,
         .files = persisted_files_snap->getColumnFiles(),
@@ -972,10 +973,9 @@ SegmentPtr SegmentTestBasic::reload(
     storage_path_pool = std::make_shared<StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
     storage_pool = std::make_shared<StoragePool>(*db_context, NullspaceID, NAMESPACE_ID, *storage_path_pool, "test.t1");
     storage_pool->restore();
-    ColumnDefinesPtr cols = (!pre_define_columns)
-        ? DMTestEnv::getDefaultColumns(
-              is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID)
-        : pre_define_columns;
+    ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns(
+                                is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID)
+                                                  : pre_define_columns;
     prepareColumns(cols);
     setColumns(cols);
 
