@@ -74,7 +74,7 @@ public:
 
     void insert(HandleRefType handle, RowID row_id)
     {
-        std::ignore = handle_to_row_id.insert(std::pair{hasher(handle), row_id});
+        std::ignore = handle_to_row_id.emplace(hasher(handle), row_id);
     }
 
     // The hash value of a handle cannot reflect the order of handles,
