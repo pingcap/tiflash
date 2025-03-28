@@ -107,7 +107,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
 
     // If calculate_read_packs is true, we will calculate which packs in DMFile to read first.
     // Or we will read all packs in DMFile.
-    // This is used to optimize scenarios where there are fewer delta records that need to be replayed.
+    // This is used to optimize scenarios where there are few delta records that need to be replayed.
     const bool calculate_read_packs = (cfs.end() - pos == 1) && ((*pos)->isInMemoryFile() || (*pos)->isTinyFile())
         && dmfile_or_delete_range_list.size() == 1;
     SCOPE_EXIT({ cleanHandleColumn(); });
