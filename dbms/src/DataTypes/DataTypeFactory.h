@@ -15,6 +15,7 @@
 #pragma once
 
 #include <DataTypes/IDataType.h>
+#include <Parsers/IAST_fwd.h>
 
 #include <ext/singleton.h>
 #include <functional>
@@ -27,9 +28,29 @@ namespace DB
 class IDataType;
 using DataTypePtr = std::shared_ptr<const IDataType>;
 
-class IAST;
-using ASTPtr = std::shared_ptr<IAST>;
+// When there are lots of tables created, the DataTypePtr could consume lots of
+// memory (tiflash#9947), or lots of CPU time to parse the string into IAST and
+// create the datatype (tiflash#6395). So we make a cache of FullName to
+// DataTypePtr in order to reuse the same DataTypePtr.
+class DataTypePtrCache
+{
+public:
+    DataTypePtr get(const String & full_name) const;
+    void tryCache(const String & full_name, const DataTypePtr & datatype_ptr);
+    size_t getFullNameCacheSize() const
+    {
+        std::shared_lock lock(rw_lock);
+        return cached_types.size();
+    }
 
+private:
+    // full_name -> DataTypePtr
+    using FullnameTypes = std::unordered_map<String, DataTypePtr>;
+    static constexpr int MAX_FULLNAME_TYPES = 50000;
+    static constexpr int FULLNAME_TYPES_HIGH_WATER_MARK = 49000;
+    mutable std::shared_mutex rw_lock;
+    FullnameTypes cached_types;
+};
 
 /** Creates a data type by name of data type family and parameters.
   */
@@ -40,16 +61,15 @@ private:
     using SimpleCreator = std::function<DataTypePtr()>;
     // family_name -> Creator
     using DataTypesDictionary = std::unordered_map<String, Creator>;
-    // full_name -> DataTypePtr
-    using FullnameTypes = std::unordered_map<String, DataTypePtr>;
 
 public:
     DataTypePtr get(const String & full_name) const;
     // In order to optimize the speed of generating data type instances, this will cache the full_name -> DataTypePtr.
     DataTypePtr getOrSet(const String & full_name);
+    DataTypePtr getOrSet(const ASTPtr & ast);
     DataTypePtr get(const String & family_name, const ASTPtr & parameters) const;
     DataTypePtr get(const ASTPtr & ast) const;
-    size_t getFullNameCacheSize() const;
+    size_t getFullNameCacheSize() const { return fullname_types.getFullNameCacheSize(); }
 
     /// For compatibility with SQL, it's possible to specify that certain data type name is case insensitive.
     enum CaseSensitiveness
@@ -76,10 +96,8 @@ private:
     /// Case insensitive data types will be additionally added here with lowercased name.
     DataTypesDictionary case_insensitive_data_types;
 
-    static constexpr int MAX_FULLNAME_TYPES = 50000;
-    static constexpr int FULLNAME_TYPES_HIGH_WATER_MARK = 49000;
-    mutable std::shared_mutex rw_lock;
-    FullnameTypes fullname_types;
+    DataTypePtrCache fullname_types;
+
     DataTypeFactory();
     friend class ext::Singleton<DataTypeFactory>;
 };
