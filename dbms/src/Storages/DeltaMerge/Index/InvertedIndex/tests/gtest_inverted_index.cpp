@@ -24,12 +24,12 @@
 namespace DB::DM::tests
 {
 
+static constexpr auto IndexFileName = "test.inverted_index";
+
 template <typename T>
 class InvertedIndexTest
 {
 public:
-    static constexpr auto IndexFileName = "test.inverted_index";
-
     InvertedIndexTest() = default;
 
     ~InvertedIndexTest() = default;
@@ -299,6 +299,47 @@ try
     InvertedIndexTest<Int16>::LargeTestCase::runMultiThread();
     InvertedIndexTest<Int32>::LargeTestCase::runMultiThread();
     InvertedIndexTest<Int64>::LargeTestCase::runMultiThread();
+}
+CATCH
+
+// TiDB support change integer type to larger type (e.g. Int8 -> Int16, UInt8 -> UInt16) without changing data.
+// This means the column will not be changed, and the index will not be rebuilt.
+// Then the type of the search key may be larger than the type of the index.
+TEST(InvertedIndex, ReadTypeLargerThanIndexType)
+try
+{
+    // Build UInt8 type index
+    {
+        auto builder = InvertedIndexWriterOnDisk<UInt8>(0, IndexFileName);
+        InvertedIndexTest<UInt8>::writeBlock(builder, {1, 2, 3, 4, 5, 6, 7, 8, 9, 255}, {0, 1, 0, 1, 0, 1, 0, 1, 0, 0});
+        InvertedIndexTest<UInt8>::writeBlock(builder, {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+        InvertedIndexTest<UInt8>::writeBlock(builder, {1, 2, 2, 2, 3, 3, 3, 4, 4, 128}, {0, 0, 0, 0, 0, 0, 0, 0, 0, 0});
+        builder.finalize();
+    }
+    auto viewer = std::make_shared<InvertedIndexMemoryReader<UInt8>>(IndexFileName);
+    // search key is in the range of UInt8
+    {
+        auto bitmap_filter = std::make_shared<BitmapFilter>(30, false);
+        viewer->search(bitmap_filter, 1);
+        ASSERT_EQ(bitmap_filter->toDebugString(), "100000000010000000001000000000");
+    }
+    {
+        auto bitmap_filter = std::make_shared<BitmapFilter>(30, false);
+        viewer->search(bitmap_filter, 255);
+        ASSERT_EQ(bitmap_filter->toDebugString(), "000000000100000000000000000000");
+    }
+    // search key is larger than UInt8
+    {
+        auto bitmap_filter = std::make_shared<BitmapFilter>(30, false);
+        viewer->search(bitmap_filter, 256);
+        ASSERT_EQ(bitmap_filter->toDebugString(), "000000000000000000000000000000");
+    }
+    {
+        auto bitmap_filter = std::make_shared<BitmapFilter>(30, false);
+        viewer->search(bitmap_filter, 1024);
+        ASSERT_EQ(bitmap_filter->toDebugString(), "000000000000000000000000000000");
+    }
+    Poco::File(IndexFileName).remove();
 }
 CATCH
 
