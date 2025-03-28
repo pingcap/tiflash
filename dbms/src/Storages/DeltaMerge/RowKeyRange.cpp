@@ -166,4 +166,16 @@ std::pair<size_t, size_t> RowKeyRange::getPosRange(const ColumnPtr & column, con
     return {start_index, end_index - start_index};
 }
 
+RowKeyRanges shrinkRowKeyRanges(const RowKeyRange & target_range, const RowKeyRanges & read_ranges)
+{
+    RowKeyRanges real_ranges;
+    real_ranges.reserve(read_ranges.size());
+    for (const auto & read_range : read_ranges)
+    {
+        auto real_range = target_range.shrink(read_range);
+        if (!real_range.none())
+            real_ranges.emplace_back(std::move(real_range));
+    }
+    return real_ranges;
+}
 } // namespace DB::DM
