@@ -302,9 +302,9 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
     // 1. Ingest [0, 10), [20, 30)
     // 2. Delta merge into [0, 30)
     // 3. Ingest [10, 20)
-    LOG_WARNING(
+    LOG_INFO(
         Logger::get(dm_context.tracing_id),
-        "ColumnFileBig={} is neither apply snapshot nor ingest sst",
+        "ColumnFileBig={} intersect with other files, treat it as normal write for safty.",
         cf_big.toString());
     auto cf_reader = cf_big.getReader(
         dm_context,
