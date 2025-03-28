@@ -176,6 +176,33 @@ FileSegmentPtr FileCache::downloadFileForLocalRead(
     return nullptr;
 }
 
+std::tuple<FileSegmentPtr, bool> FileCache::downloadFileForLocalReadWithRetry(
+    const S3::S3FilenameView & s3_fname,
+    const std::optional<UInt64> & filesize,
+    Int32 retry_count)
+{
+    auto perf_begin = PerfContext::file_cache;
+    bool has_s3_download = false;
+    for (Int32 i = retry_count; i > 0; --i)
+    {
+        try
+        {
+            auto seg = downloadFileForLocalRead(s3_fname, filesize);
+            if (PerfContext::file_cache.fg_download_from_s3 > perf_begin.fg_download_from_s3 || //
+                PerfContext::file_cache.fg_wait_download_from_s3 > perf_begin.fg_wait_download_from_s3)
+                has_s3_download = true;
+            return {seg, has_s3_download};
+        }
+        catch (...)
+        {
+            if (i <= 1)
+                throw;
+        }
+    }
+
+    return {nullptr, false};
+}
+
 FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize)
 {
     auto s3_key = s3_fname.toFullKey();
