@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/Filter/ColumnRange_fwd.h>
 #include <Storages/DeltaMerge/Filter/IntegerSet.h>
 #include <Storages/KVStore/Types.h>
 
@@ -25,13 +26,6 @@ namespace DB::DM
 using IndexID = DB::IndexID;
 using ColumnID = DB::ColumnID;
 
-class ColumnRange;
-using ColumnRangePtr = std::shared_ptr<ColumnRange>;
-using ColumnRanges = std::vector<ColumnRangePtr>;
-
-class SingleColumnRange;
-using SingleColumnRangePtr = std::shared_ptr<SingleColumnRange>;
-
 enum class ColumnRangeType
 {
     Unsupported,
@@ -41,7 +35,7 @@ enum class ColumnRangeType
 };
 
 // ColumnRange represents the range of values for columns.
-class ColumnRange : public std::enable_shared_from_this<ColumnRange>
+class ColumnRange
 {
 public:
     explicit ColumnRange(ColumnRangeType type_)
@@ -54,8 +48,10 @@ public:
 
     virtual String toDebugString() = 0;
 
-    virtual BitmapFilterPtr check(std::function<BitmapFilterPtr(const ColumnRangePtr &, size_t)> search, size_t size)
-        = 0;
+    // @return a bitmap filter that represents the result of the range check
+    // @param search: a function to search the inverted index for a single column range
+    // @param size: the size of the bitmap filter
+    virtual BitmapFilterPtr check(std::function<BitmapFilterPtr(const SingleColumnRangePtr &)> search, size_t size) = 0;
 
 public:
     ColumnRangeType type = ColumnRangeType::Unsupported;
@@ -76,13 +72,15 @@ public:
 
     String toDebugString() override { return String(magic_enum::enum_name(type)); }
 
-    BitmapFilterPtr check(std::function<BitmapFilterPtr(const ColumnRangePtr &, size_t size)>, size_t size) override
+    BitmapFilterPtr check(std::function<BitmapFilterPtr(const SingleColumnRangePtr &)>, size_t size) override
     {
         return std::make_shared<BitmapFilter>(size, true);
     }
 };
 
-class SingleColumnRange : public ColumnRange
+class SingleColumnRange
+    : public ColumnRange
+    , public std::enable_shared_from_this<SingleColumnRange>
 {
 public:
     explicit SingleColumnRange(ColumnID column_id_, IndexID index_id_, const IntegerSetPtr & set_)
@@ -104,10 +102,9 @@ public:
 
     String toDebugString() override { return fmt::format("{}: {}", column_id, set->toDebugString()); }
 
-    BitmapFilterPtr check(std::function<BitmapFilterPtr(const ColumnRangePtr &, size_t size)> search, size_t size)
-        override
+    BitmapFilterPtr check(std::function<BitmapFilterPtr(const SingleColumnRangePtr &)> search, size_t) override
     {
-        return search(shared_from_this(), size);
+        return search(shared_from_this());
     }
 
 public:
@@ -116,7 +113,9 @@ public:
     IntegerSetPtr set;
 };
 
-class LogicalOpColumnRange : public ColumnRange
+class LogicalOpColumnRange
+    : public ColumnRange
+    , public std::enable_shared_from_this<LogicalOpColumnRange>
 {
 protected:
     explicit LogicalOpColumnRange(ColumnRangeType type, const ColumnRanges & children_)
@@ -163,8 +162,7 @@ public:
 
     ColumnRangePtr tryOptimize() override;
 
-    BitmapFilterPtr check(std::function<BitmapFilterPtr(const ColumnRangePtr &, size_t size)> search, size_t size)
-        override;
+    BitmapFilterPtr check(std::function<BitmapFilterPtr(const SingleColumnRangePtr &)> search, size_t size) override;
 };
 
 class OrColumnRange : public LogicalOpColumnRange
@@ -186,8 +184,7 @@ public:
 
     ColumnRangePtr tryOptimize() override;
 
-    BitmapFilterPtr check(std::function<BitmapFilterPtr(const ColumnRangePtr &, size_t size)> search, size_t size)
-        override;
+    BitmapFilterPtr check(std::function<BitmapFilterPtr(const SingleColumnRangePtr &)> search, size_t size) override;
 };
 
 } // namespace DB::DM

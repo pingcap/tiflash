@@ -12,17 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/Filter/ColumnRange.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex/Reader.h>
+#include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromDMFile.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
-#include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
-#include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
-#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
-#include <Storages/DeltaMerge/Index/VectorIndex/Stream/ReaderFromDMFile.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/FileCachePerf.h>
+
 
 namespace DB::ErrorCodes
 {
@@ -32,29 +31,57 @@ extern const int S3_ERROR;
 namespace DB::DM
 {
 
-VectorIndexReaderPtr VectorIndexReaderFromDMFile::load(const VectorIndexStreamCtxPtr & ctx, const DMFilePtr & dmfile)
+InvertedIndexReaderFromDMFile::InvertedIndexReaderFromDMFile(
+    const ColumnRangePtr & column_range_,
+    const DMFilePtr & dmfile_,
+    const LocalIndexCachePtr & local_index_cache_)
+    : dmfile(dmfile_)
+    , column_range(column_range_)
+    , local_index_cache(local_index_cache_)
+{
+    GET_METRIC(tiflash_inverted_index_active_instances, type_disk_reader).Increment();
+}
+
+InvertedIndexReaderFromDMFile::~InvertedIndexReaderFromDMFile()
+{
+    GET_METRIC(tiflash_inverted_index_active_instances, type_disk_reader).Decrement();
+}
+
+BitmapFilterPtr InvertedIndexReaderFromDMFile::load()
+{
+    RUNTIME_CHECK(!loaded);
+
+    auto sorted_results = column_range->check(
+        [&](const SingleColumnRangePtr & column_range) { return load(column_range); },
+        dmfile->getRows());
+
+    loaded = true;
+    return sorted_results;
+}
+
+BitmapFilterPtr InvertedIndexReaderFromDMFile::load(const SingleColumnRangePtr & column_range)
 {
     Stopwatch w(CLOCK_MONOTONIC_COARSE);
 
-    const auto col_id = ctx->ann_query_info->deprecated_column_id();
-    const auto index_id = ctx->ann_query_info->index_id();
+    const auto col_id = column_range->column_id;
+    const auto index_id = column_range->index_id;
 
     RUNTIME_CHECK(dmfile->useMetaV2()); // v3
 
     // Check vector index exists on the column
-    auto vector_index = dmfile->getLocalIndex(col_id, index_id);
-    RUNTIME_CHECK(vector_index.has_value(), col_id, index_id);
-    RUNTIME_CHECK(vector_index->index_props().kind() == dtpb::IndexFileKind::VECTOR_INDEX);
-    RUNTIME_CHECK(vector_index->index_props().has_vector_index());
+    auto local_index = dmfile->getLocalIndex(col_id, index_id);
+    if (!local_index)
+        return nullptr;
+    RUNTIME_CHECK(local_index->index_props().kind() == dtpb::IndexFileKind::INVERTED_INDEX);
+    const auto & index_props = local_index->index_props();
 
     bool has_s3_download = false;
     bool has_load_from_file = false;
 
     // If local file is invalidated, cache is not valid anymore. So we
     // need to ensure file exists on local fs first.
-    const auto index_file_path = index_id > 0 //
-        ? dmfile->localIndexPath(index_id, TiDB::ColumnarIndexKind::Vector) //
-        : dmfile->colIndexPath(DMFile::getFileNameBase(col_id));
+    RUNTIME_CHECK(index_id > 0);
+    const auto index_file_path = dmfile->localIndexPath(index_id, TiDB::ColumnarIndexKind::Inverted);
     String local_index_file_path;
     if (auto s3_file_name = S3::S3FilenameView::fromKeyWithPrefix(index_file_path); s3_file_name.isValid())
     {
@@ -69,9 +96,7 @@ VectorIndexReaderPtr VectorIndexReaderFromDMFile::load(const VectorIndexStreamCt
         {
             try
             {
-                if (auto file_guard = file_cache->downloadFileForLocalRead( //
-                        s3_file_name,
-                        vector_index->index_props().file_size());
+                if (auto file_guard = file_cache->downloadFileForLocalRead(s3_file_name, index_props.file_size());
                     file_guard)
                 {
                     local_index_file_path = file_guard->getLocalFileName();
@@ -100,51 +125,49 @@ VectorIndexReaderPtr VectorIndexReaderFromDMFile::load(const VectorIndexStreamCt
 
     auto load_from_file = [&]() {
         has_load_from_file = true;
-        return VectorIndexReader::createFromMmap(
-            vector_index->index_props().vector_index(),
-            ctx->perf,
-            local_index_file_path);
+        const auto type = dmfile->getColumnStat(col_id).type;
+        return InvertedIndexReader::view(type, local_index_file_path);
     };
 
-    VectorIndexReaderPtr vec_index = nullptr;
-    // DMFile vector index uses mmap to read data, does not directly occupy memory, so use the light cache.
-    if (ctx->index_cache_light)
+    InvertedIndexReaderPtr inverted_index;
+    if (local_index_cache)
     {
         // Note: must use local_index_file_path as the cache key, because cache
         // will check whether file is still valid and try to remove memory references
         // when file is dropped.
-        auto local_index = ctx->index_cache_light->getOrSet(local_index_file_path, load_from_file);
-        vec_index = std::dynamic_pointer_cast<VectorIndexReader>(local_index);
+        auto local_index = local_index_cache->getOrSet(local_index_file_path, load_from_file);
+        inverted_index = std::dynamic_pointer_cast<InvertedIndexReader>(local_index);
     }
     else
-        vec_index = load_from_file();
+    {
+        inverted_index = load_from_file();
+    }
 
-    RUNTIME_CHECK(vec_index != nullptr);
-
-    { // Statistics
-        double elapsed = w.elapsedSeconds();
+    {
+        // Statistics
+        // TODO: add more statistics to ScanContext
+        double elapsed = w.elapsedSecondsFromLastTime();
         if (has_s3_download)
         {
             // it could be possible that s3=true but load_from_file=false, it means we download a file
             // and then reuse the memory cache. The majority time comes from s3 download
             // so we still count it as s3 download.
-            ctx->perf->load_from_stable_s3 += 1;
-            GET_METRIC(tiflash_vector_index_duration, type_load_dmfile_s3).Observe(elapsed);
+            GET_METRIC(tiflash_inverted_index_duration, type_load_dmfile_s3).Observe(elapsed);
         }
         else if (has_load_from_file)
         {
-            ctx->perf->load_from_stable_disk += 1;
-            GET_METRIC(tiflash_vector_index_duration, type_load_dmfile_local).Observe(elapsed);
+            GET_METRIC(tiflash_inverted_index_duration, type_load_dmfile_local).Observe(elapsed);
         }
         else
         {
-            ctx->perf->load_from_cache += 1;
-            GET_METRIC(tiflash_vector_index_duration, type_load_cache).Observe(elapsed);
+            GET_METRIC(tiflash_inverted_index_duration, type_load_cache).Observe(elapsed);
         }
-        ctx->perf->total_load_ms += elapsed * 1000;
     }
 
-    return vec_index;
+    RUNTIME_CHECK(inverted_index != nullptr);
+    auto bitmap_filter = column_range->set->search(inverted_index, dmfile->getRows());
+    GET_METRIC(tiflash_inverted_index_duration, type_search).Observe(w.elapsedSecondsFromLastTime());
+    return bitmap_filter;
 }
 
 } // namespace DB::DM

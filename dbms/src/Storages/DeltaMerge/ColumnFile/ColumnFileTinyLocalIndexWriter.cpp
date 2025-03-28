@@ -104,7 +104,6 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
         // Just skip if the index is already built
         if (file->hasIndex(index_info.index_id))
             continue;
-        RUNTIME_CHECK(index_info.def_vector_index != nullptr);
         index_builders[index_info.column_id].emplace_back(IndexToBuild{
             .info = index_info,
             .index_writer = {},
