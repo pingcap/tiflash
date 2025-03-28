@@ -163,7 +163,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
     };
 
     auto local_index = dmfile->getLocalIndex( //
-        vec_index_ctx->ann_query_info->column_id(),
+        vec_index_ctx->ann_query_info->deprecated_column_id(),
         vec_index_ctx->ann_query_info->index_id());
     if (!local_index.has_value())
         // Vector index is defined but does not exist on the data file,

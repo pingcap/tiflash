@@ -36,7 +36,7 @@ VectorIndexReaderPtr VectorIndexReaderFromDMFile::load(const VectorIndexStreamCt
 {
     Stopwatch w(CLOCK_MONOTONIC_COARSE);
 
-    const auto col_id = ctx->ann_query_info->column_id();
+    const auto col_id = ctx->ann_query_info->deprecated_column_id();
     const auto index_id = ctx->ann_query_info->index_id();
 
     RUNTIME_CHECK(dmfile->useMetaV2()); // v3

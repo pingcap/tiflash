@@ -80,7 +80,7 @@ public:
     {
         auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
         ann_query_info->set_query_type(tipb::ANNQueryType::OrderBy);
-        ann_query_info->set_column_id(options.column_id);
+        ann_query_info->set_deprecated_column_id(options.column_id);
         ann_query_info->set_distance_metric(options.distance_metric);
         ann_query_info->set_top_k(options.top_k);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32(options.vec));
