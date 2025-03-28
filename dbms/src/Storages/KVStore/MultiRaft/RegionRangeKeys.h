@@ -16,6 +16,7 @@
 
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVKeyValue.h>
 
 namespace DB
 {
