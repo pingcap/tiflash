@@ -37,7 +37,7 @@ class NewHandleIndexTest;
 } // namespace tests
 
 // VersionChain is to maintain the position of the base(oldest) version corresponding to each version in the Delta.
-// If a handle A has three versions exists, from the oldest to the newest, they are A1, A2, A3.
+// If a handle A has three existing versions, from the oldest to the newest, they are A1, A2, A3.
 // For a normal version chain, it looks like: A3 -> A2 -> A1.
 // The version chain here is a little different, it looks like: A2 -> A1; A3 -> A1.
 // The oldest existing version is called `base version` and the `base version` is the pivot of the version chain.
