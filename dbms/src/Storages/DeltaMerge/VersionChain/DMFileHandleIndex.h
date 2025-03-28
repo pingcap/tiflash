@@ -119,6 +119,7 @@ private:
     }
 
     // Find the base(oldest) version of the given handle in the given pack.
+    // Note that this function return the row_id without considering the `start_row_id`
     std::optional<RowID> getBaseVersion(const DMContext & dm_context, HandleRefType h, UInt32 clipped_pack_id)
     {
         loadHandleIfNotLoaded(dm_context);
