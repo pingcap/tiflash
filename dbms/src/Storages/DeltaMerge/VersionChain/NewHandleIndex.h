@@ -97,7 +97,7 @@ public:
         auto begin = row_ids.begin();
         auto end = row_ids.end();
         auto get_next_continuous_size = [](auto begin, auto end) {
-            RUNTIME_CHECK(begin != end);
+            assert(begin != end);
             auto itr = std::next(begin);
             for (; itr != end && (*itr - *begin) == (itr - begin); ++itr) {}
             return itr - begin;
