@@ -144,7 +144,7 @@ private:
     // Base version means the oldest version that has not been garbage collected yet.
     // (*base_versions)[n] is the row id of the oldest version of the n-th record in delta.
     // And different versions of the same record has the same base version except the base version itself.
-    // The base version of the base version is NotExistRowID.
+    // The previous version of the base version is NotExistRowID.
     // Therefore, base version of a record acts as a pivot.
     std::shared_ptr<std::vector<RowID>> base_versions;
     NewHandleIndex<HandleType> new_handle_to_row_ids;
