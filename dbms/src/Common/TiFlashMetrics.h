@@ -935,7 +935,11 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_sent_total, {"type", "sent_total"}),                                                                                   \
       F(type_sent_cross_zone, {"type", "sent_cross_zone"}),                                                                         \
       F(type_received_total, {"type", "received_total"}),                                                                           \
-      F(type_received_cross_zone, {"type", "received_cross_zone"}))
+      F(type_received_cross_zone, {"type", "received_cross_zone"}))                                                                 \
+    M(tiflash_spill_limiter,                                                                                                        \
+      "Current bytes of spilled files",                                                                                             \
+      Gauge,                                                                                                                        \
+      F(type_current_spilled_bytes, {"type", "current_spilled_bytes"}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

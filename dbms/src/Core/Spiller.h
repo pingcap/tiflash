@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/TiFlashMetrics.h>
 #include <Core/Block.h>
 #include <Core/SpillConfig.h>
 #include <Poco/File.h>
@@ -52,6 +53,7 @@ public:
     {
         std::lock_guard<std::mutex> guard(lock);
         current_spilled_bytes += bytes;
+        GET_METRIC(tiflash_spill_limiter, type_current_spilled_bytes).Set(current_spilled_bytes);
     }
 
     void minusSpilledBytes(uint64_t bytes)
@@ -59,6 +61,7 @@ public:
         std::lock_guard<std::mutex> guard(lock);
         RUNTIME_CHECK(current_spilled_bytes >= bytes);
         current_spilled_bytes -= bytes;
+        GET_METRIC(tiflash_spill_limiter, type_current_spilled_bytes).Set(current_spilled_bytes);
     }
 
     uint64_t getCurrentSpilledBytes() const { return current_spilled_bytes; }
