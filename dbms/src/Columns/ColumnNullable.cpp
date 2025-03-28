@@ -282,6 +282,12 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, con
     return pos;
 }
 
+void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    getNullMapColumn().countSerializeByteSize(byte_size);
+    getNestedColumn().countSerializeByteSize(byte_size);
+}
+
 void ColumnNullable::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
     const NullMap * nullmap,
@@ -292,10 +298,13 @@ void ColumnNullable::countSerializeByteSizeForCmp(
     getNullMapColumn().countSerializeByteSizeForCmp(byte_size, nullptr, collator);
     getNestedColumn().countSerializeByteSizeForCmp(byte_size, &getNullMapData(), collator);
 }
-void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+
+void ColumnNullable::countSerializeByteSizeForColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets) const
 {
-    getNullMapColumn().countSerializeByteSize(byte_size);
-    getNestedColumn().countSerializeByteSize(byte_size);
+    getNullMapColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets);
+    getNestedColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets);
 }
 
 void ColumnNullable::countSerializeByteSizeForCmpColumnArray(
@@ -306,15 +315,15 @@ void ColumnNullable::countSerializeByteSizeForCmpColumnArray(
 {
     // Unable to handle ColumnArray(ColumnNullable(ColumnXXX)).
     throw Exception(
-        "countSerializeByteSizeForCmpColumnArray cannot handle ColumnArray(" + getName() + ")",
+        "countSerializeByteSizeForCmpColumnArray cannot handle ColumnArray(ColumnNullable(ColumnXXX))" + getName()
+            + ")",
         ErrorCodes::NOT_IMPLEMENTED);
 }
-void ColumnNullable::countSerializeByteSizeForColumnArray(
-    PaddedPODArray<size_t> & byte_size,
-    const IColumn::Offsets & array_offsets) const
+
+void ColumnNullable::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
-    getNullMapColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets);
-    getNestedColumn().countSerializeByteSizeForColumnArray(byte_size, array_offsets);
+    getNullMapColumn().serializeToPos(pos, start, length, has_null);
+    getNestedColumn().serializeToPos(pos, start, length, has_null);
 }
 
 void ColumnNullable::serializeToPosForCmp(
@@ -333,10 +342,15 @@ void ColumnNullable::serializeToPosForCmp(
         .serializeToPosForCmp(pos, start, length, has_null, &getNullMapData(), collator, sort_key_container);
 }
 
-void ColumnNullable::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
+void ColumnNullable::serializeToPosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const IColumn::Offsets & array_offsets) const
 {
-    getNullMapColumn().serializeToPos(pos, start, length, has_null);
-    getNestedColumn().serializeToPos(pos, start, length, has_null);
+    getNullMapColumn().serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
+    getNestedColumn().serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
 }
 
 void ColumnNullable::serializeToPosForCmpColumnArray(
@@ -353,39 +367,16 @@ void ColumnNullable::serializeToPosForCmpColumnArray(
     // while ColumnNullable::nullmap corresponds to the rows of ColumnNullable.
     // This means it's not easy to correctly serialize the row in ColumnNullable to the corresponding position in pos.
     throw Exception(
-        "serializeToPosForCmpColumnArray cannot handle ColumnArray(" + getName() + ")",
+        "serializeToPosForCmpColumnArray cannot handle ColumnArray(ColumnNullable(ColumnXXX))" + getName() + ")",
         ErrorCodes::NOT_IMPLEMENTED);
 }
-void ColumnNullable::serializeToPosForColumnArray(
-    PaddedPODArray<char *> & pos,
-    size_t start,
-    size_t length,
-    bool has_null,
-    const IColumn::Offsets & array_offsets) const
-{
-    getNullMapColumn().serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
-    getNestedColumn().serializeToPosForColumnArray(pos, start, length, has_null, array_offsets);
-}
 
-void ColumnNullable::deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
-{
-    getNullMapColumn().deserializeForCmpAndInsertFromPos(pos, use_nt_align_buffer);
-    getNestedColumn().deserializeForCmpAndInsertFromPos(pos, use_nt_align_buffer);
-}
 void ColumnNullable::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
 {
     getNullMapColumn().deserializeAndInsertFromPos(pos, use_nt_align_buffer);
     getNestedColumn().deserializeAndInsertFromPos(pos, use_nt_align_buffer);
 }
 
-void ColumnNullable::deserializeForCmpAndInsertFromPosColumnArray(
-    PaddedPODArray<char *> & pos,
-    const IColumn::Offsets & array_offsets,
-    bool use_nt_align_buffer)
-{
-    getNullMapColumn().deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer);
-    getNestedColumn().deserializeForCmpAndInsertFromPosColumnArray(pos, array_offsets, use_nt_align_buffer);
-}
 void ColumnNullable::deserializeAndInsertFromPosForColumnArray(
     PaddedPODArray<char *> & pos,
     const IColumn::Offsets & array_offsets,
@@ -399,6 +390,20 @@ void ColumnNullable::flushNTAlignBuffer()
 {
     getNullMapColumn().flushNTAlignBuffer();
     getNestedColumn().flushNTAlignBuffer();
+}
+
+void ColumnNullable::deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const
+{
+    getNullMapColumn().deserializeAndAdvancePos(pos);
+    getNestedColumn().deserializeAndAdvancePos(pos);
+}
+
+void ColumnNullable::deserializeAndAdvancePosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets) const
+{
+    getNullMapColumn().deserializeAndAdvancePosForColumnArray(pos, array_offsets);
+    getNestedColumn().deserializeAndAdvancePosForColumnArray(pos, array_offsets);
 }
 
 void ColumnNullable::insertRangeFrom(const IColumn & src, size_t start, size_t length)
@@ -437,17 +442,15 @@ void ColumnNullable::insertManyFrom(const IColumn & src, size_t n, size_t length
     map.resize_fill(map.size() + length, src_concrete.getNullMapData()[n]);
 }
 
-void ColumnNullable::insertSelectiveFrom(const IColumn & src, const Offsets & selective_offsets)
+void ColumnNullable::insertSelectiveRangeFrom(
+    const IColumn & src,
+    const Offsets & selective_offsets,
+    size_t start,
+    size_t length)
 {
     const auto & src_concrete = static_cast<const ColumnNullable &>(src);
-    getNestedColumn().insertSelectiveFrom(src_concrete.getNestedColumn(), selective_offsets);
-    auto & map = getNullMapData();
-    const auto & src_map = src_concrete.getNullMapData();
-    size_t old_size = map.size();
-    size_t to_add_size = selective_offsets.size();
-    map.resize(old_size + to_add_size);
-    for (size_t i = 0; i < to_add_size; ++i)
-        map[i + old_size] = src_map[selective_offsets[i]];
+    getNestedColumn().insertSelectiveRangeFrom(src_concrete.getNestedColumn(), selective_offsets, start, length);
+    getNullMapColumn().insertSelectiveRangeFrom(src_concrete.getNullMapColumn(), selective_offsets, start, length);
 }
 
 void ColumnNullable::popBack(size_t n)
