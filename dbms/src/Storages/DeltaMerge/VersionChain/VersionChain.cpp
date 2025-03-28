@@ -341,7 +341,7 @@ std::optional<RowID> VersionChain<HandleType>::findBaseVersionFromDMFileOrDelete
     const DMContext & dm_context,
     HandleRefType h)
 {
-    // From from new to old
+    // Scan from new to old to handle the semantic of "DeleteRange"
     for (auto & dmfile_or_delete_range : dmfile_or_delete_range_list | std::views::reverse)
     {
         if (auto * dmfile_index = std::get_if<DMFileHandleIndex<HandleType>>(&dmfile_or_delete_range); dmfile_index)
