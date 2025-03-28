@@ -116,7 +116,7 @@ VectorIndexReader::SearchResults VectorIndexReader::search(
             query_vec_size,
             file_props.dimensions(),
             query_info->index_id(),
-            query_info->column_id());
+            query_info->deprecated_column_id());
 
     RUNTIME_CHECK(query_info->ref_vec_f32().size() == sizeof(UInt32) + query_vec_size * sizeof(Float32));
 
@@ -127,7 +127,7 @@ VectorIndexReader::SearchResults VectorIndexReader::search(
             tipb::VectorDistanceMetric_Name(query_info->distance_metric()),
             file_props.distance_metric(),
             query_info->index_id(),
-            query_info->column_id());
+            query_info->deprecated_column_id());
 
     std::atomic<size_t> visited_nodes = 0;
     std::atomic<size_t> discarded_nodes = 0;
