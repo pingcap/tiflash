@@ -41,7 +41,7 @@ PushDownExecutorPtr PushDownExecutor::build(
         bool is_matching_ann_query = std::any_of(
             columns_to_read.begin(),
             columns_to_read.end(),
-            [cid = ann_query_info->column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
+            [cid = ann_query_info->deprecated_column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
         if (!is_valid_ann_query || !is_matching_ann_query)
             valid_ann_query_info = nullptr;
     }
