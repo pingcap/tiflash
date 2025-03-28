@@ -102,6 +102,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
     // `offset` points to the first records that has not been replayed in `pos`.
     auto offset = replayed_rows_and_deletes - skipped_rows_and_deletes;
     // Only ColumnFileInMemory or ColumnFileTiny can be half replayed.
+    RUNTIME_CHECK(pos != cfs.end(), skipped_rows_and_deletes, replayed_rows_and_deletes);
     RUNTIME_CHECK(offset == 0 || (*pos)->isInMemoryFile() || (*pos)->isTinyFile(), offset, (*pos)->toString());
 
     // If calculate_read_packs is true, we will calculate which packs in DMFile to read first.
