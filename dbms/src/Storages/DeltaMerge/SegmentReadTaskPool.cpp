@@ -97,7 +97,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     t->initInputStream(
         columns_to_read,
         start_ts,
-        filter,
+        executor,
         read_mode,
         expected_block_size,
         t->dm_context->global_context.getSettingsRef().dt_enable_delta_index_error_fallback);
@@ -117,7 +117,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
 SegmentReadTaskPool::SegmentReadTaskPool(
     int extra_table_id_index_,
     const ColumnDefines & columns_to_read_,
-    const PushDownExecutorPtr & filter_,
+    const PushDownExecutorPtr & executor_,
     uint64_t start_ts_,
     size_t expected_block_size_,
     ReadMode read_mode_,
@@ -131,7 +131,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
     , extra_table_id_index(extra_table_id_index_)
     , columns_to_read(columns_to_read_)
-    , filter(filter_)
+    , executor(executor_)
     , start_ts(start_ts_)
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
