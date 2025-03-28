@@ -159,7 +159,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         snapshot.detailInfo(),
         curr_replayed_rows,
         curr_replayed_deletes,
-        sw_total.elapsed() / 1000000);
+        sw_total.elapsedMilliseconds());
 
     return base_versions;
 }
