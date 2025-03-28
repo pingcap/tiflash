@@ -245,6 +245,11 @@ public:
     {
         throw Exception("updateHashWithValues is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
+    void updateHashWithValues(size_t, size_t, IColumn::HashValues &, const TiDB::TiDBCollatorPtr &, String &)
+        const override
+    {
+        throw Exception("updateHashWithValues is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
 
     void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &) const override
     {

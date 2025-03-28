@@ -391,12 +391,27 @@ void ColumnFixedString::updateHashWithValue(size_t index, SipHash & hash, const 
     hash.update(reinterpret_cast<const char *>(&chars[n * index]), n);
 }
 
-void ColumnFixedString::updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)
-    const
+void ColumnFixedString::updateHashWithValues(
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
 {
-    for (size_t i = 0, sz = chars.size() / n; i < sz; ++i)
+    updateHashWithValues(0, size(), hash_values, collator, sort_key_container);
+}
+
+void ColumnFixedString::updateHashWithValues(
+    size_t start,
+    size_t length,
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr &,
+    String &) const
+{
+    RUNTIME_CHECK(size() >= start + length);
+    RUNTIME_CHECK(hash_values.size() >= length);
+
+    for (size_t i = 0, row = start; i < length; ++i, ++row)
     {
-        hash_values[i].update(reinterpret_cast<const char *>(&chars[n * i]), n);
+        hash_values[i].update(reinterpret_cast<const char *>(&chars[n * row]), n);
     }
 }
 

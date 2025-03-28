@@ -208,6 +208,9 @@ public:
     {}
 
     void updateHashWithValues(IColumn::HashValues &, const TiDB::TiDBCollatorPtr &, String &) const override {}
+    void updateHashWithValues(size_t, size_t, IColumn::HashValues &, const TiDB::TiDBCollatorPtr &, String &)
+        const override
+    {}
 
     void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &) const override {}
     void updateWeakHash32(WeakHash32 &, const TiDB::TiDBCollatorPtr &, String &, const BlockSelective &) const override

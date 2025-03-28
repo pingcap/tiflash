@@ -380,7 +380,7 @@ MockWindowFrame buildDefaultRowsFrame();
 #define Count(expr) makeASTFunction("count", (expr))
 #define Sum(expr) makeASTFunction("sum", (expr))
 #define Avg(expr) makeASTFunction("avg", (expr))
-#define CountDistinct(expr) makeASTFunction("countDistinct", (expr))
+#define CountDistinct(expr) makeASTFunction("uniqExact", (expr))
 
 /// Window functions
 #define RowNumber() makeASTFunction("RowNumber")
