@@ -21,14 +21,35 @@
 
 namespace DB
 {
-std::pair<bool, Block> CTE::tryGetBlockAt(size_t idx)
+FetchStatus CTE::checkAvailableBlockAt(size_t idx)
+{
+    std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+    auto block_num = this->blocks.size(); // TODO consider spill
+    if (block_num <= idx)
+    {
+        if (this->is_eof)
+            return FetchStatus::Eof;
+        else
+            return FetchStatus::Waiting;
+    }
+    // TODO handle FetchStatus::Cancelled
+    return FetchStatus::Ok;
+}
+    
+std::pair<FetchStatus, Block> CTE::tryGetBlockAt(size_t idx)
 {
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
     auto block_num = this->blocks.size(); // TODO maybe blocks are in disk
     if (block_num <= idx)
-        return {this->is_eof, Block()};
+    {
+        if (this->is_eof)
+            return {FetchStatus::Eof, Block()};
+        else
+            return {FetchStatus::Waiting, Block()};
+    }
+    // TODO handle error and cancel
     // TODO maybe fetch block from disk
-    return {false, this->blocks[idx]};
+    return {FetchStatus::Ok, this->blocks[idx]};
 }
 
 void CTE::pushBlock(const Block & block)
@@ -42,5 +63,18 @@ void CTE::notifyEOF()
 {
     std::unique_lock<std::shared_mutex> lock(this->rw_lock);
     this->is_eof = true;
+}
+
+void CTE::registerTask(TaskPtr && task)
+{
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        if (!this->hasDataNoLock())
+        {
+            pipe_cv.registerTask(std::move(task));
+            return;
+        }
+    }
+    this->pipe_cv.notifyTaskDirectly(std::move(task));
 }
 } // namespace DB

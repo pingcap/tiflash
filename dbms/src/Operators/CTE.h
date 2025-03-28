@@ -16,23 +16,46 @@
 
 #include <Core/Block.h>
 #include <Common/RWLock.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 
 #include <shared_mutex>
 #include <utility>
 
 namespace DB
 {
-class CTE
+enum class FetchStatus
+{
+    Ok,
+    Waiting,
+    Eof,
+    Cancelled
+};
+
+class CTE : public NotifyFuture
 {
 public:
-    std::pair<bool, Block> tryGetBlockAt(size_t idx);
+    std::pair<FetchStatus, Block> tryGetBlockAt(size_t idx);
+    FetchStatus checkAvailableBlockAt(size_t idx);
     void pushBlock(const Block & block);
     void notifyEOF();
+
+    void registerTask(TaskPtr && task) override;
+
 private:
+    // Return true if CTE has data
+    inline bool hasDataNoLock() const { return !this->blocks.empty() || this->spill_triggered; }
+
     std::shared_mutex rw_lock;
     Blocks blocks;
 
+    // Tasks in WAITING_FOR_NOTIFY are saved in this deque
+    std::deque<TaskPtr> waiting_tasks;
+    PipeConditionVariable pipe_cv;
+
     bool is_eof = false;
+
+    bool spill_triggered = false; // TODO this var may be useless, just a placement so far
     // TODO spill
 };
 } // namespace DB

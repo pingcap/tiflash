@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Operators/CTESinkOp.h>
+#include "Operators/Operator.h"
 
 namespace DB
 {
@@ -23,7 +24,7 @@ void CTESinkOp::operateSuffixImpl()
 
 OperatorStatus CTESinkOp::writeImpl(Block && block)
 {
-    this->cte->pushBlock(block);
-    return 
+    this->cte->pushBlock(block); // TODO handle spill
+    return OperatorStatus::NEED_INPUT;
 }
 } // namespace DB

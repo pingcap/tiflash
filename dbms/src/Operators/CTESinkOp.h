@@ -25,8 +25,9 @@ class CTESinkOp : public SinkOp
 public:
     CTESinkOp(
             PipelineExecutorContext & exec_context_,
-            const String & req_id)
-            : SinkOp(exec_context_, req_id)
+            const String & req_id,
+            std::shared_ptr<CTE> cte_)
+            : SinkOp(exec_context_, req_id), cte(cte_)
         {}
 
     String getName() const override { return "CTESinkOp"; }
