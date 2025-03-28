@@ -230,7 +230,7 @@ private:
     // Clipped by rowkey_range
     const ClippedPackRange clipped_pack_range;
     const std::vector<HandleType> clipped_pack_index; // max value of each pack
-    const std::vector<UInt32> clipped_pack_offsets; // row offset of each pack
+    const std::vector<RowID> clipped_pack_offsets; // row offset of each pack inside this file
     std::vector<ColumnPtr> clipped_handle_packs; // handle column of each pack
     // If clipped_need_read_packs[i] is 1, pack i need to be read.
     // If clipped_need_read_packs is empty, no need to read.
