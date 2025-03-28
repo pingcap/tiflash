@@ -936,8 +936,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_sent_cross_zone, {"type", "sent_cross_zone"}),                                                                         \
       F(type_received_total, {"type", "received_total"}),                                                                           \
       F(type_received_cross_zone, {"type", "received_cross_zone"}))                                                                 \
-    M(tiflash_spill_limiter,                                                                                                        \
-      "Current bytes of spilled files",                                                                                             \
+    M(tiflash_spilled_files,                                                                                                        \
+      "Information about spilled files",                                                                                            \
       Gauge,                                                                                                                        \
       F(type_current_spilled_bytes, {"type", "current_spilled_bytes"}))
 
