@@ -23,7 +23,7 @@ template <ExtraHandleType HandleType>
 HandleType genHandle(Int64 i)
 {
     if constexpr (isCommonHandle<HandleType>())
-        return fmt::format("{:0>{}}", i, 3);
+        return fmt::format("{:0>3}", i);
     else
         return i;
 }
