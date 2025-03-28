@@ -33,7 +33,7 @@ ColumnPtr genColumn()
 {
     MutableColumnPtr col;
     if constexpr (isCommonHandle<HandleType>())
-        col = DataTypeFactory::instance().getOrSet("String")->createColumn();
+        col = DataTypeFactory::instance().getOrSet(DataTypeString::getDefaultName())->createColumn();
     else
         col = DataTypeFactory::instance().getOrSet("Int64")->createColumn();
 
