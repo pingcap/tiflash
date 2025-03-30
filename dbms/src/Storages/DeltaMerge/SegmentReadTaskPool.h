@@ -15,6 +15,7 @@
 #pragma once
 #include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
@@ -175,7 +176,10 @@ public:
 
     std::once_flag & addToSchedulerFlag() { return add_to_scheduler; }
 
-    void registerTask(TaskPtr && task) override { q.registerPipeTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ);
+    }
 
 public:
     const uint64_t pool_id;

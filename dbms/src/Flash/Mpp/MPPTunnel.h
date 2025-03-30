@@ -28,6 +28,7 @@
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/StringRef.h>
 #include <common/defines.h>
@@ -119,7 +120,6 @@ public:
     virtual bool finish() = 0;
 
     virtual bool isWritable() const = 0;
-    virtual void notifyNextPipelineWriter() = 0;
 
     void consumerFinish(const String & err_msg);
     String getConsumerFinishMsg() { return consumer_state.getMsg(); }
@@ -198,9 +198,10 @@ public:
 
     bool isWritable() const override { return send_queue.isWritable(); }
 
-    void notifyNextPipelineWriter() override { send_queue.notifyNextPipelineWriter(); }
-
-    void registerTask(TaskPtr && task) override { send_queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        send_queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
+    }
 
 private:
     friend class tests::TestMPPTunnel;
@@ -252,8 +253,6 @@ public:
 
     bool isWritable() const override { return queue.isWritable(); }
 
-    void notifyNextPipelineWriter() override { queue.notifyNextPipelineWriter(); }
-
     void cancelWith(const String & reason) override { queue.cancelWith(reason); }
 
     const String & getCancelReason() const { return queue.getCancelReason(); }
@@ -265,7 +264,10 @@ public:
 
     void subDataSizeMetric(size_t size) { ::DB::MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, size); }
 
-    void registerTask(TaskPtr && task) override { queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
+    }
 
 private:
     GRPCSendQueue<TrackedMppDataPacketPtr> queue;
@@ -324,25 +326,14 @@ public:
         }
     }
 
-    void notifyNextPipelineWriter() override
-    {
-        if constexpr (local_only)
-            local_request_handler.notifyNextPipelineWriter();
-        else
-        {
-            std::lock_guard lock(mu);
-            local_request_handler.notifyNextPipelineWriter();
-        }
-    }
-
     void registerTask(TaskPtr && task) override
     {
         if constexpr (local_only)
-            local_request_handler.registerPipeWriteTask(std::move(task));
+            local_request_handler.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
         else
         {
             std::lock_guard lock(mu);
-            local_request_handler.registerPipeWriteTask(std::move(task));
+            local_request_handler.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
         }
     }
 
@@ -439,9 +430,11 @@ public:
     bool finish() override { return send_queue.finish(); }
 
     bool isWritable() const override { return send_queue.isWritable(); }
-    void notifyNextPipelineWriter() override { send_queue.notifyNextPipelineWriter(); }
 
-    void registerTask(TaskPtr && task) override { send_queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        send_queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
+    }
 
 private:
     bool cancel_reason_sent = false;
@@ -518,12 +511,6 @@ public:
     // ```
     WaitResult waitForWritable() const;
     void forceWrite(TrackedMppDataPacketPtr && data);
-
-    void notifyNextPipelineWriter()
-    {
-        assert(tunnel_sender != nullptr);
-        tunnel_sender->notifyNextPipelineWriter();
-    }
 
     // finish the writing, and wait until the sender finishes.
     void writeDone();

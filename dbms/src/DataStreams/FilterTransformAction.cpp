@@ -102,16 +102,18 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
         *  and now - are calculated. That is, not all cases are covered by the code above.
         * This happens if the function returns a constant for a non-constant argument.
         * For example, `ignore` function.
+        * use a local variable to avoid the case that function return a constant for a non-constant argument in one block
+        * but return a non-constant for the same argument in another block.
         */
-    constant_filter_description = ConstantFilterDescription(*column_of_filter);
+    auto current_constant_filter_description = ConstantFilterDescription(*column_of_filter);
 
-    if (constant_filter_description.always_false)
+    if (current_constant_filter_description.always_false)
     {
         block.clear();
         return true;
     }
 
-    if (constant_filter_description.always_true)
+    if (current_constant_filter_description.always_true)
     {
         if (return_filter)
             res_filter = nullptr;
@@ -140,7 +142,7 @@ bool FilterTransformAction::transform(Block & block, FilterPtr & res_filter, boo
     if (filtered_rows == rows)
     {
         /// Replace the column with the filter by a constant.
-        auto filter_column = block.safeGetByPosition(filter_column_position);
+        auto & filter_column = block.safeGetByPosition(filter_column_position);
         filter_column.column = filter_column.type->createColumnConst(filtered_rows, static_cast<UInt64>(1));
         /// No need to touch the rest of the columns.
         return true;

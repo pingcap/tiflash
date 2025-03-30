@@ -58,8 +58,7 @@ struct CopStreamWriter
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");
     }
-    static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
-    static void notifyNextPipelineWriter() {}
+    static WaitResult waitForWritable() { return WaitResult::Ready; }
 };
 
 struct BatchCopStreamWriter
@@ -83,8 +82,7 @@ struct BatchCopStreamWriter
         if (!writer->Write(resp))
             throw Exception("Failed to write resp");
     }
-    static WaitResult waitForWritable() { throw Exception("Unsupport async write"); }
-    static void notifyNextPipelineWriter() {}
+    static WaitResult waitForWritable() { return WaitResult::Ready; }
 };
 
 using CopStreamWriterPtr = std::shared_ptr<CopStreamWriter>;

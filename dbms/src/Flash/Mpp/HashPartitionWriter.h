@@ -38,20 +38,12 @@ public:
         MPPDataPacketVersion data_codec_version_,
         tipb::CompressionMode compression_mode_);
     WaitResult waitForWritable() const override;
-
-protected:
-    bool doWrite(const Block & block) override;
-    bool doFlush() override;
-    void notifyNextPipelineWriter() override;
-
+    WriteResult write(const Block & block) override;
+    WriteResult flush() override;
 
 private:
-    bool writeImpl(const Block & block);
-    bool writeImplV1(const Block & block);
     void partitionAndWriteBlocks();
     void partitionAndWriteBlocksV1();
-
-    void writePartitionBlocks(std::vector<Blocks> & partition_blocks);
 
 private:
     Int64 batch_send_min_limit;
