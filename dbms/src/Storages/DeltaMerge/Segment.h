@@ -27,9 +27,9 @@
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
-
 namespace DB
 {
 struct GeneralCancelHandle;
@@ -837,6 +837,8 @@ public:
 
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;
+
+    GenericVersionChain version_chain;
 };
 
 void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info);

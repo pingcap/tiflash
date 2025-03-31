@@ -31,6 +31,9 @@ namespace DB
 {
 namespace FailPoints
 {
+extern const char random_join_prob_failpoint[];
+extern const char exception_mpp_hash_build[];
+extern const char exception_mpp_hash_probe[];
 extern const char force_join_v2_probe_enable_lm[];
 extern const char force_join_v2_probe_disable_lm[];
 } // namespace FailPoints
@@ -404,6 +407,7 @@ bool HashJoin::finishOneBuildRow(size_t stream_index)
         wd.all_size);
     if (active_build_worker.fetch_sub(1) == 1)
     {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_build);
         workAfterBuildRowFinish();
         return true;
     }
@@ -423,7 +427,12 @@ bool HashJoin::finishOneProbe(size_t stream_index)
         wd.replicate_time / 1000000UL,
         wd.other_condition_time / 1000000UL,
         wd.collision);
-    return active_probe_worker.fetch_sub(1) == 1;
+    if (active_probe_worker.fetch_sub(1) == 1)
+    {
+        FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
+        return true;
+    }
+    return false;
 }
 
 void HashJoin::workAfterBuildRowFinish()
@@ -436,7 +445,6 @@ void HashJoin::workAfterBuildRowFinish()
     for (size_t i = 0; i < build_concurrency; ++i)
         enable_tagged_pointer &= build_workers_data[i].enable_tagged_pointer;
 
-    Stopwatch watch;
     pointer_table.init(
         method,
         all_build_row_count,
@@ -464,15 +472,12 @@ void HashJoin::workAfterBuildRowFinish()
     fiu_do_on(FailPoints::force_join_v2_probe_disable_lm, { late_materialization = false; });
     join_probe_helper = std::make_unique<JoinProbeBlockHelper>(this, late_materialization);
 
-    LOG_DEBUG(
+    LOG_INFO(
         log,
-        "allocate pointer table and init join probe helper cost {}ms, rows {}, pointer table size {}, "
-        "added column num {}, enable prefetch {}, enable tagged pointer {}, "
-        "enable late materialization {}(avg size {})",
-        watch.elapsedMilliseconds(),
+        "finish build row and allocate pointer table, rows {}, pointer table size {}, enable (prefetch {}, tagged "
+        "pointer {}, lm {}(avg size {}))",
         all_build_row_count,
         pointer_table.getPointerTableSize(),
-        right_sample_block_pruned.columns(),
         pointer_table.enableProbePrefetch(),
         pointer_table.enableTaggedPointer(),
         late_materialization,
@@ -599,6 +604,8 @@ Block HashJoin::probeBlock(JoinProbeContext & context, size_t stream_index)
         left_sample_block_pruned,
         collators,
         row_layout);
+
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
 
     auto & wd = probe_workers_data[stream_index];
     Block res = join_probe_helper->probe(context, wd);

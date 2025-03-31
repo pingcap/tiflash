@@ -99,14 +99,16 @@ public:
             return *this;
         }
 
-        Iterator operator++(int)
+        Iterator operator++(int) & // NOLINT(cert-dcl21-cpp)
         {
+            // https://stackoverflow.com/questions/66465402/clang-tidy-is-ambiguous-what-should-operatorint-return
+            // https://stackoverflow.com/questions/52871026/overloaded-operator-returns-a-non-const-and-clang-tidy-complains
             Iterator tmp = *this;
             ++pos;
             return tmp;
         }
 
-        Iterator operator--(int)
+        Iterator operator--(int) & // NOLINT(cert-dcl21-cpp)
         {
             Iterator tmp = *this;
             --pos;

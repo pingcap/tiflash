@@ -110,7 +110,7 @@ void BitmapFilter::logicalOr(const BitmapFilter & other)
         all_match = true;
         return;
     }
-    for (UInt32 i = 0; i < filter.size(); i++)
+    for (UInt32 i = 0; i < filter.size(); ++i)
     {
         filter[i] = filter[i] || other.filter[i];
     }
@@ -128,10 +128,16 @@ void BitmapFilter::logicalAnd(const BitmapFilter & other)
         all_match = other.all_match;
         return;
     }
-    for (UInt32 i = 0; i < filter.size(); i++)
+    for (UInt32 i = 0; i < filter.size(); ++i)
     {
         filter[i] = filter[i] && other.filter[i];
     }
+    all_match = all_match && other.all_match;
+}
+
+void BitmapFilter::append(const BitmapFilter & other)
+{
+    filter.insert(filter.end(), other.filter.cbegin(), other.filter.cend());
     all_match = all_match && other.all_match;
 }
 
@@ -143,14 +149,14 @@ void BitmapFilter::runOptimize()
 String BitmapFilter::toDebugString() const
 {
     String s(filter.size(), '1');
-    for (UInt32 i = 0; i < filter.size(); i++)
+    for (UInt32 i = 0; i < filter.size(); ++i)
     {
         if (!filter[i])
         {
             s[i] = '0';
         }
     }
-    return fmt::format("{}", s);
+    return s;
 }
 
 size_t BitmapFilter::count() const
