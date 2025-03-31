@@ -271,7 +271,7 @@ LocalIndexInfosPtr PBToLocalIndexInfos(const google::protobuf::RepeatedPtrField<
             const auto & ann_query_info = idx.ann_query_info();
             local_index_infos->emplace_back(LocalIndexInfo(
                 ann_query_info.index_id(),
-                ann_query_info.column_id(),
+                ann_query_info.deprecated_column_id(),
                 TiDB::VectorIndexDefinitionPtr()));
             break;
         }
