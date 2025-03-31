@@ -84,7 +84,7 @@ public:
         const SelectQueryInfo & query_info,
         const ColumnDefines & columns_to_read,
         const ColumnDefines & table_column_defines,
-        const LocalIndexInfosSnapshot & local_index_infos,
+        const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & used_indexes,
         const Context & context,
         const LoggerPtr & tracing_logger);
 

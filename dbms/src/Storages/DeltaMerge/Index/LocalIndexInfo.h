@@ -64,8 +64,6 @@ struct LocalIndexInfo
 };
 
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
-LocalIndexInfosPtr PBToLocalIndexInfos(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & indexes);
-
 class LocalIndexInfosChangeset
 {
 public:

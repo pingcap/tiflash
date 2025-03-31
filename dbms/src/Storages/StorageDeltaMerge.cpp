@@ -850,7 +850,8 @@ BlockInputStreams StorageDeltaMerge::read(
         query_info,
         columns_to_read,
         store->getTableColumns(),
-        query_info.dag_query ? query_info.dag_query->used_indexes : nullptr,
+        query_info.dag_query ? query_info.dag_query->used_indexes
+                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
         context,
         tracing_logger);
 
@@ -939,7 +940,8 @@ void StorageDeltaMerge::read(
         query_info,
         columns_to_read,
         store->getTableColumns(),
-        query_info.dag_query ? query_info.dag_query->used_indexes : nullptr,
+        query_info.dag_query ? query_info.dag_query->used_indexes
+                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
         context,
         tracing_logger);
 

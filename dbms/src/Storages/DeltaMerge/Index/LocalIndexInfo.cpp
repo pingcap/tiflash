@@ -259,39 +259,4 @@ String LocalIndexInfosChangeset::toString() const
     return buf.toString();
 }
 
-LocalIndexInfosPtr PBToLocalIndexInfos(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & indexes)
-{
-    auto local_index_infos = std::make_shared<LocalIndexInfos>();
-    for (const auto & idx : indexes)
-    {
-        switch (idx.index_type())
-        {
-        case tipb::ColumnarIndexType::TypeVector:
-        {
-            const auto & ann_query_info = idx.ann_query_info();
-            local_index_infos->emplace_back(LocalIndexInfo(
-                ann_query_info.index_id(),
-                ann_query_info.deprecated_column_id(),
-                TiDB::VectorIndexDefinitionPtr()));
-            break;
-        }
-        case tipb::ColumnarIndexType::TypeInverted:
-        {
-            const auto & inverted_query_info = idx.invert_query_info();
-            local_index_infos->emplace_back(LocalIndexInfo(
-                inverted_query_info.index_id(),
-                inverted_query_info.column_id(),
-                TiDB::InvertedIndexDefinitionPtr()));
-            break;
-        }
-        default:
-            throw Exception(
-                ErrorCodes::LOGICAL_ERROR,
-                "Unsupported columnar index type: {}",
-                tipb::ColumnarIndexType_Name(idx.index_type()));
-        }
-    }
-    return local_index_infos;
-}
-
 } // namespace DB::DM

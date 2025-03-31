@@ -34,15 +34,19 @@ public:
         return minMaxCheckCmp<RoughCheck::CheckEqual>(start_pack, pack_count, param, attr, value);
     }
 
-    ColumnRangePtr buildSets(const LocalIndexInfosSnapshot & index_info) override
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_info) override
     {
         if (auto set = IntegerSet::createValueSet(attr.type, {value}); set)
         {
-            auto iter = std::find_if(index_info->begin(), index_info->end(), [&](const auto & info) {
-                return info.column_id == attr.col_id && info.kind == TiDB::ColumnarIndexKind::Inverted;
+            auto iter = std::find_if(index_info.begin(), index_info.end(), [&](const auto & info) {
+                return info.index_type() == tipb::ColumnarIndexType::TypeInverted
+                    && info.invert_query_info().column_id() == attr.col_id;
             });
-            if (iter != index_info->end())
-                return SingleColumnRange::create(iter->column_id, iter->index_id, set);
+            if (iter != index_info.end())
+                return SingleColumnRange::create(
+                    iter->invert_query_info().column_id(),
+                    iter->invert_query_info().index_id(),
+                    set);
         }
         return UnsupportedColumnRange::create();
     }

@@ -149,6 +149,16 @@ try
     const auto snapshot = std::make_shared<const LocalIndexInfos>(index_infos);
     cols->emplace_back(integer_cd);
 
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
+    {
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_invert_query_info();
+        inverted->set_index_id(1);
+        inverted->set_column_id(integer_column_id);
+        used_indexes.Add(std::move(columnar_info));
+    }
+
     // Prepare DMFile
     {
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
@@ -179,7 +189,7 @@ try
     {
         Attr attr{.col_name = integer_cd.name, .col_id = integer_cd.id, .type = integer_cd.type};
         auto rs_operator = createGreater(attr, Field(static_cast<UInt64>(1)));
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -190,7 +200,7 @@ try
     {
         Attr attr{.col_name = integer_cd.name, .col_id = integer_cd.id, .type = integer_cd.type};
         auto rs_operator = createLess(attr, Field(static_cast<UInt64>(7)));
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -201,7 +211,7 @@ try
     {
         Attr attr{.col_name = integer_cd.name, .col_id = integer_cd.id, .type = integer_cd.type};
         auto rs_operator = createEqual(attr, Field(static_cast<UInt64>(6)));
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -214,7 +224,7 @@ try
         auto rs_operator1 = createGreater(attr, Field(static_cast<UInt64>(1)));
         auto rs_operator2 = createLess(attr, Field(static_cast<UInt64>(10)));
         auto rs_operator = createAnd({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -227,7 +237,7 @@ try
         auto rs_operator1 = createGreater(attr, Field(static_cast<UInt64>(5)));
         auto rs_operator2 = createUnsupported("unsupported");
         auto rs_operator = createAnd({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -240,7 +250,7 @@ try
         auto rs_operator1 = createGreater(attr, Field(static_cast<UInt64>(1)));
         auto rs_operator2 = createUnsupported("unsupported");
         auto rs_operator = createOr({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -278,6 +288,24 @@ try
     };
     const auto snapshot = std::make_shared<const LocalIndexInfos>(index_infos);
 
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
+    {
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_invert_query_info();
+        inverted->set_index_id(1);
+        inverted->set_column_id(integer_cd_1.id);
+        used_indexes.Add(std::move(columnar_info));
+    }
+    {
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_invert_query_info();
+        inverted->set_index_id(2);
+        inverted->set_column_id(integer_cd_2.id);
+        used_indexes.Add(std::move(columnar_info));
+    }
+
     // Prepare DMFile
     {
         auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
@@ -314,7 +342,7 @@ try
         auto rs_operator1 = createGreater(attr_1, Field(static_cast<UInt64>(1)));
         auto rs_operator2 = createLess(attr_2, Field(static_cast<Int64>(7)));
         auto rs_operator = createAnd({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -328,7 +356,7 @@ try
         auto rs_operator1 = createGreater(attr_1, Field(static_cast<UInt64>(5)));
         auto rs_operator2 = createLess(attr_2, Field(static_cast<Int64>(7)));
         auto rs_operator = createOr({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -342,7 +370,7 @@ try
         auto rs_operator1 = createGreater(attr_1, Field(static_cast<UInt64>(10)));
         auto rs_operator2 = createLess(attr_2, Field(static_cast<Int64>(7)));
         auto rs_operator = createAnd({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -356,7 +384,7 @@ try
         auto rs_operator1 = createLess(attr_1, Field(static_cast<UInt64>(1)));
         auto rs_operator2 = createGreater(attr_2, Field(static_cast<Int64>(1)));
         auto rs_operator = createOr({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -371,7 +399,7 @@ try
         auto rs_operator2 = createEqual(attr_2, Field(static_cast<UInt64>(6)));
         auto rs_operator3 = createUnsupported("unsupported");
         auto rs_operator = createAnd({rs_operator1, rs_operator2, rs_operator3});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         InvertedIndexReaderFromDMFile reader(column_range, dm_file, dbContext().getLightLocalIndexCache());
         auto bitmap = reader.load();
@@ -526,6 +554,16 @@ try
     const auto snapshot = std::make_shared<const LocalIndexInfos>(index_infos);
     cols->emplace_back(integer_cd);
 
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
+    {
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_invert_query_info();
+        inverted->set_index_id(1);
+        inverted->set_column_id(integer_column_id);
+        used_indexes.Add(std::move(columnar_info));
+    }
+
     // Prepare ColumnFilePersistedSet
     ColumnFilePersisteds persisted_files;
     {
@@ -561,7 +599,7 @@ try
     {
         Attr attr{.col_name = integer_cd.name, .col_id = integer_cd.id, .type = integer_cd.type};
         auto rs_operator = createGreater(attr, Field(static_cast<UInt64>(1)));
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)
@@ -582,7 +620,7 @@ try
     {
         Attr attr{.col_name = integer_cd.name, .col_id = integer_cd.id, .type = integer_cd.type};
         auto rs_operator = createLess(attr, Field(static_cast<UInt64>(7)));
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)
@@ -603,7 +641,7 @@ try
     {
         Attr attr{.col_name = integer_cd.name, .col_id = integer_cd.id, .type = integer_cd.type};
         auto rs_operator = createEqual(attr, Field(static_cast<UInt64>(6)));
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)
@@ -626,7 +664,7 @@ try
         auto rs_operator1 = createGreater(attr, Field(static_cast<UInt64>(1)));
         auto rs_operator2 = createLess(attr, Field(static_cast<UInt64>(10)));
         auto rs_operator = createAnd({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)
@@ -649,7 +687,7 @@ try
         auto rs_operator1 = createGreater(attr, Field(static_cast<UInt64>(5)));
         auto rs_operator2 = createUnsupported("unsupported");
         auto rs_operator = createAnd({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)
@@ -672,7 +710,7 @@ try
         auto rs_operator1 = createGreater(attr, Field(static_cast<UInt64>(1)));
         auto rs_operator2 = createUnsupported("unsupported");
         auto rs_operator = createOr({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)
@@ -720,6 +758,24 @@ try
     };
     const auto snapshot = std::make_shared<const LocalIndexInfos>(index_infos);
 
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
+    {
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_invert_query_info();
+        inverted->set_index_id(1);
+        inverted->set_column_id(integer_cd_1.id);
+        used_indexes.Add(std::move(columnar_info));
+    }
+    {
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_invert_query_info();
+        inverted->set_index_id(2);
+        inverted->set_column_id(integer_cd_2.id);
+        used_indexes.Add(std::move(columnar_info));
+    }
+
     // Prepare ColumnFilePersistedSet
     ColumnFilePersisteds persisted_files;
     {
@@ -761,7 +817,7 @@ try
         auto rs_operator1 = createGreater(attr_1, Field(static_cast<UInt64>(1)));
         auto rs_operator2 = createLess(attr_2, Field(static_cast<Int64>(7)));
         auto rs_operator = createAnd({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)
@@ -785,7 +841,7 @@ try
         auto rs_operator1 = createGreater(attr_1, Field(static_cast<UInt64>(5)));
         auto rs_operator2 = createLess(attr_2, Field(static_cast<Int64>(7)));
         auto rs_operator = createOr({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)
@@ -809,7 +865,7 @@ try
         auto rs_operator1 = createGreater(attr_1, Field(static_cast<UInt64>(10)));
         auto rs_operator2 = createLess(attr_2, Field(static_cast<Int64>(7)));
         auto rs_operator = createAnd({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)
@@ -833,7 +889,7 @@ try
         auto rs_operator1 = createLess(attr_1, Field(static_cast<UInt64>(1)));
         auto rs_operator2 = createGreater(attr_2, Field(static_cast<Int64>(1)));
         auto rs_operator = createOr({rs_operator1, rs_operator2});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)
@@ -858,7 +914,7 @@ try
         auto rs_operator2 = createEqual(attr_2, Field(static_cast<UInt64>(6)));
         auto rs_operator3 = createUnsupported("unsupported");
         auto rs_operator = createAnd({rs_operator1, rs_operator2, rs_operator3});
-        auto column_range = rs_operator->buildSets(snapshot);
+        auto column_range = rs_operator->buildSets(used_indexes);
 
         BitmapFilter bitmap_filter(0, false);
         for (const auto & tiny_file : tiny_files)

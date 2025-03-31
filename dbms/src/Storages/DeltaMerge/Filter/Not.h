@@ -35,7 +35,7 @@ public:
         return results;
     }
 
-    ColumnRangePtr buildSets(const LocalIndexInfosSnapshot & index_info) override
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_info) override
     {
         auto sets = children[0]->buildSets(index_info);
         return sets->invert();

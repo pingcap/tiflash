@@ -260,24 +260,36 @@ try
 }
 CATCH
 
-// Split the large test case into two parts to avoid long running time.
+// Split the large test case into multiple parts to avoid long running time.
 
 TEST(InvertedIndex, Large1)
 try
 {
     InvertedIndexTest<UInt8>::LargeTestCase::run();
-    InvertedIndexTest<UInt16>::LargeTestCase::run();
-    InvertedIndexTest<UInt32>::LargeTestCase::run();
-    InvertedIndexTest<UInt64>::LargeTestCase::run();
+    InvertedIndexTest<Int8>::LargeTestCase::run();
 }
 CATCH
 
 TEST(InvertedIndex, Large2)
 try
 {
-    InvertedIndexTest<Int8>::LargeTestCase::run();
+    InvertedIndexTest<UInt16>::LargeTestCase::run();
     InvertedIndexTest<Int16>::LargeTestCase::run();
+}
+CATCH
+
+TEST(InvertedIndex, Large3)
+try
+{
+    InvertedIndexTest<UInt32>::LargeTestCase::run();
     InvertedIndexTest<Int32>::LargeTestCase::run();
+}
+CATCH
+
+TEST(InvertedIndex, Large4)
+try
+{
+    InvertedIndexTest<UInt64>::LargeTestCase::run();
     InvertedIndexTest<Int64>::LargeTestCase::run();
 }
 CATCH

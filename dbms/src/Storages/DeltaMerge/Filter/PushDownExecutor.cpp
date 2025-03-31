@@ -179,7 +179,7 @@ PushDownExecutorPtr PushDownExecutor::build(
     const SelectQueryInfo & query_info,
     const ColumnDefines & columns_to_read,
     const ColumnDefines & table_column_defines,
-    const LocalIndexInfosSnapshot & local_index_infos,
+    const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & used_indexes,
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
@@ -196,7 +196,7 @@ PushDownExecutorPtr PushDownExecutor::build(
         context.getSettingsRef().dt_enable_rough_set_filter,
         tracing_logger);
     // build column_range
-    const auto column_range = rs_operator && local_index_infos ? rs_operator->buildSets(local_index_infos) : nullptr;
+    const auto column_range = rs_operator && used_indexes.empty() ? rs_operator->buildSets(used_indexes) : nullptr;
     // build ann_query_info
     ANNQueryInfoPtr ann_query_info = nullptr;
     if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)

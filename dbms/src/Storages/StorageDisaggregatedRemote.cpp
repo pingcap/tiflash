@@ -502,10 +502,10 @@ std::tuple<DM::RSOperatorPtr, DM::ColumnRangePtr> StorageDisaggregated::buildRSO
         db_context.getTimezoneInfo());
     const auto rs_operator
         = DM::RSOperator::build(dag_query, table_scan.getColumns(), *columns_to_read, enable_rs_filter, log);
-    const auto & local_index_infos = dag_query->used_indexes;
+    const auto & used_indexes = dag_query->used_indexes;
 
     // build column_range
-    const auto column_range = rs_operator && local_index_infos ? rs_operator->buildSets(local_index_infos) : nullptr;
+    const auto column_range = rs_operator && used_indexes.empty() ? rs_operator->buildSets(used_indexes) : nullptr;
     return {rs_operator, column_range};
 }
 

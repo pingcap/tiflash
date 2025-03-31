@@ -47,7 +47,7 @@ public:
     // f = f + other
     void append(const BitmapFilter & other);
     // all_of(filter[start, start+limit), false)
-    bool isAllNotMatch(size_t offset, size_t limit) const;
+    bool isAllNotMatch(size_t start, size_t limit) const;
 
     void runOptimize();
 

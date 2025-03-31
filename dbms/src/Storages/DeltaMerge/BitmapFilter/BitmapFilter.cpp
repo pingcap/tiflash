@@ -141,13 +141,14 @@ void BitmapFilter::append(const BitmapFilter & other)
     all_match = all_match && other.all_match;
 }
 
-bool BitmapFilter::isAllNotMatch(size_t offset, size_t limit) const
+bool BitmapFilter::isAllNotMatch(size_t start, size_t limit) const
 {
     if (all_match)
     {
         return false;
     }
-    return std::all_of(filter.cbegin() + offset, filter.cbegin() + offset + limit, [](const auto a) { return !a; });
+    assert(start + limit <= filter.size());
+    return std::all_of(filter.cbegin() + start, filter.cbegin() + start + limit, [](const auto a) { return !a; });
 }
 
 void BitmapFilter::runOptimize()
