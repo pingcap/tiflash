@@ -20,6 +20,7 @@
 #include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
 #include <gtest/gtest.h>
+#include <tipb/executor.pb.h>
 
 #include <optional>
 
@@ -322,6 +323,72 @@ try
 }
 CATCH
 
+tipb::WindowFrameBound makeTiPBWindowBound(WindowFrame::BoundaryType type, UInt64 offset, bool preceding)
+{
+    tipb::WindowFrameBound bound;
+    bound.set_unbounded(false);
+    if (preceding)
+        bound.set_type(tipb::WindowBoundType::Preceding);
+    else
+        bound.set_type(tipb::WindowBoundType::Following);
+
+    switch (type)
+    {
+    case WindowFrame::BoundaryType::Current:
+        bound.set_type(tipb::WindowBoundType::CurrentRow);
+        break;
+    case WindowFrame::BoundaryType::Offset:
+        bound.set_offset(offset);
+        break;
+    case WindowFrame::BoundaryType::Unbounded:
+        bound.set_unbounded(true);
+        break;
+    }
+    return bound;
+}
+
+tipb::WindowFrame makeTiPBWindowFrame(
+    const WindowFrame::FrameType type,
+    const WindowFrame::BoundaryType begin_type,
+    const UInt64 begin_offset,
+    const bool begin_preceding,
+    const WindowFrame::BoundaryType end_type,
+    const UInt64 end_offset,
+    const bool end_preceding)
+{
+    tipb::WindowFrame frame;
+    switch (type)
+    {
+    case WindowFrame::FrameType::Rows:
+        frame.set_type(tipb::WindowFrameType::Rows);
+        break;
+    case WindowFrame::FrameType::Ranges:
+        frame.set_type(tipb::WindowFrameType::Ranges);
+        break;
+    default:
+        throw Exception("Invalid frame type");
+    }
+    (*frame.mutable_start()) = makeTiPBWindowBound(begin_type, begin_offset, begin_preceding);
+    (*frame.mutable_end()) = makeTiPBWindowBound(end_type, end_offset, end_preceding);
+    return frame;
+}
+
+WindowFrame makeWindowFrame(
+    const WindowFrame::FrameType type,
+    const WindowFrame::BoundaryType begin_type,
+    const UInt64 begin_offset,
+    const bool begin_preceding,
+    const WindowFrame::BoundaryType end_type,
+    const UInt64 end_offset,
+    const bool end_preceding)
+{
+    WindowFrame frame;
+    setWindowFrameImpl(
+        frame,
+        makeTiPBWindowFrame(type, begin_type, begin_offset, begin_preceding, end_type, end_offset, end_preceding));
+    return frame;
+}
+
 TEST_F(WindowAggFuncTest, initNeedDecrease)
 try
 {
@@ -330,10 +397,13 @@ try
     desc.initNeedDecrease(true);
     ASSERT_FALSE(desc.need_decrease);
 
+    tipb::WindowFrame w;
+    tipb::WindowFrameBound b;
+
     std::vector<WindowFrame::FrameType> frame_types;
     for (auto type : frame_types)
     {
-        desc.frame = WindowFrame(
+        desc.frame = makeWindowFrame(
             type,
             WindowFrame::BoundaryType::Unbounded,
             0,
@@ -344,7 +414,7 @@ try
         desc.initNeedDecrease(true);
         ASSERT_FALSE(desc.need_decrease);
 
-        desc.frame = WindowFrame(
+        desc.frame = makeWindowFrame(
             type,
             WindowFrame::BoundaryType::Offset,
             0,
@@ -355,7 +425,7 @@ try
         desc.initNeedDecrease(true);
         ASSERT_TRUE(desc.need_decrease);
 
-        desc.frame = WindowFrame(
+        desc.frame = makeWindowFrame(
             type,
             WindowFrame::BoundaryType::Unbounded,
             0,
@@ -366,7 +436,7 @@ try
         desc.initNeedDecrease(true);
         ASSERT_FALSE(desc.need_decrease);
 
-        desc.frame = WindowFrame(
+        desc.frame = makeWindowFrame(
             type,
             WindowFrame::BoundaryType::Current,
             0,
@@ -377,7 +447,7 @@ try
         desc.initNeedDecrease(true);
         ASSERT_TRUE(desc.need_decrease);
 
-        desc.frame = WindowFrame(
+        desc.frame = makeWindowFrame(
             type,
             WindowFrame::BoundaryType::Unbounded,
             0,
@@ -388,7 +458,7 @@ try
         desc.initNeedDecrease(true);
         ASSERT_FALSE(desc.need_decrease);
 
-        desc.frame = WindowFrame(
+        desc.frame = makeWindowFrame(
             type,
             WindowFrame::BoundaryType::Current,
             0,
@@ -400,7 +470,7 @@ try
         ASSERT_FALSE(desc.need_decrease);
     }
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Ranges,
         WindowFrame::BoundaryType::Offset,
         0,
@@ -411,7 +481,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_TRUE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Ranges,
         WindowFrame::BoundaryType::Offset,
         0,
@@ -422,7 +492,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_TRUE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Ranges,
         WindowFrame::BoundaryType::Offset,
         0,
@@ -433,7 +503,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_TRUE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Offset,
         0,
@@ -444,7 +514,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_FALSE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Offset,
         0,
@@ -455,7 +525,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_FALSE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Offset,
         0,
@@ -466,7 +536,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_FALSE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Offset,
         3,
@@ -477,7 +547,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_FALSE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Offset,
         3,
@@ -488,7 +558,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_FALSE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Offset,
         3,
@@ -499,7 +569,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_TRUE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Offset,
         2,
@@ -510,7 +580,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_TRUE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Offset,
         0,
@@ -521,7 +591,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_TRUE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Offset,
         1,
@@ -532,7 +602,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_TRUE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Current,
         0,
@@ -543,7 +613,7 @@ try
     desc.initNeedDecrease(true);
     ASSERT_FALSE(desc.need_decrease);
 
-    desc.frame = WindowFrame(
+    desc.frame = makeWindowFrame(
         WindowFrame::FrameType::Rows,
         WindowFrame::BoundaryType::Offset,
         0,
