@@ -17,6 +17,7 @@
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/ReadIndexWorker.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <kvproto/raft_serverpb.pb.h>
 #include <raft_cmdpb.pb.h>

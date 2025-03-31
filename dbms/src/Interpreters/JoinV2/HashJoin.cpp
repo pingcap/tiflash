@@ -373,7 +373,6 @@ void HashJoin::workAfterBuildRowFinish()
     for (size_t i = 0; i < build_concurrency; ++i)
         enable_tagged_pointer &= build_workers_data[i].enable_tagged_pointer;
 
-    Stopwatch watch;
     pointer_table.init(
         method,
         all_build_row_count,
@@ -381,14 +380,12 @@ void HashJoin::workAfterBuildRowFinish()
         settings.probe_enable_prefetch_threshold,
         enable_tagged_pointer);
 
-    LOG_DEBUG(
+    LOG_INFO(
         log,
-        "allocate pointer table cost {}ms, rows {}, pointer table size {}, added column num {}, enable prefetch {}, "
-        "enable tagged pointer {}",
-        watch.elapsedMilliseconds(),
+        "finish build row and allocate pointer table, rows {}, pointer table size {}, enable (prefetch {}, tagged "
+        "pointer {})",
         all_build_row_count,
         pointer_table.getPointerTableSize(),
-        right_sample_block_pruned.columns(),
         pointer_table.enableProbePrefetch(),
         pointer_table.enableTaggedPointer());
 }

@@ -68,29 +68,6 @@ BlockIO InterpreterDropQuery::execute()
         return {};
     }
 
-    /// Drop temporary table.
-    if (drop.database.empty() || drop.temporary)
-    {
-        StoragePtr table
-            = (context.hasSessionContext() ? context.getSessionContext() : context).tryRemoveExternalTable(drop.table);
-        if (table)
-        {
-            if (drop.database.empty() && !drop.temporary)
-            {
-                LOG_WARNING(
-                    (&Poco::Logger::get("InterpreterDropQuery")),
-                    "It is recommended to use `DROP TEMPORARY TABLE` to delete temporary tables");
-            }
-            table->shutdown();
-            /// If table was already dropped by anyone, an exception will be thrown
-            auto table_lock = table->lockExclusively(context.getCurrentQueryId(), drop.lock_timeout);
-            /// Delete table data
-            table->drop();
-            table->is_dropped = true;
-            return {};
-        }
-    }
-
     String database_name = drop.database.empty() ? current_database : drop.database;
     String database_name_escaped = escapeForFileName(database_name);
 
@@ -223,13 +200,10 @@ BlockIO InterpreterDropQuery::execute()
 }
 
 
-void InterpreterDropQuery::checkAccess(const ASTDropQuery & drop)
+void InterpreterDropQuery::checkAccess(const ASTDropQuery & /*drop*/)
 {
     const Settings & settings = context.getSettingsRef();
-    auto readonly = settings.readonly;
-
-    /// It's allowed to drop temporary tables.
-    if (!readonly || (drop.database.empty() && context.tryGetExternalTable(drop.table) && readonly >= 2))
+    if (!settings.readonly)
     {
         return;
     }

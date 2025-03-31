@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Databases/DatabaseTiFlash.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
@@ -21,7 +22,6 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TMTStorages.h>
 #include <Storages/KVStore/Types.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>

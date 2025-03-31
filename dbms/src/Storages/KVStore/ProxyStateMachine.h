@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/TiFlashBuildInfo.h>
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Interpreters/Settings.h>
@@ -191,7 +192,7 @@ private:
 
 #if SERVERLESS_PROXY == 1
             if (config.has("blacklist_file"))
-                args_map["blacklist-ile"] = config.getString("blacklist_file");
+                args_map["blacklist-file"] = config.getString("blacklist_file");
 #endif
 
             for (auto && [k, v] : args_map)

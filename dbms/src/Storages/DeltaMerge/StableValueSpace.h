@@ -16,6 +16,7 @@
 
 #include <IO/FileProvider/FileProvider_fwd.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
+#include <Storages/DeltaMerge/ConcatSkippableBlockInputStream_fwd.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
@@ -37,6 +38,8 @@ struct WriteBatches;
 
 class StableValueSpace;
 using StableValueSpacePtr = std::shared_ptr<StableValueSpace>;
+
+class DMFileBlockInputStreamBuilder;
 
 class StableValueSpace : public std::enable_shared_from_this<StableValueSpace>
 {
@@ -224,7 +227,8 @@ public:
             }
         }
 
-        SkippableBlockInputStreamPtr getInputStream(
+        template <bool need_row_id = false>
+        ConcatSkippableBlockInputStreamPtr<need_row_id> getInputStream(
             const DMContext & dm_context, //
             const ColumnDefines & read_columns,
             const RowKeyRanges & rowkey_ranges,
@@ -236,23 +240,7 @@ public:
             bool is_fast_scan = false,
             bool enable_del_clean_read = false,
             const std::vector<IdSetPtr> & read_packs = {},
-            bool need_row_id = false);
-
-        SkippableBlockInputStreamPtr tryGetInputStreamWithVectorIndex(
-            const DMContext & dm_context,
-            const ColumnDefines & read_columns,
-            const RowKeyRanges & rowkey_ranges,
-            const ANNQueryInfoPtr & ann_query_info,
-            UInt64 max_data_version,
-            size_t expected_block_size,
-            bool enable_handle_clean_read,
-            ReadTag read_tag,
-            const DMFilePackFilterResults & pack_filter_results,
-            bool is_fast_scan = false,
-            bool enable_del_clean_read = false,
-            const std::vector<IdSetPtr> & read_packs = {},
-            bool need_row_id = false,
-            BitmapFilterPtr bitmap_filter = nullptr);
+            std::function<void(DMFileBlockInputStreamBuilder &)> additional_builder_opt = nullptr);
 
         RowsAndBytes getApproxRowsAndBytes(const DMContext & dm_context, const RowKeyRange & range) const;
 

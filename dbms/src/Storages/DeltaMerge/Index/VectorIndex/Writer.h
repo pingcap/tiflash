@@ -17,6 +17,7 @@
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
 #include <IO/Buffer/WriteBuffer.h>
+#include <Storages/DeltaMerge/Index/LocalIndexWriter.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Writer_fwd.h>
 #include <TiDB/Schema/VectorIndex.h>
 #include <VectorSearch/USearch.h>
@@ -26,69 +27,82 @@ namespace DB::DM
 
 class VectorIndexWriterInternal
 {
+    friend class VectorIndexWriterInMemory;
+    friend class VectorIndexWriterOnDisk;
+
 protected:
     using USearchImplType = unum::usearch::index_dense_gt</* key_at */ UInt32, /* compressed_slot_at */ UInt32>;
-
-    void saveToFile(std::string_view path) const;
-    void saveToBuffer(WriteBuffer & write_buf) const;
 
 public:
     /// The key is the row's offset in the DMFile.
     using Key = UInt32;
-    using ProceedCheckFn = std::function<bool()>;
 
     explicit VectorIndexWriterInternal(const TiDB::VectorIndexDefinitionPtr & definition_);
 
-    virtual ~VectorIndexWriterInternal();
+    ~VectorIndexWriterInternal();
 
+    using ProceedCheckFn = LocalIndexWriter::ProceedCheckFn;
     void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark, ProceedCheckFn should_proceed);
+    void saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) const;
 
 public:
     const TiDB::VectorIndexDefinitionPtr definition;
 
 private:
-    USearchImplType index;
     UInt64 added_rows = 0; // Includes nulls and deletes. Used as the index key.
-
-    mutable double total_duration = 0;
     size_t last_reported_memory_usage = 0;
+    USearchImplType index;
+    mutable double total_duration = 0;
 };
 
-class VectorIndexWriterInMemory : public VectorIndexWriterInternal
+class VectorIndexWriterInMemory : public LocalIndexWriterInMemory
 {
 public:
-    explicit VectorIndexWriterInMemory(const TiDB::VectorIndexDefinitionPtr & definition_)
-        : VectorIndexWriterInternal(definition_)
+    explicit VectorIndexWriterInMemory(IndexID index_id, const TiDB::VectorIndexDefinitionPtr & definition)
+        : LocalIndexWriterInMemory(index_id)
+        , writer(definition)
     {}
 
-    static VectorIndexWriterInMemoryPtr create(const TiDB::VectorIndexDefinitionPtr & definition)
+    void saveToBuffer(WriteBuffer & write_buf) override;
+
+    void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark, ProceedCheckFn should_proceed) override
     {
-        return std::make_shared<VectorIndexWriterInMemory>(definition);
+        writer.addBlock(column, del_mark, should_proceed);
     }
 
-    void finalize(WriteBuffer & write_buf) const { saveToBuffer(write_buf); }
+    void saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) const override { writer.saveFileProps(pb_idx); }
+
+    dtpb::IndexFileKind kind() const override { return dtpb::IndexFileKind::VECTOR_INDEX; }
+
+private:
+    VectorIndexWriterInternal writer;
 };
 
 // FIXME: The building process is still in-memory. Only the index file is saved to disk.
-class VectorIndexWriterOnDisk : public VectorIndexWriterInternal
+class VectorIndexWriterOnDisk : public LocalIndexWriterOnDisk
 {
 public:
-    explicit VectorIndexWriterOnDisk(std::string_view index_file, const TiDB::VectorIndexDefinitionPtr & definition_)
-        : VectorIndexWriterInternal(definition_)
-        , index_file(index_file)
-    {}
-
-    static VectorIndexWriterOnDiskPtr create(
+    explicit VectorIndexWriterOnDisk(
+        IndexID index_id,
         std::string_view index_file,
         const TiDB::VectorIndexDefinitionPtr & definition)
+        : LocalIndexWriterOnDisk(index_id, index_file)
+        , writer(definition)
+    {}
+
+    void saveToFile() const override;
+
+    void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark, ProceedCheckFn should_proceed) override
     {
-        return std::make_shared<VectorIndexWriterOnDisk>(index_file, definition);
+        writer.addBlock(column, del_mark, should_proceed);
     }
 
-    void finalize() const { saveToFile(index_file); }
+    void saveFileProps(dtpb::IndexFilePropsV2 * pb_idx) const override { writer.saveFileProps(pb_idx); }
+
+    dtpb::IndexFileKind kind() const override { return dtpb::IndexFileKind::VECTOR_INDEX; }
 
 private:
-    const std::string index_file;
+    VectorIndexWriterInternal writer;
 };
 
 } // namespace DB::DM

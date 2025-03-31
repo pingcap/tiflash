@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/nocopyable.h>
 #include <IO/BaseFile/fwd.h>
+#include <IO/IOThreadPools.h>
 #include <Interpreters/Settings_fwd.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Server/StorageConfigParser.h>
@@ -53,6 +54,7 @@ public:
         // which must be downloaded to the local disk.
         // So the priority of caching is relatively high
         VectorIndex,
+        InvertedIndex,
         Merged,
         Index,
         Mark, // .mkr, .null.mrk
@@ -228,7 +230,12 @@ public:
                                                                              : nullptr;
     }
 
-    static void shutdown() { global_file_cache_instance = nullptr; }
+    static void shutdown()
+    {
+        // wait for all tasks done
+        S3FileCachePool::shutdown();
+        global_file_cache_instance = nullptr;
+    }
 
     FileCache(PathCapacityMetricsPtr capacity_metrics_, const StorageRemoteCacheConfig & config_);
 
@@ -299,6 +306,7 @@ public:
         0, // Unknow type, currently never cache it.
         8 * 1024, // Estimated size of meta.
         12 * 1024 * 1024, // Estimated size of vector index
+        128 * 1024, // Estimated size of inverted index.
         1 * 1024 * 1024, // Estimated size of merged.
         8 * 1024, // Estimated size of index.
         8 * 1024, // Estimated size of mark.

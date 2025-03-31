@@ -16,7 +16,6 @@
 #include <Client/Connection.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Exception.h>
-#include <Common/ExternalTable.h>
 #include <Common/NetException.h>
 #include <Common/ShellCommand.h>
 #include <Common/Stopwatch.h>
@@ -51,6 +50,7 @@
 #include <Poco/File.h>
 #include <Poco/Util/Application.h>
 #include <WindowFunctions/registerWindowFunctions.h>
+#include <boost_wrapper/program_options.h>
 #include <common/find_symbols.h>
 #include <fcntl.h>
 #include <port/unistd.h>
@@ -59,7 +59,6 @@
 
 #include <algorithm>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/program_options.hpp>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
@@ -178,10 +177,6 @@ private:
 
     size_t written_progress_chars = 0;
     bool written_first_block = false;
-
-    /// External tables info.
-    std::list<ExternalTable> external_tables;
-
 
     struct ConnectionParameters
     {
@@ -734,28 +729,10 @@ private:
         return true;
     }
 
-
-    /// Convert external tables to ExternalTableData and send them using the connection.
-    void sendExternalTables()
-    {
-        const auto * select = typeid_cast<const ASTSelectWithUnionQuery *>(&*parsed_query);
-        if (!select && !external_tables.empty())
-            throw Exception("External tables could be sent only with select query", ErrorCodes::BAD_ARGUMENTS);
-
-        std::vector<ExternalTableData> data;
-        for (auto & table : external_tables)
-            data.emplace_back(table.getData(*context));
-
-        connection->sendExternalTablesData(data);
-    }
-
-
     /// Process the query that doesn't require transfering data blocks to the server.
     void processOrdinaryQuery()
     {
-        connection
-            ->sendQuery(query, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr, true);
-        sendExternalTables();
+        connection->sendQuery(query, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr);
         receiveResult();
     }
 
@@ -776,9 +753,7 @@ private:
             query_id,
             QueryProcessingStage::Complete,
             &context->getSettingsRef(),
-            nullptr,
-            true);
-        sendExternalTables();
+            nullptr);
 
         /// Receive description of table structure.
         Block sample;
@@ -1228,56 +1203,16 @@ public:
 
         /** We allow different groups of arguments:
           * - common arguments;
-          * - arguments for any number of external tables each in form "--external args...",
-          *   where possible args are file, name, format, structure, types.
           * Split these groups before processing.
           */
         using Arguments = std::vector<const char *>;
 
         Arguments common_arguments{""}; /// 0th argument is ignored.
-        std::vector<Arguments> external_tables_arguments;
 
-        bool in_external_group = false;
         for (int arg_num = 1; arg_num < argc; ++arg_num)
         {
             const char * arg = argv[arg_num];
-
-            if (0 == strcmp(arg, "--external"))
-            {
-                in_external_group = true;
-                external_tables_arguments.emplace_back(Arguments{""});
-            }
-            /// Options with value after equal sign.
-            else if (
-                in_external_group
-                && (0 == strncmp(arg, "--file=", strlen("--file=")) || 0 == strncmp(arg, "--name=", strlen("--name="))
-                    || 0 == strncmp(arg, "--format=", strlen("--format="))
-                    || 0 == strncmp(arg, "--structure=", strlen("--structure="))
-                    || 0 == strncmp(arg, "--types=", strlen("--types="))))
-            {
-                external_tables_arguments.back().emplace_back(arg);
-            }
-            /// Options with value after whitespace.
-            else if (
-                in_external_group
-                && (0 == strcmp(arg, "--file") || 0 == strcmp(arg, "--name") || 0 == strcmp(arg, "--format")
-                    || 0 == strcmp(arg, "--structure") || 0 == strcmp(arg, "--types")))
-            {
-                if (arg_num + 1 < argc)
-                {
-                    external_tables_arguments.back().emplace_back(arg);
-                    ++arg_num;
-                    arg = argv[arg_num];
-                    external_tables_arguments.back().emplace_back(arg);
-                }
-                else
-                    break;
-            }
-            else
-            {
-                in_external_group = false;
-                common_arguments.emplace_back(arg);
-            }
+            common_arguments.emplace_back(arg);
         }
 
 #define DECLARE_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) \
@@ -1313,18 +1248,6 @@ public:
         // clang-format on
 #undef DECLARE_SETTING
 
-        /// Commandline options related to external tables.
-        boost::program_options::options_description external_description("External tables options");
-        // clang-format off
-        external_description.add_options()
-            ("file", boost::program_options::value<std::string>(), "data file or - for stdin")
-            ("name", boost::program_options::value<std::string>()->default_value("_data"), "name of the table")
-            ("format", boost::program_options::value<std::string>()->default_value("TabSeparated"), "data format")
-            ("structure", boost::program_options::value<std::string>(), "structure")
-            ("types", boost::program_options::value<std::string>(), "types")
-        ;
-        // clang-format on
-
         /// Parse main commandline options.
         boost::program_options::parsed_options parsed
             = boost::program_options::command_line_parser(common_arguments.size(), common_arguments.data())
@@ -1345,39 +1268,7 @@ public:
                 && options["host"].as<std::string>() == "elp")) /// If user writes -help instead of --help.
         {
             std::cout << main_description << "\n";
-            std::cout << external_description << "\n";
             exit(0);
-        }
-
-        size_t number_of_external_tables_with_stdin_source = 0;
-        for (size_t i = 0; i < external_tables_arguments.size(); ++i)
-        {
-            /// Parse commandline options related to external tables.
-            boost::program_options::parsed_options parsed = boost::program_options::command_line_parser(
-                                                                external_tables_arguments[i].size(),
-                                                                external_tables_arguments[i].data())
-                                                                .options(external_description)
-                                                                .run();
-            boost::program_options::variables_map external_options;
-            boost::program_options::store(parsed, external_options);
-
-            try
-            {
-                external_tables.emplace_back(external_options);
-                if (external_tables.back().file == "-")
-                    ++number_of_external_tables_with_stdin_source;
-                if (number_of_external_tables_with_stdin_source > 1)
-                    throw Exception(
-                        "Two or more external tables has stdin (-) set as --file field",
-                        ErrorCodes::BAD_ARGUMENTS);
-            }
-            catch (const Exception & e)
-            {
-                std::string text = e.displayText();
-                std::cerr << "Code: " << e.code() << ". " << text << std::endl;
-                std::cerr << "Table №" << i << std::endl << std::endl;
-                exit(e.code());
-            }
         }
 
         /// Extract settings and limits from the options.

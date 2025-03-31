@@ -59,6 +59,9 @@ inline void integrityCheckIndexInfoV2(const dtpb::ColumnFileIndexInfo & index_in
     case dtpb::IndexFileKind::VECTOR_INDEX:
         RUNTIME_CHECK(index_info.index_props().has_vector_index());
         break;
+    case dtpb::IndexFileKind::INVERTED_INDEX:
+        RUNTIME_CHECK(index_info.index_props().has_inverted_index());
+        break;
     default:
         RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index_info.index_props().kind()));
     }
@@ -413,6 +416,23 @@ ColumnFileTiny::ColumnFileTiny(
     , index_infos(index_infos_)
     , keyspace_id(dm_context.keyspace_id)
     , file_provider(dm_context.global_context.getFileProvider())
+{}
+
+ColumnFileTiny::ColumnFileTiny(
+    const ColumnFileSchemaPtr & schema_,
+    UInt64 rows_,
+    UInt64 bytes_,
+    PageIdU64 data_page_id_,
+    KeyspaceID keyspace_id_,
+    const FileProviderPtr & file_provider_,
+    const IndexInfosPtr & index_infos_)
+    : schema(schema_)
+    , rows(rows_)
+    , bytes(bytes_)
+    , data_page_id(data_page_id_)
+    , index_infos(index_infos_)
+    , keyspace_id(keyspace_id_)
+    , file_provider(file_provider_)
 {}
 
 } // namespace DB::DM

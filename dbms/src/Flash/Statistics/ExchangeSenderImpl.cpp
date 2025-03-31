@@ -24,7 +24,7 @@ namespace DB
 String MPPTunnelDetail::toJson() const
 {
     return fmt::format(
-        R"({{"tunnel_id":"{}","sender_target_task_id":{},"sender_target_host":"{}","is_local":{},"conn_type":{},"packets":{},"bytes":{}}})",
+        R"({{"tunnel_id":"{}","sender_target_task_id":{},"sender_target_host":"{}","is_local":{},"conn_type":"{}","packets":{},"bytes":{}}})",
         tunnel_id,
         sender_target_task_id,
         sender_target_host,

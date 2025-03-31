@@ -32,9 +32,9 @@
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashTestEnv.h>
+#include <boost_wrapper/program_options.h>
 #include <common/types.h>
 
-#include <boost/program_options.hpp>
 #include <cstdint>
 #include <magic_enum.hpp>
 #include <unordered_set>
