@@ -102,8 +102,16 @@ void WindowDescription::initNeedDecrease(bool has_agg)
 
     if (frame.type == WindowFrame::FrameType::Rows)
     {
-        if ((frame.begin_offset == 0 && frame.end_offset == 0)
-            || (frame.begin_preceding == frame.end_preceding && frame.begin_offset == frame.end_offset))
+        UInt64 begin_offset = frame.begin_offset;
+        if (frame.begin_type == WindowFrame::BoundaryType::Current)
+            begin_offset = 0;
+
+        UInt64 end_offset = frame.end_offset;
+        if (frame.end_type == WindowFrame::BoundaryType::Current)
+            end_offset = 0;
+
+        if ((begin_offset == 0 && end_offset == 0)
+            || (frame.begin_preceding == frame.end_preceding && begin_offset == end_offset))
             need_decrease = false;
     }
 }
