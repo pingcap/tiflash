@@ -272,17 +272,23 @@ try
 
     region->updateRaftLogEagerIndex(1024);
 
-    const auto path = dir_path + "/region.test";
-    WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-    size_t region_ser_size = std::get<0>(region->serialize(write_buf));
-    write_buf.next();
-    write_buf.sync();
-    ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
-
-    ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
-    auto new_region = Region::deserialize(read_buf);
-    ASSERT_REGION_EQ(*new_region, *region);
+    String serialized_str;
     {
+        WriteBufferFromOwnString write_buf;
+        size_t region_ser_size = std::get<0>(region->serialize(write_buf));
+        write_buf.next();
+        write_buf.finalize();
+        serialized_str = write_buf.releaseStr();
+        ASSERT_EQ(region_ser_size, serialized_str.size());
+        LOG_INFO(Logger::get(), "region_ser_size={}", region_ser_size);
+    }
+
+    {
+        ReadBufferFromString read_buf(serialized_str);
+        auto new_region = Region::deserialize(read_buf);
+        ASSERT_REGION_EQ(*new_region, *region);
+
+        // eager_truncated_index
         const auto & [eager_truncated_index, applied_index] = new_region->getRaftLogEagerGCRange();
         ASSERT_EQ(eager_truncated_index, 1024);
     }
