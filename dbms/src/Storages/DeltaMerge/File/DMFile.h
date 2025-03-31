@@ -346,6 +346,7 @@ public:
     DMFileMetaPtr meta;
 
     friend class VectorIndexReaderFromDMFile;
+    friend class InvertedIndexReaderFromDMFile;
     friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
     friend class DMFileLocalIndexWriter;
