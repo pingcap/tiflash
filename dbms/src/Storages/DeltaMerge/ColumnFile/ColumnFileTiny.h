@@ -72,7 +72,7 @@ private:
     IndexInfosPtr index_infos;
 
     /// The id of the keyspace which this ColumnFileTiny belongs to.
-    KeyspaceID keyspace_id;
+    const KeyspaceID keyspace_id;
     /// The global file_provider
     const FileProviderPtr file_provider;
 
@@ -168,12 +168,12 @@ public:
     Block readBlockForMinorCompaction(const PageReader & page_reader) const;
 
     static std::shared_ptr<ColumnFileSchema> getSchema(
-        const DMContext & context,
+        const DMContext & dm_context,
         BlockPtr schema_block,
         ColumnFileSchemaPtr & last_schema);
 
     static ColumnFileTinyPtr writeColumnFile(
-        const DMContext & context,
+        const DMContext & dm_context,
         const Block & block,
         size_t offset,
         size_t limit,
@@ -181,25 +181,25 @@ public:
         const CachePtr & cache = nullptr);
 
     static PageIdU64 writeColumnFileData(
-        const DMContext & context,
+        const DMContext & dm_context,
         const Block & block,
         size_t offset,
         size_t limit,
         WriteBatches & wbs);
 
     static ColumnFilePersistedPtr deserializeMetadata(
-        const DMContext & context,
+        const DMContext & dm_context,
         ReadBuffer & buf,
         ColumnFileSchemaPtr & last_schema);
 
     static ColumnFilePersistedPtr deserializeMetadata(
-        const DMContext & context,
+        const DMContext & dm_context,
         const dtpb::ColumnFileTiny & cf_pb,
         ColumnFileSchemaPtr & last_schema);
 
     static ColumnFilePersistedPtr restoreFromCheckpoint(
         const LoggerPtr & parent_log,
-        const DMContext & context,
+        const DMContext & dm_context,
         UniversalPageStoragePtr temp_ps,
         WriteBatches & wbs,
         BlockPtr schema,
@@ -209,14 +209,14 @@ public:
         IndexInfosPtr index_infos);
     static std::tuple<ColumnFilePersistedPtr, BlockPtr> createFromCheckpoint(
         const LoggerPtr & parent_log,
-        const DMContext & context,
+        const DMContext & dm_context,
         ReadBuffer & buf,
         UniversalPageStoragePtr temp_ps,
         const BlockPtr & last_schema,
         WriteBatches & wbs);
     static std::tuple<ColumnFilePersistedPtr, BlockPtr> createFromCheckpoint(
         const LoggerPtr & parent_log,
-        const DMContext & context,
+        const DMContext & dm_context,
         const dtpb::ColumnFileTiny & cf_pb,
         UniversalPageStoragePtr temp_ps,
         const BlockPtr & last_schema,
