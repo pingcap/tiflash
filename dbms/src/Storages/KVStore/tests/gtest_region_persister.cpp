@@ -162,14 +162,13 @@ TEST_F(RegionSeriTest, peer)
 try
 {
     auto peer = RegionBench::createPeer(100, true);
-    const auto path = dir_path + "/peer.test";
-    WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+    WriteBufferFromOwnString write_buf;
     auto size = writeBinary2(peer, write_buf);
     write_buf.next();
-    write_buf.sync();
-    ASSERT_EQ(size, Poco::File(path).getSize());
+    auto serialized_str = write_buf.releaseStr();
+    ASSERT_EQ(size, serialized_str.size());
 
-    ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+    ReadBufferFromString read_buf(serialized_str);
     auto new_peer = readPeer(read_buf);
     ASSERT_PEER_EQ(new_peer, peer);
 }
@@ -185,14 +184,13 @@ try
     }
 
     auto region_info = RegionBench::createMetaRegion(233, 66, 0, 200);
-    const auto path = dir_path + "/region_info.test";
-    WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+    WriteBufferFromOwnString write_buf;
     auto size = writeBinary2(region_info, write_buf);
     write_buf.next();
-    write_buf.sync();
-    ASSERT_EQ(size, (size_t)Poco::File(path).getSize());
+    auto serialized_str = write_buf.releaseStr();
+    ASSERT_EQ(size, serialized_str.size());
 
-    ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+    ReadBufferFromString read_buf(serialized_str);
     auto new_region_info = readRegion(read_buf);
     ASSERT_EQ(new_region_info.id(), region_info.id());
     ASSERT_EQ(new_region_info.start_key(), region_info.start_key());
@@ -206,15 +204,14 @@ CATCH
 TEST_F(RegionSeriTest, RegionMeta)
 try
 {
-    const auto path = dir_path + "/meta.test";
-    WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+    WriteBufferFromOwnString write_buf;
     RegionMeta meta = createRegionMeta(888, 66);
     auto size = std::get<0>(meta.serialize(write_buf));
     write_buf.next();
-    write_buf.sync();
-    ASSERT_EQ(size, (size_t)Poco::File(path).getSize());
+    auto serialized_str = write_buf.releaseStr();
+    ASSERT_EQ(size, serialized_str.size());
 
-    ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+    ReadBufferFromString read_buf(serialized_str);
     auto restored_meta = RegionMeta::deserialize(read_buf);
     ASSERT_EQ(restored_meta, meta);
 }
@@ -232,14 +229,13 @@ try
 
     region->updateRaftLogEagerIndex(1024);
 
-    const auto path = dir_path + "/region.test";
-    WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+    WriteBufferFromOwnString write_buf;
     size_t region_ser_size = std::get<0>(region->serializeImpl(1, 0, mockSerFactory(0), write_buf));
     write_buf.next();
-    write_buf.sync();
-    ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+    auto serialized_str = write_buf.releaseStr();
+    ASSERT_EQ(region_ser_size, serialized_str.size());
 
-    ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+    ReadBufferFromString read_buf(serialized_str);
     auto new_region = Region::deserialize(read_buf);
     ASSERT_REGION_EQ(*new_region, *region);
     {
@@ -308,13 +304,13 @@ try
     region->insertDebug("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
     region->insertDebug("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
-    const auto path = dir_path + "/region_state.test";
-    WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+    WriteBufferFromOwnString write_buf;
     size_t region_ser_size = std::get<0>(region->serialize(write_buf));
     write_buf.next();
+    auto serialized_str = write_buf.releaseStr();
+    ASSERT_EQ(region_ser_size, serialized_str.size());
 
-    ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
-    ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+    ReadBufferFromString read_buf(serialized_str);
     auto new_region = Region::deserialize(read_buf);
     ASSERT_EQ(*new_region, *region);
 }
@@ -331,14 +327,13 @@ try
         // V2 store, V2 load, no unrecognized fields
         auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
-        const auto path = dir_path + "/region0.test";
-        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+        WriteBufferFromOwnString write_buf;
         size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf));
         write_buf.next();
-        write_buf.sync();
-        ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+        auto serialized_str = write_buf.releaseStr();
+        ASSERT_EQ(region_ser_size, serialized_str.size());
 
-        ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+        ReadBufferFromString read_buf(serialized_str);
         auto new_region = Region::deserializeImpl(2, mockDeserFactory(0, counter), read_buf);
         ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
         ASSERT_REGION_EQ(*new_region, *region);
@@ -349,14 +344,13 @@ try
         // V3 store, V3 load, no unrecognized fields
         auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
-        const auto path = dir_path + "/region.test";
-        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+        WriteBufferFromOwnString write_buf;
         size_t region_ser_size = std::get<0>(region->serializeImpl(3, ext_cnt_3, mockSerFactory(1), write_buf));
         write_buf.next();
-        write_buf.sync();
-        ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+        auto serialized_str = write_buf.releaseStr();
+        ASSERT_EQ(region_ser_size, serialized_str.size());
 
-        ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+        ReadBufferFromString read_buf(serialized_str);
         auto new_region = Region::deserializeImpl(3, mockDeserFactory(1, counter), read_buf);
         ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
         ASSERT_REGION_EQ(*new_region, *region);
@@ -368,14 +362,13 @@ try
         auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
         // In V2, will also write UNUSED_EXTENSION_NUMBER_FOR_TEST.
-        const auto path = dir_path + "/region2.test";
-        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+        WriteBufferFromOwnString write_buf;
         size_t region_ser_size = std::get<0>(region->serializeImpl(4, ext_cnt_4, mockSerFactory(1 | 2), write_buf));
         write_buf.next();
-        write_buf.sync();
-        ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+        auto serialized_str = write_buf.releaseStr();
+        ASSERT_EQ(region_ser_size, serialized_str.size());
 
-        ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+        ReadBufferFromString read_buf(serialized_str);
         auto new_region = Region::deserializeImpl(3, mockDeserFactory(1, counter), read_buf);
         ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
         ASSERT_REGION_EQ(*new_region, *region);
@@ -386,15 +379,14 @@ try
         // Downgrade. V4(whatever) store. V2 load. UNUSED_EXTENSION_NUMBER_FOR_TEST unrecognized.
         auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
-        const auto path = dir_path + "/region3.test";
-        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+        WriteBufferFromOwnString write_buf;
         size_t region_ser_size = std::get<0>(region->serializeImpl(4, ext_cnt_4, mockSerFactory(1 | 2), write_buf));
         write_buf.next();
-        write_buf.sync();
-        ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+        auto serialized_str = write_buf.releaseStr();
+        ASSERT_EQ(region_ser_size, serialized_str.size());
 
         {
-            ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+            ReadBufferFromString read_buf(serialized_str);
             auto new_region = Region::deserializeImpl(2, mockDeserFactory(1, counter), read_buf);
             ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
             ASSERT_REGION_EQ(*new_region, *region);
@@ -402,7 +394,7 @@ try
         }
         {
             // Also test V4 load.
-            ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+            ReadBufferFromString read_buf(serialized_str);
             auto new_region = Region::deserializeImpl(4, mockDeserFactory(1 | 2, counter), read_buf);
             ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
             ASSERT_REGION_EQ(*new_region, *region);
@@ -414,14 +406,13 @@ try
         // Upgrade. V2 to V3.
         auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
-        const auto path = dir_path + "/region4.test";
-        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+        WriteBufferFromOwnString write_buf;
         size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf));
         write_buf.next();
-        write_buf.sync();
-        ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+        auto serialized_str = write_buf.releaseStr();
+        ASSERT_EQ(region_ser_size, serialized_str.size());
 
-        ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+        ReadBufferFromString read_buf(serialized_str);
         auto new_region = Region::deserializeImpl(3, mockDeserFactory(1, counter), read_buf);
         ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
         ASSERT_REGION_EQ(*new_region, *region);
@@ -431,40 +422,45 @@ try
         // Upgrade -> Upgrade -> Downgrade -> Downgrade
         auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
-        const auto path = dir_path + "/region5.test";
-        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
-        size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf));
-        write_buf.next();
-        write_buf.sync();
-        ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+        String serialized_str;
+        {
+            WriteBufferFromOwnString write_buf;
+            size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf));
+            write_buf.next();
+            serialized_str = write_buf.releaseStr();
+            ASSERT_EQ(region_ser_size, serialized_str.size());
+        }
         {
             // 2 -> 3
             auto counter = std::make_shared<int>(0);
-            ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+            ReadBufferFromString read_buf(serialized_str);
             auto new_region = Region::deserializeImpl(3, mockDeserFactory(1, counter), read_buf);
             ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
             ASSERT_REGION_EQ(*new_region, *region);
-            WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+            WriteBufferFromOwnString write_buf;
             region->serializeImpl(3, ext_cnt_3, mockSerFactory(1), write_buf);
             ASSERT_EQ(*counter, 0);
+            serialized_str = write_buf.releaseStr();
         }
 
         {
             // 3 -> 4
             auto counter = std::make_shared<int>(0);
-            ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+            ReadBufferFromString read_buf(serialized_str);
             auto new_region = Region::deserializeImpl(4, mockDeserFactory(1 | 2, counter), read_buf);
             ASSERT_EQ(*counter, 1);
             ASSERT_EQ(new_region->getRaftLogEagerGCRange().first, 5678);
             ASSERT_REGION_EQ(*new_region, *region);
-            WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+            WriteBufferFromOwnString write_buf;
             region->serializeImpl(4, ext_cnt_4, mockSerFactory(1 | 2), write_buf);
+            serialized_str = write_buf.releaseStr();
         }
 
         {
             // 4 -> 2
             auto counter = std::make_shared<int>(0);
-            ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+            ReadBufferFromString read_buf(serialized_str);
+            WriteBufferFromOwnString write_buf;
             region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf);
             EXPECT_THROW(Region::deserializeImpl(2, mockDeserFactory(0, counter), read_buf), Exception);
         }
@@ -474,14 +470,13 @@ try
         auto counter = std::make_shared<int>(0);
         auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
-        const auto path = dir_path + "/region6.test";
-        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+        WriteBufferFromOwnString write_buf;
         size_t region_ser_size = std::get<0>(region->serializeImpl(2, ext_cnt_2, mockSerFactory(0), write_buf));
         write_buf.next();
-        write_buf.sync();
-        ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+        auto serialized_str = write_buf.releaseStr();
+        ASSERT_EQ(region_ser_size, serialized_str.size());
 
-        ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+        ReadBufferFromString read_buf(serialized_str);
         EXPECT_THROW(Region::deserializeImpl(1, mockDeserFactory(0, counter), read_buf), Exception);
     }
     {
@@ -489,14 +484,13 @@ try
         auto counter = std::make_shared<int>(0);
         auto region = makeTmpRegion();
         region->updateRaftLogEagerIndex(5678);
-        const auto path = dir_path + "/region7.test";
-        WriteBufferFromFile write_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_WRONLY | O_CREAT);
+        WriteBufferFromOwnString write_buf;
         size_t region_ser_size = std::get<0>(region->serializeImpl(3, ext_cnt_3, mockSerFactory(1), write_buf));
         write_buf.next();
-        write_buf.sync();
-        ASSERT_EQ(region_ser_size, (size_t)Poco::File(path).getSize());
+        auto serialized_str = write_buf.releaseStr();
+        ASSERT_EQ(region_ser_size, serialized_str.size());
 
-        ReadBufferFromFile read_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
+        ReadBufferFromString read_buf(serialized_str);
         EXPECT_THROW(Region::deserializeImpl(1, mockDeserFactory(0, counter), read_buf), Exception);
     }
 }
