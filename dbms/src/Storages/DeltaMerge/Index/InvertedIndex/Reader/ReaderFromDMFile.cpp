@@ -88,17 +88,11 @@ BitmapFilterPtr InvertedIndexReaderFromDMFile::load(const SingleColumnRangePtr &
         // Disaggregated mode
         auto * file_cache = FileCache::instance();
         RUNTIME_CHECK_MSG(file_cache, "Must enable S3 file cache to use inverted index");
-        if (auto [file_seg, downloaded]
+        auto [file_seg, downloaded]
             = file_cache->downloadFileForLocalReadWithRetry(s3_file_name, index_props.file_size(), 3);
-            file_seg)
-        {
-            local_index_file_path = file_seg->getLocalFileName();
-            has_s3_download = downloaded;
-        }
-        else
-        {
-            throw Exception(ErrorCodes::S3_ERROR, "Failed to download inverted index file {}", index_file_path);
-        }
+        RUNTIME_CHECK(file_seg);
+        local_index_file_path = file_seg->getLocalFileName();
+        has_s3_download = downloaded;
     }
     else
     {

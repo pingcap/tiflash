@@ -203,7 +203,11 @@ std::tuple<FileSegmentPtr, bool> FileCache::downloadFileForLocalReadWithRetry(
         }
     }
 
-    return {nullptr, false};
+    throw Exception(
+        ErrorCodes::S3_ERROR,
+        "Failed to download S3 file {} after {} retries",
+        s3_fname.toFullKey(),
+        retry_count);
 }
 
 FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize)

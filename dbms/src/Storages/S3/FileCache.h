@@ -252,6 +252,7 @@ public:
 
     /// The same as downloadFileForLocalRead, but it supports retry.
     /// Returns the file guard of the local cache file and whether the file is downloaded from S3.
+    /// If the file is not downloaded, an exception will be thrown.
     std::tuple<FileSegmentPtr, bool> downloadFileForLocalReadWithRetry(
         const S3::S3FilenameView & s3_fname,
         const std::optional<UInt64> & filesize,

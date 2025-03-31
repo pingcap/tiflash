@@ -61,19 +61,11 @@ VectorIndexReaderPtr VectorIndexReaderFromDMFile::load(const VectorIndexStreamCt
         // Disaggregated mode
         auto * file_cache = FileCache::instance();
         RUNTIME_CHECK_MSG(file_cache, "Must enable S3 file cache to use vector index");
-        if (auto [file_seg, downloaded] = file_cache->downloadFileForLocalReadWithRetry( //
-                s3_file_name,
-                vector_index->index_props().file_size(),
-                3);
-            file_seg)
-        {
-            local_index_file_path = file_seg->getLocalFileName();
-            has_s3_download = downloaded;
-        }
-        else
-        {
-            throw Exception(ErrorCodes::S3_ERROR, "Failed to download vector index file {}", index_file_path);
-        }
+        auto [file_seg, downloaded]
+            = file_cache->downloadFileForLocalReadWithRetry(s3_file_name, vector_index->index_props().file_size(), 3);
+        RUNTIME_CHECK(file_seg);
+        local_index_file_path = file_seg->getLocalFileName();
+        has_s3_download = downloaded;
     }
     else
     {
