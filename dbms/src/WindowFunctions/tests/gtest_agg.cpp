@@ -531,6 +531,28 @@ try
         false);
     desc.initNeedDecrease(true);
     ASSERT_TRUE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Current,
+        0,
+        true,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_FALSE(desc.need_decrease);
+
+    desc.frame = WindowFrame(
+        WindowFrame::FrameType::Rows,
+        WindowFrame::BoundaryType::Offset,
+        0,
+        true,
+        WindowFrame::BoundaryType::Current,
+        0,
+        false);
+    desc.initNeedDecrease(true);
+    ASSERT_FALSE(desc.need_decrease);
 }
 CATCH
 

@@ -91,13 +91,10 @@ void WindowDescription::initNeedDecrease(bool has_agg)
 
     need_decrease = true;
 
-    if (frame.begin_type == WindowFrame::BoundaryType::Unbounded)
-    {
-        need_decrease = false;
+    if (frame.end_type == WindowFrame::BoundaryType::Unbounded)
         return;
-    }
 
-    if (frame.begin_type == WindowFrame::BoundaryType::Current && (frame.end_type == WindowFrame::BoundaryType::Current || frame.end_type == WindowFrame::BoundaryType::Unbounded))
+    if (frame.begin_type == WindowFrame::BoundaryType::Unbounded)
     {
         need_decrease = false;
         return;
