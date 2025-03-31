@@ -32,9 +32,12 @@ enum class FetchStatus
     Cancelled
 };
 
+// TODO track memory with allocator
 class CTE : public NotifyFuture
 {
 public:
+    ~CTE() override = default;
+
     std::pair<FetchStatus, Block> tryGetBlockAt(size_t idx);
     FetchStatus checkAvailableBlockAt(size_t idx);
     void pushBlock(const Block & block);

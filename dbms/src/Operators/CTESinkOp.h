@@ -36,7 +36,6 @@ public:
 protected:
     void operateSuffixImpl() override;
     OperatorStatus writeImpl(Block && block) override;
-    OperatorStatus awaitImpl() override;
 
 private:
     std::shared_ptr<CTE> cte;
