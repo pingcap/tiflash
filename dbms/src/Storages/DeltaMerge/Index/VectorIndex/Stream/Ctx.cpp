@@ -38,7 +38,7 @@ VectorIndexStreamCtxPtr VectorIndexStreamCtx::create(
     rest_columns->reserve(col_defs->size() - 1);
     for (const auto & cd : *col_defs)
     {
-        if (cd.id == ann_query_info->column_id())
+        if (cd.id == ann_query_info->deprecated_column_id())
             vec_cd.emplace(cd);
         else
             rest_columns->emplace_back(cd);
@@ -77,7 +77,7 @@ VectorIndexStreamCtxPtr VectorIndexStreamCtx::createForStableOnlyTests(
     rest_columns->reserve(col_defs->size() - 1);
     for (const auto & cd : *col_defs)
     {
-        if (cd.id == ann_query_info->column_id())
+        if (cd.id == ann_query_info->deprecated_column_id())
             vec_cd.emplace(cd);
         else
             rest_columns->emplace_back(cd);

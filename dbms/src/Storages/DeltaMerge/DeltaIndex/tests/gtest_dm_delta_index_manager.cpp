@@ -12,16 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/DeltaIndexManager.h>
-#include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
-namespace DB
+namespace DB::DM::tests
 {
-namespace DM
-{
-namespace tests
-{
+
 class DeltaIndexManagerTest : public ::testing::Test
 {
 public:
@@ -93,6 +90,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM::tests

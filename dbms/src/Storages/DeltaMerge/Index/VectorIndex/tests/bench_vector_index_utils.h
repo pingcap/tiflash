@@ -17,8 +17,8 @@
 #include <Common/Exception.h>
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/tests/gtest_dm_vector_index_utils.h>
 #include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
-#include <Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h>
 #include <TiDB/Schema/VectorIndex.h>
 #include <benchmark/benchmark.h>
 #include <common/types.h>

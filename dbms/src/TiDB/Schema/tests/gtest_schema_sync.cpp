@@ -23,8 +23,8 @@
 #include <Parsers/IAST.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/tests/gtest_dm_vector_index_utils.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
-#include <Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -853,7 +853,7 @@ try
 
         auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
         ann_query_info->set_index_id(idx_id);
-        ann_query_info->set_column_id(dmsv.vec_column_id);
+        ann_query_info->set_deprecated_column_id(dmsv.vec_column_id);
         ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
 
         // read with ANN query

@@ -259,8 +259,7 @@ ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
             RUNTIME_CHECK_MSG(false, "Unexpected proto ColumnFile");
         }
     }
-    auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
-    return ColumnFileSetSnapshot::buildFromColumnFiles(empty_data_provider, std::move(column_files));
+    return ColumnFileSetSnapshot::buildFromColumnFiles(ColumnFileDataProviderNop::instance(), std::move(column_files));
 }
 
 RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMemory & cf_in_mem, bool need_mem_data)
