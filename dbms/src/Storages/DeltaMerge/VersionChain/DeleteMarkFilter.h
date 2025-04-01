@@ -14,12 +14,13 @@
 
 #pragma once
 
-#include <Columns/IColumn.h>
-
 namespace DB::DM
 {
 struct DMContext;
 struct SegmentSnapshot;
+
+// Filter out record versions that are deleted.
+// Return how many records are filtered out.
 UInt32 buildDeleteMarkFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,

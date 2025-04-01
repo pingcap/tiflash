@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 
 namespace DB::DM
@@ -22,6 +21,9 @@ namespace DB::DM
 struct DMContext;
 struct SegmentSnapshot;
 
+// Filter out record versions that do not meet the requirement of `read_ts`
+// based on `base_versions`. This is the core logic of MVCC.
+// Returns how many rows are filtered out.
 template <ExtraHandleType HandleType>
 UInt32 buildVersionFilter(
     const DMContext & dm_context,

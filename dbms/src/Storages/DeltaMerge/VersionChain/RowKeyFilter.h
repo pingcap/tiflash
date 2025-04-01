@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Columns/IColumn.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 
 namespace DB::DM
@@ -24,8 +23,8 @@ struct SegmentSnapshot;
 struct RowKeyRange;
 using RowKeyRanges = std::vector<RowKeyRange>;
 
-// Filter out rows by read_ranges.
-// Return the number of filtered out rows.
+// Filter out records that do not meet the requirement of `read_ranges`.
+// Return how many records are filtered out.
 template <ExtraHandleType HandleType>
 UInt32 buildRowKeyFilter(
     const DMContext & dm_context,
