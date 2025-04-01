@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Common/SpillLimiter.h>
 #include <IO/BaseFile/RateLimiter.h>
 #include <IO/BaseFile/WritableFile.h>
 
@@ -39,13 +40,14 @@ public:
         bool truncate_when_exists_,
         int flags,
         mode_t mode,
-        const WriteLimiterPtr & write_limiter_ = nullptr);
+        const WriteLimiterPtr & write_limiter_ = nullptr,
+        SpillLimiterPtr spill_limiter_ = nullptr);
 
     ~PosixWritableFile() override;
 
     ssize_t write(char * buf, size_t size) override;
 
-    ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
+    ssize_t pwrite(char * buf, size_t size, off_t offset) override;
 
     off_t seek(off_t offset, int whence) const override;
 
@@ -68,12 +70,28 @@ public:
 private:
     void doOpenFile(bool truncate_when_exists_, int flags, mode_t mode);
 
+    void tryRequestSpillLimiter(size_t size)
+    {
+        if (spill_limiter)
+        {
+            auto [ok, cur_spilled_bytes, max_bytes] = spill_limiter->tryRequest(size);
+            RUNTIME_CHECK_MSG(
+                ok,
+                "Failed to spill {} bytes to disk because exceeds max_spilled_bytes({}), cur_spilled_bytes: {}",
+                size,
+                max_bytes,
+                cur_spilled_bytes);
+        }
+    }
+
 private:
     // Only add metrics when file is actually added in `doOpenFile`.
     CurrentMetrics::Increment metric_increment{CurrentMetrics::OpenFileForWrite, 0};
     std::string file_name;
     int fd = -1;
     WriteLimiterPtr write_limiter;
+    SpillLimiterPtr spill_limiter;
+    uint64_t total_write_bytes = 0;
 };
 
 } // namespace DB

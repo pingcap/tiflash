@@ -36,10 +36,14 @@ SpillHandler::SpillWriter::SpillWriter(
         file_provider,
         file_name,
         EncryptionPath(file_name, ""),
-        true,
-        nullptr,
-        DBMS_DEFAULT_BUFFER_SIZE,
-        append_write ? O_APPEND | O_WRONLY : -1))
+        /*create_new_encryption_info=*/true,
+        /*write_limiter=*/nullptr,
+        /*buf_size=*/DBMS_DEFAULT_BUFFER_SIZE,
+        /*flags=*/append_write ? O_APPEND | O_WRONLY : -1,
+        /*mode=*/0666,
+        /*existing_memory=*/nullptr,
+        /*alignment=*/0,
+        SpillLimiter::instance))
     , compressed_buf(file_buf)
 {
     if (!append_write)
@@ -48,20 +52,19 @@ SpillHandler::SpillWriter::SpillWriter(
     out->writePrefix();
 }
 
-void SpillHandler::SpillWriter::finishWrite(std::unique_ptr<SpilledFile> & spilled_file)
+SpillDetails SpillHandler::SpillWriter::finishWrite()
 {
     out->flush();
     compressed_buf.next();
     file_buf.next();
     out->writeSuffix();
-
-    recordSpillStats(0, spilled_file);
+    return {written_rows, compressed_buf.count(), file_buf.count()};
 }
 
-void SpillHandler::SpillWriter::write(const Block & block, std::unique_ptr<SpilledFile> & spilled_file)
+void SpillHandler::SpillWriter::write(const Block & block)
 {
+    written_rows += block.rows();
     out->write(block);
-    recordSpillStats(block.rows(), spilled_file);
 }
 
 SpillHandler::SpillHandler(Spiller * spiller_, size_t partition_id_)
@@ -143,8 +146,6 @@ void SpillHandler::spillBlocks(Blocks && blocks)
                 if (unlikely(!block || block.rows() == 0))
                     continue;
 
-                checkOkToSpill();
-
                 /// erase constant column
                 spiller->removeConstantColumns(block);
                 RUNTIME_CHECK(block.columns() > 0);
@@ -154,11 +155,11 @@ void SpillHandler::spillBlocks(Blocks && blocks)
                 total_rows += rows;
                 rows_in_file += rows;
                 bytes_in_file += block.estimateBytesForSpill();
-                writer->write(block, spilled_files[current_spilled_file_index]);
+                writer->write(block);
                 block.clear();
                 if (spiller->enable_append_write && isSpilledFileFull(rows_in_file, bytes_in_file))
                 {
-                    writer->finishWrite(spilled_files[current_spilled_file_index]);
+                    spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
                     spilled_files[current_spilled_file_index]->markFull();
                     writer = nullptr;
                 }
@@ -195,17 +196,15 @@ void SpillHandler::finish()
     {
         if (writer != nullptr)
         {
-            // check again before finishWrite().
             try
             {
-                checkOkToSpill();
+                spilled_files[current_spilled_file_index]->updateSpillDetails(writer->finishWrite());
             }
             catch (...)
             {
                 markAsInvalidAndRethrow();
             }
 
-            writer->finishWrite(spilled_files[current_spilled_file_index]);
             auto current_spill_details = spilled_files[current_spilled_file_index]->getSpillDetails();
             if (!spiller->enable_append_write
                 || isSpilledFileFull(current_spill_details.rows, current_spill_details.data_bytes_uncompressed))

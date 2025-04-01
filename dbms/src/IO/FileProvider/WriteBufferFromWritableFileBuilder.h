@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/SpillLimiter.h>
 #include <IO/BaseFile/fwd.h>
 #include <IO/Buffer/WriteBufferFromWritableFile.h>
 #include <IO/FileProvider/EncryptionPath.h>
@@ -35,7 +36,8 @@ public:
         int flags = -1,
         mode_t mode = 0666,
         char * existing_memory = nullptr,
-        size_t alignment = 0);
+        size_t alignment = 0,
+        SpillLimiterPtr spill_limiter_ = nullptr);
 
     static WriteBufferFromWritableFile build(
         const FileProviderPtr & file_provider,
@@ -47,7 +49,8 @@ public:
         int flags = -1,
         mode_t mode = 0666,
         char * existing_memory = nullptr,
-        size_t alignment = 0);
+        size_t alignment = 0,
+        SpillLimiterPtr spill_limiter_ = nullptr);
 };
 
 } // namespace DB

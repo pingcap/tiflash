@@ -36,7 +36,7 @@
 #include <Common/getNumberOfCPUCores.h>
 #include <Common/grpcpp.h>
 #include <Common/setThreadName.h>
-#include <Core/Spiller.h>
+#include <Common/SpillLimiter.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>
@@ -1076,7 +1076,7 @@ try
         }
     });
 
-    SpillLimiter::instance = std::make_unique<SpillLimiter>(settings.max_spilled_bytes);
+    SpillLimiter::instance = std::make_shared<SpillLimiter>(settings.max_spilled_bytes);
 
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
     if (not_disagg_mode || /*has_been_bootstrap*/ store_ident.has_value())

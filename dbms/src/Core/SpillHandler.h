@@ -48,59 +48,15 @@ private:
             bool append_write,
             const Block & header,
             size_t spill_version);
-        void finishWrite(std::unique_ptr<SpilledFile> & spilled_file);
-        void write(const Block & block, std::unique_ptr<SpilledFile> & spilled_file);
+        SpillDetails finishWrite();
+        void write(const Block & block);
 
     private:
-        // Have to make sure bytes record into SpillLimiter is equal to spilled_file.data_bytes_compressed,
-        // because when spilled_file destory, SpillLimiter will minus spilled_file.data_bytes_compressed.
-        // We have to make sure SpillLimiter::current_spill_bytes >= 0.
-        void recordSpillStats(size_t delta_rows, const std::unique_ptr<SpilledFile> & spilled_file)
-        {
-            RUNTIME_CHECK_MSG(
-                compressed_buf.count() >= last_bytes_uncompressed && file_buf.count() >= last_bytes_compressed,
-                "check spill detail failed, bytes uncompressed: {}, {}, bytes compressed: {}, {}",
-                compressed_buf.count(),
-                last_bytes_uncompressed,
-                file_buf.count(),
-                last_bytes_compressed);
-
-            auto delta = SpillDetails{
-                delta_rows,
-                compressed_buf.count() - last_bytes_uncompressed,
-                file_buf.count() - last_bytes_compressed};
-
-            // NOTE: compressed_buf.count() returns the bytes count of uncompressed data,
-            // which is the data written directly using compressed_buf.write().
-            // file_buf.count() returns the bytes count of data written to file_buf by CompressedWriteBuffer::nextImpl(),
-            // which is the compressed data size.
-            last_bytes_uncompressed = compressed_buf.count();
-            last_bytes_compressed = file_buf.count();
-
-            spilled_file->updateSpillDetails(delta);
-
-            // Use file_buf.count() (a.k.a. compressed data size) instead of uncompressed data size
-            // because we want to record the real bytes written to files.
-            SpillLimiter::instance->addSpilledBytes(delta.data_bytes_compressed);
-        }
-
         WriteBufferFromWritableFile file_buf;
         CompressedWriteBuffer<> compressed_buf;
         std::unique_ptr<IBlockOutputStream> out;
-        size_t last_bytes_uncompressed = 0;
-        size_t last_bytes_compressed = 0;
+        size_t written_rows = 0;
     };
-
-    static void checkOkToSpill()
-    {
-        auto [ok_to_spill, cur_spilled_bytes, max_bytes] = SpillLimiter::instance->okToSpill();
-        if (!ok_to_spill)
-            throw Exception(fmt::format(
-                "Failed to spill bytes to disk because exceeds max_spilled_bytes({}), cur_spilled_bytes: "
-                "{}",
-                max_bytes,
-                cur_spilled_bytes));
-    }
 
     // Expect to be called in catch statement.
     void markAsInvalidAndRethrow()

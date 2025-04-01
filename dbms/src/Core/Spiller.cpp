@@ -48,7 +48,6 @@ SpilledFile::~SpilledFile()
     {
         auto file_path = path();
         file_provider->deleteRegularFile(file_path, EncryptionPath(file_path, ""));
-        SpillLimiter::instance->minusSpilledBytes(details.data_bytes_compressed);
     }
     catch (...)
     {
@@ -414,6 +413,4 @@ String Spiller::nextSpillFileName(UInt64 partition_id)
 }
 
 std::atomic<Int64> Spiller::tmp_file_index = 0;
-auto SpillLimiter::instance = std::make_unique<SpillLimiter>(-1);
-
 } // namespace DB

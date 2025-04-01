@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/TiFlashMetrics.h>
 #include <Core/Block.h>
 #include <Core/SpillConfig.h>
 #include <Poco/File.h>
@@ -29,50 +28,6 @@ using BlockInputStreams = std::vector<BlockInputStreamPtr>;
 class SpillHandler;
 class CachedSpillHandler;
 using CachedSpillHandlerPtr = std::shared_ptr<CachedSpillHandler>;
-
-class SpillLimiter
-{
-public:
-    explicit SpillLimiter(int64_t max_spilled_bytes_)
-        : max_spilled_bytes(max_spilled_bytes_)
-    {}
-
-    // return <ok_to_spill, current_spilled_bytes, max_spilled_bytes>
-    std::tuple<bool, uint64_t, int64_t> okToSpill()
-    {
-        std::lock_guard<std::mutex> guard(lock);
-        if (max_spilled_bytes < 0)
-            return {true, current_spilled_bytes, max_spilled_bytes};
-        return {
-            current_spilled_bytes < static_cast<uint64_t>(max_spilled_bytes),
-            current_spilled_bytes,
-            max_spilled_bytes};
-    }
-
-    void addSpilledBytes(uint64_t bytes)
-    {
-        std::lock_guard<std::mutex> guard(lock);
-        current_spilled_bytes += bytes;
-        GET_METRIC(tiflash_spilled_files, type_current_spilled_bytes).Set(current_spilled_bytes);
-    }
-
-    void minusSpilledBytes(uint64_t bytes)
-    {
-        std::lock_guard<std::mutex> guard(lock);
-        RUNTIME_CHECK(current_spilled_bytes >= bytes);
-        current_spilled_bytes -= bytes;
-        GET_METRIC(tiflash_spilled_files, type_current_spilled_bytes).Set(current_spilled_bytes);
-    }
-
-    uint64_t getCurrentSpilledBytes() const { return current_spilled_bytes; }
-
-    static std::unique_ptr<SpillLimiter> instance;
-
-private:
-    std::mutex lock;
-    int64_t max_spilled_bytes;
-    uint64_t current_spilled_bytes = 0;
-};
 
 struct SpillDetails
 {
