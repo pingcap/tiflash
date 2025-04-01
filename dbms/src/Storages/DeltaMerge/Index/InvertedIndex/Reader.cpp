@@ -205,6 +205,7 @@ inline bool isKeyGreaterThanMax(const InvertedIndexReader::Key key)
 template <typename T>
 void InvertedIndexMemoryReader<T>::search(BitmapFilterPtr & bitmap_filter, const Key & key) const
 {
+    // handle wider data type
     if (isKeyOutOfRange<T>(key))
         return;
 
@@ -218,6 +219,7 @@ template <typename T>
 void InvertedIndexMemoryReader<T>::searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end)
     const
 {
+    // handle wider data type
     if (isKeyGreaterThanMax<T>(begin) || isKeyLessThanMin<T>(end))
         return;
     T real_begin = begin;
@@ -264,6 +266,7 @@ void InvertedIndexFileReader<T>::loadMeta(ReadBuffer & read_buf, size_t index_si
 template <typename T>
 void InvertedIndexFileReader<T>::search(BitmapFilterPtr & bitmap_filter, const Key & key) const
 {
+    // handle wider data type
     if (isKeyOutOfRange<T>(key))
         return;
 
@@ -282,6 +285,7 @@ void InvertedIndexFileReader<T>::search(BitmapFilterPtr & bitmap_filter, const K
 template <typename T>
 void InvertedIndexFileReader<T>::searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const
 {
+    // handle wider data type
     if (isKeyGreaterThanMax<T>(begin) || isKeyLessThanMin<T>(end))
         return;
     T real_begin = begin;

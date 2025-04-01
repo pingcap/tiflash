@@ -196,7 +196,7 @@ PushDownExecutorPtr PushDownExecutor::build(
         context.getSettingsRef().dt_enable_rough_set_filter,
         tracing_logger);
     // build column_range
-    const auto column_range = rs_operator && used_indexes.empty() ? rs_operator->buildSets(used_indexes) : nullptr;
+    const auto column_range = rs_operator && !used_indexes.empty() ? rs_operator->buildSets(used_indexes) : nullptr;
     // build ann_query_info
     ANNQueryInfoPtr ann_query_info = nullptr;
     if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)

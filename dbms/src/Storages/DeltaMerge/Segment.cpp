@@ -3098,7 +3098,7 @@ size_t modifyPackFilterResults(
 
 } // namespace
 
-BitmapFilterPtr Segment::buildBitmapFilter(
+BitmapFilterPtr Segment::buildMVCCBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
@@ -3107,10 +3107,9 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     size_t expected_block_size)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
-    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
     if (readStableOnly(dm_context, segment_snap))
     {
-        return buildBitmapFilterStableOnly(
+        return buildMVCCBitmapFilterStableOnly(
             dm_context,
             segment_snap,
             read_ranges,
@@ -3120,7 +3119,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     }
     else
     {
-        return buildBitmapFilterNormal(
+        return buildMVCCBitmapFilterNormal(
             dm_context,
             segment_snap,
             read_ranges,
@@ -3130,7 +3129,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     }
 }
 
-BitmapFilterPtr Segment::buildBitmapFilterNormal(
+BitmapFilterPtr Segment::buildMVCCBitmapFilterNormal(
     const DMContext & dm_context,
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
@@ -3201,13 +3200,13 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
     LOG_DEBUG(
         segment_snap->log,
-        "buildBitmapFilterNormal total_rows={} cost={:.3f}ms",
+        "buildMVCCBitmapFilterNormal total_rows={} cost={:.3f}ms",
         total_rows,
         elapse_ns / 1'000'000.0);
     return bitmap_filter;
 }
 
-BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
+BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
     const DMContext & dm_context,
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
@@ -3236,7 +3235,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         auto elapse_ms = commit_elapse();
         LOG_DEBUG(
             segment_snap->log,
-            "buildBitmapFilterStableOnly all match, total_rows={}, cost={:.3f}ms",
+            "buildMVCCBitmapFilterStableOnly all match, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ true);
@@ -3257,7 +3256,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         auto elapse_ms = commit_elapse();
         LOG_DEBUG(
             segment_snap->log,
-            "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
+            "buildMVCCBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
         return bitmap_filter;
@@ -3295,7 +3294,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
     auto elapse_ms = commit_elapse();
     LOG_DEBUG(
         segment_snap->log,
-        "buildBitmapFilterStableOnly read_packs={} total_rows={} cost={:.3f}ms",
+        "buildMVCCBitmapFilterStableOnly read_packs={} total_rows={} cost={:.3f}ms",
         use_packs,
         segment_snap->stable->getDMFilesRows(),
         elapse_ms);
@@ -3528,19 +3527,15 @@ static bool hasCacheableColumn(const ColumnDefines & columns)
     return std::find_if(columns.begin(), columns.end(), DMFileReader::isCacheableColumn) != columns.end();
 }
 
-BlockInputStreamPtr Segment::getBitmapFilterInputStream(
+BitmapFilterPtr Segment::buildBitmapFilter(
     const DMContext & dm_context,
-    const ColumnDefines & columns_to_read,
     const SegmentSnapshotPtr & segment_snap,
     const RowKeyRanges & read_ranges,
     const PushDownExecutorPtr & executor,
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
-    size_t build_bitmap_filter_block_rows,
-    size_t read_data_block_rows)
+    size_t build_bitmap_filter_block_rows)
 {
-    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
-
     BitmapFilterPtr bitmap_filter = nullptr;
     if (executor && executor->column_range && executor->column_range->type != ColumnRangeType::Unsupported)
     {
@@ -3574,7 +3569,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         }
     }
 
-    auto mvcc_bitmap_filter = buildBitmapFilter(
+    auto mvcc_bitmap_filter = buildMVCCBitmapFilter(
         dm_context,
         segment_snap,
         read_ranges,
@@ -3602,16 +3597,37 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         size_t skipped_pack = modifyPackFilterResults(segment_snap, pack_filter_results, bitmap_filter);
         LOG_DEBUG(
             segment_snap->log,
-            "Finish build MVCC bitmap filter, bitmap_filter={}/{}, skipped_pack={}",
+            "Finish build MVCC bitmap filter with inverted index, bitmap_filter={}/{}, skipped_pack={}",
             bitmap_filter->count(),
             bitmap_filter->size(),
             skipped_pack);
-    }
-    else
-    {
-        bitmap_filter = mvcc_bitmap_filter;
+        return bitmap_filter;
     }
 
+    return mvcc_bitmap_filter;
+}
+
+BlockInputStreamPtr Segment::getBitmapFilterInputStream(
+    const DMContext & dm_context,
+    const ColumnDefines & columns_to_read,
+    const SegmentSnapshotPtr & segment_snap,
+    const RowKeyRanges & read_ranges,
+    const PushDownExecutorPtr & executor,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    size_t build_bitmap_filter_block_rows,
+    size_t read_data_block_rows)
+{
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
+
+    auto bitmap_filter = buildBitmapFilter(
+        dm_context,
+        segment_snap,
+        read_ranges,
+        executor,
+        pack_filter_results,
+        start_ts,
+        build_bitmap_filter_block_rows);
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
     if (!hasCacheableColumn(columns_to_read))

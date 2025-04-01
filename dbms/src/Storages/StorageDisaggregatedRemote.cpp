@@ -505,7 +505,7 @@ std::tuple<DM::RSOperatorPtr, DM::ColumnRangePtr> StorageDisaggregated::buildRSO
     const auto & used_indexes = dag_query->used_indexes;
 
     // build column_range
-    const auto column_range = rs_operator && used_indexes.empty() ? rs_operator->buildSets(used_indexes) : nullptr;
+    const auto column_range = rs_operator && !used_indexes.empty() ? rs_operator->buildSets(used_indexes) : nullptr;
     return {rs_operator, column_range};
 }
 
