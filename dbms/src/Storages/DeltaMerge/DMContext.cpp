@@ -75,4 +75,9 @@ bool DMContext::enableVersionChain() const
 {
     return global_context.getSettingsRef().enable_version_chain != static_cast<Int64>(VersionChainMode::Disabled);
 }
+
+bool DMContext::enableVersionChainForTest() const
+{
+    return global_context.getSettingsRef().enable_version_chain == static_cast<Int64>(VersionChainMode::EnabledForTest);
+}
 } // namespace DB::DM

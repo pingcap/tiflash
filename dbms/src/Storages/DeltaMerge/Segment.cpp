@@ -3092,11 +3092,12 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
     size_t expected_block_size,
-    bool use_version_chain)
+    bool enable_version_chain)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
-    if (use_version_chain)
+
+    if (enable_version_chain)
     {
         return ::DB::DM::buildBitmapFilter(
             dm_context,
@@ -3676,10 +3677,6 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
 {
     sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
 
-    const auto & settings = dm_context.global_context.getSettingsRef();
-    const bool enable_version_chain = settings.enable_version_chain != static_cast<Int64>(VersionChainMode::Disabled);
-    const bool verify_mvcc_bitmap
-        = settings.enable_version_chain == static_cast<Int64>(VersionChainMode::EnabledForTest);
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
         segment_snap,
@@ -3687,9 +3684,9 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
         pack_filter_results,
         start_ts,
         build_bitmap_filter_block_rows,
-        enable_version_chain);
+        dm_context.enableVersionChain());
 
-    if (unlikely(verify_mvcc_bitmap))
+    if (unlikely(dm_context.enableVersionChainForTest()))
     {
         checkMVCCBitmap(
             dm_context,

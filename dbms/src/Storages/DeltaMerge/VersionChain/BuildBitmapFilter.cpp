@@ -43,9 +43,6 @@ BitmapFilterPtr buildBitmapFilter(
     const auto & stable_filter_res = pack_filter_results[0];
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, true);
 
-    const bool enable_version_chain_for_test = dm_context.global_context.getSettingsRef().enable_version_chain
-        == static_cast<Int64>(VersionChainMode::EnabledForTest);
-
     auto version_filtered_out_rows = buildVersionFilter<HandleType>(
         dm_context,
         snapshot,
@@ -53,12 +50,12 @@ BitmapFilterPtr buildBitmapFilter(
         read_ts,
         stable_filter_res,
         *bitmap_filter);
-    if (enable_version_chain_for_test)
+    if (unlikely(dm_context.enableVersionChainForTest()))
         bitmap_filter->saveVersionFilterForDebug();
 
     auto rowkey_filtered_out_rows
         = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, stable_filter_res, *bitmap_filter);
-    if (enable_version_chain_for_test)
+    if (unlikely(dm_context.enableVersionChainForTest()))
         bitmap_filter->saveRowKeyFilterForDebug();
 
     auto delete_filtered_out_rows = buildDeleteMarkFilter(dm_context, snapshot, stable_filter_res, *bitmap_filter);
