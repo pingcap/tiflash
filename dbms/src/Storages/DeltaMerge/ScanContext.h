@@ -97,12 +97,12 @@ public:
     std::atomic<uint64_t> vector_idx_read_vec_time_ms{0};
     std::atomic<uint64_t> vector_idx_read_others_time_ms{0};
 
-    std::atomic<uint64_t> inverted_idx_load_from_s3{0};
-    std::atomic<uint64_t> inverted_idx_load_from_disk{0};
-    std::atomic<uint64_t> inverted_idx_load_from_cache{0};
+    std::atomic<uint32_t> inverted_idx_load_from_s3{0};
+    std::atomic<uint32_t> inverted_idx_load_from_disk{0};
+    std::atomic<uint32_t> inverted_idx_load_from_cache{0};
     std::atomic<uint64_t> inverted_idx_load_time_ms{0};
     std::atomic<uint64_t> inverted_idx_search_time_ms{0};
-    std::atomic<uint64_t> inverted_idx_search_skipped_packs{0};
+    std::atomic<uint32_t> inverted_idx_search_skipped_packs{0};
     std::atomic<uint64_t> inverted_idx_indexed_rows{0};
     std::atomic<uint64_t> inverted_idx_search_selected_rows{0};
 
