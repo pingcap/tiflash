@@ -15,6 +15,7 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 
 namespace DB::DM
 {
@@ -72,6 +73,6 @@ DMContext::DMContext(
 
 bool DMContext::enableVersionChain() const
 {
-    return global_context.getSettingsRef().enable_version_chain != 0;
+    return global_context.getSettingsRef().enable_version_chain != static_cast<Int64>(VersionChainMode::Disabled);
 }
 } // namespace DB::DM
