@@ -15,12 +15,12 @@
 #include <Core/Field.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/WindowDescription.h>
+#include <tipb/executor.pb.h>
 #include <tipb/expression.pb.h>
 
 #include <magic_enum.hpp>
 #include <string>
 
-#include "tipb/executor.pb.h"
 
 namespace DB
 {
