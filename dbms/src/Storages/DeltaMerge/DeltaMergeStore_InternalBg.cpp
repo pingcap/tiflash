@@ -432,7 +432,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
             task.segment->flushCache(*task.dm_context);
             // After flush cache, try to create delta local index.
             segmentEnsureDeltaLocalIndexAsync(task.segment);
-            // After flush cache, better place delta index or version chain.
+            // After flush cache, better to update delta index or version chain.
             update_delta_index_or_version_chain(task);
             left = task.segment;
             type = ThreadType::BG_Flush;
