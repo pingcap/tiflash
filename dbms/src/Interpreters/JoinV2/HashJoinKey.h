@@ -57,6 +57,27 @@ enum class HashJoinKeyMethod
 #undef M
 };
 
+class HashJoinKeyUtil
+{
+public:
+    static ALWAYS_INLINE void serializeStringJoinKey(const StringRef & s, char * pos)
+    {
+        UInt32 sz = s.size;
+        tiflash_compiler_builtin_memcpy(pos, &sz, sizeof(UInt32));
+        inline_memcpy(pos + sizeof(UInt32), s.data, sz);
+    }
+
+    static ALWAYS_INLINE StringRef deserializeStringJoinKey(const char * pos)
+    {
+        StringRef s;
+        UInt32 sz;
+        tiflash_compiler_builtin_memcpy(&sz, pos, sizeof(UInt32));
+        s.size = sz;
+        s.data = reinterpret_cast<const char *>(pos + sizeof(UInt32));
+        return s;
+    }
+};
+
 template <typename T>
 class alignas(CPU_CACHE_LINE_SIZE) HashJoinKeyOneNumber
 {
@@ -159,9 +180,6 @@ public:
             case 16:
                 tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 16);
                 break;
-            case 32:
-                tiflash_compiler_builtin_memcpy(&data[offset], vec[i] + fixed_size[i] * row, 32);
-                break;
             default:
                 inline_memcpy(&data[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
             }
@@ -229,7 +247,7 @@ public:
         buffer_initialized = false;
     }
 
-    ALWAYS_INLINE KeyType getJoinKey(size_t row)
+    ALWAYS_INLINE StringRef getJoinKey(size_t row)
     {
         size_t sz = vec.size();
         size_t offset = 0;
@@ -252,9 +270,6 @@ public:
             case 16:
                 tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 16);
                 break;
-            case 32:
-                tiflash_compiler_builtin_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, 32);
-                break;
             default:
                 inline_memcpy(&key_buffer[offset], vec[i] + fixed_size[i] * row, fixed_size[i]);
             }
@@ -263,7 +278,7 @@ public:
         return StringRef(key_buffer.data(), fixed_size_sum);
     }
 
-    ALWAYS_INLINE KeyType getJoinKeyWithBuffer(size_t row)
+    ALWAYS_INLINE StringRef getJoinKeyWithBuffer(size_t row)
     {
         if unlikely (!buffer_initialized)
         {
@@ -284,23 +299,23 @@ public:
         return StringRef(&keys_buffer[row * fixed_size_sum], fixed_size_sum);
     }
 
-    ALWAYS_INLINE size_t getJoinKeyByteSize(const KeyType &) const { return fixed_size_sum; }
+    ALWAYS_INLINE size_t getJoinKeyByteSize(const StringRef &) const { return fixed_size_sum; }
 
-    ALWAYS_INLINE void serializeJoinKey(const KeyType & s, char * pos) const
+    ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos) const
     {
         inline_memcpy(pos, s.data, fixed_size_sum);
     }
 
-    ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos) const { return StringRef(pos, fixed_size_sum); }
+    ALWAYS_INLINE StringRef deserializeJoinKey(const char * pos) const { return StringRef(pos, fixed_size_sum); }
 
     static constexpr bool joinKeyCompareHashFirst() { return true; }
 
-    ALWAYS_INLINE bool joinKeyIsEqual(const KeyType & key1, const KeyType & key2) const
+    ALWAYS_INLINE bool joinKeyIsEqual(const StringRef & key1, const StringRef & key2) const
     {
         return mem_utils::IsStrEqualWithSameSize(key1.data, key2.data, fixed_size_sum);
     }
 
-    ALWAYS_INLINE size_t getRequiredKeyOffset(const KeyType &) const { return required_key_offset; }
+    ALWAYS_INLINE size_t getRequiredKeyOffset(const StringRef &) const { return required_key_offset; }
 
 private:
     size_t rows = 0;
@@ -359,16 +374,12 @@ public:
 
     ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos) const
     {
-        tiflash_compiler_builtin_memcpy(pos, &s.size, sizeof(UInt32));
-        inline_memcpy(pos + sizeof(UInt32), s.data, s.size);
+        HashJoinKeyUtil::serializeStringJoinKey(s, pos);
     }
 
-    ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos) const
+    ALWAYS_INLINE StringRef deserializeJoinKey(const char * pos) const
     {
-        StringRef s;
-        tiflash_compiler_builtin_memcpy(&s.size, pos, sizeof(UInt32));
-        s.data = reinterpret_cast<const char *>(pos + sizeof(UInt32));
-        return s;
+        return HashJoinKeyUtil::deserializeStringJoinKey(pos)
     }
 
     static constexpr bool joinKeyCompareHashFirst() { return true; }
@@ -434,16 +445,12 @@ public:
 
     ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos) const
     {
-        tiflash_compiler_builtin_memcpy(pos, &s.size, sizeof(UInt32));
-        inline_memcpy(pos + sizeof(UInt32), s.data, s.size);
+        HashJoinKeyUtil::serializeStringJoinKey(s, pos);
     }
 
-    ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos) const
+    ALWAYS_INLINE StringRef deserializeJoinKey(const char * pos) const
     {
-        StringRef s;
-        tiflash_compiler_builtin_memcpy(&s.size, pos, sizeof(UInt32));
-        s.data = reinterpret_cast<const char *>(pos + sizeof(UInt32));
-        return s;
+        return HashJoinKeyUtil::deserializeStringJoinKey(pos)
     }
 
     static constexpr bool joinKeyCompareHashFirst() { return true; }
@@ -516,16 +523,12 @@ public:
 
     ALWAYS_INLINE void serializeJoinKey(const StringRef & s, char * pos) const
     {
-        tiflash_compiler_builtin_memcpy(pos, &s.size, sizeof(UInt32));
-        inline_memcpy(pos + sizeof(UInt32), s.data, s.size);
+        HashJoinKeyUtil::serializeStringJoinKey(s, pos);
     }
 
-    ALWAYS_INLINE KeyType deserializeJoinKey(const char * pos) const
+    ALWAYS_INLINE StringRef deserializeJoinKey(const char * pos) const
     {
-        StringRef s;
-        tiflash_compiler_builtin_memcpy(&s.size, pos, sizeof(UInt32));
-        s.data = reinterpret_cast<const char *>(pos + sizeof(UInt32));
-        return s;
+        return HashJoinKeyUtil::deserializeStringJoinKey(pos)
     }
 
     static constexpr bool joinKeyCompareHashFirst() { return true; }
