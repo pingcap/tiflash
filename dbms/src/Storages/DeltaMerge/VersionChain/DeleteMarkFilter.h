@@ -19,7 +19,7 @@ namespace DB::DM
 struct DMContext;
 struct SegmentSnapshot;
 
-// Filter out record versions that are deleted.
+// Filter out record versions that are deleted: read the delete mark column and update the `filter`.
 // Return how many records are filtered out.
 UInt32 buildDeleteMarkFilter(
     const DMContext & dm_context,

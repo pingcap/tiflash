@@ -35,6 +35,7 @@ UInt32 buildDeleteMarkFilterBlock(
     if (rows == 0)
         return 0;
 
+    // ColumnDefine of delete mark column is never changed.
     static const auto delmark_cds_ptr = std::make_shared<ColumnDefines>(1, getTagColumnDefine());
     auto cf_reader = cf.getReader(dm_context, data_provider, delmark_cds_ptr, ReadTag::MVCC);
     auto block = cf_reader->readNextBlock();
@@ -43,12 +44,15 @@ UInt32 buildDeleteMarkFilterBlock(
         "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
         cf.toString(),
         block.rows());
-    const auto & deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column); // Must success.
+    const auto deleteds = ColumnView<UInt8>(*(block.begin()->column));
     UInt32 filtered_out_rows = 0;
     for (UInt32 i = 0; i < deleteds.size(); ++i)
     {
-        filter[start_row_id + i] = filter[start_row_id + i] && !deleteds[i];
-        filtered_out_rows += deleteds[i];
+        if (filter[start_row_id + i] && deleteds[i])
+        {
+            filter[start_row_id + i] = 0;
+            ++filtered_out_rows;
+        }
     }
     return filtered_out_rows;
 }
@@ -95,13 +99,13 @@ UInt32 buildDeleteMarkFilterDMFile(
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
-        const auto & is_deleteds = *toColumnVectorDataPtr<UInt8>(block.begin()->column);
+        const auto deleteds = ColumnView<UInt8>(*(block.begin()->column));
         const auto itr = start_row_id_of_need_read_packs.find(pack_id);
         RUNTIME_CHECK(itr != start_row_id_of_need_read_packs.end(), start_row_id_of_need_read_packs, pack_id);
         const UInt32 pack_start_row_id = itr->second;
-        for (UInt32 i = 0; i < is_deleteds.size(); ++i)
+        for (UInt32 i = 0; i < deleteds.size(); ++i)
         {
-            if (filter[pack_start_row_id + i] && is_deleteds[i])
+            if (filter[pack_start_row_id + i] && deleteds[i])
             {
                 filter[pack_start_row_id + i] = 0;
                 ++filtered_out_rows;
@@ -173,7 +177,7 @@ UInt32 buildDeleteMarkFilter(
         const UInt32 start_row_id = read_rows;
         read_rows += cf_rows;
 
-        // TODO: add deleted_rows in tiny file
+        // TODO: add deleted_rows in tiny file and we can skip this column file is deleted_rows equals to 0.
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
             filtered_out_rows += buildDeleteMarkFilterBlock(dm_context, data_provider, *cf, start_row_id, filter);
