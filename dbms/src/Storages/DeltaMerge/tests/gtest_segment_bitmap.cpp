@@ -599,7 +599,7 @@ try
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, BigPart)
+TEST_P(SegmentBitmapFilterTest, BigPart_Middle)
 try
 {
     // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
@@ -614,6 +614,34 @@ try
             .expected_bitmap = "000001111111111111111111100000",
         },
         __LINE__);
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, BigPart_Left)
+try
+{
+    // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
+    // Packs in rowkey_range: [250, 260)|[260, 270)|[270, 280)|[280, 290)|[290, 300)
+    writeSegmentGeneric("d_big:[250, 1000):pack_size_10", std::tuple<Int64, Int64, bool>{240, 295, false});
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "11111111111111111111111111111111111111111111100000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, BigPart_Right)
+try
+{
+    // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
+    // Packs in rowkey_range: [940, 950)|[950, 960)|[960, 970)|[970, 980)|[980, 990)|[990, 1000)
+    writeSegmentGeneric("d_big:[250, 1000):pack_size_10", std::tuple<Int64, Int64, bool>{940, 995, false});
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "111111111111111111111111111111111111111111111111111111100000",
+    });
 }
 CATCH
 
@@ -1616,6 +1644,47 @@ TEST_P(SegmentBitmapFilterTest, RSFilter1)
         .caller_line = __LINE__,
         .expected_bitmap = "1111111111111111111100000001111111111111111111111111111",
         .rs_filter_results = rs_filter_results,
+    });
+}
+
+TEST_P(SegmentBitmapFilterTest, Big_NoIntersection)
+{
+    writeSegmentGeneric("d_big:[0, 10):pack_size_3|d_big:[20, 30):pack_size_3|d_big:[10, 20):pack_size_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = String(30, '1'),
+    });
+}
+
+TEST_P(SegmentBitmapFilterTest, Big_Intersection_FalsePositive)
+{
+    writeSegmentGeneric("d_big:[0, 10):pack_size_3|d_big:[20, 30):pack_size_3|merge_delta|d_big:[10, 20):pack_size_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = String(30, '1'),
+    });
+}
+
+TEST_P(SegmentBitmapFilterTest, Big_Intersection_DeleteRange)
+{
+    writeSegmentGeneric(
+        "d_big:[0, 10):pack_size_3|d_big:[20, 30):pack_size_3|merge_delta|d_dr:[10, 20)|d_big:[10, 20):pack_size_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = String(30, '1'),
+    });
+}
+
+TEST_P(SegmentBitmapFilterTest, Big_NoIntersection_Tiny)
+{
+    writeSegmentGeneric("d_big:[0, 10):pack_size_3|d_tiny:[10, 20)|d_big:[20, 30):pack_size_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = String(30, '1'),
     });
 }
 } // namespace DB::DM::tests
