@@ -27,8 +27,7 @@ namespace DB::DM
 
 IntegerSetPtr IntegerSet::createValueSet(const DataTypePtr & type, const Fields & values)
 {
-    auto type_id = type->isNullable() ? dynamic_cast<const DataTypeNullable &>(*type).getNestedType()->getTypeId()
-                                      : type->getTypeId();
+    auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)
     {
     case TypeIndex::UInt8:
@@ -78,8 +77,7 @@ IntegerSetPtr IntegerSet::createLessRangeSet(const DataTypePtr & type, const Fie
             return std::make_shared<RangeSet<T>>(std::numeric_limits<T>::min(), max_value - not_included);
     };
 
-    auto type_id = type->isNullable() ? dynamic_cast<const DataTypeNullable &>(*type).getNestedType()->getTypeId()
-                                      : type->getTypeId();
+    auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)
     {
     case TypeIndex::UInt8:
@@ -129,8 +127,7 @@ IntegerSetPtr IntegerSet::createGreaterRangeSet(const DataTypePtr & type, const 
             return std::make_shared<RangeSet<T>>(min_value + not_included, std::numeric_limits<T>::max());
     };
 
-    auto type_id = type->isNullable() ? dynamic_cast<const DataTypeNullable &>(*type).getNestedType()->getTypeId()
-                                      : type->getTypeId();
+    auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)
     {
     case TypeIndex::UInt8:

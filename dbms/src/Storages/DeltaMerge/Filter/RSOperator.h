@@ -54,7 +54,7 @@ public:
 
     virtual ColIds getColumnIDs() = 0;
 
-    virtual ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_info)
+    virtual ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_infos)
         = 0;
 
     static RSOperatorPtr build(

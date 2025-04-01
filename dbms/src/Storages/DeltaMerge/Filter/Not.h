@@ -35,9 +35,9 @@ public:
         return results;
     }
 
-    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_info) override
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_infos) override
     {
-        auto sets = children[0]->buildSets(index_info);
+        auto sets = children[0]->buildSets(index_infos);
         return sets->invert();
     }
 };

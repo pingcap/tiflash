@@ -36,15 +36,15 @@ public:
         return results;
     }
 
-    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_info) override
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_infos) override
     {
         if (auto set = IntegerSet::createLessRangeSet(attr.type, value, /*not_included=*/false); set)
         {
-            auto iter = std::find_if(index_info.begin(), index_info.end(), [&](const auto & info) {
+            auto iter = std::find_if(index_infos.begin(), index_infos.end(), [&](const auto & info) {
                 return info.index_type() == tipb::ColumnarIndexType::TypeInverted
                     && info.inverted_query_info().column_id() == attr.col_id;
             });
-            if (iter != index_info.end())
+            if (iter != index_infos.end())
                 return SingleColumnRange::create(
                     iter->inverted_query_info().column_id(),
                     iter->inverted_query_info().index_id(),

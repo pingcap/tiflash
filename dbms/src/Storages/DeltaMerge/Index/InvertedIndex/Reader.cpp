@@ -30,8 +30,7 @@ namespace DB::DM
 
 InvertedIndexReaderPtr InvertedIndexReader::view(const DataTypePtr & type, std::string_view path)
 {
-    auto type_id = type->isNullable() ? dynamic_cast<const DataTypeNullable &>(*type).getNestedType()->getTypeId()
-                                      : type->getTypeId();
+    auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)
     {
     case TypeIndex::UInt8:
@@ -71,8 +70,7 @@ InvertedIndexReaderPtr InvertedIndexReader::view(const DataTypePtr & type, std::
 
 InvertedIndexReaderPtr InvertedIndexReader::view(const DataTypePtr & type, ReadBuffer & buf, size_t index_size)
 {
-    auto type_id = type->isNullable() ? dynamic_cast<const DataTypeNullable &>(*type).getNestedType()->getTypeId()
-                                      : type->getTypeId();
+    auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)
     {
     case TypeIndex::UInt8:
