@@ -136,25 +136,8 @@ ColumnFilePersisteds deserializeSavedColumnFiles(
         column_files = deserializeSavedColumnFilesInV2Format(context, buf, version);
         break;
     case DeltaFormat::V3:
-<<<<<<< HEAD
         column_files = deserializeSavedColumnFilesInV3Format(context, segment_range, buf);
         break;
-=======
-        return deserializeSavedColumnFilesInV3Format(context, segment_range, buf);
-    case DeltaFormat::V4:
-    {
-        dtpb::DeltaLayerMeta meta;
-        String data;
-        // Note: if the data is too large (DEFAULT_MAX_STRING_SIZE), this may cause exception when restore,
-        // but it is OK so far
-        readStringBinary(data, buf);
-        RUNTIME_CHECK_MSG(
-            meta.ParseFromString(data),
-            "Failed to parse DeltaLayerMeta from string: {}",
-            Redact::keyToHexString(data.data(), data.size()));
-        return deserializeSavedColumnFilesInV4Format(context, segment_range, meta);
-    }
->>>>>>> c4bf6f4a32 (KVStore: Fix fail to restore tikv value larger than 16MiB (#10055))
     default:
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
@@ -181,25 +164,8 @@ ColumnFilePersisteds createColumnFilesFromCheckpoint( //
     switch (version)
     {
     case DeltaFormat::V3:
-<<<<<<< HEAD
         column_files = createColumnFilesInV3FormatFromCheckpoint(parent_log, context, segment_range, buf, temp_ps, wbs);
         break;
-=======
-        return createColumnFilesInV3FormatFromCheckpoint(parent_log, context, segment_range, buf, temp_ps, wbs);
-    case DeltaFormat::V4:
-    {
-        dtpb::DeltaLayerMeta meta;
-        String data;
-        // Note: if the data is too large (DEFAULT_MAX_STRING_SIZE), this may cause exception when restore,
-        // but it is OK so far
-        readStringBinary(data, buf);
-        RUNTIME_CHECK_MSG(
-            meta.ParseFromString(data),
-            "Failed to parse DeltaLayerMeta from string: {}",
-            Redact::keyToHexString(data.data(), data.size()));
-        return createColumnFilesInV4FormatFromCheckpoint(parent_log, context, segment_range, meta, temp_ps, wbs);
-    }
->>>>>>> c4bf6f4a32 (KVStore: Fix fail to restore tikv value larger than 16MiB (#10055))
     default:
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
