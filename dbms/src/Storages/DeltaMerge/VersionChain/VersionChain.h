@@ -166,8 +166,12 @@ inline GenericVersionChain createVersionChain(bool is_common_handle)
 
 enum class VersionChainMode : Int64
 {
+    // Generating MVCC bitmap by using delta index.
     Disabled = 0,
+    // Generating MVCC bitmap by using version chain.
     Enabled = 1,
+    // Generating MVCC bitmap by using version chain and delta index,
+    // then perform comparative verification. Only for test.
     EnabledForTest = 2,
 };
 
