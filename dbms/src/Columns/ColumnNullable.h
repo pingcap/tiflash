@@ -151,15 +151,10 @@ public:
     void insertManyDefaults(size_t length) override
     {
         getNestedColumn().insertManyDefaults(length);
-        insertManyNulls(length, 1);
-    }
-
-    void insertManyNulls(size_t length, UInt8 val)
-    {
         auto & map = getNullMapData();
         size_t old_size = map.size();
         map.resize(old_size + length);
-        memset(map.data() + old_size, val, length);
+        memset(map.data() + old_size, 1, length);
     }
 
     void popBack(size_t n) override;

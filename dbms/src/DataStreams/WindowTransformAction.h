@@ -147,7 +147,7 @@ private:
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
 
-    template <bool need_decrease, bool has_shortcut>
+    template <bool need_decrease, bool support_batch_calculate>
     void tryCalculate();
 
     template <
@@ -322,7 +322,7 @@ public:
     bool has_rank_or_dense_rank = false;
 
     // When preceding and following boundary type are all unbounded we can apply shortcut for agg functions.
-    bool has_shortcut = false;
+    bool support_batch_calculate = false;
 
     std::unique_ptr<Arena> arena;
 };

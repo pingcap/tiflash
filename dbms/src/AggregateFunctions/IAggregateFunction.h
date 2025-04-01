@@ -120,12 +120,7 @@ public:
     virtual void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena * arena) const = 0;
 
     /// Inserts batch results into a column
-    virtual void batchInsertSameResultInto(
-        ConstAggregateDataPtr __restrict place,
-        IColumn & to,
-        size_t num,
-        Arena * arena) const
-        = 0;
+    virtual void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const = 0;
 
     /** Returns true for aggregate functions of type -State.
       * They are executed as other aggregate functions, but not finalized (return an aggregation state that can be combined with another).
@@ -392,7 +387,7 @@ public:
         throw Exception("decrease function is not implemented yet");
     }
 
-    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict, IColumn &, size_t, Arena *) const override
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict, IColumn &, size_t) const override
     {
         throw Exception("batchInsertSameResultInto function is not implemented yet");
     }

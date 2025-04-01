@@ -241,7 +241,7 @@ WindowTransformAction::WindowTransformAction(
     initialWorkspaces();
     initialPartitionAndOrderColumnIndices();
 
-    has_shortcut = window_description_.frame.begin_type == WindowFrame::BoundaryType::Unbounded
+    support_batch_calculate = window_description_.frame.begin_type == WindowFrame::BoundaryType::Unbounded
         && window_description_.frame.end_type == WindowFrame::BoundaryType::Unbounded
         && !aggregation_workspaces.empty();
 }
@@ -1325,7 +1325,7 @@ RowNumber WindowTransformAction::writeBatchResult()
         IColumn * result_column = block.output_columns[ws.idx].get();
         const auto * agg_func = ws.aggregate_function.get();
         auto * buf = ws.aggregate_function_state.data();
-        agg_func->batchInsertSameResultInto(buf, *result_column, insert_row_num, nullptr);
+        agg_func->batchInsertSameResultInto(buf, *result_column, insert_row_num);
     }
 
     return tmp_row;
@@ -1337,14 +1337,14 @@ Block WindowTransformAction::tryGetOutputBlock()
     // first try calculate the result based on current data
     if (window_description.need_decrease)
     {
-        if (has_shortcut)
+        if (support_batch_calculate)
             tryCalculate<true, true>();
         else
             tryCalculate<true, false>();
     }
     else
     {
-        if (has_shortcut)
+        if (support_batch_calculate)
             tryCalculate<false, true>();
         else
             tryCalculate<false, false>();
@@ -1496,7 +1496,7 @@ void WindowTransformAction::updateAggregationState()
     first_processed = false;
 }
 
-template <bool need_decrease, bool has_shortcut>
+template <bool need_decrease, bool support_batch_calculate>
 void WindowTransformAction::tryCalculate()
 {
     // if there is no input data, we don't need to calculate
@@ -1564,7 +1564,7 @@ void WindowTransformAction::tryCalculate()
                 updateAggregationState<false>();
 
 
-            if constexpr (has_shortcut)
+            if constexpr (support_batch_calculate)
             {
                 // When we reach here, partition must be ended
                 assert(partition_ended);

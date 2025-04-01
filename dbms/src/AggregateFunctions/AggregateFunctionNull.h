@@ -629,14 +629,14 @@ public:
         }
     }
 
-    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena * arena)
-        const override
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
     {
         auto & to_concrete = static_cast<ColumnNullable &>(to);
         if (getCounter(place) > 0)
         {
-            nested_function->batchInsertSameResultInto(nestedPlace(place), to_concrete.getNestedColumn(), num, arena);
-            to_concrete.insertManyNulls(num, 0);
+            nested_function->batchInsertSameResultInto(nestedPlace(place), to_concrete.getNestedColumn(), num);
+            auto & null_map = to_concrete.getNullMapData();
+            null_map.resize_fill_zero(null_map.size() + num);
         }
         else
         {
