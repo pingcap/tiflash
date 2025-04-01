@@ -228,25 +228,29 @@ try
         "multi_test",
         "t1",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 3, 0}), toVec<Int32>("b", {2, 2, 0}), toVec<Int32>("c", {3, 2, 0})});
+        {toNullableVec<Int32>("a", {1, 3, 0}),
+         toNullableVec<Int32>("b", {2, 2, 0}),
+         toNullableVec<Int32>("c", {3, 2, 0})});
 
     context.addMockTable(
         "multi_test",
         "t2",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {3, 3, 0}), toVec<Int32>("b", {4, 2, 0}), toVec<Int32>("c", {5, 3, 0})});
+        {toNullableVec<Int32>("a", {3, 3, 0}),
+         toNullableVec<Int32>("b", {4, 2, 0}),
+         toNullableVec<Int32>("c", {5, 3, 0})});
 
     context.addMockTable(
         "multi_test",
         "t3",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 2, 0}), toVec<Int32>("b", {2, 2, 0})});
+        {toNullableVec<Int32>("a", {1, 2, 0}), toNullableVec<Int32>("b", {2, 2, 0})});
 
     context.addMockTable(
         "multi_test",
         "t4",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {3, 2, 0}), toVec<Int32>("b", {4, 2, 0})});
+        {toNullableVec<Int32>("a", {3, 2, 0}), toNullableVec<Int32>("b", {4, 2, 0})});
 
     const ColumnsWithTypeAndName expected_cols[join_type_num * join_type_num] = {
         /// inner x inner x inner
@@ -646,86 +650,86 @@ try
     column_prune_ref_columns.push_back(toVec<UInt64>({1}));
 
     /// int(1) == float(1.0)
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLong, false}}, {toVec<Int32>("a", {1})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeFloat}}, {toVec<Float32>("a", {1.0})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeFloat, false}}, {toVec<Float32>("a", {1.0})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float32>({1.0})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<Int32>({1}), toVec<Float32>({1.0})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// int(1) == double(1.0)
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLong, false}}, {toVec<Int32>("a", {1})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble}}, {toVec<Float64>("a", {1.0})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble, false}}, {toVec<Float64>("a", {1.0})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float64>({1.0})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<Int32>({1}), toVec<Float64>({1.0})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// float(1) == double(1.0)
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeFloat}}, {toVec<Float32>("a", {1})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeFloat, false}}, {toVec<Float32>("a", {1})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble}}, {toVec<Float64>("a", {1})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble, false}}, {toVec<Float64>("a", {1})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Float32>({1}), toNullableVec<Float64>({1})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<Float32>({1}), toVec<Float64>({1})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// varchar('x') == char('x')
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeString}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeString, false}}, {toVec<String>("a", {"x"})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar, false}}, {toVec<String>("a", {"x"})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<String>({"x"}), toVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// tinyblob('x') == varchar('x')
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeTinyBlob}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeTinyBlob, false}}, {toVec<String>("a", {"x"})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar, false}}, {toVec<String>("a", {"x"})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<String>({"x"}), toVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// mediumBlob('x') == varchar('x')
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeMediumBlob}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeMediumBlob, false}}, {toVec<String>("a", {"x"})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar, false}}, {toVec<String>("a", {"x"})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<String>({"x"}), toVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// blob('x') == varchar('x')
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeBlob}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeBlob, false}}, {toVec<String>("a", {"x"})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar, false}}, {toVec<String>("a", {"x"})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<String>({"x"}), toVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// longBlob('x') == varchar('x')
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLongBlob}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLongBlob, false}}, {toVec<String>("a", {"x"})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar, false}}, {toVec<String>("a", {"x"})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<String>({"x"}), toVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// decimal with different scale
     context.addMockTable(
         "cast",
         "t1",
-        {{"a", TiDB::TP::TypeNewDecimal}},
+        {{"a", TiDB::TP::TypeNewDecimal, false}},
         {createColumn<Decimal256>(std::make_tuple(9, 4), {"0.12"}, "a")});
 
     context.addMockTable(
         "cast",
         "t2",
-        {{"a", TiDB::TP::TypeNewDecimal}},
+        {{"a", TiDB::TP::TypeNewDecimal, false}},
         {createColumn<Decimal256>(std::make_tuple(9, 3), {"0.12"}, "a")});
 
     executeAndAssertColumnsEqual(
         cast_request(),
-        {createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}),
-         createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
+        {createColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}),
+         createColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// datetime(1970-01-01 00:00:01) == timestamp(1970-01-01 00:00:01)
@@ -769,13 +773,13 @@ try
         "join_agg",
         "t1",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 1, 3, 4}), toVec<Int32>("b", {1, 1, 4, 1})});
+        {toNullableVec<Int32>("a", {1, 1, 3, 4}), toNullableVec<Int32>("b", {1, 1, 4, 1})});
 
     context.addMockTable(
         "join_agg",
         "t2",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 4, 2}), toVec<Int32>("b", {2, 6, 2})});
+        {toNullableVec<Int32>("a", {1, 4, 2}), toNullableVec<Int32>("b", {2, 6, 2})});
 
     const ColumnsWithTypeAndName expected_cols[join_type_num] = {
         {toNullableVec<Int32>({4}), toNullableVec<Int32>({1}), toVec<UInt64>({3}), toNullableVec<Int32>({1})},
@@ -1913,8 +1917,8 @@ try
     {
         executeAndAssertColumnsEqual(
             request,
-            {toNullableVec<String>({"banana", "banana"}),
-             toNullableVec<String>({"apple", "banana"}),
+            {toVec<String>({"banana", "banana"}),
+             toVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"})});
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request_column_prune, 2));
@@ -1922,12 +1926,12 @@ try
 
     request = context.scan("test_db", "l_table")
                   .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                  .project({"s", "join_c"})
+                  .project({"l_table.s", "r_table.join_c"})
                   .build(context);
     {
         executeAndAssertColumnsEqual(
             request,
-            {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+            {toVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
     }
 
     request = context.scan("test_db", "l_table")
@@ -1936,15 +1940,15 @@ try
     {
         executeAndAssertColumnsEqual(
             request,
-            {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
-             toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+            {toVec<String>({"banana", "banana", "banana", "banana"}),
+             toVec<String>({"apple", "apple", "apple", "banana"}),
              toNullableVec<String>({"banana", "banana", "banana", {}}),
              toNullableVec<String>({"apple", "apple", "apple", {}})});
     }
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, InnerJoin)
+TEST_F(JoinExecutorTestRunner, InnerJoinWithNullAndNotNullJoinKey)
 try
 {
     context.addMockTable(
@@ -2149,8 +2153,8 @@ try
         WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(
             request,
-            {toNullableVec<String>({"banana", "banana"}),
-             toNullableVec<String>({"apple", "banana"}),
+            {toVec<String>({"banana", "banana"}),
+             toVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"})});
         WRAP_FOR_JOIN_TEST_END
@@ -2165,14 +2169,14 @@ try
         "null_test",
         "t",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
-         toVec<Int32>("b", {1, 1, 1, 1, 1, 1, 1, 2, 2, 2}),
-         toVec<Int32>("c", {1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
+        {toNullableVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+         toNullableVec<Int32>("b", {1, 1, 1, 1, 1, 1, 1, 2, 2, 2}),
+         toNullableVec<Int32>("c", {1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
     context.addMockTable(
         "null_test",
         "null_table",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {}), toVec<Int32>("b", {}), toVec<Int32>("c", {})});
+        {toNullableVec<Int32>("a", {}), toNullableVec<Int32>("b", {}), toNullableVec<Int32>("c", {})});
 
     std::shared_ptr<tipb::DAGRequest> request;
     std::shared_ptr<tipb::DAGRequest> request_column_prune;
@@ -2685,8 +2689,8 @@ try
 {
     String query = "select * from test_db.l_table left outer join test_db.r_table_2 using join_c";
     auto cols
-        = {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
-           toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+        = {toVec<String>({"banana", "banana", "banana", "banana"}),
+           toVec<String>({"apple", "apple", "apple", "banana"}),
            toNullableVec<String>({"banana", "banana", "banana", {}}),
            toNullableVec<String>({"apple", "apple", "apple", {}})};
     WRAP_FOR_JOIN_TEST_BEGIN
@@ -2701,9 +2705,9 @@ try
     context.addMockTable(
         "split_test",
         "t1",
-        {{"a", TiDB::TP::TypeLong}},
+        {{"a", TiDB::TP::TypeLong, false}},
         {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
-    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1})});
+    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong, false}}, {toVec<Int32>("a", {1, 1, 1, 1, 1})});
 
     auto request = context.scan("split_test", "t1")
                        .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
@@ -2776,12 +2780,12 @@ try
     context.addMockTable(
         "split_test",
         "t1",
-        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+        {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}},
         {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}), toVec<Int32>("b", {2, 2, 2, 2, 2, 2, 2, 2, 2, 2})});
     context.addMockTable(
         "split_test",
         "t2",
-        {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+        {{"a", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong, false}},
         {toVec<Int32>("a", {1, 1, 1, 1, 1}), toVec<Int32>("c", {1, 2, 3, 4, 5})});
 
     std::vector<size_t> block_sizes{1, 2, 7, 25, 49, 50, 51, DEFAULT_BLOCK_SIZE};

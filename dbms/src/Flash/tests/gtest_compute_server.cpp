@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <AggregateFunctions/AggregateFunctionFactory.h>
+#include <Columns/ColumnUtils.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Flash/Mpp/MPPTaskId.h>
@@ -248,18 +249,27 @@ public:
                 {col2_name, TiDB::TP::TypeLongLong, true},
                 {col4_name, TiDB::TP::TypeTiny, true}};
 
+            auto nullable_hash_ndv_block = high_ndv_block;
+            for (size_t i = 0; i < nullable_hash_ndv_block.columns(); ++i)
+                convertColumnToNullable(nullable_hash_ndv_block.getByPosition(i));
             context.addMockTable(
                 {db_name, nullable_high_ndv_tbl_name},
                 nullable_column_infos,
-                high_ndv_block.getColumnsWithTypeAndName());
+                nullable_hash_ndv_block.getColumnsWithTypeAndName());
+            auto nullable_low_ndv_block = low_ndv_block;
+            for (size_t i = 0; i < nullable_low_ndv_block.columns(); ++i)
+                convertColumnToNullable(nullable_low_ndv_block.getByPosition(i));
             context.addMockTable(
                 {db_name, nullable_low_ndv_tbl_name},
                 nullable_column_infos,
-                low_ndv_block.getColumnsWithTypeAndName());
+                nullable_low_ndv_block.getColumnsWithTypeAndName());
+            auto nullable_medium_ndv_block = medium_ndv_block;
+            for (size_t i = 0; i < nullable_medium_ndv_block.columns(); ++i)
+                convertColumnToNullable(nullable_medium_ndv_block.getByPosition(i));
             context.addMockTable(
                 {db_name, nullable_medium_ndv_tbl_name},
                 nullable_column_infos,
-                medium_ndv_block.getColumnsWithTypeAndName());
+                nullable_medium_ndv_block.getColumnsWithTypeAndName());
 
             expected_strings = {
                 R"(exchange_sender_4 | type:Hash, {<0, String>, <1, Longlong>, <2, Longlong>, <3, Longlong>, <4, Longlong>, <5, Longlong>, <6, Tiny>, <7, Tiny>, <8, Tiny>, <9, Tiny>, <10, Longlong>, <11, Longlong>, <12, Longlong>, <13, Longlong>, <14, Longlong>, <15, String>}
@@ -478,7 +488,7 @@ public:
                 for (size_t j = 0; j < block_size; ++j)
                 {
                     size_t idx = (i * block_size + j) % distinct_num;
-                    auto repo_name = distinct_repo_names[idx];
+                    const auto & repo_name = distinct_repo_names[idx];
                     auto commit_num = distinct_commit_nums[idx];
                     col1->insert(Field(repo_name.data(), repo_name.size()));
                     col2->insert(Field(static_cast<Int64>(commit_num)));
