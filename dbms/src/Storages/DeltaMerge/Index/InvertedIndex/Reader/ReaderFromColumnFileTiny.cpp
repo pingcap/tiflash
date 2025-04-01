@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromColumnFileTiny.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 
 
 namespace DB::DM
@@ -30,11 +31,13 @@ InvertedIndexReaderFromColumnFileTiny::InvertedIndexReaderFromColumnFileTiny(
     const ColumnRangePtr & column_range_,
     const ColumnFileTiny & tiny_file_,
     const IColumnFileDataProviderPtr & data_provider_,
-    const LocalIndexCachePtr & local_index_cache_)
+    const LocalIndexCachePtr & local_index_cache_,
+    const ScanContextPtr & scan_context_)
     : tiny_file(tiny_file_)
     , data_provider(data_provider_)
     , column_range(column_range_)
     , local_index_cache(local_index_cache_)
+    , scan_context(scan_context_)
 {
     GET_METRIC(tiflash_inverted_index_active_instances, type_memory_reader).Increment();
 }
@@ -86,7 +89,6 @@ BitmapFilterPtr InvertedIndexReaderFromColumnFileTiny::load(const SingleColumnRa
 
     {
         // Statistics
-        // TODO: add more statistics to ScanContext
         double elapsed = w.elapsedSecondsFromLastTime();
         if (is_load_from_storage)
         {
@@ -96,11 +98,25 @@ BitmapFilterPtr InvertedIndexReaderFromColumnFileTiny::load(const SingleColumnRa
         {
             GET_METRIC(tiflash_inverted_index_duration, type_load_cache).Observe(elapsed);
         }
+
+        if (scan_context)
+        {
+            scan_context->inverted_idx_load_from_disk.fetch_add(is_load_from_storage, std::memory_order_relaxed);
+            scan_context->inverted_idx_load_from_cache.fetch_add(!is_load_from_storage, std::memory_order_relaxed);
+            scan_context->inverted_idx_load_time_ms.fetch_add(elapsed * 1000, std::memory_order_relaxed);
+        }
     }
 
     RUNTIME_CHECK(index_reader != nullptr);
     auto bitmap_filter = column_range->set->search(index_reader, tiny_file.getRows());
-    GET_METRIC(tiflash_inverted_index_duration, type_search).Observe(w.elapsedSecondsFromLastTime());
+    auto elapsed = w.elapsedSecondsFromLastTime();
+    GET_METRIC(tiflash_inverted_index_duration, type_search).Observe(elapsed);
+    if (scan_context)
+    {
+        scan_context->inverted_idx_search_time_ms.fetch_add(elapsed * 1000, std::memory_order_relaxed);
+        scan_context->inverted_idx_indexed_rows.fetch_add(bitmap_filter->size(), std::memory_order_relaxed);
+        scan_context->inverted_idx_search_selected_rows.fetch_add(bitmap_filter->count(), std::memory_order_relaxed);
+    }
     return bitmap_filter;
 }
 
