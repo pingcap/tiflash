@@ -45,6 +45,10 @@ DeltaIndex::Updates ColumnFileFlushTask::prepare(WriteBatches & wbs)
         if (!task.block_data)
             continue;
 
+        // Data sorting alters the sequence of data, requiring updates to the VersionChain,
+        // like `cloneWithUpdates` of DeltaIndex, yet it provides no benefit for VersionChain's data scanning.
+        // Meanwhile, the DeltaIndex inherently supports unordered delta data, such as unflushed or compacted data.
+        // Therefore, only perform data sorting when the VersionChain is disabled.
         if (!context.enableVersionChain())
         {
             IColumn::Permutation perm;
