@@ -231,19 +231,15 @@ TEST_F(RegionSeriTest, Region)
 try
 {
     TableID table_id = 100;
-<<<<<<< HEAD
     auto region = std::make_shared<Region>(createRegionMeta(1001, table_id));
-=======
-    auto region = makeTmpRegion();
 
->>>>>>> c4bf6f4a32 (KVStore: Fix fail to restore tikv value larger than 16MiB (#10055))
     TiKVKey key = RecordKVFormat::genKey(table_id, 323, 9983);
     region->insert("default", TiKVKey::copyFrom(key), TiKVValue("value1"));
     region->insert("write", TiKVKey::copyFrom(key), RecordKVFormat::encodeWriteCfValue('P', 0));
     region->insert("lock", TiKVKey::copyFrom(key), RecordKVFormat::encodeLockCfValue('P', "", 0, 0));
 
     TiKVKey large_value_key = RecordKVFormat::genKey(table_id, 324, 9983);
-    region->insertDebug(
+    region->insert(
         "default",
         TiKVKey::copyFrom(large_value_key),
         // slightly less than `TIKV_MAX_VALUE_SIZE` for other key-values
