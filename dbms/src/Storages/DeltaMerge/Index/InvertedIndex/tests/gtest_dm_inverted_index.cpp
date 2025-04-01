@@ -153,7 +153,7 @@ try
     {
         auto columnar_info = tipb::ColumnarIndexInfo();
         columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
-        auto * inverted = columnar_info.mutable_invert_query_info();
+        auto * inverted = columnar_info.mutable_inverted_query_info();
         inverted->set_index_id(1);
         inverted->set_column_id(integer_column_id);
         used_indexes.Add(std::move(columnar_info));
@@ -292,7 +292,7 @@ try
     {
         auto columnar_info = tipb::ColumnarIndexInfo();
         columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
-        auto * inverted = columnar_info.mutable_invert_query_info();
+        auto * inverted = columnar_info.mutable_inverted_query_info();
         inverted->set_index_id(1);
         inverted->set_column_id(integer_cd_1.id);
         used_indexes.Add(std::move(columnar_info));
@@ -300,7 +300,7 @@ try
     {
         auto columnar_info = tipb::ColumnarIndexInfo();
         columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
-        auto * inverted = columnar_info.mutable_invert_query_info();
+        auto * inverted = columnar_info.mutable_inverted_query_info();
         inverted->set_index_id(2);
         inverted->set_column_id(integer_cd_2.id);
         used_indexes.Add(std::move(columnar_info));
@@ -558,7 +558,7 @@ try
     {
         auto columnar_info = tipb::ColumnarIndexInfo();
         columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
-        auto * inverted = columnar_info.mutable_invert_query_info();
+        auto * inverted = columnar_info.mutable_inverted_query_info();
         inverted->set_index_id(1);
         inverted->set_column_id(integer_column_id);
         used_indexes.Add(std::move(columnar_info));
@@ -762,7 +762,7 @@ try
     {
         auto columnar_info = tipb::ColumnarIndexInfo();
         columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
-        auto * inverted = columnar_info.mutable_invert_query_info();
+        auto * inverted = columnar_info.mutable_inverted_query_info();
         inverted->set_index_id(1);
         inverted->set_column_id(integer_cd_1.id);
         used_indexes.Add(std::move(columnar_info));
@@ -770,7 +770,7 @@ try
     {
         auto columnar_info = tipb::ColumnarIndexInfo();
         columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
-        auto * inverted = columnar_info.mutable_invert_query_info();
+        auto * inverted = columnar_info.mutable_inverted_query_info();
         inverted->set_index_id(2);
         inverted->set_column_id(integer_cd_2.id);
         used_indexes.Add(std::move(columnar_info));

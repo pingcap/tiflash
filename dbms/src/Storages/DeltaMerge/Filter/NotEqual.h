@@ -44,12 +44,12 @@ public:
         {
             auto iter = std::find_if(index_info.begin(), index_info.end(), [&](const auto & info) {
                 return info.index_type() == tipb::ColumnarIndexType::TypeInverted
-                    && info.invert_query_info().column_id() == attr.col_id;
+                    && info.inverted_query_info().column_id() == attr.col_id;
             });
             if (iter != index_info.end())
                 return SingleColumnRange::create(
-                    iter->invert_query_info().column_id(),
-                    iter->invert_query_info().index_id(),
+                    iter->inverted_query_info().column_id(),
+                    iter->inverted_query_info().index_id(),
                     less->unionWith(greater));
         }
         return UnsupportedColumnRange::create();

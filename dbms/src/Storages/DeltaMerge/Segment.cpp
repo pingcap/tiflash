@@ -3553,8 +3553,10 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             bitmap_filter = InvertedIndexReaderFromSegment::loadStable(
                 segment_snap,
                 executor->column_range,
-                dm_context.global_context.getLightLocalIndexCache());
+                dm_context.global_context.getLightLocalIndexCache(),
+                dm_context.scan_context);
             size_t skipped_pack = modifyPackFilterResults(segment_snap, pack_filter_results, bitmap_filter);
+            dm_context.scan_context->inverted_idx_search_skipped_packs += skipped_pack;
             LOG_DEBUG(
                 segment_snap->log,
                 "Finish load inverted index, column_range={}, bitmap_filter={}/{}, skipped_pack={}",
@@ -3586,7 +3588,8 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             auto delta_index_bitmap = InvertedIndexReaderFromSegment::loadDelta(
                 segment_snap,
                 executor->column_range,
-                dm_context.global_context.getLightLocalIndexCache());
+                dm_context.global_context.getLightLocalIndexCache(),
+                dm_context.scan_context);
             bitmap_filter->append(*delta_index_bitmap);
         }
 
