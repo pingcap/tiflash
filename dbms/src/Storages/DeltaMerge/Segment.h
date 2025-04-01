@@ -811,6 +811,7 @@ public:
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
 
+    template <ExtraHandleType HandleType>
     void checkMVCCBitmap(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,

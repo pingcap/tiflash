@@ -3259,7 +3259,6 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
             "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
-        bitmap_filter->runOptimize();
         return bitmap_filter;
     }
 
@@ -3299,7 +3298,6 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         use_packs,
         segment_snap->stable->getDMFilesRows(),
         elapse_ms);
-    bitmap_filter->runOptimize();
     return bitmap_filter;
 }
 
@@ -3529,6 +3527,10 @@ static bool hasCacheableColumn(const ColumnDefines & columns)
     return std::find_if(columns.begin(), columns.end(), DMFileReader::isCacheableColumn) != columns.end();
 }
 
+// `checkMVCCBitmap` is only used for testing.
+// It will check both bitmaps that generating by version chain and delta index.
+// If the bitmaps are not equal, it will throw an exception.
+template <ExtraHandleType HandleType>
 void Segment::checkMVCCBitmap(
     const DMContext & dm_context,
     const SegmentSnapshotPtr & segment_snap,
@@ -3556,6 +3558,7 @@ void Segment::checkMVCCBitmap(
     std::lock_guard lock(check_mtx);
     if (check_failed)
     {
+        // Aoid too many logs.
         LOG_ERROR(segment_snap->log, "{} failed, skip", __FUNCTION__);
         return;
     }
@@ -3565,23 +3568,23 @@ void Segment::checkMVCCBitmap(
     {
         LOG_ERROR(
             segment_snap->log,
-            "{} failed, bitmap size not match, new_bitmap_filter_size={}, bitmap_filter_size={}, snapshot_rows={}",
+            "{} failed, new_bitmap_filter_size={}, bitmap_filter_size={}, snapshot_rows={}",
             __FUNCTION__,
             new_bitmap_filter->size(),
             bitmap_filter.size(),
             segment_snap->getRows());
-        throw Exception("Bitmap size not match", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Bitmap size not equal", ErrorCodes::LOGICAL_ERROR);
     }
 
     if (new_bitmap_filter->isAllMatch() != bitmap_filter.isAllMatch())
     {
         LOG_ERROR(
             segment_snap->log,
-            "{} failed, bitmap all match not match, new_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
+            "{} failed, new_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
             __FUNCTION__,
             new_bitmap_filter->isAllMatch(),
             bitmap_filter.isAllMatch());
-        throw Exception("Bitmap all match not match", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Bitmap all_match not euqal", ErrorCodes::LOGICAL_ERROR);
     }
 
     LOG_ERROR(
@@ -3623,44 +3626,39 @@ void Segment::checkMVCCBitmap(
     auto block = vstackBlocks(std::move(blocks));
     RUNTIME_CHECK_MSG(
         block.rows() == bitmap_filter.size(),
-        "Block rows not match: block_rows={}, bitmap_size={}",
+        "Block rows not equal: block_rows={}, bitmap_size={}",
         block.rows(),
         bitmap_filter.size());
-    RUNTIME_CHECK(!dm_context.is_common_handle); // TODO: support common handle
     auto handle_col = block.getByName(MutSup::extra_handle_column_name).column;
     auto version_col = block.getByName(MutSup::version_column_name).column;
     auto delmark_col = block.getByName(MutSup::delmark_column_name).column;
-    const auto & handles = toColumnVectorData<Int64>(handle_col);
-    const auto & versions = toColumnVectorData<UInt64>(version_col);
-    const auto & delmarks = toColumnVectorData<UInt8>(delmark_col);
+    const auto handles = ColumnView<HandleType>(*handle_col);
+    const auto versions = ColumnView<UInt64>(*version_col);
+    const auto delmarks = ColumnView<UInt8>(*delmark_col);
     for (UInt32 i = 0; i < bitmap_filter.size(); ++i)
     {
         if (new_bitmap_filter->get(i) != bitmap_filter.get(i))
         {
-            std::string_view filter_by;
-            if (!bitmap_filter.get(i))
-            {
-                if (!bitmap_filter.version_filter[i])
-                    filter_by = "version";
-                else if (!bitmap_filter.rowkey_filter[i])
-                    filter_by = "rowkey";
-                else
-                    filter_by = "delmark";
-            }
+            RowKeyValue rowkey;
+            if constexpr (std::is_same_v<HandleType, String>)
+                rowkey = RowKeyValue(dm_context.is_common_handle, std::make_shared<String>(String(handles[i])));
+            else
+                rowkey = RowKeyValue(dm_context.is_common_handle, nullptr, handles[i]);
 
             LOG_ERROR(
                 segment_snap->log,
-                "{} {} {} {} {} {}, filter by {}",
+                "{} delte_index={} version_chain={} handle={} version={} delmark={} version_filter={} rowkey_filter={}",
                 i,
                 new_bitmap_filter->get(i),
                 bitmap_filter.get(i),
-                handles[i],
+                rowkey.toDebugString(),
                 versions[i],
                 delmarks[i],
-                filter_by);
+                bitmap_filter.version_filter[i],
+                bitmap_filter.rowkey_filter[i]);
         }
     }
-    throw Exception("Bitmap not match", ErrorCodes::LOGICAL_ERROR);
+    throw Exception("Bitmap not equal", ErrorCodes::LOGICAL_ERROR);
 }
 
 BlockInputStreamPtr Segment::getBitmapFilterInputStream(
@@ -3687,14 +3685,24 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
 
     if (unlikely(dm_context.enableVersionChainForTest()))
     {
-        checkMVCCBitmap(
-            dm_context,
-            segment_snap,
-            read_ranges,
-            pack_filter_results,
-            start_ts,
-            build_bitmap_filter_block_rows,
-            *bitmap_filter);
+        if (dm_context.is_common_handle)
+            checkMVCCBitmap<String>(
+                dm_context,
+                segment_snap,
+                read_ranges,
+                pack_filter_results,
+                start_ts,
+                build_bitmap_filter_block_rows,
+                *bitmap_filter);
+        else
+            checkMVCCBitmap<Int64>(
+                dm_context,
+                segment_snap,
+                read_ranges,
+                pack_filter_results,
+                start_ts,
+                build_bitmap_filter_block_rows,
+                *bitmap_filter);
     }
 
     // If we don't need to read the cacheable columns, release column cache as soon as possible.
