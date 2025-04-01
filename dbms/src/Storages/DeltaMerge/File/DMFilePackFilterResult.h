@@ -20,6 +20,7 @@
 
 namespace DB::DM
 {
+
 class DMFilePackFilterResult
 {
     friend class DMFilePackFilter;
