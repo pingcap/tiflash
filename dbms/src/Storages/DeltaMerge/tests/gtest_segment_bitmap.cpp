@@ -1590,9 +1590,9 @@ TEST_P(SegmentBitmapFilterTest, RSFilter0)
     auto rs_filter_results = loadPackFilterResults(snap, {seg->getRowKeyRange()});
     ASSERT_EQ(rs_filter_results.size(), 1);
     auto & rs_filter_result = rs_filter_results[0];
-    ASSERT_EQ(rs_filter_result->handle_res.size(), 10);
-    ASSERT_EQ(rs_filter_result->pack_res.size(), 10);
-    rs_filter_result->pack_res[4] = RSResult::None; // [20, 25)
+    const auto & pack_res = rs_filter_result->getPackRes();
+    ASSERT_EQ(pack_res.size(), 10);
+    const_cast<RSResults &>(pack_res)[4] = RSResult::None; // [20, 25)
     checkBitmap(CheckBitmapOptions{
         .seg_id = SEG_ID,
         .caller_line = __LINE__,
@@ -1608,9 +1608,9 @@ TEST_P(SegmentBitmapFilterTest, RSFilter1)
     auto rs_filter_results = loadPackFilterResults(snap, {seg->getRowKeyRange()});
     ASSERT_EQ(rs_filter_results.size(), 1);
     auto & rs_filter_result = rs_filter_results[0];
-    ASSERT_EQ(rs_filter_result->handle_res.size(), 10);
-    ASSERT_EQ(rs_filter_result->pack_res.size(), 10);
-    rs_filter_result->pack_res[4] = RSResult::None; // [20, 25)
+    const auto & pack_res = rs_filter_result->getPackRes();
+    ASSERT_EQ(pack_res.size(), 10);
+    const_cast<RSResults &>(pack_res)[4] = RSResult::None; // [20, 25)
     checkBitmap(CheckBitmapOptions{
         .seg_id = SEG_ID,
         .caller_line = __LINE__,
