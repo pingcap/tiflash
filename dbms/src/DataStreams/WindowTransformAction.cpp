@@ -242,8 +242,8 @@ WindowTransformAction::WindowTransformAction(
     initialPartitionAndOrderColumnIndices();
 
     support_batch_calculate = window_description_.frame.begin_type == WindowFrame::BoundaryType::Unbounded
-        && window_description_.frame.end_type == WindowFrame::BoundaryType::Unbounded
-        && !aggregation_workspaces.empty();
+        && window_description_.frame.end_type == WindowFrame::BoundaryType::Unbounded && !aggregation_workspaces.empty()
+        && window_workspaces.empty();
 }
 
 void WindowTransformAction::cleanUp()
@@ -1337,10 +1337,7 @@ Block WindowTransformAction::tryGetOutputBlock()
     // first try calculate the result based on current data
     if (window_description.need_decrease)
     {
-        if (support_batch_calculate)
-            tryCalculate<true, true>();
-        else
-            tryCalculate<true, false>();
+        tryCalculate<true, false>();
     }
     else
     {

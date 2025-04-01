@@ -120,8 +120,7 @@ public:
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
 
-    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *)
-        const override
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
     {
         auto & container = static_cast<ColumnUInt64 &>(to).getData();
         container.resize_fill(container.size() + num, data(place).count);
@@ -216,8 +215,7 @@ public:
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
 
-    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *)
-        const override
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
     {
         auto & container = static_cast<ColumnUInt64 &>(to).getData();
         container.resize_fill(container.size() + num, data(place).count);
@@ -296,8 +294,7 @@ public:
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
 
-    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num, Arena *)
-        const override
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
     {
         auto & container = static_cast<ColumnUInt64 &>(to).getData();
         container.resize_fill(container.size() + num, data(place).count);
