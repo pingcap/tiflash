@@ -3545,7 +3545,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     if (executor && executor->column_range && executor->column_range->type != ColumnRangeType::Unsupported)
     {
         bool all_dmfile_packs_skipped
-            = std::any_of(pack_filter_results.begin(), pack_filter_results.end(), [](const auto & res) {
+            = std::all_of(pack_filter_results.begin(), pack_filter_results.end(), [](const auto & res) {
                   return res->countUsePack() == 0;
               });
         if (!all_dmfile_packs_skipped)
