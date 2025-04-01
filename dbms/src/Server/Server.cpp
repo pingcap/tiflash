@@ -21,6 +21,7 @@
 #include <Common/FailPoint.h>
 #include <Common/MemoryAllocTrace.h>
 #include <Common/RedactHelpers.h>
+#include <Common/SpillLimiter.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashBuildInfo.h>
@@ -36,7 +37,6 @@
 #include <Common/getNumberOfCPUCores.h>
 #include <Common/grpcpp.h>
 #include <Common/setThreadName.h>
-#include <Common/SpillLimiter.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Flash/DiagnosticsService.h>
 #include <Flash/FlashService.h>

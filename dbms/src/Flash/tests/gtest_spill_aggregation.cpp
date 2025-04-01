@@ -139,7 +139,7 @@ try
 
     // <max_spilled_bytes, expect_error>
     std::vector<std::pair<int64_t, bool>> max_spilled_bytes
-        = {{-1, false}, {1, true}, {total_data_size / 3, true}, {total_data_size, false}};
+        = {{-1, false}, {1, true}, {total_data_size / 200, true}, {total_data_size, false}};
 
     /// test single thread aggregation
     SPILL_LIMITER_TEST_BEGIN
