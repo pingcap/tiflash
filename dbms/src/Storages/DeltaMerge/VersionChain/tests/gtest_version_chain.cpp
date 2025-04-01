@@ -297,9 +297,6 @@ try
         excepted_base_versions.begin() + 10 + 55,
         NotExistRowID); // d_tiny:[200, 255)
     std::iota(excepted_base_versions.begin() + 10 + 55, excepted_base_versions.end(), 298); // d_mem:[298, 305)
-    //read_ranges.emplace_back(buildRowKeyRange(222, 244, is_common_handle));
-    //read_ranges.emplace_back(buildRowKeyRange(300, 303, is_common_handle));
-    //read_ranges.emplace_back(buildRowKeyRange(555, 666, is_common_handle));
     runVersionChainTest(TestOptions{
         .seg_data = "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
         .expected_base_versions = excepted_base_versions,
