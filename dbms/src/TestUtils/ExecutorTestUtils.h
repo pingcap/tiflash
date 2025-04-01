@@ -44,7 +44,7 @@ ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
     for (const auto & pair : max_spilled_bytes)                              \
     {                                                                        \
         bool got_error_var_in_marco = false;                                 \
-        SpillLimiter::instance = std::make_unique<SpillLimiter>(pair.first); \
+        SpillLimiter::instance = std::make_shared<SpillLimiter>(pair.first); \
         try                                                                  \
         {
 #define SPILL_LIMITER_TEST_END                                                  \

@@ -118,6 +118,7 @@ try
     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
     enablePipeline(false);
     auto ref_columns = executeStreams(request, original_max_streams);
+
     /// enable spill
     WRAP_FOR_SPILL_TEST_BEGIN
     context.context->setSetting(
@@ -139,7 +140,7 @@ try
 
     // <max_spilled_bytes, expect_error>
     std::vector<std::pair<int64_t, bool>> max_spilled_bytes
-        = {{-1, false}, {1, true}, {total_data_size / 200, true}, {total_data_size, false}};
+        = {{-1, false}, {1, true}, {4500, true}, {total_data_size, false}};
 
     /// test single thread aggregation
     SPILL_LIMITER_TEST_BEGIN
