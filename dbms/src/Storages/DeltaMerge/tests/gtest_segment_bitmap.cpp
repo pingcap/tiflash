@@ -210,7 +210,7 @@ void SegmentBitmapFilterTest::checkBitmap(const CheckBitmapOptions & opt)
         rs_filter_results,
         opt.read_ts,
         DEFAULT_BLOCK_SIZE,
-        enable_version_chain);
+        /*enable_version_chain*/ true);
 
     auto bitmap_filter_delta_index = seg->buildBitmapFilter(
         *dm_context,
@@ -219,7 +219,7 @@ void SegmentBitmapFilterTest::checkBitmap(const CheckBitmapOptions & opt)
         rs_filter_results,
         opt.read_ts,
         DEFAULT_BLOCK_SIZE,
-        !enable_version_chain);
+        /*enable_version_chain*/ false);
 
     if (opt.expected_bitmap)
         ASSERT_EQ(bitmap_filter_version_chain->toDebugString(), *(opt.expected_bitmap))

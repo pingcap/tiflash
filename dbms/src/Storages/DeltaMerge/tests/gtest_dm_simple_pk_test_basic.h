@@ -54,6 +54,9 @@ public:
         std::pair<Int64, Int64> range;
         const std::vector<Block> & blocks;
         bool clear = false;
+
+        // Records of the same handle must be written in version order and cannot be arbitrarily out of sequence.
+        // When ingestFiles concurrently, ranges that intersect share the same mutex to serialize their data generation and ingestion order.
         std::shared_ptr<std::mutex> mtx;
     };
     void ingestFiles(const IngestFilesOptions & options);

@@ -37,7 +37,6 @@ protected:
     ColumnPtr hold_row_id;
     ColumnPtr hold_handle;
     bool is_common_handle = false;
-    bool enable_version_chain = true; // TODO
 
     void setRowKeyRange(Int64 begin, Int64 end, bool including_right_boundary);
 
