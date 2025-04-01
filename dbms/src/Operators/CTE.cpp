@@ -54,15 +54,23 @@ std::pair<FetchStatus, Block> CTE::tryGetBlockAt(size_t idx)
 
 void CTE::pushBlock(const Block & block)
 {
-    // TODO track memory
     std::unique_lock<std::shared_mutex> lock(this->rw_lock);
-    this->blocks.push_back(block); // TODO consider spill
+    
+    // TODO consider spill
+    this->memory_usage += block.bytes();
+    // TODO check spill
+    if unlikely (this->blocks.empty())
+        this->pipe_cv.notifyAll();
+    this->blocks.push_back(block);
 }
 
 void CTE::notifyEOF()
 {
     std::unique_lock<std::shared_mutex> lock(this->rw_lock);
     this->is_eof = true;
+
+    // Just in case someone is in WAITING_FOR_NOTIFY status
+    this->pipe_cv.notifyAll();
 }
 
 void CTE::registerTask(TaskPtr && task)

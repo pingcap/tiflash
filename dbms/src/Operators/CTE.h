@@ -52,12 +52,13 @@ private:
     std::shared_mutex rw_lock;
     Blocks blocks;
 
+    size_t memory_usage = 0;
+
     // Tasks in WAITING_FOR_NOTIFY are saved in this deque
     std::deque<TaskPtr> waiting_tasks;
     PipeConditionVariable pipe_cv;
 
     bool is_eof = false;
-
     bool spill_triggered = false; // TODO this var may be useless, just a placement so far
     // TODO spill
 };

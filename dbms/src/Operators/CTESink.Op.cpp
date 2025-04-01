@@ -24,6 +24,13 @@ void CTESinkOp::operateSuffixImpl()
 
 OperatorStatus CTESinkOp::writeImpl(Block && block)
 {
+    if (!block)
+    {
+        this->input_done = true;
+        this->cte->notifyEOF();
+        return OperatorStatus::FINISHED;
+    }
+    this->total_rows += block.rows();
     this->cte->pushBlock(block); // TODO handle spill
     return OperatorStatus::NEED_INPUT;
 }

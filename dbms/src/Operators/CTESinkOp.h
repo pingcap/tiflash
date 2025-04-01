@@ -19,7 +19,6 @@
 
 namespace DB
 {
-// TODO handle selective block
 class CTESinkOp : public SinkOp
 {
 public:
@@ -41,8 +40,5 @@ private:
     std::shared_ptr<CTE> cte;
     size_t total_rows = 0;
     bool input_done = false;
-
-    // When spill is triggered in CTE, we need to temporarily save the block
-    Block tmp_block;
 };
 } // namespace DB

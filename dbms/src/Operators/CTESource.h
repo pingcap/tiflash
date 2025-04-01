@@ -22,8 +22,7 @@
 
 namespace DB
 {
-// TODO consider fine granine
-// TODO maybe consider handling selective block
+// TODO consider fine graine (start from here)
 class CTESourceOp : public SourceOp
 {
 public:
