@@ -2576,12 +2576,11 @@ void Segment::replayVersionChain(const DMContext & dm_context)
         = createSnapshot(dm_context, /*for_update=*/false, CurrentMetrics::DT_SnapshotOfReplayVersionChain);
     if (!segment_snap)
         return;
-    auto base_versions = std::visit(
+    std::ignore = std::visit(
         [&dm_context, &segment_snap](auto & version_chain) {
             return version_chain.replaySnapshot(dm_context, *segment_snap);
         },
         this->version_chain);
-    UNUSED(base_versions);
 }
 
 String Segment::simpleInfo() const
