@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromDMFile.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/FileCachePerf.h>
 
@@ -34,10 +35,12 @@ namespace DB::DM
 InvertedIndexReaderFromDMFile::InvertedIndexReaderFromDMFile(
     const ColumnRangePtr & column_range_,
     const DMFilePtr & dmfile_,
-    const LocalIndexCachePtr & local_index_cache_)
+    const LocalIndexCachePtr & local_index_cache_,
+    const ScanContextPtr & scan_context_)
     : dmfile(dmfile_)
     , column_range(column_range_)
     , local_index_cache(local_index_cache_)
+    , scan_context(scan_context_)
 {
     GET_METRIC(tiflash_inverted_index_active_instances, type_disk_reader).Increment();
 }
@@ -87,35 +90,12 @@ BitmapFilterPtr InvertedIndexReaderFromDMFile::load(const SingleColumnRangePtr &
     {
         // Disaggregated mode
         auto * file_cache = FileCache::instance();
-        RUNTIME_CHECK_MSG(file_cache, "Must enable S3 file cache to use vector index");
-
-        auto perf_begin = PerfContext::file_cache;
-
-        // If download file failed, retry a few times.
-        for (auto i = 3; i > 0; --i)
-        {
-            try
-            {
-                if (auto file_guard = file_cache->downloadFileForLocalRead(s3_file_name, index_props.file_size());
-                    file_guard)
-                {
-                    local_index_file_path = file_guard->getLocalFileName();
-                    break; // Successfully downloaded index into local cache
-                }
-
-                throw Exception(ErrorCodes::S3_ERROR, "Failed to download vector index file {}", index_file_path);
-            }
-            catch (...)
-            {
-                if (i <= 1)
-                    throw;
-            }
-        }
-
-        if ( //
-            PerfContext::file_cache.fg_download_from_s3 > perf_begin.fg_download_from_s3 || //
-            PerfContext::file_cache.fg_wait_download_from_s3 > perf_begin.fg_wait_download_from_s3)
-            has_s3_download = true;
+        RUNTIME_CHECK_MSG(file_cache, "Must enable S3 file cache to use inverted index");
+        auto [file_seg, downloaded]
+            = file_cache->downloadFileForLocalReadWithRetry(s3_file_name, index_props.file_size(), 3);
+        RUNTIME_CHECK(file_seg);
+        local_index_file_path = file_seg->getLocalFileName();
+        has_s3_download = downloaded;
     }
     else
     {
@@ -145,7 +125,6 @@ BitmapFilterPtr InvertedIndexReaderFromDMFile::load(const SingleColumnRangePtr &
 
     {
         // Statistics
-        // TODO: add more statistics to ScanContext
         double elapsed = w.elapsedSecondsFromLastTime();
         if (has_s3_download)
         {
@@ -162,11 +141,28 @@ BitmapFilterPtr InvertedIndexReaderFromDMFile::load(const SingleColumnRangePtr &
         {
             GET_METRIC(tiflash_inverted_index_duration, type_load_cache).Observe(elapsed);
         }
+
+        if (scan_context)
+        {
+            scan_context->inverted_idx_load_from_s3.fetch_add(has_s3_download, std::memory_order_relaxed);
+            scan_context->inverted_idx_load_from_disk.fetch_add(has_load_from_file, std::memory_order_relaxed);
+            scan_context->inverted_idx_load_from_cache.fetch_add(
+                !has_s3_download && !has_load_from_file,
+                std::memory_order_relaxed);
+            scan_context->inverted_idx_load_time_ms.fetch_add(elapsed * 1000, std::memory_order_relaxed);
+        }
     }
 
     RUNTIME_CHECK(inverted_index != nullptr);
     auto bitmap_filter = column_range->set->search(inverted_index, dmfile->getRows());
-    GET_METRIC(tiflash_inverted_index_duration, type_search).Observe(w.elapsedSecondsFromLastTime());
+    auto elapsed = w.elapsedSecondsFromLastTime();
+    GET_METRIC(tiflash_inverted_index_duration, type_search).Observe(elapsed);
+    if (scan_context)
+    {
+        scan_context->inverted_idx_search_time_ms.fetch_add(elapsed * 1000, std::memory_order_relaxed);
+        scan_context->inverted_idx_indexed_rows.fetch_add(bitmap_filter->size(), std::memory_order_relaxed);
+        scan_context->inverted_idx_search_selected_rows.fetch_add(bitmap_filter->count(), std::memory_order_relaxed);
+    }
     return bitmap_filter;
 }
 

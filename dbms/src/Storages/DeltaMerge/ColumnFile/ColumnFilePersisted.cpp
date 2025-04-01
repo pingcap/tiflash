@@ -181,6 +181,8 @@ ColumnFilePersisteds deserializeSavedColumnFiles(
     {
         dtpb::DeltaLayerMeta meta;
         String data;
+        // Note: if the data is too large (DEFAULT_MAX_STRING_SIZE), this may cause exception when restore,
+        // but it is OK so far
         readStringBinary(data, buf);
         RUNTIME_CHECK_MSG(
             meta.ParseFromString(data),
@@ -217,6 +219,8 @@ ColumnFilePersisteds createColumnFilesFromCheckpoint( //
     {
         dtpb::DeltaLayerMeta meta;
         String data;
+        // Note: if the data is too large (DEFAULT_MAX_STRING_SIZE), this may cause exception when restore,
+        // but it is OK so far
         readStringBinary(data, buf);
         RUNTIME_CHECK_MSG(
             meta.ParseFromString(data),
