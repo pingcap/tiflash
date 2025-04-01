@@ -70,6 +70,10 @@ private:
                 compressed_buf.count() - last_bytes_uncompressed,
                 file_buf.count() - last_bytes_compressed};
 
+            // NOTE: compressed_buf.count() returns the bytes count of uncompressed data,
+            // which is the data written directly using compressed_buf.write().
+            // file_buf.count() returns the bytes count of data written to file_buf by CompressedWriteBuffer::nextImpl(),
+            // which is the compressed data size.
             last_bytes_uncompressed = compressed_buf.count();
             last_bytes_compressed = file_buf.count();
 
