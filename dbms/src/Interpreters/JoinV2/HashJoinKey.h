@@ -379,7 +379,7 @@ public:
 
     ALWAYS_INLINE StringRef deserializeJoinKey(const char * pos) const
     {
-        return HashJoinKeyUtil::deserializeStringJoinKey(pos)
+        return HashJoinKeyUtil::deserializeStringJoinKey(pos);
     }
 
     static constexpr bool joinKeyCompareHashFirst() { return true; }
@@ -450,7 +450,7 @@ public:
 
     ALWAYS_INLINE StringRef deserializeJoinKey(const char * pos) const
     {
-        return HashJoinKeyUtil::deserializeStringJoinKey(pos)
+        return HashJoinKeyUtil::deserializeStringJoinKey(pos);
     }
 
     static constexpr bool joinKeyCompareHashFirst() { return true; }
@@ -528,7 +528,7 @@ public:
 
     ALWAYS_INLINE StringRef deserializeJoinKey(const char * pos) const
     {
-        return HashJoinKeyUtil::deserializeStringJoinKey(pos)
+        return HashJoinKeyUtil::deserializeStringJoinKey(pos);
     }
 
     static constexpr bool joinKeyCompareHashFirst() { return true; }
