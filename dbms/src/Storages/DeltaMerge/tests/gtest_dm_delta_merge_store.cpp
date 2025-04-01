@@ -4016,8 +4016,7 @@ CATCH
 
 void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
 {
-    // This test case is design for delta index.
-    // Always use delta index in this case.
+    // This test case is design for delta index. Always use delta index in this case.
     auto guard = disableVersionChainTemporary(db_context->getGlobalContext().getSettingsRef());
 
     auto table_column_defines = DMTestEnv::getDefaultColumns();

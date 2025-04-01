@@ -1041,11 +1041,6 @@ try
 }
 CATCH
 
-namespace
-{
-constexpr bool use_version_chain = true;
-}
-
 TEST_F(SegmentTest, ColumnFileBigRangeGreaterThanSegment)
 try
 {
@@ -1103,17 +1098,28 @@ try
         // test built bitmap filter
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
         auto real_ranges = segment->shrinkRowKeyRanges({read_range});
-        auto bitmap_filter = segment->buildBitmapFilter( //
+        auto bitmap_filter_delta_index = segment->buildBitmapFilter( //
             dmContext(),
             segment_snap,
             real_ranges,
             loadPackFilterResults(segment_snap, real_ranges),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
-            use_version_chain);
+            /*enable_version_chain*/ false);
+        auto bitmap_filter_version_chain = segment->buildBitmapFilter( //
+            dmContext(),
+            segment_snap,
+            real_ranges,
+            loadPackFilterResults(segment_snap, real_ranges),
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            /*enable_version_chain*/ true);
         // the bitmap only contains the overlapped packs of ColumnFileBig. So only 60 here.
-        ASSERT_EQ(bitmap_filter->size(), 60);
-        ASSERT_EQ(bitmap_filter->toDebugString(), "000000000011111111111111111111111111111111111111110000000000");
+        ASSERT_EQ(bitmap_filter_version_chain->size(), 60);
+        ASSERT_EQ(
+            bitmap_filter_version_chain->toDebugString(),
+            "000000000011111111111111111111111111111111111111110000000000");
+        ASSERT_EQ(*bitmap_filter_version_chain, *bitmap_filter_delta_index);
     }
 
     ColumnDefines cols_to_read{
@@ -1165,24 +1171,24 @@ try
         auto read_ranges = {RowKeyRange::newAll(false, 1)};
         auto real_ranges = segment->shrinkRowKeyRanges(read_ranges);
 
-        auto bitmap_filter1 = segment->buildBitmapFilter( //
+        auto bitmap_filter_delta_index = segment->buildBitmapFilter( //
             dmContext(),
             segment_snap,
             real_ranges,
             loadPackFilterResults(segment_snap, real_ranges),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
-            !use_version_chain);
-        auto bitmap_filter2 = segment->buildBitmapFilter( //
+            /*enable_version_chain*/ false);
+        auto bitmap_filter_version_chain = segment->buildBitmapFilter( //
             dmContext(),
             segment_snap,
             real_ranges,
             loadPackFilterResults(segment_snap, real_ranges),
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE,
-            use_version_chain);
+            /*enable_version_chain*/ false);
 
-        ASSERT_EQ(bitmap_filter1->toDebugString(), bitmap_filter2->toDebugString());
+        ASSERT_EQ(*bitmap_filter_delta_index, *bitmap_filter_version_chain);
     }
     {
         // test read data with delete-range and new writes
