@@ -571,7 +571,7 @@ public:
     }
 };
 
-// For some tests only for delta-index, use this function to diable version-chain temporarily.
+// For some tests that designed for delta index, use this function to disable version chain temporarily.
 [[nodiscard]] inline auto disableVersionChainTemporary(Settings & settings)
 {
     const Int64 initial_config = settings.enable_version_chain;
@@ -580,6 +580,7 @@ public:
         [initial_config, &settings]() { settings.set("enable_version_chain", std::to_string(initial_config)); });
 }
 
+// For some tests that designed for version chain, use this function to enable version chain temporarily.
 [[nodiscard]] inline auto enableVersionChainTemporary(Settings & settings)
 {
     const Int64 initial_config = settings.enable_version_chain;
