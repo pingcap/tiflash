@@ -3259,6 +3259,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
             "buildBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
+        bitmap_filter->runOptimize();
         return bitmap_filter;
     }
 
@@ -3298,6 +3299,7 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         use_packs,
         segment_snap->stable->getDMFilesRows(),
         elapse_ms);
+    bitmap_filter->runOptimize();
     return bitmap_filter;
 }
 
