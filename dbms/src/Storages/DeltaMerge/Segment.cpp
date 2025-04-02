@@ -3128,7 +3128,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilter(
 
     if (enable_version_chain)
     {
-        return ::DB::DM::buildBitmapFilter(
+        return ::DB::DM::buildMVCCBitmapFilter(
             dm_context,
             *segment_snap,
             read_ranges,

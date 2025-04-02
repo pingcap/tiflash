@@ -17,15 +17,15 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/VersionChain/MVCCBitmapFilter.h>
 #include <Storages/DeltaMerge/VersionChain/DeleteMarkFilter.h>
+#include <Storages/DeltaMerge/VersionChain/MVCCBitmapFilter.h>
 #include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
 #include <Storages/DeltaMerge/VersionChain/VersionFilter.h>
 
 namespace DB::DM
 {
 template <ExtraHandleType HandleType>
-BitmapFilterPtr buildBitmapFilter(
+BitmapFilterPtr buildMVCCBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
@@ -85,7 +85,7 @@ BitmapFilterPtr buildBitmapFilter(
     return bitmap_filter;
 }
 
-template BitmapFilterPtr buildBitmapFilter<Int64>(
+template BitmapFilterPtr buildMVCCBitmapFilter<Int64>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
@@ -93,7 +93,7 @@ template BitmapFilterPtr buildBitmapFilter<Int64>(
     const UInt64 read_ts,
     VersionChain<Int64> & version_chain);
 
-template BitmapFilterPtr buildBitmapFilter<String>(
+template BitmapFilterPtr buildMVCCBitmapFilter<String>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
@@ -101,7 +101,7 @@ template BitmapFilterPtr buildBitmapFilter<String>(
     const UInt64 read_ts,
     VersionChain<String> & version_chain);
 
-BitmapFilterPtr buildBitmapFilter(
+BitmapFilterPtr buildMVCCBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
@@ -111,7 +111,13 @@ BitmapFilterPtr buildBitmapFilter(
 {
     return std::visit(
         [&](auto & version_chain) {
-            return buildBitmapFilter(dm_context, snapshot, read_ranges, pack_filter_results, read_ts, version_chain);
+            return buildMVCCBitmapFilter(
+                dm_context,
+                snapshot,
+                read_ranges,
+                pack_filter_results,
+                read_ts,
+                version_chain);
         },
         generic_version_chain);
 }

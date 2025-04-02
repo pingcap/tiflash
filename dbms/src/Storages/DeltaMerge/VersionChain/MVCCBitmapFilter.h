@@ -27,10 +27,10 @@ using RowKeyRanges = std::vector<RowKeyRange>;
 class BitmapFilter;
 using BitmapFilterPtr = std::shared_ptr<BitmapFilter>;
 
-// buildBitmapFilter calls buildVersionFilter, buildRowKeyFilter, and buildDeleteMarkFilter,
-// returning a result consistent with Segment::buildBitmapFilterNormal/Segment::buildBitmapFilterStableOnly.
+// buildMVCCBitmapFilter calls buildVersionFilter, buildRowKeyFilter, and buildDeleteMarkFilter,
+// returning a result consistent with Segment::buildMVCCBitmapFilterNormal/Segment::buildMVCCBitmapFilterStableOnly.
 template <ExtraHandleType HandleType>
-BitmapFilterPtr buildBitmapFilter(
+BitmapFilterPtr buildMVCCBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
@@ -38,7 +38,7 @@ BitmapFilterPtr buildBitmapFilter(
     const UInt64 read_ts,
     VersionChain<HandleType> & version_chain);
 
-BitmapFilterPtr buildBitmapFilter(
+BitmapFilterPtr buildMVCCBitmapFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,

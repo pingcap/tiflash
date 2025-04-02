@@ -183,7 +183,7 @@ try
             RUNTIME_ASSERT(version_chain.getReplayedRows() == delta_rows);
             for (auto _ : state)
             {
-                auto bitmap_filter = buildBitmapFilter<decltype(handle_type)>(
+                auto bitmap_filter = buildMVCCBitmapFilter<decltype(handle_type)>(
                     *dm_context,
                     *segment_snapshot,
                     {segment->getRowKeyRange()},
