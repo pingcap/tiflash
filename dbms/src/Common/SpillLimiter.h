@@ -59,12 +59,16 @@ public:
         GET_METRIC(tiflash_spilled_files, type_current_spilled_bytes).Set(current_spilled_bytes);
     }
 
-    uint64_t getCurrentSpilledBytes() const { return current_spilled_bytes; }
+    uint64_t getCurrentSpilledBytes() const
+    {
+        std::lock_guard<std::mutex> guard(lock);
+        return current_spilled_bytes;
+    }
 
     static inline std::shared_ptr<SpillLimiter> instance = std::make_shared<SpillLimiter>(-1);
 
 private:
-    std::mutex lock;
+    mutable std::mutex lock;
     int64_t max_spilled_bytes;
     uint64_t current_spilled_bytes = 0;
 };
