@@ -70,9 +70,15 @@ void setWindowFrameImpl(WindowFrame & frame, const tipb::WindowFrame & tipb_fram
     if (frame.type == WindowFrame::FrameType::Rows)
     {
         if (frame.begin_type == WindowFrame::BoundaryType::Offset && frame.begin_offset == 0)
+        {
             frame.begin_type = WindowFrame::BoundaryType::Current;
+            frame.begin_preceding = false;
+        }
         if (frame.end_type == WindowFrame::BoundaryType::Offset && frame.end_offset == 0)
+        {
             frame.end_type = WindowFrame::BoundaryType::Current;
+            frame.end_preceding = false;
+        }
     }
 }
 
