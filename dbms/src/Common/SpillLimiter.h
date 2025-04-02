@@ -32,11 +32,7 @@ public:
     {
         std::lock_guard<std::mutex> guard(lock);
         bool ok = true;
-        if (max_spilled_bytes < 0)
-        {
-            ok = true;
-        }
-        else
+        if (max_spilled_bytes >= 0)
         {
             const auto sum = current_spilled_bytes + bytes;
             // ok is true when no overflow and sum is less than max bytes.
@@ -63,6 +59,12 @@ public:
     {
         std::lock_guard<std::mutex> guard(lock);
         return current_spilled_bytes;
+    }
+
+    void setMaxSpilledBytes(int64_t max)
+    {
+        std::lock_guard<std::mutex> guard(lock);
+        max_spilled_bytes = max;
     }
 
     static inline std::shared_ptr<SpillLimiter> instance = std::make_shared<SpillLimiter>(-1);

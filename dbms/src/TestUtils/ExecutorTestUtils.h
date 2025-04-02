@@ -40,12 +40,12 @@ ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
 #define WRAP_FOR_TEST_END }
 
-#define SPILL_LIMITER_TEST_BEGIN                                             \
-    for (const auto & pair : max_spilled_bytes)                              \
-    {                                                                        \
-        bool got_error_var_in_marco = false;                                 \
-        SpillLimiter::instance = std::make_shared<SpillLimiter>(pair.first); \
-        try                                                                  \
+#define SPILL_LIMITER_TEST_BEGIN                                \
+    for (const auto & pair : max_spilled_bytes)                 \
+    {                                                           \
+        bool got_error_var_in_marco = false;                    \
+        SpillLimiter::instance->setMaxSpilledBytes(pair.first); \
+        try                                                     \
         {
 #define SPILL_LIMITER_TEST_END                                                  \
     }                                                                           \
@@ -57,7 +57,7 @@ ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
     ASSERT_EQ(pair.second, got_error_var_in_marco);                             \
     }                                                                           \
     ASSERT_EQ(SpillLimiter::instance->getCurrentSpilledBytes(), 0);             \
-    SpillLimiter::instance = std::make_shared<SpillLimiter>(-1);
+    SpillLimiter::instance->setMaxSpilledBytes(-1);
 
 class ExecutorTest : public ::testing::Test
 {

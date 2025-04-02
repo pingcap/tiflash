@@ -1076,7 +1076,7 @@ try
         }
     });
 
-    SpillLimiter::instance = std::make_shared<SpillLimiter>(settings.max_spilled_bytes);
+    SpillLimiter::instance->setMaxSpilledBytes(settings.max_spilled_bytes);
 
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
     if (not_disagg_mode || /*has_been_bootstrap*/ store_ident.has_value())
