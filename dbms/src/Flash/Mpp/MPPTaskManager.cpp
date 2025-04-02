@@ -16,6 +16,7 @@
 #include <Common/FmtUtils.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/EstablishCall.h>
 #include <Flash/Mpp/MPPTask.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Interpreters/Context.h>
@@ -28,8 +29,6 @@
 #include <string>
 #include <unordered_map>
 #include <utility>
-
-#include "Flash/EstablishCall.h"
 
 namespace DB
 {
@@ -187,7 +186,7 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
             if (gather_task_set == nullptr)
                 gather_task_set = query->addMPPGatherTaskSet(id.gather_id);
             auto & alarm = gather_task_set->alarms[sender_task_id][receiver_task_id];
-            call_data->setState(EstablishCallData::WAIT_TUNNEL);
+            call_data->setCallState(EstablishCallData::WAIT_TUNNEL);
             if likely (cq != nullptr)
             {
                 alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());

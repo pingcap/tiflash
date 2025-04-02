@@ -36,8 +36,6 @@
 #include <common/types.h>
 
 #include <atomic>
-#include <type_traits>
-
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

@@ -24,8 +24,6 @@
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/TMTContext.h>
 
-#include "Interpreters/Set.h"
-
 namespace DB
 {
 namespace FailPoints
@@ -99,10 +97,10 @@ EstablishCallData::~EstablishCallData()
     }
 }
 
-void EstablishCallData::setState(EstablishCallData::CallStatus new_status)
+void EstablishCallData::setCallState(EstablishCallData::CallStatus new_state)
 {
     updateStateMetrics(state, -1);
-    state = new_status;
+    state = new_state;
     updateStateMetrics(state, 1);
 }
 
@@ -263,7 +261,7 @@ void EstablishCallData::write(const mpp::MPPDataPacket & packet)
 
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
-    setState(WAIT_WRITE_ERR);
+    setCallState(WAIT_WRITE_ERR);
     write(packet);
 }
 
@@ -275,7 +273,7 @@ static LoggerPtr & getLogger()
 
 void EstablishCallData::writeDone(String msg, const grpc::Status & status)
 {
-    setStatus(FINISH);
+    setCallState(FINISH);
 
     if (async_tunnel_sender)
     {
@@ -341,7 +339,7 @@ void EstablishCallData::trySendOneMsg()
         /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
         /// is destructed which may cause the memory tracker in `res` become invalid
         packet->switchMemTracker(nullptr);
-        setState(WAIT_WRITE);
+        setCallState(WAIT_WRITE);
         write(packet->packet);
         return;
     case MPMCQueueResult::FINISHED:
@@ -352,7 +350,7 @@ void EstablishCallData::trySendOneMsg()
         writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
         return;
     case MPMCQueueResult::EMPTY:
-        setState(WAIT_IN_QUEUE);
+        setCallState(WAIT_IN_QUEUE);
         // No new message.
         return;
     default:

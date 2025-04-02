@@ -74,7 +74,7 @@ public:
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
     void startEstablishConnection();
-    void setState(CallStatus status);
+    void setCallState(CallStatus new_state);
     bool isWaitingTunnelState() { return state == WAIT_TUNNEL; }
 
     static void updateStateMetrics(CallStatus status, Int64 change);
