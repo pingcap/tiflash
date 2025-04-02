@@ -3704,11 +3704,11 @@ void Segment::checkMVCCBitmap(
     {
         LOG_ERROR(
             segment_snap->log,
-            "{} failed, new_bitmap_filter_size={}, bitmap_filter_size={}, snapshot_rows={}",
+            "{} failed, snapshot={}, new_bitmap_filter_size={}, bitmap_filter_size={}",
             __FUNCTION__,
+            segment_snap->detailInfo(),
             new_bitmap_filter->size(),
-            bitmap_filter.size(),
-            segment_snap->getRows());
+            bitmap_filter.size());
         throw Exception("Bitmap size not equal", ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -3716,8 +3716,9 @@ void Segment::checkMVCCBitmap(
     {
         LOG_ERROR(
             segment_snap->log,
-            "{} failed, new_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
+            "{} failed, snapshot={}, new_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
             __FUNCTION__,
+            segment_snap->detailInfo(),
             new_bitmap_filter->isAllMatch(),
             bitmap_filter.isAllMatch());
         throw Exception("Bitmap all_match not euqal", ErrorCodes::LOGICAL_ERROR);
@@ -3725,15 +3726,14 @@ void Segment::checkMVCCBitmap(
 
     LOG_ERROR(
         segment_snap->log,
-        "{} failed, new_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{}, stable={}, delta={}, "
+        "{} failed, snapshot={}, new_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{}"
         "read_ranges={}, segment_range={}",
         __FUNCTION__,
+        segment_snap->detailInfo(),
         new_bitmap_filter->count(),
         new_bitmap_filter->size(),
         bitmap_filter.count(),
         bitmap_filter.size(),
-        segment_snap->stable->getRows(),
-        segment_snap->delta->getRows(),
         read_ranges,
         rowkey_range);
 
