@@ -39,24 +39,22 @@ mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i =
 |    1 |
 +------+
 mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i = -2;
-+------+
-| i    |
-+------+
-|   -2 |
-+------+
 mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i = 257;
 mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i > 1;
 +------+
 | i    |
 +------+
 |    2 |
+|    3 |
+|    4 |
+|    5 |
 +------+
 
-# Modify data type which needs change data is not supported
+# Modify data type which does not need to change data is supported
 mysql> ALTER TABLE test.t MODIFY COLUMN `i` tinyint;
 ERROR 8200 (HY000): Unsupported modify column: columnar indexes on the column
 
-# Modify data type which needs change data is supported
+# Modify data type which needs to change data is not supported
 mysql> ALTER TABLE test.t MODIFY COLUMN `i` smallint unsigned;
 mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i = 1;
 +------+
@@ -65,17 +63,15 @@ mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i =
 |    1 |
 +------+
 mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i = -2;
-+------+
-| i    |
-+------+
-|   -2 |
-+------+
 mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i = 257;
 mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i > 1;
 +------+
 | i    |
 +------+
 |    2 |
+|    3 |
+|    4 |
+|    5 |
 +------+
 
 # Drop index
