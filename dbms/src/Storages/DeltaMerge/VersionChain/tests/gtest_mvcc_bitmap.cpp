@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Storages/DeltaMerge/VersionChain/MVCCBitmapFilter.h>
 #include <Storages/DeltaMerge/VersionChain/ColumnView.h>
+#include <Storages/DeltaMerge/VersionChain/MVCCBitmapFilter.h>
 #include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/DeltaMerge/VersionChain/tests/mvcc_test_utils.h>
 #include <TestUtils/ColumnGenerator.h>
