@@ -241,6 +241,11 @@ WindowTransformAction::WindowTransformAction(
     initialWorkspaces();
     initialPartitionAndOrderColumnIndices();
 
+    if (window_description_.frame.begin_type == WindowFrame::BoundaryType::Unbounded)
+        assert(window_description_.frame.begin_preceding);
+    if (window_description_.frame.end_type == WindowFrame::BoundaryType::Unbounded)
+        assert(!window_description_.frame.end_preceding);
+
     support_batch_calculate = window_description_.frame.begin_type == WindowFrame::BoundaryType::Unbounded
         && window_description_.frame.end_type == WindowFrame::BoundaryType::Unbounded && !aggregation_workspaces.empty()
         && window_workspaces.empty();
