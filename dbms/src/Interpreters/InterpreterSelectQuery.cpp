@@ -57,8 +57,6 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/RegionQueryInfo.h>
-#include <TableFunctions/ITableFunction.h>
-#include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/logger_useful.h>
@@ -167,12 +165,6 @@ void InterpreterSelectQuery::init(const Names & required_result_column_names)
         /// Read from subquery.
         source_columns
             = InterpreterSelectWithUnionQuery::getSampleBlock(table_expression, context).getNamesAndTypesList();
-    }
-    else if (table_expression && typeid_cast<const ASTFunction *>(table_expression.get()))
-    {
-        /// Read from table function.
-        storage = context.getQueryContext().executeTableFunction(table_expression);
-        table_lock = storage->lockForShare(context.getCurrentQueryId());
     }
     else
     {

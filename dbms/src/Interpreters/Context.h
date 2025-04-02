@@ -68,7 +68,6 @@ class QueryLog;
 class IDatabase;
 class DDLGuard;
 class IStorage;
-class ITableFunction;
 using StoragePtr = std::shared_ptr<IStorage>;
 using Tables = std::map<String, StoragePtr>;
 class IAST;
@@ -289,8 +288,6 @@ public:
 
     StoragePtr getTable(const String & database_name, const String & table_name) const;
     StoragePtr tryGetTable(const String & database_name, const String & table_name) const;
-
-    StoragePtr executeTableFunction(const ASTPtr & table_expression);
 
     void addDatabase(const String & database_name, const DatabasePtr & database);
     DatabasePtr detachDatabase(const String & database_name);
