@@ -52,12 +52,12 @@ public:
         std::lock_guard<std::mutex> guard(lock);
         if unlikely (current_spilled_bytes < bytes)
         {
-            current_spilled_bytes = 0;
             LOG_ERROR(
                 Logger::get("SpillLimiter"),
-                "unexpected release bytes({}), current bytes: {}",
+                "unexpected release bytes({}), current bytes: {}, reset current bytes to zero",
                 bytes,
                 current_spilled_bytes);
+            current_spilled_bytes = 0;
         }
         else
         {

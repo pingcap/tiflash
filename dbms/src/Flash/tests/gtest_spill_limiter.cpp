@@ -29,34 +29,26 @@ public:
         ExecutorTest::initializeContext();
         dag_context_ptr->log = Logger::get("SpillLimiterTest");
 
+        total_rows = 2000;
+        DB::MockColumnInfoVec table_column_infos{
+            {"key_64", TiDB::TP::TypeLongLong, false},
+            {"key_string", TiDB::TP::TypeString, false},
+            {"key_nullable_string", TiDB::TP::TypeString, true},
+            {"key_decimal256", TiDB::TP::TypeString, false},
+            {"value", TiDB::TP::TypeLong, false}};
+        ColumnsWithTypeAndName table_column_data;
+        for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos))
         {
-            total_rows = 2000;
-            DB::MockColumnInfoVec table_column_infos{
-                {"key_64", TiDB::TP::TypeLongLong, false},
-                {"key_string", TiDB::TP::TypeString, false},
-                {"key_nullable_string", TiDB::TP::TypeString, true},
-                {"key_decimal256", TiDB::TP::TypeString, false},
-                {"value", TiDB::TP::TypeLong, false}};
-            ColumnsWithTypeAndName table_column_data;
-            for (const auto & column_info : mockColumnInfosToTiDBColumnInfos(table_column_infos))
-            {
-                ColumnGeneratorOpts opts{
-                    total_rows,
-                    getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
-                    RANDOM,
-                    column_info.name};
-                table_column_data.push_back(ColumnGenerator::instance().generate(opts));
-            }
-            context.addMockTable("test_db", "t1", table_column_infos, table_column_data);
-
-            for (auto & column_data : table_column_data)
-                total_data_size += column_data.column->estimateByteSizeForSpill();
-
-            LOG_DEBUG(Logger::get(), "total_data_size: {}", total_data_size);
+            ColumnGeneratorOpts opts{
+                total_rows,
+                getDataTypeByColumnInfoForComputingLayer(column_info)->getName(),
+                RANDOM,
+                column_info.name};
+            table_column_data.push_back(ColumnGenerator::instance().generate(opts));
         }
+        context.addMockTable("test_db", "t1", table_column_infos, table_column_data);
     }
 
-    size_t total_data_size = 0;
     size_t total_rows = 0;
 };
 
