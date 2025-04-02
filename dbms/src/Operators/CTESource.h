@@ -22,7 +22,7 @@
 
 namespace DB
 {
-// TODO consider fine graine (start from here)
+// TODO consider fine graine at compiling stage
 class CTESourceOp : public SourceOp
 {
 public:
@@ -33,8 +33,6 @@ public:
         : SourceOp(exec_context_, req_id), cte(cte_) {}
 
     String getName() const override { return "CTESourceOp"; }
-
-    IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 
 protected:
     void operateSuffixImpl() override { LOG_DEBUG(log, "finish read {} rows from cte source", total_rows); }
@@ -49,9 +47,5 @@ private:
 
     uint64_t total_rows{};
     std::queue<Block> block_queue;
-
-    // size_t stream_id; // TODO maybe need it
-
-    IOProfileInfoPtr io_profile_info; // TODO initialize it and handle it
 };
 } // namespace DB
