@@ -1104,6 +1104,13 @@ UInt64 StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
     return getAndMaybeInitStore()->ingestSegmentsFromCheckpointInfo(global_context, settings, range, checkpoint_info);
 }
 
+UInt64 StorageDeltaMerge::removeSegmentsFromCheckpointInfo(
+    const CheckpointIngestInfo & checkpoint_info,
+    const Settings & settings)
+{
+    return getAndMaybeInitStore()->removeSegmentsFromCheckpointInfo(global_context, settings, checkpoint_info);
+}
+
 UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)
 {
     if (storeInited())
