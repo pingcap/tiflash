@@ -33,7 +33,10 @@ public:
         return RSResults(pack_count, RSResult::Some);
     }
 
-    ColumnRangePtr buildSets(const LocalIndexInfosSnapshot &) override { return UnsupportedColumnRange::create(); }
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> &) override
+    {
+        return UnsupportedColumnRange::create();
+    }
 };
 
 } // namespace DB::DM

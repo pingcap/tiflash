@@ -846,8 +846,14 @@ BlockInputStreams StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter
-        = PushDownExecutor::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
+    auto filter = PushDownExecutor::build(
+        query_info,
+        columns_to_read,
+        store->getTableColumns(),
+        query_info.dag_query ? query_info.dag_query->used_indexes
+                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
+        context,
+        tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -862,7 +868,7 @@ BlockInputStreams StorageDeltaMerge::read(
         /*start_ts=*/mvcc_query_info.start_ts,
         filter,
         runtime_filter_list,
-        query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
+        query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
@@ -930,8 +936,14 @@ void StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter
-        = PushDownExecutor::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
+    auto filter = PushDownExecutor::build(
+        query_info,
+        columns_to_read,
+        store->getTableColumns(),
+        query_info.dag_query ? query_info.dag_query->used_indexes
+                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
+        context,
+        tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -948,7 +960,7 @@ void StorageDeltaMerge::read(
         /*start_ts=*/mvcc_query_info.start_ts,
         filter,
         runtime_filter_list,
-        query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
+        query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
