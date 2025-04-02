@@ -37,7 +37,7 @@ UInt32 buildVersionFilterVector(
     for (ssize_t i = versions.size() - 1; i >= 0; --i)
     {
         const UInt32 row_id = start_row_id + i;
-        // Already filtered out, maybe by RowKeyFilter
+        // Already filtered out, maybe by newer version.
         if (!filter[row_id])
             continue;
 
@@ -51,7 +51,7 @@ UInt32 buildVersionFilterVector(
 
         // Visible
         const auto base_row_id = base_ver_snap[row_id - stable_rows];
-        // base_version is filtered-out, there is newer version has been chosen
+        // base_version is filtered out, there is newer version has been chosen
         if (base_row_id != NotExistRowID && !filter[base_row_id])
         {
             filter[row_id] = 0;
@@ -78,6 +78,7 @@ UInt32 buildVersionFilterVector(
     const UInt32 start_row_id,
     BitmapFilter & filter)
 {
+    assert(cf.isInMemoryFile() || cf.isTinyFile() || cf.isBigFile());
     static const auto version_cds_ptr = std::make_shared<ColumnDefines>(1, getVersionColumnDefine());
     auto cf_reader = cf.getReader(dm_context, data_provider, version_cds_ptr, ReadTag::MVCC);
     UInt32 read_block_count = 0;
@@ -85,24 +86,18 @@ UInt32 buildVersionFilterVector(
     UInt32 filtered_out_rows = 0;
     while (true)
     {
-        // Must make sure different versions of the same handle are sorted ascending.
-        // So that when scanning the version column in reverse order, you can first read the large version and then read the small version of one handle.
         auto block = cf_reader->readNextBlock();
         if (!block)
             break;
 
         ++read_block_count;
         read_rows += block.rows();
-        const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column); // Must success
+        const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column);
         filtered_out_rows
             += buildVersionFilterVector(versions, read_ts, base_ver_snap, stable_rows, start_row_id, filter);
     }
 
-    RUNTIME_CHECK_MSG(
-        cf.getRows() == read_rows,
-        "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
-        cf.toString(),
-        read_rows);
+    RUNTIME_CHECK(cf.getRows() == read_rows, cf.toString(), read_rows);
 
     if (cf.isInMemoryFile() || cf.isTinyFile())
         RUNTIME_CHECK_MSG(
@@ -120,7 +115,7 @@ template <ExtraHandleType HandleType>
     const DMFilePtr & dmfile,
     const UInt64 read_ts,
     const UInt32 start_pack_id,
-    const RSResults & rs_results,
+    const RSResults & rs_results, // Use to skip packs that are not used.
     const ssize_t start_row_id,
     BitmapFilter & filter)
 {
@@ -138,12 +133,13 @@ template <ExtraHandleType HandleType>
         const auto & stat = pack_stats[pack_id];
         processed_rows += stat.rows;
 
-        // Packs that filtered out by rs_results is handle by RowKeyFilter.
+        // Packs that filtered out by rs_results is handled by RowKeyFilter.
         // So we just skip these packs here.
         if (!rs_results[i].isUse())
             continue;
 
-        // `not_clean` means there are multiple versions of the same handle in this pack.
+        // `not_clean` means there have <multiple versions of the same handle> or <delete mark> in this pack.
+        // Delete mark is handled by DeleteMarkFilter, so we don't read delete mark column below.
         // `max_versions[pack_id] > read_ts` means there is a version of this pack that is not visible to `read_ts`.
         if (stat.not_clean || max_versions[pack_id] > read_ts)
         {
@@ -182,8 +178,11 @@ template <ExtraHandleType HandleType>
         {
             for (UInt32 i = 0; i < block.rows(); ++i)
             {
-                filtered_out_rows += filter[pack_start_row_id + i] && versions[i] > read_ts;
-                filter[pack_start_row_id + i] = filter[pack_start_row_id + i] && versions[i] <= read_ts;
+                if (filter[pack_start_row_id + i] && versions[i] > read_ts)
+                {
+                    filter[pack_start_row_id + i] = 0;
+                    ++filtered_out_rows;
+                }
             }
         }
 
@@ -200,14 +199,17 @@ template <ExtraHandleType HandleType>
                     break;
 
                 // Let `handle_itr` point to next different handle.
-                handle_itr = std::find_if(itr, handle_end, [h = *itr](auto a) { return h != a; });
+                handle_itr = std::find_if(itr, handle_end, [h = *itr](const auto a) { return h != a; });
                 // [itr, handle_itr) are the same handle of different versions.
-                auto count = handle_itr - itr;
+                const auto count = handle_itr - itr;
                 RUNTIME_CHECK(count >= 2, count);
                 // `base_row_id` is the row_id of the first version of the same handle.
                 // The first version is the oldest version in DMFile.
                 const UInt32 base_row_id = itr - handles.begin() + pack_start_row_id;
-                // If the first version is filtered out, that means the newer version in delta has been chosen.
+                // If the first version is filtered out, there are two possible reasons:
+                // 1. The newer version in delta has been chosen.
+                // 2. It is invisiable to `read_ts`.
+                // So we just filter out all versions of the same handle.
                 if (!filter[base_row_id])
                 {
                     filter.set(base_row_id + 1, count - 1, false);
@@ -216,7 +218,7 @@ template <ExtraHandleType HandleType>
                 else
                 {
                     // Find the newest but not filtered out version.
-                    // If it is invisiable to `read_ts`, it already filtered out before.
+                    // If it is invisiable to `read_ts`, it is already filtered out before.
                     // So we just get the last not filtered out version here.
                     for (UInt32 i = 1; i < count; ++i)
                     {
@@ -243,9 +245,6 @@ template <ExtraHandleType HandleType>
     const ssize_t start_row_id,
     BitmapFilter & filter)
 {
-    // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
-    // `valid_handle_res` is the filter results of the rowkey range. The packs that do not intersect at both ends have been cut off.
-    // `valid_start_pack_id` is the first pack that intersects with the rowkey range in DMFile.
     auto [valid_handle_res, valid_start_pack_id]
         = getClippedRSResultsByRange(dm_context, cf_big.getFile(), cf_big.getRange());
     if (valid_handle_res.empty())
@@ -272,15 +271,15 @@ template <ExtraHandleType HandleType>
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
     const auto & dmfile = dmfiles[0];
-    constexpr UInt32 start_pack_id = 0; // For Stable, all packs of DMFile will be considered in BitmapFilter.
-    const auto & rs_results = stable_filter_res->getPackRes();
+    const auto & pack_res = stable_filter_res->getPackRes();
+    constexpr UInt32 start_pack_id = 0;
     constexpr UInt32 start_row_id = 0;
     return buildVersionFilterDMFile<HandleType>(
         dm_context,
         dmfile,
         read_ts,
         start_pack_id,
-        rs_results,
+        pack_res,
         start_row_id,
         filter);
 }

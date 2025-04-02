@@ -3620,7 +3620,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
                 pack_filter_results,
                 start_ts,
                 build_bitmap_filter_block_rows,
-                *bitmap_filter);
+                *mvcc_bitmap_filter);
         else
             checkMVCCBitmap<Int64>(
                 dm_context,
@@ -3629,7 +3629,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
                 pack_filter_results,
                 start_ts,
                 build_bitmap_filter_block_rows,
-                *bitmap_filter);
+                *mvcc_bitmap_filter);
     }
 
     if (bitmap_filter)
