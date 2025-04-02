@@ -23,12 +23,12 @@ namespace DB
 class SpillLimiter
 {
 public:
-    explicit SpillLimiter(int64_t max_spilled_bytes_)
+    explicit SpillLimiter(uint64_t max_spilled_bytes_)
         : max_spilled_bytes(max_spilled_bytes_)
     {}
 
     // return <ok_to_spill, current_spilled_bytes, max_spilled_bytes>
-    std::tuple<bool, uint64_t, int64_t> tryRequest(uint64_t bytes)
+    std::tuple<bool, uint64_t, uint64_t> tryRequest(uint64_t bytes)
     {
         std::lock_guard<std::mutex> guard(lock);
         bool ok = true;
@@ -36,7 +36,7 @@ public:
         {
             const auto sum = current_spilled_bytes + bytes;
             // ok is true when no overflow and sum is less than max bytes.
-            ok = (!(sum < current_spilled_bytes) && (sum < static_cast<uint64_t>(max_spilled_bytes)));
+            ok = (!(sum < current_spilled_bytes) && (sum < max_spilled_bytes));
         }
 
         if (ok)
@@ -72,17 +72,17 @@ public:
         return current_spilled_bytes;
     }
 
-    void setMaxSpilledBytes(int64_t max)
+    void setMaxSpilledBytes(uint64_t max)
     {
         std::lock_guard<std::mutex> guard(lock);
         max_spilled_bytes = max;
     }
 
-    static inline std::shared_ptr<SpillLimiter> instance = std::make_shared<SpillLimiter>(-1);
+    static inline std::shared_ptr<SpillLimiter> instance = std::make_shared<SpillLimiter>(0);
 
 private:
     mutable std::mutex lock;
-    int64_t max_spilled_bytes;
+    uint64_t max_spilled_bytes;
     uint64_t current_spilled_bytes = 0;
 };
 

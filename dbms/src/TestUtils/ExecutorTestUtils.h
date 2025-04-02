@@ -57,7 +57,7 @@ ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
     ASSERT_EQ(pair.second, got_error_var_in_marco);                             \
     }                                                                           \
     ASSERT_EQ(SpillLimiter::instance->getCurrentSpilledBytes(), 0);             \
-    SpillLimiter::instance->setMaxSpilledBytes(-1);
+    SpillLimiter::instance->setMaxSpilledBytes(0);
 
 class ExecutorTest : public ::testing::Test
 {
