@@ -1062,6 +1062,8 @@ try
 
     proxy_machine.restoreKVStore(global_context->getTMTContext(), global_context->getPathPool());
 
+    SpillLimiter::instance->setMaxSpilledBytes(settings.max_spilled_bytes);
+
     /// setting up elastic thread pool
     bool enable_elastic_threadpool = settings.enable_elastic_threadpool;
     if (enable_elastic_threadpool)
@@ -1075,8 +1077,6 @@ try
             DynamicThreadPool::global_instance.reset();
         }
     });
-
-    SpillLimiter::instance->setMaxSpilledBytes(settings.max_spilled_bytes);
 
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
     if (not_disagg_mode || /*has_been_bootstrap*/ store_ident.has_value())

@@ -55,7 +55,7 @@ public:
         const WriteLimiterPtr & write_limiter_ = nullptr,
         int flags = -1,
         mode_t mode = 0666,
-        SpillLimiterPtr spill_limiter_ = nullptr) const;
+        const SpillLimiterPtr & spill_limiter_ = nullptr) const;
 
     WriteReadableFilePtr newWriteReadableFile(
         const String & file_path_,

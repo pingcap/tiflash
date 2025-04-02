@@ -42,7 +42,7 @@ PosixWritableFile::PosixWritableFile(
     int flags,
     mode_t mode,
     const WriteLimiterPtr & write_limiter_,
-    SpillLimiterPtr spill_limiter_)
+    const SpillLimiterPtr & spill_limiter_)
     : file_name{file_name_}
     , write_limiter{write_limiter_}
     , spill_limiter{spill_limiter_}

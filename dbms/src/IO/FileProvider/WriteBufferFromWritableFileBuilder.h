@@ -37,7 +37,7 @@ public:
         mode_t mode = 0666,
         char * existing_memory = nullptr,
         size_t alignment = 0,
-        SpillLimiterPtr spill_limiter_ = nullptr);
+        const SpillLimiterPtr & spill_limiter_ = nullptr);
 
     static WriteBufferFromWritableFile build(
         const FileProviderPtr & file_provider,
@@ -50,7 +50,7 @@ public:
         mode_t mode = 0666,
         char * existing_memory = nullptr,
         size_t alignment = 0,
-        SpillLimiterPtr spill_limiter_ = nullptr);
+        const SpillLimiterPtr & spill_limiter_ = nullptr);
 };
 
 } // namespace DB

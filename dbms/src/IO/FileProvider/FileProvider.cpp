@@ -61,7 +61,7 @@ WritableFilePtr FileProvider::newWritableFile(
     const WriteLimiterPtr & write_limiter_,
     int flags,
     mode_t mode,
-    SpillLimiterPtr spill_limiter_) const
+    const SpillLimiterPtr & spill_limiter_) const
 {
     // S3 file always does not encrypt.
     if (auto view = S3::S3FilenameView::fromKeyWithPrefix(file_path_); view.isValid())

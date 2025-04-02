@@ -41,7 +41,7 @@ public:
         int flags,
         mode_t mode,
         const WriteLimiterPtr & write_limiter_ = nullptr,
-        SpillLimiterPtr spill_limiter_ = nullptr);
+        const SpillLimiterPtr & spill_limiter_ = nullptr);
 
     ~PosixWritableFile() override;
 

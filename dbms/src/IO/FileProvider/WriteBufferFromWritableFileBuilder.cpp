@@ -29,7 +29,7 @@ WriteBufferFromWritableFilePtr WriteBufferFromWritableFileBuilder::buildPtr(
     mode_t mode,
     char * existing_memory,
     size_t alignment,
-    SpillLimiterPtr spill_limiter_)
+    const SpillLimiterPtr & spill_limiter_)
 {
     auto writeable_file = file_provider->newWritableFile(
         file_name_,
@@ -54,7 +54,7 @@ WriteBufferFromWritableFile WriteBufferFromWritableFileBuilder::build(
     mode_t mode,
     char * existing_memory,
     size_t alignment,
-    SpillLimiterPtr spill_limiter_)
+    const SpillLimiterPtr & spill_limiter_)
 {
     auto writeable_file = file_provider->newWritableFile(
         file_name_,
