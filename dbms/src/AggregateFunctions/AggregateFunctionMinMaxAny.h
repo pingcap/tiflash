@@ -260,9 +260,7 @@ public:
     void batchInsertSameResultInto(IColumn & to, size_t num) const
     {
         if (has())
-        {
             static_cast<ColumnString &>(to).batchInsertDataWithTerminatingZero(num, getData(), size);
-        }
         else
             static_cast<ColumnString &>(to).insertManyDefaults(num);
     }
