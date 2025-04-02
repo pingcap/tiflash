@@ -261,8 +261,7 @@ public:
     {
         if (has())
         {
-            for (size_t i = 0; i < num; ++i)
-                static_cast<ColumnString &>(to).insertDataWithTerminatingZero(getData(), size);
+            static_cast<ColumnString &>(to).batchInsertDataWithTerminatingZero(num, getData(), size);
         }
         else
             static_cast<ColumnString &>(to).insertManyDefaults(num);
