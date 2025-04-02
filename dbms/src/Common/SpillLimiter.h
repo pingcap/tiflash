@@ -24,8 +24,7 @@ class SpillLimiter
 {
 public:
     explicit SpillLimiter(int64_t max_spilled_bytes_)
-        : log(Logger::get("SpillLimiter"))
-        , max_spilled_bytes(max_spilled_bytes_)
+        : max_spilled_bytes(max_spilled_bytes_)
     {}
 
     // return <ok_to_spill, current_spilled_bytes, max_spilled_bytes>
@@ -33,7 +32,7 @@ public:
     {
         std::lock_guard<std::mutex> guard(lock);
         bool ok = true;
-        if (max_spilled_bytes >= 0)
+        if (max_spilled_bytes > 0)
         {
             const auto sum = current_spilled_bytes + bytes;
             // ok is true when no overflow and sum is less than max bytes.
@@ -54,7 +53,11 @@ public:
         if unlikely (current_spilled_bytes < bytes)
         {
             current_spilled_bytes = 0;
-            LOG_ERROR(log, "unexpected release bytes({}), current bytes: {}", bytes, current_spilled_bytes);
+            LOG_ERROR(
+                Logger::get("SpillLimiter"),
+                "unexpected release bytes({}), current bytes: {}",
+                bytes,
+                current_spilled_bytes);
         }
         else
         {
@@ -78,7 +81,6 @@ public:
     static inline std::shared_ptr<SpillLimiter> instance = std::make_shared<SpillLimiter>(-1);
 
 private:
-    LoggerPtr log;
     mutable std::mutex lock;
     int64_t max_spilled_bytes;
     uint64_t current_spilled_bytes = 0;

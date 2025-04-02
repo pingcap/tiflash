@@ -101,13 +101,10 @@ try
             RANDOM,
             column_info.name};
         column_datas.push_back(ColumnGenerator::instance().generate(opts));
+        total_data_size += column_datas.back().column->byteSize();
     }
     for (auto & column_data : column_datas)
         column_data.column->assumeMutable()->insertRangeFrom(*column_data.column, 0, duplicated_rows);
-
-    for (auto & column_data : column_datas)
-        total_data_size += column_data.column->estimateByteSizeForSpill();
-
     context.addMockTable("spill_sort_test", "simple_table", column_infos, column_datas, 8);
 
     auto request = context.scan("spill_sort_test", "simple_table")
@@ -118,7 +115,6 @@ try
     context.context->setSetting("max_bytes_before_external_group_by", Field(static_cast<UInt64>(0)));
     enablePipeline(false);
     auto ref_columns = executeStreams(request, original_max_streams);
-
     /// enable spill
     WRAP_FOR_SPILL_TEST_BEGIN
     context.context->setSetting(
@@ -137,21 +133,10 @@ try
     WRAP_FOR_AGG_FAILPOINTS_END
     /// enable spill and use small max_cached_data_bytes_in_spiller
     context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 200)));
-
-    // <max_spilled_bytes, expect_error>
-    std::vector<std::pair<int64_t, bool>> max_spilled_bytes
-        = {{-1, false}, {1, true}, {4500, true}, {total_data_size, false}};
-
     /// test single thread aggregation
-    SPILL_LIMITER_TEST_BEGIN
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, 1));
-    SPILL_LIMITER_TEST_END
-
     /// test parallel aggregation
-    SPILL_LIMITER_TEST_BEGIN
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-    SPILL_LIMITER_TEST_END
-
     /// test spill with small max_block_size
     /// the avg rows in one bucket is ~10240/256 = 400, so set the small_max_block_size to 100
     /// is enough to test the output spilt

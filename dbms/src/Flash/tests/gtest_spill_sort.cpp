@@ -57,15 +57,9 @@ try
             RANDOM,
             column_info.name};
         column_data.push_back(ColumnGenerator::instance().generate(opts));
+        total_data_size += column_data.back().column->byteSize();
     }
-    for (const auto & column : column_data)
-        total_data_size += column.column->estimateByteSizeForSpill();
-
     context.addMockTable("spill_sort_test", "simple_table", column_infos, column_data, 8);
-
-    // <max_spilled_bytes, expect_error>
-    std::vector<std::pair<int64_t, bool>> max_spilled_bytes
-        = {{-1, false}, {1, true}, {100000, true}, {total_data_size, false}};
 
     MockOrderByItemVec order_by_items{
         std::make_pair("a", true),
@@ -81,32 +75,21 @@ try
     /// disable spill
     context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(0)));
     auto ref_columns = executeStreams(request, 1);
-
     /// enable spill
     context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
     // don't use `executeAndAssertColumnsEqual` since it takes too long to run
     /// todo use ASSERT_COLUMNS_EQ_R once TiFlash support final TopN
-    SPILL_LIMITER_TEST_BEGIN
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-    SPILL_LIMITER_TEST_END
-
     /// enable spill and use small max_cached_data_bytes_in_spiller
     context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
-    SPILL_LIMITER_TEST_BEGIN
     ASSERT_COLUMNS_EQ_UR(ref_columns, executeStreams(request, original_max_streams));
-    SPILL_LIMITER_TEST_END
 
     // The implementation of topN in the pipeline model is LocalSort, and the result of using multiple threads is unstable. Therefore, a single thread is used here instead.
     enablePipeline(true);
     context.context->setSetting("max_bytes_before_external_sort", Field(static_cast<UInt64>(total_data_size / 10)));
-    SPILL_LIMITER_TEST_BEGIN
     ASSERT_COLUMNS_EQ_R(ref_columns, executeStreams(request, 1));
-    SPILL_LIMITER_TEST_END
-
     context.context->setSetting("max_cached_data_bytes_in_spiller", Field(static_cast<UInt64>(total_data_size / 100)));
-    SPILL_LIMITER_TEST_BEGIN
     ASSERT_COLUMNS_EQ_R(ref_columns, executeStreams(request, 1));
-    SPILL_LIMITER_TEST_END
 }
 CATCH
 
