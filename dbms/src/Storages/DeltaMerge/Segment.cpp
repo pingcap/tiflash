@@ -3726,7 +3726,7 @@ void Segment::checkMVCCBitmap(
 
     LOG_ERROR(
         segment_snap->log,
-        "{} failed, snapshot={}, new_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{}"
+        "{} failed, snapshot={}, new_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{} "
         "read_ranges={}, segment_range={}",
         __FUNCTION__,
         segment_snap->detailInfo(),
@@ -3783,7 +3783,9 @@ void Segment::checkMVCCBitmap(
 
             LOG_ERROR(
                 segment_snap->log,
-                "{} delte_index={} version_chain={} handle={} version={} delmark={} version_filter={} rowkey_filter={}",
+                "{} {} delte_index={} version_chain={} handle={} version={} delmark={} version_filter={} "
+                "rowkey_filter={}",
+                __FUNCTION__,
                 i,
                 new_bitmap_filter->get(i),
                 bitmap_filter.get(i),
