@@ -316,12 +316,12 @@ UInt32 buildVersionFilter(
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();
 
-    // Delta MVCC
     UInt32 read_rows = 0;
     UInt32 filtered_out_rows = 0;
     // Read versions from new to old. Assume that the same handle is written in version order.
     // So we can read versions from new to old and filter out the older versions.
-    // Raft log replay repeatly is allow, but reorder is not allow.
+    // Raft log apply repeatly is allow, for example, <A1, A2, A3, A2, A3>.
+    // But reorder is not allow, for example, <A1, A2, A3, A2, {but A3 not apply again}>.
     for (const auto & cf : cfs | std::views::reverse)
     {
         // Delete range will be handled by RowKeyFilter.
