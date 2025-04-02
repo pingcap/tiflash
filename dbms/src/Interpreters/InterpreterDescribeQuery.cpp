@@ -26,8 +26,6 @@
 #include <Parsers/queryToString.h>
 #include <Storages/IStorage.h>
 #include <Storages/MutableSupport.h>
-#include <TableFunctions/ITableFunction.h>
-#include <TableFunctions/TableFunctionFactory.h>
 
 
 namespace DB
@@ -80,41 +78,27 @@ BlockInputStreamPtr InterpreterDescribeQuery::executeImpl()
     }
     else
     {
-        if (table_expression->table_function)
+        String database_name;
+        String table_name;
+
+        auto identifier = table_expression->database_and_table_name;
+        if (identifier->children.size() > 2)
+            throw Exception("Logical error: more than two components in table expression", ErrorCodes::LOGICAL_ERROR);
+
+        if (identifier->children.size() > 1)
         {
-            const auto * table_function = typeid_cast<const ASTFunction *>(table_expression->table_function.get());
-            /// Get the table function
-            TableFunctionPtr table_function_ptr = TableFunctionFactory::instance().get(table_function->name, context);
-            /// Run it and remember the result
-            table = table_function_ptr->execute(table_expression->table_function, context);
+            auto database_ptr = identifier->children[0];
+            auto table_ptr = identifier->children[1];
+
+            if (database_ptr)
+                database_name = typeid_cast<ASTIdentifier &>(*database_ptr).name;
+            if (table_ptr)
+                table_name = typeid_cast<ASTIdentifier &>(*table_ptr).name;
         }
         else
-        {
-            String database_name;
-            String table_name;
+            table_name = typeid_cast<ASTIdentifier &>(*identifier).name;
 
-            auto identifier = table_expression->database_and_table_name;
-            if (identifier->children.size() > 2)
-                throw Exception(
-                    "Logical error: more than two components in table expression",
-                    ErrorCodes::LOGICAL_ERROR);
-
-            if (identifier->children.size() > 1)
-            {
-                auto database_ptr = identifier->children[0];
-                auto table_ptr = identifier->children[1];
-
-                if (database_ptr)
-                    database_name = typeid_cast<ASTIdentifier &>(*database_ptr).name;
-                if (table_ptr)
-                    table_name = typeid_cast<ASTIdentifier &>(*table_ptr).name;
-            }
-            else
-                table_name = typeid_cast<ASTIdentifier &>(*identifier).name;
-
-            table = context.getTable(database_name, table_name);
-        }
-
+        table = context.getTable(database_name, table_name);
         auto table_lock = table->lockStructureForShare(context.getCurrentQueryId());
         columns = table->getColumns().getAll();
         column_defaults = table->getColumns().defaults;

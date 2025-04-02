@@ -92,7 +92,6 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/registerStorages.h>
-#include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <WindowFunctions/registerWindowFunctions.h>
@@ -502,7 +501,6 @@ try
     registerFunctions();
     registerAggregateFunctions();
     registerWindowFunctions();
-    registerTableFunctions();
     registerStorages();
 
     const auto disagg_opt = DisaggOptions::parseFromConfig(config());

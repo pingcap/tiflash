@@ -49,7 +49,7 @@ add_library (tiflash-server-lib
 
 target_link_libraries(tiflash-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 
-target_link_libraries (tiflash-server-lib PRIVATE grpc_server_holder tiflash_common_io daemon tiflash_storages_system tiflash_functions tiflash_aggregate_functions tiflash_table_functions)
+target_link_libraries (tiflash-server-lib PRIVATE grpc_server_holder daemon tiflash_functions tiflash_aggregate_functions)
 target_include_directories (tiflash-server-lib PRIVATE ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
 target_include_directories (tiflash-server-lib PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
 
