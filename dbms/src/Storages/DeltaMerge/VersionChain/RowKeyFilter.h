@@ -23,7 +23,7 @@ struct SegmentSnapshot;
 struct RowKeyRange;
 using RowKeyRanges = std::vector<RowKeyRange>;
 
-// Filter out records that do not meet the requirement of `read_ranges`.
+// Filter out records according to `read_ranges`, `delete_ranges` and `stable_filter_res`.
 // Return how many records are filtered out.
 template <ExtraHandleType HandleType>
 UInt32 buildRowKeyFilter(

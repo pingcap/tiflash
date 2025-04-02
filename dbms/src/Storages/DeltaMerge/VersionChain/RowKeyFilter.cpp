@@ -101,7 +101,7 @@ UInt32 buildRowKeyFilterDMFile(
         const auto pack_id = start_pack_id + i;
         const auto pack_start_row_id = start_row_id + processed_rows;
         processed_rows += pack_stats[pack_id].rows;
-        if (!pack_res[i].isUse())
+        if (!pack_res[i].isUse()) // Filter out by read_ranges/delete_ranges/rs_filter.
         {
             filtered_out_rows += pack_stats[pack_id].rows;
             filter.set(pack_start_row_id, pack_stats[pack_id].rows, false);
@@ -233,14 +233,15 @@ UInt32 buildRowKeyFilter(
     const UInt32 delta_rows = delta.getRows();
     const UInt32 stable_rows = stable.getDMFilesRows();
     const UInt32 total_rows = delta_rows + stable_rows;
+    assert(filter.size() == total_rows);
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();
-    RUNTIME_CHECK(filter.size() == total_rows, filter.size(), total_rows);
 
+    // Records that were written before delete ranges and have overlapping ranges need to be filtered out.
+    // Read ColumnFiles from new to old for handling delete ranges.
     RowKeyRanges delete_ranges;
     UInt32 read_rows = 0;
     UInt32 filtered_out_rows = 0;
-    // Read ColumnFiles from new to old for handling delete ranges
     for (const auto & cf : cfs | std::views::reverse)
     {
         if (const auto * cf_delete_range = cf->tryToDeleteRange(); cf_delete_range)

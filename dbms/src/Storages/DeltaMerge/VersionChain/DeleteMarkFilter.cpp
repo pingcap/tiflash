@@ -162,9 +162,9 @@ UInt32 buildDeleteMarkFilter(
     const UInt32 delta_rows = delta.getRows();
     const UInt32 stable_rows = stable.getDMFilesRows();
     const UInt32 total_rows = delta_rows + stable_rows;
+    assert(filter.size() == total_rows);
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();
-    assert(filter.size() == total_rows);
 
     auto filtered_out_rows = buildDeleteMarkFilterStable(dm_context, stable, stable_filter_res, filter);
     auto read_rows = stable_rows;

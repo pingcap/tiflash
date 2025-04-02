@@ -312,7 +312,7 @@ UInt32 buildVersionFilter(
     const UInt32 delta_rows = delta.getRows();
     const UInt32 stable_rows = stable.getDMFilesRows();
     const UInt32 total_rows = delta_rows + stable_rows;
-    RUNTIME_CHECK(filter.size() == total_rows, filter.size(), total_rows);
+    assert(filter.size() == total_rows);
     const auto cfs = delta.getColumnFiles();
     const auto & data_provider = delta.getDataProvider();
 
