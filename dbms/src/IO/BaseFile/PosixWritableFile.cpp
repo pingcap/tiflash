@@ -85,19 +85,21 @@ void PosixWritableFile::close()
 
 ssize_t PosixWritableFile::write(char * buf, size_t size)
 {
-    if (write_limiter)
-        write_limiter->request(size);
     tryRequestSpillLimiter(size);
     total_write_bytes += size;
+
+    if (write_limiter)
+        write_limiter->request(size);
     return ::write(fd, buf, size);
 }
 
 ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset)
 {
-    if (write_limiter)
-        write_limiter->request(size);
     tryRequestSpillLimiter(size);
     total_write_bytes += size;
+
+    if (write_limiter)
+        write_limiter->request(size);
     return ::pwrite(fd, buf, size, offset);
 }
 
