@@ -3136,7 +3136,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilter(
             start_ts,
             version_chain);
     }
-    
+
     if (readStableOnly(dm_context, segment_snap))
     {
         return buildMVCCBitmapFilterStableOnly(
