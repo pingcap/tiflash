@@ -18,7 +18,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
-#include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
+#include <Storages/DeltaMerge/VersionChain/MVCCBitmapFilter.h>
 #include <Storages/DeltaMerge/VersionChain/tests/mvcc_test_utils.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/PathPool.h>

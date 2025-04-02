@@ -17,7 +17,7 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
-#include <Storages/DeltaMerge/VersionChain/BuildBitmapFilter.h>
+#include <Storages/DeltaMerge/VersionChain/MVCCBitmapFilter.h>
 #include <Storages/DeltaMerge/VersionChain/DeleteMarkFilter.h>
 #include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
 #include <Storages/DeltaMerge/VersionChain/VersionFilter.h>
