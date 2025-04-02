@@ -54,18 +54,6 @@ public:
         grpc::ServerCompletionQueue * notify_cq,
         const std::shared_ptr<std::atomic<bool>> & is_shutdown);
 
-    /// for test
-    EstablishCallData();
-
-    ~EstablishCallData() override;
-
-    void execute(bool ok) override;
-
-    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
-    void startEstablishConnection();
-    void setToWaitingTunnelState();
-    bool isWaitingTunnelState() { return state == WAIT_TUNNEL; }
-
     // Let's implement a state machine with the following states.
     enum CallStatus
     {
@@ -77,7 +65,19 @@ public:
         FINISH
     };
 
-    static void decreaseMetricsWithState(CallStatus status);
+    /// for test
+    EstablishCallData();
+
+    ~EstablishCallData() override;
+
+    void execute(bool ok) override;
+
+    void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
+    void startEstablishConnection();
+    void setState(CallStatus status);
+    bool isWaitingTunnelState() { return state == WAIT_TUNNEL; }
+
+    static void updateStateMetrics(CallStatus status, Int64 change);
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.

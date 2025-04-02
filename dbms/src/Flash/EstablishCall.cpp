@@ -24,6 +24,8 @@
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/TMTContext.h>
 
+#include "Interpreters/Set.h"
+
 namespace DB
 {
 namespace FailPoints
@@ -61,34 +63,34 @@ EstablishCallData::EstablishCallData()
     GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Increment();
 }
 
-void EstablishCallData::decreaseMetricsWithState(CallStatus status)
+void EstablishCallData::updateStateMetrics(CallStatus status, Int64 change)
 {
     switch (status)
     {
     case NEW_REQUEST:
-        GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Decrement();
+        GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Increment(change);
         break;
     case WAIT_TUNNEL:
-        GET_METRIC(tiflash_establish_calldata_count, type_wait_tunnel_calldata).Decrement();
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_tunnel_calldata).Increment(change);
         break;
     case WAIT_WRITE:
-        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_calldata).Decrement();
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_calldata).Increment(change);
         break;
     case WAIT_IN_QUEUE:
-        GET_METRIC(tiflash_establish_calldata_count, type_wait_in_queue_calldata).Decrement();
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_in_queue_calldata).Increment(change);
         break;
     case WAIT_WRITE_ERR:
-        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_err_calldata).Decrement();
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_err_calldata).Increment(change);
         break;
     case FINISH:
-        GET_METRIC(tiflash_establish_calldata_count, type_finish_calldata).Decrement();
+        GET_METRIC(tiflash_establish_calldata_count, type_finish_calldata).Increment(change);
         break;
     }
 }
 
 EstablishCallData::~EstablishCallData()
 {
-    decreaseMetricsWithState(state);
+    updateStateMetrics(state, -1);
     if (stopwatch)
     {
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
@@ -97,19 +99,11 @@ EstablishCallData::~EstablishCallData()
     }
 }
 
-void EstablishCallData::setToWaitingTunnelState()
+void EstablishCallData::setState(EstablishCallData::CallStatus new_status)
 {
-    if likely (state == NEW_REQUEST)
-    {
-        // should always be true
-        GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Decrement();
-    }
-    else
-    {
-        decreaseMetricsWithState(state);
-    }
-    state = WAIT_TUNNEL;
-    GET_METRIC(tiflash_establish_calldata_count, type_wait_tunnel_calldata).Increment();
+    updateStateMetrics(state, -1);
+    state = new_status;
+    updateStateMetrics(state, 1);
 }
 
 void EstablishCallData::execute(bool ok)
@@ -146,7 +140,7 @@ void EstablishCallData::execute(bool ok)
 
         // If ok is false,
         // For WAIT_WRITE state, it means grpc write is failed.
-        // For WAIT_POP_FROM_QUEUE state, it means queue state is finished or cancelled so
+        // For WAIT_IN_QUEUE state, it means queue state is finished or cancelled so
         // it is convenient to call trySendOneMsg(call pop queue inside) to handle it which
         // is the same as the case that the pop function is not blocked and the queue is finished
         // or cancelled.
@@ -269,9 +263,7 @@ void EstablishCallData::write(const mpp::MPPDataPacket & packet)
 
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
-    decreaseMetricsWithState(state);
-    state = WAIT_WRITE_ERR;
-    GET_METRIC(tiflash_establish_calldata_count, type_wait_write_err_calldata).Increment();
+    setState(WAIT_WRITE_ERR);
     write(packet);
 }
 
@@ -283,9 +275,7 @@ static LoggerPtr & getLogger()
 
 void EstablishCallData::writeDone(String msg, const grpc::Status & status)
 {
-    decreaseMetricsWithState(state);
-    state = FINISH;
-    GET_METRIC(tiflash_establish_calldata_count, type_finish_calldata).Increment();
+    setStatus(FINISH);
 
     if (async_tunnel_sender)
     {
@@ -351,9 +341,7 @@ void EstablishCallData::trySendOneMsg()
         /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
         /// is destructed which may cause the memory tracker in `res` become invalid
         packet->switchMemTracker(nullptr);
-        decreaseMetricsWithState(state);
-        state = WAIT_WRITE;
-        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_calldata).Increment();
+        setState(WAIT_WRITE);
         write(packet->packet);
         return;
     case MPMCQueueResult::FINISHED:
@@ -364,9 +352,7 @@ void EstablishCallData::trySendOneMsg()
         writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
         return;
     case MPMCQueueResult::EMPTY:
-        decreaseMetricsWithState(state);
-        state = WAIT_IN_QUEUE;
-        GET_METRIC(tiflash_establish_calldata_count, type_wait_in_queue_calldata).Increment();
+        setState(WAIT_IN_QUEUE);
         // No new message.
         return;
     default:
