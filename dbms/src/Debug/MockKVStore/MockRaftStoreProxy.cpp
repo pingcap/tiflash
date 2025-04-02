@@ -21,6 +21,7 @@
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Debug/MockKVStore/MockSSTReader.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Debug/MockTiDB.h>
 #include <Debug/dbgTools.h>
 #include <Interpreters/Context.h>
@@ -28,22 +29,16 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/tests/region_helper.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Decode/RowCodec.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <google/protobuf/text_format.h>
 
 namespace DB
 {
-namespace RegionBench
-{
-extern void setupPutRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &, const TiKVValue &);
-extern void setupDelRequest(raft_cmdpb::Request *, const std::string &, const TiKVKey &);
-} // namespace RegionBench
 
 TiFlashRaftProxyHelper MockRaftStoreProxy::setRaftStoreProxyFFIHelper(RaftStoreProxyPtr proxy_ptr)
 {
@@ -180,7 +175,11 @@ void MockRaftStoreProxy::debugAddRegions(
         auto lock = kvs.genRegionMgrWriteLock(task_lock); // Region mgr lock
         for (int i = 0; i < n; ++i)
         {
-            auto region = tests::makeRegion(region_ids[i], ranges[i].first, ranges[i].second, kvs.getProxyHelper());
+            auto region = RegionBench::makeRegionForRange(
+                region_ids[i],
+                ranges[i].first,
+                ranges[i].second,
+                kvs.getProxyHelper());
             lock.regions.emplace(region_ids[i], region);
             lock.index.add(region);
             tmt.getRegionTable().addRegion(*region);

@@ -19,9 +19,9 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <boost_wrapper/program_options.h>
 #include <fcntl.h>
 
-#include <boost/program_options.hpp>
 #include <iostream>
 
 namespace DTTool::Migrate

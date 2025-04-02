@@ -113,13 +113,6 @@ public:
 
     PreparedSets getPreparedSets() { return prepared_sets; }
 
-    /** Tables that will need to be sent to remote servers for distributed query processing.
-      */
-    const Tables & getExternalTables() const { return external_tables; }
-
-    /// Create Set-s that we can from IN section to use the index on them.
-    void makeSetsForIndex();
-
 private:
     ASTPtr ast;
     ASTSelectQuery * select_query;
@@ -146,9 +139,6 @@ private:
     NamesAndTypesList aggregation_keys;
     AggregateDescriptions aggregate_descriptions;
 
-    /// Do I need to prepare for execution global subqueries when analyzing the query.
-    bool do_global;
-
     SubqueriesForSets subqueries_for_sets;
 
     PreparedSets prepared_sets;
@@ -172,10 +162,6 @@ private:
 
     using SetOfASTs = std::set<const IAST *>;
     using MapOfASTs = std::map<ASTPtr, ASTPtr>;
-
-    /// All new temporary tables obtained by performing the GLOBAL IN/JOIN subqueries.
-    Tables external_tables;
-    size_t external_table_id = 1;
 
     /** Remove all unnecessary columns from the list of all available columns of the table (`columns`).
       * At the same time, form a set of unknown columns (`unknown_required_source_columns`),
@@ -224,18 +210,6 @@ private:
     void executeScalarSubqueries();
     void executeScalarSubqueriesImpl(ASTPtr & ast);
 
-    /// Find global subqueries in the GLOBAL IN/JOIN sections. Fills in external_tables.
-    void initGlobalSubqueriesAndExternalTables();
-    void initGlobalSubqueries(ASTPtr & ast);
-
-    /// Finds in the query the usage of external tables (as table identifiers). Fills in external_tables.
-    void findExternalTables(ASTPtr & ast);
-
-    /** Initialize InterpreterSelectQuery for a subquery in the GLOBAL IN/JOIN section,
-      * create a temporary table of type Memory and store it in the external_tables dictionary.
-      */
-    void addExternalStorage(ASTPtr & subquery_or_table_name);
-
     void addJoinAction(ExpressionActionsPtr & actions, bool only_types) const;
 
     struct ScopeStack;
@@ -279,12 +253,10 @@ private:
     void makeExplicitSet(const ASTFunction * node, const Block & sample_block, bool create_ordered_set);
 
     /**
-      * Create Set from a subuqery or a table expression in the query. The created set is suitable for using the index.
+      * Create Set from a subquery or a table expression in the query. The created set is suitable for using the index.
       * The set will not be created if its size hits the limit.
       */
     void tryMakeSetFromSubquery(const ASTPtr & subquery_or_table_name);
-
-    void makeSetsForIndexImpl(const ASTPtr & node, const Block & sample_block);
 
     /** Translate qualified names such as db.table.column, table.column, table_alias.column
       *  to unqualified names. This is done in a poor transitional way:

@@ -517,16 +517,4 @@ void RegionTable::removeTableFromIndex(KeyspaceID keyspace_id, TableID table_id)
     }
 }
 
-RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
-    const Base & base_,
-    std::vector<DM::ExternalDTFileInfo> && external_files_)
-    : base(base_)
-    , external_files(std::move(external_files_))
-{}
-
-RegionPtrWithCheckpointInfo::RegionPtrWithCheckpointInfo(const Base & base_, CheckpointIngestInfoPtr checkpoint_info_)
-    : base(base_)
-    , checkpoint_info(std::move(checkpoint_info_))
-{}
-
 } // namespace DB

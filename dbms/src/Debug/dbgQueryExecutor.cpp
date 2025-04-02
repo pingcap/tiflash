@@ -14,6 +14,7 @@
 
 #include <DataStreams/UnionBlockInputStream.h>
 #include <Debug/MockExecutor/AstToPBUtils.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Debug/dbgQueryExecutor.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
@@ -21,8 +22,8 @@
 #include <Interpreters/Context.h>
 #include <Server/MockComputeClient.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <TestUtils/TiFlashTestEnv.h>
 namespace DB
 {
 using TiFlashTestEnv = tests::TiFlashTestEnv;

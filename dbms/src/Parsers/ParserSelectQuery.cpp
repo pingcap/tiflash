@@ -47,7 +47,6 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     ParserKeyword s_from("FROM");
     ParserKeyword s_partition("PARTITION");
     ParserKeyword s_segment("SEGMENT");
-    ParserKeyword s_prewhere("PREWHERE");
     ParserKeyword s_where("WHERE");
     ParserKeyword s_group_by("GROUP BY");
     ParserKeyword s_with("WITH");
@@ -111,13 +110,6 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     if (s_segment.ignore(pos, expected))
     {
         if (!ParserPartition().parse(pos, select_query->segment_expression_list, expected))
-            return false;
-    }
-
-    /// PREWHERE expr
-    if (s_prewhere.ignore(pos, expected))
-    {
-        if (!exp_elem.parse(pos, select_query->prewhere_expression, expected))
             return false;
     }
 
@@ -217,8 +209,6 @@ bool ParserSelectQuery::parseImpl(Pos & pos, ASTPtr & node, Expected & expected)
     select_query->children.push_back(select_query->select_expression_list);
     if (select_query->tables)
         select_query->children.push_back(select_query->tables);
-    if (select_query->prewhere_expression)
-        select_query->children.push_back(select_query->prewhere_expression);
     if (select_query->where_expression)
         select_query->children.push_back(select_query->where_expression);
     if (select_query->group_expression_list)

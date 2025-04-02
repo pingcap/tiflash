@@ -25,9 +25,8 @@
 #include <Poco/Logger.h>
 #include <Storages/Page/workload/PSStressEnv.h>
 #include <Storages/Page/workload/PSWorkload.h>
+#include <boost_wrapper/program_options.h>
 #include <signal.h>
-
-#include <boost/program_options.hpp>
 
 namespace DB::PS::tests
 {

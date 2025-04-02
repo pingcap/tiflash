@@ -30,9 +30,9 @@
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectQuery.h>
 #include <Storages/ColumnsDescription.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
-#include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
@@ -56,10 +56,13 @@ namespace FailPoints
 extern const char exception_before_drop_segment[];
 extern const char exception_after_drop_segment[];
 } // namespace FailPoints
-namespace DM
+namespace DM::tests
 {
-namespace tests
-{
+
+static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
+static const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{};
+static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
+
 TEST(StorageDeltaMergeTest, ReadWriteCase1)
 try
 {
@@ -128,14 +131,13 @@ try
     // these field should live long enough because `DAGQueryInfo` only
     // keep a ref on them
     const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
-    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
-    const auto ann_query_info = tipb::ANNQueryInfo{};
     TiDB::ColumnInfos source_columns{};
     const std::vector<int> runtime_filter_ids;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         filters,
-        ann_query_info,
-        pushed_down_filters, // Not care now
+        empty_ann_query_info,
+        empty_pushed_down_filters, // Not care now
+        empty_used_indexes, // Not care now
         source_columns, // Not care now
         runtime_filter_ids,
         0,
@@ -686,14 +688,13 @@ try
     // these field should live long enough because `DAGQueryInfo` only
     // keep a ref on them
     const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
-    const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
-    const auto ann_query_info = tipb::ANNQueryInfo{};
     TiDB::ColumnInfos source_columns{};
     const std::vector<int> runtime_filter_ids;
     query_info.dag_query = std::make_unique<DAGQueryInfo>(
         filters,
-        ann_query_info,
-        pushed_down_filters, // Not care now
+        empty_ann_query_info,
+        empty_pushed_down_filters, // Not care now
+        empty_used_indexes, // Not care now
         source_columns, // Not care now
         runtime_filter_ids,
         0,
@@ -806,14 +807,13 @@ try
         // these field should live long enough because `DAGQueryInfo` only
         // keep a ref on them
         const google::protobuf::RepeatedPtrField<tipb::Expr> filters{};
-        const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{};
         TiDB::ColumnInfos source_columns{};
         const std::vector<int> runtime_filter_ids;
-        const auto ann_query_info = tipb::ANNQueryInfo{};
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filters,
-            ann_query_info,
-            pushed_down_filters, // Not care now
+            empty_ann_query_info,
+            empty_pushed_down_filters, // Not care now
+            empty_used_indexes, // Not care now
             source_columns, // Not care now
             runtime_filter_ids,
             0,
@@ -887,6 +887,5 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DM
+} // namespace DM::tests
 } // namespace DB

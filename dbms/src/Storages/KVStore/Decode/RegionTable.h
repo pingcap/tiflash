@@ -18,7 +18,7 @@
 #include <Core/Block.h>
 #include <Core/Names.h>
 #include <Interpreters/Context_fwd.h>
-#include <Storages/DeltaMerge/ExternalDTFileInfo.h>
+#include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/Decode/RegionDataRead.h>
 #include <Storages/KVStore/Decode/RegionTable_fwd.h>
@@ -26,7 +26,7 @@
 #include <Storages/KVStore/Decode/TiKVHandle.h>
 #include <Storages/KVStore/Read/RegionException.h>
 #include <Storages/KVStore/Read/RegionLockInfo.h>
-#include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <common/logger_useful.h>
 
 #include <functional>
@@ -36,25 +36,8 @@
 
 namespace DB
 {
-struct MockRaftCommand;
-struct ColumnsDescription;
-class IStorage;
-using StoragePtr = std::shared_ptr<IStorage>;
-class TMTContext;
-class IBlockInputStream;
-using BlockInputStreamPtr = std::shared_ptr<IBlockInputStream>;
-class Block;
-// for debug
-struct MockTiDBTable;
 class RegionRangeKeys;
 class RegionTaskLock;
-struct RegionPtrWithSnapshotFiles;
-class RegionScanFilter;
-using RegionScanFilterPtr = std::shared_ptr<RegionScanFilter>;
-struct CheckpointInfo;
-using CheckpointInfoPtr = std::shared_ptr<CheckpointInfo>;
-struct CheckpointIngestInfo;
-using CheckpointIngestInfoPtr = std::shared_ptr<CheckpointIngestInfo>;
 
 class RegionTable : private boost::noncopyable
 {
@@ -97,7 +80,7 @@ public:
     // Most of the regions are scheduled to TiFlash by a raft snapshot.
     void addPrehandlingRegion(const Region & region);
 
-    // When a reigon is removed out of TiFlash.
+    // When a region is removed out of TiFlash.
     void removeRegion(RegionID region_id, bool remove_data, const RegionTaskLock &);
 
     // Used by apply snapshot.
@@ -185,42 +168,5 @@ private:
     LoggerPtr log;
 };
 
-
-// A wrap of RegionPtr, with snapshot files directory waiting to be ingested
-struct RegionPtrWithSnapshotFiles
-{
-    using Base = RegionPtr;
-
-    /// can accept const ref of RegionPtr without cache
-    RegionPtrWithSnapshotFiles(const Base & base_, std::vector<DM::ExternalDTFileInfo> && external_files_ = {});
-
-    /// to be compatible with usage as RegionPtr.
-    Base::element_type * operator->() const { return base.operator->(); }
-    const Base::element_type & operator*() const { return base.operator*(); }
-
-    /// make it could be cast into RegionPtr implicitly.
-    operator const Base &() const { return base; }
-
-    const Base & base;
-    const std::vector<DM::ExternalDTFileInfo> external_files;
-};
-
-// A wrap of RegionPtr, with checkpoint info to be ingested
-struct RegionPtrWithCheckpointInfo
-{
-    using Base = RegionPtr;
-
-    RegionPtrWithCheckpointInfo(const Base & base_, CheckpointIngestInfoPtr checkpoint_info_);
-
-    /// to be compatible with usage as RegionPtr.
-    Base::element_type * operator->() const { return base.operator->(); }
-    const Base::element_type & operator*() const { return base.operator*(); }
-
-    /// make it could be cast into RegionPtr implicitly.
-    operator const Base &() const { return base; }
-
-    const Base & base;
-    CheckpointIngestInfoPtr checkpoint_info;
-};
 
 } // namespace DB

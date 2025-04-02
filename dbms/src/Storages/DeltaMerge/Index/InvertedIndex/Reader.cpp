@@ -17,6 +17,8 @@
 #include <IO/ReadHelpers.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader.h>
 
+#include <type_traits>
+
 namespace DB::ErrorCodes
 {
 extern const int BAD_ARGUMENTS;
@@ -28,8 +30,7 @@ namespace DB::DM
 
 InvertedIndexReaderPtr InvertedIndexReader::view(const DataTypePtr & type, std::string_view path)
 {
-    auto type_id = type->isNullable() ? dynamic_cast<const DataTypeNullable &>(*type).getNestedType()->getTypeId()
-                                      : type->getTypeId();
+    auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)
     {
     case TypeIndex::UInt8:
@@ -69,8 +70,7 @@ InvertedIndexReaderPtr InvertedIndexReader::view(const DataTypePtr & type, std::
 
 InvertedIndexReaderPtr InvertedIndexReader::view(const DataTypePtr & type, ReadBuffer & buf, size_t index_size)
 {
-    auto type_id = type->isNullable() ? dynamic_cast<const DataTypeNullable &>(*type).getNestedType()->getTypeId()
-                                      : type->getTypeId();
+    auto type_id = removeNullable(type)->getTypeId();
     switch (type_id)
     {
     case TypeIndex::UInt8:
@@ -152,9 +152,63 @@ void InvertedIndexMemoryReader<T>::load(ReadBuffer & read_buf, size_t index_size
     }
 }
 
+namespace
+{
+
+template <typename T>
+inline bool isKeyOutOfRange(const InvertedIndexReader::Key key)
+{
+    if constexpr (std::is_signed_v<T>)
+    {
+        using SignedKey = std::make_signed_t<InvertedIndexReader::Key>;
+        SignedKey signed_key = key;
+        return signed_key < std::numeric_limits<T>::min() || signed_key > std::numeric_limits<T>::max();
+    }
+    else
+    {
+        return key > std::numeric_limits<T>::max();
+    }
+}
+
+template <typename T>
+inline bool isKeyLessThanMin(const InvertedIndexReader::Key key)
+{
+    if constexpr (std::is_signed_v<T>)
+    {
+        using SignedKey = std::make_signed_t<InvertedIndexReader::Key>;
+        SignedKey signed_key = key;
+        return signed_key < std::numeric_limits<T>::min();
+    }
+    else
+    {
+        return false;
+    }
+}
+
+template <typename T>
+inline bool isKeyGreaterThanMax(const InvertedIndexReader::Key key)
+{
+    if constexpr (std::is_signed_v<T>)
+    {
+        using SignedKey = std::make_signed_t<InvertedIndexReader::Key>;
+        SignedKey signed_key = key;
+        return signed_key > std::numeric_limits<T>::max();
+    }
+    else
+    {
+        return key > std::numeric_limits<T>::max();
+    }
+}
+
+} // namespace
+
 template <typename T>
 void InvertedIndexMemoryReader<T>::search(BitmapFilterPtr & bitmap_filter, const Key & key) const
 {
+    // handle wider data type
+    if (isKeyOutOfRange<T>(key))
+        return;
+
     T real_key = key;
     auto it = index.find(real_key);
     if (it != index.end())
@@ -165,8 +219,16 @@ template <typename T>
 void InvertedIndexMemoryReader<T>::searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end)
     const
 {
+    // handle wider data type
+    if (isKeyGreaterThanMax<T>(begin) || isKeyLessThanMin<T>(end))
+        return;
     T real_begin = begin;
+    if (isKeyLessThanMin<T>(begin))
+        real_begin = std::numeric_limits<T>::min();
     T real_end = end;
+    if (isKeyGreaterThanMax<T>(end))
+        real_end = std::numeric_limits<T>::max();
+
     auto index_begin = index.lower_bound(real_begin);
     auto index_end = index.upper_bound(real_end);
     for (auto it = index_begin; it != index_end; ++it)
@@ -204,6 +266,10 @@ void InvertedIndexFileReader<T>::loadMeta(ReadBuffer & read_buf, size_t index_si
 template <typename T>
 void InvertedIndexFileReader<T>::search(BitmapFilterPtr & bitmap_filter, const Key & key) const
 {
+    // handle wider data type
+    if (isKeyOutOfRange<T>(key))
+        return;
+
     T real_key = key;
     auto it = std::find_if(meta.entries.begin(), meta.entries.end(), [&](const auto & entry) {
         return entry.min <= real_key && entry.max >= real_key;
@@ -219,8 +285,16 @@ void InvertedIndexFileReader<T>::search(BitmapFilterPtr & bitmap_filter, const K
 template <typename T>
 void InvertedIndexFileReader<T>::searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const
 {
+    // handle wider data type
+    if (isKeyGreaterThanMax<T>(begin) || isKeyLessThanMin<T>(end))
+        return;
     T real_begin = begin;
+    if (isKeyLessThanMin<T>(begin))
+        real_begin = std::numeric_limits<T>::min();
     T real_end = end;
+    if (isKeyGreaterThanMax<T>(end))
+        real_end = std::numeric_limits<T>::max();
+
     // max < begin
     auto meta_begin = std::lower_bound(
         meta.entries.begin(),

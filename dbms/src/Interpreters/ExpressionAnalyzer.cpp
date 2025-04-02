@@ -146,7 +146,7 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     const NamesAndTypesList & source_columns_,
     const Names & required_result_columns_,
     size_t subquery_depth_,
-    bool do_global_,
+    bool /*do_global_*/,
     const SubqueriesForSets & subqueries_for_set_)
     : ast(ast_)
     , context(context_)
@@ -155,7 +155,6 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     , source_columns(source_columns_)
     , required_result_columns(required_result_columns_.begin(), required_result_columns_.end())
     , storage(storage_)
-    , do_global(do_global_)
     , subqueries_for_sets(subqueries_for_set_)
 {
     select_query = typeid_cast<ASTSelectQuery *>(ast.get());
@@ -216,17 +215,7 @@ ExpressionAnalyzer::ExpressionAnalyzer(
     /// Delete the unnecessary from `source_columns` list. Create `unknown_required_source_columns`. Form `columns_added_by_join`.
     collectUsedColumns();
 
-    /// external_tables, subqueries_for_sets for global subqueries.
-    /// Replaces global subqueries with the generated names of temporary tables that will be sent to remote servers.
-    initGlobalSubqueriesAndExternalTables();
-
     /// has_aggregation, aggregation_keys, aggregate_descriptions, aggregated_columns.
-    /// This analysis should be performed after processing global subqueries, because otherwise,
-    /// if the aggregate function contains a global subquery, then `analyzeAggregation` method will save
-    /// in `aggregate_descriptions` the information about the parameters of this aggregate function, among which
-    /// global subquery. Then, when you call `initGlobalSubqueriesAndExternalTables` method, this
-    /// the global subquery will be replaced with a temporary table, resulting in aggregate_descriptions
-    /// will contain out-of-date information, which will lead to an error when the query is executed.
     analyzeAggregation();
 }
 
@@ -582,59 +571,6 @@ void ExpressionAnalyzer::analyzeAggregation()
     }
 }
 
-
-void ExpressionAnalyzer::initGlobalSubqueriesAndExternalTables()
-{
-    /// Adds existing external tables (not subqueries) to the external_tables dictionary.
-    findExternalTables(ast);
-
-    /// Converts GLOBAL subqueries to external tables; Puts them into the external_tables dictionary: name -> StoragePtr.
-    initGlobalSubqueries(ast);
-}
-
-
-void ExpressionAnalyzer::initGlobalSubqueries(ASTPtr & ast)
-{
-    /// Recursive calls. We do not go into subqueries.
-
-    for (auto & child : ast->children)
-        if (!typeid_cast<ASTSelectQuery *>(child.get()))
-            initGlobalSubqueries(child);
-
-    /// Bottom-up actions.
-
-    if (auto * node = typeid_cast<ASTFunction *>(ast.get()))
-    {
-        /// For GLOBAL IN.
-        if (do_global && (node->name == "globalIn" || node->name == "globalNotIn"))
-            addExternalStorage(node->arguments->children.at(1));
-    }
-    else if (auto * node = typeid_cast<ASTTablesInSelectQueryElement *>(ast.get()))
-    {
-        /// For GLOBAL JOIN.
-        if (do_global && node->table_join
-            && static_cast<const ASTTableJoin &>(*node->table_join).locality == ASTTableJoin::Locality::Global)
-            addExternalStorage(node->table_expression);
-    }
-}
-
-
-void ExpressionAnalyzer::findExternalTables(ASTPtr & ast)
-{
-    /// Traverse from the bottom. Intentionally go into subqueries.
-    for (auto & child : ast->children)
-        findExternalTables(child);
-
-    /// If table type identifier
-    StoragePtr external_storage;
-
-    if (auto * node = typeid_cast<ASTIdentifier *>(ast.get()))
-        if (node->kind == ASTIdentifier::Table)
-            if ((external_storage = context.tryGetExternalTable(node->name)))
-                external_tables[node->name] = external_storage;
-}
-
-
 static std::pair<String, String> getDatabaseAndTableNameFromIdentifier(const ASTIdentifier & identifier)
 {
     std::pair<String, String> res;
@@ -649,7 +585,6 @@ static std::pair<String, String> getDatabaseAndTableNameFromIdentifier(const AST
     }
     return res;
 }
-
 
 static std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
     const ASTPtr & subquery_or_table_name,
@@ -755,102 +690,6 @@ static std::shared_ptr<InterpreterSelectWithUnionQuery> interpretSubquery(
         QueryProcessingStage::Complete,
         subquery_depth + 1);
 }
-
-
-void ExpressionAnalyzer::addExternalStorage(ASTPtr & subquery_or_table_name_or_table_expression)
-{
-    /// With nondistributed queries, creating temporary tables does not make sense.
-    if (!(storage && storage->isRemote()))
-        return;
-
-    ASTPtr subquery;
-    ASTPtr table_name;
-    ASTPtr subquery_or_table_name;
-
-    if (typeid_cast<const ASTIdentifier *>(subquery_or_table_name_or_table_expression.get()))
-    {
-        table_name = subquery_or_table_name_or_table_expression;
-        subquery_or_table_name = table_name;
-    }
-    else if (
-        const auto * ast_table_expr
-        = typeid_cast<const ASTTableExpression *>(subquery_or_table_name_or_table_expression.get()))
-    {
-        if (ast_table_expr->database_and_table_name)
-        {
-            table_name = ast_table_expr->database_and_table_name;
-            subquery_or_table_name = table_name;
-        }
-        else if (ast_table_expr->subquery)
-        {
-            subquery = ast_table_expr->subquery;
-            subquery_or_table_name = subquery;
-        }
-    }
-    else if (typeid_cast<const ASTSubquery *>(subquery_or_table_name_or_table_expression.get()))
-    {
-        subquery = subquery_or_table_name_or_table_expression;
-        subquery_or_table_name = subquery;
-    }
-
-    if (!subquery_or_table_name)
-        throw Exception(
-            "Logical error: unknown AST element passed to ExpressionAnalyzer::addExternalStorage method",
-            ErrorCodes::LOGICAL_ERROR);
-
-    if (table_name)
-    {
-        /// If this is already an external table, you do not need to add anything. Just remember its presence.
-        if (external_tables.end() != external_tables.find(static_cast<const ASTIdentifier &>(*table_name).name))
-            return;
-    }
-
-    /// Generate the name for the external table.
-    String external_table_name = "_data" + toString(external_table_id);
-    while (external_tables.count(external_table_name))
-    {
-        ++external_table_id;
-        external_table_name = "_data" + toString(external_table_id);
-    }
-
-    auto interpreter = interpretSubquery(subquery_or_table_name, context, subquery_depth, {});
-
-    Block sample = interpreter->getSampleBlock();
-    NamesAndTypesList columns = sample.getNamesAndTypesList();
-
-    StoragePtr external_storage = StorageMemory::create(external_table_name, ColumnsDescription{columns});
-    external_storage->startup();
-
-    /** We replace the subquery with the name of the temporary table.
-        * It is in this form, the request will go to the remote server.
-        * This temporary table will go to the remote server, and on its side,
-        *  instead of doing a subquery, you just need to read it.
-        */
-
-    auto database_and_table_name = std::make_shared<ASTIdentifier>(external_table_name, ASTIdentifier::Table);
-
-    if (auto * ast_table_expr = typeid_cast<ASTTableExpression *>(subquery_or_table_name_or_table_expression.get()))
-    {
-        ast_table_expr->subquery.reset();
-        ast_table_expr->database_and_table_name = database_and_table_name;
-
-        ast_table_expr->children.clear();
-        ast_table_expr->children.emplace_back(database_and_table_name);
-    }
-    else
-        subquery_or_table_name_or_table_expression = database_and_table_name;
-
-    external_tables[external_table_name] = external_storage;
-    subqueries_for_sets[external_table_name].source = interpreter->execute().in;
-    subqueries_for_sets[external_table_name].table = external_storage;
-
-    /** NOTE If it was written IN tmp_table - the existing temporary (but not external) table,
-      *  then a new temporary table will be created (for example, _data1),
-      *  and the data will then be copied to it.
-      * Maybe this can be avoided.
-      */
-}
-
 
 static NamesAndTypesList::iterator findColumn(const String & name, NamesAndTypesList & cols)
 {
@@ -1127,8 +966,6 @@ void ExpressionAnalyzer::normalizeTreeImpl(
     /// If the WHERE clause or HAVING consists of a single alias, the reference must be replaced not only in children, but also in where_expression and having_expression.
     if (auto * select = typeid_cast<ASTSelectQuery *>(ast.get()))
     {
-        if (select->prewhere_expression)
-            normalizeTreeImpl(select->prewhere_expression, finished_asts, current_asts, current_alias, level + 1);
         if (select->where_expression)
             normalizeTreeImpl(select->where_expression, finished_asts, current_asts, current_alias, level + 1);
         if (select->having_expression)
@@ -1445,19 +1282,6 @@ void ExpressionAnalyzer::optimizeLimitBy()
         elems = unique_elems;
 }
 
-
-void ExpressionAnalyzer::makeSetsForIndex()
-{
-    if (storage && select_query && storage->supportsIndexForIn())
-    {
-        if (select_query->where_expression)
-            makeSetsForIndexImpl(select_query->where_expression, storage->getSampleBlock());
-        if (select_query->prewhere_expression)
-            makeSetsForIndexImpl(select_query->prewhere_expression, storage->getSampleBlock());
-    }
-}
-
-
 void ExpressionAnalyzer::tryMakeSetFromSubquery(const ASTPtr & subquery_or_table_name)
 {
     BlockIO res = interpretSubquery(subquery_or_table_name, context, subquery_depth + 1, {})->execute();
@@ -1475,56 +1299,6 @@ void ExpressionAnalyzer::tryMakeSetFromSubquery(const ASTPtr & subquery_or_table
 
     prepared_sets[subquery_or_table_name.get()] = std::move(set);
 }
-
-
-void ExpressionAnalyzer::makeSetsForIndexImpl(const ASTPtr & node, const Block & sample_block)
-{
-    for (auto & child : node->children)
-    {
-        /// Don't descent into subqueries.
-        if (typeid_cast<ASTSubquery *>(child.get()))
-            continue;
-
-        /// Don't dive into lambda functions
-        const auto * func = typeid_cast<const ASTFunction *>(child.get());
-        if (func && func->name == "lambda")
-            continue;
-
-        makeSetsForIndexImpl(child, sample_block);
-    }
-
-    const auto * func = typeid_cast<const ASTFunction *>(node.get());
-    if (func && functionIsInOperator(func->name))
-    {
-        const IAST & args = *func->arguments;
-
-        if (storage && storage->mayBenefitFromIndexForIn(args.children.at(0)))
-        {
-            const ASTPtr & arg = args.children.at(1);
-
-            if (!prepared_sets.count(arg.get())) /// Not already prepared.
-            {
-                if (typeid_cast<ASTSubquery *>(arg.get()) || typeid_cast<ASTIdentifier *>(arg.get()))
-                {
-                    if (settings.use_index_for_in_with_subqueries)
-                        tryMakeSetFromSubquery(arg);
-                }
-                else
-                {
-                    NamesAndTypesList temp_columns = source_columns;
-                    temp_columns.insert(temp_columns.end(), columns_added_by_join.begin(), columns_added_by_join.end());
-                    ExpressionActionsPtr temp_actions = std::make_shared<ExpressionActions>(temp_columns);
-                    getRootActions(func->arguments->children.at(0), true, false, temp_actions);
-
-                    Block sample_block_with_calculated_columns = temp_actions->getSampleBlock();
-                    if (sample_block_with_calculated_columns.has(args.children.at(0)->getColumnName()))
-                        makeExplicitSet(func, sample_block_with_calculated_columns, true);
-                }
-            }
-        }
-    }
-}
-
 
 void ExpressionAnalyzer::makeSet(const ASTFunction * node, const Block & sample_block)
 {
@@ -1576,47 +1350,6 @@ void ExpressionAnalyzer::makeSet(const ASTFunction * node, const Block & sample_
 
         SetPtr set = std::make_shared<Set>(
             SizeLimits(settings.max_rows_in_set, settings.max_bytes_in_set, settings.set_overflow_mode));
-
-        /** The following happens for GLOBAL INs:
-          * - in the addExternalStorage function, the IN (SELECT ...) subquery is replaced with IN _data1,
-          *   in the subquery_for_set object, this subquery is set as source and the temporary table _data1 as the table.
-          * - this function shows the expression IN_data1.
-          */
-        if (!subquery_for_set.source && (!storage || !storage->isRemote()))
-        {
-            auto interpreter = interpretSubquery(arg, context, subquery_depth, {});
-            subquery_for_set.source
-                = std::make_shared<LazyBlockInputStream>(interpreter->getSampleBlock(), [interpreter]() mutable {
-                      return interpreter->execute().in;
-                  });
-
-            /** Why is LazyBlockInputStream used?
-              *
-              * The fact is that when processing a query of the form
-              *  SELECT ... FROM remote_test WHERE column GLOBAL IN (subquery),
-              *  if the distributed remote_test table contains localhost as one of the servers,
-              *  the query will be interpreted locally again (and not sent over TCP, as in the case of a remote server).
-              *
-              * The query execution pipeline will be:
-              * CreatingSets
-              *  subquery execution, filling the temporary table with _data1 (1)
-              *  CreatingSets
-              *   reading from the table _data1, creating the set (2)
-              *   read from the table subordinate to remote_test.
-              *
-              * (The second part of the pipeline under CreateSets is a reinterpretation of the query inside StorageDistributed,
-              *  the query differs in that the database name and tables are replaced with subordinates, and the subquery is replaced with _data1.)
-              *
-              * But when creating the pipeline, when creating the source (2), it will be found that the _data1 table is empty
-              *  (because the query has not started yet), and empty source will be returned as the source.
-              * And then, when the query is executed, an empty set will be created in step (2).
-              *
-              * Therefore, we make the initialization of step (2) lazy
-              *  - so that it does not occur until step (1) is completed, on which the table will be populated.
-              *
-              * Note: this solution is not very good, you need to think better.
-              */
-        }
 
         subquery_for_set.set = set;
         prepared_sets[arg.get()] = set;
@@ -2096,11 +1829,10 @@ void ExpressionAnalyzer::getActionsImpl(
 
 void ExpressionAnalyzer::getAggregates(const ASTPtr & ast, ExpressionActionsPtr & actions)
 {
-    /// There can not be aggregate functions inside the WHERE and PREWHERE.
-    if (select_query
-        && (ast.get() == select_query->where_expression.get() || ast.get() == select_query->prewhere_expression.get()))
+    /// There can not be aggregate functions inside the WHERE.
+    if (select_query && ast.get() == select_query->where_expression.get())
     {
-        assertNoAggregates(ast, "in WHERE or PREWHERE");
+        assertNoAggregates(ast, "in WHERE");
         return;
     }
 

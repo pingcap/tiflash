@@ -32,7 +32,7 @@ public:
         : Base(std::move(str_))
     {}
     StringObject(StringObject && obj)
-        : Base((Base &&) obj)
+        : Base((Base &&)obj)
     {}
     StringObject(const char * str, const size_t len)
         : Base(str, len)
@@ -54,12 +54,13 @@ public:
         if (this == &a)
             return *this;
 
-        (Base &)* this = (Base &&) a;
+        (Base &)* this = (Base &&)a;
         return *this;
     }
 
     const std::string & getStr() const { return *this; }
     size_t dataSize() const { return Base::size(); }
+    size_t size() const = delete;
     std::string toString() const { return *this; }
 
     // Format as a hex string for debugging. The value will be converted to '?' if redact-log is on
@@ -67,15 +68,14 @@ public:
 
     explicit operator bool() const { return !empty(); }
 
-    size_t serialize(WriteBuffer & buf) const { return writeBinary2((const Base &)*this, buf); }
+    size_t serialize(WriteBuffer & buf) const { return writeBinary2(static_cast<const Base &>(*this), buf); }
 
-    static StringObject deserialize(ReadBuffer & buf) { return StringObject(readBinary2<Base>(buf)); }
+    static StringObject deserialize(ReadBuffer & buf) { return StringObject(readTiKVStringBinary(buf)); }
 
 private:
     StringObject(const Base & str_)
         : Base(str_)
     {}
-    size_t size() const = delete;
 };
 
 using TiKVKey = StringObject<true>;
