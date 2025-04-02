@@ -117,7 +117,7 @@ void WindowDescription::initNeedDecrease(bool has_agg)
         return;
     }
 
-    if ((frame.type == WindowFrame::FrameType::Rows) && (frame.begin_type == frame.end_type))
+    if (frame.type == WindowFrame::FrameType::Rows && frame.begin_type == frame.end_type)
     {
         // During the construction of frame with tipb, we will convert the boundary type from offset to current
         // when the frame type is rows and offset is 0. So it's needless to judge offset = 0.
