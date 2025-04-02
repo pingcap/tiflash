@@ -24,7 +24,8 @@ class SpillLimiter
 {
 public:
     explicit SpillLimiter(int64_t max_spilled_bytes_)
-        : max_spilled_bytes(max_spilled_bytes_)
+        : log(Logger::get("SpillLimiter"))
+        , max_spilled_bytes(max_spilled_bytes_)
     {}
 
     // return <ok_to_spill, current_spilled_bytes, max_spilled_bytes>
@@ -50,8 +51,15 @@ public:
     void release(uint64_t bytes)
     {
         std::lock_guard<std::mutex> guard(lock);
-        RUNTIME_CHECK(current_spilled_bytes >= bytes);
-        current_spilled_bytes -= bytes;
+        if unlikely (current_spilled_bytes < bytes)
+        {
+            current_spilled_bytes = 0;
+            LOG_ERROR(log, "unexpected release bytes({}), current bytes: {}", bytes, current_spilled_bytes);
+        }
+        else
+        {
+            current_spilled_bytes -= bytes;
+        }
         GET_METRIC(tiflash_spilled_files, type_current_spilled_bytes).Set(current_spilled_bytes);
     }
 
@@ -70,6 +78,7 @@ public:
     static inline std::shared_ptr<SpillLimiter> instance = std::make_shared<SpillLimiter>(-1);
 
 private:
+    LoggerPtr log;
     mutable std::mutex lock;
     int64_t max_spilled_bytes;
     uint64_t current_spilled_bytes = 0;
