@@ -285,19 +285,6 @@ template <ExtraHandleType HandleType>
         filter);
 }
 
-bool isApplySnapshotOrIngestSST(
-    const ColumnFileBig & cf_big,
-    const UInt32 stable_rows,
-    const UInt32 start_row_id,
-    const std::vector<RowID> & base_ver_snap)
-{
-    const auto offset = start_row_id - stable_rows;
-    const auto rows = cf_big.getRows();
-    return std::all_of(base_ver_snap.begin() + offset, base_ver_snap.begin() + offset + rows, [](RowID row_id) {
-        return row_id == NotExistRowID;
-    });
-}
-
 template <ExtraHandleType HandleType>
 UInt32 buildVersionFilter(
     const DMContext & dm_context,
@@ -351,10 +338,21 @@ UInt32 buildVersionFilter(
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            if (likely(isApplySnapshotOrIngestSST(*cf_big, stable_rows, start_row_id, base_ver_snap)))
+            const auto offset_in_delta = start_row_id - stable_rows;
+            const auto rows = cf_big->getRows();
+            const bool has_base_version = std::any_of(
+                base_ver_snap.begin() + offset_in_delta,
+                base_ver_snap.begin() + offset_in_delta + rows,
+                [](RowID row_id) { return row_id != NotExistRowID; });
+
+            // If `​has_base_version` is ​false, it means we only need to handle version filtering ​within the DMFile.
+            if (likely(!has_base_version))
+            {
                 filtered_out_rows
                     += buildVersionFilterColumnFileBig<HandleType>(dm_context, *cf_big, read_ts, start_row_id, filter);
+            }
             else
+            {
                 filtered_out_rows += buildVersionFilterBlock(
                     dm_context,
                     data_provider,
@@ -364,6 +362,7 @@ UInt32 buildVersionFilter(
                     stable_rows,
                     start_row_id,
                     filter);
+            }
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
