@@ -32,7 +32,7 @@ public:
         : Base(std::move(str_))
     {}
     StringObject(StringObject && obj)
-        : Base((Base &&)obj)
+        : Base((Base &&) obj)
     {}
     StringObject(const char * str, const size_t len)
         : Base(str, len)
@@ -54,7 +54,7 @@ public:
         if (this == &a)
             return *this;
 
-        (Base &)* this = (Base &&)a;
+        (Base &)* this = (Base &&) a;
         return *this;
     }
 
