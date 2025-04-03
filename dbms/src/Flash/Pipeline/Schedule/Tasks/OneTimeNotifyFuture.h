@@ -25,12 +25,16 @@ namespace DB
 class OneTimeNotifyFuture : public NotifyFuture
 {
 public:
+    explicit OneTimeNotifyFuture(NotifyType notify_type_)
+        : notify_type(notify_type_)
+    {}
     void registerTask(TaskPtr && task) override
     {
         {
             std::lock_guard lock(mu);
             if (!finished)
             {
+                task->setNotifyType(notify_type);
                 cv.registerTask(std::move(task));
                 return;
             }
@@ -53,6 +57,7 @@ private:
     std::mutex mu;
     bool finished{false};
     PipeConditionVariable cv;
+    NotifyType notify_type;
 };
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 } // namespace DB

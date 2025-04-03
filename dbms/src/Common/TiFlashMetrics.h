@@ -586,11 +586,16 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "Indicate the tiflash server info, and the value is the start timestamp (s).",                                                \
       Gauge,                                                                                                                        \
       F(start_time, {"version", TiFlashBuildInfo::getReleaseVersion()}, {"hash", TiFlashBuildInfo::getGitHash()}))                  \
-    M(tiflash_object_count,                                                                                                         \
-      "Number of objects",                                                                                                          \
+    M(tiflash_object_count, "Number of objects", Gauge, F(type_count_of_mpptunnel, {"type", "count_of_mpptunnel"}))                 \
+    M(tiflash_establish_calldata_count,                                                                                             \
+      "Number of establish calldata",                                                                                               \
       Gauge,                                                                                                                        \
-      F(type_count_of_establish_calldata, {"type", "count_of_establish_calldata"}),                                                 \
-      F(type_count_of_mpptunnel, {"type", "count_of_mpptunnel"}))                                                                   \
+      F(type_new_request_calldata, {"type", "new_request_calldata"}),                                                               \
+      F(type_wait_tunnel_calldata, {"type", "wait_tunnel_calldata"}),                                                               \
+      F(type_wait_write_calldata, {"type", "wait_write_calldata"}),                                                                 \
+      F(type_wait_in_queue_calldata, {"type", "wait_in_queue_calldata"}),                                                           \
+      F(type_wait_write_err_calldata, {"type", "wait_write_err_calldata"}),                                                         \
+      F(type_finish_calldata, {"type", "finish_calldata"}))                                                                         \
     M(tiflash_thread_count,                                                                                                         \
       "Number of threads",                                                                                                          \
       Gauge,                                                                                                                        \
@@ -751,6 +756,18 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_io_executing_tasks_count, {"type", "io_executing_tasks_count"}),                                                       \
       F(type_cpu_task_thread_pool_size, {"type", "cpu_task_thread_pool_size"}),                                                     \
       F(type_io_task_thread_pool_size, {"type", "io_task_thread_pool_size"}))                                                       \
+    M(tiflash_pipeline_wait_on_notify_tasks,                                                                                        \
+      "waiting on notify pipeline task count",                                                                                      \
+      Gauge,                                                                                                                        \
+      F(type_wait_on_table_scan_read, {"type", "wait_on_table_scan_read"}),                                                         \
+      F(type_wait_on_shared_queue_write, {"type", "wait_on_shared_queue_write"}),                                                   \
+      F(type_wait_on_shared_queue_read, {"type", "wait_on_shared_queue_read"}),                                                     \
+      F(type_wait_on_spill_bucket_read, {"type", "wait_on_spill_bucket_read"}),                                                     \
+      F(type_wait_on_grpc_recv_read, {"type", "wait_on_grcp_recv_read"}),                                                           \
+      F(type_wait_on_tunnel_sender_write, {"type", "wait_on_tunnel_sender_write"}),                                                 \
+      F(type_wait_on_join_build, {"type", "wait_on_join_build"}),                                                                   \
+      F(type_wait_on_join_probe, {"type", "wait_on_join_probe"}),                                                                   \
+      F(type_wait_on_result_queue_write, {"type", "wait_on_result_queue_write"}))                                                   \
     M(tiflash_pipeline_task_duration_seconds,                                                                                       \
       "Bucketed histogram of pipeline task duration in seconds",                                                                    \
       Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */ \
