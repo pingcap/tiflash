@@ -28,16 +28,28 @@ public:
         const LoggerPtr & log,
         const FineGrainedShuffle & fine_grained_shuffle);
 
-    // TODO
-    void buildPipelineExecGroupImpl(
-        PipelineExecutorContext & exec_context,
-        PipelineExecGroupBuilder & group_builder,
-        Context & context,
-        size_t concurrency) override;
+    // TODO to partition data, we may need to call `ExchangeSenderInterpreterHelper::genPartitionColCollators` like PhysicalExchangeSender
+    PhysicalCTESource(
+            const String & executor_id_,
+            const NamesAndTypes & schema_,
+            const FineGrainedShuffle & fine_grained_shuffle,
+            const String & req_id,
+            const Block & sample_block_)
+            : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, fine_grained_shuffle, req_id)
+            , sample_block(sample_block_)
+        {}
 
     void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;
+
+private:
+    // TODO
+    void buildPipelineExecGroupImpl(
+        PipelineExecutorContext & exec_context,
+        PipelineExecGroupBuilder & group_builder,
+        Context & /*context*/,
+        size_t /*concurrency*/) override;
 
 private:
     Block sample_block;
