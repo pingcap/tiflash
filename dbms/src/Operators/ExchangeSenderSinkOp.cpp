@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/DAGResponseWriter.h>
 #include <Operators/ExchangeSenderSinkOp.h>
 
 namespace DB
@@ -28,15 +29,16 @@ void ExchangeSenderSinkOp::operateSuffixImpl()
 
 OperatorStatus ExchangeSenderSinkOp::writeImpl(Block && block)
 {
-    if (!block)
+    assert(!writer->hasPendingFlush());
+    if (block)
     {
-        writer->flush();
-        return OperatorStatus::FINISHED;
+        total_rows += block.rows();
+        // write
+        return writeResultToOperatorStatus(writer->write(std::move(block)));
     }
-
-    total_rows += block.rows();
-    writer->write(block);
-    return OperatorStatus::NEED_INPUT;
+    // input is done
+    input_done = true;
+    return writeResultToOperatorStatus(writer->flush());
 }
 
 OperatorStatus ExchangeSenderSinkOp::waitForWriter() const
@@ -53,13 +55,31 @@ OperatorStatus ExchangeSenderSinkOp::waitForWriter() const
     }
 }
 
+OperatorStatus ExchangeSenderSinkOp::writeResultToOperatorStatus(WriteResult res) const
+{
+    if (res == WriteResult::Done)
+    {
+        assert(!writer->hasPendingFlush());
+        return input_done ? OperatorStatus::FINISHED : OperatorStatus::NEED_INPUT;
+    }
+    assert(writer->hasPendingFlush());
+    return res == WriteResult::NeedWaitForPolling ? OperatorStatus::WAITING : OperatorStatus::WAIT_FOR_NOTIFY;
+}
+
 OperatorStatus ExchangeSenderSinkOp::prepareImpl()
 {
-    return waitForWriter();
+    if (writer->hasPendingFlush())
+    {
+        // if there is pending flush, flush it
+        return writeResultToOperatorStatus(writer->flush());
+    }
+    return OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus ExchangeSenderSinkOp::awaitImpl()
 {
+    // awaitImpl should only be called if there is pending flush
+    RUNTIME_CHECK(writer->hasPendingFlush());
     return waitForWriter();
 }
 

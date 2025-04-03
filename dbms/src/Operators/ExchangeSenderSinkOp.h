@@ -47,9 +47,11 @@ protected:
 
 private:
     OperatorStatus waitForWriter() const;
+    OperatorStatus writeResultToOperatorStatus(WriteResult res) const;
 
 private:
     std::unique_ptr<DAGResponseWriter> writer;
     size_t total_rows = 0;
+    bool input_done = false;
 };
 } // namespace DB
