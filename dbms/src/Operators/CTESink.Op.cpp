@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Operators/CTESinkOp.h>
+
 #include "Operators/Operator.h"
 
 namespace DB

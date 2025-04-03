@@ -27,6 +27,7 @@ class CTEManager
 public:
     std::shared_ptr<CTE> getCTE(const String & query_id_and_cte_id);
     void releaseCTE(const String & query_id_and_cte_id);
+
 private:
     std::mutex mu;
     std::map<String, std::pair<Int32, std::shared_ptr<CTE>>> ctes;

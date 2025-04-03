@@ -14,8 +14,8 @@
 
 #pragma once
 
-#include <Core/Block.h>
 #include <Common/RWLock.h>
+#include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 

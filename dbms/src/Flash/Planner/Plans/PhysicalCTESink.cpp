@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/Plans/PhysicalCTESink.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
+#include <Flash/Planner/Plans/PhysicalCTESink.h>
 #include <Operators/CTE.h>
 #include <Operators/CTESinkOp.h>
 
@@ -58,8 +58,7 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     size_t partition_id = 0;
     group_builder.transform([&](auto & builder) {
         std::shared_ptr<CTE> cte; // TODO get it from CTEManager
-        builder.setSinkOp(
-            std::make_unique<CTESinkOp>(exec_context, log->identifier(), cte));
+        builder.setSinkOp(std::make_unique<CTESinkOp>(exec_context, log->identifier(), cte));
         ++partition_id;
     });
 }

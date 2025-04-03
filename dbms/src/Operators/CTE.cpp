@@ -35,7 +35,7 @@ FetchStatus CTE::checkAvailableBlockAt(size_t idx)
     // TODO handle FetchStatus::Cancelled
     return FetchStatus::Ok;
 }
-    
+
 std::pair<FetchStatus, Block> CTE::tryGetBlockAt(size_t idx)
 {
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
@@ -55,7 +55,7 @@ std::pair<FetchStatus, Block> CTE::tryGetBlockAt(size_t idx)
 void CTE::pushBlock(const Block & block)
 {
     std::unique_lock<std::shared_mutex> lock(this->rw_lock);
-    
+
     // TODO consider spill
     this->memory_usage += block.bytes();
     // TODO check spill

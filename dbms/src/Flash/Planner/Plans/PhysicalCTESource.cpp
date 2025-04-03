@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Planner/Plans/PhysicalCTESource.h>
 #include <Flash/Planner/FinalizeHelper.h>
+#include <Flash/Planner/Plans/PhysicalCTESource.h>
 
 namespace DB
 {

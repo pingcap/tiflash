@@ -17,8 +17,8 @@
 #include <Common/Logger.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
-#include <Operators/Operator.h>
 #include <Operators/CTE.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
@@ -26,11 +26,10 @@ namespace DB
 class CTESourceOp : public SourceOp
 {
 public:
-    CTESourceOp(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        std::shared_ptr<CTE> cte_)
-        : SourceOp(exec_context_, req_id), cte(cte_) {}
+    CTESourceOp(PipelineExecutorContext & exec_context_, const String & req_id, std::shared_ptr<CTE> cte_)
+        : SourceOp(exec_context_, req_id)
+        , cte(cte_)
+    {}
 
     String getName() const override { return "CTESourceOp"; }
 

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Operators/CTESource.h>
+
 #include "Operators/CTE.h"
 #include "Operators/Operator.h"
 
@@ -41,7 +42,7 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         return OperatorStatus::CANCELLED;
     }
 }
-    
+
 OperatorStatus CTESourceOp::awaitImpl()
 {
     // TODO when spill is triggered, this function may be blocked by spill. fix it

@@ -30,14 +30,14 @@ public:
 
     // TODO to partition data, we may need to call `ExchangeSenderInterpreterHelper::genPartitionColCollators` like PhysicalExchangeSender
     PhysicalCTESource(
-            const String & executor_id_,
-            const NamesAndTypes & schema_,
-            const FineGrainedShuffle & fine_grained_shuffle,
-            const String & req_id,
-            const Block & sample_block_)
-            : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, fine_grained_shuffle, req_id)
-            , sample_block(sample_block_)
-        {}
+        const String & executor_id_,
+        const NamesAndTypes & schema_,
+        const FineGrainedShuffle & fine_grained_shuffle,
+        const String & req_id,
+        const Block & sample_block_)
+        : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, fine_grained_shuffle, req_id)
+        , sample_block(sample_block_)
+    {}
 
     void finalizeImpl(const Names & parent_require) override;
 

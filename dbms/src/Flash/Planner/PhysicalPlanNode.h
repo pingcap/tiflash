@@ -105,7 +105,7 @@ protected:
     virtual void buildBlockInputStreamImpl(DAGPipeline & /*pipeline*/, Context & /*context*/, size_t /*max_streams*/)
     {
         throw Exception("Unsupported");
-    };
+    }
 
     virtual void buildPipelineExecGroupImpl(
         PipelineExecutorContext & /*exec_status*/,

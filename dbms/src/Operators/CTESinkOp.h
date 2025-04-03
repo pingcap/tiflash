@@ -14,20 +14,18 @@
 
 #pragma once
 
-#include <Operators/Operator.h>
 #include <Operators/CTE.h>
+#include <Operators/Operator.h>
 
 namespace DB
 {
 class CTESinkOp : public SinkOp
 {
 public:
-    CTESinkOp(
-            PipelineExecutorContext & exec_context_,
-            const String & req_id,
-            std::shared_ptr<CTE> cte_)
-            : SinkOp(exec_context_, req_id), cte(cte_)
-        {}
+    CTESinkOp(PipelineExecutorContext & exec_context_, const String & req_id, std::shared_ptr<CTE> cte_)
+        : SinkOp(exec_context_, req_id)
+        , cte(cte_)
+    {}
 
     String getName() const override { return "CTESinkOp"; }
     bool canHandleSelectiveBlock() const override { return true; }
