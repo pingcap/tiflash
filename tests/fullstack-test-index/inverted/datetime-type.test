@@ -1,0 +1,117 @@
+# Copyright 2025 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+mysql> drop table if exists test.t;
+
+# create table
+mysql> CREATE TABLE test.t (d date, t time, dt datetime, ts timestamp, y year);
+mysql> INSERT INTO test.t VALUES ('2022-01-01', '10:00:00', '2022-01-01 12:00:00', '2022-01-01 12:00:00', 2022);
+mysql> INSERT INTO test.t VALUES ('2023-01-01', '11:00:00', '2023-01-01 12:00:00', '2023-01-01 12:00:00', 2023);
+mysql> INSERT INTO test.t VALUES ('2024-01-01', '12:00:00', '2024-01-01 12:00:00', '2024-01-01 12:00:00', 2024);
+mysql> INSERT INTO test.t VALUES ('2025-01-01', '13:00:00', '2025-01-01 12:00:00', '2025-01-01 12:00:00', 2025);
+mysql> INSERT INTO test.t VALUES ('2026-01-01', '14:00:00', '2026-01-01 12:00:00', '2026-01-01 12:00:00', 2026);
+mysql> ALTER TABLE test.t SET TIFLASH REPLICA 1;
+func> wait_table test t
+
+# create inverted index
+mysql> CREATE COLUMNAR INDEX idx_d ON test.t (d) USING INVERTED;
+mysql> CREATE COLUMNAR INDEX idx_t ON test.t (t) USING INVERTED;
+mysql> CREATE COLUMNAR INDEX idx_dt ON test.t (dt) USING INVERTED;
+mysql> CREATE COLUMNAR INDEX idx_ts ON test.t (ts) USING INVERTED;
+mysql> CREATE COLUMNAR INDEX idx_y ON test.t (y) USING INVERTED;
+
+mysql> alter table test.t compact tiflash replica;
+mysql> select index_name,rows_stable_indexed,rows_stable_not_indexed from information_schema.tiflash_indexes where TIDB_DATABASE = 'test' AND TIDB_TABLE = 't';
++------------+---------------------+-------------------------+
+| index_name | rows_stable_indexed | rows_stable_not_indexed |
++------------+---------------------+-------------------------+
+| idx_d      |                   5 |                       0 |
+| idx_t      |                   5 |                       0 |
+| idx_dt     |                   5 |                       0 |
+| idx_ts     |                   5 |                       0 |
+| idx_y      |                   5 |                       0 |
++------------+---------------------+-------------------------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE d = '2022-01-01';
++------------+----------+---------------------+---------------------+------+
+| d          | t        | dt                  | ts                  | y    |
++------------+----------+---------------------+---------------------+------+
+| 2022-01-01 | 10:00:00 | 2022-01-01 12:00:00 | 2022-01-01 12:00:00 | 2022 |
++------------+----------+---------------------+---------------------+------+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE d > '2024-01-01';
++------------+----------+---------------------+---------------------+------+
+| d          | t        | dt                  | ts                  | y    |
++------------+----------+---------------------+---------------------+------+
+| 2025-01-01 | 13:00:00 | 2025-01-01 12:00:00 | 2025-01-01 12:00:00 | 2025 |
+| 2026-01-01 | 14:00:00 | 2026-01-01 12:00:00 | 2026-01-01 12:00:00 | 2026 |
++------------+----------+---------------------+---------------------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE t = '12:00:00';
++------------+----------+---------------------+---------------------+------+
+| d          | t        | dt                  | ts                  | y    |
++------------+----------+---------------------+---------------------+------+
+| 2024-01-01 | 12:00:00 | 2024-01-01 12:00:00 | 2024-01-01 12:00:00 | 2024 |
++------------+----------+---------------------+---------------------+------+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE t > '12:00:00';
++------------+----------+---------------------+---------------------+------+
+| d          | t        | dt                  | ts                  | y    |
++------------+----------+---------------------+---------------------+------+
+| 2025-01-01 | 13:00:00 | 2025-01-01 12:00:00 | 2025-01-01 12:00:00 | 2025 |
+| 2026-01-01 | 14:00:00 | 2026-01-01 12:00:00 | 2026-01-01 12:00:00 | 2026 |
++------------+----------+---------------------+---------------------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE dt = '2022-01-01 12:00:00';
++------------+----------+---------------------+---------------------+------+
+| d          | t        | dt                  | ts                  | y    |
++------------+----------+---------------------+---------------------+------+
+| 2022-01-01 | 10:00:00 | 2022-01-01 12:00:00 | 2022-01-01 12:00:00 | 2022 |
++------------+----------+---------------------+---------------------+------+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE dt > '2024-01-01 12:00:00';
++------------+----------+---------------------+---------------------+------+
+| d          | t        | dt                  | ts                  | y    |
++------------+----------+---------------------+---------------------+------+
+| 2025-01-01 | 13:00:00 | 2025-01-01 12:00:00 | 2025-01-01 12:00:00 | 2025 |
+| 2026-01-01 | 14:00:00 | 2026-01-01 12:00:00 | 2026-01-01 12:00:00 | 2026 |
++------------+----------+---------------------+---------------------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE ts = '2026-01-01 12:00:00';
++------------+----------+---------------------+---------------------+------+
+| d          | t        | dt                  | ts                  | y    |
++------------+----------+---------------------+---------------------+------+
+| 2026-01-01 | 14:00:00 | 2026-01-01 12:00:00 | 2026-01-01 12:00:00 | 2026 |
++------------+----------+---------------------+---------------------+------+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE ts > '2024-01-01 12:00:00';
++------------+----------+---------------------+---------------------+------+
+| d          | t        | dt                  | ts                  | y    |
++------------+----------+---------------------+---------------------+------+
+| 2025-01-01 | 13:00:00 | 2025-01-01 12:00:00 | 2025-01-01 12:00:00 | 2025 |
+| 2026-01-01 | 14:00:00 | 2026-01-01 12:00:00 | 2026-01-01 12:00:00 | 2026 |
++------------+----------+---------------------+---------------------+------+
+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE y = 2022;
++------------+----------+---------------------+---------------------+------+
+| d          | t        | dt                  | ts                  | y    |
++------------+----------+---------------------+---------------------+------+
+| 2022-01-01 | 10:00:00 | 2022-01-01 12:00:00 | 2022-01-01 12:00:00 | 2022 |
++------------+----------+---------------------+---------------------+------+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE y < 2026 and y > 2024;
++------------+----------+---------------------+---------------------+------+
+| d          | t        | dt                  | ts                  | y    |
++------------+----------+---------------------+---------------------+------+
+| 2025-01-01 | 13:00:00 | 2025-01-01 12:00:00 | 2025-01-01 12:00:00 | 2025 |
++------------+----------+---------------------+---------------------+------+
+
+# Cleanup
+mysql> drop table if exists test.t;

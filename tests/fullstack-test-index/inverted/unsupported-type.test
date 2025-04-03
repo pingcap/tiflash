@@ -1,0 +1,48 @@
+# Copyright 2025 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+mysql> drop table if exists test.t;
+
+# create table
+mysql> CREATE TABLE test.t (`char` char(10), `blob` blob, `float` float, `double` double, `decimal` decimal(10, 2), `bit` bit(1), `json` json, `enum` enum('a', 'b', 'c'), `set` set('a', 'b', 'c'), `varchar` varchar(10), `varbinary` varbinary(10));
+mysql> ALTER TABLE test.t SET TIFLASH REPLICA 1;
+func> wait_table test t
+
+# create inverted index
+mysql> CREATE COLUMNAR INDEX idx_char ON test.t (`char`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+mysql> CREATE COLUMNAR INDEX idx_blob ON test.t (`blob`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+mysql> CREATE COLUMNAR INDEX idx_float ON test.t (`float`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+mysql> CREATE COLUMNAR INDEX idx_double ON test.t (`double`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+mysql> CREATE COLUMNAR INDEX idx_decimal ON test.t (`decimal`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+mysql> CREATE COLUMNAR INDEX idx_bit ON test.t (`bit`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+mysql> CREATE COLUMNAR INDEX idx_json ON test.t (`json`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+mysql> CREATE COLUMNAR INDEX idx_enum ON test.t (`enum`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+mysql> CREATE COLUMNAR INDEX idx_set ON test.t (`set`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+mysql> CREATE COLUMNAR INDEX idx_varchar ON test.t (`varchar`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+mysql> CREATE COLUMNAR INDEX idx_varbinary ON test.t (`varbinary`) USING INVERTED;
+{#REGEXP}ERROR 8200 (HY000): Unsupported add columnar index: only support integer type, but this is type:.*
+
+# Cleanup
+mysql> drop table if exists test.t;
