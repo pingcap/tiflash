@@ -28,7 +28,7 @@ public:
     // Write N bytes of buf to file.  Return the number written, or -1.
     virtual ssize_t write(char * buf, size_t size) = 0;
 
-    virtual ssize_t pwrite(char * buf, size_t size, off_t offset) const = 0;
+    virtual ssize_t pwrite(char * buf, size_t size, off_t offset) = 0;
 
     virtual off_t seek(off_t offset, int whence) const = 0;
 
