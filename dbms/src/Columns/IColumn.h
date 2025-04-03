@@ -193,11 +193,6 @@ public:
     /// In this special case inserting data should be zero-ending (i.e. length is 1 byte greater than real string size).
     virtual void insertDataWithTerminatingZero(const char * pos, size_t length) { insertData(pos, length); }
 
-    virtual void batchInsertDataWithTerminatingZero(size_t, const char *, size_t)
-    {
-        throw Exception("Not implemented yet");
-    }
-
     /// Appends "default value".
     /// Is used when there are need to increase column size, but inserting value doesn't make sense.
     /// For example, ColumnNullable(Nested) absolutely ignores values of nested column if it is marked as NULL.

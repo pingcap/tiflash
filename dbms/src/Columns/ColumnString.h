@@ -252,25 +252,7 @@ public:
 
     template <bool add_terminating_zero>
     ALWAYS_INLINE inline void batchInsertDataImpl(size_t num, const char * pos, size_t length)
-    {
-        size_t old_size = chars.size();
-        size_t appended_size = 0;
-        const size_t single_str_size = length + (add_terminating_zero ? 1 : 0);
-
-        chars.resize(old_size + (single_str_size * num));
-        if (offsets.capacity() < offsets.size() + num)
-            offsets.reserve(offsets.size() + num);
-
-        for (size_t i = 0; i < num; i++)
-        {
-            inline_memcpy(&chars[old_size + appended_size], pos, length);
-            appended_size += single_str_size;
-
-            if constexpr (add_terminating_zero)
-                chars[old_size + length] = 0;
-            offsets.push_back(old_size + appended_size);
-        }
-    }
+    {}
 
     void insertData(const char * pos, size_t length) override { return insertDataImpl<true>(pos, length); }
 
@@ -285,9 +267,20 @@ public:
         return insertDataImpl<false>(pos, length);
     }
 
-    void batchInsertDataWithTerminatingZero(size_t num, const char * pos, size_t length) override
+    void batchInsertDataWithTerminatingZero(size_t num, const char * pos, size_t length)
     {
-        return batchInsertDataImpl<false>(num, pos, length);
+        size_t old_size = chars.size();
+        size_t appended_size = 0;
+        const size_t single_str_size = length;
+
+        chars.resize(old_size + (single_str_size * num));
+        offsets.reserve(offsets.size() + num);
+        for (size_t i = 0; i < num; i++)
+        {
+            inline_memcpy(&chars[old_size + appended_size], pos, length);
+            appended_size += single_str_size;
+            offsets.push_back(old_size + appended_size);
+        }
     }
 
     void popBack(size_t n) override
