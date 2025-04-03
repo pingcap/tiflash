@@ -36,53 +36,28 @@ void SegmentBitmapFilterTest::setRowKeyRange(Int64 begin, Int64 end, bool includ
 
 void SegmentBitmapFilterTest::writeSegmentGeneric(
     std::string_view seg_data,
-    std::optional<std::tuple<Int64, Int64, bool>> rowkey_range)
+    std::optional<std::tuple<Int64, Int64, bool>> seg_rowkey_range)
 {
     if (is_common_handle)
-        writeSegment<String>(seg_data, rowkey_range);
+        writeSegment<String>(seg_data, seg_rowkey_range);
     else
-        writeSegment<Int64>(seg_data, rowkey_range);
+        writeSegment<Int64>(seg_data, seg_rowkey_range);
 }
 
-/*
-    0----------------stable_rows----------------stable_rows + delta_rows <-- append
-    | stable value space | delta value space ..........................  <-- append
-    |--------------------|--ColumnFilePersisted--|ColumnFileInMemory...  <-- append
-    |--------------------|-Tiny|DeleteRange|Big--|ColumnFileInMemory...  <-- append
-
-    `seg_data`: s:[a, b)|d_tiny:[a, b)|d_tiny_del:[a, b)|d_big:[a, b)|d_dr:[a, b)|d_mem:[a, b)|d_mem_del
-    - s: stable
-    - d_tiny: delta ColumnFileTiny
-    - d_tiny_del: delta ColumnFileTiny with delete flag
-    - d_big: delta ColumnFileBig
-    - d_dr: delta delete range
-
-    Returns {row_id, handle}.
-    */
 template <typename HandleType>
-std::pair<const PaddedPODArray<UInt32> *, const std::optional<ColumnView<HandleType>>> SegmentBitmapFilterTest::
-    writeSegment(std::string_view seg_data, std::optional<std::tuple<Int64, Int64, bool>> rowkey_range)
+void SegmentBitmapFilterTest::writeSegment(
+    std::string_view seg_data,
+    std::optional<std::tuple<Int64, Int64, bool>> seg_rowkey_range)
 {
-    if (rowkey_range)
+    if (seg_rowkey_range)
     {
-        const auto & [left, right, including_right_boundary] = *rowkey_range;
+        const auto & [left, right, including_right_boundary] = *seg_rowkey_range;
         setRowKeyRange(left, right, including_right_boundary);
     }
     auto seg_data_units = parseSegData(seg_data);
     for (const auto & unit : seg_data_units)
     {
         writeSegment(unit);
-    }
-    hold_row_id = getSegmentRowId(SEG_ID, read_ranges);
-    hold_handle = getSegmentHandle(SEG_ID, read_ranges);
-    if (hold_row_id == nullptr)
-    {
-        RUNTIME_CHECK(hold_handle == nullptr);
-        return {nullptr, std::nullopt};
-    }
-    else
-    {
-        return {toColumnVectorDataPtr<UInt32>(hold_row_id), ColumnView<HandleType>(*hold_handle)};
     }
 }
 
@@ -158,22 +133,33 @@ template <typename HandleType>
 void SegmentBitmapFilterTest::runTestCase(TestCase test_case, int caller_line)
 {
     auto info = fmt::format("caller_line={}", caller_line);
-    auto [row_id, handle] = writeSegment<HandleType>(test_case.seg_data, test_case.rowkey_range);
+
+    writeSegment<HandleType>(test_case.seg_data, test_case.seg_rowkey_range);
+
+    // Verify row_id and handles by using DeltaIndex.
+    auto col_row_id = getSegmentRowId(SEG_ID, test_case.read_ranges);
+    auto col_handle = getSegmentHandle(SEG_ID, test_case.read_ranges);
     if (test_case.expected_size == 0)
     {
-        ASSERT_EQ(nullptr, row_id) << info;
-        ASSERT_EQ(std::nullopt, handle) << info;
+        ASSERT_EQ(nullptr, col_row_id) << info;
+        ASSERT_EQ(nullptr, col_handle) << info;
     }
     else
     {
-        ASSERT_EQ(test_case.expected_size, row_id->size()) << info;
         auto expected_row_id = genSequence<UInt32>(test_case.expected_row_id);
-        ASSERT_TRUE(sequenceEqual(expected_row_id, *row_id)) << info;
+        auto row_id = ColumnView<UInt32>(*col_row_id);
+        ASSERT_TRUE(sequenceEqual(expected_row_id, row_id)) << info;
 
-        ASSERT_EQ(test_case.expected_size, handle->size()) << info;
         auto expected_handle = genHandleSequence<HandleType>(test_case.expected_handle);
-        ASSERT_TRUE(sequenceEqual(expected_handle, *handle)) << info;
+        auto handle = ColumnView<HandleType>(*col_handle);
+        ASSERT_TRUE(sequenceEqual(expected_handle, handle)) << info;
     }
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = caller_line,
+        .expected_bitmap = test_case.expected_bitmap,
+    });
 }
 
 DMFilePackFilterResults SegmentBitmapFilterTest::loadPackFilterResults(
@@ -204,6 +190,46 @@ void SegmentBitmapFilterTest::checkHandle(PageIdU64 seg_id, std::string_view seq
         auto expected_handle = genHandleSequence<Int64>(seq_ranges);
         ASSERT_TRUE(sequenceEqual(expected_handle, ColumnView<Int64>{*handle})) << info;
     }
+}
+
+void SegmentBitmapFilterTest::checkBitmap(const CheckBitmapOptions & opt)
+{
+    auto info = opt.toDebugString();
+    auto [seg, snap] = getSegmentForRead(opt.seg_id);
+
+    const auto read_ranges
+        = shrinkRowKeyRanges(seg->getRowKeyRange(), opt.read_ranges.value_or(RowKeyRanges{seg->getRowKeyRange()}));
+
+    const auto & rs_filter_results
+        = opt.rs_filter_results.empty() ? loadPackFilterResults(snap, read_ranges) : opt.rs_filter_results;
+
+    auto bitmap_filter_version_chain = seg->buildMVCCBitmapFilter(
+        *dm_context,
+        snap,
+        read_ranges,
+        rs_filter_results,
+        opt.read_ts,
+        DEFAULT_BLOCK_SIZE,
+        /*enable_version_chain*/ true);
+
+    auto bitmap_filter_delta_index = seg->buildMVCCBitmapFilter(
+        *dm_context,
+        snap,
+        read_ranges,
+        rs_filter_results,
+        opt.read_ts,
+        DEFAULT_BLOCK_SIZE,
+        /*enable_version_chain*/ false);
+
+    if (opt.expected_bitmap)
+        ASSERT_EQ(bitmap_filter_version_chain->toDebugString(), *(opt.expected_bitmap))
+            << fmt::format("{}, bitmap_filter_delta_index={}", info, bitmap_filter_delta_index->toDebugString());
+
+    ASSERT_EQ(*bitmap_filter_delta_index, *bitmap_filter_version_chain) << fmt::format(
+        "{}, bitmap_filter_delta_index={}, bitmap_filter_version_chain={}",
+        info,
+        bitmap_filter_delta_index->toDebugString(),
+        bitmap_filter_version_chain->toDebugString());
 }
 
 INSTANTIATE_TEST_CASE_P(MVCC, SegmentBitmapFilterTest, /* is_common_handle */ ::testing::Bool());
@@ -407,15 +433,18 @@ CATCH
 TEST_P(SegmentBitmapFilterTest, Ranges)
 try
 {
-    read_ranges.emplace_back(buildRowKeyRange(222, 244, is_common_handle));
-    read_ranges.emplace_back(buildRowKeyRange(300, 303, is_common_handle));
-    read_ranges.emplace_back(buildRowKeyRange(555, 666, is_common_handle));
     runTestCaseGeneric(
         TestCase{
             .seg_data = "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
             .expected_size = 136,
             .expected_row_id = "[1056, 1078)|[1091, 1094)|[555, 666)",
-            .expected_handle = "[222, 244)|[300, 303)|[555, 666)"},
+            .expected_handle = "[222, 244)|[300, 303)|[555, 666)",
+            .read_ranges = {
+                buildRowKeyRange(222, 244, is_common_handle),
+                buildRowKeyRange(300, 303, is_common_handle),
+                buildRowKeyRange(555, 666, is_common_handle),
+            },
+        },
         __LINE__);
 }
 CATCH
@@ -435,18 +464,26 @@ try
     ASSERT_TRUE(new_seg_id.has_value());
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
     checkHandle(SEG_ID, "[0, 128)|[200, 255)|[256, 305)|[310, 512)", __LINE__);
-
     auto left_row_id = getSegmentRowId(SEG_ID, {});
     const auto & left_r = toColumnVectorData<UInt32>(left_row_id);
     auto expected_left_row_id = genSequence<UInt32>("[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 512)");
     ASSERT_TRUE(sequenceEqual(expected_left_row_id, left_r));
 
     checkHandle(*new_seg_id, "[512, 1024)", __LINE__);
-
     auto right_row_id = getSegmentRowId(*new_seg_id, {});
     const auto & right_r = toColumnVectorData<UInt32>(right_row_id);
     auto expected_right_row_id = genSequence<UInt32>("[512, 1024)");
     ASSERT_TRUE(sequenceEqual(expected_right_row_id, right_r));
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = *new_seg_id,
+        .caller_line = __LINE__,
+    });
 }
 CATCH
 
@@ -458,17 +495,11 @@ TEST_P(SegmentBitmapFilterTest, CleanStable)
     ASSERT_EQ(seg->getDelta()->getRows(), 0);
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
     ASSERT_EQ(seg->getStable()->getRows(), 25000);
-    auto bitmap_filter = seg->buildMVCCBitmapFilterStableOnly(
-        *dm_context,
-        snap,
-        {seg->getRowKeyRange()},
-        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
-    ASSERT_NE(bitmap_filter, nullptr);
-    std::string expect_result;
-    expect_result.append(std::string(25000, '1'));
-    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = String(25000, '1'),
+    });
 }
 
 TEST_P(SegmentBitmapFilterTest, NotCleanStable)
@@ -480,23 +511,18 @@ TEST_P(SegmentBitmapFilterTest, NotCleanStable)
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
     ASSERT_EQ(seg->getStable()->getRows(), 20000);
     {
-        auto bitmap_filter = seg->buildMVCCBitmapFilterStableOnly(
-            *dm_context,
-            snap,
-            {seg->getRowKeyRange()},
-            loadPackFilterResults(snap, {seg->getRowKeyRange()}),
-            std::numeric_limits<UInt64>::max(),
-            DEFAULT_BLOCK_SIZE);
-        ASSERT_NE(bitmap_filter, nullptr);
-        std::string expect_result;
+        String expect_result;
         expect_result.append(std::string(5000, '1'));
         for (int i = 0; i < 5000; i++)
-        {
             expect_result.append(std::string("01"));
-        }
         expect_result.append(std::string(5000, '1'));
-        ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+        checkBitmap(CheckBitmapOptions{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .expected_bitmap = expect_result,
+        });
     }
+
     {
         // Stale read
         ASSERT_EQ(version, 2);
@@ -511,11 +537,14 @@ TEST_P(SegmentBitmapFilterTest, NotCleanStable)
         std::string expect_result;
         expect_result.append(std::string(5000, '1'));
         for (int i = 0; i < 5000; i++)
-        {
-            expect_result.append(std::string("10"));
-        }
-        expect_result.append(std::string(5000, '0'));
-        ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+            expect_result.append(String("10"));
+        expect_result.append(String(5000, '0'));
+        checkBitmap(CheckBitmapOptions{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ts = 1,
+            .expected_bitmap = expect_result,
+        });
     }
 }
 
@@ -528,20 +557,17 @@ TEST_P(SegmentBitmapFilterTest, StableRange)
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
     ASSERT_EQ(seg->getStable()->getRows(), 50000);
 
-    auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(10000, 50000, is_common_handle)}; // [10000, 50000)
-    auto bitmap_filter = seg->buildMVCCBitmapFilterStableOnly(
-        *dm_context,
-        snap,
-        ranges,
-        loadPackFilterResults(snap, ranges),
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
-    ASSERT_NE(bitmap_filter, nullptr);
-    std::string expect_result;
+    String expect_result;
     // [0, 10000) is filtered by range.
-    expect_result.append(std::string(10000, '0'));
-    expect_result.append(std::string(40000, '1'));
-    ASSERT_EQ(bitmap_filter->toDebugString(), expect_result);
+    expect_result.append(String(10000, '0'));
+    expect_result.append(String(40000, '1'));
+    const auto ranges = RowKeyRanges{buildRowKeyRange(10000, 50000, is_common_handle)}; // [10000, 50000)
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ranges = ranges,
+        .expected_bitmap = expect_result,
+    });
 }
 
 TEST_P(SegmentBitmapFilterTest, StableLogicalSplit)
@@ -555,27 +581,33 @@ try
     ASSERT_EQ(seg->getStable()->getRows(), 50000);
 
     auto new_seg_id = splitSegmentAt(SEG_ID, 25000, Segment::SplitMode::Logical);
-
     ASSERT_TRUE(new_seg_id.has_value());
     ASSERT_TRUE(areSegmentsSharingStable({SEG_ID, *new_seg_id}));
 
     checkHandle(SEG_ID, "[0, 25000)", __LINE__);
-
     auto left_row_id = getSegmentRowId(SEG_ID, {});
     const auto & left_r = toColumnVectorData<UInt32>(left_row_id);
     auto expected_left_row_id = genSequence<UInt32>("[0, 25000)");
     ASSERT_TRUE(sequenceEqual(expected_left_row_id, left_r));
 
     checkHandle(*new_seg_id, "[25000, 50000)", __LINE__);
-
     auto right_row_id = getSegmentRowId(*new_seg_id, {});
     const auto & right_r = toColumnVectorData<UInt32>(right_row_id);
     auto expected_right_row_id = genSequence<UInt32>("[25000, 50000)");
     ASSERT_TRUE(sequenceEqual(expected_right_row_id, right_r));
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = *new_seg_id,
+        .caller_line = __LINE__,
+    });
 }
 CATCH
 
-TEST_P(SegmentBitmapFilterTest, BigPart)
+TEST_P(SegmentBitmapFilterTest, BigPart_Middle)
 try
 {
     // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
@@ -586,20 +618,38 @@ try
             .expected_size = 20,
             .expected_row_id = "[5, 25)",
             .expected_handle = "[275, 295)",
-            .rowkey_range = std::tuple<Int64, Int64, bool>{275, 295, false}},
+            .seg_rowkey_range = std::tuple<Int64, Int64, bool>{275, 295, false},
+            .expected_bitmap = "000001111111111111111111100000",
+        },
         __LINE__);
+}
+CATCH
 
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-    auto bitmap_filter = seg->buildMVCCBitmapFilter(
-        *dm_context,
-        snap,
-        {seg->getRowKeyRange()},
-        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
-    ASSERT_EQ(bitmap_filter->size(), 30);
-    ASSERT_EQ(bitmap_filter->count(), 20); // `count()` returns the number of bit has been set.
-    ASSERT_EQ(bitmap_filter->toDebugString(), "000001111111111111111111100000");
+TEST_P(SegmentBitmapFilterTest, BigPart_Left)
+try
+{
+    // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
+    // Packs in rowkey_range: [250, 260)|[260, 270)|[270, 280)|[280, 290)|[290, 300)
+    writeSegmentGeneric("d_big:[250, 1000):pack_size_10", std::tuple<Int64, Int64, bool>{240, 295, false});
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "11111111111111111111111111111111111111111111100000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, BigPart_Right)
+try
+{
+    // For ColumnFileBig, only packs that intersection with the rowkey range will be considered in BitmapFilter.
+    // Packs in rowkey_range: [940, 950)|[950, 960)|[960, 970)|[970, 980)|[980, 990)|[990, 1000)
+    writeSegmentGeneric("d_big:[250, 1000):pack_size_10", std::tuple<Int64, Int64, bool>{940, 995, false});
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "111111111111111111111111111111111111111111111111111111100000",
+    });
 }
 CATCH
 
@@ -621,25 +671,18 @@ try
 
     // For Stable, all packs of DMFile will be considered in BitmapFilter.
     setRowKeyRange(275, 295, false); // Shrinking range
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-    auto bitmap_filter = seg->buildMVCCBitmapFilter(
-        *dm_context,
-        snap,
-        {seg->getRowKeyRange()},
-        loadPackFilterResults(snap, {seg->getRowKeyRange()}),
-        std::numeric_limits<UInt64>::max(),
-        DEFAULT_BLOCK_SIZE);
-    ASSERT_EQ(bitmap_filter->size(), 750);
-    ASSERT_EQ(bitmap_filter->count(), 20); // `count()` returns the number of bit has been set.
-    ASSERT_EQ(
-        bitmap_filter->toDebugString(),
-        "00000000000000000000000001111111111111111111100000000000000000000000000000000000000000000000000000000000000000"
-        "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-        "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-        "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-        "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-        "00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
-        "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap
+        = "000000000000000000000000011111111111111111111000000000000000000000000000000000000000000000000000000000000000"
+          "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+          "000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    });
 }
 CATCH
 
@@ -699,15 +742,14 @@ TEST_P(SegmentBitmapFilterTest, testSkipPackStableOnly)
                 ASSERT_EQ(pack_res[i], RSResult::Some);
         }
 
-        auto bitmap_filter = seg->buildMVCCBitmapFilterStableOnly(
-            *dm_context,
-            snap,
-            ranges,
-            pack_filter_results,
-            2,
-            DEFAULT_BLOCK_SIZE);
-
-        ASSERT_EQ(expect_result, bitmap_filter->toDebugString());
+        checkBitmap(CheckBitmapOptions{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ts = 2,
+            .read_ranges = ranges,
+            .expected_bitmap = expect_result,
+            .rs_filter_results = pack_filter_results,
+        });
 
         deleteRangeSegment(SEG_ID);
     }
@@ -824,18 +866,833 @@ TEST_P(SegmentBitmapFilterTest, testSkipPackNormal)
             }
         }
 
-        auto bitmap_filter = seg->buildMVCCBitmapFilterNormal(
-            *dm_context,
-            snap,
-            ranges,
-            pack_filter_results,
-            start_ts,
-            DEFAULT_BLOCK_SIZE);
-
-        ASSERT_EQ(expect_result, bitmap_filter->toDebugString());
+        checkBitmap(CheckBitmapOptions{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ts = start_ts,
+            .read_ranges = ranges,
+            .expected_bitmap = expect_result,
+            .rs_filter_results = pack_filter_results,
+        });
 
         deleteRangeSegment(SEG_ID);
     }
 }
 
+TEST_P(SegmentBitmapFilterTest, Int64Boundary)
+try
+{
+    writeSegmentGeneric("d_mem:[-9223372036854775808, -9223372036854775800):shuffle|d_mem:[9223372036854775800, "
+                        "9223372036854775807]:shuffle");
+    {
+        auto ranges = RowKeyRanges{
+            buildRowKeyRange(std::numeric_limits<Int64>::min(), std::numeric_limits<Int64>::max(), is_common_handle)};
+        if (!is_common_handle)
+            ASSERT_TRUE(ranges[0].isStartInfinite());
+        ASSERT_FALSE(ranges[0].isEndInfinite());
+        checkBitmap(CheckBitmapOptions{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ranges = ranges,
+        });
+    }
+
+    {
+        auto ranges = RowKeyRanges{RowKeyRange::newAll(is_common_handle, 1)};
+        ASSERT_TRUE(ranges[0].isStartInfinite());
+        ASSERT_TRUE(ranges[0].isEndInfinite());
+        checkBitmap(CheckBitmapOptions{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ranges = ranges,
+        });
+    }
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Range_Stable)
+try
+{
+    writeSegmentGeneric("s:[250, 1000):pack_size_50");
+    checkBitmap(
+        CheckBitmapOptions {
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ranges = RowKeyRanges{
+                buildRowKeyRange(318, 520, is_common_handle),
+                buildRowKeyRange(618, 737, is_common_handle),
+                buildRowKeyRange(918, 998, is_common_handle),
+            },
+        }
+    );
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Range_CFBig)
+try
+{
+    writeSegmentGeneric("d_big:[250, 1000):pack_size_50", std::tuple{388, 888, false});
+    checkBitmap(
+        CheckBitmapOptions{
+            .seg_id = SEG_ID,
+            .caller_line = __LINE__,
+            .read_ranges = RowKeyRanges{
+                buildRowKeyRange(318, 520, is_common_handle),
+                buildRowKeyRange(618, 737, is_common_handle),
+                buildRowKeyRange(818, 998, is_common_handle),
+            },
+        }
+    );
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Range_CFTinyOrMem)
+try
+{
+    writeSegmentGeneric("d_mem:[115, 277):shuffle|d_tiny:[140, 250):shuffle");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ranges = RowKeyRanges{buildRowKeyRange(120, 260, is_common_handle)}});
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange1)
+try
+{
+    writeSegmentGeneric("s:[10, 500):pack_size_10|d_dr:[5, 73)");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange2)
+try
+{
+    writeSegmentGeneric("s:[10, 500):pack_size_10|d_dr:[5, 73)|d_tiny:[60, 83):shuffle");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange3)
+try
+{
+    writeSegmentGeneric("s:[10, 500):pack_size_10|d_dr:[5, 73)|d_tiny:[60, 83):shuffle|d_dr:[70, 100)");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange4)
+try
+{
+    writeSegmentGeneric(
+        "d_mem:[-9223372036854775808, -9223372036854775800):shuffle|d_mem:[9223372036854775800, "
+        "9223372036854775807]:shuffle|"
+        "d_dr:[-9223372036854775808, -9223372036854775804)|d_dr:[9223372036854775804, 9223372036854775807)");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange4_1)
+try
+{
+    writeSegmentGeneric(
+        "d_mem:[-9223372036854775808, -9223372036854775800)|d_mem:[9223372036854775800, 9223372036854775807]|"
+        "d_dr:[-9223372036854775808, -9223372036854775804)|d_dr:[9223372036854775804, 9223372036854775807)");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "0000111111110001",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange5)
+try
+{
+    writeSegmentGeneric(
+        "d_mem:[-9223372036854775808, -9223372036854775800):shuffle|d_mem:[9223372036854775800, "
+        "9223372036854775807]:shuffle|"
+        "d_dr:[-9223372036854775808, -9223372036854775804)|d_dr:[9223372036854775804, 9223372036854775807]");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange5_1)
+try
+{
+    writeSegmentGeneric(
+        "d_mem:[-9223372036854775808, -9223372036854775800)|d_mem:[9223372036854775800, 9223372036854775807]|"
+        "d_dr:[-9223372036854775808, -9223372036854775804)|d_dr:[9223372036854775804, 9223372036854775807]");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "0000111111110000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange6)
+try
+{
+    writeSegmentGeneric(
+        "s:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, 9223372036854775807)");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "1111111111111111111111111111111111111111111111111111110000000000000000000000000000000000000"
+                           "00000000000000001",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange7)
+try
+{
+    writeSegmentGeneric(
+        "s:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, 9223372036854775807]");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "1111111111111111111111111111111111111111111111111111110000000000000000000000000000000000000"
+                           "00000000000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange8)
+try
+{
+    writeSegmentGeneric("d_big:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, "
+                        "9223372036854775807)");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "1111111111111111111111111111111111111111111111111111110000000000000000000000000000000000000"
+                           "00000000000000001",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange9)
+try
+{
+    writeSegmentGeneric("d_big:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, "
+                        "9223372036854775807]");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "1111111111111111111111111111111111111111111111111111110000000000000000000000000000000000000"
+                           "00000000000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange10)
+try
+{
+    writeSegmentGeneric(
+        "d_big:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, "
+        "9223372036854775807)",
+        std::tuple{9223372036854775715, 9223372036854775807, false});
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "000001111111111111111111111111111111111111110000000000000000000000000000000000000"
+                           "00000000000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteRange11)
+try
+{
+    writeSegmentGeneric(
+        "d_big:[9223372036854775700, 9223372036854775807]:pack_size_10|d_dr:[9223372036854775754, "
+        "9223372036854775807)",
+        std::tuple{9223372036854775715, 9223372036854775807, true});
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "000001111111111111111111111111111111111111110000000000000000000000000000000000000"
+                           "00000000000000001",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Version_Delta)
+try
+{
+    writeSegmentGeneric("d_mem:[0, 1):ts_1|d_mem:[0, 1):ts_2|d_mem:[0, 1):ts_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "001",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "010",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "100",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Version_Delta_Flush)
+try
+{
+    writeSegmentGeneric("d_mem:[0, 10):shuffle:ts_1|d_mem:[3, 13):shuffle:ts_2|d_mem:[6, 16):shuffle:ts_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+
+
+    auto guard = enableVersionChainTemporary(db_context->getGlobalContext().getSettingsRef());
+    ASSERT_TRUE(dm_context->enableVersionChain());
+
+    auto get_base_versions = [&](bool flushed) {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        auto cfs = snap->delta->getColumnFiles();
+        RUNTIME_CHECK(cfs.size() == 1, cfs.size());
+        if (flushed)
+            RUNTIME_CHECK(cfs[0]->isTinyFile(), cfs[0]->toString());
+        else
+            RUNTIME_CHECK(cfs[0]->isInMemoryFile(), cfs[0]->toString());
+
+        auto vc = createVersionChain(is_common_handle);
+        return std::visit([&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); }, vc);
+    };
+    auto base_ver1 = get_base_versions(false);
+    writeSegmentGeneric("flush_cache"); // Flush never sort data when version chain enabled.
+    auto base_ver2 = get_base_versions(true);
+    ASSERT_EQ(*base_ver1, *base_ver2);
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Version_Delta_Compact)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFiles().size(), 3);
+    }
+    writeSegmentGeneric("compact_delta");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFiles().size(), 1);
+    }
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Version_Delta_Compact_1)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny:[3, 13):ts_2|d_tiny:[6, 16):ts_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "111000000011100000001111111111",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "111000000011111111110000000000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "111111111100000000000000000000",
+    });
+
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFiles().size(), 3);
+    }
+    writeSegmentGeneric("compact_delta");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFiles().size(), 1);
+    }
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "111000000011100000001111111111",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "111000000011111111110000000000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "111111111100000000000000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Version_DMFile_MaxVersion)
+try
+{
+    writeSegmentGeneric(
+        "d_tiny:[0, 10):shuffle:ts_1|d_tiny:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3|merge_delta");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFileCount(), 0);
+    }
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "111010101001001001001010101111",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "111010101010010010010101010000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "111101010100100100100000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Version_DMFile_MaxVersionWithDelta)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 1):ts_1|d_tiny:[1, 2):ts_2|d_tiny:[2, 3):ts_3|d_tiny:[3, 4):ts_4|d_tiny:[4, "
+                        "5):ts_5|merge_delta|d_tiny:[0, 1):ts_2");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFileCount(), 1);
+    }
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "010001",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Version_DMFile_NotClean)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny:[0, 10):ts_2|d_tiny:[0, 10):ts_3|d_tiny:[0, 10):ts_4|d_tiny:[0, "
+                        "10):ts_5|merge_delta:pack_size_10");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFileCount(), 0);
+        const auto & dmfile = snap->stable->getDMFiles()[0];
+        ASSERT_EQ(dmfile->getPacks(), 5);
+        ASSERT_TRUE(std::all_of(dmfile->getPackStats().begin(), dmfile->getPackStats().end(), [](const auto & ps) {
+            return ps.not_clean;
+        }));
+    }
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "10000100001000010000100001000010000100001000010000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "01000010000100001000010000100001000010000100001000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "00100001000010000100001000010000100001000010000100",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 4,
+        .expected_bitmap = "00010000100001000010000100001000010000100001000010",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 5,
+        .expected_bitmap = "00001000010000100001000010000100001000010000100001",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, Version_DMFile_NotCleanWithDelta)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny:[0, 10):ts_2|d_tiny:[0, 10):ts_3|d_tiny:[0, 10):ts_4|d_tiny:[0, "
+                        "10):ts_5|merge_delta:pack_size_10|d_tiny:[0, 10):ts_6");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFileCount(), 1);
+        ASSERT_EQ(snap->delta->getRows(), 10);
+        const auto & dmfile = snap->stable->getDMFiles()[0];
+        ASSERT_EQ(dmfile->getPacks(), 5);
+        ASSERT_TRUE(std::all_of(dmfile->getPackStats().begin(), dmfile->getPackStats().end(), [](const auto & ps) {
+            return ps.not_clean;
+        }));
+    }
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "100001000010000100001000010000100001000010000100000000000000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "010000100001000010000100001000010000100001000010000000000000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "001000010000100001000010000100001000010000100001000000000000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 4,
+        .expected_bitmap = "000100001000010000100001000010000100001000010000100000000000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 5,
+        .expected_bitmap = "000010000100001000010000100001000010000100001000010000000000",
+    });
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 6,
+        .expected_bitmap = "000000000000000000000000000000000000000000000000001111111111",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteMark1)
+try
+{
+    writeSegmentGeneric("d_mem:[0, 1):ts_1|d_mem_del:[0, 1):ts_2|d_mem:[0, 1):ts_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "001",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "100",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteMark2)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny_del:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteMark2_1)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 10):ts_1|d_tiny_del:[3, 13):ts_2|d_tiny:[6, 16):ts_3");
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "111000000000000000001111111111",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "111000000000000000000000000000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "111111111100000000000000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteMark3)
+try
+{
+    writeSegmentGeneric(
+        "d_tiny:[0, 10):shuffle:ts_1|d_tiny_del:[3, 13):shuffle:ts_2|d_tiny:[6, 16):shuffle:ts_3|merge_delta");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        ASSERT_EQ(snap->delta->getColumnFileCount(), 0);
+    }
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "111000000001001001001010101111",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "111000000000000000000000000000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "111101010100100100100000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DeleteMark4)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 10):shuffle:ts_1|d_tiny_del:[3, 13):shuffle:ts_2|d_tiny:[6, "
+                        "16):shuffle:ts_3|merge_delta|d_mem:[2, 7):ts_4");
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        auto cfs = snap->delta->getColumnFiles();
+        ASSERT_EQ(cfs.size(), 1);
+        ASSERT_TRUE(cfs[0]->isInMemoryFile()) << cfs[0]->toString();
+    }
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 4,
+        .expected_bitmap = "11000000000000100100101010111111111",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 3,
+        .expected_bitmap = "11100000000100100100101010111100000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 2,
+        .expected_bitmap = "11100000000000000000000000000000000",
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+        .expected_bitmap = "11110101010010010010000000000000000",
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, DupHandle)
+try
+{
+    writeSegmentGeneric("d_tiny:[0, 128):ts_1|merge_delta|d_tiny:[50, 60):ts_2");
+    auto [seg1, snap1] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(snap1->delta->getRows(), 10);
+    ASSERT_EQ(snap1->stable->getRows(), 128);
+
+    writeSegmentGeneric("d_tiny:[50, 60):ts_2");
+    auto [seg2, snap2] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(snap2->delta->getRows(), 20);
+    ASSERT_EQ(snap2->stable->getRows(), 128);
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+    });
+}
+CATCH
+
+TEST_P(SegmentBitmapFilterTest, RSFilter0)
+{
+    writeSegmentGeneric("s:[0, 50):pack_size_5:ts_1");
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto rs_filter_results = loadPackFilterResults(snap, {seg->getRowKeyRange()});
+    ASSERT_EQ(rs_filter_results.size(), 1);
+    auto & rs_filter_result = rs_filter_results[0];
+    const auto & pack_res = rs_filter_result->getPackRes();
+    ASSERT_EQ(pack_res.size(), 10);
+    const_cast<RSResults &>(pack_res)[4] = RSResult::None; // [20, 25)
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "11111111111111111111000001111111111111111111111111",
+        .rs_filter_results = rs_filter_results,
+    });
+}
+
+TEST_P(SegmentBitmapFilterTest, RSFilter1)
+{
+    writeSegmentGeneric("s:[0, 50):pack_size_5:ts_1|d_tiny:[22, 27):ts_2");
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto rs_filter_results = loadPackFilterResults(snap, {seg->getRowKeyRange()});
+    ASSERT_EQ(rs_filter_results.size(), 1);
+    auto & rs_filter_result = rs_filter_results[0];
+    const auto & pack_res = rs_filter_result->getPackRes();
+    ASSERT_EQ(pack_res.size(), 10);
+    const_cast<RSResults &>(pack_res)[4] = RSResult::None; // [20, 25)
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = "1111111111111111111100000001111111111111111111111111111",
+        .rs_filter_results = rs_filter_results,
+    });
+}
+
+TEST_P(SegmentBitmapFilterTest, Big_NoIntersection)
+{
+    writeSegmentGeneric("d_big:[0, 10):pack_size_3|d_big:[20, 30):pack_size_3|d_big:[10, 20):pack_size_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = String(30, '1'),
+    });
+}
+
+TEST_P(SegmentBitmapFilterTest, Big_Intersection_FalsePositive)
+{
+    writeSegmentGeneric("d_big:[0, 10):pack_size_3|d_big:[20, 30):pack_size_3|merge_delta|d_big:[10, 20):pack_size_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = String(30, '1'),
+    });
+}
+
+TEST_P(SegmentBitmapFilterTest, Big_Intersection_DeleteRange)
+{
+    writeSegmentGeneric(
+        "d_big:[0, 10):pack_size_3|d_big:[20, 30):pack_size_3|merge_delta|d_dr:[10, 20)|d_big:[10, 20):pack_size_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = String(30, '1'),
+    });
+}
+
+TEST_P(SegmentBitmapFilterTest, Big_NoIntersection_Tiny)
+{
+    writeSegmentGeneric("d_big:[0, 10):pack_size_3|d_tiny:[10, 20)|d_big:[20, 30):pack_size_3");
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .expected_bitmap = String(30, '1'),
+    });
+}
 } // namespace DB::DM::tests
