@@ -239,7 +239,7 @@ private:
         for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
         {
             IColumn * column = added_columns[column_index].get();
-            if (has_null_map && is_nullable)
+            if (is_nullable)
                 column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
             column->deserializeAndInsertFromPos(wd.insert_batch, true);
         }
@@ -251,7 +251,7 @@ private:
             for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
             {
                 IColumn * column = added_columns[column_index].get();
-                if (has_null_map && is_nullable)
+                if (is_nullable)
                     column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
                 column->flushNTAlignBuffer();
             }
@@ -264,16 +264,13 @@ private:
 
     void ALWAYS_INLINE fillNullMap(size_t size) const
     {
-        if constexpr (has_null_map)
+        for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
         {
-            for (auto [column_index, is_nullable] : row_layout.raw_required_key_column_indexes)
+            if (is_nullable)
             {
-                if (is_nullable)
-                {
-                    auto & null_map_vec
-                        = static_cast<ColumnNullable &>(*added_columns[column_index]).getNullMapColumn().getData();
-                    null_map_vec.resize_fill_zero(null_map_vec.size() + size);
-                }
+                auto & null_map_vec
+                    = static_cast<ColumnNullable &>(*added_columns[column_index]).getNullMapColumn().getData();
+                null_map_vec.resize_fill_zero(null_map_vec.size() + size);
             }
         }
     }
