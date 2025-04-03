@@ -95,6 +95,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_exchange_receiver, {"type", "exchange_receiver"}),                                                                     \
       F(type_projection, {"type", "projection"}),                                                                                   \
       F(type_partition_ts, {"type", "partition_table_scan"}),                                                                       \
+      F(type_cte_sink, {"type", "cte_sink"}),                                                                                       \
+      F(type_cte_source, {"type", "cte_source"}),                                                                                   \
       F(type_window, {"type", "window"}),                                                                                           \
       F(type_window_sort, {"type", "window_sort"}),                                                                                 \
       F(type_expand, {"type", "expand"}))                                                                                           \

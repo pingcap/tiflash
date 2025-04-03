@@ -17,23 +17,28 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <common/logger_useful.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
 
+#include <memory>
+
 namespace DB
 {
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
+using PipelineExecutorContextPtr = std::shared_ptr<PipelineExecutorContext>;
 using Pipelines = std::vector<PipelinePtr>;
 
 class PhysicalPlan
 {
 public:
-    PhysicalPlan(Context & context_, const String & req_id)
+    PhysicalPlan(Context & context_, const String & req_id, PipelineExecutorContextPtr pipeline_exec_ptr_)
         : context(context_)
         , log(Logger::get(req_id))
+        , exec_context_ptr(pipeline_exec_ptr_)
     {}
 
     void build(const tipb::DAGRequest * dag_request);
@@ -63,7 +68,7 @@ private:
     void buildTableScan(const String & executor_id, const tipb::Executor * executor);
 
 private:
-    std::vector<PhysicalPlanNodePtr> cur_plan_nodes{};
+    std::vector<PhysicalPlanNodePtr> cur_plan_nodes;
 
     // hold the root node of physical plan node tree after `outputAndOptimize`.
     PhysicalPlanNodePtr root_node;
@@ -71,5 +76,7 @@ private:
     Context & context;
 
     LoggerPtr log;
+
+    PipelineExecutorContextPtr exec_context_ptr;
 };
 } // namespace DB

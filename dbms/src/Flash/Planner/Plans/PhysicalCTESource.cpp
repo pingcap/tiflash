@@ -17,8 +17,7 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/Plans/PhysicalCTESource.h>
 #include <Interpreters/Context.h>
-
-#include "Operators/CTESource.h"
+#include <Operators/CTESource.h>
 
 namespace DB
 {
@@ -26,11 +25,11 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     const Context & context,
     const String & executor_id,
     const LoggerPtr & log,
-    const FineGrainedShuffle & fine_grained_shuffle
+    const FineGrainedShuffle & fine_grained_shuffle,
+    PipelineExecutorContextPtr exec_context_ptr
     /* TODO tipb::ExchangeReceiver */)
 {
     // TODO tipb for cte: need output schema field in tipb for cte source
-    // TODO CTEManager: get cte from CTEManager
     // TODO we need to get meta data such as `partition_col_collators` for partitioning data
     NamesAndTypes schema; // TODO scchema info is from tipb
     auto physical_exchange_receiver = std::make_shared<PhysicalCTESource>(
@@ -39,7 +38,8 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
         schema,
         fine_grained_shuffle,
         log->identifier(),
-        Block(schema));
+        Block(schema),
+        exec_context_ptr);
     return physical_exchange_receiver;
 }
 
@@ -52,11 +52,12 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
     if (fine_grained_shuffle.enabled())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
 
-    std::shared_ptr<CTE> cte; // TODO CTEManager: get it from CTEManager
+    String query_id_and_cte_id_prefix = fmt::format("{}_{}", this->exec_context_ptr->getQueryIdForCTE(), this->cte_id);
 
     for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
     {
-        group_builder.addConcurrency(std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte));
+        group_builder.addConcurrency(
+            std::make_unique<CTESourceOp>(exec_context, log->identifier(), this->exec_context_ptr->));
     }
     context.getDAGContext()->addInboundIOProfileInfos(this->executor_id, group_builder.getCurIOProfileInfos());
 }

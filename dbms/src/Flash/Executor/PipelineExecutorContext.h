@@ -53,6 +53,7 @@ public:
 
     PipelineExecutorContext(
         const String & query_id_,
+        const String & query_id_for_cte_,
         const String & req_id,
         const MemoryTrackerPtr & mem_tracker_,
         DAGContext * dag_context_ = nullptr,
@@ -60,6 +61,7 @@ public:
         const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr,
         const String & resource_group_name_ = "")
         : query_id(query_id_)
+        , query_id_for_cte(query_id_for_cte_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)
         , dag_context(dag_context_)
@@ -114,6 +116,8 @@ public:
 
     const String & getQueryId() const { return query_id; }
 
+    const String & getQueryIdForCTE() const { return this->query_id_for_cte; }
+
     const MemoryTrackerPtr & getMemoryTracker() const { return mem_tracker; }
 
     void triggerAutoSpill() const
@@ -157,6 +161,8 @@ private:
 
 private:
     const String query_id;
+
+    String query_id_for_cte;
 
     LoggerPtr log;
 

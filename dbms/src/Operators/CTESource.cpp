@@ -12,13 +12,19 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Operators/CTE.h>
 #include <Operators/CTESource.h>
-
-#include "Operators/CTE.h"
-#include "Operators/Operator.h"
+#include <Operators/Operator.h>
 
 namespace DB
 {
+void CTESourceOp::operateSuffixImpl()
+{
+    this->cte.reset();
+    this->cte_manager->releaseCTE(this->query_id_and_cte_id);
+    LOG_DEBUG(log, "finish read {} rows from cte source", total_rows);
+}
+
 // TODO in some cases, source needs to manually filter some data when cte saves all data
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {

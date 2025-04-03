@@ -28,6 +28,7 @@
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <IO/BaseFile/fwd.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/FileProvider/FileProvider.h>
@@ -76,6 +77,7 @@
 #include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
+#include <memory>
 #include <pcg_random.hpp>
 #include <unordered_map>
 
@@ -227,6 +229,8 @@ struct ContextShared
     Context::ConfigReloadCallback config_reload_callback;
 
     std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
+
+    std::unique_ptr<CTEManager> cte_manager;
 
     ContextShared(
         std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_,

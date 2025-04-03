@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Mpp/CTEManager.h>
 #include <Operators/CTE.h>
 #include <Operators/Operator.h>
 
@@ -22,9 +23,15 @@ namespace DB
 class CTESinkOp : public SinkOp
 {
 public:
-    CTESinkOp(PipelineExecutorContext & exec_context_, const String & req_id, std::shared_ptr<CTE> cte_)
+    CTESinkOp(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const String & query_id_and_cte_id_,
+        CTEManager * cte_manager_)
         : SinkOp(exec_context_, req_id)
-        , cte(cte_)
+        , query_id_and_cte_id(query_id_and_cte_id_)
+        , cte_manager(cte_manager_)
+        , cte(cte_manager_->getCTE(query_id_and_cte_id_))
     {}
 
     String getName() const override { return "CTESinkOp"; }
@@ -35,6 +42,8 @@ protected:
     OperatorStatus writeImpl(Block && block) override;
 
 private:
+    String query_id_and_cte_id;
+    CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
     size_t total_rows = 0;
     bool input_done = false;

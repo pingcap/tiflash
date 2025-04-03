@@ -13,13 +13,17 @@
 // limitations under the License.
 
 #include <Operators/CTESinkOp.h>
-
-#include "Operators/Operator.h"
+#include <Operators/Operator.h>
 
 namespace DB
 {
 void CTESinkOp::operateSuffixImpl()
 {
+    this->cte.reset();
+    this->cte_manager->releaseCTE(this->query_id_and_cte_id);
+
+    // In case some tasks are still in WAITING_FOR_NOTIFY status
+    this->cte->notifyEOF();
     LOG_DEBUG(log, "finish write with {} rows", this->total_rows);
 }
 

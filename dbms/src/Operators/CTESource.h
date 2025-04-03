@@ -16,31 +16,39 @@
 
 #include <Common/Logger.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Operators/CTE.h>
 #include <Operators/Operator.h>
 
 namespace DB
 {
-// TODO consider fine graine at compiling stage
 class CTESourceOp : public SourceOp
 {
 public:
-    CTESourceOp(PipelineExecutorContext & exec_context_, const String & req_id, std::shared_ptr<CTE> cte_)
+    CTESourceOp(
+        PipelineExecutorContext & exec_context_,
+        const String & req_id,
+        const String & query_id_and_cte_id_,
+        CTEManager * cte_manager_)
         : SourceOp(exec_context_, req_id)
-        , cte(cte_)
+        , query_id_and_cte_id(query_id_and_cte_id_)
+        , cte_manager(cte_manager_)
+        , cte(cte_manager_->getCTE(query_id_and_cte_id_))
     {}
 
     String getName() const override { return "CTESourceOp"; }
 
 protected:
-    void operateSuffixImpl() override { LOG_DEBUG(log, "finish read {} rows from cte source", total_rows); }
+    void operateSuffixImpl() override;
 
     OperatorStatus readImpl(Block & block) override;
 
     OperatorStatus awaitImpl() override;
 
 private:
+    String query_id_and_cte_id;
+    CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
     size_t block_fetch_idx = 0;
 

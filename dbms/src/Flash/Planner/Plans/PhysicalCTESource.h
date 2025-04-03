@@ -14,11 +14,14 @@
 
 #pragma once
 
+#include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
-#include <Operators/CTE.h>
 
 namespace DB
 {
+using PipelineExecutorContextPtr = std::shared_ptr<PipelineExecutorContext>;
+
 class PhysicalCTESource : public PhysicalLeaf
 {
 public:
@@ -26,7 +29,8 @@ public:
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const FineGrainedShuffle & fine_grained_shuffle);
+        const FineGrainedShuffle & fine_grained_shuffle,
+        PipelineExecutorContextPtr exec_context_ptr);
 
     // TODO to partition data, we may need to call `ExchangeSenderInterpreterHelper::genPartitionColCollators` like PhysicalExchangeSender
     PhysicalCTESource(
@@ -34,9 +38,11 @@ public:
         const NamesAndTypes & schema_,
         const FineGrainedShuffle & fine_grained_shuffle,
         const String & req_id,
-        const Block & sample_block_)
+        const Block & sample_block_,
+        PipelineExecutorContextPtr exec_context_ptr_)
         : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, fine_grained_shuffle, req_id)
         , sample_block(sample_block_)
+        , exec_context_ptr(exec_context_ptr_)
     {}
 
     void finalizeImpl(const Names & parent_require) override;
@@ -44,7 +50,6 @@ public:
     const Block & getSampleBlock() const override;
 
 private:
-    // TODO
     void buildPipelineExecGroupImpl(
         PipelineExecutorContext & exec_context,
         PipelineExecGroupBuilder & group_builder,
@@ -54,6 +59,7 @@ private:
 private:
     Block sample_block;
     String query_id_and_cte_id;
-    std::shared_ptr<CTE> cte;
+    UInt64 cte_id = 0; // TODO initialize it from tipb
+    PipelineExecutorContextPtr exec_context_ptr;
 };
 } // namespace DB
