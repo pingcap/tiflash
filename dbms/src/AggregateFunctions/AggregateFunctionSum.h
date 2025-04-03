@@ -443,8 +443,9 @@ public:
     {
         if constexpr (IsDecimal<TResult>)
         {
-            assert(static_cast<ColumnDecimal<TResult> &>(to).getData().getScale() == result_scale);
-            static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(this->data(place).get());
+            auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
+            assert(container.getScale() == result_scale);
+            container.push_back(this->data(place).get());
         }
         else
             static_cast<ColumnVector<TResult> &>(to).getData().push_back(this->data(place).get());
@@ -455,6 +456,7 @@ public:
         if constexpr (IsDecimal<TResult>)
         {
             auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
+            assert(container.getScale() == result_scale);
             container.resize_fill(container.size() + num, this->data(place).get());
         }
         else
