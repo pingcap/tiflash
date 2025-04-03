@@ -443,6 +443,7 @@ public:
     {
         if constexpr (IsDecimal<TResult>)
         {
+            assert(static_cast<ColumnDecimal<TResult> &>(to).getData().getScale() == result_scale);
             static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(this->data(place).get());
         }
         else
