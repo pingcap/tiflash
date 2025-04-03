@@ -61,34 +61,34 @@ EstablishCallData::EstablishCallData()
     GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Increment();
 }
 
-void EstablishCallData::updateStateMetrics(CallStatus status, Int64 change)
+void EstablishCallData::decreaseStateMetrics(CallStatus status)
 {
     switch (status)
     {
     case NEW_REQUEST:
-        GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Increment(change);
+        GET_METRIC(tiflash_establish_calldata_count, type_new_request_calldata).Decrement();
         break;
     case WAIT_TUNNEL:
-        GET_METRIC(tiflash_establish_calldata_count, type_wait_tunnel_calldata).Increment(change);
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_tunnel_calldata).Decrement();
         break;
     case WAIT_WRITE:
-        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_calldata).Increment(change);
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_calldata).Decrement();
         break;
     case WAIT_IN_QUEUE:
-        GET_METRIC(tiflash_establish_calldata_count, type_wait_in_queue_calldata).Increment(change);
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_in_queue_calldata).Decrement();
         break;
     case WAIT_WRITE_ERR:
-        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_err_calldata).Increment(change);
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_err_calldata).Decrement();
         break;
     case FINISH:
-        GET_METRIC(tiflash_establish_calldata_count, type_finish_calldata).Increment(change);
+        GET_METRIC(tiflash_establish_calldata_count, type_finish_calldata).Decrement();
         break;
     }
 }
 
 EstablishCallData::~EstablishCallData()
 {
-    updateStateMetrics(state, -1);
+    decreaseStateMetrics(state);
     if (stopwatch)
     {
         GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Decrement();
@@ -97,11 +97,13 @@ EstablishCallData::~EstablishCallData()
     }
 }
 
-void EstablishCallData::setCallState(EstablishCallData::CallStatus new_state)
+void EstablishCallData::setCallStateAndUpdateMetrics(
+    EstablishCallData::CallStatus new_state,
+    prometheus::Gauge & new_metric)
 {
-    updateStateMetrics(state, -1);
+    decreaseStateMetrics(state);
     state = new_state;
-    updateStateMetrics(state, 1);
+    new_metric.Increment();
 }
 
 void EstablishCallData::execute(bool ok)
@@ -261,7 +263,9 @@ void EstablishCallData::write(const mpp::MPPDataPacket & packet)
 
 void EstablishCallData::writeErr(const mpp::MPPDataPacket & packet)
 {
-    setCallState(WAIT_WRITE_ERR);
+    setCallStateAndUpdateMetrics(
+        WAIT_WRITE_ERR,
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_write_err_calldata));
     write(packet);
 }
 
@@ -273,7 +277,7 @@ static LoggerPtr & getLogger()
 
 void EstablishCallData::writeDone(String msg, const grpc::Status & status)
 {
-    setCallState(FINISH);
+    setCallStateAndUpdateMetrics(FINISH, GET_METRIC(tiflash_establish_calldata_count, type_finish_calldata));
 
     if (async_tunnel_sender)
     {
@@ -339,7 +343,9 @@ void EstablishCallData::trySendOneMsg()
         /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
         /// is destructed which may cause the memory tracker in `res` become invalid
         packet->switchMemTracker(nullptr);
-        setCallState(WAIT_WRITE);
+        setCallStateAndUpdateMetrics(
+            WAIT_WRITE,
+            GET_METRIC(tiflash_establish_calldata_count, type_wait_write_calldata));
         write(packet->packet);
         return;
     case MPMCQueueResult::FINISHED:
@@ -350,7 +356,9 @@ void EstablishCallData::trySendOneMsg()
         writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
         return;
     case MPMCQueueResult::EMPTY:
-        setCallState(WAIT_IN_QUEUE);
+        setCallStateAndUpdateMetrics(
+            WAIT_IN_QUEUE,
+            GET_METRIC(tiflash_establish_calldata_count, type_wait_in_queue_calldata));
         // No new message.
         return;
     default:

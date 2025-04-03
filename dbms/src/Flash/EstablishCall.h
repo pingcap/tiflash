@@ -20,6 +20,7 @@
 #include <Flash/FlashService.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <kvproto/tikvpb.grpc.pb.h>
+#include <prometheus/gauge.h>
 
 namespace DB
 {
@@ -74,10 +75,10 @@ public:
 
     void attachAsyncTunnelSender(const std::shared_ptr<DB::AsyncTunnelSender> &) override;
     void startEstablishConnection();
-    void setCallState(CallStatus new_state);
+    void setCallStateAndUpdateMetrics(CallStatus new_state, prometheus::Gauge & new_metric);
     bool isWaitingTunnelState() { return state == WAIT_TUNNEL; }
 
-    static void updateStateMetrics(CallStatus status, Int64 change);
+    static void decreaseStateMetrics(CallStatus status);
 
     // Spawn a new EstablishCallData instance to serve new clients while we process the one for this EstablishCallData.
     // The instance will deallocate itself as part of its FINISH state.
