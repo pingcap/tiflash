@@ -191,6 +191,22 @@ public:
         return insertDataImpl<false>(pos, length);
     }
 
+    void batchInsertDataWithTerminatingZero(size_t num, const char * pos, size_t length)
+    {
+        size_t old_size = chars.size();
+        size_t appended_size = 0;
+        const size_t single_str_size = length;
+
+        chars.resize(old_size + (single_str_size * num));
+        offsets.reserve(offsets.size() + num);
+        for (size_t i = 0; i < num; i++)
+        {
+            inline_memcpy(&chars[old_size + appended_size], pos, length);
+            appended_size += single_str_size;
+            offsets.push_back(old_size + appended_size);
+        }
+    }
+
     void popBack(size_t n) override
     {
         size_t nested_n = offsets.back() - offsetAt(offsets.size() - n);
