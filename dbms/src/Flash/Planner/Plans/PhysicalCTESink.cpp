@@ -24,29 +24,20 @@ namespace DB
 PhysicalPlanNodePtr PhysicalCTESink::build(
     const String & executor_id,
     const LoggerPtr & log,
-    const tipb::ExchangeSender & exchange_sender,
     const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child)
 {
+    // TODO CTEManager: get cte from CTEManager
     RUNTIME_CHECK(child);
 
-    // std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
-    // TiDB::TiDBCollators partition_col_collators
-    //     = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
-
-    // auto physical_exchange_sender = std::make_shared<PhysicalExchangeSender>(
-    //     executor_id,
-    //     child->getSchema(),
-    //     fine_grained_shuffle,
-    //     log->identifier(),
-    //     child,
-    //     partition_col_ids,
-    //     partition_col_collators,
-    //     exchange_sender.tp(),
-    //     exchange_sender.compression());
-    // // executeUnion will be call after sender.transform, so don't need to restore concurrency.
-    // physical_exchange_sender->disableRestoreConcurrency();
-    // return physical_exchange_sender;
+    auto physical_cte_sink = std::make_shared<PhysicalCTESink>(
+        executor_id,
+        child->getSchema(),
+        fine_grained_shuffle,
+        log->identifier(),
+        child);
+    physical_cte_sink->disableRestoreConcurrency();
+    return physical_cte_sink;
 }
 
 void PhysicalCTESink::buildPipelineExecGroupImpl(
@@ -57,7 +48,7 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
 {
     size_t partition_id = 0;
     group_builder.transform([&](auto & builder) {
-        std::shared_ptr<CTE> cte; // TODO get it from CTEManager
+        std::shared_ptr<CTE> cte; // TODO CTEManager: get it from CTEManager
         builder.setSinkOp(std::make_unique<CTESinkOp>(exec_context, log->identifier(), cte));
         ++partition_id;
     });

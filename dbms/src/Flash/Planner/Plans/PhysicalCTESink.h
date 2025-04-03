@@ -27,7 +27,6 @@ public:
     static PhysicalPlanNodePtr build(
         const String & executor_id,
         const LoggerPtr & log,
-        const tipb::ExchangeSender & exchange_sender,
         const FineGrainedShuffle & fine_grained_shuffle,
         const PhysicalPlanNodePtr & child);
 
