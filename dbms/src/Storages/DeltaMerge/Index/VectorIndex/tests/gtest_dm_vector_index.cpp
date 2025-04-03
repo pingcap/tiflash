@@ -1965,7 +1965,7 @@ public:
     std::pair<BlockInputStreamPtr, DMContextPtr> createComputeNodeStream(
         const SegmentPtr & write_node_segment,
         const ColumnDefines & columns_to_read,
-        const PushDownExecutorPtr & filter,
+        const PushDownExecutorPtr & executor,
         const ScanContextPtr & read_scan_context = nullptr)
     {
         auto write_dm_context = dmContext();
@@ -2002,7 +2002,7 @@ public:
             columns_to_read,
             cn_segment_snap,
             {write_node_segment->getRowKeyRange()},
-            filter,
+            executor,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
 

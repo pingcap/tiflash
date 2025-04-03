@@ -17,6 +17,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/Ctl.h>
 #include <Debug/MockKVStore/MockUtils.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <IO/Buffer/ReadBufferFromString.h>
 #include <IO/Buffer/WriteBufferFromString.h>
 #include <Interpreters/Context.h>
@@ -30,7 +31,6 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 

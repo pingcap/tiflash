@@ -458,7 +458,7 @@ TEST_P(SegmentBitmapFilterTest, CleanStable)
     ASSERT_EQ(seg->getDelta()->getRows(), 0);
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
     ASSERT_EQ(seg->getStable()->getRows(), 25000);
-    auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+    auto bitmap_filter = seg->buildMVCCBitmapFilterStableOnly(
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
@@ -480,7 +480,7 @@ TEST_P(SegmentBitmapFilterTest, NotCleanStable)
     ASSERT_EQ(seg->getDelta()->getDeletes(), 0);
     ASSERT_EQ(seg->getStable()->getRows(), 20000);
     {
-        auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+        auto bitmap_filter = seg->buildMVCCBitmapFilterStableOnly(
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
@@ -500,7 +500,7 @@ TEST_P(SegmentBitmapFilterTest, NotCleanStable)
     {
         // Stale read
         ASSERT_EQ(version, 2);
-        auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+        auto bitmap_filter = seg->buildMVCCBitmapFilterStableOnly(
             *dm_context,
             snap,
             {seg->getRowKeyRange()},
@@ -529,7 +529,7 @@ TEST_P(SegmentBitmapFilterTest, StableRange)
     ASSERT_EQ(seg->getStable()->getRows(), 50000);
 
     auto ranges = std::vector<RowKeyRange>{buildRowKeyRange(10000, 50000, is_common_handle)}; // [10000, 50000)
-    auto bitmap_filter = seg->buildBitmapFilterStableOnly(
+    auto bitmap_filter = seg->buildMVCCBitmapFilterStableOnly(
         *dm_context,
         snap,
         ranges,
@@ -590,7 +590,7 @@ try
         __LINE__);
 
     auto [seg, snap] = getSegmentForRead(SEG_ID);
-    auto bitmap_filter = seg->buildBitmapFilter(
+    auto bitmap_filter = seg->buildMVCCBitmapFilter(
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
@@ -622,7 +622,7 @@ try
     // For Stable, all packs of DMFile will be considered in BitmapFilter.
     setRowKeyRange(275, 295, false); // Shrinking range
     auto [seg, snap] = getSegmentForRead(SEG_ID);
-    auto bitmap_filter = seg->buildBitmapFilter(
+    auto bitmap_filter = seg->buildMVCCBitmapFilter(
         *dm_context,
         snap,
         {seg->getRowKeyRange()},
@@ -699,8 +699,13 @@ TEST_P(SegmentBitmapFilterTest, testSkipPackStableOnly)
                 ASSERT_EQ(pack_res[i], RSResult::Some);
         }
 
-        auto bitmap_filter
-            = seg->buildBitmapFilterStableOnly(*dm_context, snap, ranges, pack_filter_results, 2, DEFAULT_BLOCK_SIZE);
+        auto bitmap_filter = seg->buildMVCCBitmapFilterStableOnly(
+            *dm_context,
+            snap,
+            ranges,
+            pack_filter_results,
+            2,
+            DEFAULT_BLOCK_SIZE);
 
         ASSERT_EQ(expect_result, bitmap_filter->toDebugString());
 
@@ -819,7 +824,7 @@ TEST_P(SegmentBitmapFilterTest, testSkipPackNormal)
             }
         }
 
-        auto bitmap_filter = seg->buildBitmapFilterNormal(
+        auto bitmap_filter = seg->buildMVCCBitmapFilterNormal(
             *dm_context,
             snap,
             ranges,
