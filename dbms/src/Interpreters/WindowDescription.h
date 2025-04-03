@@ -148,10 +148,11 @@ struct WindowDescription
 
     bool need_decrease;
 
-    void setWindowFrame(const tipb::WindowFrame & frame_);
+    void setWindowFrame(const tipb::WindowFrame & tipb_frame);
 
     void fillArgColumnNumbers();
     void initNeedDecrease(bool has_agg);
 };
 
+void setWindowFrameImpl(WindowFrame & frame, const tipb::WindowFrame & tipb_frame);
 } // namespace DB
