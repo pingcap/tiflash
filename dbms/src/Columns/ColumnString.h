@@ -250,10 +250,6 @@ public:
         offsets.push_back(new_size);
     }
 
-    template <bool add_terminating_zero>
-    ALWAYS_INLINE inline void batchInsertDataImpl(size_t num, const char * pos, size_t length)
-    {}
-
     void insertData(const char * pos, size_t length) override { return insertDataImpl<true>(pos, length); }
 
     bool decodeTiDBRowV2Datum(size_t cursor, const String & raw_value, size_t length, bool /* force_decode */) override
