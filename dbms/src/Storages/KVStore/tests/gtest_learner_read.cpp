@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Debug/MockKVStore/MockUtils.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/LearnerReadWorker.h>
@@ -21,7 +22,6 @@
 #include <Storages/PathPool.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <kvproto/kvrpcpb.pb.h>
 
 namespace DB::tests

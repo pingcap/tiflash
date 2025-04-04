@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/SyncPoint/Ctl.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <IO/Encryption/MockKeyManager.h>
 #include <Poco/Logger.h>
 #include <Storages/Page/V3/LogFile/LogFilename.h>
@@ -28,7 +29,6 @@
 #include <Storages/Page/V3/tests/entries_helper.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <common/types.h>
 
 #include <future>

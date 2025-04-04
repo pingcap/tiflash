@@ -76,6 +76,10 @@ public:
         return minmax_index->getUInt64MinMax(pack_id).second;
     }
 
+    // Modify the pack_res according to the `bitmap_filter`.
+    // Return the count of skipped packs that benefits from `bitmap_filter`.
+    size_t modify(const DMFilePtr & dmfile, const BitmapFilterPtr & bitmap_filter, size_t offset);
+
     // None+NoneNull, Some+SomeNull, All, AllNull
     std::tuple<UInt64, UInt64, UInt64, UInt64> countPackRes() const;
 

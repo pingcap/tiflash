@@ -15,12 +15,12 @@
 #pragma once
 
 #include <Common/CurrentMetrics.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/PathPool.h>
-#include <TestUtils/TiFlashTestEnv.h>
 
 #include <magic_enum.hpp>
 #include <random>
@@ -125,14 +125,14 @@ public:
     virtual std::vector<Int64> getDelta(UInt32 n) = 0;
 
 protected:
-    std::vector<Int64> getVec(Int64 stable_start, Int64 stable_end)
+    static std::vector<Int64> getVec(Int64 stable_start, Int64 stable_end)
     {
         std::vector<Int64> v(stable_end - stable_start);
         std::iota(v.begin(), v.end(), stable_start);
         return v;
     }
 
-    std::vector<Int64> getRandoms(Int64 rand_start, Int64 rand_end)
+    static std::vector<Int64> getRandoms(Int64 rand_start, Int64 rand_end)
     {
         auto v = getVec(rand_start, rand_end);
         static constexpr int rnd_seed = 573172;

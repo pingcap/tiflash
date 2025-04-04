@@ -1246,13 +1246,13 @@ ReadMode DeltaMergeStore::getReadMode(
     const Context & db_context,
     bool is_fast_scan,
     bool keep_order,
-    const PushDownExecutorPtr & filter)
+    const PushDownExecutorPtr & executor)
 {
     auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
     RUNTIME_CHECK_MSG(
-        !filter || !filter->before_where || read_mode == ReadMode::Bitmap,
+        !executor || !executor->before_where || read_mode == ReadMode::Bitmap,
         "Push down executor needs bitmap, push down executor is empty: {}, read mode: {}",
-        filter == nullptr || filter->before_where == nullptr,
+        executor == nullptr || executor->before_where == nullptr,
         magic_enum::enum_name(read_mode));
     return read_mode;
 }
@@ -1264,7 +1264,7 @@ BlockInputStreams DeltaMergeStore::read(
     const RowKeyRanges & sorted_ranges,
     size_t num_streams,
     UInt64 start_ts,
-    const PushDownExecutorPtr & filter,
+    const PushDownExecutorPtr & executor,
     const RuntimeFilteList & runtime_filter_list,
     int rf_max_wait_time_ms,
     const String & tracing_id,
@@ -1299,12 +1299,13 @@ BlockInputStreams DeltaMergeStore::read(
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
-    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
-    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, executor);
+    const auto & final_columns_to_read
+        = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         extra_table_id_index,
         final_columns_to_read,
-        filter,
+        executor,
         start_ts,
         expected_block_size,
         read_mode,
@@ -1337,7 +1338,7 @@ BlockInputStreams DeltaMergeStore::read(
                 read_task_pool,
                 after_segment_read,
                 final_columns_to_read,
-                filter,
+                executor,
                 start_ts,
                 expected_block_size,
                 read_mode,
@@ -1356,7 +1357,7 @@ BlockInputStreams DeltaMergeStore::read(
         db_context.getSettingsRef().dt_enable_read_thread,
         enable_read_thread,
         is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr,
+        executor == nullptr || executor->before_where == nullptr,
         read_task_pool->pool_id,
         final_num_stream,
         columns_to_read,
@@ -1374,7 +1375,7 @@ void DeltaMergeStore::read(
     const RowKeyRanges & sorted_ranges,
     size_t num_streams,
     UInt64 start_ts,
-    const PushDownExecutorPtr & filter,
+    const PushDownExecutorPtr & executor,
     const RuntimeFilteList & runtime_filter_list,
     int rf_max_wait_time_ms,
     const String & tracing_id,
@@ -1410,12 +1411,13 @@ void DeltaMergeStore::read(
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream
         = enable_read_thread ? std::max(1, num_streams) : std::max(1, std::min(num_streams, tasks.size()));
-    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
-    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, executor);
+    const auto & final_columns_to_read
+        = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         extra_table_id_index,
         final_columns_to_read,
-        filter,
+        executor,
         start_ts,
         expected_block_size,
         read_mode,
@@ -1451,7 +1453,7 @@ void DeltaMergeStore::read(
                 read_task_pool,
                 after_segment_read,
                 final_columns_to_read,
-                filter,
+                executor,
                 start_ts,
                 expected_block_size,
                 read_mode,
@@ -1476,7 +1478,7 @@ void DeltaMergeStore::read(
         db_context.getSettingsRef().dt_enable_read_thread,
         enable_read_thread,
         is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr,
+        executor == nullptr || executor->before_where == nullptr,
         read_task_pool->pool_id,
         final_num_stream,
         columns_to_read,

@@ -123,8 +123,8 @@ void JoinProbeContext::prepareForHashProbe(
     is_prepared = true;
 }
 
-template <bool has_null_key, bool has_other_condition, bool late_materialization>
-struct ProbeAdder<Inner, has_null_key, has_other_condition, late_materialization>
+template <bool has_other_condition, bool late_materialization>
+struct ProbeAdder<Inner, has_other_condition, late_materialization>
 {
     static constexpr bool need_not_matched = false;
 
@@ -140,7 +140,7 @@ struct ProbeAdder<Inner, has_null_key, has_other_condition, late_materialization
     {
         ++current_offset;
         wd.selective_offsets.push_back(idx);
-        helper.insertRowToBatch<has_null_key, late_materialization>(wd, added_columns, row_ptr + ptr_offset);
+        helper.insertRowToBatch<late_materialization>(wd, added_columns, row_ptr + ptr_offset);
         return current_offset >= helper.settings.max_block_size;
     }
 
@@ -152,13 +152,13 @@ struct ProbeAdder<Inner, has_null_key, has_other_condition, late_materialization
 
     static void flush(JoinProbeBlockHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
-        helper.flushBatchIfNecessary<has_null_key, late_materialization, true>(wd, added_columns);
-        helper.fillNullMapWithZero<has_null_key, late_materialization>(added_columns);
+        helper.flushBatchIfNecessary<late_materialization, true>(wd, added_columns);
+        helper.fillNullMapWithZero<late_materialization>(added_columns);
     }
 };
 
-template <bool has_null_key, bool has_other_condition, bool late_materialization>
-struct ProbeAdder<LeftOuter, has_null_key, has_other_condition, late_materialization>
+template <bool has_other_condition, bool late_materialization>
+struct ProbeAdder<LeftOuter, has_other_condition, late_materialization>
 {
     static constexpr bool need_not_matched = !has_other_condition;
 
@@ -174,7 +174,7 @@ struct ProbeAdder<LeftOuter, has_null_key, has_other_condition, late_materializa
     {
         ++current_offset;
         wd.selective_offsets.push_back(idx);
-        helper.insertRowToBatch<has_null_key, late_materialization>(wd, added_columns, row_ptr + ptr_offset);
+        helper.insertRowToBatch<late_materialization>(wd, added_columns, row_ptr + ptr_offset);
         return current_offset >= helper.settings.max_block_size;
     }
 
@@ -197,8 +197,8 @@ struct ProbeAdder<LeftOuter, has_null_key, has_other_condition, late_materializa
 
     static void flush(JoinProbeBlockHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
-        helper.flushBatchIfNecessary<has_null_key, late_materialization, true>(wd, added_columns);
-        helper.fillNullMapWithZero<has_null_key, late_materialization>(added_columns);
+        helper.flushBatchIfNecessary<late_materialization, true>(wd, added_columns);
+        helper.fillNullMapWithZero<late_materialization>(added_columns);
 
         if constexpr (!has_other_condition)
         {
@@ -448,13 +448,7 @@ void JoinProbeBlockHelper::probeFillColumns(
     using KeyGetterType = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
-    constexpr bool has_null_key = has_null_map || kind == LeftOuter;
-    if constexpr (!has_null_key)
-    {
-        for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
-            RUNTIME_CHECK_MSG(!is_nullable, "has_null_key is false but a key column is nullable");
-    }
-    using Adder = ProbeAdder<kind, has_null_key, has_other_condition, late_materialization>;
+    using Adder = ProbeAdder<kind, has_other_condition, late_materialization>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
     size_t current_offset = wd.result_block.rows();
@@ -578,13 +572,7 @@ void JoinProbeBlockHelper::probeFillColumnsPrefetch(
     using KeyGetterType = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
-    constexpr bool has_null_key = has_null_map || kind == LeftOuter;
-    if constexpr (!has_null_key)
-    {
-        for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
-            RUNTIME_CHECK_MSG(!is_nullable, "has_null_key is false but a key column is nullable");
-    }
-    using Adder = ProbeAdder<kind, has_null_key, has_other_condition, late_materialization>;
+    using Adder = ProbeAdder<kind, has_other_condition, late_materialization>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
     initPrefetchStates<KeyGetter>(context);

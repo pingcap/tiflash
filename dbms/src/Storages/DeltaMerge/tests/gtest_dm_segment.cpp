@@ -1093,7 +1093,7 @@ try
             auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, real_ranges, EMPTY_RS_OPERATOR, {});
             pack_filter_results.push_back(pack_filter);
         }
-        auto bitmap_filter = segment->buildBitmapFilter( //
+        auto bitmap_filter = segment->buildMVCCBitmapFilter( //
             dmContext(),
             segment_snap,
             real_ranges,

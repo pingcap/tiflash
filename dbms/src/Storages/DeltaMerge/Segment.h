@@ -734,17 +734,25 @@ public:
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
+        const PushDownExecutorPtr & executor,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
-        size_t expected_block_size);
-    BitmapFilterPtr buildBitmapFilterNormal(
+        size_t build_bitmap_filter_block_rows);
+    BitmapFilterPtr buildMVCCBitmapFilter(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size);
-    BitmapFilterPtr buildBitmapFilterStableOnly(
+    BitmapFilterPtr buildMVCCBitmapFilterNormal(
+        const DMContext & dm_context,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & read_ranges,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts,
+        size_t expected_block_size);
+    BitmapFilterPtr buildMVCCBitmapFilterStableOnly(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
