@@ -27,8 +27,6 @@
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
 
-#include <memory>
-
 
 namespace DB
 {

@@ -2163,28 +2163,7 @@ try
 }
 CATCH
 
-TEST_F(JoinExecutorTestRunner, LeftJoinAggWithOtherCondition)
-try
-{
-    auto request
-        = context.scan("test_db", "l_table")
-              .join(
-                  context.scan("test_db", "r_table"),
-                  tipb::JoinType::TypeLeftOuterJoin,
-                  {col("join_c")},
-                  {},
-                  {},
-                  {And(lt(col("l_table.s"), col("r_table.s")), eq(col("l_table.join_c"), col("r_table.join_c")))},
-                  {})
-              .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
-              .build(context);
-    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
-    ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request, 2));
-    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
-}
-CATCH
-
-TEST_F(JoinExecutorTestRunner, LeftOuterJoin)
+TEST_F(JoinExecutorTestRunner, LeftOuterJoinWithNullAndNotNullJoinKey)
 try
 {
     context.addMockTable(
@@ -2223,7 +2202,7 @@ try
             toNullableVec<Int64>("l4", {3, 1, 2, 0, 2, 3, 3, {}, 4, 5, 0, 6}),
         });
 
-    // No other condition
+    // No other condition: lj_l_table left join lj_r_table
     auto request = context.scan("test_db", "lj_l_table")
                        .join(
                            context.scan("test_db", "lj_r_table"),
@@ -2309,7 +2288,73 @@ try
         });
     WRAP_FOR_JOIN_TEST_END
 
-    // Has other condition
+    // No other condition: lj_r_table left join lj_l_table
+    request = context.scan("test_db", "lj_r_table")
+                  .join(
+                      context.scan("test_db", "lj_l_table"),
+                      tipb::JoinType::TypeLeftOuterJoin,
+                      {col("k2"), col("k1")},
+                      {},
+                      {},
+                      {},
+                      {})
+                  .project(
+                      {"lj_r_table.r1",
+                       "lj_r_table.r2",
+                       "lj_r_table.r3",
+                       "lj_r_table.k2",
+                       "lj_l_table.k2",
+                       "lj_l_table.l1",
+                       "lj_l_table.l2",
+                       "lj_l_table.l4"})
+                  .build(context);
+    WRAP_FOR_JOIN_TEST_BEGIN
+    executeAndAssertColumnsEqual(
+        request,
+        {
+            toVec<String>(
+                {"apple",
+                 "apple",
+                 "banana",
+                 "banana",
+                 "cat",
+                 "cat",
+                 "cat",
+                 "dog",
+                 "dog",
+                 "dog",
+                 "dog",
+                 "elephant",
+                 "elephant",
+                 "elephant",
+                 "frag"}),
+            toVec<String>(
+                {"aaa",
+                 "aaa",
+                 "bbb",
+                 "bbb",
+                 "ccc",
+                 "ccc",
+                 "ccc",
+                 "ddd",
+                 "ddd",
+                 "ddd",
+                 "ddd",
+                 "eee",
+                 "eee",
+                 "eee",
+                 "fff"}),
+            toVec<Int32>({1, 1, 2, 2, 3, 3, 3, 4, 4, 4, 4, 5, 5, 5, 6}),
+            toVec<Int16>({1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 2, 2, 2, 5}),
+            toNullableVec<Int16>({1, 1, 1, 1, 2, 2, 2, 3, 3, 3, 3, 2, 2, 2, {}}),
+            toNullableVec<String>(
+                {"AAA", "KKK", "AAA", "KKK", "CCC", "LLL", "III", "FFF", "JJJ", "HHH", "GGG", "CCC", "LLL", "III", {}}),
+            toNullableVec<Int32>({1, 9, 1, 9, 3, 10, 7, 6, 8, 6, 6, 3, 10, 7, {}}),
+            toNullableVec<Int64>({3, 0, 3, 0, 2, 6, 4, 3, 5, {}, 3, 2, 6, 4, {}}),
+        });
+    WRAP_FOR_JOIN_TEST_END
+
+    // Has other condition: lj_l_table left join lj_r_table
     request = context.scan("test_db", "lj_l_table")
                   .join(
                       context.scan("test_db", "lj_r_table"),
@@ -2343,6 +2388,62 @@ try
             toVec<Int32>({1, 1, 2, 3, 4, 5, 6, 6, 6, 7, 8, 9, 10, 10}),
             toNullableVec<Int64>({3, 3, 1, 2, 0, 2, 3, 3, {}, 4, 5, 0, 6, 6}),
         });
+    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
+
+    // Has other condition: lj_r_table left join lj_l_table
+    request = context.scan("test_db", "lj_r_table")
+                  .join(
+                      context.scan("test_db", "lj_l_table"),
+                      tipb::JoinType::TypeLeftOuterJoin,
+                      {col("k2"), col("k1")},
+                      {},
+                      {},
+                      {gt(col("lj_l_table.l4"), col("lj_r_table.r3"))},
+                      {})
+                  .project(
+                      {"lj_r_table.r1",
+                       "lj_r_table.r2",
+                       "lj_r_table.r3",
+                       "lj_r_table.k2",
+                       "lj_l_table.k2",
+                       "lj_l_table.l1",
+                       "lj_l_table.l2",
+                       "lj_l_table.l4"})
+                  .build(context);
+    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
+    executeAndAssertColumnsEqual(
+        request,
+        {
+            toVec<String>({"apple", "banana", "cat", "cat", "dog", "elephant", "frag"}),
+            toVec<String>({"aaa", "bbb", "ccc", "ccc", "ddd", "eee", "fff"}),
+            toVec<Int32>({1, 2, 3, 3, 4, 5, 6}),
+            toVec<Int16>({1, 1, 2, 2, 3, 2, 5}),
+            toNullableVec<Int16>({1, 1, 2, 2, 3, 2, {}}),
+            toNullableVec<String>({"AAA", "AAA", "LLL", "III", "JJJ", "LLL", {}}),
+            toNullableVec<Int32>({1, 1, 10, 7, 8, 10, {}}),
+            toNullableVec<Int64>({3, 3, 6, 4, 5, 6, {}}),
+        });
+    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, LeftJoinAggWithOtherCondition)
+try
+{
+    auto request
+        = context.scan("test_db", "l_table")
+              .join(
+                  context.scan("test_db", "r_table"),
+                  tipb::JoinType::TypeLeftOuterJoin,
+                  {col("join_c")},
+                  {},
+                  {},
+                  {And(lt(col("l_table.s"), col("r_table.s")), eq(col("l_table.join_c"), col("r_table.join_c")))},
+                  {})
+              .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
+              .build(context);
+    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
+    ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request, 2));
     WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
 }
 CATCH

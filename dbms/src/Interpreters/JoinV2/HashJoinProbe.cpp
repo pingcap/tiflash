@@ -364,7 +364,7 @@ Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorke
         for (size_t i = 0; i < right_columns; ++i)
             added_columns[i] = wd.result_block.safeGetByPosition(left_columns + i).column->assumeMutable();
         for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
-            RUNTIME_CHECK(added_columns[column_index]->isColumnNullable() == is_nullable);
+            RUNTIME_CHECK(added_columns.at(column_index)->isColumnNullable() == is_nullable);
     }
 
     Stopwatch watch;
@@ -381,7 +381,6 @@ Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorke
             context,
             wd,
             added_columns);
-
     wd.probe_hash_table_time += watch.elapsedFromLastTime();
 
     if constexpr (late_materialization)
