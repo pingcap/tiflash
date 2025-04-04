@@ -2190,11 +2190,11 @@ try
     context.addMockTable(
         {"test_db", "lj_r_table"},
         {
-            {"r1", TiDB::TP::TypeString},
-            {"k1", TiDB::TP::TypeLongLong},
-            {"k2", TiDB::TP::TypeShort},
-            {"r2", TiDB::TP::TypeString},
-            {"r3", TiDB::TP::TypeLong},
+            {"r1", TiDB::TP::TypeString, false},
+            {"k1", TiDB::TP::TypeLongLong, false},
+            {"k2", TiDB::TP::TypeShort, false},
+            {"r2", TiDB::TP::TypeString, false},
+            {"r3", TiDB::TP::TypeLong, false},
         },
         {
             toVec<String>("r1", {"apple", "banana", "cat", "dog", "elephant", "frag"}),
@@ -2207,12 +2207,12 @@ try
     context.addMockTable(
         {"test_db", "lj_l_table"},
         {
-            {"l1", TiDB::TP::TypeString},
-            {"k1", TiDB::TP::TypeLongLong},
-            {"k2", TiDB::TP::TypeShort},
-            {"l2", TiDB::TP::TypeLong},
-            {"l3", TiDB::TP::TypeLong},
-            {"l4", TiDB::TP::TypeLongLong},
+            {"l1", TiDB::TP::TypeString, false},
+            {"k1", TiDB::TP::TypeLongLong, true},
+            {"k2", TiDB::TP::TypeShort, true},
+            {"l2", TiDB::TP::TypeLong, false},
+            {"l3", TiDB::TP::TypeLong, true},
+            {"l4", TiDB::TP::TypeLongLong, true},
         },
         {
             toVec<String>("l1", {"AAA", "BBB", "CCC", "DDD", "EEE", "FFF", "GGG", "HHH", "III", "JJJ", "KKK", "LLL"}),
@@ -2286,7 +2286,7 @@ try
             toNullableVec<Int32>({1, 2, {}, 3, 5, {}, {}, {}, {}, 4, 3, 5, 4, 1, 2, 3, 5}),
             toNullableVec<Int16>({1, 1, {}, 2, 2, {}, {}, {}, {}, 3, 2, 2, 3, 1, 1, 2, 2}),
             toNullableVec<Int16>({1, 1, {}, 2, 2, 9, 2, 3, 3, 3, 2, 2, 3, 1, 1, 2, 2}),
-            toNullableVec<String>(
+            toVec<String>(
                 {"AAA",
                  "AAA",
                  "BBB",
@@ -2304,7 +2304,7 @@ try
                  "KKK",
                  "LLL",
                  "LLL"}),
-            toNullableVec<Int32>({1, 1, 2, 3, 3, 4, 5, 6, 6, 6, 7, 7, 8, 9, 9, 10, 10}),
+            toVec<Int32>({1, 1, 2, 3, 3, 4, 5, 6, 6, 6, 7, 7, 8, 9, 9, 10, 10}),
             toNullableVec<Int64>({3, 3, 1, 2, 2, 0, 2, 3, 3, {}, 4, 4, 5, 0, 0, 6, 6}),
         });
     WRAP_FOR_JOIN_TEST_END
@@ -2338,9 +2338,9 @@ try
             toNullableVec<Int32>({1, 2, {}, {}, {}, {}, {}, {}, {}, 3, 4, {}, 3, 5}),
             toNullableVec<Int16>({1, 1, {}, {}, {}, {}, {}, {}, {}, 2, 3, {}, 2, 2}),
             toNullableVec<Int16>({1, 1, {}, 2, 9, 2, 3, 3, 3, 2, 3, 1, 2, 2}),
-            toNullableVec<String>(
+            toVec<String>(
                 {"AAA", "AAA", "BBB", "CCC", "DDD", "EEE", "FFF", "GGG", "HHH", "III", "JJJ", "KKK", "LLL", "LLL"}),
-            toNullableVec<Int32>({1, 1, 2, 3, 4, 5, 6, 6, 6, 7, 8, 9, 10, 10}),
+            toVec<Int32>({1, 1, 2, 3, 4, 5, 6, 6, 6, 7, 8, 9, 10, 10}),
             toNullableVec<Int64>({3, 3, 1, 2, 0, 2, 3, 3, {}, 4, 5, 0, 6, 6}),
         });
     WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END

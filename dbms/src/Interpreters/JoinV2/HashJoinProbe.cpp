@@ -345,9 +345,12 @@ Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorke
     MutableColumns added_columns;
     if constexpr (late_materialization)
     {
-        for (auto [column_index, _] : row_layout.raw_key_column_indexes)
+        for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+        {
             added_columns.emplace_back(
                 wd.result_block.safeGetByPosition(left_columns + column_index).column->assumeMutable());
+            RUNTIME_CHECK(added_columns.back()->isColumnNullable() == is_nullable);
+        }
         for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
         {
             size_t column_index = row_layout.other_column_indexes[i].first;
@@ -360,6 +363,8 @@ Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorke
         added_columns.resize(right_columns);
         for (size_t i = 0; i < right_columns; ++i)
             added_columns[i] = wd.result_block.safeGetByPosition(left_columns + i).column->assumeMutable();
+        for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+            RUNTIME_CHECK(added_columns[column_index]->isColumnNullable() == is_nullable);
     }
 
     Stopwatch watch;
