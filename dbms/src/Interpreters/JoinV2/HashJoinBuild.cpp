@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/typeid_cast.h>
 #include <Interpreters/JoinV2/HashJoinBuild.h>
 
 namespace DB
@@ -30,7 +31,8 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     ConstNullMapPtr null_map,
     const HashJoinRowLayout & row_layout,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
-    JoinBuildWorkerData & wd)
+    JoinBuildWorkerData & wd,
+    bool check_lm_row_size)
 {
     using KeyGetterType = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
@@ -38,7 +40,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     static_assert(sizeof(HashValueType) <= sizeof(decltype(wd.hashes)::value_type));
 
     auto & key_getter = *static_cast<KeyGetterType *>(wd.key_getter.get());
-    key_getter.reset(key_columns, row_layout.raw_required_key_column_indexes.size());
+    key_getter.reset(key_columns, row_layout.raw_key_column_indexes.size());
 
     wd.row_sizes.clear();
     wd.row_sizes.resize_fill(rows, row_layout.other_column_fixed_size);
@@ -46,13 +48,32 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     /// The last partition is used to hold rows with null join key.
     constexpr size_t part_count = JOIN_BUILD_PARTITION_COUNT + 1;
     wd.partition_row_sizes.clear();
-    wd.partition_row_sizes.resize_fill(part_count, 0);
+    wd.partition_row_sizes.resize_fill_zero(part_count);
     wd.partition_row_count.clear();
-    wd.partition_row_count.resize_fill(part_count, 0);
+    wd.partition_row_count.resize_fill_zero(part_count);
     wd.partition_last_row_index.clear();
     wd.partition_last_row_index.resize_fill(part_count, -1);
 
-    for (const auto & [index, is_fixed_size] : row_layout.other_required_column_indexes)
+    if (check_lm_row_size)
+    {
+        wd.lm_row_count += rows;
+        for (size_t i = row_layout.other_column_count_for_other_condition; i < row_layout.other_column_indexes.size();
+             ++i)
+        {
+            size_t index = row_layout.other_column_indexes[i].first;
+            const auto & column = block.getByPosition(index).column;
+            if (const auto * column_string = typeid_cast<const ColumnString *>(column.get()))
+            {
+                wd.lm_row_size += column_string->getChars().size() + sizeof(UInt32) * column_string->size();
+            }
+            else
+            {
+                wd.lm_row_size += column->byteSize();
+            }
+        }
+    }
+
+    for (const auto & [index, is_fixed_size] : row_layout.other_column_indexes)
     {
         if (!is_fixed_size)
             block.getByPosition(index).column->countSerializeByteSize(wd.row_sizes);
@@ -129,7 +150,11 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
                 container.hashes.reserve(wd.partition_row_count[i]);
 
             wd.partition_row_sizes[i] = 0;
-            wd.row_count += wd.partition_row_count[i];
+            if (i != JOIN_BUILD_PARTITION_COUNT)
+            {
+                // Do not add the count of null rows
+                wd.row_count += wd.partition_row_count[i];
+            }
         }
     }
 
@@ -179,7 +204,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
             key_getter.serializeJoinKey(key, ptr);
             ptr += key_getter.getJoinKeyByteSize(key);
         }
-        for (const auto & [index, _] : row_layout.other_required_column_indexes)
+        for (const auto & [index, _] : row_layout.other_column_indexes)
         {
             if constexpr (has_null_map && !need_record_null_rows)
                 block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end - start, true);
@@ -204,7 +229,8 @@ void insertBlockToRowContainersType(
     ConstNullMapPtr null_map,
     const HashJoinRowLayout & row_layout,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
-    JoinBuildWorkerData & worker_data)
+    JoinBuildWorkerData & worker_data,
+    bool check_lm_row_size)
 {
 #define CALL(has_null_map, need_record_null_rows)                                       \
     insertBlockToRowContainersTypeImpl<KeyGetter, has_null_map, need_record_null_rows>( \
@@ -214,7 +240,8 @@ void insertBlockToRowContainersType(
         null_map,                                                                       \
         row_layout,                                                                     \
         multi_row_containers,                                                           \
-        worker_data);
+        worker_data,                                                                    \
+        check_lm_row_size);
 
     if (null_map)
     {
@@ -243,7 +270,8 @@ void insertBlockToRowContainers(
     ConstNullMapPtr null_map,
     const HashJoinRowLayout & row_layout,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
-    JoinBuildWorkerData & worker_data)
+    JoinBuildWorkerData & worker_data,
+    bool check_lm_row_size)
 {
     switch (method)
     {
@@ -258,7 +286,8 @@ void insertBlockToRowContainers(
             null_map,                                                                      \
             row_layout,                                                                    \
             multi_row_containers,                                                          \
-            worker_data);                                                                  \
+            worker_data,                                                                   \
+            check_lm_row_size);                                                            \
         break;
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M

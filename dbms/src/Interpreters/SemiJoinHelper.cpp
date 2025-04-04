@@ -415,7 +415,7 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
         left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
         if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
         {
-            left_semi_null_map->resize_fill(probe_rows, 0);
+            left_semi_null_map->resize_fill_zero(probe_rows);
         }
         else
         {
@@ -449,21 +449,10 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
             }
             else
             {
-                switch (result)
-                {
-                case SemiJoinResultType::FALSE_VALUE:
-                    left_semi_column_data->push_back(0);
-                    left_semi_null_map->push_back(0);
-                    break;
-                case SemiJoinResultType::TRUE_VALUE:
-                    left_semi_column_data->push_back(1);
-                    left_semi_null_map->push_back(0);
-                    break;
-                case SemiJoinResultType::NULL_VALUE:
-                    left_semi_column_data->push_back(0);
-                    left_semi_null_map->push_back(1);
-                    break;
-                }
+                Int8 res = result == SemiJoinResultType::TRUE_VALUE ? 1 : 0;
+                UInt8 is_null = result == SemiJoinResultType::NULL_VALUE ? 1 : 0;
+                left_semi_column_data->push_back(res);
+                left_semi_null_map->push_back(is_null);
             }
         }
     }
