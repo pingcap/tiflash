@@ -832,8 +832,6 @@ std::tuple<ContextPtr, grpc::Status> FlashService::createDBContext(const grpc::S
         auto tmp_context = std::make_shared<Context>(*context);
         tmp_context->setGlobalContext(*context);
 
-        // TODO set cte manager here
-
         /// Set a bunch of client information.
         std::string user = getClientMetaVarWithDefault(grpc_context, "user", "default");
         std::string password = getClientMetaVarWithDefault(grpc_context, "password", "");

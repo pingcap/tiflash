@@ -104,11 +104,6 @@ String MPPTaskId::toString() const
                        : fmt::format("MPP<{},task_id:{}>", gather_id.toString(), task_id);
 }
 
-String MPPTaskId::getQueryIDForCTE() const
-{
-    return isUnknown() ? "" : gather_id.toStringForQueryID();
-}
-
 const MPPTaskId MPPTaskId::unknown_mpp_task_id = MPPTaskId{};
 
 constexpr UInt64 MAX_UINT64 = std::numeric_limits<UInt64>::max();

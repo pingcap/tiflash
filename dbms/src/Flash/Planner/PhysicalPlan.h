@@ -17,13 +17,10 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <DataStreams/IBlockInputStream.h>
-#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Planner/PhysicalPlanNode.h>
 #include <common/logger_useful.h>
 #include <tipb/executor.pb.h>
 #include <tipb/select.pb.h>
-
-#include <memory>
 
 namespace DB
 {

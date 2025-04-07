@@ -108,7 +108,7 @@ struct MPPGatherId
         , query_id(task_meta)
     {}
 
-    String toStringForQueryID() const
+    inline String toStringForQueryID() const
     {
         return fmt::format(
             "query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}",
@@ -118,7 +118,7 @@ struct MPPGatherId
             query_id.start_ts);
     }
 
-    String toString() const { return fmt::format("gather_id:{}, {}", gather_id, this->toStringForQueryID()); }
+    inline String toString() const { return fmt::format("gather_id:{}, {}", gather_id, this->toStringForQueryID()); }
 
     bool hasMeaningfulGatherId() const { return gather_id > 0; }
     bool operator==(const MPPGatherId & rid) const;
@@ -168,8 +168,8 @@ struct MPPTaskId
 
     bool isUnknown() const { return task_id == unknown_task_id; }
 
+    inline String getQueryIDForCTE() const { return isUnknown() ? "" : gather_id.toStringForQueryID(); }
     String toString() const;
-    String getQueryIDForCTE() const;
     static const MPPTaskId unknown_mpp_task_id;
     static const MPPQueryId Max_Query_Id;
 

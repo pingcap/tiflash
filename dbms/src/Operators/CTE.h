@@ -32,7 +32,6 @@ enum class FetchStatus
     Cancelled
 };
 
-// TODO track memory with allocator
 class CTE : public NotifyFuture
 {
 public:

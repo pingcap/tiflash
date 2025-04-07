@@ -36,7 +36,7 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
         return OperatorStatus::FINISHED;
     }
     this->total_rows += block.rows();
-    this->cte->pushBlock(block); // TODO handle spill
+    this->cte->pushBlock(block);
     return OperatorStatus::NEED_INPUT;
 }
 } // namespace DB
