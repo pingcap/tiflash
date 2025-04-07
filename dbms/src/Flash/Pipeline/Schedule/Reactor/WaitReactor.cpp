@@ -31,6 +31,15 @@ WaitReactor::WaitReactor(TaskScheduler & scheduler_)
 {
     GET_METRIC(tiflash_pipeline_scheduler, type_waiting_tasks_count).Set(0);
     GET_METRIC(tiflash_pipeline_scheduler, type_wait_for_notify_tasks_count).Set(0);
+    GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_table_scan_read).Set(0);
+    GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_shared_queue_read).Set(0);
+    GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_spill_bucket_read).Set(0);
+    GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_grpc_recv_read).Set(0);
+    GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_tunnel_sender_write).Set(0);
+    GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_join_build).Set(0);
+    GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_join_probe).Set(0);
+    GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_result_queue_write).Set(0);
+    GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_shared_queue_write).Set(0);
     thread = std::thread(&WaitReactor::loop, this);
 }
 
