@@ -321,7 +321,7 @@ public:
 
     bool has_rank_or_dense_rank = false;
 
-    // When preceding and following boundary type are all unbounded we can apply shortcut for agg functions.
+    // When all rows in same partition share one result, we set this var to true
     bool support_batch_calculate = false;
 
     std::unique_ptr<Arena> arena;
