@@ -56,6 +56,11 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr, IColumn & to, Arena *) const override { to.insertDefault(); }
 
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict, IColumn & to, size_t num) const override
+    {
+        to.insertManyDefaults(num);
+    }
+
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 

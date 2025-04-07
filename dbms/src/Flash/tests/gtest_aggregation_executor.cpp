@@ -86,7 +86,7 @@ public:
              {col_name[1], TiDB::TP::TypeString},
              {col_name[2], TiDB::TP::TypeString},
              {col_name[3], TiDB::TP::TypeDouble},
-             {col_name[4], TiDB::TP::TypeLong}},
+             {col_name[4], TiDB::TP::TypeLong, false}},
             /* columns= */
             {toNullableVec<Int32>(col_name[0], col_age),
              toNullableVec<String>(col_name[1], col_gender),
@@ -102,17 +102,17 @@ public:
 
         context.addMockTable(
             {"test_db", "test_table"},
-            {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+            {{"s1", TiDB::TP::TypeLongLong, false}, {"s2", TiDB::TP::TypeLongLong, false}},
             {toVec<Int64>("s1", {1, 2, 3}), toVec<Int64>("s2", {1, 2, 3})});
 
         context.addMockTable(
             {"test_db", "test_table_not_null"},
             {
-                {"c1_i64", TiDB::TP::TypeLongLong},
-                {"c2_f64", TiDB::TP::TypeDouble},
-                {"c3_str", TiDB::TP::TypeString},
-                {"c4_str", TiDB::TP::TypeString},
-                {"c5_date_time", TiDB::TP::TypeDatetime},
+                {"c1_i64", TiDB::TP::TypeLongLong, false},
+                {"c2_f64", TiDB::TP::TypeDouble, false},
+                {"c3_str", TiDB::TP::TypeString, false},
+                {"c4_str", TiDB::TP::TypeString, false},
+                {"c5_date_time", TiDB::TP::TypeDatetime, false},
             },
             {
                 toVec<Int64>("c1_i64", {1, 2, 2}),
@@ -993,14 +993,14 @@ try
 {
     context.addMockTable(
         {"test_db", "empty_table"},
-        {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+        {{"s1", TiDB::TP::TypeLongLong, false}, {"s2", TiDB::TP::TypeLongLong, false}},
         {toVec<Int64>("s1", {}), toVec<Int64>("s2", {})});
     context.addExchangeReceiver(
         "empty_recv",
-        {{"s1", TiDB::TP::TypeLongLong}, {"s2", TiDB::TP::TypeLongLong}},
+        {{"s1", TiDB::TP::TypeLongLong, false}, {"s2", TiDB::TP::TypeLongLong, false}},
         {toVec<Int64>("s1", {}), toVec<Int64>("s2", {})},
         5,
-        {{"s2", TiDB::TP::TypeLongLong}});
+        {{"s2", TiDB::TP::TypeLongLong, false}});
 
     auto request = context.scan("test_db", "empty_table").aggregation({Max(col("s1"))}, {col("s2")}).build(context);
     executeAndAssertColumnsEqual(request, {});

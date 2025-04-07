@@ -63,6 +63,20 @@ public:
             static_cast<ColumnType &>(to).insertDefault();
     }
 
+    void batchInsertSameResultInto(IColumn & to, size_t num) const
+    {
+        if (has())
+        {
+            auto & container = static_cast<ColumnType &>(to).getData();
+            container.resize_fill(num + container.size(), value);
+        }
+        else
+        {
+            static_cast<ColumnType &>(to).insertManyDefaults(num);
+        }
+    }
+
+
     void write(WriteBuffer & buf, const IDataType & /*data_type*/) const
     {
         writeBinary(has(), buf);
@@ -241,6 +255,14 @@ public:
             static_cast<ColumnString &>(to).insertDataWithTerminatingZero(getData(), size);
         else
             static_cast<ColumnString &>(to).insertDefault();
+    }
+
+    void batchInsertSameResultInto(IColumn & to, size_t num) const
+    {
+        if (has())
+            static_cast<ColumnString &>(to).batchInsertDataWithTerminatingZero(num, getData(), size);
+        else
+            static_cast<ColumnString &>(to).insertManyDefaults(num);
     }
 
     void setCollators(const TiDB::TiDBCollators & collators_)
@@ -455,6 +477,16 @@ public:
             to.insert(value);
         else
             to.insertDefault();
+    }
+
+    void batchInsertSameResultInto(IColumn & to, size_t num) const
+    {
+        if (has())
+        {
+            to.insertMany(value, num);
+        }
+        else
+            to.insertManyDefaults(num);
     }
 
     void write(WriteBuffer & buf, const IDataType & data_type) const
@@ -795,6 +827,11 @@ public:
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         this->data(place).insertResultInto(to);
+    }
+
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        this->data(place).batchInsertSameResultInto(to, num);
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }

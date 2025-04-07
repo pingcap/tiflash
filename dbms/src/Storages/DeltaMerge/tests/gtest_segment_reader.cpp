@@ -29,7 +29,6 @@
 #include <Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_test_basic.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 
