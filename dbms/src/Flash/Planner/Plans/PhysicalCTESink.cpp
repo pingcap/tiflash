@@ -14,6 +14,7 @@
 
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalCTESink.h>
+#include <Interpreters/Context.h>
 #include <Operators/CTE.h>
 #include <Operators/CTESinkOp.h>
 
@@ -27,7 +28,6 @@ PhysicalPlanNodePtr PhysicalCTESink::build(
     const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child)
 {
-    // TODO CTEManager: get cte from CTEManager
     RUNTIME_CHECK(child);
 
     auto physical_cte_sink = std::make_shared<PhysicalCTESink>(
@@ -43,14 +43,16 @@ PhysicalPlanNodePtr PhysicalCTESink::build(
 void PhysicalCTESink::buildPipelineExecGroupImpl(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
-    Context & /*context*/,
+    Context & context,
     size_t /*concurrency*/)
 {
     size_t partition_id = 0;
+    String query_id_and_cte_id_prefix = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
     group_builder.transform([&](auto & builder) {
-        std::shared_ptr<CTE> cte; // TODO CTEManager: get it from CTEManager
-        builder.setSinkOp(std::make_unique<CTESinkOp>(exec_context, log->identifier(), cte));
-        ++partition_id;
+        String query_id_and_cte_id = fmt::format("{}_{}", query_id_and_cte_id_prefix, partition_id);
+        builder.setSinkOp(
+            std::make_unique<CTESinkOp>(exec_context, log->identifier(), query_id_and_cte_id, context.getCTEManager()));
+        partition_id++;
     });
 }
 

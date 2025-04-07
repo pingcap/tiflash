@@ -21,6 +21,8 @@
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
+#include <Flash/Planner/Plans/PhysicalCTESink.h>
+#include <Flash/Planner/Plans/PhysicalCTESource.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
@@ -40,8 +42,6 @@
 #include <Flash/Planner/optimize.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
-
-#include "Flash/Planner/Plans/PhysicalCTESource.h"
 
 namespace DB
 {
@@ -241,11 +241,18 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         pushBack(PhysicalExpand2::build(context, executor_id, log, executor->expand2(), popBack()));
         break;
 
-        // TODO this is tmp code for tipb::ExecType::CTESource
-        GET_METRIC(tiflash_coprocessor_executor_count, type_cte_source).Increment();
-        pushBack(PhysicalCTESource::build(context, executor_id, log, fine_grained_shuffle));
-        // TODO this is tmp code for tipb::ExecType::CTESink
-        GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
+        {
+            // This is tmp code for tipb::ExecType::CTESource
+            auto fine_grained_shuffle = FineGrainedShuffle(executor);
+            GET_METRIC(tiflash_coprocessor_executor_count, type_cte_source).Increment();
+            pushBack(PhysicalCTESource::build(context, executor_id, log, fine_grained_shuffle));
+        }
+        {
+            // This is tmp code for tipb::ExecType::CTESink
+            auto fine_grained_shuffle = FineGrainedShuffle(executor);
+            GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
+            pushBack(PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack()));
+        }
     }
     // TODO add tipb::ExecType::CTESource
     // TODO add tipb::ExecType::CTESink

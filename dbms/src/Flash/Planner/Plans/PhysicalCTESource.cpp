@@ -25,8 +25,7 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     const Context & context,
     const String & executor_id,
     const LoggerPtr & log,
-    const FineGrainedShuffle & fine_grained_shuffle,
-    PipelineExecutorContextPtr exec_context_ptr
+    const FineGrainedShuffle & fine_grained_shuffle
     /* TODO tipb::ExchangeReceiver */)
 {
     // TODO tipb for cte: need output schema field in tipb for cte source
@@ -38,8 +37,7 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
         schema,
         fine_grained_shuffle,
         log->identifier(),
-        Block(schema),
-        exec_context_ptr);
+        Block(schema));
     return physical_exchange_receiver;
 }
 
@@ -52,12 +50,16 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
     if (fine_grained_shuffle.enabled())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
 
-    String query_id_and_cte_id_prefix = fmt::format("{}_{}", this->exec_context_ptr->getQueryIdForCTE(), this->cte_id);
+    String query_id_and_cte_id_prefix = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
 
     for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
     {
-        group_builder.addConcurrency(
-            std::make_unique<CTESourceOp>(exec_context, log->identifier(), this->exec_context_ptr->));
+        String query_id_and_cte_id = fmt::format("{}_{}", query_id_and_cte_id_prefix, partition_id);
+        group_builder.addConcurrency(std::make_unique<CTESourceOp>(
+            exec_context,
+            log->identifier(),
+            query_id_and_cte_id,
+            context.getCTEManager()));
     }
     context.getDAGContext()->addInboundIOProfileInfos(this->executor_id, group_builder.getCurIOProfileInfos());
 }

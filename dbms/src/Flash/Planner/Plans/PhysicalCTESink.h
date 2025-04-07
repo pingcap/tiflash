@@ -49,5 +49,7 @@ private:
         PipelineExecGroupBuilder & group_builder,
         Context & context,
         size_t /*concurrency*/) override;
+
+    UInt64 cte_id = 0; // TODO initialize it from tipb
 };
 } // namespace DB

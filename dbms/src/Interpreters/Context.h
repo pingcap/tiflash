@@ -36,6 +36,8 @@
 #include <mutex>
 #include <thread>
 
+#include "Flash/Mpp/CTEManager.h"
+
 
 namespace pingcap
 {
@@ -213,6 +215,8 @@ public:
     String getFlagsPath() const;
     String getUserFilesPath() const;
     PathPool & getPathPool() const;
+
+    CTEManager * getCTEManager() const;
 
     void setPath(const String & path);
     void setTemporaryPath(const String & path);

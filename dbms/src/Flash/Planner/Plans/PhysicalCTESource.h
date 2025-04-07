@@ -29,8 +29,7 @@ public:
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const FineGrainedShuffle & fine_grained_shuffle,
-        PipelineExecutorContextPtr exec_context_ptr);
+        const FineGrainedShuffle & fine_grained_shuffle);
 
     // TODO to partition data, we may need to call `ExchangeSenderInterpreterHelper::genPartitionColCollators` like PhysicalExchangeSender
     PhysicalCTESource(
@@ -38,11 +37,9 @@ public:
         const NamesAndTypes & schema_,
         const FineGrainedShuffle & fine_grained_shuffle,
         const String & req_id,
-        const Block & sample_block_,
-        PipelineExecutorContextPtr exec_context_ptr_)
+        const Block & sample_block_)
         : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, fine_grained_shuffle, req_id)
         , sample_block(sample_block_)
-        , exec_context_ptr(exec_context_ptr_)
     {}
 
     void finalizeImpl(const Names & parent_require) override;
@@ -60,6 +57,5 @@ private:
     Block sample_block;
     String query_id_and_cte_id;
     UInt64 cte_id = 0; // TODO initialize it from tipb
-    PipelineExecutorContextPtr exec_context_ptr;
 };
 } // namespace DB

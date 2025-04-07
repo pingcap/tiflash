@@ -230,7 +230,7 @@ struct ContextShared
 
     std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
 
-    std::unique_ptr<CTEManager> cte_manager;
+    std::unique_ptr<CTEManager> cte_manager; // TODO initialize it
 
     ContextShared(
         std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_,
@@ -572,6 +572,12 @@ PathPool & Context::getPathPool() const
 {
     auto lock = getLock();
     return shared->path_pool;
+}
+
+CTEManager * Context::getCTEManager() const
+{
+    auto lock = getLock();
+    return this->shared->cte_manager.get();
 }
 
 void Context::setPath(const String & path)
