@@ -14,13 +14,13 @@
 
 
 #include <Common/CurrentMetrics.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/VersionChain/tests/mvcc_test_utils.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/PathPool.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <benchmark/benchmark.h>
 
 using namespace DB;

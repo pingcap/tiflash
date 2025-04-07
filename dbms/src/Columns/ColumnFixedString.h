@@ -54,25 +54,6 @@ private:
         , chars(src.chars.begin(), src.chars.end())
         , n(src.n){};
 
-    void countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size) const;
-
-    template <bool has_nullmap>
-    void countSerializeByteSizeForColumnArrayImpl(
-        PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets,
-        const NullMap * nullmap) const;
-
-    template <bool has_null, bool has_nullmap>
-    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const NullMap * nullmap) const;
-
-    template <bool has_null, bool has_nullmap>
-    void serializeToPosForColumnArrayImpl(
-        PaddedPODArray<char *> & pos,
-        size_t start,
-        size_t length,
-        const IColumn::Offsets & array_offsets,
-        const NullMap * nullmap) const;
-
 public:
     std::string getName() const override { return "FixedString(" + std::to_string(n) + ")"; }
     const char * getFamilyName() const override { return "FixedString"; }
@@ -105,7 +86,8 @@ public:
 
     void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
 
-    void insertSelectiveFrom(const IColumn & src_, const Offsets & selective_offsets) override;
+    void insertSelectiveRangeFrom(const IColumn & src_, const Offsets & selective_offsets, size_t start, size_t length)
+        override;
 
     void insertData(const char * pos, size_t length) override;
 
@@ -123,32 +105,27 @@ public:
 
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
+    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
     void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & byte_size,
-        const NullMap * /*nullmap*/,
-        const TiDB::TiDBCollatorPtr & collator) const override
-    {
-        // collator->sortKey() will change the string length, which may exceeds n.
-        RUNTIME_CHECK_MSG(
-            !collator,
-            "{} doesn't support countSerializeByteSizeForCmp when collator is not null",
-            getName());
-        countSerializeByteSizeImpl(byte_size);
-    }
-    void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
-    {
-        countSerializeByteSizeImpl(byte_size);
-    }
+        const NullMap * nullmap,
+        const TiDB::TiDBCollatorPtr & collator) const override;
 
+    void countSerializeByteSizeForColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets) const override;
     void countSerializeByteSizeForCmpColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets,
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator) const override;
-    void countSerializeByteSizeForColumnArray(
+    template <bool has_nullmap>
+    void countSerializeByteSizeForColumnArrayImpl(
         PaddedPODArray<size_t> & byte_size,
-        const IColumn::Offsets & array_offsets) const override;
+        const IColumn::Offsets & array_offsets,
+        const NullMap * nullmap) const;
 
+    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
     void serializeToPosForCmp(
         PaddedPODArray<char *> & pos,
         size_t start,
@@ -157,8 +134,15 @@ public:
         const NullMap * nullmap,
         const TiDB::TiDBCollatorPtr & collator,
         String *) const override;
-    void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
+    template <bool has_null, bool has_nullmap>
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const NullMap * nullmap) const;
 
+    void serializeToPosForColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const IColumn::Offsets & array_offsets) const override;
     void serializeToPosForCmpColumnArray(
         PaddedPODArray<char *> & pos,
         size_t start,
@@ -168,32 +152,27 @@ public:
         const IColumn::Offsets & array_offsets,
         const TiDB::TiDBCollatorPtr & collator,
         String *) const override;
-    void serializeToPosForColumnArray(
+    template <bool has_null, bool has_nullmap>
+    void serializeToPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
-        bool has_null,
-        const IColumn::Offsets & array_offsets) const override;
+        const IColumn::Offsets & array_offsets,
+        const NullMap * nullmap) const;
 
-    void deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override
-    {
-        deserializeAndInsertFromPos(pos, use_nt_align_buffer);
-    }
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
 
-    void deserializeForCmpAndInsertFromPosColumnArray(
-        PaddedPODArray<char *> & pos,
-        const IColumn::Offsets & array_offsets,
-        bool use_nt_align_buffer) override
-    {
-        deserializeAndInsertFromPosForColumnArray(pos, array_offsets, use_nt_align_buffer);
-    }
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override;
 
     void flushNTAlignBuffer() override {}
+
+    void deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const override { IColumn::advancePosByOffset(pos, n); }
+
+    void deserializeAndAdvancePosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
+        const override;
 
     void updateHashWithValue(size_t index, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
 

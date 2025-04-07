@@ -1965,7 +1965,7 @@ public:
     std::pair<BlockInputStreamPtr, DMContextPtr> createComputeNodeStream(
         const SegmentPtr & write_node_segment,
         const ColumnDefines & columns_to_read,
-        const PushDownExecutorPtr & filter,
+        const PushDownExecutorPtr & executor,
         const ScanContextPtr & read_scan_context = nullptr)
     {
         auto write_dm_context = dmContext();
@@ -2002,7 +2002,7 @@ public:
             columns_to_read,
             cn_segment_snap,
             {write_node_segment->getRowKeyRange()},
-            filter,
+            executor,
             std::numeric_limits<UInt64>::max(),
             DEFAULT_BLOCK_SIZE);
 
@@ -2230,9 +2230,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
     }
     {
         auto * file_cache = FileCache::instance();
@@ -2252,9 +2252,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 1);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 0);
     }
 }
 CATCH
@@ -2281,9 +2281,9 @@ try
                     colVecFloat32("[5, 6)"),
                 }));
 
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+            ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+            ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+            ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
         }
         {
             auto * file_cache = FileCache::instance();
@@ -2303,9 +2303,9 @@ try
                     colVecFloat32("[5, 6)"),
                 }));
 
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 1);
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 0);
+            ASSERT_EQ(scan_context->vector_idx_load_from_cache, 1);
+            ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+            ASSERT_EQ(scan_context->vector_idx_load_from_s3, 0);
         }
     }
     {
@@ -2322,9 +2322,9 @@ try
                     colVecFloat32("[5, 6)"),
                 }));
 
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+            ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+            ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+            ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
         }
         {
             auto * file_cache = FileCache::instance();
@@ -2344,9 +2344,9 @@ try
                     colVecFloat32("[5, 6)"),
                 }));
 
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 1);
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-            ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 0);
+            ASSERT_EQ(scan_context->vector_idx_load_from_cache, 1);
+            ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+            ASSERT_EQ(scan_context->vector_idx_load_from_s3, 0);
         }
     }
 }
@@ -2371,9 +2371,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
     }
     {
         auto * file_cache = FileCache::instance();
@@ -2402,9 +2402,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
     }
     {
         // Read again, we should be reading from memory cache.
@@ -2419,9 +2419,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 1);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 0);
     }
 }
 CATCH
@@ -2445,9 +2445,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
     }
     {
         auto * file_cache = FileCache::instance();
@@ -2481,9 +2481,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
     }
     {
         // Read again, we should be reading from memory cache.
@@ -2498,9 +2498,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 1);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 0);
     }
 }
 CATCH
@@ -2524,9 +2524,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
     }
     {
         auto * file_cache = FileCache::instance();
@@ -2548,9 +2548,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
     }
     {
         // Read again, we should be reading from memory cache.
@@ -2565,9 +2565,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 1);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 0);
     }
 }
 CATCH
@@ -2591,9 +2591,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
     }
     {
         auto * file_cache = FileCache::instance();
@@ -2621,9 +2621,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
     }
     {
         // Read again, we should be reading from memory cache.
@@ -2638,9 +2638,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 1);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 0);
     }
 }
 CATCH
@@ -2668,9 +2668,9 @@ try
                 colVecFloat32("[5, 6)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
 
         ASSERT_EQ(PerfContext::file_cache.fg_download_from_s3, 1);
         ASSERT_EQ(PerfContext::file_cache.fg_wait_download_from_s3, 0);
@@ -2690,9 +2690,9 @@ try
                 colVecFloat32("[7, 8)"),
             }));
 
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_cache, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_disk, 0);
-        ASSERT_EQ(scan_context->total_vector_idx_load_from_s3, 1);
+        ASSERT_EQ(scan_context->vector_idx_load_from_cache, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_disk, 0);
+        ASSERT_EQ(scan_context->vector_idx_load_from_s3, 1);
 
         ASSERT_EQ(PerfContext::file_cache.fg_download_from_s3, 0);
         ASSERT_EQ(PerfContext::file_cache.fg_wait_download_from_s3, 1);

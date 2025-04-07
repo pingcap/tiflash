@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Filter/ColumnRange_fwd.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache_fwd.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 
 namespace DB::DM
 {
@@ -31,25 +32,30 @@ private:
     const ColumnRangePtr column_range;
     // Global local index cache
     const LocalIndexCachePtr local_index_cache;
+    const ScanContextPtr scan_context;
 
 public:
     InvertedIndexReaderFromSegment(
         const SegmentSnapshotPtr & snapshot_,
         const ColumnRangePtr & column_range_,
-        const LocalIndexCachePtr & local_index_cache_)
+        const LocalIndexCachePtr & local_index_cache_,
+        const ScanContextPtr & scan_context_)
         : snapshot(snapshot_)
         , column_range(column_range_)
         , local_index_cache(local_index_cache_)
+        , scan_context(scan_context_)
     {}
 
     static BitmapFilterPtr loadStable(
         const SegmentSnapshotPtr & snapshot,
         const ColumnRangePtr & column_range,
-        const LocalIndexCachePtr & local_index_cache);
+        const LocalIndexCachePtr & local_index_cache,
+        const ScanContextPtr & scan_context);
     static BitmapFilterPtr loadDelta(
         const SegmentSnapshotPtr & snapshot,
         const ColumnRangePtr & column_range,
-        const LocalIndexCachePtr & local_index_cache);
+        const LocalIndexCachePtr & local_index_cache,
+        const ScanContextPtr & scan_context);
 
     ~InvertedIndexReaderFromSegment() = default;
 

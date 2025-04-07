@@ -166,19 +166,19 @@ String ScanContext::toJson() const
     };
     json->set("region_num_of_instance", to_json_array(region_num_of_instance));
 
-    if (total_vector_idx_load_from_cache.load() //
-            + total_vector_idx_load_from_disk.load() //
-            + total_vector_idx_load_from_s3.load()
+    if (vector_idx_load_from_cache.load() //
+            + vector_idx_load_from_disk.load() //
+            + vector_idx_load_from_s3.load()
         > 0)
     {
         Poco::JSON::Object::Ptr vec_idx = new Poco::JSON::Object();
-        vec_idx->set("tot_load", total_vector_idx_load_time_ms.load());
-        vec_idx->set("load_s3", total_vector_idx_load_from_s3.load());
-        vec_idx->set("load_disk", total_vector_idx_load_from_disk.load());
-        vec_idx->set("load_cache", total_vector_idx_load_from_cache.load());
-        vec_idx->set("tot_search", total_vector_idx_search_time_ms.load());
-        vec_idx->set("read_vec", total_vector_idx_read_vec_time_ms.load());
-        vec_idx->set("read_others", total_vector_idx_read_others_time_ms.load());
+        vec_idx->set("tot_load", vector_idx_load_time_ms.load());
+        vec_idx->set("load_s3", vector_idx_load_from_s3.load());
+        vec_idx->set("load_disk", vector_idx_load_from_disk.load());
+        vec_idx->set("load_cache", vector_idx_load_from_cache.load());
+        vec_idx->set("tot_search", vector_idx_search_time_ms.load());
+        vec_idx->set("read_vec", vector_idx_read_vec_time_ms.load());
+        vec_idx->set("read_others", vector_idx_read_others_time_ms.load());
         json->set("vector_idx", vec_idx);
     }
 

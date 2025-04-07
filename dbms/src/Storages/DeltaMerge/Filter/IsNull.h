@@ -40,7 +40,10 @@ public:
         return rs_index ? rs_index->minmax->checkIsNull(start_pack, pack_count) : RSResults(pack_count, RSResult::Some);
     }
 
-    ColumnRangePtr buildSets(const LocalIndexInfosSnapshot &) override { return UnsupportedColumnRange::create(); }
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> &) override
+    {
+        return UnsupportedColumnRange::create();
+    }
 };
 
 } // namespace DB::DM

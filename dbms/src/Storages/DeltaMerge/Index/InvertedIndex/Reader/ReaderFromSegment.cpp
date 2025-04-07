@@ -23,18 +23,20 @@ namespace DB::DM
 BitmapFilterPtr InvertedIndexReaderFromSegment::loadStable(
     const SegmentSnapshotPtr & snapshot,
     const ColumnRangePtr & column_range,
-    const LocalIndexCachePtr & local_index_cache)
+    const LocalIndexCachePtr & local_index_cache,
+    const ScanContextPtr & scan_context)
 {
-    InvertedIndexReaderFromSegment reader(snapshot, column_range, local_index_cache);
+    InvertedIndexReaderFromSegment reader(snapshot, column_range, local_index_cache, scan_context);
     return reader.loadStableImpl();
 }
 
 BitmapFilterPtr InvertedIndexReaderFromSegment::loadDelta(
     const SegmentSnapshotPtr & snapshot,
     const ColumnRangePtr & column_range,
-    const LocalIndexCachePtr & local_index_cache)
+    const LocalIndexCachePtr & local_index_cache,
+    const ScanContextPtr & scan_context)
 {
-    InvertedIndexReaderFromSegment reader(snapshot, column_range, local_index_cache);
+    InvertedIndexReaderFromSegment reader(snapshot, column_range, local_index_cache, scan_context);
     return reader.loadDeltaImpl();
 }
 
@@ -43,7 +45,7 @@ BitmapFilterPtr InvertedIndexReaderFromSegment::loadStableImpl()
     BitmapFilterPtr bitmap_filter = std::make_shared<BitmapFilter>(0, false);
     for (const auto & dmfile : snapshot->stable->getDMFiles())
     {
-        InvertedIndexReaderFromDMFile reader(column_range, dmfile, local_index_cache);
+        InvertedIndexReaderFromDMFile reader(column_range, dmfile, local_index_cache, scan_context);
         if (auto sub_bf = reader.load(); sub_bf)
             bitmap_filter->append(*sub_bf);
         else
@@ -61,7 +63,8 @@ BitmapFilterPtr InvertedIndexReaderFromSegment::loadDeltaImpl()
     {
         if (auto * tiny_cf = cf->tryToTinyFile(); tiny_cf)
         {
-            InvertedIndexReaderFromColumnFileTiny reader(column_range, *tiny_cf, data_provider, local_index_cache);
+            InvertedIndexReaderFromColumnFileTiny
+                reader(column_range, *tiny_cf, data_provider, local_index_cache, scan_context);
             if (auto sub_bf = reader.load(); sub_bf)
                 bitmap_filter->append(*sub_bf);
             else

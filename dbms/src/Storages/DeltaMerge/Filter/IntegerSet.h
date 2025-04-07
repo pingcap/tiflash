@@ -69,9 +69,9 @@ public:
     // Only used in tests.
     virtual String toDebugString() = 0;
 
-    static IntegerSetPtr createValueSet(TypeIndex type_index, const Fields & values);
-    static IntegerSetPtr createLessRangeSet(TypeIndex type_index, const Field & max, bool not_included = true);
-    static IntegerSetPtr createGreaterRangeSet(TypeIndex type_index, const Field & min, bool not_included = true);
+    static IntegerSetPtr createValueSet(const DataTypePtr & type, const Fields & values);
+    static IntegerSetPtr createLessRangeSet(const DataTypePtr & type, const Field & max, bool not_included = true);
+    static IntegerSetPtr createGreaterRangeSet(const DataTypePtr & type, const Field & min, bool not_included = true);
 };
 
 class EmptySet final : public IntegerSet

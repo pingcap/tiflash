@@ -38,18 +38,18 @@ public:
         // 2. The decimal type is not supported.
         context.addMockDeltaMerge(
             {"test_db", "t0"},
-            {{"col0", TiDB::TP::TypeLongLong}},
+            {{"col0", TiDB::TP::TypeLongLong, false}},
             {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
 
         context.addMockDeltaMerge(
             {"test_db", "t1"},
-            {{"col0", TiDB::TP::TypeLongLong}, {"col1", TiDB::TP::TypeString}},
+            {{"col0", TiDB::TP::TypeLongLong, false}, {"col1", TiDB::TP::TypeString}},
             {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})},
              {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
 
         context.addMockDeltaMerge(
             {"test_db", "t2"},
-            {{"col0", TiDB::TP::TypeLongLong},
+            {{"col0", TiDB::TP::TypeLongLong, false},
              {"col1", TiDB::TP::TypeTiny},
              {"col2", TiDB::TP::TypeShort},
              {"col3", TiDB::TP::TypeLong},
@@ -80,12 +80,12 @@ public:
         }
         context.addMockDeltaMerge(
             {"test_db", "big_table"},
-            {{"key", TiDB::TP::TypeLongLong}, {"value", TiDB::TP::TypeString}},
+            {{"key", TiDB::TP::TypeLongLong, false}, {"value", TiDB::TP::TypeString}},
             {toVec<Int64>("key", key), toNullableVec<String>("value", value)});
 
         context.addMockDeltaMerge(
             {"test_db", "empty_table"},
-            {{"col0", TiDB::TP::TypeLongLong}},
+            {{"col0", TiDB::TP::TypeLongLong, false}},
             {toVec<Int32>("col0", {})});
     }
 
@@ -118,19 +118,19 @@ try
     for (auto keep_order : keep_order_opt)
     {
         auto request = context.scan("test_db", "t0", keep_order).build(context);
-        executeAndAssertColumnsEqual(request, {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
+        executeAndAssertColumnsEqual(request, {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
 
         request = context.scan("test_db", "t1", keep_order).build(context);
         executeAndAssertColumnsEqual(
             request,
-            {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})},
+            {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})},
              {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}, "col1-4", {}, "col1-6", "col1-7"})}});
 
         request = context.scan("test_db", "t2", keep_order).build(context);
 
         executeAndAssertColumnsEqual(
             request,
-            {toNullableVec<Int64>({1, 2, 3, 4, 5, 6, 7, 8, 9}),
+            {toVec<Int64>({1, 2, 3, 4, 5, 6, 7, 8, 9}),
              toNullableVec<Int8>(col_tinyint),
              toNullableVec<Int16>(col_smallint),
              toNullableVec<Int32>(col_int),
@@ -151,7 +151,7 @@ try
 
         // projection
         request = context.scan("test_db", "t1", keep_order).project({col("col0")}).build(context);
-        executeAndAssertColumnsEqual(request, {{toNullableVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
+        executeAndAssertColumnsEqual(request, {{toVec<Int64>("col0", {0, 1, 2, 3, 4, 5, 6, 7})}});
 
         request = context.scan("test_db", "t1", keep_order).project({col("col1")}).build(context);
         executeAndAssertColumnsEqual(
@@ -162,14 +162,14 @@ try
         request = context.scan("test_db", "t0", keep_order)
                       .filter(lt(col("col0"), lit(Field(static_cast<Int64>(4)))))
                       .build(context);
-        executeAndAssertColumnsEqual(request, {{toNullableVec<Int64>("col0", {0, 1, 2, 3})}});
+        executeAndAssertColumnsEqual(request, {{toVec<Int64>("col0", {0, 1, 2, 3})}});
 
         request = context.scan("test_db", "t1", keep_order)
                       .filter(lt(col("col0"), lit(Field(static_cast<Int64>(4)))))
                       .build(context);
         executeAndAssertColumnsEqual(
             request,
-            {{toNullableVec<Int64>("col0", {0, 1, 2, 3})},
+            {{toVec<Int64>("col0", {0, 1, 2, 3})},
              {toNullableVec<String>("col1", {"col1-0", "col1-1", "col1-2", {}})}});
     }
     WRAP_FOR_DM_TEST_END

@@ -39,17 +39,17 @@ public:
 
         context.addMockTable(
             {"test_db", "r_table"},
-            {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+            {{"s", TiDB::TP::TypeString, false}, {"join_c", TiDB::TP::TypeString, false}},
             {toVec<String>("s", {"banana", "banana"}), toVec<String>("join_c", {"apple", "banana"})});
 
         context.addMockTable(
             {"test_db", "r_table_2"},
-            {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+            {{"s", TiDB::TP::TypeString, false}, {"join_c", TiDB::TP::TypeString, false}},
             {toVec<String>("s", {"banana", "banana", "banana"}), toVec<String>("join_c", {"apple", "apple", "apple"})});
 
         context.addMockTable(
             {"test_db", "l_table"},
-            {{"s", TiDB::TP::TypeString}, {"join_c", TiDB::TP::TypeString}},
+            {{"s", TiDB::TP::TypeString, false}, {"join_c", TiDB::TP::TypeString, false}},
             {toVec<String>("s", {"banana", "banana"}), toVec<String>("join_c", {"apple", "banana"})});
 
         context.addExchangeReceiver(
