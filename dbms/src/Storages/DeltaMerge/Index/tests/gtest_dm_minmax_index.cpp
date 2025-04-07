@@ -2068,8 +2068,8 @@ try
     auto type = std::make_shared<DataTypeInt64>();
     auto data_type = makeNullable(type);
 
-    PaddedPODArray<UInt8> has_null_marks(1);
-    PaddedPODArray<UInt8> has_value_marks(1);
+    PaddedPODArray<UInt8> has_null_marks(1, 1);
+    PaddedPODArray<UInt8> has_value_marks(1, 1);
     MutableColumnPtr minmaxes = data_type->createColumn();
 
     auto column = data_type->createColumn();
