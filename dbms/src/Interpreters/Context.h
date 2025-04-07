@@ -18,6 +18,7 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/CancellationHook.h>
 #include <Interpreters/ClientInfo.h>
@@ -35,9 +36,6 @@
 #include <memory>
 #include <mutex>
 #include <thread>
-
-#include "Flash/Mpp/CTEManager.h"
-
 
 namespace pingcap
 {

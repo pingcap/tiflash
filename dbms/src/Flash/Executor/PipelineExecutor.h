@@ -24,7 +24,6 @@ class Context;
 
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
-using PipelineExecutorContextPtr = std::shared_ptr<PipelineExecutorContext>;
 using Pipelines = std::vector<PipelinePtr>;
 
 class AutoSpillTrigger;
@@ -89,6 +88,6 @@ private:
 private:
     PipelinePtr root_pipeline;
 
-    PipelineExecutorContextPtr exec_context_ptr;
+    PipelineExecutorContext exec_context;
 };
 } // namespace DB

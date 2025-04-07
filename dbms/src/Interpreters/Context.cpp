@@ -230,7 +230,7 @@ struct ContextShared
 
     std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
 
-    std::unique_ptr<CTEManager> cte_manager; // TODO initialize it
+    std::unique_ptr<CTEManager> cte_manager;
 
     ContextShared(
         std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_,
@@ -238,6 +238,7 @@ struct ContextShared
         : runtime_components_factory(std::move(runtime_components_factory_))
         , storage_run_mode(PageStorageRunMode::ONLY_V3)
         , application_type(app_type)
+        , cte_manager(std::make_unique<CTEManager>())
     {
         /// TODO: make it singleton (?)
 #ifndef MULTIPLE_CONTEXT_GTEST

@@ -29,16 +29,14 @@ namespace DB
 {
 class Pipeline;
 using PipelinePtr = std::shared_ptr<Pipeline>;
-using PipelineExecutorContextPtr = std::shared_ptr<PipelineExecutorContext>;
 using Pipelines = std::vector<PipelinePtr>;
 
 class PhysicalPlan
 {
 public:
-    PhysicalPlan(Context & context_, const String & req_id, PipelineExecutorContextPtr pipeline_exec_ptr_)
+    PhysicalPlan(Context & context_, const String & req_id)
         : context(context_)
         , log(Logger::get(req_id))
-        , exec_context_ptr(pipeline_exec_ptr_)
     {}
 
     void build(const tipb::DAGRequest * dag_request);
@@ -76,7 +74,5 @@ private:
     Context & context;
 
     LoggerPtr log;
-
-    PipelineExecutorContextPtr exec_context_ptr;
 };
 } // namespace DB

@@ -47,7 +47,7 @@ public:
 
 private:
     // Return true if CTE has data
-    inline bool hasDataNoLock() const { return !this->blocks.empty() || this->spill_triggered; }
+    inline bool hasDataNoLock() const { return !this->blocks.empty(); }
 
     std::shared_mutex rw_lock;
     Blocks blocks;
@@ -59,7 +59,5 @@ private:
     PipeConditionVariable pipe_cv;
 
     bool is_eof = false;
-    bool spill_triggered = false; // TODO this var may be useless, just a placement so far
-    // TODO spill
 };
 } // namespace DB

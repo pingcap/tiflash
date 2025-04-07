@@ -20,8 +20,6 @@
 
 namespace DB
 {
-using PipelineExecutorContextPtr = std::shared_ptr<PipelineExecutorContext>;
-
 class PhysicalCTESource : public PhysicalLeaf
 {
 public:
