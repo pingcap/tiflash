@@ -19,10 +19,12 @@
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/WindowTestUtils.h>
 #include <TestUtils/mockExecutor.h>
+#include <common/types.h>
 #include <gtest/gtest.h>
 #include <tipb/executor.pb.h>
 
 #include <optional>
+
 
 namespace DB::tests
 {
@@ -70,6 +72,7 @@ public:
     void initializeContext() override { ExecutorTest::initializeContext(); }
 
     void executeTest(const TestCase & test);
+    void executeTestForIssue9913(const TestCase & test);
 
 protected:
     static std::vector<Int64> partition;
@@ -134,6 +137,36 @@ void WindowAggFuncTest::executeTest(const TestCase & test)
             {toVec<Int64>(partition), toVec<Int64>(order), value_col_with_type_and_name},
             frame);
     }
+}
+
+void WindowAggFuncTest::executeTestForIssue9913(const TestCase & test)
+{
+    MockWindowFrame frame;
+    if (test.is_range_frame)
+        frame.type = tipb::WindowFrameType::Ranges;
+    else
+        frame.type = tipb::WindowFrameType::Rows;
+
+    frame.start = mock::MockWindowFrameBound(tipb::WindowBoundType::Preceding, true, 0);
+    frame.end = mock::MockWindowFrameBound(tipb::WindowBoundType::Following, true, 0);
+
+    ColumnWithTypeAndName value_col_with_type_and_name;
+    if (test.is_input_value_nullable)
+        value_col_with_type_and_name = toNullableVec<Int64>(int_nullable_value);
+    else
+        value_col_with_type_and_name = toVec<Int64>(int_value);
+
+    ColumnWithTypeAndName res;
+    if (test.is_return_type_int)
+        res = toNullableVec<Int64>(test.results[0]);
+    else
+        res = toNullableVec<Float64>(test.float_results[0]);
+
+    executeFunctionAndAssert(
+        res,
+        test.ast_func,
+        {toVec<Int64>(partition), toVec<Int64>(order), value_col_with_type_and_name},
+        frame);
 }
 
 
@@ -654,6 +687,54 @@ try
         {partition_col, order_col, val_col},
         mock_frame,
         false);
+}
+CATCH
+
+TEST_F(WindowAggFuncTest, issue9913)
+try
+{
+    std::vector<std::optional<Int64>> res
+        = {0, -1, -1, -1, -1, -4, -4, -4, -4, -4, -9, -9, -9, -9, -9, -9, -9, 4, -5, 0, 0, 0};
+    executeTestForIssue9913(TestCase(MinForWindow(value_col), {}, {}, {res}, {}, false, false));
+    executeTestForIssue9913(TestCase(MinForWindow(value_col), {}, {}, {res}, {}, true, false));
+
+    res = {0, 6, 6, 6, 6, 2, 2, 2, 2, 2, 9, 9, 9, 9, 9, 9, 9, 4, -5, 5, 5, 5};
+    executeTestForIssue9913(TestCase(MaxForWindow(value_col), {}, {}, {res}, {}, false, false));
+    executeTestForIssue9913(TestCase(MaxForWindow(value_col), {}, {}, {res}, {}, true, false));
+
+    res = {0, 9, 9, 9, 9, -3, -3, -3, -3, -3, 4, 4, 4, 4, 4, 4, 4, 4, -5, 7, 7, 7};
+    executeTestForIssue9913(TestCase(Sum(value_col), {}, {}, {res}, {}, false, false));
+    executeTestForIssue9913(TestCase(Sum(value_col), {}, {}, {res}, {}, true, false));
+
+    res = {1, 4, 4, 4, 4, 5, 5, 5, 5, 5, 7, 7, 7, 7, 7, 7, 7, 1, 1, 3, 3, 3};
+    executeTestForIssue9913(TestCase(Count(value_col), {}, {}, {res}, {}, false, false));
+    executeTestForIssue9913(TestCase(Count(value_col), {}, {}, {res}, {}, true, false));
+
+    std::vector<std::optional<Float64>> float_res
+        = {0,
+           2.25,
+           2.25,
+           2.25,
+           2.25,
+           -0.6,
+           -0.6,
+           -0.6,
+           -0.6,
+           -0.6,
+           0.5714285714285714,
+           0.5714285714285714,
+           0.5714285714285714,
+           0.5714285714285714,
+           0.5714285714285714,
+           0.5714285714285714,
+           0.5714285714285714,
+           4,
+           -5,
+           2.3333333333333335,
+           2.3333333333333335,
+           2.3333333333333335};
+    executeTestForIssue9913(TestCase(Avg(value_col), {}, {}, {}, {float_res}, false, false, false));
+    executeTestForIssue9913(TestCase(Avg(value_col), {}, {}, {}, {float_res}, true, false, false));
 }
 CATCH
 

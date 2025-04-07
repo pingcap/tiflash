@@ -239,8 +239,17 @@ WindowTransformAction::WindowTransformAction(
     }
 
     initialWorkspaces();
-
     initialPartitionAndOrderColumnIndices();
+
+    if (window_description_.frame.begin_type == WindowFrame::BoundaryType::Unbounded)
+        assert(window_description_.frame.begin_preceding);
+    if (window_description_.frame.end_type == WindowFrame::BoundaryType::Unbounded)
+        assert(!window_description_.frame.end_preceding);
+
+    // When size of frame is equal to the partition, we can set this var to true
+    support_batch_calculate = window_description_.frame.begin_type == WindowFrame::BoundaryType::Unbounded
+        && window_description_.frame.end_type == WindowFrame::BoundaryType::Unbounded && !aggregation_workspaces.empty()
+        && window_workspaces.empty();
 }
 
 void WindowTransformAction::cleanUp()
@@ -1294,10 +1303,55 @@ void WindowTransformAction::writeOutCurrentRow()
     }
 }
 
+RowNumber WindowTransformAction::writeBatchResult()
+{
+    assert(partition_ended);
+    assert(current_row < partition_end);
+
+    size_t insert_row_num = 0;
+    const auto & block = blockAt(current_row);
+    RowNumber tmp_row;
+    if (current_row.block != partition_end.block)
+    {
+        insert_row_num = block.rows - current_row.row;
+        tmp_row = current_row;
+        tmp_row.block += 1;
+        tmp_row.row = 0;
+    }
+    else
+    {
+        insert_row_num = partition_end.row - current_row.row;
+        tmp_row = partition_end;
+    }
+
+    // As aggregation function and window function can not occur in one window at the same time
+    // Only batch inserting results for aggregation function is ok
+    for (auto & ws : aggregation_workspaces)
+    {
+        IColumn * result_column = block.output_columns[ws.idx].get();
+        const auto * agg_func = ws.aggregate_function.get();
+        auto * buf = ws.aggregate_function_state.data();
+        agg_func->batchInsertSameResultInto(buf, *result_column, insert_row_num);
+    }
+
+    return tmp_row;
+}
+
+
 Block WindowTransformAction::tryGetOutputBlock()
 {
     // first try calculate the result based on current data
-    tryCalculate();
+    if (window_description.need_decrease)
+    {
+        tryCalculate<true, false>();
+    }
+    else
+    {
+        if (support_batch_calculate)
+            tryCalculate<false, true>();
+        else
+            tryCalculate<false, false>();
+    }
     // then return block if it is ready
     assert(first_not_ready_row.block >= first_block_number);
     // The first_not_ready_row might be past-the-end if we have already
@@ -1445,6 +1499,7 @@ void WindowTransformAction::updateAggregationState()
     first_processed = false;
 }
 
+template <bool need_decrease, bool support_batch_calculate>
 void WindowTransformAction::tryCalculate()
 {
     // if there is no input data, we don't need to calculate
@@ -1506,26 +1561,41 @@ void WindowTransformAction::tryCalculate()
             assert(frame_started);
             assert(frame_ended);
 
-            if (window_description.need_decrease)
+            if constexpr (need_decrease)
                 updateAggregationState<true>();
             else
                 updateAggregationState<false>();
 
-            // Write out the results.
-            // TODO execute the window function by block instead of row.
-            writeOutCurrentRow();
+
+            if constexpr (support_batch_calculate)
+            {
+                // When we reach here, partition must be ended
+                assert(partition_ended);
+
+                // As support_batch_calculate can be true only when the function is
+                // aggregation function and current_row_number is only used for
+                // window function, it's needless to update current_row_number here.
+                current_row = writeBatchResult();
+            }
+            else
+            {
+                // TODO execute the window function by block instead of row.
+                writeOutCurrentRow();
+
+                // Move to the next row. The frame will have to be recalculated.
+                // The peer group start is updated at the beginning of the loop,
+                // because current_row might now be past-the-end.
+                advanceRowNumber(current_row);
+                ++current_row_number;
+            }
 
             prev_frame_start = frame_start;
             prev_frame_end = frame_end;
 
-            // Move to the next row. The frame will have to be recalculated.
-            // The peer group start is updated at the beginning of the loop,
-            // because current_row might now be past-the-end.
-            advanceRowNumber(current_row);
-            ++current_row_number;
             first_not_ready_row = current_row;
             frame_ended = false;
             frame_started = false;
+
             // each `tryCalculate()` will calculate at most 1 block's data
             // this is to make sure that in pipeline mode, the execution time
             // of each iterator won't be too long
