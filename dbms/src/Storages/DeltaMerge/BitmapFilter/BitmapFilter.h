@@ -59,14 +59,9 @@ public:
 
     ALWAYS_INLINE auto & operator[](size_t n) { return filter[n]; }
 
-    friend class BitmapFilterView;
-
-    // Debug helpers
     bool operator==(const BitmapFilter & other) const { return filter == other.filter && all_match == other.all_match; }
-    void saveRowKeyFilterForDebug() { rowkey_filter.assign(filter); }
-    void saveVersionFilterForDebug() { version_filter.assign(filter); }
-    IColumn::Filter rowkey_filter;
-    IColumn::Filter version_filter;
+
+    friend class BitmapFilterView;
 
 private:
     IColumn::Filter filter;

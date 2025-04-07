@@ -168,7 +168,6 @@ public:
     DM::DMConfigurationOpt createChecksumConfig() const { return DMChecksumConfig::fromDBContext(global_context); }
 
     bool enableVersionChain() const;
-    bool enableVersionChainForTest() const;
 
 private:
     DMContext(
