@@ -31,3 +31,4 @@ endif ()
 
 add_subdirectory (libsymbolization)
 add_subdirectory (libprocess_metrics)
+add_subdirectory (libclara-cmake)

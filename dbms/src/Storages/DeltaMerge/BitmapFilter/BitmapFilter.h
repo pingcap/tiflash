@@ -26,6 +26,7 @@ class BitmapFilter
 {
 public:
     BitmapFilter(UInt32 size_, bool default_value);
+    BitmapFilter(std::initializer_list<UInt8> init);
 
     // Read blocks from `stream` and set the rows_id to be true according to the
     // `segmentRowIdCol` in the block read from `stream`.

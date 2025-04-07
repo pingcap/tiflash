@@ -29,9 +29,11 @@
 #include <TiDB/Decode/DatumCodec.h>
 #include <TiDB/Decode/JsonBinary.h>
 #include <TiDB/Decode/Vector.h>
+#include <TiDB/Schema/FullTextIndex.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/VectorIndex.h>
+#include <clara_fts/src/tokenizer/mod.rs.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
@@ -135,6 +137,32 @@ inline tipb::VectorIndexKind toVectorIndexKind(IndexType index_type)
             "Invalid index type for vector index {}",
             magic_enum::enum_name(index_type));
     }
+}
+
+FullTextIndexDefinitionPtr parseFullTextIndexFromJSON(const Poco::JSON::Object::Ptr & json)
+{
+    RUNTIME_CHECK(json); // not nullptr
+
+    RUNTIME_CHECK_MSG(json->has("parser_type"), "Invalid FullTextIndex definition, missing parser_type");
+    auto parser_type_field = json->getValue<String>("parser_type");
+    RUNTIME_CHECK_MSG(
+        ClaraFTS::supports_tokenizer(parser_type_field),
+        "Invalid FullTextIndex definition, unsupported parser_type `{}`",
+        parser_type_field);
+
+    return std::make_shared<const FullTextIndexDefinition>(FullTextIndexDefinition{
+        .parser_type = parser_type_field,
+    });
+}
+
+Poco::JSON::Object::Ptr fullTextIndexToJSON(const FullTextIndexDefinitionPtr & full_text_index)
+{
+    RUNTIME_CHECK(full_text_index != nullptr);
+    RUNTIME_CHECK(ClaraFTS::supports_tokenizer(full_text_index->parser_type));
+
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    json->set("parser_type", full_text_index->parser_type);
+    return json;
 }
 
 VectorIndexDefinitionPtr parseVectorIndexFromJSON(IndexType index_type, const Poco::JSON::Object::Ptr & json)
@@ -917,6 +945,10 @@ try
     {
         json->set("inverted_index", invertedIndexToJSON(inverted_index));
     }
+    else if (full_text_index)
+    {
+        json->set("full_text_index", fullTextIndexToJSON(full_text_index));
+    }
 
 #ifndef NDEBUG
     std::stringstream str;
@@ -966,6 +998,10 @@ try
     if (auto inverted_index_json = json->getObject("inverted_index"); inverted_index_json)
     {
         inverted_index = parseInvertedIndexFromJSON(static_cast<IndexType>(index_type), inverted_index_json);
+    }
+    if (auto full_text_index_json = json->getObject("full_text_index"); full_text_index_json)
+    {
+        full_text_index = parseFullTextIndexFromJSON(full_text_index_json);
     }
 }
 catch (const Poco::Exception & e)
