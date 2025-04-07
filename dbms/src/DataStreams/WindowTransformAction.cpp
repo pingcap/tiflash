@@ -1570,6 +1570,10 @@ void WindowTransformAction::tryCalculate()
             {
                 // When we reach here, partition must be ended
                 assert(partition_ended);
+
+                // As support_batch_calculate can be true only when the function is
+                // aggregation function and current_row_number is only used for
+                // window function, it's needless to update current_row_number here.
                 current_row = writeBatchResult();
             }
             else
