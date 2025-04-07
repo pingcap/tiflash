@@ -292,13 +292,13 @@ Block NASemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & ou
         {
             // If the result is true, this row should be kept.
             // Otherwise, this row should be filtered.
-            (*filter)[i] = result == SemiJoinResultType::TRUE_VALUE ? 1 : 0;
+            (*filter)[i] = result == SemiJoinResultType::TRUE_VALUE;
             rows_for_anti += (*filter)[i];
         }
         else
         {
-            Int8 res = result == SemiJoinResultType::TRUE_VALUE ? 1 : 0;
-            UInt8 is_null = result == SemiJoinResultType::NULL_VALUE ? 1 : 0;
+            Int8 res = result == SemiJoinResultType::TRUE_VALUE;
+            UInt8 is_null = result == SemiJoinResultType::NULL_VALUE;
             left_semi_column_data->push_back(res);
             left_semi_null_map->push_back(is_null);
         }

@@ -383,6 +383,9 @@ Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorke
             added_columns);
     wd.probe_hash_table_time += watch.elapsedFromLastTime();
 
+    if (wd.selective_offsets.empty())
+        return join->output_block_after_finalize;
+
     if constexpr (late_materialization)
     {
         size_t idx = 0;
@@ -399,9 +402,6 @@ Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorke
         for (size_t i = 0; i < right_columns; ++i)
             wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
     }
-
-    if (wd.selective_offsets.empty())
-        return join->output_block_after_finalize;
 
     if constexpr (has_other_condition)
     {
