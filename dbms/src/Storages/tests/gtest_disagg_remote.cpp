@@ -17,7 +17,6 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/StorageDisaggregatedHelpers.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <kvproto/disaggregated.pb.h>
 #include <pingcap/coprocessor/Client.h>
 #include <pingcap/kv/Backoff.h>

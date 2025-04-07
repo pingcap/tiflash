@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <DataTypes/DataTypeNullable.h>
 #include <Storages/DeltaMerge/Filter/IntegerSet.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader.h>
 
@@ -24,9 +25,10 @@
 namespace DB::DM
 {
 
-IntegerSetPtr IntegerSet::createValueSet(TypeIndex type_index, const Fields & values)
+IntegerSetPtr IntegerSet::createValueSet(const DataTypePtr & type, const Fields & values)
 {
-    switch (type_index)
+    auto type_id = removeNullable(type)->getTypeId();
+    switch (type_id)
     {
     case TypeIndex::UInt8:
         return std::make_shared<ValueSet<UInt8>>(values);
@@ -63,7 +65,7 @@ IntegerSetPtr IntegerSet::createValueSet(TypeIndex type_index, const Fields & va
     }
 }
 
-IntegerSetPtr IntegerSet::createLessRangeSet(TypeIndex type_index, const Field & max, bool not_included)
+IntegerSetPtr IntegerSet::createLessRangeSet(const DataTypePtr & type, const Field & max, bool not_included)
 {
     auto func = []<typename T>(const Field & max, bool not_included) -> IntegerSetPtr {
         auto max_value = max.get<T>();
@@ -75,7 +77,8 @@ IntegerSetPtr IntegerSet::createLessRangeSet(TypeIndex type_index, const Field &
             return std::make_shared<RangeSet<T>>(std::numeric_limits<T>::min(), max_value - not_included);
     };
 
-    switch (type_index)
+    auto type_id = removeNullable(type)->getTypeId();
+    switch (type_id)
     {
     case TypeIndex::UInt8:
         return func.template operator()<UInt8>(max, not_included);
@@ -112,7 +115,7 @@ IntegerSetPtr IntegerSet::createLessRangeSet(TypeIndex type_index, const Field &
     }
 }
 
-IntegerSetPtr IntegerSet::createGreaterRangeSet(TypeIndex type_index, const Field & min, bool not_included)
+IntegerSetPtr IntegerSet::createGreaterRangeSet(const DataTypePtr & type, const Field & min, bool not_included)
 {
     auto func = []<typename T>(const Field & min, bool not_included) -> IntegerSetPtr {
         auto min_value = min.get<T>();
@@ -124,7 +127,8 @@ IntegerSetPtr IntegerSet::createGreaterRangeSet(TypeIndex type_index, const Fiel
             return std::make_shared<RangeSet<T>>(min_value + not_included, std::numeric_limits<T>::max());
     };
 
-    switch (type_index)
+    auto type_id = removeNullable(type)->getTypeId();
+    switch (type_id)
     {
     case TypeIndex::UInt8:
         return func.template operator()<UInt8>(min, not_included);

@@ -18,6 +18,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Core/Defines.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -35,7 +36,6 @@
 #include <Storages/PathPool.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
@@ -4221,7 +4221,7 @@ try
         return block;
     };
 
-    auto check = [&](PushDownExecutorPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+    auto check = [&](PushDownExecutorPtr executor, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4229,7 +4229,7 @@ try
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
-            filter,
+            executor,
             std::vector<RuntimeFilterPtr>{},
             0,
             "",
@@ -4350,7 +4350,7 @@ try
         return block;
     };
 
-    auto check = [&](PushDownExecutorPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+    auto check = [&](PushDownExecutorPtr executor, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4358,7 +4358,7 @@ try
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
-            filter,
+            executor,
             std::vector<RuntimeFilterPtr>{},
             0,
             "",

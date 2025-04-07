@@ -16,8 +16,6 @@
 
 #include <IO/Buffer/WriteBuffer.h>
 
-#include <vector>
-
 namespace DB
 {
 namespace ErrorCodes

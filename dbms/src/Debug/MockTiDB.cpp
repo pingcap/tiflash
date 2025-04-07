@@ -600,7 +600,7 @@ void MockTiDB::addVectorIndexToTable(
     version++;
 
     SchemaDiff diff;
-    diff.type = SchemaActionType::ActionAddVectorIndex;
+    diff.type = SchemaActionType::ActionAddColumnarIndex;
     diff.schema_id = table->database_id;
     diff.table_id = table->id();
     diff.version = version;

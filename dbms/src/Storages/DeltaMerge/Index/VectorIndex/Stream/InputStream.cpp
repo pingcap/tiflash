@@ -114,14 +114,13 @@ void VectorIndexInputStream::initSearchResults()
     if (ctx->dm_context != nullptr && ctx->dm_context->scan_context != nullptr)
     {
         auto scan_context = ctx->dm_context->scan_context;
-        scan_context->total_vector_idx_load_from_s3 += ctx->perf->load_from_stable_s3;
-        scan_context->total_vector_idx_load_from_disk
-            += ctx->perf->load_from_stable_disk + ctx->perf->load_from_column_file;
-        scan_context->total_vector_idx_load_from_cache += ctx->perf->load_from_cache;
-        scan_context->total_vector_idx_load_time_ms += ctx->perf->total_load_ms;
-        scan_context->total_vector_idx_search_time_ms += ctx->perf->total_search_ms;
-        scan_context->total_vector_idx_search_visited_nodes += ctx->perf->visited_nodes;
-        scan_context->total_vector_idx_search_discarded_nodes += ctx->perf->discarded_nodes;
+        scan_context->vector_idx_load_from_s3 += ctx->perf->load_from_stable_s3;
+        scan_context->vector_idx_load_from_disk += ctx->perf->load_from_stable_disk + ctx->perf->load_from_column_file;
+        scan_context->vector_idx_load_from_cache += ctx->perf->load_from_cache;
+        scan_context->vector_idx_load_time_ms += ctx->perf->total_load_ms;
+        scan_context->vector_idx_search_time_ms += ctx->perf->total_search_ms;
+        scan_context->vector_idx_search_visited_nodes += ctx->perf->visited_nodes;
+        scan_context->vector_idx_search_discarded_nodes += ctx->perf->discarded_nodes;
     }
 
     searchResultsInited = true;
@@ -198,9 +197,8 @@ void VectorIndexInputStream::onReadFinished()
     if (ctx->dm_context != nullptr && ctx->dm_context->scan_context != nullptr)
     {
         auto scan_context = ctx->dm_context->scan_context;
-        scan_context->total_vector_idx_read_vec_time_ms
-            += ctx->perf->total_cf_read_vec_ms + ctx->perf->total_dm_read_vec_ms;
-        scan_context->total_vector_idx_read_others_time_ms
+        scan_context->vector_idx_read_vec_time_ms += ctx->perf->total_cf_read_vec_ms + ctx->perf->total_dm_read_vec_ms;
+        scan_context->vector_idx_read_others_time_ms
             += ctx->perf->total_cf_read_others_ms + ctx->perf->total_dm_read_others_ms;
     }
 }

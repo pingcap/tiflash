@@ -51,7 +51,7 @@ void StorageFactory::registerStorage(const std::string & name, Creator creator)
 {
     RUNTIME_CHECK_MSG(
         storages.emplace(name, std::move(creator)).second,
-        "TableFunctionFactory: the table function name '{}' is not unique",
+        "StorageFactory: the Storage name '{}' is not unique",
         name);
 }
 

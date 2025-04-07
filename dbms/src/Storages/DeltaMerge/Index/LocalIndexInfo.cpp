@@ -42,12 +42,12 @@ bool isLocalIndexSupported(const LoggerPtr & logger)
     return true;
 }
 
-ColumnID getVectorIndxColumnID(
+ColumnID getColumnarIndexColumnID(
     const TiDB::TableInfo & table_info,
     const TiDB::IndexInfo & idx_info,
     const LoggerPtr & logger)
 {
-    if (!idx_info.vector_index)
+    if (!idx_info.isColumnarIndex())
         return EmptyColumnID;
 
     // Vector Index requires a specific storage format to work.
@@ -58,7 +58,7 @@ ColumnID getVectorIndxColumnID(
     {
         LOG_ERROR(
             logger,
-            "The index columns length is {}, which does not support building vector index, index_id={}, table_id={}.",
+            "The index columns length is {}, which does not support building local index, index_id={}, table_id={}.",
             idx_info.idx_cols.size(),
             idx_info.id,
             table_info.id);
@@ -168,10 +168,10 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
 
     for (const auto & idx : new_table_info.index_infos)
     {
-        if (!idx.hasColumnarIndex())
+        if (!idx.isColumnarIndex())
             continue;
 
-        const auto column_id = getVectorIndxColumnID(new_table_info, idx, logger);
+        const auto column_id = getColumnarIndexColumnID(new_table_info, idx, logger);
         if (column_id <= EmptyColumnID)
             continue;
 
@@ -180,7 +180,10 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
             if (idx.state == TiDB::StatePublic || idx.state == TiDB::StateWriteReorganization)
             {
                 // create a new index
-                new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.vector_index));
+                if (idx.columnarIndexKind() == TiDB::ColumnarIndexKind::Vector)
+                    new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.vector_index));
+                else if (idx.columnarIndexKind() == TiDB::ColumnarIndexKind::Inverted)
+                    new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.inverted_index));
                 newly_added.emplace_back(idx.id);
                 index_ids_in_new_table.emplace(idx.id);
             }

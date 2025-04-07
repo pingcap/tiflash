@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Disaggregated/MockS3LockClient.h>
 #include <IO/FileProvider/EncryptionPath.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
@@ -27,7 +28,6 @@
 #include <Storages/S3/S3GCManager.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/OwnerManager.h>
 #include <aws/core/utils/DateTime.h>
 #include <aws/s3/model/GetObjectTaggingRequest.h>
