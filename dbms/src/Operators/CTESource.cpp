@@ -25,10 +25,9 @@ void CTESourceOp::operateSuffixImpl()
     LOG_DEBUG(log, "finish read {} rows from cte source", total_rows);
 }
 
-// TODO in some cases, source needs to manually filter some data when cte saves all data
+// TODO in some cases, source needs to manually filter some data when cte saves all data(start here)
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {
-    // TODO when spill is triggered, this function may be blocked by spill. fix it
     auto res = this->cte->tryGetBlockAt(this->block_fetch_idx);
     switch (res.first)
     {
@@ -51,7 +50,6 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
 
 OperatorStatus CTESourceOp::awaitImpl()
 {
-    // TODO when spill is triggered, this function may be blocked by spill. fix it
     auto res = this->cte->checkAvailableBlockAt(this->block_fetch_idx);
     switch (res)
     {

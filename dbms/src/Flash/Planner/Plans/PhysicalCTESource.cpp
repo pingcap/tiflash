@@ -22,7 +22,7 @@
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalCTESource::build(
-    const Context & context,
+    const Context & /*context*/,
     const String & executor_id,
     const LoggerPtr & log,
     const FineGrainedShuffle & fine_grained_shuffle
@@ -32,7 +32,6 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     // TODO we need to get meta data such as `partition_col_collators` for partitioning data
     NamesAndTypes schema; // TODO scchema info is from tipb
     auto physical_exchange_receiver = std::make_shared<PhysicalCTESource>(
-        context,
         executor_id,
         schema,
         fine_grained_shuffle,

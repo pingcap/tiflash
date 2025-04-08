@@ -34,6 +34,8 @@ public:
         , cte(cte_manager_->getCTE(query_id_and_cte_id_))
     {}
 
+    ~CTESinkOp() override { assert(!this->cte); }
+
     String getName() const override { return "CTESinkOp"; }
     bool canHandleSelectiveBlock() const override { return true; }
 

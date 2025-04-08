@@ -37,6 +37,8 @@ public:
         , cte(cte_manager_->getCTE(query_id_and_cte_id_))
     {}
 
+    ~CTESourceOp() override { assert(!this->cte); }
+
     String getName() const override { return "CTESourceOp"; }
 
 protected:
