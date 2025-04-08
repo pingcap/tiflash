@@ -70,7 +70,6 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
@@ -891,28 +890,6 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
 
     return table;
 }
-
-StoragePtr Context::executeTableFunction(const ASTPtr & table_expression)
-{
-    /// Slightly suboptimal.
-    auto hash = table_expression->getTreeHash();
-    String key = toString(hash.first) + '_' + toString(hash.second);
-
-    StoragePtr & res = table_function_results[key];
-
-    if (!res)
-    {
-        TableFunctionPtr table_function_ptr = TableFunctionFactory::instance().get(
-            typeid_cast<const ASTFunction *>(table_expression.get())->name,
-            *this);
-
-        /// Run it and remember the result
-        res = table_function_ptr->execute(table_expression, *this);
-    }
-
-    return res;
-}
-
 
 DDLGuard::DDLGuard(
     Map & map_,

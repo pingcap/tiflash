@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/ColumnRange_fwd.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache_fwd.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 
 namespace DB::DM
 {
@@ -29,6 +30,7 @@ private:
     const ColumnRangePtr column_range;
     // Global local index cache
     const LocalIndexCachePtr local_index_cache;
+    const ScanContextPtr scan_context;
 
     bool loaded = false;
 
@@ -36,7 +38,8 @@ public:
     InvertedIndexReaderFromDMFile(
         const ColumnRangePtr & column_range_,
         const DMFilePtr & dmfile_,
-        const LocalIndexCachePtr & local_index_cache_);
+        const LocalIndexCachePtr & local_index_cache_,
+        const ScanContextPtr & scan_context_ = nullptr);
 
     ~InvertedIndexReaderFromDMFile();
 

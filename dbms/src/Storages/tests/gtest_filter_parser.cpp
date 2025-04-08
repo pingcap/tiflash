@@ -35,6 +35,7 @@
 
 #include <regex>
 
+
 namespace DB::tests
 {
 
@@ -106,10 +107,12 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     const auto ann_query_info = tipb::ANNQueryInfo{};
     const auto runtime_filter_ids = std::vector<int>();
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{}; // don't care pushed down filters
+    const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{}; // don't care used indexes
     std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
         conditions,
         ann_query_info,
         pushed_down_filters,
+        empty_used_indexes,
         table_info.columns,
         runtime_filter_ids, // don't care runtime filter
         0,
@@ -136,12 +139,15 @@ try
     "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
 })json";
 
-    std::vector<DM::LocalIndexInfo> local_index_infos;
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
     {
-        auto definition = std::make_shared<TiDB::InvertedIndexDefinition>(false, 8);
-        local_index_infos.emplace_back(1, 2, definition);
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_inverted_query_info();
+        inverted->set_index_id(1);
+        inverted->set_column_id(2);
+        used_indexes.Add(std::move(columnar_info));
     }
-    auto snapshot = std::make_shared<const std::vector<DM::LocalIndexInfo>>(local_index_infos);
 
     {
         // Equal between col and literal
@@ -150,7 +156,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: {666}");
     }
@@ -162,7 +168,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"666\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: [667, 9223372036854775807]");
     }
@@ -174,7 +180,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: [667, 9223372036854775807]");
     }
@@ -186,7 +192,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: [-9223372036854775808, 776]");
     }
@@ -198,7 +204,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"776\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: [-9223372036854775808, 776]");
     }
@@ -217,12 +223,15 @@ try
     "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
 })json";
 
-    std::vector<DM::LocalIndexInfo> local_index_infos;
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
     {
-        auto definition = std::make_shared<TiDB::InvertedIndexDefinition>(false, 8);
-        local_index_infos.emplace_back(1, 2, definition);
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_inverted_query_info();
+        inverted->set_index_id(1);
+        inverted->set_column_id(2);
+        used_indexes.Add(std::move(columnar_info));
     }
-    auto snapshot = std::make_shared<const std::vector<DM::LocalIndexInfo>>(local_index_infos);
 
     // Test cases for literal and col (inverse direction)
     {
@@ -232,7 +241,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"667\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: {667}");
     }
@@ -247,7 +256,7 @@ try
         EXPECT_EQ(
             rs_operator->toDebugString(),
             "{\"op\":\"not_equal\",\"col\":\"col_2\",\"value\":\"-9223372036854775808\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: [-9223372036854775807, 9223372036854775807]");
     }
@@ -259,7 +268,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"not_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: {[-9223372036854775808, 666], [668, 9223372036854775807]}");
     }
@@ -271,7 +280,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"667\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: [668, 9223372036854775807]");
     }
@@ -283,7 +292,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: [667, 9223372036854775807]");
     }
@@ -295,7 +304,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: [-9223372036854775808, 776]");
     }
@@ -307,7 +316,7 @@ try
         EXPECT_EQ(rs_operator->getColumnIDs().size(), 1);
         EXPECT_EQ(rs_operator->getColumnIDs()[0], 2);
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"777\"}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: [-9223372036854775808, 777]");
     }
@@ -329,16 +338,23 @@ try
     "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
 })json";
 
-    std::vector<DM::LocalIndexInfo> local_index_infos;
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
     {
-        auto definition = std::make_shared<TiDB::InvertedIndexDefinition>(false, 8);
-        local_index_infos.emplace_back(1, 2, definition);
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_inverted_query_info();
+        inverted->set_index_id(1);
+        inverted->set_column_id(2);
+        used_indexes.Add(std::move(columnar_info));
     }
     {
-        auto definition = std::make_shared<TiDB::InvertedIndexDefinition>(false, 8);
-        local_index_infos.emplace_back(2, 3, definition);
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_inverted_query_info();
+        inverted->set_index_id(2);
+        inverted->set_column_id(3);
+        used_indexes.Add(std::move(columnar_info));
     }
-    auto snapshot = std::make_shared<const std::vector<DM::LocalIndexInfo>>(local_index_infos);
 
     {
         // Not
@@ -350,7 +366,7 @@ try
         EXPECT_EQ(
             rs_operator->toDebugString(),
             "{\"op\":\"not\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}]}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: {[-9223372036854775808, 665], [667, 9223372036854775807]}");
     }
@@ -365,7 +381,7 @@ try
         std::regex rx(
             R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: {666}");
     }
@@ -382,7 +398,7 @@ try
             rs_operator->toDebugString(),
             "{\"op\":\"or\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"equal\","
             "\"col\":\"col_2\",\"value\":\"777\"}]}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: {777, 789}");
     }
@@ -399,7 +415,7 @@ try
             rs_operator->toDebugString(),
             "{\"op\":\"or\",\"children\":[{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"less\","
             "\"col\":\"col_2\",\"value\":\"791\"}]}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: ALL");
     }
@@ -416,7 +432,7 @@ try
         std::regex rx(
             R"(\{"op":"and","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: {[-9223372036854775808, 665], [667, 9223372036854775807]}");
     }
@@ -433,7 +449,7 @@ try
             rs_operator->toDebugString(),
             "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"not\","
             "\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"}]}]}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "And[3: {[-9223372036854775808, 665], [667, 9223372036854775807]}, 2: {789}]");
     }
@@ -453,7 +469,7 @@ try
             "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"or\","
             "\"children\":[{\"op\":\"equal\",\"col\":\"col_3\",\"value\":\"666\"},{\"op\":\"equal\",\"col\":\"col_3\","
             "\"value\":\"678\"}]}]}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "And[3: {666, 678}, 2: {789}]");
     }
@@ -468,7 +484,7 @@ try
         std::regex rx(
             R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"equal","col":"col_2","value":"666"\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
@@ -484,7 +500,7 @@ try
         std::regex rx(
             R"(\{"op":"or","children":\[\{"op":"unsupported",.*\},\{"op":"not","children":\[\{"op":"equal","col":"col_2","value":"666"\}\]\}\]\})");
         EXPECT_TRUE(std::regex_search(rs_operator->toDebugString(), rx));
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
@@ -501,7 +517,7 @@ try
             rs_operator->toDebugString(),
             "{\"op\":\"and\",\"children\":[{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"789\"},{\"op\":\"isnull\","
             "\"col\":\"col_3\"}]}");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "2: {789}");
     }
@@ -513,7 +529,7 @@ try
         EXPECT_EQ(
             rs_operator->toDebugString(),
             R"raw({"op":"and","children":[{"op":"unsupported","reason":"child of logical and is not function, expr.tp=ColumnRef"},{"op":"unsupported","reason":"child of logical and is not function, expr.tp=Uint64"}]})raw");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
@@ -525,7 +541,7 @@ try
         EXPECT_EQ(
             rs_operator->toDebugString(),
             R"raw({"op":"or","children":[{"op":"unsupported","reason":"child of logical operator is not function, child_type=ColumnRef"},{"op":"unsupported","reason":"child of logical operator is not function, child_type=Uint64"}]})raw");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
@@ -534,7 +550,7 @@ try
         // IsNull with FunctionExpr (not supported since IsNull only support when child is ColumnExpr)
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where (col_2 > 1) is null");
         EXPECT_EQ(rs_operator->name(), "unsupported");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
@@ -556,20 +572,31 @@ try
     "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
 })json";
 
-    std::vector<DM::LocalIndexInfo> local_index_infos;
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
     {
-        auto definition = std::make_shared<TiDB::InvertedIndexDefinition>(false, 8);
-        local_index_infos.emplace_back(1, 4, definition);
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_inverted_query_info();
+        inverted->set_index_id(1);
+        inverted->set_column_id(4);
+        used_indexes.Add(std::move(columnar_info));
     }
     {
-        auto definition = std::make_shared<TiDB::InvertedIndexDefinition>(false, 8);
-        local_index_infos.emplace_back(2, 5, definition);
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_inverted_query_info();
+        inverted->set_index_id(2);
+        inverted->set_column_id(5);
+        used_indexes.Add(std::move(columnar_info));
     }
     {
-        auto definition = std::make_shared<TiDB::InvertedIndexDefinition>(false, 8);
-        local_index_infos.emplace_back(3, 6, definition);
+        auto columnar_info = tipb::ColumnarIndexInfo();
+        columnar_info.set_index_type(tipb::ColumnarIndexType::TypeInverted);
+        auto * inverted = columnar_info.mutable_inverted_query_info();
+        inverted->set_index_id(3);
+        inverted->set_column_id(6);
+        used_indexes.Add(std::move(columnar_info));
     }
-    auto snapshot = std::make_shared<const std::vector<DM::LocalIndexInfo>>(local_index_infos);
 
     String datetime = "2021-10-26 17:00:00.00000";
     ReadBufferFromMemory read_buffer(datetime.c_str(), datetime.size());
@@ -594,7 +621,7 @@ try
         EXPECT_EQ(
             rs_operator->toDebugString(),
             fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
     }
@@ -616,7 +643,7 @@ try
         EXPECT_EQ(
             rs_operator->toDebugString(),
             fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
     }
@@ -638,7 +665,7 @@ try
         EXPECT_EQ(
             rs_operator->toDebugString(),
             fmt::format(R"json({{"op":"greater","col":"col_timestamp","value":"{}"}})json", converted_time));
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("4: [{}, 18446744073709551615]", converted_time + 1));
     }
@@ -654,7 +681,7 @@ try
         EXPECT_EQ(
             rs_operator->toDebugString(),
             fmt::format(R"json({{"op":"greater","col":"col_datetime","value":"{}"}})json", origin_time_stamp));
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("5: [{}, 18446744073709551615]", origin_time_stamp + 1));
     }
@@ -670,7 +697,7 @@ try
         EXPECT_EQ(
             rs_operator->toDebugString(),
             fmt::format(R"json({{"op":"greater","col":"col_date","value":"{}"}})json", origin_time_stamp));
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), fmt::format("6: [{}, 18446744073709551615]", origin_time_stamp + 1));
     }
@@ -693,15 +720,14 @@ try
     "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
 })json";
 
-    std::vector<DM::LocalIndexInfo> local_index_infos;
-    auto snapshot = std::make_shared<const std::vector<DM::LocalIndexInfo>>(local_index_infos);
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
 
     {
         // Greater between col and literal (not supported since the type of col_3 is floating point)
         auto rs_operator
             = generateRsOperator(table_info_json, "select * from default.t_111 where col_3 > 1234568.890123");
         EXPECT_EQ(rs_operator->name(), "unsupported");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
@@ -710,7 +736,7 @@ try
         // Greater between col and literal (not supported since the type of col_1 is string)
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_1 > '123'");
         EXPECT_EQ(rs_operator->name(), "unsupported");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
@@ -719,7 +745,7 @@ try
         // Greater between col and literal (not supported since the type of col_5 is decimal)
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where col_5 > 1");
         EXPECT_EQ(rs_operator->name(), "unsupported");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
@@ -728,7 +754,7 @@ try
         // Not with literal (not supported since Not only support when child is ColumnExpr)
         auto rs_operator = generateRsOperator(table_info_json, "select * from default.t_111 where not 1");
         EXPECT_EQ(rs_operator->name(), "unsupported");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }
@@ -751,8 +777,7 @@ try
     "comment":"Mocked.","id":30,"schema_version":-1,"state":0,"tiflash_replica":{"Count":0},"update_timestamp":1636471547239654
 })json";
 
-    std::vector<DM::LocalIndexInfo> local_index_infos;
-    auto snapshot = std::make_shared<const std::vector<DM::LocalIndexInfo>>(local_index_infos);
+    google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
 
     for (const auto & test_case : Strings{
              "select * from default.t_111 where col_2 = col_5", // col and col
@@ -768,7 +793,7 @@ try
     {
         auto rs_operator = generateRsOperator(table_info_json, test_case);
         EXPECT_EQ(rs_operator->name(), "unsupported");
-        auto sets = rs_operator->buildSets(snapshot);
+        auto sets = rs_operator->buildSets(used_indexes);
         EXPECT_TRUE(sets != nullptr);
         EXPECT_EQ(sets->toDebugString(), "Unsupported");
     }

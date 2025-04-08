@@ -34,6 +34,7 @@
 #include <ext/scope_guard.h>
 #include <memory>
 
+
 namespace DB::DM::tests
 {
 
@@ -2033,8 +2034,8 @@ try
     auto data_type = makeNullable(type);
 
     // Generate a minmax index with the min value is null as a old version(before v6.4) minmax index.
-    PaddedPODArray<UInt8> has_null_marks(1);
-    PaddedPODArray<UInt8> has_value_marks(1);
+    PaddedPODArray<UInt8> has_null_marks(1, 1);
+    PaddedPODArray<UInt8> has_value_marks(1, 1);
     MutableColumnPtr minmaxes = data_type->createColumn();
 
     auto column = data_type->createColumn();
@@ -2067,8 +2068,8 @@ try
     auto type = std::make_shared<DataTypeInt64>();
     auto data_type = makeNullable(type);
 
-    PaddedPODArray<UInt8> has_null_marks(1);
-    PaddedPODArray<UInt8> has_value_marks(1);
+    PaddedPODArray<UInt8> has_null_marks(1, 1);
+    PaddedPODArray<UInt8> has_value_marks(1, 1);
     MutableColumnPtr minmaxes = data_type->createColumn();
 
     auto column = data_type->createColumn();
@@ -2245,10 +2246,12 @@ try
     b.id = 2;
     TiDB::ColumnInfos column_infos = {a, b};
     const auto ann_query_info = tipb::ANNQueryInfo{};
+    static const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{};
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filters,
         ann_query_info,
         pushed_down_filters, // Not care now
+        empty_used_indexes,
         column_infos,
         std::vector<int>{},
         0,

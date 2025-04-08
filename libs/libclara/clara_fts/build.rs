@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,21 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/config.h>
-#include <TableFunctions/TableFunctionFactory.h>
-#include <TableFunctions/registerTableFunctions.h>
+use std::io::Result;
 
+fn main() -> Result<()> {
+    prost_build::compile_protos(&["src/directory/merged/proto.proto"], &["src"])?;
+    println!("cargo:rerun-if-changed=src/directory/merged/proto.proto");
 
-namespace DB
-{
-void registerTableFunctionNumbers(TableFunctionFactory & factory);
+    let files = [
+        "src/tokenizer/mod.rs",
+        "src/index_reader.rs",
+        "src/index_writer.rs",
+        "src/brute_searcher.rs",
+    ];
 
-void registerTableFunctions()
-{
-    auto & factory = TableFunctionFactory::instance();
+    // Generate bridge only
+    let _ = cxx_build::bridges(files);
 
-    registerTableFunctionNumbers(factory);
+    Ok(())
 }
-
-} // namespace DB

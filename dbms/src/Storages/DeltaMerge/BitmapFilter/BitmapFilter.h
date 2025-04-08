@@ -46,6 +46,8 @@ public:
     void logicalAnd(const BitmapFilter & other);
     // f = f + other
     void append(const BitmapFilter & other);
+    // all_of(filter[start, start+limit), false)
+    bool isAllNotMatch(size_t start, size_t limit) const;
 
     void runOptimize();
 

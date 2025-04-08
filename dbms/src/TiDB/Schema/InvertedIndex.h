@@ -14,7 +14,7 @@
 
 #pragma once
 
-#include <Core/Types.h>
+#include <common/types.h>
 #include <fmt/format.h>
 
 namespace TiDB
@@ -53,7 +53,7 @@ struct fmt::formatter<TiDB::InvertedIndexDefinitionPtr>
     auto format(const TiDB::InvertedIndexDefinitionPtr & index, FormatContext & ctx) const -> decltype(ctx.out())
     {
         if (!index)
-            return fmt::format_to(ctx.out(), "");
+            return fmt::format_to(ctx.out(), "nullptr");
         return fmt::format_to(ctx.out(), "{}", *index);
     }
 };

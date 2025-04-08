@@ -1,4 +1,4 @@
-# Copyright 2023 PingCAP, Inc.
+# Copyright 2025 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,11 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-include(${TiFlash_SOURCE_DIR}/cmake/dbms_glob_sources.cmake)
-add_headers_and_sources(tiflash_table_functions .)
-
-list(REMOVE_ITEM tiflash_table_functions_sources ITableFunction.cpp TableFunctionFactory.cpp)
-list(REMOVE_ITEM tiflash_table_functions_headers ITableFunction.h TableFunctionFactory.h)
-
-add_library(tiflash_table_functions ${tiflash_table_functions_sources})
-target_link_libraries(tiflash_table_functions tiflash_storages_system dbms ${Poco_Foundation_LIBRARY})
+find_program(OBJCOPY_EXECUTABLE "objcopy")
+if(OBJCOPY_EXECUTABLE)
+    message(STATUS "Compressing debug sections for libclara...")
+    execute_process(COMMAND ${OBJCOPY_EXECUTABLE} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/libclara_shared.so)
+else()
+    message(WARNING "objcopy not found in PATH. Skipped debug section compression for libclara.")
+endif()

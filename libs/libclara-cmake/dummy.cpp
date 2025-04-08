@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,14 +12,4 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ProfileEvents.h>
-#include <TableFunctions/ITableFunction.h>
-
-namespace DB
-{
-StoragePtr ITableFunction::execute(const ASTPtr & ast_function, const Context & context) const
-{
-    return executeImpl(ast_function, context);
-}
-
-} // namespace DB
+// This file is intentionally left blank

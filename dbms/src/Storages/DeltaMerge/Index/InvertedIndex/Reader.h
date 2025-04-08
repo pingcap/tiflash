@@ -23,6 +23,7 @@
 
 namespace DB::DM
 {
+
 /// Read a InvertedIndex file.
 class InvertedIndexReader : public ICacheableLocalIndexReader
 {
@@ -36,8 +37,13 @@ public:
     static InvertedIndexReaderPtr view(const DataTypePtr & type, std::string_view path);
     static InvertedIndexReaderPtr view(const DataTypePtr & type, ReadBuffer & buf, size_t index_size);
 
+    // All row ids that match the key will be set to 1 in bitmap_filter.
+    // Key can be wider than the index type range.
+    // But std::is_signed_v<Key> should equal to std::is_signed_v<T>.
+    // For example, if the index type is UInt32, key can be std::numeric_limits<UInt32>::max() + 1, but key can not be minus.
     virtual void search(BitmapFilterPtr & bitmap_filter, const Key & key) const = 0;
-    // [begin, end]
+    // All row ids that match the range [begin, end] will be set to 1 in bitmap_filter.
+    // Both begin and end can be wider than the index type range.
     virtual void searchRange(BitmapFilterPtr & bitmap_filter, const Key & begin, const Key & end) const = 0;
 };
 
