@@ -224,7 +224,7 @@ try
 {
     for (size_t task_num = 1; task_num < 100; ++task_num)
     {
-        PipelineExecutorContext exec_context{"", "", MemoryTracker::create()};
+        PipelineExecutorContext exec_context{"", "", "", MemoryTracker::create()};
         std::vector<TaskPtr> tasks;
         for (size_t i = 0; i < task_num; ++i)
             tasks.push_back(std::make_unique<MemoryTraceTask>(exec_context));

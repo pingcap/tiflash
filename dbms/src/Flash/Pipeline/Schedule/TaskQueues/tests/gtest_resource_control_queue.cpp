@@ -172,6 +172,7 @@ public:
             auto resource_group_name = resource_groups[i]->name;
             all_contexts[i] = std::make_shared<PipelineExecutorContext>(
                 query_id_prefix + resource_group_name,
+                query_id_prefix + resource_group_name,
                 req_id_prefix + resource_group_name,
                 mem_tracker,
                 nullptr,
@@ -375,6 +376,7 @@ TEST_F(TestResourceControlQueue, BasicTest)
         String group_name = "rg" + std::to_string(i);
         all_contexts[i] = std::make_shared<PipelineExecutorContext>(
             "mock-query-id",
+            "mock-query-id",
             "mock-req-id",
             mem_tracker,
             nullptr,
@@ -411,6 +413,7 @@ TEST_F(TestResourceControlQueue, BasicTimeoutTest)
     String group_name = "rg1";
     auto exec_context = std::make_shared<PipelineExecutorContext>(
         "mock-query-id",
+        "mock-query-id",
         "mock-req-id",
         mem_tracker,
         nullptr,
@@ -445,7 +448,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
     TaskScheduler task_scheduler(config);
 
     PipelineExecutorContext
-        exec_context("mock-query-id", "mock-req-id", mem_tracker, nullptr, nullptr, nullptr, rg_name);
+        exec_context("mock-query-id", "mock-query-id", "mock-req-id", mem_tracker, nullptr, nullptr, nullptr, rg_name);
 
     auto task = std::make_unique<SimpleTask>(exec_context);
     // This task should use 5*100ms cpu_time.
