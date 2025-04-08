@@ -240,22 +240,22 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
         pushBack(PhysicalExpand2::build(context, executor_id, log, executor->expand2(), popBack()));
         break;
-
-        {
-            // This is tmp code for tipb::ExecType::CTESource
-            auto fine_grained_shuffle = FineGrainedShuffle(executor);
-            GET_METRIC(tiflash_coprocessor_executor_count, type_cte_source).Increment();
-            pushBack(PhysicalCTESource::build(context, executor_id, log, fine_grained_shuffle));
-        }
-        {
-            // This is tmp code for tipb::ExecType::CTESink
-            auto fine_grained_shuffle = FineGrainedShuffle(executor);
-            GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
-            pushBack(PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack()));
-        }
     }
-    // TODO add tipb::ExecType::CTESource
-    // TODO add tipb::ExecType::CTESink
+    case tipb::ExecType::TypeCTESource:
+    {
+        auto fine_grained_shuffle = FineGrainedShuffle(executor);
+        GET_METRIC(tiflash_coprocessor_executor_count, type_cte_source).Increment();
+        pushBack(PhysicalCTESource::build(context, executor_id, log, fine_grained_shuffle, executor->cte_source()));
+        break;
+    }
+    case tipb::ExecType::TypeCTESink:
+    {
+        auto fine_grained_shuffle = FineGrainedShuffle(executor);
+        GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
+        pushBack(
+            PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack(), executor->cte_sink().cte_id()));
+        break;
+    }
     default:
         throw TiFlashException(
             fmt::format("{} executor is not supported", fmt::underlying(executor->tp())),

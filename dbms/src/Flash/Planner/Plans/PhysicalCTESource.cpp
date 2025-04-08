@@ -49,7 +49,10 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
         schema,
         fine_grained_shuffle,
         log->identifier(),
-        Block(schema));
+        Block(schema),
+        cte_source.cte_id(),
+        partition_col_ids,
+        partition_col_collators);
     return physical_exchange_receiver;
 }
 
