@@ -28,15 +28,18 @@ public:
         const String & executor_id,
         const LoggerPtr & log,
         const FineGrainedShuffle & fine_grained_shuffle,
-        const PhysicalPlanNodePtr & child);
+        const PhysicalPlanNodePtr & child,
+        UInt32 cte_id);
 
     PhysicalCTESink(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
-        const PhysicalPlanNodePtr & child_)
+        const PhysicalPlanNodePtr & child_,
+        UInt32 cte_id_)
         : PhysicalUnary(executor_id_, PlanType::CTESink, schema_, fine_grained_shuffle_, req_id, child_)
+        , cte_id(cte_id_)
     {}
 
     void finalizeImpl(const Names & parent_require) override;
@@ -50,6 +53,6 @@ private:
         Context & context,
         size_t /*concurrency*/) override;
 
-    UInt64 cte_id = 0; // TODO initialize it from tipb
+    UInt32 cte_id;
 };
 } // namespace DB

@@ -26,7 +26,8 @@ PhysicalPlanNodePtr PhysicalCTESink::build(
     const String & executor_id,
     const LoggerPtr & log,
     const FineGrainedShuffle & fine_grained_shuffle,
-    const PhysicalPlanNodePtr & child)
+    const PhysicalPlanNodePtr & child,
+    UInt32 cte_id)
 {
     RUNTIME_CHECK(child);
 
@@ -35,7 +36,8 @@ PhysicalPlanNodePtr PhysicalCTESink::build(
         child->getSchema(),
         fine_grained_shuffle,
         log->identifier(),
-        child);
+        child,
+        cte_id);
     physical_cte_sink->disableRestoreConcurrency();
     return physical_cte_sink;
 }

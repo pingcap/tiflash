@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/ExchangeSenderInterpreterHelper.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <Flash/Planner/Plans/PhysicalLeaf.h>
@@ -27,17 +28,21 @@ public:
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const FineGrainedShuffle & fine_grained_shuffle);
+        const FineGrainedShuffle & fine_grained_shuffle,
+        const tipb::CTESource & cte_source);
 
-    // TODO to partition data, we may need to call `ExchangeSenderInterpreterHelper::genPartitionColCollators` like PhysicalExchangeSender
     PhysicalCTESource(
         const String & executor_id_,
         const NamesAndTypes & schema_,
         const FineGrainedShuffle & fine_grained_shuffle,
         const String & req_id,
-        const Block & sample_block_)
+        const Block & sample_block_,
+        const std::vector<Int64> partition_col_ids_,
+        const TiDB::TiDBCollators partition_col_collators_)
         : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, fine_grained_shuffle, req_id)
         , sample_block(sample_block_)
+        , partition_col_ids(partition_col_ids_)
+        , partition_col_collators(partition_col_collators_)
     {}
 
     void finalizeImpl(const Names & parent_require) override;
@@ -54,6 +59,8 @@ private:
 private:
     Block sample_block;
     String query_id_and_cte_id;
-    UInt64 cte_id = 0; // TODO initialize it from tipb
+    UInt64 cte_id = 0;
+    std::vector<Int64> partition_col_ids;
+    TiDB::TiDBCollators partition_col_collators;
 };
 } // namespace DB

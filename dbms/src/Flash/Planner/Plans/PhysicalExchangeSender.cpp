@@ -35,9 +35,11 @@ PhysicalPlanNodePtr PhysicalExchangeSender::build(
 {
     RUNTIME_CHECK(child);
 
-    std::vector<Int64> partition_col_ids = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender);
-    TiDB::TiDBCollators partition_col_collators
-        = ExchangeSenderInterpreterHelper::genPartitionColCollators(exchange_sender);
+    std::vector<Int64> partition_col_ids
+        = ExchangeSenderInterpreterHelper::genPartitionColIds(exchange_sender.partition_keys());
+    TiDB::TiDBCollators partition_col_collators = ExchangeSenderInterpreterHelper::genPartitionColCollators(
+        exchange_sender.partition_keys(),
+        exchange_sender.types());
 
     auto physical_exchange_sender = std::make_shared<PhysicalExchangeSender>(
         executor_id,

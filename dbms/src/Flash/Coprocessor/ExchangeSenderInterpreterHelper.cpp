@@ -23,10 +23,10 @@
 
 namespace DB::ExchangeSenderInterpreterHelper
 {
-std::vector<Int64> genPartitionColIds(const tipb::ExchangeSender & exchange_sender)
+std::vector<Int64> genPartitionColIds(const ::google::protobuf::RepeatedPtrField<::tipb::Expr> & partition_keys)
 {
     std::vector<Int64> partition_col_ids;
-    for (const auto & part_key : exchange_sender.partition_keys())
+    for (const auto & part_key : partition_keys)
     {
         if (unlikely(!isColumnExpr(part_key)))
         {
@@ -41,13 +41,15 @@ std::vector<Int64> genPartitionColIds(const tipb::ExchangeSender & exchange_send
     return partition_col_ids;
 }
 
-TiDB::TiDBCollators genPartitionColCollators(const tipb::ExchangeSender & exchange_sender)
+TiDB::TiDBCollators genPartitionColCollators(
+    const ::google::protobuf::RepeatedPtrField<::tipb::Expr> & partition_keys,
+    const ::google::protobuf::RepeatedPtrField<::tipb::FieldType> & types)
 {
     TiDB::TiDBCollators partition_col_collators;
-    const auto & part_keys = exchange_sender.partition_keys();
+    auto type_num = types.size();
     /// in case TiDB is an old version, it has no collation info
-    bool has_collator_info = exchange_sender.types_size() != 0;
-    if (unlikely(has_collator_info && part_keys.size() != exchange_sender.types_size()))
+    bool has_collator_info = type_num != 0;
+    if (unlikely(has_collator_info && partition_keys.size() != type_num))
     {
         throw TiFlashException(
             fmt::format(
@@ -56,12 +58,12 @@ TiDB::TiDBCollators genPartitionColCollators(const tipb::ExchangeSender & exchan
                 __PRETTY_FUNCTION__),
             Errors::Coprocessor::BadRequest);
     }
-    for (int i = 0; i < part_keys.size(); ++i)
+    for (int i = 0; i < partition_keys.size(); ++i)
     {
-        const auto & expr = part_keys[i];
+        const auto & expr = partition_keys[i];
         if (has_collator_info && removeNullable(getDataTypeByFieldTypeForComputingLayer(expr.field_type()))->isString())
         {
-            partition_col_collators.emplace_back(getCollatorFromFieldType(exchange_sender.types(i)));
+            partition_col_collators.emplace_back(getCollatorFromFieldType(types.at(i)));
         }
         else
         {

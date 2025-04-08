@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
@@ -19,18 +20,30 @@
 #include <Interpreters/Context.h>
 #include <Operators/CTESource.h>
 
+
 namespace DB
 {
 PhysicalPlanNodePtr PhysicalCTESource::build(
     const Context & /*context*/,
     const String & executor_id,
     const LoggerPtr & log,
-    const FineGrainedShuffle & fine_grained_shuffle
-    /* TODO tipb::ExchangeReceiver */)
+    const FineGrainedShuffle & fine_grained_shuffle,
+    const tipb::CTESource & cte_source)
 {
-    // TODO tipb for cte: need output schema field in tipb for cte source
-    // TODO we need to get meta data such as `partition_col_collators` for partitioning data
-    NamesAndTypes schema; // TODO scchema info is from tipb
+    std::vector<Int64> partition_col_ids
+        = ExchangeSenderInterpreterHelper::genPartitionColIds(cte_source.partition_keys());
+    TiDB::TiDBCollators partition_col_collators
+        = ExchangeSenderInterpreterHelper::genPartitionColCollators(cte_source.partition_keys(), cte_source.types());
+
+    DAGSchema dag_schema;
+    for (int i = 0; i < cte_source.field_types_size(); ++i)
+    {
+        String name = genNameForExchangeReceiver(i);
+        TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(cte_source.field_types(i));
+        dag_schema.emplace_back(std::move(name), std::move(info));
+    }
+
+    NamesAndTypes schema = toNamesAndTypes(dag_schema);
     auto physical_exchange_receiver = std::make_shared<PhysicalCTESource>(
         executor_id,
         schema,
@@ -58,7 +71,9 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
             exec_context,
             log->identifier(),
             query_id_and_cte_id,
-            context.getCTEManager()));
+            context.getCTEManager(),
+            this->partition_col_ids,
+            this->partition_col_collators));
     }
     context.getDAGContext()->addInboundIOProfileInfos(this->executor_id, group_builder.getCurIOProfileInfos());
 }
