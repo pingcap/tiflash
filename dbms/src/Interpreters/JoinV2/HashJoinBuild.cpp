@@ -62,14 +62,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         {
             size_t index = row_layout.other_column_indexes[i].first;
             const auto & column = block.getByPosition(index).column;
-            if (const auto * column_string = typeid_cast<const ColumnString *>(column.get()))
-            {
-                wd.lm_row_size += column_string->getChars().size() + sizeof(UInt32) * column_string->size();
-            }
-            else
-            {
-                wd.lm_row_size += column->byteSize();
-            }
+            wd.lm_row_size += column->serializeByteSize();
         }
     }
 
@@ -142,7 +135,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
             container.data.resize(wd.partition_row_sizes[i], CPU_CACHE_LINE_SIZE);
             wd.enable_tagged_pointer &= isRowPtrTagZero(container.data.data());
             wd.enable_tagged_pointer &= isRowPtrTagZero(container.data.data() + wd.partition_row_sizes[i]);
-            assert((reinterpret_cast<uintptr_t>(container.data.data()) & (CPU_CACHE_LINE_SIZE - 1)) == 0);
+            RUNTIME_CHECK((reinterpret_cast<uintptr_t>(container.data.data()) & (CPU_CACHE_LINE_SIZE - 1)) == 0);
             wd.all_size += wd.partition_row_sizes[i];
 
             container.offsets.reserve(wd.partition_row_count[i]);

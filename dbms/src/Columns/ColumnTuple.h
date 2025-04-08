@@ -97,6 +97,14 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
+    size_t serializeByteSize() const override
+    {
+        size_t res = 0;
+        for (const auto & column : columns)
+            res += column->serializeByteSize();
+        return res;
+    }
+
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override
     {
         for (const auto & column : columns)

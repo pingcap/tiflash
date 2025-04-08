@@ -238,6 +238,8 @@ public:
         return pos + string_size;
     }
 
+    size_t serializeByteSize() const override { return chars.size() + offsets.size() * sizeof(UInt32); }
+
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
     void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & byte_size,

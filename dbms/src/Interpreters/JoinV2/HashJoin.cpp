@@ -452,7 +452,7 @@ void HashJoin::workAfterBuildRowFinish()
         settings.probe_enable_prefetch_threshold,
         enable_tagged_pointer);
 
-    const size_t lm_size_threshold = 32;
+    const size_t lm_size_threshold = 16;
     bool late_materialization = false;
     size_t avg_lm_row_size = 0;
     if (has_other_condition
