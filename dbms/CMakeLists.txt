@@ -202,6 +202,7 @@ target_link_libraries (tiflash_common_io
     ${RE2_LIBRARY}
     ${RE2_ST_LIBRARY}
     fastpforlib
+    absl::synchronization
 )
 
 target_include_directories (tiflash_common_io BEFORE PRIVATE ${kvClient_SOURCE_DIR}/include)
@@ -221,7 +222,6 @@ target_link_libraries(tiflash_vector_search
 target_link_libraries (dbms
     ${OPENSSL_CRYPTO_LIBRARY}
     ${BTRIE_LIBRARIES}
-    absl::synchronization
     tiflash_contrib::aws_s3
     tiflash_vector_search
     clara_shared

@@ -14,13 +14,13 @@
 
 #pragma once
 
+#include <Common/SharedMutexProtected.h>
 #include <DataTypes/IDataType.h>
 #include <Parsers/IAST_fwd.h>
 
 #include <ext/singleton.h>
 #include <functional>
 #include <memory>
-#include <shared_mutex>
 #include <unordered_map>
 
 namespace DB
@@ -39,8 +39,7 @@ public:
     void tryCache(const String & full_name, const DataTypePtr & datatype_ptr);
     size_t getFullNameCacheSize() const
     {
-        std::shared_lock lock(rw_lock);
-        return cached_types.size();
+        return cached_types.withShared([&](const FullnameTypes & types) { return types.size(); });
     }
 
 private:
@@ -48,8 +47,7 @@ private:
     using FullnameTypes = std::unordered_map<String, DataTypePtr>;
     static constexpr int MAX_FULLNAME_TYPES = 50000;
     static constexpr int FULLNAME_TYPES_HIGH_WATER_MARK = 49000;
-    mutable std::shared_mutex rw_lock;
-    FullnameTypes cached_types;
+    SharedMutexProtected<FullnameTypes> cached_types;
 };
 
 /** Creates a data type by name of data type family and parameters.
