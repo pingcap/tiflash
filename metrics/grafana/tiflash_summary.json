@@ -8403,7 +8403,7 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "alias": "cache_hit_ratio",
+              "alias": "/cache_hit_ratio/",
               "yaxis": 2
             }
           ],
@@ -8413,7 +8413,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"add_cache_stale|add_cache_succ|add_cache_total_bytes_limit|add_cache_reach_count_limit\"}[1m])) by (type)",
+              "expr": "sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"add_cache_total_bytes_limit\"}[1m])) by (type)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -8423,7 +8423,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"data_sharing_hit\"}[1m]))/sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"data_sharing_hit|data_sharing_miss\"}[1m]))",
+              "expr": "sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"data_sharing_hit\"}[1m]))/sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"data_sharing_hit|data_sharing_miss\"}[1m]))",
               "hide": false,
               "instant": false,
               "interval": "",
@@ -8432,7 +8432,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"extra_column_hit\"}[1m]))/sum(rate(tiflash_storage_read_thread_counter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"extra_column_hit|extra_column_miss\"}[1m]))",
+              "expr": "sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"extra_column_hit\"}[1m]))/sum(rate(tiflash_storage_column_cache_packs{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"extra_column_hit|extra_column_miss\"}[1m]))",
               "hide": true,
               "instant": false,
               "interval": "",
