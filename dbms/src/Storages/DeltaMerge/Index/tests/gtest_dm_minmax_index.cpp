@@ -2034,8 +2034,8 @@ try
     auto data_type = makeNullable(type);
 
     // Generate a minmax index with the min value is null as a old version(before v6.4) minmax index.
-    PaddedPODArray<UInt8> has_null_marks(1);
-    PaddedPODArray<UInt8> has_value_marks(1);
+    PaddedPODArray<UInt8> has_null_marks(1, 1);
+    PaddedPODArray<UInt8> has_value_marks(1, 1);
     MutableColumnPtr minmaxes = data_type->createColumn();
 
     auto column = data_type->createColumn();
