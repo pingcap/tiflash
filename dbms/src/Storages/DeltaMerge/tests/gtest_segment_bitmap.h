@@ -36,14 +36,13 @@ protected:
     static constexpr auto SEG_ID = DELTA_MERGE_FIRST_SEGMENT_ID;
     ColumnPtr hold_row_id;
     ColumnPtr hold_handle;
-    RowKeyRanges read_ranges;
     bool is_common_handle = false;
 
     void setRowKeyRange(Int64 begin, Int64 end, bool including_right_boundary);
 
     void writeSegmentGeneric(
         std::string_view seg_data,
-        std::optional<std::tuple<Int64, Int64, bool>> rowkey_range = std::nullopt);
+        std::optional<std::tuple<Int64, Int64, bool>> seg_rowkey_range = std::nullopt);
 
     /*
     0----------------stable_rows----------------stable_rows + delta_rows <-- append
@@ -61,9 +60,7 @@ protected:
     Returns {row_id, handle}.
     */
     template <typename HandleType>
-    std::pair<const PaddedPODArray<UInt32> *, const std::optional<ColumnView<HandleType>>> writeSegment(
-        std::string_view seg_data,
-        std::optional<std::tuple<Int64, Int64, bool>> rowkey_range);
+    void writeSegment(std::string_view seg_data, std::optional<std::tuple<Int64, Int64, bool>> seg_rowkey_range);
 
     void writeSegment(const SegDataUnit & unit);
 
@@ -73,7 +70,11 @@ protected:
         size_t expected_size;
         std::string expected_row_id;
         std::string expected_handle;
-        std::optional<std::tuple<Int64, Int64, bool>> rowkey_range;
+        std::optional<std::tuple<Int64, Int64, bool>> seg_rowkey_range;
+
+        RowKeyRanges read_ranges;
+
+        const std::optional<String> expected_bitmap;
     };
 
     void runTestCaseGeneric(TestCase test_case, int caller_line);
@@ -84,5 +85,28 @@ protected:
     DMFilePackFilterResults loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges);
 
     void checkHandle(PageIdU64 seg_id, std::string_view seq_ranges, int caller_line);
+
+    struct CheckBitmapOptions
+    {
+        const PageIdU64 seg_id;
+        const int caller_line; // For debug
+        const UInt64 read_ts = std::numeric_limits<UInt64>::max();
+        const std::optional<RowKeyRanges> read_ranges;
+        const std::optional<String> expected_bitmap;
+        const DMFilePackFilterResults rs_filter_results;
+
+        String toDebugString() const
+        {
+            return fmt::format(
+                "seg_id={}, caller_line={}, read_ts={}, read_ranges={}, expected_bitmap={}",
+                seg_id,
+                caller_line,
+                read_ts,
+                read_ranges,
+                expected_bitmap);
+        }
+    };
+
+    void checkBitmap(const CheckBitmapOptions & opt);
 };
 } // namespace DB::DM::tests

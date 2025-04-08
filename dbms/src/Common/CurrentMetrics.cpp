@@ -62,6 +62,7 @@
     M(DT_SnapshotOfDeltaMerge)                  \
     M(DT_SnapshotOfDeltaCompact)                \
     M(DT_SnapshotOfPlaceIndex)                  \
+    M(DT_SnapshotOfReplayVersionChain)          \
     M(DT_SnapshotOfBitmapFilter)                \
     M(DT_SnapshotOfDisaggReadNodeRead)          \
     M(IOLimiterPendingBgWriteReq)               \
