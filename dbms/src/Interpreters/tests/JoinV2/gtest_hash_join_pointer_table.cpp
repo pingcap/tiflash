@@ -28,7 +28,8 @@ namespace tests
 class HashJoinPointerTableTest : public ::testing::Test
 {
 public:
-    static void testInit(HashJoinKeyMethod method,
+    static void testInit(
+        HashJoinKeyMethod method,
         size_t row_count,
         size_t hash_value_bytes,
         size_t pointer_table_size,
@@ -61,7 +62,7 @@ try
 {
     testInit(HashJoinKeyMethod::OneKey8, 100000000, 1, 1 << 8, 8, 0xff);
     testInit(HashJoinKeyMethod::OneKey8, 1, 1, 1 << 8, 8, 0xff);
-    
+
     testInit(HashJoinKeyMethod::OneKey16, 100000000, 2, 1 << 16, 16, 0xffff);
     testInit(HashJoinKeyMethod::OneKey16, 1, 2, 1 << 16, 16, 0xffff);
 
