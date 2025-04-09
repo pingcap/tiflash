@@ -629,6 +629,21 @@ public:
         }
     }
 
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        auto & to_concrete = static_cast<ColumnNullable &>(to);
+        if (getCounter(place) > 0)
+        {
+            nested_function->batchInsertSameResultInto(nestedPlace(place), to_concrete.getNestedColumn(), num);
+            auto & null_map = to_concrete.getNullMapData();
+            null_map.resize_fill_zero(null_map.size() + num);
+        }
+        else
+        {
+            to_concrete.insertManyDefaults(num);
+        }
+    }
+
     bool hasTrivialDestructor() const override { return nested_function->hasTrivialDestructor(); }
 
     size_t sizeOfData() const override { return prefix_size + nested_function->sizeOfData(); }
