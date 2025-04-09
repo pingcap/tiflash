@@ -71,14 +71,14 @@ try
     testInit(HashJoinKeyMethod::OneKey128, (1 << 24) + 15, 4, 1 << 26, 26, 0xffffffc0);
     testInit(HashJoinKeyMethod::KeysFixed32, (1 << 26) + 9, 3, 1 << 24, 24, 0xffffff);
     // pointer table size can not exceed 2^32
-    testInit(HashJoinKeyMethod::KeysFixed64, (1ULL << 50) + 15, 6, 1ULL << 32, 32, 0xffffffff0000);
+    testInit(HashJoinKeyMethod::KeysFixed64, (1ULL << 50) + 15, 6, 1ULL << 32, 32, 0xffffffff0000ULL);
 
-    testInit(HashJoinKeyMethod::KeysFixed128, 1 << 4, 8, 1 << 10, 10, 0xffc0000000000000);
-    testInit(HashJoinKeyMethod::KeysFixed256, 1 << 17, 8, 1 << 18, 18, 0xffffc00000000000);
-    testInit(HashJoinKeyMethod::KeysFixedOther, (1 << 17) + 233, 8, 1 << 19, 19, 0xffffe00000000000);
-    testInit(HashJoinKeyMethod::OneKeyString, (1 << 29) + 12345, 8, 1ULL << 31, 31, 0xfffffffe00000000);
+    testInit(HashJoinKeyMethod::KeysFixed128, 1 << 4, 8, 1 << 10, 10, 0xffc0000000000000ULL);
+    testInit(HashJoinKeyMethod::KeysFixed256, 1 << 17, 8, 1 << 18, 18, 0xffffc00000000000ULL);
+    testInit(HashJoinKeyMethod::KeysFixedOther, (1 << 17) + 233, 8, 1 << 19, 19, 0xffffe00000000000ULL);
+    testInit(HashJoinKeyMethod::OneKeyString, (1 << 29) + 12345, 8, 1ULL << 31, 31, 0xfffffffe00000000ULL);
     // pointer table size can not exceed 2^32
-    testInit(HashJoinKeyMethod::KeySerialized, (1ULL << 60) + 233, 8, 1ULL << 32, 32, 0xffffffff00000000);
+    testInit(HashJoinKeyMethod::KeySerialized, (1ULL << 60) + 233, 8, 1ULL << 32, 32, 0xffffffff00000000ULL);
 }
 CATCH
 

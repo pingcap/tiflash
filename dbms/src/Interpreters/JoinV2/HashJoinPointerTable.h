@@ -73,6 +73,8 @@ private:
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
+#else
+public:
 #endif
     size_t hash_value_bits = 0;
     size_t pointer_table_size = 0;
