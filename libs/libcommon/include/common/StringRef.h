@@ -195,7 +195,8 @@ struct CRC32Hash
 
         const char * end = pos + size;
         UInt32 crc1 = 0xFFFFFFFF;
-        UInt32 crc2 = 0xDEADBEEF;
+        /// Comes from FNV-1a 32-bit offset basis
+        UInt32 crc2 = 0x811C9DC5;
 
         do
         {
