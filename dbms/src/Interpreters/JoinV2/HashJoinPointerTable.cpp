@@ -48,9 +48,9 @@ void HashJoinPointerTable::init(
         pointer_table_size = std::min(pointer_table_size, 1ULL << 32);
     }
 
-    RUNTIME_ASSERT(isPowerOfTwo(pointer_table_size) && pointer_table_size > 0);
+    RUNTIME_CHECK(isPowerOfTwo(pointer_table_size) && pointer_table_size > 0);
     pointer_table_size_degree = __builtin_ctzll(pointer_table_size);
-    RUNTIME_ASSERT((1ULL << pointer_table_size_degree) == pointer_table_size);
+    RUNTIME_CHECK((1ULL << pointer_table_size_degree) == pointer_table_size);
 
     enable_probe_prefetch = pointer_table_size >= probe_prefetch_threshold;
 

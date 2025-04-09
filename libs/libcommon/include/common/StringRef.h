@@ -120,7 +120,7 @@ inline bool operator>(StringRef lhs, StringRef rhs)
 
 struct StringRefHash64
 {
-    size_t operator()(StringRef x) const { return CityHash_v1_0_2::CityHash64(x.data, x.size); }
+    UInt64 operator()(StringRef x) const { return CityHash_v1_0_2::CityHash64(x.data, x.size); }
 };
 
 #if defined(__SSE4_2__)
@@ -142,7 +142,7 @@ inline UInt64 rotateByAtLeast1(UInt64 val, int shift)
     return (val >> shift) | (val << (64 - shift));
 }
 
-inline size_t hashLessThan8(const char * data, size_t size)
+inline UInt64 hashLessThan8(const char * data, size_t size)
 {
     static constexpr UInt64 k2 = 0x9ae16a3b2f90404fULL;
     static constexpr UInt64 k3 = 0xc949d7c7509e6557ULL;
@@ -166,7 +166,7 @@ inline size_t hashLessThan8(const char * data, size_t size)
     return k2;
 }
 
-[[maybe_unused]] inline size_t hashLessThan16(const char * data, size_t size)
+[[maybe_unused]] inline UInt64 hashLessThan16(const char * data, size_t size)
 {
     if (size > 8)
     {
@@ -180,7 +180,7 @@ inline size_t hashLessThan8(const char * data, size_t size)
 
 struct CRC32Hash
 {
-    static size_t operator()(const StringRef & x)
+    static UInt64 operator()(const StringRef & x)
     {
         const char * pos = x.data;
         size_t size = x.size;
@@ -194,20 +194,23 @@ struct CRC32Hash
         }
 
         const char * end = pos + size;
-        size_t res = -1ULL;
+        UInt32 crc1 = 0xFFFFFFFF;
+        UInt32 crc2 = 0xDEADBEEF;
 
         do
         {
             auto word = unalignedLoad<UInt64>(pos);
-            res = _mm_crc32_u64(res, word);
+            crc1 = _mm_crc32_u64(crc1, word);
+            crc2 = _mm_crc32_u64(crc2, word);
 
             pos += 8;
         } while (pos + 8 < end);
 
         auto word = unalignedLoad<UInt64>(end - 8); /// I'm not sure if this is normal.
-        res = _mm_crc32_u64(res, word);
+        crc1 = _mm_crc32_u64(crc1, word);
+        crc2 = _mm_crc32_u64(crc2, word);
 
-        return res;
+        return (static_cast<UInt64>(crc1) << 32) | crc2;
     }
 };
 
@@ -219,7 +222,7 @@ struct StringRefHash : CRC32Hash
 
 struct CRC32Hash
 {
-    size_t operator()(StringRef /* x */) const { throw std::logic_error{"Not implemented CRC32Hash without SSE"}; }
+    UInt64 operator()(StringRef /* x */) const { throw std::logic_error{"Not implemented CRC32Hash without SSE"}; }
 };
 
 struct StringRefHash : StringRefHash64
