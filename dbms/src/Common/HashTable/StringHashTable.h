@@ -56,7 +56,7 @@ struct StringHashTableHash
 #if defined(__SSE4_2__)
         return _mm_crc32_u64(crc, data);
 #elif defined(__aarch64__)
-        return __crc32d(crc, data);
+        return __crc32cd(crc, data);
 #endif
     }
     static size_t ALWAYS_INLINE operator()(StringKey8 key)
