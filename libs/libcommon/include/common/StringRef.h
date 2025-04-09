@@ -221,7 +221,7 @@ struct CRC32Hash
             pos += 8;
         } while (pos + 8 < end);
 
-        auto word = unalignedLoad<UInt64>(end - 8); /// I'm not sure if this is normal.
+        auto word = unalignedLoad<UInt64>(end - 8);
         crc1 = crc32U64(crc1, word);
         crc2 = crc32U64(crc2, word);
 
