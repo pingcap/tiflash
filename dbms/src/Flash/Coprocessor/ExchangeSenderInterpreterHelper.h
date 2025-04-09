@@ -20,9 +20,7 @@
 
 namespace DB::ExchangeSenderInterpreterHelper
 {
-std::vector<Int64> genPartitionColIds(const ::google::protobuf::RepeatedPtrField<::tipb::Expr> & partition_keys);
+std::vector<Int64> genPartitionColIds(const tipb::ExchangeSender & exchange_sender);
 
-TiDB::TiDBCollators genPartitionColCollators(
-    const ::google::protobuf::RepeatedPtrField<::tipb::Expr> & partition_keys,
-    const ::google::protobuf::RepeatedPtrField<::tipb::FieldType> & types);
+TiDB::TiDBCollators genPartitionColCollators(const tipb::ExchangeSender & exchange_sender);
 } // namespace DB::ExchangeSenderInterpreterHelper

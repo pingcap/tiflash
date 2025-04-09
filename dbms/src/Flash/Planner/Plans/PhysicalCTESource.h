@@ -37,14 +37,10 @@ public:
         const FineGrainedShuffle & fine_grained_shuffle,
         const String & req_id,
         const Block & sample_block_,
-        UInt64 cte_id_,
-        const std::vector<Int64> partition_col_ids_,
-        const TiDB::TiDBCollators partition_col_collators_)
+        UInt64 cte_id_)
         : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, fine_grained_shuffle, req_id)
         , sample_block(sample_block_)
         , cte_id(cte_id_)
-        , partition_col_ids(partition_col_ids_)
-        , partition_col_collators(partition_col_collators_)
     {}
 
     void finalizeImpl(const Names & parent_require) override;

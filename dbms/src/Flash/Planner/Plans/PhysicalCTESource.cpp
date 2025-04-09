@@ -30,11 +30,6 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     const FineGrainedShuffle & fine_grained_shuffle,
     const tipb::CTESource & cte_source)
 {
-    std::vector<Int64> partition_col_ids
-        = ExchangeSenderInterpreterHelper::genPartitionColIds(cte_source.partition_keys());
-    TiDB::TiDBCollators partition_col_collators
-        = ExchangeSenderInterpreterHelper::genPartitionColCollators(cte_source.partition_keys(), cte_source.types());
-
     DAGSchema dag_schema;
     for (int i = 0; i < cte_source.field_types_size(); ++i)
     {
@@ -44,16 +39,13 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     }
 
     NamesAndTypes schema = toNamesAndTypes(dag_schema);
-    auto physical_exchange_receiver = std::make_shared<PhysicalCTESource>(
+    return std::make_shared<PhysicalCTESource>(
         executor_id,
         schema,
         fine_grained_shuffle,
         log->identifier(),
         Block(schema),
-        cte_source.cte_id(),
-        partition_col_ids,
-        partition_col_collators);
-    return physical_exchange_receiver;
+        cte_source.cte_id());
 }
 
 void PhysicalCTESource::buildPipelineExecGroupImpl(
@@ -74,9 +66,7 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
             exec_context,
             log->identifier(),
             query_id_and_cte_id,
-            context.getCTEManager(),
-            this->partition_col_ids,
-            this->partition_col_collators));
+            context.getCTEManager()));
     }
     context.getDAGContext()->addInboundIOProfileInfos(this->executor_id, group_builder.getCurIOProfileInfos());
 }

@@ -30,15 +30,11 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const String & query_id_and_cte_id_,
-        CTEManager * cte_manager_,
-        std::vector<Int64> partition_col_ids_,
-        TiDB::TiDBCollators partition_col_collators_)
+        CTEManager * cte_manager_)
         : SourceOp(exec_context_, req_id)
         , query_id_and_cte_id(query_id_and_cte_id_)
         , cte_manager(cte_manager_)
         , cte(cte_manager_->getCTE(query_id_and_cte_id_))
-        , partition_col_ids(partition_col_ids_)
-        , partition_col_collators(partition_col_collators_)
     {}
 
     ~CTESourceOp() override { assert(!this->cte); }
@@ -60,8 +56,5 @@ private:
 
     uint64_t total_rows{};
     std::queue<Block> block_queue;
-
-    std::vector<Int64> partition_col_ids;
-    TiDB::TiDBCollators partition_col_collators;
 };
 } // namespace DB
