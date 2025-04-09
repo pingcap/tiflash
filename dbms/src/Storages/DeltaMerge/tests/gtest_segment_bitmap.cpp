@@ -1181,7 +1181,7 @@ try
 
 
     auto guard = enableVersionChainTemporary(db_context->getGlobalContext().getSettingsRef());
-    ASSERT_TRUE(dm_context->enableVersionChain());
+    ASSERT_TRUE(dm_context->isVersionChainEnabled());
 
     auto get_base_versions = [&](bool flushed) {
         auto [seg, snap] = getSegmentForRead(SEG_ID);

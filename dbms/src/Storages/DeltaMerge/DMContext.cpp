@@ -71,7 +71,7 @@ DMContext::DMContext(
     , scan_context(scan_context_ ? scan_context_ : std::make_shared<ScanContext>())
 {}
 
-bool DMContext::enableVersionChain() const
+bool DMContext::isVersionChainEnabled() const
 {
     return global_context.getSettingsRef().enable_version_chain != static_cast<Int64>(VersionChainMode::Disabled);
 }

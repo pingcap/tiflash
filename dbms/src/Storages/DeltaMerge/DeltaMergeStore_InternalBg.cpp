@@ -396,7 +396,7 @@ bool DeltaMergeStore::handleBackgroundTask(bool heavy)
     }
 
     auto update_delta_index_or_version_chain = [](const auto & task) {
-        if (task.dm_context->enableVersionChain())
+        if (task.dm_context->isVersionChainEnabled())
             task.segment->replayVersionChain(*task.dm_context);
         else
             task.segment->placeDeltaIndex(*task.dm_context);
