@@ -15,8 +15,7 @@
 #include <Functions/FunctionHelpers.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-
-#include "common/types.h"
+#include <common/types.h>
 
 namespace DB
 {
@@ -60,7 +59,7 @@ try
     auto col_string = createColumn<String>({"sdafyuwer123"}).column;
     testCloneFullColumn(col_string);
     auto col_array = createColumn<Array>(
-                         std::make_tuple(std::make_shared<DataTypeFloat32>()), //
+                         std::make_tuple(std::make_shared<DataTypeFloat32>()),
                          {Array{}, Array{1.0, 2.0}, Array{1.0, 2.0, 3.0}})
                          .column;
     testCloneFullColumn(col_array);
@@ -99,7 +98,7 @@ try
     ASSERT_EQ(nullable_col_string->serializeByteSize(), sizeof(UInt8) * 3 + sizeof(UInt32) * 3 + 13);
 
     auto col_array = createColumn<Array>(
-                         std::make_tuple(std::make_shared<DataTypeFloat32>()), //
+                         std::make_tuple(std::make_shared<DataTypeFloat32>()),
                          {Array{}, Array{1.0, 2.0}, Array{1.0, 2.0, 3.0}})
                          .column;
     ASSERT_EQ(col_array->serializeByteSize(), sizeof(UInt32) * 3 + sizeof(Float32) * 5);
