@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/PODArray.h>
 #include <Storages/KVStore/Utils.h>
 
 #include <vector>
@@ -30,12 +31,12 @@ struct RowContainer
 {
     PaddedPODArray<char> data;
     PaddedPODArray<size_t> offsets;
-    PaddedPODArray<size_t> hashes;
+    PaddedPODArray<UInt64> hashes;
 
     size_t size() const { return offsets.size(); }
 
     RowPtr getRowPtr(ssize_t row) { return &data[offsets[row - 1]]; }
-    size_t getHash(ssize_t row) { return hashes[row]; }
+    UInt64 getHash(ssize_t row) { return hashes[row]; }
 };
 
 struct alignas(CPU_CACHE_LINE_SIZE) MultipleRowContainer

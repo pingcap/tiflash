@@ -120,7 +120,7 @@ bool HashJoinPointerTable::buildImpl(
             if constexpr (tagged_pointer)
                 assert(isRowPtrTagZero(row_ptr));
 
-            size_t hash;
+            UInt64 hash;
             if constexpr (std::is_same_v<HashValueType, void>)
             {
                 hash = container->getHash(i);
