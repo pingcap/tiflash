@@ -50,26 +50,34 @@ inline StringRef ALWAYS_INLINE toStringRef(const StringKey24 & n)
 
 struct StringHashTableHash
 {
+#if defined(__SSE4_2__) || (defined(__aarch64__) && defined(__ARM_FEATURE_CRC32))
+    static inline UInt32 crc32U64(UInt32 crc, UInt64 data)
+    {
 #if defined(__SSE4_2__)
+        return _mm_crc32_u64(crc, data);
+#elif defined(__aarch64__)
+        return __crc32d(crc, data);
+#endif
+    }
     static size_t ALWAYS_INLINE operator()(StringKey8 key)
     {
         size_t res = -1ULL;
-        res = _mm_crc32_u64(res, key);
+        res = crc32U64(res, key);
         return res;
     }
     static size_t ALWAYS_INLINE operator()(const StringKey16 & key)
     {
         size_t res = -1ULL;
-        res = _mm_crc32_u64(res, key.low);
-        res = _mm_crc32_u64(res, key.high);
+        res = crc32U64(res, key.low);
+        res = crc32U64(res, key.high);
         return res;
     }
     static size_t ALWAYS_INLINE operator()(const StringKey24 & key)
     {
         size_t res = -1ULL;
-        res = _mm_crc32_u64(res, key.a);
-        res = _mm_crc32_u64(res, key.b);
-        res = _mm_crc32_u64(res, key.c);
+        res = crc32U64(res, key.a);
+        res = crc32U64(res, key.b);
+        res = crc32U64(res, key.c);
         return res;
     }
 #else

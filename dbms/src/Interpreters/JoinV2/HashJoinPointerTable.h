@@ -47,12 +47,6 @@ public:
         std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
         size_t max_build_size);
 
-    template <typename HashValueType, bool tagged_pointer>
-    bool buildImpl(
-        JoinBuildWorkerData & wd,
-        std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
-        size_t max_build_size);
-
     size_t getBucketNum(size_t hash) const
     {
         return (hash & pointer_table_size_mask) >> (hash_value_bits - pointer_table_size_degree);
@@ -69,6 +63,13 @@ public:
     }
 
     std::atomic<RowPtr> * getPointerTable() const { return reinterpret_cast<std::atomic<RowPtr> *>(pointer_table); }
+
+private:
+    template <typename HashValueType, bool tagged_pointer>
+    bool buildImpl(
+        JoinBuildWorkerData & wd,
+        std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
+        size_t max_build_size);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

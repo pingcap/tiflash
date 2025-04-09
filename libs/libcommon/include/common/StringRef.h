@@ -32,6 +32,11 @@
 #include <smmintrin.h>
 #endif
 
+#if defined(__aarch64__) && defined(__ARM_FEATURE_CRC32)
+#include <arm_acle.h>
+#include <arm_neon.h>
+#endif
+
 
 /**
  * The std::string_view-like container to avoid creating strings to find substrings in the hash table.
@@ -123,7 +128,7 @@ struct StringRefHash64
     UInt64 operator()(StringRef x) const { return CityHash_v1_0_2::CityHash64(x.data, x.size); }
 };
 
-#if defined(__SSE4_2__)
+#if defined(__SSE4_2__) || (defined(__aarch64__) && defined(__ARM_FEATURE_CRC32))
 
 /// Parts are taken from CityHash.
 
@@ -180,6 +185,15 @@ inline UInt64 hashLessThan8(const char * data, size_t size)
 
 struct CRC32Hash
 {
+    static inline UInt32 crc32U64(UInt32 crc, UInt64 data)
+    {
+#if defined(__SSE4_2__)
+        return _mm_crc32_u64(crc, data);
+#elif defined(__aarch64__)
+        return __crc32d(crc, data);
+#endif
+    }
+
     static UInt64 operator()(const StringRef & x)
     {
         const char * pos = x.data;
@@ -201,15 +215,15 @@ struct CRC32Hash
         do
         {
             auto word = unalignedLoad<UInt64>(pos);
-            crc1 = _mm_crc32_u64(crc1, word);
-            crc2 = _mm_crc32_u64(crc2, word);
+            crc1 = crc32U64(crc1, word);
+            crc2 = crc32U64(crc2, word);
 
             pos += 8;
         } while (pos + 8 < end);
 
         auto word = unalignedLoad<UInt64>(end - 8); /// I'm not sure if this is normal.
-        crc1 = _mm_crc32_u64(crc1, word);
-        crc2 = _mm_crc32_u64(crc2, word);
+        crc1 = crc32U64(crc1, word);
+        crc2 = crc32U64(crc2, word);
 
         return (static_cast<UInt64>(crc1) << 32) | crc2;
     }
