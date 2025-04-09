@@ -38,11 +38,7 @@ BitmapFilterPtr buildMVCCBitmapFilter(
     RUNTIME_CHECK(snapshot.stable->getDMFiles().size() == 1, snapshot.stable->getDMFiles().size());
     const auto base_ver_snap = version_chain.replaySnapshot(dm_context, snapshot);
     const auto replay_ms = sw.elapsedMillisecondsFromLastTime();
-    const auto & delta = *(snapshot.delta);
-    const auto & stable = *(snapshot.stable);
-    const UInt32 delta_rows = delta.getRows();
-    const UInt32 stable_rows = stable.getDMFilesRows();
-    const UInt32 total_rows = delta_rows + stable_rows;
+    const UInt32 total_rows = snapshot.delta->getRows() + snapshot.stable->getDMFilesRows();
     const auto & stable_filter_res = pack_filter_results[0];
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, true);
 
