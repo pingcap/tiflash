@@ -129,6 +129,7 @@ UInt32 buildRowKeyFilterDMFile(
         const auto handles = ColumnView<HandleType>(*(block.begin()->column));
         const auto itr = start_row_id_of_need_read_packs.find(pack_id);
         RUNTIME_CHECK(itr != start_row_id_of_need_read_packs.end(), start_row_id_of_need_read_packs, pack_id);
+        // TODO: These packs are sorted, maybe we can use binary search for optimization.
         filtered_out_rows += buildRowKeyFilterVector(
             handles,
             delete_ranges,
