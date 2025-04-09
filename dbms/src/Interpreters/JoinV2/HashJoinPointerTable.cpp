@@ -169,7 +169,7 @@ template bool HashJoinPointerTable::build<UInt32>(
     JoinBuildWorkerData & worker_data,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size);
-template bool HashJoinPointerTable::build<size_t>(
+template bool HashJoinPointerTable::build<UInt64>(
     JoinBuildWorkerData & worker_data,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size);
