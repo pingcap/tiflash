@@ -712,7 +712,6 @@ void JoinProbeBlockHelper::probeFillColumns(
                     {
                         if constexpr (Adder::break_on_first_match)
                             ptr = nullptr;
-
                         break;
                     }
                 }
