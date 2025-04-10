@@ -65,6 +65,7 @@
 #include <Server/BgStorageInit.h>
 #include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
+#include <Server/FlashGrpcServerHolder.h>
 #include <Server/MetricsPrometheus.h>
 #include <Server/RaftConfigParser.h>
 #include <Server/Server.h>
@@ -91,7 +92,6 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/registerStorages.h>
-#include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <WindowFunctions/registerWindowFunctions.h>
@@ -501,7 +501,6 @@ try
     registerFunctions();
     registerAggregateFunctions();
     registerWindowFunctions();
-    registerTableFunctions();
     registerStorages();
 
     const auto disagg_opt = DisaggOptions::parseFromConfig(config());
@@ -582,7 +581,7 @@ try
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
-    /// Load global settings from default_profile and system_profile.
+    /// Load global settings from default_profile
     /// It internally depends on UserConfig::parseSettings.
     // TODO: Parse the settings from config file at the program beginning
     global_context->setDefaultProfiles();

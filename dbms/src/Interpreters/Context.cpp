@@ -51,7 +51,7 @@
 #include <Server/ServerInfo.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
-#include <Storages/DeltaMerge/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
@@ -69,7 +69,6 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
@@ -77,7 +76,6 @@
 
 #include <boost/functional/hash/hash.hpp>
 #include <pcg_random.hpp>
-#include <set>
 #include <unordered_map>
 
 
@@ -155,7 +153,6 @@ struct ContextShared
     mutable DM::ColumnCacheLongTermPtr column_cache_long_term;
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
-    ViewDependencies view_dependencies; /// Current dependencies
     ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
     BackgroundProcessingPoolPtr background_pool; /// The thread pool for the background work performed by the tables.
     BackgroundProcessingPoolPtr
@@ -755,54 +752,6 @@ void Context::checkDatabaseAccessRightsImpl(const std::string & database_name) c
         throw Exception(fmt::format("Access denied to database {}", database_name), ErrorCodes::DATABASE_ACCESS_DENIED);
 }
 
-void Context::addDependency(const DatabaseAndTableName & from, const DatabaseAndTableName & where)
-{
-    auto lock = getLock();
-    checkDatabaseAccessRightsImpl(from.first);
-    checkDatabaseAccessRightsImpl(where.first);
-    shared->view_dependencies[from].insert(where);
-
-    // Notify table of dependencies change
-    auto table = tryGetTable(from.first, from.second);
-    if (table != nullptr)
-        table->updateDependencies();
-}
-
-void Context::removeDependency(const DatabaseAndTableName & from, const DatabaseAndTableName & where)
-{
-    auto lock = getLock();
-    checkDatabaseAccessRightsImpl(from.first);
-    checkDatabaseAccessRightsImpl(where.first);
-    shared->view_dependencies[from].erase(where);
-
-    // Notify table of dependencies change
-    auto table = tryGetTable(from.first, from.second);
-    if (table != nullptr)
-        table->updateDependencies();
-}
-
-Dependencies Context::getDependencies(const String & database_name, const String & table_name) const
-{
-    auto lock = getLock();
-
-    String db = resolveDatabase(database_name, current_database);
-
-    if (database_name.empty() && tryGetExternalTable(table_name))
-    {
-        /// Table is temporary. Access granted.
-    }
-    else
-    {
-        checkDatabaseAccessRightsImpl(db);
-    }
-
-    auto iter = shared->view_dependencies.find(DatabaseAndTableName(db, table_name));
-    if (iter == shared->view_dependencies.end())
-        return {};
-
-    return Dependencies(iter->second.begin(), iter->second.end());
-}
-
 bool Context::isTableExist(const String & database_name, const String & table_name) const
 {
     auto lock = getLock();
@@ -821,12 +770,6 @@ bool Context::isDatabaseExist(const String & database_name) const
     checkDatabaseAccessRightsImpl(db);
     return shared->databases.end() != shared->databases.find(db);
 }
-
-bool Context::isExternalTableExist(const String & table_name) const
-{
-    return external_tables.end() != external_tables.find(table_name);
-}
-
 
 void Context::assertTableExists(const String & database_name, const String & table_name) const
 {
@@ -891,39 +834,6 @@ void Context::assertDatabaseDoesntExist(const String & database_name) const
             ErrorCodes::DATABASE_ALREADY_EXISTS);
 }
 
-
-Tables Context::getExternalTables() const
-{
-    auto lock = getLock();
-
-    Tables res;
-    for (const auto & table : external_tables)
-        res[table.first] = table.second.first;
-
-    if (session_context && session_context != this)
-    {
-        Tables buf = session_context->getExternalTables();
-        res.insert(buf.begin(), buf.end());
-    }
-    else if (global_context && global_context != this)
-    {
-        Tables buf = global_context->getExternalTables();
-        res.insert(buf.begin(), buf.end());
-    }
-    return res;
-}
-
-
-StoragePtr Context::tryGetExternalTable(const String & table_name) const
-{
-    auto jt = external_tables.find(table_name);
-    if (external_tables.end() == jt)
-        return StoragePtr();
-
-    return jt->second.first;
-}
-
-
 StoragePtr Context::getTable(const String & database_name, const String & table_name) const
 {
     Exception exc;
@@ -943,13 +853,6 @@ StoragePtr Context::tryGetTable(const String & database_name, const String & tab
 StoragePtr Context::getTableImpl(const String & database_name, const String & table_name, Exception * exception) const
 {
     auto lock = getLock();
-
-    if (database_name.empty())
-    {
-        StoragePtr res = tryGetExternalTable(table_name);
-        if (res)
-            return res;
-    }
 
     String db = resolveDatabase(database_name, current_database);
     checkDatabaseAccessRightsImpl(db);
@@ -976,52 +879,6 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
 
     return table;
 }
-
-
-void Context::addExternalTable(const String & table_name, const StoragePtr & storage, const ASTPtr & ast)
-{
-    if (external_tables.end() != external_tables.find(table_name))
-        throw Exception(
-            fmt::format("Temporary table {} already exists.", backQuoteIfNeed(table_name)),
-            ErrorCodes::TABLE_ALREADY_EXISTS);
-
-    external_tables[table_name] = std::pair(storage, ast);
-}
-
-StoragePtr Context::tryRemoveExternalTable(const String & table_name)
-{
-    auto it = external_tables.find(table_name);
-
-    if (external_tables.end() == it)
-        return StoragePtr();
-
-    auto storage = it->second.first;
-    external_tables.erase(it);
-    return storage;
-}
-
-
-StoragePtr Context::executeTableFunction(const ASTPtr & table_expression)
-{
-    /// Slightly suboptimal.
-    auto hash = table_expression->getTreeHash();
-    String key = toString(hash.first) + '_' + toString(hash.second);
-
-    StoragePtr & res = table_function_results[key];
-
-    if (!res)
-    {
-        TableFunctionPtr table_function_ptr = TableFunctionFactory::instance().get(
-            typeid_cast<const ASTFunction *>(table_expression.get())->name,
-            *this);
-
-        /// Run it and remember the result
-        res = table_function_ptr->execute(table_expression, *this);
-    }
-
-    return res;
-}
-
 
 DDLGuard::DDLGuard(
     Map & map_,
@@ -1100,17 +957,6 @@ ASTPtr Context::getCreateTableQuery(const String & database_name, const String &
     return shared->databases[db]->getCreateTableQuery(*this, table_name);
 }
 
-ASTPtr Context::getCreateExternalTableQuery(const String & table_name) const
-{
-    auto jt = external_tables.find(table_name);
-    if (external_tables.end() == jt)
-        throw Exception(
-            fmt::format("Temporary table {} doesn't exist", backQuoteIfNeed(table_name)),
-            ErrorCodes::UNKNOWN_TABLE);
-
-    return jt->second.second;
-}
-
 ASTPtr Context::getCreateDatabaseQuery(const String & database_name) const
 {
     auto lock = getLock();
@@ -1147,25 +993,15 @@ void Context::setSettings(const Settings & settings_)
 
 void Context::setSetting(const String & name, const Field & value)
 {
-    if (name == "profile")
-    {
-        auto lock = getLock();
-        settings.setProfile(value.safeGet<String>(), *shared->users_config);
-    }
-    else
-        settings.set(name, value);
+    assert(name != "profile");
+    settings.set(name, value);
 }
 
 
 void Context::setSetting(const String & name, const std::string & value)
 {
-    if (name == "profile")
-    {
-        auto lock = getLock();
-        settings.setProfile(value, *shared->users_config);
-    }
-    else
-        settings.set(name, value);
+    assert(name != "profile");
+    settings.set(name, value);
 }
 
 
@@ -1971,15 +1807,6 @@ SharedContextDisaggPtr Context::getSharedContextDisagg() const
     return shared->ctx_disagg;
 }
 
-UInt16 Context::getTCPPort() const
-{
-    auto lock = getLock();
-
-    auto & config = getConfigRef();
-    return config.getInt("tcp_port");
-}
-
-
 void Context::initializeSystemLogs()
 {
     auto lock = getLock();
@@ -2070,7 +1897,8 @@ void Context::shutdown()
 void Context::setDefaultProfiles()
 {
     shared->default_profile_name = "default";
-    setSetting("profile", shared->default_profile_name);
+    auto lock = getLock();
+    settings.setProfile(shared->default_profile_name, *shared->users_config);
     is_config_loaded = true;
 }
 
@@ -2205,12 +2033,12 @@ void Context::initRegionBlocklist(const std::unordered_set<RegionID> & region_id
     auto lock = getLock();
     shared->region_blocklist = region_ids;
 }
-bool Context::isRegionInBlocklist(const RegionID region_id)
+bool Context::isRegionInBlocklist(const RegionID region_id) const
 {
     auto lock = getLock();
     return shared->region_blocklist.count(region_id) > 0;
 }
-bool Context::isRegionsContainsInBlocklist(const std::vector<RegionID> & regions)
+bool Context::isRegionsContainsInBlocklist(const std::vector<RegionID> & regions) const
 {
     auto lock = getLock();
     for (const auto region : regions)

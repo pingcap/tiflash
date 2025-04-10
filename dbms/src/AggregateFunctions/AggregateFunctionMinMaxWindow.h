@@ -40,6 +40,10 @@ private:
     mutable std::deque<T> queue;
 
 public:
+    static bool needArena() { return false; }
+
+    void reset() { queue.clear(); }
+
     void insertResultInto(IColumn & to) const
     {
         if likely (!queue.empty())
@@ -48,7 +52,17 @@ public:
             static_cast<ColumnType &>(to).insertDefault();
     }
 
-    void reset() { queue.clear(); }
+    template <bool is_min>
+    void insertBatchResultInto(IColumn & to, size_t num) const
+    {
+        if (!queue.empty())
+        {
+            auto & container = static_cast<ColumnType &>(to).getData();
+            container.resize_fill(num + container.size(), queue.front());
+        }
+        else
+            static_cast<ColumnType &>(to).insertManyDefaults(num);
+    }
 
     void decrease(const IColumn & column, size_t row_num)
     {
@@ -90,6 +104,10 @@ private:
     TiDB::TiDBCollatorPtr collator{};
 
 public:
+    static bool needArena() { return false; }
+
+    void reset() { queue.clear(); }
+
     void insertResultInto(IColumn & to) const
     {
         if likely (!queue.empty())
@@ -98,18 +116,24 @@ public:
             static_cast<ColumnString &>(to).insertDefault();
     }
 
-    void reset() { queue.clear(); }
+    template <bool is_min>
+    void insertBatchResultInto(IColumn & to, size_t num) const
+    {
+        if (!queue.empty())
+            static_cast<ColumnString &>(to).batchInsertDataWithTerminatingZero(
+                num,
+                queue.front().data,
+                queue.front().size);
+        else
+            static_cast<ColumnString &>(to).insertManyDefaults(num);
+    }
 
     void decrease(const IColumn & column, size_t row_num)
     {
         assert(!queue.empty());
 
         auto str = static_cast<const ColumnString &>(column).getDataAtWithTerminatingZero(row_num);
-        if (collator != nullptr)
-            if (collator->compareFastPath(str.data, str.size, queue.back().data, queue.back().size) == 0)
-                queue.pop_front();
-            else {}
-        else if (str.compare(queue.front()) == 0)
+        if (str.compare(queue.front()) == 0)
             queue.pop_front();
     }
 
@@ -157,6 +181,10 @@ private:
     mutable std::deque<Field> queue;
 
 public:
+    static bool needArena() { return false; }
+
+    void reset() { queue.clear(); }
+
     void insertResultInto(IColumn & to) const
     {
         if likely (!queue.empty())
@@ -165,7 +193,14 @@ public:
             to.insertDefault();
     }
 
-    void reset() { queue.clear(); }
+    template <bool is_min>
+    void insertBatchMinOrMaxResultInto(IColumn & to, size_t num) const
+    {
+        if (!queue.empty())
+            to.insertMany(queue.front(), num);
+        else
+            to.insertManyDefaults(num);
+    }
 
     void decrease(const IColumn & column, size_t row_num)
     {
@@ -210,6 +245,8 @@ struct AggregateFunctionMinDataForWindow : Data
 
     void insertResultInto(IColumn & to) const { Data::insertResultInto(to); }
 
+    void batchInsertSameResultInto(IColumn & to, size_t num) const { Data::insertBatchResultInto(to, num); }
+
     static const char * name() { return "min_for_window"; }
 };
 
@@ -226,6 +263,8 @@ struct AggregateFunctionMaxDataForWindow : Data
     void changeIfBetter(const Self &, Arena *) { throw Exception("Not implemented yet"); }
 
     void insertResultInto(IColumn & to) const { Data::insertResultInto(to); }
+
+    void batchInsertSameResultInto(IColumn & to, size_t num) const { Data::insertBatchResultInto(to, num); }
 
     static const char * name() { return "max_for_window"; }
 };

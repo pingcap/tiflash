@@ -16,7 +16,7 @@ version: '2.3'
 
 services:
   pd0:
-    image: hub.pingcap.net/qa/pd:${PD_BRANCH:-master}
+    image: ${PD_IMAGE:-hub.pingcap.net/tikv/pd/image:master}
     security_opt:
       - seccomp:unconfined
     volumes:
@@ -35,7 +35,7 @@ services:
       - --log-file=/log/pd.log
     restart: on-failure
   tikv0:
-    image: hub.pingcap.net/qa/tikv:${TIKV_BRANCH:-master}
+    image: ${TIKV_IMAGE:-hub.pingcap.net/tikv/tikv/image:master}
     security_opt:
       - seccomp:unconfined
     volumes:
@@ -55,7 +55,7 @@ services:
       - "pd0"
     restart: on-failure
   tidb0:
-    image: hub.pingcap.net/qa/tidb:${TIDB_BRANCH:-master}-failpoint
+    image: ${TIDB_IMAGE:-hub.pingcap.net/pingcap/tidb/images/tidb-server:master-failpoint}
     security_opt:
       - seccomp:unconfined
     environment:

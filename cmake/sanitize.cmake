@@ -19,7 +19,7 @@ else ()
     set (SAN_FLAGS "${SAN_FLAGS} -O3")
 endif ()
 
-set (SANITIZE_BLACKLIST_FILE             "${TiFlash_SOURCE_DIR}/asan_ignores.txt")
+set (SANITIZE_BLACKLIST_FILE             "${TiFlash_SOURCE_DIR}/tests/sanitize/asan_ignores.txt")
 set (CMAKE_SANITIZE_BLACKLIST_FILE_FLAG  "-fsanitize-blacklist=${SANITIZE_BLACKLIST_FILE}")
 set (CMAKE_CXX_FLAGS_ASAN                "${CMAKE_CXX_FLAGS_ASAN}  ${SAN_FLAGS} -fsanitize=address ${CMAKE_SANITIZE_BLACKLIST_FILE_FLAG}")
 set (CMAKE_C_FLAGS_ASAN                  "${CMAKE_C_FLAGS_ASAN}    ${SAN_FLAGS} -fsanitize=address ${CMAKE_SANITIZE_BLACKLIST_FILE_FLAG}")

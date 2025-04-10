@@ -35,6 +35,25 @@ public:
         std::transform(results.begin(), results.end(), results.begin(), [](RSResult result) { return !result; });
         return results;
     }
+
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_infos) override
+    {
+        auto less = IntegerSet::createLessRangeSet(attr.type, value, /*not_included=*/true);
+        auto greater = IntegerSet::createGreaterRangeSet(attr.type, value, /*not_included=*/true);
+        if (less && greater)
+        {
+            auto iter = std::find_if(index_infos.begin(), index_infos.end(), [&](const auto & info) {
+                return info.index_type() == tipb::ColumnarIndexType::TypeInverted
+                    && info.inverted_query_info().column_id() == attr.col_id;
+            });
+            if (iter != index_infos.end())
+                return SingleColumnRange::create(
+                    iter->inverted_query_info().column_id(),
+                    iter->inverted_query_info().index_id(),
+                    less->unionWith(greater));
+        }
+        return UnsupportedColumnRange::create();
+    }
 };
 
 } // namespace DB::DM

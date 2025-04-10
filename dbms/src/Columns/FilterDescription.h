@@ -19,7 +19,7 @@
 
 namespace DB
 {
-/// Support methods for implementation of WHERE, PREWHERE and HAVING.
+/// Support methods for implementation of WHERE and HAVING.
 
 
 /// Analyze if the column for filter is constant thus filter is always false or always true.

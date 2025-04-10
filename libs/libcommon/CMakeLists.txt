@@ -66,7 +66,6 @@ add_library (common ${SPLIT_SHARED}
     include/common/mremap.h
     include/common/likely.h
     include/common/logger_useful.h
-    include/common/MultiVersion.h
     include/common/strong_typedef.h
     include/common/JSON.h
     include/common/simd.h

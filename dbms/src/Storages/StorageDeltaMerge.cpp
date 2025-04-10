@@ -118,7 +118,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
 {
     const ColumnsDescription & columns = getColumns();
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "updateTableColumnInfo, table_name={} ordinary=\"{}\" materialized=\"{}\"",
         table_column_info->table_name,
@@ -223,6 +223,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         }
         table_column_defines.push_back(col_def);
     }
+    table_column_defines.shrink_to_fit();
 
     if (!new_columns.materialized.contains(MutSup::version_column_name))
     {
@@ -318,7 +319,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         // TODO: Handle with PK change: drop old PK column cache rather than let LRU evict it.
     }
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "updateTableColumnInfo finished, table_name={} table_column_defines={}",
         table_column_info->table_name,
@@ -845,8 +846,14 @@ BlockInputStreams StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter
-        = PushDownExecutor::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
+    auto filter = PushDownExecutor::build(
+        query_info,
+        columns_to_read,
+        store->getTableColumns(),
+        query_info.dag_query ? query_info.dag_query->used_indexes
+                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
+        context,
+        tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -861,7 +868,7 @@ BlockInputStreams StorageDeltaMerge::read(
         /*start_ts=*/mvcc_query_info.start_ts,
         filter,
         runtime_filter_list,
-        query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
+        query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
@@ -929,8 +936,14 @@ void StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter
-        = PushDownExecutor::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
+    auto filter = PushDownExecutor::build(
+        query_info,
+        columns_to_read,
+        store->getTableColumns(),
+        query_info.dag_query ? query_info.dag_query->used_indexes
+                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
+        context,
+        tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -947,7 +960,7 @@ void StorageDeltaMerge::read(
         /*start_ts=*/mvcc_query_info.start_ts,
         filter,
         runtime_filter_list,
-        query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
+        query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,

@@ -20,10 +20,10 @@
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/IDataType.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Poco/SortedDirectoryIterator.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TestUtils/TiFlashTestException.h>
 #include <fmt/core.h>
 

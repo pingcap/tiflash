@@ -18,6 +18,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Core/Defines.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -35,7 +36,6 @@
 #include <Storages/PathPool.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/InputStreamTestUtils.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
@@ -2943,7 +2943,12 @@ try
         auto table_column_defines = DMTestEnv::getDefaultColumns();
         table_column_defines->emplace_back(legacy_str_cd);
         dropDataOnDisk(getTemporaryPath());
+
+        auto tmp = STORAGE_FORMAT_CURRENT;
+        setStorageFormat(7); // set to legacy format temporary.
         store = reload(table_column_defines);
+        setStorageFormat(tmp.identifier); // Reset to current format.
+
         auto block = createBlock(legacy_str_cd, 0, 128);
         store->write(*db_context, db_context->getSettingsRef(), block);
 
@@ -2964,11 +2969,26 @@ try
         // Mock that after restart, the data type has been changed to new serialize. But still can read old
         // serialized format data.
         auto table_column_defines = DMTestEnv::getDefaultColumns();
-        table_column_defines->emplace_back(str_cd);
+        table_column_defines->emplace_back(legacy_str_cd);
         store = reload(table_column_defines);
+
+        // Verify that the string column with old data type name will be automatically
+        // converted into new serialized format.
+        bool legacy_str_is_converted = false;
+        auto store_cds = *store->getStoreColumns();
+        for (const auto & cd : store_cds)
+        {
+            if (cd.id == legacy_str_cd.id)
+            {
+                ASSERT_EQ(cd.type->getName(), str_cd.type->getName());
+                legacy_str_is_converted = true;
+            }
+        }
+        ASSERT_TRUE(legacy_str_is_converted);
     }
 
     {
+        // Still can read old serialized format data
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4201,7 +4221,7 @@ try
         return block;
     };
 
-    auto check = [&](PushDownExecutorPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+    auto check = [&](PushDownExecutorPtr executor, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4209,7 +4229,7 @@ try
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
-            filter,
+            executor,
             std::vector<RuntimeFilterPtr>{},
             0,
             "",
@@ -4330,7 +4350,7 @@ try
         return block;
     };
 
-    auto check = [&](PushDownExecutorPtr filter, RSResult expected_res, const std::vector<Int64> & expected_data) {
+    auto check = [&](PushDownExecutorPtr executor, RSResult expected_res, const std::vector<Int64> & expected_data) {
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
@@ -4338,7 +4358,7 @@ try
             {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
-            filter,
+            executor,
             std::vector<RuntimeFilterPtr>{},
             0,
             "",

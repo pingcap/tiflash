@@ -17,7 +17,6 @@
 #include <DataStreams/ConvertingBlockInputStream.h>
 #include <DataStreams/CountingBlockOutputStream.h>
 #include <DataStreams/NullAndDoCopyBlockInputStream.h>
-#include <DataStreams/PushingToViewsBlockOutputStream.h>
 #include <DataStreams/SquashingBlockOutputStream.h>
 #include <DataStreams/copyData.h>
 #include <IO/Buffer/ConcatReadBuffer.h>
@@ -28,8 +27,8 @@
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTInsertQuery.h>
 #include <Parsers/ASTSelectWithUnionQuery.h>
+#include <Storages/IStorage.h>
 #include <Storages/MutableSupport.h>
-#include <TableFunctions/TableFunctionFactory.h>
 
 namespace DB
 {
@@ -53,13 +52,6 @@ InterpreterInsertQuery::InterpreterInsertQuery(
 
 StoragePtr InterpreterInsertQuery::getTable(const ASTInsertQuery & query)
 {
-    if (query.table_function)
-    {
-        const auto * table_function = typeid_cast<const ASTFunction *>(query.table_function.get());
-        const auto & factory = TableFunctionFactory::instance();
-        return factory.get(table_function->name, context)->execute(query.table_function, context);
-    }
-
     /// Into what table to write.
     return context.getTable(query.database, query.table);
 }
@@ -118,16 +110,9 @@ BlockIO InterpreterInsertQuery::execute()
     /// We create a pipeline of several streams, into which we will write data.
     BlockOutputStreamPtr out;
 
-    out = std::make_shared<PushingToViewsBlockOutputStream>(
-        query.database,
-        query.table,
-        table,
-        context,
-        query_ptr,
-        query.no_destination);
-
     out = std::make_shared<AddingDefaultBlockOutputStream>(
-        out,
+        table,
+        query_ptr,
         getSampleBlock(query, table),
         required_columns,
         table->getColumns().defaults,
@@ -183,12 +168,10 @@ BlockIO InterpreterInsertQuery::execute()
 }
 
 
-void InterpreterInsertQuery::checkAccess(const ASTInsertQuery & query)
+void InterpreterInsertQuery::checkAccess(const ASTInsertQuery &)
 {
     const Settings & settings = context.getSettingsRef();
-    auto readonly = settings.readonly;
-
-    if (!readonly || (query.database.empty() && context.tryGetExternalTable(query.table) && readonly >= 2))
+    if (!settings.readonly)
     {
         return;
     }

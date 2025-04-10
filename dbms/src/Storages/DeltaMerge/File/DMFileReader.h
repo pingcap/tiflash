@@ -31,12 +31,10 @@
 namespace DB::DM
 {
 
-class DMFileWithVectorIndexBlockInputStream;
-
 
 class DMFileReader
 {
-    friend class DMFileWithVectorIndexBlockInputStream;
+    friend class DMFileInputStreamProvideVectorIndex;
     friend class DMFileReaderPoolSharding;
 
 public:

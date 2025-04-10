@@ -118,6 +118,7 @@ namespace DB
     M(force_agg_on_partial_block)                            \
     M(force_agg_prefetch)                                    \
     M(force_magic_hash)                                      \
+    M(disable_agg_batch_get_key_holder)                      \
     M(force_set_fap_candidate_store_id)                      \
     M(force_not_clean_fap_on_destroy)                        \
     M(force_fap_worker_throw)                                \
@@ -419,6 +420,8 @@ void FailPointHelper::wait(const String &) {}
 void FailPointHelper::initRandomFailPoints(Poco::Util::LayeredConfiguration &, const LoggerPtr &) {}
 
 void FailPointHelper::enableRandomFailPoint(const String &, double) {}
+
+void FailPointHelper::disableRandomFailPoints(Poco::Util::LayeredConfiguration &, const LoggerPtr &) {}
 #endif
 
 } // namespace DB

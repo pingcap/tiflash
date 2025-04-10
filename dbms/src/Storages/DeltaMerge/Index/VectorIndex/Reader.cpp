@@ -30,16 +30,14 @@ namespace DB::DM
 
 VectorIndexReaderPtr VectorIndexReader::createFromMmap(
     const dtpb::IndexFilePropsV2Vector & file_props,
+    const VectorIndexPerfPtr & perf,
     std::string_view path)
 {
     tipb::VectorDistanceMetric metric;
     RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
     RUNTIME_CHECK(metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
-    Stopwatch w;
-    SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_view).Observe(w.elapsedSeconds()); });
-
-    auto vi = std::make_shared<VectorIndexReader>(file_props);
+    auto vi = std::make_shared<VectorIndexReader>(/* is_in_memory */ false, file_props, perf);
 
     vi->index = USearchImplType::make(
         unum::usearch::metric_punned_t( //
@@ -71,16 +69,14 @@ VectorIndexReaderPtr VectorIndexReader::createFromMmap(
 
 VectorIndexReaderPtr VectorIndexReader::createFromMemory(
     const dtpb::IndexFilePropsV2Vector & file_props,
+    const VectorIndexPerfPtr & perf,
     ReadBuffer & buf)
 {
     tipb::VectorDistanceMetric metric;
     RUNTIME_CHECK(tipb::VectorDistanceMetric_Parse(file_props.distance_metric(), &metric));
     RUNTIME_CHECK(metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
-    Stopwatch w;
-    SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_view).Observe(w.elapsedSeconds()); });
-
-    auto vi = std::make_shared<VectorIndexReader>(file_props);
+    auto vi = std::make_shared<VectorIndexReader>(/* is_in_memory */ true, file_props, perf);
 
     vi->index = USearchImplType::make(
         unum::usearch::metric_punned_t( //
@@ -101,13 +97,15 @@ VectorIndexReaderPtr VectorIndexReader::createFromMemory(
     RUNTIME_CHECK_MSG(result, "Failed to load vector index: {}", result.error.what());
 
     auto current_memory_usage = vi->index.memory_usage();
-    GET_METRIC(tiflash_vector_index_memory_usage, type_view).Increment(static_cast<double>(current_memory_usage));
+    GET_METRIC(tiflash_vector_index_memory_usage, type_load).Increment(static_cast<double>(current_memory_usage));
     vi->last_reported_memory_usage = current_memory_usage;
 
     return vi;
 }
 
-auto VectorIndexReader::searchImpl(const ANNQueryInfoPtr & query_info, const RowFilter & valid_rows) const
+VectorIndexReader::SearchResults VectorIndexReader::search(
+    const ANNQueryInfoPtr & query_info,
+    const RowFilter & valid_rows) const
 {
     RUNTIME_CHECK(query_info->ref_vec_f32().size() >= sizeof(UInt32));
     auto query_vec_size = readLittleEndian<UInt32>(query_info->ref_vec_f32().data());
@@ -118,7 +116,7 @@ auto VectorIndexReader::searchImpl(const ANNQueryInfoPtr & query_info, const Row
             query_vec_size,
             file_props.dimensions(),
             query_info->index_id(),
-            query_info->column_id());
+            query_info->deprecated_column_id());
 
     RUNTIME_CHECK(query_info->ref_vec_f32().size() == sizeof(UInt32) + query_vec_size * sizeof(Float32));
 
@@ -129,7 +127,7 @@ auto VectorIndexReader::searchImpl(const ANNQueryInfoPtr & query_info, const Row
             tipb::VectorDistanceMetric_Name(query_info->distance_metric()),
             file_props.distance_metric(),
             query_info->index_id(),
-            query_info->column_id());
+            query_info->deprecated_column_id());
 
     std::atomic<size_t> visited_nodes = 0;
     std::atomic<size_t> discarded_nodes = 0;
@@ -141,9 +139,9 @@ auto VectorIndexReader::searchImpl(const ANNQueryInfoPtr & query_info, const Row
         try
         {
             // Note: We don't increase the thread_local perf, because search runs on other threads.
-            visited_nodes++;
+            visited_nodes.fetch_add(1, std::memory_order_relaxed);
             if (!valid_rows[key])
-                discarded_nodes++;
+                discarded_nodes.fetch_add(1, std::memory_order_relaxed);
             return valid_rows[key];
         }
         catch (...)
@@ -154,8 +152,13 @@ auto VectorIndexReader::searchImpl(const ANNQueryInfoPtr & query_info, const Row
         }
     };
 
-    Stopwatch w;
-    SCOPE_EXIT({ GET_METRIC(tiflash_vector_index_duration, type_search).Observe(w.elapsedSeconds()); });
+    Stopwatch w(CLOCK_MONOTONIC_COARSE);
+    SCOPE_EXIT({
+        double elapsed = w.elapsedSeconds();
+        perf->n_searches += 1;
+        perf->total_search_ms += elapsed * 1000;
+        GET_METRIC(tiflash_vector_index_duration, type_search).Observe(w.elapsedSeconds());
+    });
 
     // TODO(vector-index): Support efSearch.
     auto result = index.filtered_search( //
@@ -163,37 +166,17 @@ auto VectorIndexReader::searchImpl(const ANNQueryInfoPtr & query_info, const Row
         query_info->top_k(),
         predicate);
 
+    perf->visited_nodes += visited_nodes;
+    perf->discarded_nodes += discarded_nodes;
+    perf->returned_nodes += result.size();
+
     if (has_exception_in_search)
         throw Exception(ErrorCodes::INCORRECT_QUERY, "Exception happened occurred during search");
 
-    PerfContext::vector_search.visited_nodes += visited_nodes;
-    PerfContext::vector_search.discarded_nodes += discarded_nodes;
+    if (result.error)
+        throw Exception(ErrorCodes::INCORRECT_QUERY, "Search resulted in an error: {}", result.error.what());
+
     return result;
-}
-
-std::vector<VectorIndexReader::SearchResult> VectorIndexReader::search(
-    const ANNQueryInfoPtr & query_info,
-    const RowFilter & valid_rows) const
-{
-    auto result = searchImpl(query_info, valid_rows);
-
-    // For some reason usearch does not always do the predicate for all search results.
-    // So we need to filter again.
-    const size_t result_size = result.size();
-    std::vector<SearchResult> search_results;
-    search_results.reserve(result_size);
-    for (size_t i = 0; i < result_size; ++i)
-    {
-        const auto rowid = result[i].member.key;
-        if (valid_rows[rowid])
-            search_results.emplace_back(rowid, result[i].distance);
-    }
-    return search_results;
-}
-
-size_t VectorIndexReader::size() const
-{
-    return index.size();
 }
 
 void VectorIndexReader::get(Key key, std::vector<Float32> & out) const
@@ -202,19 +185,42 @@ void VectorIndexReader::get(Key key, std::vector<Float32> & out) const
     index.get(key, out.data());
 }
 
-VectorIndexReader::VectorIndexReader(const dtpb::IndexFilePropsV2Vector & file_props_)
-    : file_props(file_props_)
+VectorIndexReader::VectorIndexReader(
+    bool is_in_memory_,
+    const dtpb::IndexFilePropsV2Vector & file_props_,
+    const VectorIndexPerfPtr & perf_)
+    : is_in_memory(is_in_memory_)
+    , file_props(file_props_)
+    , perf(perf_)
 {
+    RUNTIME_CHECK(perf_ != nullptr);
     RUNTIME_CHECK(file_props.dimensions() > 0);
     RUNTIME_CHECK(file_props.dimensions() <= TiDB::MAX_VECTOR_DIMENSION);
 
-    GET_METRIC(tiflash_vector_index_active_instances, type_view).Increment();
+    if (is_in_memory)
+    {
+        GET_METRIC(tiflash_vector_index_active_instances, type_load).Increment();
+    }
+    else
+    {
+        GET_METRIC(tiflash_vector_index_active_instances, type_view).Increment();
+    }
 }
 
 VectorIndexReader::~VectorIndexReader()
 {
-    GET_METRIC(tiflash_vector_index_memory_usage, type_view).Decrement(static_cast<double>(last_reported_memory_usage));
-    GET_METRIC(tiflash_vector_index_active_instances, type_view).Decrement();
+    if (is_in_memory)
+    {
+        GET_METRIC(tiflash_vector_index_memory_usage, type_load)
+            .Decrement(static_cast<double>(last_reported_memory_usage));
+        GET_METRIC(tiflash_vector_index_active_instances, type_load).Decrement();
+    }
+    else
+    {
+        GET_METRIC(tiflash_vector_index_memory_usage, type_view)
+            .Decrement(static_cast<double>(last_reported_memory_usage));
+        GET_METRIC(tiflash_vector_index_active_instances, type_view).Decrement();
+    }
 }
 
 } // namespace DB::DM

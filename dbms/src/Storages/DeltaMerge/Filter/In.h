@@ -47,7 +47,7 @@ public:
             ",");
         buf.append("]}");
         return buf.toString();
-    };
+    }
 
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
@@ -58,6 +58,23 @@ public:
         auto rs_index = getRSIndex(param, attr);
         return rs_index ? rs_index->minmax->checkIn(start_pack, pack_count, values, rs_index->type)
                         : RSResults(pack_count, RSResult::Some);
+    }
+
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_infos) override
+    {
+        if (auto set = IntegerSet::createValueSet(attr.type, values); set)
+        {
+            auto iter = std::find_if(index_infos.begin(), index_infos.end(), [&](const auto & info) {
+                return info.index_type() == tipb::ColumnarIndexType::TypeInverted
+                    && info.inverted_query_info().column_id() == attr.col_id;
+            });
+            if (iter != index_infos.end())
+                return SingleColumnRange::create(
+                    iter->inverted_query_info().column_id(),
+                    iter->inverted_query_info().index_id(),
+                    set);
+        }
+        return UnsupportedColumnRange::create();
     }
 };
 

@@ -38,72 +38,6 @@
   * Simple method is little faster for cases of parsing short (few digit) integers, but less precise and slower in other cases.
   * It's not recommended to use simple method and it is left only for reference.
   *
-  * For performance test, look at 'read_float_perf' test.
-  *
-  * For precision test.
-  * Parse all existing Float32 numbers:
-
-CREATE TABLE test.floats ENGINE = Log AS SELECT reinterpretAsFloat32(reinterpretAsString(toUInt32(number))) AS x FROM numbers(0x100000000);
-
-WITH
-    toFloat32(toString(x)) AS y,
-    reinterpretAsUInt32(reinterpretAsString(x)) AS bin_x,
-    reinterpretAsUInt32(reinterpretAsString(y)) AS bin_y,
-    abs(bin_x - bin_y) AS diff
-SELECT
-    diff,
-    count()
-FROM test.floats
-WHERE NOT isNaN(x)
-GROUP BY diff
-ORDER BY diff ASC
-LIMIT 100
-
-  * Here are the results:
-  *
-    Precise:
-    ┌─diff─┬────count()─┐
-    │    0 │ 4278190082 │
-    └──────┴────────────┘
-    (100% roundtrip property)
-
-    Fast:
-    ┌─diff─┬────count()─┐
-    │    0 │ 3685260580 │
-    │    1 │  592929502 │
-    └──────┴────────────┘
-    (The difference is 1 in least significant bit in 13.8% of numbers.)
-
-    Simple:
-    ┌─diff─┬────count()─┐
-    │    0 │ 2169879994 │
-    │    1 │ 1807178292 │
-    │    2 │  269505944 │
-    │    3 │   28826966 │
-    │    4 │    2566488 │
-    │    5 │     212878 │
-    │    6 │      18276 │
-    │    7 │       1214 │
-    │    8 │         30 │
-    └──────┴────────────┘
-
-  * Parse random Float64 numbers:
-
-WITH
-    rand64() AS bin_x,
-    reinterpretAsFloat64(reinterpretAsString(bin_x)) AS x,
-    toFloat64(toString(x)) AS y,
-    reinterpretAsUInt64(reinterpretAsString(y)) AS bin_y,
-    abs(bin_x - bin_y) AS diff
-SELECT
-    diff,
-    count()
-FROM numbers(100000000)
-WHERE NOT isNaN(x)
-GROUP BY diff
-ORDER BY diff ASC
-LIMIT 100
-
   */
 
 
@@ -257,7 +191,7 @@ ReturnType readFloatTextPreciseImpl(T & x, ReadBuffer & buf)
         while (!buf.eof() && num_copied_chars < MAX_LENGTH)
         {
             char c = *buf.position();
-            if (!(isNumericASCII(c) || c == '-' || c == '+' || c == '.' || c == 'e' || c == 'E'))
+            if (!isNumericASCII(c) && c != '-' && c != '+' && c != '.' && c != 'e' && c != 'E')
                 break;
 
             tmp_buf[num_copied_chars] = c;

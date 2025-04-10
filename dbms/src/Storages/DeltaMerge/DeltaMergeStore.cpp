@@ -206,6 +206,22 @@ ColumnDefinesPtr generateStoreColumns(const ColumnDefines & table_columns, bool 
     }
     return columns;
 }
+
+void convertStringTypeToDefault(DataTypePtr & type)
+{
+    if (removeNullable(type)->getTypeId() != TypeIndex::String)
+        return;
+    if (type->isNullable())
+        type = DataTypeFactory::instance().getOrSet(DataTypeString::getNullableDefaultName());
+    else
+        type = DataTypeFactory::instance().getOrSet(DataTypeString::getDefaultName());
+}
+
+void convertStringTypeToDefault(ColumnDefines & cds)
+{
+    for (auto & col : cds)
+        convertStringTypeToDefault(col.type);
+}
 } // namespace
 
 DeltaMergeStore::Settings DeltaMergeStore::EMPTY_SETTINGS
@@ -262,18 +278,17 @@ DeltaMergeStore::DeltaMergeStore(
     // Should be done before any background task setup.
     restoreStableFiles();
 
-    original_table_columns.emplace_back(original_table_handle_define);
-    original_table_columns.emplace_back(getVersionColumnDefine());
-    original_table_columns.emplace_back(getTagColumnDefine());
+    ColumnDefines tmp_table_columns;
+    tmp_table_columns.emplace_back(original_table_handle_define);
+    tmp_table_columns.emplace_back(getVersionColumnDefine());
+    tmp_table_columns.emplace_back(getTagColumnDefine());
     for (const auto & col : columns)
     {
         if (col.id != original_table_handle_define.id && col.id != MutSup::version_col_id
             && col.id != MutSup::delmark_col_id)
-            original_table_columns.emplace_back(col);
+            tmp_table_columns.emplace_back(col);
     }
-
-    original_table_header = std::make_shared<Block>(toEmptyBlock(original_table_columns));
-    store_columns = generateStoreColumns(original_table_columns, is_common_handle);
+    updateColumnDefines(std::move(tmp_table_columns));
 
     auto dm_context = newDMContext(db_context, db_context.getSettingsRef());
     PageStorageRunMode page_storage_run_mode;
@@ -1231,13 +1246,13 @@ ReadMode DeltaMergeStore::getReadMode(
     const Context & db_context,
     bool is_fast_scan,
     bool keep_order,
-    const PushDownExecutorPtr & filter)
+    const PushDownExecutorPtr & executor)
 {
     auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
     RUNTIME_CHECK_MSG(
-        !filter || !filter->before_where || read_mode == ReadMode::Bitmap,
+        !executor || !executor->before_where || read_mode == ReadMode::Bitmap,
         "Push down executor needs bitmap, push down executor is empty: {}, read mode: {}",
-        filter == nullptr || filter->before_where == nullptr,
+        executor == nullptr || executor->before_where == nullptr,
         magic_enum::enum_name(read_mode));
     return read_mode;
 }
@@ -1249,7 +1264,7 @@ BlockInputStreams DeltaMergeStore::read(
     const RowKeyRanges & sorted_ranges,
     size_t num_streams,
     UInt64 start_ts,
-    const PushDownExecutorPtr & filter,
+    const PushDownExecutorPtr & executor,
     const RuntimeFilteList & runtime_filter_list,
     int rf_max_wait_time_ms,
     const String & tracing_id,
@@ -1284,12 +1299,13 @@ BlockInputStreams DeltaMergeStore::read(
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream = std::max(1, std::min(num_streams, tasks.size()));
-    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
-    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, executor);
+    const auto & final_columns_to_read
+        = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         extra_table_id_index,
         final_columns_to_read,
-        filter,
+        executor,
         start_ts,
         expected_block_size,
         read_mode,
@@ -1322,7 +1338,7 @@ BlockInputStreams DeltaMergeStore::read(
                 read_task_pool,
                 after_segment_read,
                 final_columns_to_read,
-                filter,
+                executor,
                 start_ts,
                 expected_block_size,
                 read_mode,
@@ -1341,7 +1357,7 @@ BlockInputStreams DeltaMergeStore::read(
         db_context.getSettingsRef().dt_enable_read_thread,
         enable_read_thread,
         is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr,
+        executor == nullptr || executor->before_where == nullptr,
         read_task_pool->pool_id,
         final_num_stream,
         columns_to_read,
@@ -1359,7 +1375,7 @@ void DeltaMergeStore::read(
     const RowKeyRanges & sorted_ranges,
     size_t num_streams,
     UInt64 start_ts,
-    const PushDownExecutorPtr & filter,
+    const PushDownExecutorPtr & executor,
     const RuntimeFilteList & runtime_filter_list,
     int rf_max_wait_time_ms,
     const String & tracing_id,
@@ -1395,12 +1411,13 @@ void DeltaMergeStore::read(
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
     size_t final_num_stream
         = enable_read_thread ? std::max(1, num_streams) : std::max(1, std::min(num_streams, tasks.size()));
-    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, filter);
-    const auto & final_columns_to_read = filter && filter->extra_cast ? *filter->columns_after_cast : columns_to_read;
+    auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, executor);
+    const auto & final_columns_to_read
+        = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
     auto read_task_pool = std::make_shared<SegmentReadTaskPool>(
         extra_table_id_index,
         final_columns_to_read,
-        filter,
+        executor,
         start_ts,
         expected_block_size,
         read_mode,
@@ -1436,7 +1453,7 @@ void DeltaMergeStore::read(
                 read_task_pool,
                 after_segment_read,
                 final_columns_to_read,
-                filter,
+                executor,
                 start_ts,
                 expected_block_size,
                 read_mode,
@@ -1461,7 +1478,7 @@ void DeltaMergeStore::read(
         db_context.getSettingsRef().dt_enable_read_thread,
         enable_read_thread,
         is_fast_scan,
-        filter == nullptr || filter->before_where == nullptr,
+        executor == nullptr || executor->before_where == nullptr,
         read_task_pool->pool_id,
         final_num_stream,
         columns_to_read,
@@ -2025,12 +2042,7 @@ void DeltaMergeStore::applySchemaChanges(TiDB::TableInfo & table_info)
         replica_exist.store(false);
     }
 
-    auto new_store_columns = generateStoreColumns(new_original_table_columns, is_common_handle);
-
-    original_table_columns.swap(new_original_table_columns);
-    store_columns.swap(new_store_columns);
-
-    std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
+    updateColumnDefines(std::move(new_original_table_columns));
 
     // release the lock because `applyLocalIndexChange` will try to acquire the lock
     // and generate tasks on segments
@@ -2308,5 +2320,15 @@ void DeltaMergeStore::createFirstSegment(DM::DMContext & dm_context)
     addSegment(lock, first_segment);
 }
 
+void DeltaMergeStore::updateColumnDefines(ColumnDefines && tmp_columns)
+{
+    // Tables created before the new string serialization format takes effect will
+    // not be automatically converted to the new type during restoration.
+    // Here, we force it to algin with default string type.
+    convertStringTypeToDefault(tmp_columns);
+    original_table_columns = std::move(tmp_columns);
+    store_columns = generateStoreColumns(original_table_columns, is_common_handle);
+    std::atomic_store(&original_table_header, std::make_shared<Block>(toEmptyBlock(original_table_columns)));
+}
 } // namespace DM
 } // namespace DB

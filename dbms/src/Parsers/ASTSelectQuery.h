@@ -30,7 +30,7 @@ class ASTSelectQuery : public IAST
 {
 public:
     /** Get the text that identifies this element. */
-    String getID() const override { return "SelectQuery"; };
+    String getID() const override { return "SelectQuery"; }
 
     ASTPtr clone() const override;
 
@@ -42,7 +42,6 @@ public:
     ASTPtr tables;
     ASTPtr partition_expression_list;
     ASTPtr segment_expression_list;
-    ASTPtr prewhere_expression;
     ASTPtr where_expression;
     ASTPtr group_expression_list;
     ASTPtr having_expression;
