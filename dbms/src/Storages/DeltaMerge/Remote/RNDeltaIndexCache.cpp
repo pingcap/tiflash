@@ -26,8 +26,9 @@ namespace DB::DM::Remote
 
 DeltaIndexPtr RNDeltaIndexCache::getDeltaIndex(const CacheKey & key)
 {
+    RUNTIME_CHECK(!key.is_version_chain);
     auto [value, miss]
-        = cache.getOrSet(key, [&key] { return std::make_shared<CacheValue>(std::make_shared<DeltaIndex>(key), 0); });
+        = cache.getOrSet(key, [&key] { return std::make_shared<CacheValue>(CacheDeltaIndex(std::make_shared<DeltaIndex>(key), 0));});
     if (miss)
     {
         GET_METRIC(tiflash_storage_delta_index_cache, type_miss).Increment();
@@ -36,21 +37,27 @@ DeltaIndexPtr RNDeltaIndexCache::getDeltaIndex(const CacheKey & key)
     {
         GET_METRIC(tiflash_storage_delta_index_cache, type_hit).Increment();
     }
-    return value->delta_index;
+    return value->getDeltaIndex();
 }
 
-void RNDeltaIndexCache::setDeltaIndex(const DeltaIndexPtr & delta_index)
+void RNDeltaIndexCache::setDeltaIndex(const CacheKey & key, const DeltaIndexPtr & delta_index)
 {
     RUNTIME_CHECK(delta_index != nullptr);
-    if (const auto & key = delta_index->getRNCacheKey(); key)
+    std::lock_guard lock(mtx);
+    if (auto value = cache.get(key); value)
     {
-        std::lock_guard lock(mtx);
-        if (auto value = cache.get(*key); value)
-        {
-            cache.set(*key, std::make_shared<CacheValue>(delta_index, delta_index->getBytes()));
-            CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, cache.weight());
-        }
+        cache.set(key, std::make_shared<CacheValue>(CacheDeltaIndex(delta_index, delta_index->getBytes())));
+        CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, cache.weight());
     }
+}
+
+GenericVersionChainPtr RNDeltaIndexCache::getVersionChain(const CacheKey & )
+{
+    return nullptr;
+}
+void setVersionChain(const GenericVersionChainPtr &)
+{
+
 }
 
 } // namespace DB::DM::Remote

@@ -155,6 +155,7 @@ private:
 };
 
 using GenericVersionChain = std::variant<VersionChain<Int64>, VersionChain<String>>;
+using GenericVersionChainPtr = std::shared_ptr<GenericVersionChain>;
 
 inline GenericVersionChain createVersionChain(bool is_common_handle)
 {
@@ -162,6 +163,14 @@ inline GenericVersionChain createVersionChain(bool is_common_handle)
         return GenericVersionChain{std::in_place_type<VersionChain<String>>};
     else
         return GenericVersionChain{std::in_place_type<VersionChain<Int64>>};
+}
+
+inline GenericVersionChainPtr createVersionChainPtr(bool is_common_handle)
+{
+    if (is_common_handle)
+        return std::make_shared<GenericVersionChain>(std::in_place_type<VersionChain<String>>);
+    else
+        return std::make_shared<GenericVersionChain>(std::in_place_type<VersionChain<Int64>>);
 }
 
 enum class VersionChainMode : Int64

@@ -264,6 +264,8 @@ void SegmentReadTask::initInputStream(
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
 {
+    prepareMVCCIndex(read_mode);
+    
     if (likely(doInitInputStreamWithErrorFallback(
             columns_to_read,
             start_ts,
@@ -280,7 +282,9 @@ void SegmentReadTask::initInputStream(
     read_snapshot->delta->getSharedDeltaIndex()->swap(empty_delta_index);
     if (auto cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
     {
-        cache->setDeltaIndex(read_snapshot->delta->getSharedDeltaIndex());
+        const auto & delta_index = read_snapshot->delta->getSharedDeltaIndex();
+        if (const auto & key = delta_index->getRNCacheKey(); key)
+            cache->setDeltaIndex(*key, delta_index);
     }
     doInitInputStream(columns_to_read, start_ts, push_down_executor, read_mode, expected_block_size);
 }
@@ -814,5 +818,30 @@ bool SegmentReadTask::hasColumnFileToFetch() const
     const auto & persisted_cfs = read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles();
     return std::any_of(mem_cfs.cbegin(), mem_cfs.cend(), need_to_fetch)
         || std::any_of(persisted_cfs.cbegin(), persisted_cfs.cend(), need_to_fetch);
+}
+
+void SegmentReadTask::prepareMVCCIndex(ReadMode read_mode)
+{
+    if (!dm_context->global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+        return;
+
+    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache;
+    if (!cache)
+        return;
+
+    const auto cache_key = Remote::RNDeltaIndexCache::CacheKey{
+        .store_id = store_id,
+        .table_id = dm_context->physical_table_id,
+        .segment_id = segment->segmentId(),
+        .segment_epoch = segment->segmentEpoch(),
+        .delta_index_epoch = read_snapshot->delta->getDeltaIndexEpoch(),
+        .keyspace_id = dm_context->keyspace_id,
+        .is_version_chain = read_mode == ReadMode::Bitmap && dm_context->isVersionChainEnabled(),
+    };
+    
+    if (cache_key.is_version_chain)
+        segment->setVersionChain(cache->getVersionChain(cache_key));
+    else
+        read_snapshot->delta->setSharedDeltaIndex(cache->getDeltaIndex(cache_key));
 }
 } // namespace DB::DM

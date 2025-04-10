@@ -100,6 +100,8 @@ public:
 
     void fetchPages();
 
+    void prepareMVCCIndex(ReadMode read_mode);
+
     void initInputStream(
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
