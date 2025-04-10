@@ -83,6 +83,8 @@ private:
 private:
     friend JoinProbeBlockHelper;
 
+    static const DataTypePtr match_helper_type;
+
     const ASTTableJoin::Kind kind;
     const String join_req_id;
 

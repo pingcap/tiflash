@@ -4300,6 +4300,7 @@ try
         context.addMockTable("semi", "t", {{"a", TiDB::TP::TypeLong, false}}, left);
         context.addMockTable("semi", "s", {{"a", TiDB::TP::TypeLong, false}}, right);
 
+        WRAP_FOR_JOIN_TEST_BEGIN
         for (const auto type :
              {JoinType::TypeLeftOuterSemiJoin,
               JoinType::TypeAntiLeftOuterSemiJoin,
@@ -4308,19 +4309,27 @@ try
         {
             auto reference = genSemiJoinResult(type, left, res);
             auto request = context.scan("semi", "t").join(context.scan("semi", "s"), type, {col("a")}).build(context);
-            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            if (cfg.enable_join_v2)
             {
-                if (need_force_semi_join_time_exceed)
-                {
-                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
-                }
-                else
-                {
-                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
-                }
                 executeAndAssertColumnsEqual(request, reference);
             }
+            else
+            {
+                for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+                {
+                    if (need_force_semi_join_time_exceed)
+                    {
+                        FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                    }
+                    else
+                    {
+                        FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                    }
+                    executeAndAssertColumnsEqual(request, reference);
+                }
+            }
         }
+        WRAP_FOR_JOIN_TEST_END
     }
 
     /// One join key(t.a = s.a) + other condition(t.c < s.c).
@@ -4352,6 +4361,7 @@ try
         context.addMockTable("semi", "t", {{"a", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong}}, left);
         context.addMockTable("semi", "s", {{"a", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong}}, right);
 
+        WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
         for (const auto type :
              {JoinType::TypeLeftOuterSemiJoin,
               JoinType::TypeAntiLeftOuterSemiJoin,
@@ -4363,19 +4373,27 @@ try
                 = context.scan("semi", "t")
                       .join(context.scan("semi", "s"), type, {col("a")}, {}, {}, {lt(col("t.c"), col("s.c"))}, {})
                       .build(context);
-            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            if (cfg.enable_join_v2)
             {
-                if (need_force_semi_join_time_exceed)
-                {
-                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
-                }
-                else
-                {
-                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
-                }
                 executeAndAssertColumnsEqual(request, reference);
             }
+            else
+            {
+                for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+                {
+                    if (need_force_semi_join_time_exceed)
+                    {
+                        FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                    }
+                    else
+                    {
+                        FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                    }
+                    executeAndAssertColumnsEqual(request, reference);
+                }
+            }
         }
+        WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
     }
 
     /// Two join keys(t.a = s.a and t.b = s.b) + no other condition.
@@ -4408,6 +4426,7 @@ try
         context.addMockTable("semi", "t", {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}}, left);
         context.addMockTable("semi", "s", {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}}, right);
 
+        WRAP_FOR_JOIN_TEST_BEGIN
         for (const auto type :
              {JoinType::TypeLeftOuterSemiJoin,
               JoinType::TypeAntiLeftOuterSemiJoin,
@@ -4418,19 +4437,27 @@ try
             auto request = context.scan("semi", "t")
                                .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
                                .build(context);
-            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            if (cfg.enable_join_v2)
             {
-                if (need_force_semi_join_time_exceed)
-                {
-                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
-                }
-                else
-                {
-                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
-                }
                 executeAndAssertColumnsEqual(request, reference);
             }
+            else
+            {
+                for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+                {
+                    if (need_force_semi_join_time_exceed)
+                    {
+                        FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                    }
+                    else
+                    {
+                        FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                    }
+                    executeAndAssertColumnsEqual(request, reference);
+                }
+            }
         }
+        WRAP_FOR_JOIN_TEST_END
     }
 
     /// Two join keys(t.a = s.a and t.b = s.b) + other condition(t.c < s.c).
@@ -4494,6 +4521,7 @@ try
             {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong}},
             right);
 
+        WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
         for (const auto type :
              {JoinType::TypeLeftOuterSemiJoin,
               JoinType::TypeAntiLeftOuterSemiJoin,
@@ -4511,19 +4539,27 @@ try
                                    {lt(col("t.c"), col("s.c"))},
                                    {})
                                .build(context);
-            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            if (cfg.enable_join_v2)
             {
-                if (need_force_semi_join_time_exceed)
-                {
-                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
-                }
-                else
-                {
-                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
-                }
                 executeAndAssertColumnsEqual(request, reference);
             }
+            else
+            {
+                for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+                {
+                    if (need_force_semi_join_time_exceed)
+                    {
+                        FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                    }
+                    else
+                    {
+                        FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                    }
+                    executeAndAssertColumnsEqual(request, reference);
+                }
+            }
         }
+        WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
     }
 
     /// Two join keys(t.a = s.a and t.b = s.b) + no other condition + collation(UTF8MB4_UNICODE_CI).
@@ -4544,6 +4580,7 @@ try
         context
             .addMockTable("semi", "s", {{"a", TiDB::TP::TypeString, false}, {"b", TiDB::TP::TypeString, false}}, right);
 
+        WRAP_FOR_JOIN_TEST_BEGIN
         for (const auto type :
              {JoinType::TypeLeftOuterSemiJoin,
               JoinType::TypeAntiLeftOuterSemiJoin,
@@ -4554,19 +4591,27 @@ try
             auto request = context.scan("semi", "t")
                                .join(context.scan("semi", "s"), type, {col("a"), col("b")}, {})
                                .build(context);
-            for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+            if (cfg.enable_join_v2)
             {
-                if (need_force_semi_join_time_exceed)
-                {
-                    FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
-                }
-                else
-                {
-                    FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
-                }
                 executeAndAssertColumnsEqual(request, reference);
             }
+            else
+            {
+                for (auto need_force_semi_join_time_exceed : semi_join_time_exceed)
+                {
+                    if (need_force_semi_join_time_exceed)
+                    {
+                        FailPointHelper::enableFailPoint(FailPoints::force_semi_join_time_exceed);
+                    }
+                    else
+                    {
+                        FailPointHelper::disableFailPoint(FailPoints::force_semi_join_time_exceed);
+                    }
+                    executeAndAssertColumnsEqual(request, reference);
+                }
+            }
         }
+        WRAP_FOR_JOIN_TEST_END
     }
 }
 CATCH

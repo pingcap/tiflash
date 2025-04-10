@@ -78,8 +78,10 @@ struct JoinProbeContext
 struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
 {
     IColumn::Offsets selective_offsets;
-    // For left outer join with no other condition
+    /// For left outer join with no other condition
     IColumn::Offsets not_matched_selective_offsets;
+    /// For left outer (anti) semi join with no other condition
+    PaddedPODArray<Int8> match_helper_res;
 
     RowPtrs insert_batch;
 

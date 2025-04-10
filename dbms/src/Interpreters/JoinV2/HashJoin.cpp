@@ -18,6 +18,8 @@
 #include <Common/Stopwatch.h>
 #include <Core/ColumnsWithTypeAndName.h>
 #include <DataStreams/materializeBlock.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <Interpreters/JoinUtils.h>
 #include <Interpreters/JoinV2/HashJoin.h>
 #include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/NullableUtils.h>
@@ -107,6 +109,8 @@ StringCollatorKind getStringCollatorKind(const TiDB::TiDBCollators & collators)
 }
 
 } // namespace
+
+const DataTypePtr HashJoin::match_helper_type = makeNullable(std::make_shared<DataTypeInt8>());
 
 HashJoin::HashJoin(
     const Names & key_names_left_,
@@ -364,11 +368,29 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
         }
         output_column_indexes.push_back(output_index);
     }
-    RUNTIME_CHECK_MSG(
-        output_columns == output_block_after_finalize.columns(),
-        "output columns {} in all_sample_block_pruned != columns {} in output_block_after_finalize",
-        output_columns,
-        output_block_after_finalize.columns());
+    if (isLeftOuterSemiFamily(kind))
+    {
+        RUNTIME_CHECK_MSG(
+            output_columns + 1 == output_block_after_finalize.columns(),
+            "output columns {} in all_sample_block_pruned + 1 != columns {} in output_block_after_finalize",
+            output_columns,
+            output_block_after_finalize.columns());
+        RUNTIME_CHECK_MSG(
+            output_block_after_finalize.has(match_helper_name),
+            "output_block_after_finalize does not have {} for join kind {}",
+            match_helper_name,
+            magic_enum::enum_name(kind));
+
+        RUNTIME_CHECK(output_block_after_finalize.getByName(match_helper_name).type->equals(*match_helper_type));
+    }
+    else
+    {
+        RUNTIME_CHECK_MSG(
+            output_columns == output_block_after_finalize.columns(),
+            "output columns {} in all_sample_block_pruned != columns {} in output_block_after_finalize",
+            output_columns,
+            output_block_after_finalize.columns());
+    }
 
     if (has_other_condition)
     {
