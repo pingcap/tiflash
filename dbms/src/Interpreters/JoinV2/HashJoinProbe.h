@@ -80,27 +80,29 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     IColumn::Offsets selective_offsets;
     // For left outer join with no other condition
     IColumn::Offsets not_matched_selective_offsets;
-    RowPtrs row_ptrs_for_lm;
 
     RowPtrs insert_batch;
-
-    size_t probe_handle_rows = 0;
-    size_t probe_time = 0;
-    size_t probe_hash_table_time = 0;
-    size_t replicate_time = 0;
-    size_t other_condition_time = 0;
-    size_t collision = 0;
 
     /// For other condition
     ColumnVector<UInt8>::Container filter;
     IColumn::Offsets filter_offsets;
     IColumn::Offsets filter_selective_offsets;
+    /// For late materialization
+    RowPtrs row_ptrs_for_lm;
     RowPtrs filter_row_ptrs_for_lm;
 
     /// Schema: HashJoin::all_sample_block_pruned
     Block result_block;
     /// Schema: HashJoin::output_block_after_finalize
     Block result_block_for_other_condition;
+
+    /// Metrics
+    size_t probe_handle_rows = 0;
+    size_t probe_time = 0;
+    size_t probe_hash_table_time = 0;
+    size_t replicate_time = 0;
+    size_t other_condition_time = 0;
+    size_t collision = 0;
 };
 
 /// The implemtation of prefetching in join probe process is inspired by a paper named
