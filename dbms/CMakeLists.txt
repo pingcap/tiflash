@@ -375,6 +375,10 @@ if (ENABLE_TESTS)
                 DESTINATION ".")
     endif ()
 
+    install (TARGETS clara_shared
+            COMPONENT tiflash-gtest
+            DESTINATION ".")
+
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 
@@ -393,7 +397,7 @@ if (ENABLE_TESTS)
     target_link_libraries(bench_dbms
         gtest
         benchmark
-    
+
         dbms
         test_util_bench_main
         tiflash_functions
