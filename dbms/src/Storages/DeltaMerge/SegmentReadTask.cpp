@@ -104,7 +104,7 @@ SegmentReadTask::SegmentReadTask(
         nullptr,
         nullptr);
 
-    read_snapshot = Serializer::deserializeSegment(*dm_context, store_id, keyspace_id, physical_table_id, proto);
+    read_snapshot = Serializer::deserializeSegment(*dm_context, proto);
 
     ranges.reserve(proto.read_key_ranges_size());
     for (const auto & read_key_range : proto.read_key_ranges())
@@ -264,6 +264,10 @@ void SegmentReadTask::initInputStream(
     size_t expected_block_size,
     bool enable_delta_index_error_fallback)
 {
+    // Under disagg mode, `prepareMVCCIndex` will try to get delta index or version chain from cache.
+    auto initial_index_bytes = prepareMVCCIndex(read_mode);
+    SCOPE_EXIT({ updateMVCCIndexSize(read_mode, initial_index_bytes); });
+
     if (likely(doInitInputStreamWithErrorFallback(
             columns_to_read,
             start_ts,
@@ -278,10 +282,6 @@ void SegmentReadTask::initInputStream(
     // Exception DT_DELTA_INDEX_ERROR raised. Reset delta index and try again.
     DeltaIndex empty_delta_index;
     read_snapshot->delta->getSharedDeltaIndex()->swap(empty_delta_index);
-    if (auto cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
-    {
-        cache->setDeltaIndex(read_snapshot->delta->getSharedDeltaIndex());
-    }
     doInitInputStream(columns_to_read, start_ts, push_down_executor, read_mode, expected_block_size);
 }
 
@@ -814,5 +814,62 @@ bool SegmentReadTask::hasColumnFileToFetch() const
     const auto & persisted_cfs = read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles();
     return std::any_of(mem_cfs.cbegin(), mem_cfs.cend(), need_to_fetch)
         || std::any_of(persisted_cfs.cbegin(), persisted_cfs.cend(), need_to_fetch);
+}
+
+std::optional<Remote::RNDeltaIndexCache::CacheKey> SegmentReadTask::getRNMVCCIndexCacheKey(ReadMode read_mode) const
+{
+    if (!dm_context->global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
+        return std::nullopt;
+
+    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache;
+    if (!cache)
+        return std::nullopt;
+
+    return Remote::RNDeltaIndexCache::CacheKey{
+        .store_id = store_id,
+        .table_id = dm_context->physical_table_id,
+        .segment_id = segment->segmentId(),
+        .segment_epoch = segment->segmentEpoch(),
+        .delta_index_epoch = read_snapshot->delta->getDeltaIndexEpoch(),
+        .keyspace_id = dm_context->keyspace_id,
+        .is_version_chain = read_mode == ReadMode::Bitmap && dm_context->isVersionChainEnabled(),
+    };
+}
+
+size_t SegmentReadTask::prepareMVCCIndex(ReadMode read_mode)
+{
+    const auto cache_key = getRNMVCCIndexCacheKey(read_mode);
+    if (!cache_key)
+        return 0;
+
+    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache;
+    assert(cache != nullptr);
+    if (cache_key->is_version_chain)
+    {
+        auto version_chain = cache->getVersionChain(*cache_key, dm_context->is_common_handle);
+        segment->setVersionChain(version_chain);
+        return getVersionChainBytes(*version_chain);
+    }
+    else
+    {
+        auto delta_index = cache->getDeltaIndex(*cache_key);
+        read_snapshot->delta->setSharedDeltaIndex(delta_index);
+        return delta_index->getBytes();
+    }
+}
+
+void SegmentReadTask::updateMVCCIndexSize(ReadMode read_mode, size_t initial_index_bytes)
+{
+    const auto cache_key = getRNMVCCIndexCacheKey(read_mode);
+    if (!cache_key)
+        return;
+
+    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache;
+    assert(cache != nullptr);
+    if (cache_key->is_version_chain && getVersionChainBytes(*(segment->getVersionChain())) != initial_index_bytes)
+        cache->setVersionChain(*cache_key, segment->getVersionChain());
+    else if (
+        !cache_key->is_version_chain && read_snapshot->delta->getSharedDeltaIndex()->getBytes() != initial_index_bytes)
+        cache->setDeltaIndex(*cache_key, read_snapshot->delta->getSharedDeltaIndex());
 }
 } // namespace DB::DM

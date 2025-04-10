@@ -2586,7 +2586,7 @@ void Segment::replayVersionChain(const DMContext & dm_context)
         [&dm_context, &segment_snap](auto & version_chain) {
             return version_chain.replaySnapshot(dm_context, *segment_snap);
         },
-        this->version_chain);
+        *(this->version_chain));
     GET_METRIC(tiflash_storage_version_chain_ms, type_bg_replay).Observe(sw.elapsedMilliseconds());
 }
 
@@ -2723,9 +2723,6 @@ Segment::ReadInfo Segment::getReadInfo(
                 "Segment updated delta index, my_delta_index={} {}",
                 my_delta_index->toString(),
                 simpleInfo());
-            // Update cache size.
-            if (auto cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
-                cache->setDeltaIndex(segment_snap->delta->getSharedDeltaIndex());
         }
     }
 
@@ -3139,7 +3136,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilter(
             read_ranges,
             pack_filter_results,
             start_ts,
-            version_chain);
+            *version_chain);
     }
 
     if (readStableOnly(dm_context, segment_snap))

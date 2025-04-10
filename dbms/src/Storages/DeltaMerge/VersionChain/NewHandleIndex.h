@@ -124,6 +124,13 @@ public:
         handle_to_row_id.swap(t);
     }
 
+    size_t getBytes() const
+    {
+        // In tests, about 2.3~2.5 bytes overhead for each entry in handle_to_row_id.
+        return sizeof(hasher)
+            + handle_to_row_id.size() * (sizeof(absl::btree_multimap<UInt32, RowID>::value_type) + 2.5);
+    }
+
 private:
     static MutableColumnPtr createHandleColumn()
     {
