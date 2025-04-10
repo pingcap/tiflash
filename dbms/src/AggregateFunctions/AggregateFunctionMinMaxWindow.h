@@ -52,7 +52,6 @@ public:
             static_cast<ColumnType &>(to).insertDefault();
     }
 
-    template <bool is_min>
     void insertBatchResultInto(IColumn & to, size_t num) const
     {
         if (!queue.empty())
@@ -116,7 +115,6 @@ public:
             static_cast<ColumnString &>(to).insertDefault();
     }
 
-    template <bool is_min>
     void insertBatchResultInto(IColumn & to, size_t num) const
     {
         if (!queue.empty())
@@ -193,8 +191,7 @@ public:
             to.insertDefault();
     }
 
-    template <bool is_min>
-    void insertBatchMinOrMaxResultInto(IColumn & to, size_t num) const
+    void insertBatchResultInto(IColumn & to, size_t num) const
     {
         if (!queue.empty())
             to.insertMany(queue.front(), num);
