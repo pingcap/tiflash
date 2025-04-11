@@ -21,6 +21,7 @@
 #include <Common/FailPoint.h>
 #include <Common/MemoryAllocTrace.h>
 #include <Common/RedactHelpers.h>
+#include <Common/SpillLimiter.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashBuildInfo.h>
@@ -1059,6 +1060,8 @@ try
     });
 
     proxy_machine.restoreKVStore(global_context->getTMTContext(), global_context->getPathPool());
+
+    SpillLimiter::instance->setMaxSpilledBytes(settings.max_spilled_bytes);
 
     /// setting up elastic thread pool
     bool enable_elastic_threadpool = settings.enable_elastic_threadpool;
