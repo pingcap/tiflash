@@ -16,7 +16,9 @@
 
 #include <Columns/ColumnNullable.h>
 #include <Columns/IColumn.h>
+#include <Common/PODArray.h>
 #include <Core/Block.h>
+#include <Core/Types.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
 #include <Interpreters/JoinV2/HashJoinKey.h>
 #include <Interpreters/JoinV2/HashJoinPointerTable.h>
@@ -35,7 +37,14 @@ struct JoinProbeContext
     Block orignal_block;
     size_t rows = 0;
     size_t start_row_idx = 0;
-    RowPtr current_probe_row_ptr = nullptr;
+    RowPtr current_row_ptr = nullptr;
+    /// For left outer/(left outer) (anti) semi join without other conditions.
+    bool current_row_is_matched = false;
+    /// For left outer/(left outer) (anti) semi join with other conditions.
+    IColumn::Filter rows_not_matched;
+    /// < 0 means not_matched_offsets is not initialized.
+    ssize_t not_matched_offsets_idx = -1;
+    IColumn::Offsets not_matched_offsets;
 
     size_t prefetch_active_states = 0;
     size_t prefetch_iter = 0;
@@ -48,16 +57,16 @@ struct JoinProbeContext
     ConstNullMapPtr null_map = nullptr;
     std::unique_ptr<void, std::function<void(void *)>> key_getter;
 
-    bool current_row_is_matched = false;
-
     bool input_is_finished = false;
 
-    bool isCurrentProbeFinished() const;
+    bool isProbeFinished() const;
+    bool isAllFinished() const;
     void resetBlock(Block & block_);
 
     void prepareForHashProbe(
         HashJoinKeyMethod method,
         ASTTableJoin::Kind kind,
+        bool has_other_condition,
         const Names & key_names,
         const String & filter_column,
         const NameSet & probe_output_name_set,
@@ -69,38 +78,121 @@ struct JoinProbeContext
 struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
 {
     IColumn::Offsets selective_offsets;
+    /// For left outer join with no other condition
+    IColumn::Offsets not_matched_selective_offsets;
+    /// For left outer (anti) semi join with no other condition
+    PaddedPODArray<Int8> match_helper_res;
 
     RowPtrs insert_batch;
 
+    /// For other condition
+    ColumnVector<UInt8>::Container filter;
+    IColumn::Offsets filter_offsets;
+    IColumn::Offsets filter_selective_offsets;
+    /// For late materialization
+    RowPtrs row_ptrs_for_lm;
+    RowPtrs filter_row_ptrs_for_lm;
+
+    /// Schema: HashJoin::all_sample_block_pruned
+    Block result_block;
+    /// Schema: HashJoin::output_block_after_finalize
+    Block result_block_for_other_condition;
+
+    /// Metrics
     size_t probe_handle_rows = 0;
     size_t probe_time = 0;
     size_t probe_hash_table_time = 0;
     size_t replicate_time = 0;
     size_t other_condition_time = 0;
     size_t collision = 0;
-
-    /// filter for other condition
-    ColumnVector<UInt8>::Container filter;
-    IColumn::Offsets filter_offsets1;
-    IColumn::Offsets filter_offsets2;
-
-    /// Schema: HashJoin::all_sample_block_pruned
-    Block result_block;
-    /// Schema: HashJoin::output_block_after_finalize
-    Block result_block_for_other_condition;
 };
 
-void joinProbeBlock(
-    JoinProbeContext & context,
-    JoinProbeWorkerData & wd,
-    HashJoinKeyMethod method,
-    ASTTableJoin::Kind kind,
-    const JoinNonEqualConditions & non_equal_conditions,
-    const HashJoinSettings & settings,
-    const HashJoinPointerTable & pointer_table,
-    const HashJoinRowLayout & row_layout,
-    MutableColumns & added_columns,
-    size_t added_rows);
+template <ASTTableJoin::Kind kind, bool has_other_condition, bool late_materialization>
+struct JoinProbeAdder;
 
+#define JOIN_PROBE_TEMPLATE        \
+    template <                     \
+        typename KeyGetter,        \
+        ASTTableJoin::Kind kind,   \
+        bool has_null_map,         \
+        bool has_other_condition,  \
+        bool late_materialization, \
+        bool tagged_pointer>
+
+class HashJoin;
+class JoinProbeHelper
+{
+public:
+    JoinProbeHelper(const HashJoin * join, bool late_materialization);
+
+    Block probe(JoinProbeContext & context, JoinProbeWorkerData & wd);
+
+private:
+    JOIN_PROBE_TEMPLATE
+    Block probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd);
+
+    JOIN_PROBE_TEMPLATE
+    void NO_INLINE
+    probeFillColumns(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+    JOIN_PROBE_TEMPLATE
+    void NO_INLINE
+    probeFillColumnsPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+
+    template <typename KeyGetter>
+    void initPrefetchStates(JoinProbeContext & context);
+
+    template <typename KeyGetterType, typename KeyType, typename HashValueType>
+    bool ALWAYS_INLINE joinKeyIsEqual(
+        KeyGetterType & key_getter,
+        const KeyType & key1,
+        const KeyType & key2,
+        HashValueType hash1,
+        RowPtr row_ptr) const
+    {
+        if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+        {
+            auto hash2 = unalignedLoad<HashValueType>(row_ptr + sizeof(RowPtr));
+            if (hash1 != hash2)
+                return false;
+        }
+        return key_getter.joinKeyIsEqual(key1, key2);
+    }
+
+    template <bool late_materialization>
+    void ALWAYS_INLINE insertRowToBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns, RowPtr row_ptr) const
+    {
+        wd.insert_batch.push_back(row_ptr);
+        if unlikely (wd.insert_batch.size() >= settings.probe_insert_batch_size)
+            flushInsertBatch<late_materialization, false>(wd, added_columns);
+    }
+
+    template <bool late_materialization, bool last_flush>
+    void flushInsertBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns) const;
+
+    template <bool late_materialization>
+    void fillNullMapWithZero(MutableColumns & added_columns) const;
+
+    Block handleOtherConditions(
+        JoinProbeContext & context,
+        JoinProbeWorkerData & wd,
+        ASTTableJoin::Kind kind,
+        bool late_materialization);
+
+    Block fillNotMatchedRowsForLeftOuter(JoinProbeContext & context, JoinProbeWorkerData & wd);
+
+    Block genResultBlockForLeftOuterSemi(JoinProbeContext & context, JoinProbeWorkerData & wd);
+
+private:
+    template <ASTTableJoin::Kind kind, bool has_other_condition, bool late_materialization>
+    friend struct JoinProbeAdder;
+
+    using FuncType = Block (JoinProbeHelper::*)(JoinProbeContext &, JoinProbeWorkerData &);
+    FuncType func_ptr_has_null = nullptr;
+    FuncType func_ptr_no_null = nullptr;
+    const HashJoin * join;
+    const HashJoinSettings & settings;
+    const HashJoinPointerTable & pointer_table;
+    const HashJoinRowLayout & row_layout;
+};
 
 } // namespace DB
