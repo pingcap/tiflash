@@ -17,9 +17,9 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider_fwd.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-#include <Storages/DeltaMerge/VersionChain/VersionChain_fwd.h>
 #include <Storages/DeltaMerge/VersionChain/DMFileHandleIndex.h>
 #include <Storages/DeltaMerge/VersionChain/NewHandleIndex.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain_fwd.h>
 
 namespace DB::DM
 {

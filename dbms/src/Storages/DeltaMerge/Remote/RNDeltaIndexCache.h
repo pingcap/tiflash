@@ -16,9 +16,10 @@
 
 #include <Common/LRUCache.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache_fwd.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <common/types.h>
-#include <Storages/DeltaMerge/VersionChain/VersionChain_fwd.h>
+
 #include <boost/noncopyable.hpp>
 
 namespace DB::DM
@@ -58,19 +59,19 @@ public:
         }
     };
 
-     // Returns a cached or newly created delta index, which is assigned to the specified segment(at)epoch.
-     DeltaIndexPtr getDeltaIndex(const CacheKey & key);
+    // Returns a cached or newly created delta index, which is assigned to the specified segment(at)epoch.
+    DeltaIndexPtr getDeltaIndex(const CacheKey & key);
 
-     // `setDeltaIndex` will updated cache size and remove overflows if necessary.
-     void setDeltaIndex(const CacheKey & key, const DeltaIndexPtr & delta_index);
- 
-     // Similar to `getDeltaIndex`, but this method is used to get version chain.
-     GenericVersionChainPtr getVersionChain(const CacheKey & key);
-     // Similar to `setDeltaIndex`, but this method is used to set version chain.
-     void setVersionChain(const GenericVersionChainPtr & version_chain);
- 
-     size_t getCacheWeight() const { return cache.weight(); }
-     size_t getCacheCount() const { return cache.count(); }
+    // `setDeltaIndex` will updated cache size and remove overflows if necessary.
+    void setDeltaIndex(const CacheKey & key, const DeltaIndexPtr & delta_index);
+
+    // Similar to `getDeltaIndex`, but this method is used to get version chain.
+    GenericVersionChainPtr getVersionChain(const CacheKey & key);
+    // Similar to `setDeltaIndex`, but this method is used to set version chain.
+    void setVersionChain(const GenericVersionChainPtr & version_chain);
+
+    size_t getCacheWeight() const { return cache.weight(); }
+    size_t getCacheCount() const { return cache.count(); }
 
 private:
     struct CacheDeltaIndex
@@ -87,8 +88,9 @@ private:
     struct CacheVersionChain
     {
         CacheVersionChain(const GenericVersionChainPtr & version_chain_, size_t bytes_)
-           : version_chain(version_chain_)
-           , bytes(bytes_) {}
+            : version_chain(version_chain_)
+            , bytes(bytes_)
+        {}
 
         GenericVersionChainPtr version_chain;
         size_t bytes;
@@ -103,15 +105,9 @@ private:
             return std::visit([](const auto & v) { return v.bytes; }, value);
         }
 
-        DeltaIndexPtr getDeltaIndex() const
-        {
-            return std::get<CacheDeltaIndex>(value).delta_index;
-        }
+        DeltaIndexPtr getDeltaIndex() const { return std::get<CacheDeltaIndex>(value).delta_index; }
 
-        GenericVersionChainPtr getVersionChain() const
-        {
-            return std::get<CacheVersionChain>(value).version_chain;
-        }
+        GenericVersionChainPtr getVersionChain() const { return std::get<CacheVersionChain>(value).version_chain; }
     };
 
     struct CacheKeyHasher

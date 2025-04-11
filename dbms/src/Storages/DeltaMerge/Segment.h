@@ -667,10 +667,7 @@ public:
         }
     }
 
-    void setVersionChain(const GenericVersionChainPtr & version_chain_)
-    {
-        version_chain = version_chain_;
-    }
+    void setVersionChain(const GenericVersionChainPtr & version_chain_) { version_chain = version_chain_; }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

@@ -27,8 +27,9 @@ namespace DB::DM::Remote
 DeltaIndexPtr RNDeltaIndexCache::getDeltaIndex(const CacheKey & key)
 {
     RUNTIME_CHECK(!key.is_version_chain);
-    auto [value, miss]
-        = cache.getOrSet(key, [&key] { return std::make_shared<CacheValue>(CacheDeltaIndex(std::make_shared<DeltaIndex>(key), 0));});
+    auto [value, miss] = cache.getOrSet(key, [&key] {
+        return std::make_shared<CacheValue>(CacheDeltaIndex(std::make_shared<DeltaIndex>(key), 0));
+    });
     if (miss)
     {
         GET_METRIC(tiflash_storage_delta_index_cache, type_miss).Increment();
@@ -51,13 +52,10 @@ void RNDeltaIndexCache::setDeltaIndex(const CacheKey & key, const DeltaIndexPtr 
     }
 }
 
-GenericVersionChainPtr RNDeltaIndexCache::getVersionChain(const CacheKey & )
+GenericVersionChainPtr RNDeltaIndexCache::getVersionChain(const CacheKey &)
 {
     return nullptr;
 }
-void setVersionChain(const GenericVersionChainPtr &)
-{
-
-}
+void setVersionChain(const GenericVersionChainPtr &) {}
 
 } // namespace DB::DM::Remote

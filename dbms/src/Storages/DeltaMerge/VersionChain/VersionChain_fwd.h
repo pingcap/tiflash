@@ -18,7 +18,8 @@
 
 namespace DB::DM
 {
-template <ExtraHandleType HandleType> class VersionChain;
+template <ExtraHandleType HandleType>
+class VersionChain;
 using GenericVersionChain = std::variant<VersionChain<Int64>, VersionChain<String>>;
 using GenericVersionChainPtr = std::shared_ptr<GenericVersionChain>;
 } // namespace DB::DM

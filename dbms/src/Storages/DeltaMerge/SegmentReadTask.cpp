@@ -265,7 +265,7 @@ void SegmentReadTask::initInputStream(
     bool enable_delta_index_error_fallback)
 {
     prepareMVCCIndex(read_mode);
-    
+
     if (likely(doInitInputStreamWithErrorFallback(
             columns_to_read,
             start_ts,
@@ -838,7 +838,7 @@ void SegmentReadTask::prepareMVCCIndex(ReadMode read_mode)
         .keyspace_id = dm_context->keyspace_id,
         .is_version_chain = read_mode == ReadMode::Bitmap && dm_context->isVersionChainEnabled(),
     };
-    
+
     if (cache_key.is_version_chain)
         segment->setVersionChain(cache->getVersionChain(cache_key));
     else
