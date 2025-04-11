@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,24 +14,16 @@
 
 #pragma once
 
-#include <TableFunctions/ITableFunction.h>
-
-
-namespace DB
+namespace DB::DM
 {
-/* numbers(limit)
- * - the same as SELECT number FROM system.numbers LIMIT limit.
- * Used for testing purposes, as a simple example of table function.
- */
-class TableFunctionNumbers : public ITableFunction
-{
-public:
-    static constexpr auto name = "numbers";
-    std::string getName() const override { return name; }
+struct DMContext;
+struct SegmentSnapshot;
 
-private:
-    StoragePtr executeImpl(const ASTPtr & ast_function, const Context & context) const override;
-};
-
-
-} // namespace DB
+// Filter out record versions that are deleted: read the delete mark column and update the `filter`.
+// Return how many records are filtered out.
+UInt32 buildDeleteMarkFilter(
+    const DMContext & dm_context,
+    const SegmentSnapshot & snapshot,
+    const DMFilePackFilterResultPtr & stable_filter_res,
+    BitmapFilter & filter);
+} // namespace DB::DM

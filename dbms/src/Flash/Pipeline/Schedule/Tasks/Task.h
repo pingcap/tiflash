@@ -46,6 +46,19 @@ enum class ExecTaskStatus
     CANCELLED,
 };
 
+enum class NotifyType
+{
+    WAIT_ON_TABLE_SCAN_READ,
+    WAIT_ON_SHARED_QUEUE_WRITE,
+    WAIT_ON_SHARED_QUEUE_READ,
+    WAIT_ON_SPILL_BUCKET_READ,
+    WAIT_ON_GRPC_RECV_READ,
+    WAIT_ON_TUNNEL_SENDER_WRITE,
+    WAIT_ON_JOIN_BUILD_FINISH,
+    WAIT_ON_JOIN_PROBE_FINISH,
+    WAIT_ON_RESULT_QUEUE_WRITE,
+};
+
 class PipelineExecutorContext;
 
 class Task
@@ -106,6 +119,9 @@ public:
 
     void onErrorOccurred(const String & err_msg) { exec_context.onErrorOccurred(err_msg); }
 
+    void setNotifyType(NotifyType type) { notify_type = type; }
+    NotifyType getNotifyType() const { return notify_type; }
+
 public:
     LoggerPtr log;
 
@@ -138,6 +154,7 @@ private:
     MemoryTracker * mem_tracker_ptr;
 
     ExecTaskStatus task_status;
+    NotifyType notify_type;
 
     bool is_finalized = false;
 };

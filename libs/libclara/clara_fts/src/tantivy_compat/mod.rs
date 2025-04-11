@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -12,20 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/config.h>
-#include <TableFunctions/TableFunctionFactory.h>
-#include <TableFunctions/registerTableFunctions.h>
-
-
-namespace DB
-{
-void registerTableFunctionNumbers(TableFunctionFactory & factory);
-
-void registerTableFunctions()
-{
-    auto & factory = TableFunctionFactory::instance();
-
-    registerTableFunctionNumbers(factory);
-}
-
-} // namespace DB
+/// This mod provides compatibility with tantivy's some behaviors.
+/// Code is ported directly from tantivy.
+pub mod fieldnorm_code;

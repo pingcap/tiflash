@@ -443,10 +443,27 @@ public:
     {
         if constexpr (IsDecimal<TResult>)
         {
-            static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(this->data(place).get(), result_scale);
+            auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
+            assert(container.getScale() == result_scale);
+            container.push_back(this->data(place).get());
         }
         else
             static_cast<ColumnVector<TResult> &>(to).getData().push_back(this->data(place).get());
+    }
+
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        if constexpr (IsDecimal<TResult>)
+        {
+            auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
+            assert(container.getScale() == result_scale);
+            container.resize_fill(container.size() + num, this->data(place).get());
+        }
+        else
+        {
+            auto & container = static_cast<ColumnVector<TResult> &>(to).getData();
+            container.resize_fill(container.size() + num, this->data(place).get());
+        }
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }

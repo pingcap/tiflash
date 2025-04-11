@@ -17,6 +17,7 @@
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <memory>
 
@@ -35,7 +36,10 @@ public:
     // write
     MPMCQueueResult push(Block && block) { return queue.push(block); }
     MPMCQueueResult tryPush(Block && block) { return queue.tryPush(block); }
-    void registerTask(TaskPtr && task) override { queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_RESULT_QUEUE_WRITE);
+    }
 
     // finish/cancel
     bool finish() { return queue.finish(); }
