@@ -104,7 +104,7 @@ SegmentReadTask::SegmentReadTask(
         nullptr,
         nullptr);
 
-    read_snapshot = Serializer::deserializeSegment(*dm_context, store_id, keyspace_id, physical_table_id, proto);
+    read_snapshot = Serializer::deserializeSegment(*dm_context, proto);
 
     ranges.reserve(proto.read_key_ranges_size());
     for (const auto & read_key_range : proto.read_key_ranges())

@@ -49,7 +49,7 @@ public:
         UInt64 segment_epoch;
         UInt64 delta_index_epoch;
         KeyspaceID keyspace_id;
-        bool is_version_chain = false;
+        bool is_version_chain;
 
         bool operator==(const CacheKey & other) const
         {

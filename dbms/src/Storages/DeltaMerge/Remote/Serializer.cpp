@@ -122,12 +122,7 @@ RemotePb::RemoteSegment Serializer::serializeSegment(
     return remote;
 }
 
-SegmentSnapshotPtr Serializer::deserializeSegment(
-    const DMContext & dm_context,
-    StoreID /*remote_store_id*/,
-    KeyspaceID /*keyspace_id*/,
-    TableID /*table_id*/,
-    const RemotePb::RemoteSegment & proto)
+SegmentSnapshotPtr Serializer::deserializeSegment(const DMContext & dm_context, const RemotePb::RemoteSegment & proto)
 {
     RowKeyRange segment_range;
     {
