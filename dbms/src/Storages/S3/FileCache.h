@@ -54,6 +54,7 @@ public:
         // which must be downloaded to the local disk.
         // So the priority of caching is relatively high
         VectorIndex,
+        FullTextIndex,
         InvertedIndex,
         Merged,
         Index,
@@ -314,6 +315,7 @@ public:
         0, // Unknow type, currently never cache it.
         8 * 1024, // Estimated size of meta.
         12 * 1024 * 1024, // Estimated size of vector index
+        12 * 1024 * 1024, // Estimated size of fulltext index
         128 * 1024, // Estimated size of inverted index.
         1 * 1024 * 1024, // Estimated size of merged.
         8 * 1024, // Estimated size of index.

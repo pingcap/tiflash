@@ -22,6 +22,8 @@
 #include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Reader_fwd.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
@@ -771,6 +773,17 @@ public:
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
         const ANNQueryInfoPtr & ann_query_info,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts,
+        size_t expected_block_size,
+        ReadTag read_tag);
+    static BlockInputStreamPtr getConcatFullTextIndexBlockInputStream(
+        BitmapFilterPtr bitmap_filter,
+        const SegmentSnapshotPtr & segment_snap,
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read,
+        const RowKeyRanges & read_ranges,
+        const FTSQueryInfoPtr & fts_query_info,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size,

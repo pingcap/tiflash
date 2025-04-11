@@ -105,12 +105,14 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     }
     // these variables need to live long enough as it is kept as reference in `dag_query`
     const auto ann_query_info = tipb::ANNQueryInfo{};
+    const auto fts_query_info = tipb::FTSQueryInfo{};
     const auto runtime_filter_ids = std::vector<int>();
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters{}; // don't care pushed down filters
     const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{}; // don't care used indexes
     std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
         conditions,
         ann_query_info,
+        fts_query_info,
         pushed_down_filters,
         empty_used_indexes,
         table_info.columns,

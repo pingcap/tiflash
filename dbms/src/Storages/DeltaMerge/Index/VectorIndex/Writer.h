@@ -90,7 +90,7 @@ public:
         , writer(definition)
     {}
 
-    void saveToFile() const override;
+    void saveToFile() override;
 
     void addBlock(const IColumn & column, const ColumnVector<UInt8> * del_mark, ProceedCheckFn should_proceed) override
     {

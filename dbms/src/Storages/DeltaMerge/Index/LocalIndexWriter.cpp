@@ -13,9 +13,12 @@
 // limitations under the License.
 
 #include <Poco/File.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Writer.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Writer.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/LocalIndexWriter.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Writer.h>
+#include <TiDB/Schema/TiDB.h>
 
 
 namespace DB::DM
@@ -29,6 +32,8 @@ LocalIndexWriterInMemoryPtr LocalIndexWriter::createInMemory(const LocalIndexInf
         return std::make_shared<VectorIndexWriterInMemory>(index_info.index_id, index_info.def_vector_index);
     case TiDB::ColumnarIndexKind::Inverted:
         return createInMemoryInvertedIndexWriter(index_info.index_id, index_info.def_inverted_index);
+    case TiDB::ColumnarIndexKind::FullText:
+        return FullTextIndexWriterInMemory::create(index_info.index_id, index_info.def_fulltext_index);
     default:
         RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index_info.kind));
     }
@@ -42,6 +47,8 @@ LocalIndexWriterOnDiskPtr LocalIndexWriter::createOnDisk(std::string_view index_
         return std::make_shared<VectorIndexWriterOnDisk>(index_info.index_id, index_file, index_info.def_vector_index);
     case TiDB::ColumnarIndexKind::Inverted:
         return createOnDiskInvertedIndexWriter(index_info.index_id, index_file, index_info.def_inverted_index);
+    case TiDB::ColumnarIndexKind::FullText:
+        return FullTextIndexWriterOnDisk::create(index_info.index_id, index_info.def_fulltext_index, index_file);
     default:
         RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index_info.kind));
     }

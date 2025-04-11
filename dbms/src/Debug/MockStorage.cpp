@@ -189,6 +189,8 @@ std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareFor
 static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
 static const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{};
 static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
+static const auto empty_fts_query_info = tipb::FTSQueryInfo{};
+
 
 BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     Context & context,
@@ -207,6 +209,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             empty_ann_query_info,
+            empty_fts_query_info,
             empty_pushed_down_filters, // Not care now
             empty_used_indexes, // Not care now
             scan_column_infos,
@@ -237,6 +240,7 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
             empty_ann_query_info,
+            empty_fts_query_info,
             empty_pushed_down_filters, // Not care now
             empty_used_indexes, // Not care now
             scan_column_infos,
@@ -268,6 +272,7 @@ void MockStorage::buildExecFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             empty_ann_query_info,
+            empty_fts_query_info,
             empty_pushed_down_filters, // Not care now
             empty_used_indexes, // Not care now
             scan_column_infos,
@@ -303,6 +308,7 @@ void MockStorage::buildExecFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
             empty_ann_query_info,
+            empty_fts_query_info,
             empty_pushed_down_filters, // Not care now
             empty_used_indexes, // Not care now
             scan_column_infos,

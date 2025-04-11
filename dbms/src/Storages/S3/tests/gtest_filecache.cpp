@@ -456,15 +456,16 @@ try
         ASSERT_FALSE(file_cache.canCache(FileType::Unknow));
         ASSERT_EQ(file_cache.canCache(FileType::Meta), level >= 1);
         ASSERT_EQ(file_cache.canCache(FileType::VectorIndex), level >= 2);
-        ASSERT_EQ(file_cache.canCache(FileType::InvertedIndex), level >= 3);
-        ASSERT_EQ(file_cache.canCache(FileType::Merged), level >= 4);
-        ASSERT_EQ(file_cache.canCache(FileType::Index), level >= 5);
-        ASSERT_EQ(file_cache.canCache(FileType::Mark), level >= 6);
-        ASSERT_EQ(file_cache.canCache(FileType::NullMap), level >= 7);
-        ASSERT_EQ(file_cache.canCache(FileType::DeleteMarkColData), level >= 8);
-        ASSERT_EQ(file_cache.canCache(FileType::VersionColData), level >= 9);
-        ASSERT_EQ(file_cache.canCache(FileType::HandleColData), level >= 10);
-        ASSERT_EQ(file_cache.canCache(FileType::ColData), level >= 11);
+        ASSERT_EQ(file_cache.canCache(FileType::FullTextIndex), level >= 3);
+        ASSERT_EQ(file_cache.canCache(FileType::InvertedIndex), level >= 4);
+        ASSERT_EQ(file_cache.canCache(FileType::Merged), level >= 5);
+        ASSERT_EQ(file_cache.canCache(FileType::Index), level >= 6);
+        ASSERT_EQ(file_cache.canCache(FileType::Mark), level >= 7);
+        ASSERT_EQ(file_cache.canCache(FileType::NullMap), level >= 8);
+        ASSERT_EQ(file_cache.canCache(FileType::DeleteMarkColData), level >= 9);
+        ASSERT_EQ(file_cache.canCache(FileType::VersionColData), level >= 10);
+        ASSERT_EQ(file_cache.canCache(FileType::HandleColData), level >= 11);
+        ASSERT_EQ(file_cache.canCache(FileType::ColData), level >= 12);
     }
 }
 CATCH

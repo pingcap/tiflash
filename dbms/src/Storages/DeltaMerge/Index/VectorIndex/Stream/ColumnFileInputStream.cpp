@@ -52,7 +52,7 @@ SkippableBlockInputStreamPtr ColumnFileProvideVectorIndexInputStream::createOrFa
     return std::make_shared<ColumnFileProvideVectorIndexInputStream>(ctx, tiny_file);
 }
 
-inline VectorIndexReaderPtr ColumnFileProvideVectorIndexInputStream::getVectorIndexReader()
+VectorIndexReaderPtr ColumnFileProvideVectorIndexInputStream::getVectorIndexReader()
 {
     if (vec_index != nullptr)
         return vec_index;
@@ -108,7 +108,13 @@ Block ColumnFileProvideVectorIndexInputStream::read()
     ctx->perf->total_cf_read_others_ms += w.elapsedMillisecondsFromLastTime();
 
     auto index = ctx->header.getPositionByName(ctx->vec_cd.name);
-    block.insert(index, ColumnWithTypeAndName(std::move(vec_column), ctx->vec_cd.type, ctx->vec_cd.name));
+    block.insert(
+        index,
+        ColumnWithTypeAndName( //
+            std::move(vec_column),
+            ctx->vec_cd.type,
+            ctx->vec_cd.name,
+            ctx->vec_cd.id));
 
     // After a successful read, clear out the ordered_return_rows so that
     // the next read will just return an empty block.
@@ -117,7 +123,7 @@ Block ColumnFileProvideVectorIndexInputStream::read()
     return block;
 }
 
-inline Block ColumnFileProvideVectorIndexInputStream::getHeader() const
+Block ColumnFileProvideVectorIndexInputStream::getHeader() const
 {
     return ctx->header;
 }

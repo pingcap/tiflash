@@ -38,6 +38,9 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/ColumnFileInputStream.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/InputStream.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromSegment.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/ColumnFileInputStream.h>
@@ -3450,6 +3453,68 @@ BlockInputStreamPtr Segment::getConcatVectorIndexBlockInputStream(
     return stream3;
 }
 
+BlockInputStreamPtr Segment::getConcatFullTextIndexBlockInputStream(
+    BitmapFilterPtr bitmap_filter,
+    const SegmentSnapshotPtr & segment_snap,
+    const DMContext & dm_context,
+    const ColumnDefines & columns_to_read,
+    const RowKeyRanges & read_ranges,
+    const FTSQueryInfoPtr & fts_query_info,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    size_t expected_block_size,
+    ReadTag read_tag)
+{
+    // set `is_fast_scan` to true to try to enable clean read
+    auto enable_handle_clean_read = !hasColumn(columns_to_read, MutSup::extra_handle_id);
+    constexpr auto is_fast_scan = true;
+    auto enable_del_clean_read = !hasColumn(columns_to_read, MutSup::version_col_id);
+
+    auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
+
+    auto memtable = segment_snap->delta->getMemTableSetSnapshot();
+    auto persisted = segment_snap->delta->getPersistedFileSetSnapshot();
+
+    auto ctx = FullTextIndexStreamCtx::create(
+        dm_context.global_context.getLightLocalIndexCache(),
+        dm_context.global_context.getHeavyLocalIndexCache(),
+        fts_query_info,
+        columns_to_read_ptr,
+        persisted->getDataProvider(),
+        dm_context,
+        read_tag);
+
+    // The order in the stream: stable1, stable2, ..., persist1, persist2, ..., memtable1, memtable2, ...
+
+    auto stream = segment_snap->stable->getInputStream(
+        dm_context,
+        columns_to_read,
+        read_ranges,
+        start_ts,
+        expected_block_size,
+        enable_handle_clean_read,
+        read_tag,
+        pack_filter_results,
+        is_fast_scan,
+        enable_del_clean_read,
+        /* read_packs */ {},
+        [=](DMFileBlockInputStreamBuilder & builder) { builder.setFtsIndexQuery(ctx); });
+
+    for (const auto & file : persisted->getColumnFiles())
+        stream->appendChild(ColumnFileProvideFullTextIndexInputStream::createOrFallback(ctx, file), file->getRows());
+    for (const auto & file : memtable->getColumnFiles())
+        stream->appendChild(ColumnFileProvideFullTextIndexInputStream::createOrFallback(ctx, file), file->getRows());
+
+    auto stream2 = FullTextIndexInputStream::create(ctx, bitmap_filter, stream);
+    auto stream3 = std::make_shared<SquashingBlockInputStream>(
+        stream2,
+        /*min_block_size_rows=*/expected_block_size,
+        /*min_block_size_bytes=*/0,
+        dm_context.tracing_id);
+
+    return stream3;
+}
+
 BlockInputStreamPtr Segment::getLateMaterializationStream(
     BitmapFilterPtr & bitmap_filter,
     const DMContext & dm_context,
@@ -3687,6 +3752,20 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     }
 
     BlockInputStreamPtr stream;
+    if (executor && executor->fts_query_info)
+    {
+        return getConcatFullTextIndexBlockInputStream(
+            bitmap_filter,
+            segment_snap,
+            dm_context,
+            columns_to_read,
+            read_ranges,
+            executor->fts_query_info,
+            pack_filter_results,
+            start_ts,
+            read_data_block_rows,
+            ReadTag::Query);
+    }
     if (executor && executor->ann_query_info)
     {
         // For ANN query, try to use vector index to accelerate.

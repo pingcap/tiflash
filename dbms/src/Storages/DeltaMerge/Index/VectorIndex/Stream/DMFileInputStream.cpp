@@ -108,7 +108,7 @@ Block DMFileInputStreamProvideVectorIndex::read()
     return block;
 }
 
-inline VectorIndexReaderPtr DMFileInputStreamProvideVectorIndex::getVectorIndexReader()
+VectorIndexReaderPtr DMFileInputStreamProvideVectorIndex::getVectorIndexReader()
 {
     if (vec_index != nullptr)
         return vec_index;
@@ -203,7 +203,7 @@ void DMFileInputStreamProvideVectorIndex::setReturnRows(IProvideVectorIndex::Sea
     RUNTIME_CHECK_MSG(sorted_results_it == sorted_results_view.end(), "All results are not consumed");
 }
 
-inline Block DMFileInputStreamProvideVectorIndex::getHeader() const
+Block DMFileInputStreamProvideVectorIndex::getHeader() const
 {
     return ctx->header;
 }
