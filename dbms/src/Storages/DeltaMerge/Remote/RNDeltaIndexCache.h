@@ -61,14 +61,13 @@ public:
 
     // Returns a cached or newly created delta index, which is assigned to the specified segment(at)epoch.
     DeltaIndexPtr getDeltaIndex(const CacheKey & key);
-
     // `setDeltaIndex` will updated cache size and remove overflows if necessary.
     void setDeltaIndex(const CacheKey & key, const DeltaIndexPtr & delta_index);
 
     // Similar to `getDeltaIndex`, but this method is used to get version chain.
-    GenericVersionChainPtr getVersionChain(const CacheKey & key);
+    GenericVersionChainPtr getVersionChain(const CacheKey & key, bool is_common_handle);
     // Similar to `setDeltaIndex`, but this method is used to set version chain.
-    void setVersionChain(const GenericVersionChainPtr & version_chain);
+    void setVersionChain(const CacheKey & key, const GenericVersionChainPtr & version_chain);
 
     size_t getCacheWeight() const { return cache.weight(); }
     size_t getCacheCount() const { return cache.count(); }
@@ -95,7 +94,6 @@ private:
         GenericVersionChainPtr version_chain;
         size_t bytes;
     };
-
     struct CacheValue
     {
         std::variant<CacheDeltaIndex, CacheVersionChain> value;

@@ -100,7 +100,8 @@ public:
 
     void fetchPages();
 
-    void prepareMVCCIndex(ReadMode read_mode);
+    size_t prepareMVCCIndex(ReadMode read_mode);
+    //void updateMVCCIndexCache(size_t initial_index_bytes);
 
     void initInputStream(
         const ColumnDefines & columns_to_read,

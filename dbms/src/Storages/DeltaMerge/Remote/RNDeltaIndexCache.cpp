@@ -16,6 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaIndex/DeltaIndex.h>
 #include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 namespace CurrentMetrics
 {
 extern const Metric DT_DeltaIndexCacheSize;
@@ -24,20 +25,25 @@ extern const Metric DT_DeltaIndexCacheSize;
 namespace DB::DM::Remote
 {
 
+namespace
+{
+void reportCacheHitStats(bool miss)
+{
+    if (miss)
+        GET_METRIC(tiflash_storage_delta_index_cache, type_miss).Increment();
+    else
+        GET_METRIC(tiflash_storage_delta_index_cache, type_hit).Increment();
+}
+} // namespace
+
 DeltaIndexPtr RNDeltaIndexCache::getDeltaIndex(const CacheKey & key)
 {
     RUNTIME_CHECK(!key.is_version_chain);
     auto [value, miss] = cache.getOrSet(key, [&key] {
-        return std::make_shared<CacheValue>(CacheDeltaIndex(std::make_shared<DeltaIndex>(key), 0));
+        return std::make_shared<CacheValue>(
+            CacheDeltaIndex(std::make_shared<DeltaIndex>(key), 0)); // TODO: use real size
     });
-    if (miss)
-    {
-        GET_METRIC(tiflash_storage_delta_index_cache, type_miss).Increment();
-    }
-    else
-    {
-        GET_METRIC(tiflash_storage_delta_index_cache, type_hit).Increment();
-    }
+    reportCacheHitStats(miss);
     return value->getDeltaIndex();
 }
 
@@ -52,10 +58,28 @@ void RNDeltaIndexCache::setDeltaIndex(const CacheKey & key, const DeltaIndexPtr 
     }
 }
 
-GenericVersionChainPtr RNDeltaIndexCache::getVersionChain(const CacheKey &)
+GenericVersionChainPtr RNDeltaIndexCache::getVersionChain(const CacheKey & key, bool is_common_handle)
 {
-    return nullptr;
+    RUNTIME_CHECK(key.is_version_chain);
+    auto [value, miss] = cache.getOrSet(key, [is_common_handle] {
+        return std::make_shared<CacheValue>(
+            CacheVersionChain(createVersionChain(is_common_handle), 0)); // TODO: use real size
+    });
+    reportCacheHitStats(miss);
+    return value->getVersionChain();
 }
-void setVersionChain(const GenericVersionChainPtr &) {}
+
+void RNDeltaIndexCache::setVersionChain(const CacheKey & key, const GenericVersionChainPtr & version_chain)
+{
+    RUNTIME_CHECK(version_chain != nullptr);
+    std::lock_guard lock(mtx);
+    if (auto value = cache.get(key); value)
+    {
+        cache.set(
+            key,
+            std::make_shared<CacheValue>(CacheVersionChain(version_chain, getVersionChainBytes(*version_chain))));
+        CurrentMetrics::set(CurrentMetrics::DT_DeltaIndexCacheSize, cache.weight());
+    }
+}
 
 } // namespace DB::DM::Remote

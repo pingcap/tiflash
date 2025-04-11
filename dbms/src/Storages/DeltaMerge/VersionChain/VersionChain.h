@@ -71,6 +71,8 @@ public:
         const DMContext & dm_context,
         const SegmentSnapshot & snapshot);
 
+    size_t getBytes() const;
+
 #ifdef DBMS_PUBLIC_GTEST
     [[nodiscard]] auto getReplayedRows() const { return base_versions->size(); }
     [[nodiscard]] auto deepCopy() const { return VersionChain(*this); }
@@ -161,6 +163,11 @@ inline GenericVersionChainPtr createVersionChain(bool is_common_handle)
         return std::make_shared<GenericVersionChain>(std::in_place_type<VersionChain<String>>);
     else
         return std::make_shared<GenericVersionChain>(std::in_place_type<VersionChain<Int64>>);
+}
+
+inline size_t getVersionChainBytes(const GenericVersionChain & version_chain)
+{
+    return std::visit([](auto && v) { return v.getBytes(); }, version_chain);
 }
 
 enum class VersionChainMode : Int64
