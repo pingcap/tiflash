@@ -2578,11 +2578,13 @@ void Segment::replayVersionChain(const DMContext & dm_context)
         = createSnapshot(dm_context, /*for_update=*/false, CurrentMetrics::DT_SnapshotOfReplayVersionChain);
     if (!segment_snap)
         return;
+    Stopwatch sw;
     std::ignore = std::visit(
         [&dm_context, &segment_snap](auto & version_chain) {
             return version_chain.replaySnapshot(dm_context, *segment_snap);
         },
         this->version_chain);
+    GET_METRIC(tiflash_storage_version_chain_ms, type_bg_replay).Observe(sw.elapsedMilliseconds());
 }
 
 String Segment::simpleInfo() const

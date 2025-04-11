@@ -14,6 +14,7 @@
 
 
 #include <Common/Stopwatch.h>
+#include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -62,6 +63,13 @@ BitmapFilterPtr buildMVCCBitmapFilter(
     // The sum of `*_filtered_out_rows` may greater than the actual number of rows that are filtered out,
     // because the same row may be filtered out by multiple filters and counted multiple times.
     bitmap_filter->setAllMatch(rowkey_filtered_out_rows + version_filtered_out_rows + delete_filtered_out_rows == 0);
+
+    GET_METRIC(tiflash_storage_version_chain_ms, type_replay).Observe(replay_ms);
+    GET_METRIC(tiflash_storage_version_chain_ms, type_version_filter).Observe(build_version_filter_ms);
+    GET_METRIC(tiflash_storage_version_chain_ms, type_rowkey_filter).Observe(build_rowkey_filter_ms);
+    GET_METRIC(tiflash_storage_version_chain_ms, type_delete_filter).Observe(build_delete_filter_ms);
+    GET_METRIC(tiflash_storage_version_chain_ms, type_total)
+        .Observe(replay_ms + build_version_filter_ms + build_rowkey_filter_ms + build_delete_filter_ms);
 
     LOG_INFO(
         snapshot.log,
