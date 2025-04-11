@@ -101,7 +101,7 @@ public:
     void fetchPages();
 
     size_t prepareMVCCIndex(ReadMode read_mode);
-    //void updateMVCCIndexCache(size_t initial_index_bytes);
+    void updateMVCCIndexSize(ReadMode read_mode, size_t initial_index_bytes);
 
     void initInputStream(
         const ColumnDefines & columns_to_read,
@@ -123,6 +123,8 @@ public:
     String toString() const;
 
 private:
+    std::optional<Remote::RNDeltaIndexCache::CacheKey> getRNMVCCIndexCacheKey(ReadMode read_mode) const;
+
     std::vector<Remote::PageOID> buildRemotePageOID() const;
 
     Remote::RNLocalPageCache::OccupySpaceResult blockingOccupySpaceForTask() const;

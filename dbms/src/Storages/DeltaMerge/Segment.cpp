@@ -2718,13 +2718,6 @@ Segment::ReadInfo Segment::getReadInfo(
                 "Segment updated delta index, my_delta_index={} {}",
                 my_delta_index->toString(),
                 simpleInfo());
-            // Update cache size.
-            if (auto cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
-            {
-                const auto & delta_index = segment_snap->delta->getSharedDeltaIndex();
-                if (const auto & key = delta_index->getRNCacheKey(); key)
-                    cache->setDeltaIndex(*key, delta_index);
-            }
         }
     }
 

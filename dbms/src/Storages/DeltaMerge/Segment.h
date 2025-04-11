@@ -668,6 +668,7 @@ public:
     }
 
     void setVersionChain(const GenericVersionChainPtr & version_chain_) { version_chain = version_chain_; }
+    const GenericVersionChainPtr & getVersionChain() const { return version_chain; }
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
