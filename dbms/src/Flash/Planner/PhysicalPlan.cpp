@@ -21,6 +21,8 @@
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
+#include <Flash/Planner/Plans/PhysicalCTESink.h>
+#include <Flash/Planner/Plans/PhysicalCTESource.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
@@ -237,6 +239,21 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     {
         GET_METRIC(tiflash_coprocessor_executor_count, type_expand).Increment();
         pushBack(PhysicalExpand2::build(context, executor_id, log, executor->expand2(), popBack()));
+        break;
+    }
+    case tipb::ExecType::TypeCTESource:
+    {
+        auto fine_grained_shuffle = FineGrainedShuffle(executor);
+        GET_METRIC(tiflash_coprocessor_executor_count, type_cte_source).Increment();
+        pushBack(PhysicalCTESource::build(context, executor_id, log, fine_grained_shuffle, executor->cte_source()));
+        break;
+    }
+    case tipb::ExecType::TypeCTESink:
+    {
+        auto fine_grained_shuffle = FineGrainedShuffle(executor);
+        GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
+        pushBack(
+            PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack(), executor->cte_sink().cte_id()));
         break;
     }
     default:
