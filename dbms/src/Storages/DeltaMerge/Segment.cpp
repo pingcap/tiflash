@@ -301,7 +301,7 @@ Segment::Segment( //
     , stable(stable_)
     , parent_log(parent_log_)
     , log(parent_log_->getChild(fmt::format("segment_id={} epoch={}", segment_id, epoch)))
-    , version_chain(createVersionChain(is_common_handle))
+    , version_chain(createVersionChainPtr(is_common_handle))
 {
     if (delta != nullptr)
         delta->resetLogger(log);
@@ -2582,7 +2582,7 @@ void Segment::replayVersionChain(const DMContext & dm_context)
         [&dm_context, &segment_snap](auto & version_chain) {
             return version_chain.replaySnapshot(dm_context, *segment_snap);
         },
-        this->version_chain);
+        *(this->version_chain));
 }
 
 String Segment::simpleInfo() const
@@ -2720,7 +2720,11 @@ Segment::ReadInfo Segment::getReadInfo(
                 simpleInfo());
             // Update cache size.
             if (auto cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache; cache)
-                cache->setDeltaIndex(segment_snap->delta->getSharedDeltaIndex());
+            {
+                const auto & delta_index = segment_snap->delta->getSharedDeltaIndex();
+                if (const auto & key = delta_index->getRNCacheKey(); key)
+                    cache->setDeltaIndex(*key, delta_index);
+            }
         }
     }
 
@@ -3134,7 +3138,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilter(
             read_ranges,
             pack_filter_results,
             start_ts,
-            version_chain);
+            *version_chain);
     }
 
     if (readStableOnly(dm_context, segment_snap))
