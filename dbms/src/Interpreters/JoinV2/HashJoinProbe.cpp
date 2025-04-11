@@ -588,7 +588,7 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
 
     if constexpr (has_other_condition)
     {
-        // Always using late materialization for left side
+        // Always using late materialization for left side columns
         for (size_t i = 0; i < left_columns; ++i)
         {
             if (!join->left_required_flag_for_other_condition[i])
@@ -745,10 +745,7 @@ void JoinProbeHelper::probeFillColumns(
                 ++idx;
             break;
         }
-        if constexpr (Adder::need_not_matched)
-        {
-            NOT_MATCHED(!is_matched)
-        }
+        NOT_MATCHED(!is_matched)
     }
 
     Adder::flush(*this, wd, added_columns);
