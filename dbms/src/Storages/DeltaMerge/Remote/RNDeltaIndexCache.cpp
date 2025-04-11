@@ -40,8 +40,7 @@ DeltaIndexPtr RNDeltaIndexCache::getDeltaIndex(const CacheKey & key)
 {
     RUNTIME_CHECK(!key.is_version_chain);
     auto [value, miss] = cache.getOrSet(key, [&key] {
-        return std::make_shared<CacheValue>(
-            CacheDeltaIndex(std::make_shared<DeltaIndex>(key), 0)); // TODO: use real size
+        return std::make_shared<CacheValue>(CacheDeltaIndex(std::make_shared<DeltaIndex>(key), 0));
     });
     reportCacheHitStats(miss);
     return value->getDeltaIndex();
@@ -62,8 +61,7 @@ GenericVersionChainPtr RNDeltaIndexCache::getVersionChain(const CacheKey & key, 
 {
     RUNTIME_CHECK(key.is_version_chain);
     auto [value, miss] = cache.getOrSet(key, [is_common_handle] {
-        return std::make_shared<CacheValue>(
-            CacheVersionChain(createVersionChain(is_common_handle), 0)); // TODO: use real size
+        return std::make_shared<CacheValue>(CacheVersionChain(createVersionChain(is_common_handle), 0));
     });
     reportCacheHitStats(miss);
     return value->getVersionChain();
