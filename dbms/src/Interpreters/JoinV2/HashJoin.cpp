@@ -492,7 +492,7 @@ void HashJoin::workAfterBuildRowFinish()
     }
     fiu_do_on(FailPoints::force_join_v2_probe_enable_lm, { late_materialization = true; });
     fiu_do_on(FailPoints::force_join_v2_probe_disable_lm, { late_materialization = false; });
-    join_probe_helper = std::make_unique<JoinProbeBlockHelper>(this, late_materialization);
+    join_probe_helper = std::make_unique<JoinProbeHelper>(this, late_materialization);
 
     LOG_INFO(
         log,

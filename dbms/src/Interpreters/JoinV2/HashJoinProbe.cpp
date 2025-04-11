@@ -123,15 +123,45 @@ void JoinProbeContext::prepareForHashProbe(
     is_prepared = true;
 }
 
+/// The implemtation of prefetching in join probe process is inspired by a paper named
+/// `Asynchronous Memory Access Chaining` in vldb-15.
+/// Ref: https://www.vldb.org/pvldb/vol9/p252-kocberber.pdf
+enum class ProbePrefetchStage : UInt8
+{
+    None,
+    FindHeader,
+    FindNext,
+};
+
+template <typename KeyGetter>
+struct ProbePrefetchState
+{
+    using KeyGetterType = typename KeyGetter::Type;
+    using KeyType = typename KeyGetterType::KeyType;
+    using HashValueType = typename KeyGetter::HashValueType;
+
+    ProbePrefetchStage stage = ProbePrefetchStage::None;
+    bool is_matched = false;
+    UInt16 hash_tag = 0;
+    UInt32 index = 0;
+    HashValueType hash = 0;
+    KeyType key{};
+    union
+    {
+        RowPtr ptr = nullptr;
+        std::atomic<RowPtr> * pointer_ptr;
+    };
+};
+
 template <bool has_other_condition, bool late_materialization>
-struct ProbeAdder<Inner, has_other_condition, late_materialization>
+struct JoinProbeAdder<Inner, has_other_condition, late_materialization>
 {
     static constexpr bool need_matched = true;
     static constexpr bool need_not_matched = false;
     static constexpr bool break_on_first_match = false;
 
     static bool ALWAYS_INLINE addMatched(
-        JoinProbeBlockHelper & helper,
+        JoinProbeHelper & helper,
         JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns & added_columns,
@@ -147,27 +177,27 @@ struct ProbeAdder<Inner, has_other_condition, late_materialization>
     }
 
     static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeBlockHelper &, JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &)
+    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &)
     {
         return false;
     }
 
-    static void flush(JoinProbeBlockHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
+    static void flush(JoinProbeHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
-        helper.flushBatchIfNecessary<late_materialization, true>(wd, added_columns);
+        helper.flushInsertBatch<late_materialization, true>(wd, added_columns);
         helper.fillNullMapWithZero<late_materialization>(added_columns);
     }
 };
 
 template <bool has_other_condition, bool late_materialization>
-struct ProbeAdder<LeftOuter, has_other_condition, late_materialization>
+struct JoinProbeAdder<LeftOuter, has_other_condition, late_materialization>
 {
     static constexpr bool need_matched = true;
     static constexpr bool need_not_matched = !has_other_condition;
     static constexpr bool break_on_first_match = false;
 
     static bool ALWAYS_INLINE addMatched(
-        JoinProbeBlockHelper & helper,
+        JoinProbeHelper & helper,
         JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns & added_columns,
@@ -183,7 +213,7 @@ struct ProbeAdder<LeftOuter, has_other_condition, late_materialization>
     }
 
     static bool ALWAYS_INLINE addNotMatched(
-        JoinProbeBlockHelper & helper,
+        JoinProbeHelper & helper,
         JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns &,
@@ -199,9 +229,9 @@ struct ProbeAdder<LeftOuter, has_other_condition, late_materialization>
         return false;
     }
 
-    static void flush(JoinProbeBlockHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
+    static void flush(JoinProbeHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
-        helper.flushBatchIfNecessary<late_materialization, true>(wd, added_columns);
+        helper.flushInsertBatch<late_materialization, true>(wd, added_columns);
         helper.fillNullMapWithZero<late_materialization>(added_columns);
 
         if constexpr (!has_other_condition)
@@ -221,14 +251,14 @@ struct ProbeAdder<LeftOuter, has_other_condition, late_materialization>
 };
 
 template <>
-struct ProbeAdder<Semi, false, false>
+struct JoinProbeAdder<Semi, false, false>
 {
     static constexpr bool need_matched = true;
     static constexpr bool need_not_matched = false;
     static constexpr bool break_on_first_match = true;
 
     static bool ALWAYS_INLINE addMatched(
-        JoinProbeBlockHelper & helper,
+        JoinProbeHelper & helper,
         JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns &,
@@ -243,23 +273,23 @@ struct ProbeAdder<Semi, false, false>
     }
 
     static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeBlockHelper &, JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &)
+    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &)
     {
         return false;
     }
 
-    static void flush(JoinProbeBlockHelper &, JoinProbeWorkerData &, MutableColumns &) {}
+    static void flush(JoinProbeHelper &, JoinProbeWorkerData &, MutableColumns &) {}
 };
 
 template <>
-struct ProbeAdder<Anti, false, false>
+struct JoinProbeAdder<Anti, false, false>
 {
     static constexpr bool need_matched = false;
     static constexpr bool need_not_matched = true;
     static constexpr bool break_on_first_match = true;
 
     static bool ALWAYS_INLINE addMatched(
-        JoinProbeBlockHelper &,
+        JoinProbeHelper &,
         JoinProbeContext &,
         JoinProbeWorkerData &,
         MutableColumns &,
@@ -272,7 +302,7 @@ struct ProbeAdder<Anti, false, false>
     }
 
     static bool ALWAYS_INLINE addNotMatched(
-        JoinProbeBlockHelper & helper,
+        JoinProbeHelper & helper,
         JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns &,
@@ -284,18 +314,18 @@ struct ProbeAdder<Anti, false, false>
         return current_offset >= helper.settings.max_block_size;
     }
 
-    static void flush(JoinProbeBlockHelper &, JoinProbeWorkerData &, MutableColumns &) {}
+    static void flush(JoinProbeHelper &, JoinProbeWorkerData &, MutableColumns &) {}
 };
 
 template <>
-struct ProbeAdder<LeftOuterSemi, false, false>
+struct JoinProbeAdder<LeftOuterSemi, false, false>
 {
     static constexpr bool need_matched = true;
     static constexpr bool need_not_matched = false;
     static constexpr bool break_on_first_match = true;
 
     static bool ALWAYS_INLINE addMatched(
-        JoinProbeBlockHelper &,
+        JoinProbeHelper &,
         JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns &,
@@ -309,23 +339,23 @@ struct ProbeAdder<LeftOuterSemi, false, false>
     }
 
     static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeBlockHelper &, JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &)
+    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &)
     {
         return false;
     }
 
-    static void flush(JoinProbeBlockHelper &, JoinProbeWorkerData &, MutableColumns &) {}
+    static void flush(JoinProbeHelper &, JoinProbeWorkerData &, MutableColumns &) {}
 };
 
 template <>
-struct ProbeAdder<LeftOuterAnti, false, false>
+struct JoinProbeAdder<LeftOuterAnti, false, false>
 {
     static constexpr bool need_matched = false;
     static constexpr bool need_not_matched = true;
     static constexpr bool break_on_first_match = true;
 
     static bool ALWAYS_INLINE addMatched(
-        JoinProbeBlockHelper &,
+        JoinProbeHelper &,
         JoinProbeContext &,
         JoinProbeWorkerData &,
         MutableColumns &,
@@ -338,7 +368,7 @@ struct ProbeAdder<LeftOuterAnti, false, false>
     }
 
     static bool ALWAYS_INLINE addNotMatched(
-        JoinProbeBlockHelper &,
+        JoinProbeHelper &,
         JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns &,
@@ -349,10 +379,10 @@ struct ProbeAdder<LeftOuterAnti, false, false>
         return false;
     }
 
-    static void flush(JoinProbeBlockHelper &, JoinProbeWorkerData &, MutableColumns &) {}
+    static void flush(JoinProbeHelper &, JoinProbeWorkerData &, MutableColumns &) {}
 };
 
-JoinProbeBlockHelper::JoinProbeBlockHelper(const HashJoin * join, bool late_materialization)
+JoinProbeHelper::JoinProbeHelper(const HashJoin * join, bool late_materialization)
     : join(join)
     , settings(join->settings)
     , pointer_table(join->pointer_table)
@@ -361,10 +391,10 @@ JoinProbeBlockHelper::JoinProbeBlockHelper(const HashJoin * join, bool late_mate
 #define CALL3(KeyGetter, JoinType, has_other_condition, late_materialization, tagged_pointer)                       \
     {                                                                                                               \
         func_ptr_has_null                                                                                           \
-            = &JoinProbeBlockHelper::                                                                               \
+            = &JoinProbeHelper::                                                                                    \
                   probeImpl<KeyGetter, JoinType, true, has_other_condition, late_materialization, tagged_pointer>;  \
         func_ptr_no_null                                                                                            \
-            = &JoinProbeBlockHelper::                                                                               \
+            = &JoinProbeHelper::                                                                                    \
                   probeImpl<KeyGetter, JoinType, false, has_other_condition, late_materialization, tagged_pointer>; \
     }
 
@@ -432,7 +462,7 @@ JoinProbeBlockHelper::JoinProbeBlockHelper(const HashJoin * join, bool late_mate
 #undef CALL3
 }
 
-Block JoinProbeBlockHelper::probe(JoinProbeContext & context, JoinProbeWorkerData & wd)
+Block JoinProbeHelper::probe(JoinProbeContext & context, JoinProbeWorkerData & wd)
 {
     if (context.null_map)
         return (this->*func_ptr_has_null)(context, wd);
@@ -441,7 +471,7 @@ Block JoinProbeBlockHelper::probe(JoinProbeContext & context, JoinProbeWorkerDat
 }
 
 JOIN_PROBE_TEMPLATE
-Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd)
+Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd)
 {
     static_assert(has_other_condition || !late_materialization);
 
@@ -536,26 +566,7 @@ Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorke
 
     if constexpr (kind == LeftOuterSemi || kind == LeftOuterAnti)
     {
-        Block res_block = join->output_block_after_finalize.cloneEmpty();
-        size_t columns = res_block.columns();
-        size_t match_helper_column_index = res_block.getPositionByName(join->match_helper_name);
-        for (size_t i = 0; i < columns; ++i)
-        {
-            if (i == match_helper_column_index)
-                continue;
-            res_block.getByPosition(i) = context.block.getByName(res_block.getByPosition(i).name);
-        }
-
-        MutableColumnPtr match_helper_column_ptr
-            = res_block.getByPosition(match_helper_column_index).column->cloneEmpty();
-        auto * match_helper_column = typeid_cast<ColumnNullable *>(match_helper_column_ptr.get());
-        match_helper_column->getNullMapColumn().getData().resize_fill_zero(context.rows);
-        auto * match_helper_res = &typeid_cast<ColumnVector<Int8> &>(match_helper_column->getNestedColumn()).getData();
-        match_helper_res->swap(wd.match_helper_res);
-
-        res_block.getByPosition(match_helper_column_index).column = std::move(match_helper_column_ptr);
-
-        return res_block;
+        return genResultBlockForLeftOuterSemi(context, wd);
     }
 
     if constexpr (late_materialization)
@@ -616,7 +627,7 @@ Block JoinProbeBlockHelper::probeImpl(JoinProbeContext & context, JoinProbeWorke
 }
 
 JOIN_PROBE_TEMPLATE
-void JoinProbeBlockHelper::probeFillColumns(
+void JoinProbeHelper::probeFillColumns(
     JoinProbeContext & context,
     JoinProbeWorkerData & wd,
     MutableColumns & added_columns)
@@ -624,7 +635,7 @@ void JoinProbeBlockHelper::probeFillColumns(
     using KeyGetterType = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
-    using Adder = ProbeAdder<kind, has_other_condition, late_materialization>;
+    using Adder = JoinProbeAdder<kind, has_other_condition, late_materialization>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
     size_t current_offset = wd.result_block.rows();
@@ -753,7 +764,7 @@ void JoinProbeBlockHelper::probeFillColumns(
 #define PREFETCH_READ(ptr) __builtin_prefetch((ptr), 0 /* rw==read */, 3 /* locality */)
 
 JOIN_PROBE_TEMPLATE
-void JoinProbeBlockHelper::probeFillColumnsPrefetch(
+void JoinProbeHelper::probeFillColumnsPrefetch(
     JoinProbeContext & context,
     JoinProbeWorkerData & wd,
     MutableColumns & added_columns)
@@ -761,7 +772,7 @@ void JoinProbeBlockHelper::probeFillColumnsPrefetch(
     using KeyGetterType = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
-    using Adder = ProbeAdder<kind, has_other_condition, late_materialization>;
+    using Adder = JoinProbeAdder<kind, has_other_condition, late_materialization>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
     initPrefetchStates<KeyGetter>(context);
@@ -945,7 +956,7 @@ void JoinProbeBlockHelper::probeFillColumnsPrefetch(
 #undef NOT_MATCHED
 }
 
-Block JoinProbeBlockHelper::handleOtherConditions(
+Block JoinProbeHelper::handleOtherConditions(
     JoinProbeContext & context,
     JoinProbeWorkerData & wd,
     ASTTableJoin::Kind kind,
@@ -1204,7 +1215,106 @@ Block JoinProbeBlockHelper::handleOtherConditions(
     return output_block_after_finalize;
 }
 
-Block JoinProbeBlockHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context, JoinProbeWorkerData & wd)
+template <typename KeyGetter>
+void JoinProbeHelper::initPrefetchStates(JoinProbeContext & context)
+{
+    if (!context.prefetch_states)
+    {
+        context.prefetch_states = decltype(context.prefetch_states)(
+            static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
+            [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
+    }
+}
+
+template <bool late_materialization, bool last_flush>
+void JoinProbeHelper::flushInsertBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns) const
+{
+    if constexpr (late_materialization)
+    {
+        size_t idx = 0;
+        for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
+        {
+            IColumn * column = added_columns[idx].get();
+            if (is_nullable)
+                column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
+            column->deserializeAndInsertFromPos(wd.insert_batch, true);
+            ++idx;
+        }
+        for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
+            added_columns[idx++]->deserializeAndInsertFromPos(wd.insert_batch, true);
+
+        wd.row_ptrs_for_lm.insert(wd.insert_batch.begin(), wd.insert_batch.end());
+    }
+    else
+    {
+        for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+        {
+            IColumn * column = added_columns[column_index].get();
+            if (is_nullable)
+                column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
+            column->deserializeAndInsertFromPos(wd.insert_batch, true);
+        }
+        for (auto [column_index, _] : row_layout.other_column_indexes)
+            added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch, true);
+    }
+
+    if constexpr (last_flush)
+    {
+        if constexpr (late_materialization)
+        {
+            size_t idx = 0;
+            for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
+            {
+                IColumn * column = added_columns[idx].get();
+                if (is_nullable)
+                    column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
+                column->flushNTAlignBuffer();
+                ++idx;
+            }
+            for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
+                added_columns[idx++]->flushNTAlignBuffer();
+        }
+        else
+        {
+            for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+            {
+                IColumn * column = added_columns[column_index].get();
+                if (is_nullable)
+                    column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
+                column->flushNTAlignBuffer();
+            }
+            for (auto [column_index, _] : row_layout.other_column_indexes)
+                added_columns[column_index]->flushNTAlignBuffer();
+        }
+    }
+
+    wd.insert_batch.clear();
+}
+
+template <bool late_materialization>
+void JoinProbeHelper::fillNullMapWithZero(MutableColumns & added_columns) const
+{
+    size_t idx = 0;
+    for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+    {
+        if (is_nullable)
+        {
+            size_t index;
+            if constexpr (late_materialization)
+                index = idx;
+            else
+                index = column_index;
+            auto & nullable_column = static_cast<ColumnNullable &>(*added_columns[index]);
+            size_t data_size = nullable_column.getNestedColumn().size();
+            size_t nullmap_size = nullable_column.getNullMapColumn().size();
+            RUNTIME_CHECK(nullmap_size <= data_size);
+            nullable_column.getNullMapColumn().getData().resize_fill_zero(data_size);
+        }
+        ++idx;
+    }
+}
+
+Block JoinProbeHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context, JoinProbeWorkerData & wd)
 {
     RUNTIME_CHECK(join->kind == LeftOuter);
     RUNTIME_CHECK(join->has_other_condition);
@@ -1299,6 +1409,33 @@ Block JoinProbeBlockHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & co
     }
 
     return output_block_after_finalize;
+}
+
+Block JoinProbeHelper::genResultBlockForLeftOuterSemi(JoinProbeContext & context, JoinProbeWorkerData & wd)
+{
+    RUNTIME_CHECK(join->kind == LeftOuterSemi || join->kind == LeftOuterAnti);
+    RUNTIME_CHECK(!join->has_other_condition);
+    RUNTIME_CHECK(context.isProbeFinished());
+
+    Block res_block = join->output_block_after_finalize.cloneEmpty();
+    size_t columns = res_block.columns();
+    size_t match_helper_column_index = res_block.getPositionByName(join->match_helper_name);
+    for (size_t i = 0; i < columns; ++i)
+    {
+        if (i == match_helper_column_index)
+            continue;
+        res_block.getByPosition(i) = context.block.getByName(res_block.getByPosition(i).name);
+    }
+
+    MutableColumnPtr match_helper_column_ptr = res_block.getByPosition(match_helper_column_index).column->cloneEmpty();
+    auto * match_helper_column = typeid_cast<ColumnNullable *>(match_helper_column_ptr.get());
+    match_helper_column->getNullMapColumn().getData().resize_fill_zero(context.rows);
+    auto * match_helper_res = &typeid_cast<ColumnVector<Int8> &>(match_helper_column->getNestedColumn()).getData();
+    match_helper_res->swap(wd.match_helper_res);
+
+    res_block.getByPosition(match_helper_column_index).column = std::move(match_helper_column_ptr);
+
+    return res_block;
 }
 
 } // namespace DB

@@ -81,7 +81,7 @@ private:
     void workAfterBuildRowFinish();
 
 private:
-    friend JoinProbeBlockHelper;
+    friend JoinProbeHelper;
 
     static const DataTypePtr match_helper_type;
 
@@ -150,7 +150,7 @@ private:
     size_t probe_concurrency = 0;
     std::vector<JoinProbeWorkerData> probe_workers_data;
     std::atomic<size_t> active_probe_worker = 0;
-    std::unique_ptr<JoinProbeBlockHelper> join_probe_helper;
+    std::unique_ptr<JoinProbeHelper> join_probe_helper;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 
