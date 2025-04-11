@@ -36,11 +36,12 @@ extern const int DATA_TYPE_CANNOT_HAVE_ARGUMENTS;
 
 DataTypePtr DataTypePtrCache::get(const String & full_name) const
 {
-    std::shared_lock lock(rw_lock);
-    if (auto it = cached_types.find(full_name); //
-        it != cached_types.end())
-        return it->second;
-    return nullptr;
+    return cached_types.withShared([&](const FullnameTypes & types) -> DataTypePtr {
+        auto it = types.find(full_name);
+        if (it != types.end())
+            return it->second;
+        return nullptr;
+    });
 }
 
 void DataTypePtrCache::tryCache(const String & full_name, const DataTypePtr & datatype_ptr)
@@ -49,18 +50,19 @@ void DataTypePtrCache::tryCache(const String & full_name, const DataTypePtr & da
     // "Enum16('N' = 1, 'Y' = 2)" and "Enum16('Y' = 2, 'N' = 1)", but should
     // be good enough.
     // Avoid big hashmap in rare cases.
-    std::unique_lock lock(rw_lock);
-    if (cached_types.size() < MAX_FULLNAME_TYPES)
-    {
-        // DataTypeEnum may generate too many full_name, so just skip inserting DataTypeEnum into fullname_types when
-        // the capacity limit is almost reached, which ensures that most datatypes can be cached.
-        if (cached_types.size() > FULLNAME_TYPES_HIGH_WATER_MARK
-            && (datatype_ptr->getTypeId() == TypeIndex::Enum8 || datatype_ptr->getTypeId() == TypeIndex::Enum16))
+    cached_types.withExclusive([&](FullnameTypes & types) {
+        if (types.size() < MAX_FULLNAME_TYPES)
         {
-            return;
+            // DataTypeEnum may generate too many full_name, so just skip inserting DataTypeEnum into fullname_types when
+            // the capacity limit is almost reached, which ensures that most datatypes can be cached.
+            if (types.size() > FULLNAME_TYPES_HIGH_WATER_MARK
+                && (datatype_ptr->getTypeId() == TypeIndex::Enum8 || datatype_ptr->getTypeId() == TypeIndex::Enum16))
+            {
+                return;
+            }
+            types.emplace(full_name, datatype_ptr);
         }
-        cached_types.emplace(full_name, datatype_ptr);
-    }
+    });
 }
 
 DataTypePtr DataTypeFactory::get(const String & full_name) const
