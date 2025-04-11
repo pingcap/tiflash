@@ -55,6 +55,7 @@
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
+#include <Storages/DeltaMerge/VersionChain/MVCCBitmapFilter.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/dtpb/segment.pb.h>
 #include <Storages/KVStore/KVStore.h>
@@ -120,6 +121,7 @@ extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
 extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
+extern const Metric DT_SnapshotOfReplayVersionChain;
 extern const Metric DT_SnapshotOfSegmentIngest;
 extern const Metric DT_SnapshotOfBitmapFilter;
 } // namespace CurrentMetrics
@@ -2549,8 +2551,9 @@ bool Segment::compactDelta(DMContext & dm_context)
     return delta->compact(dm_context);
 }
 
-void Segment::placeDeltaIndex(DMContext & dm_context) const
+void Segment::placeDeltaIndex(const DMContext & dm_context) const
 {
+    RUNTIME_CHECK(!dm_context.isVersionChainEnabled());
     // Update delta-index with persisted packs. TODO: can use a read snapshot here?
     auto segment_snap = createSnapshot(dm_context, /*for_update=*/true, CurrentMetrics::DT_SnapshotOfPlaceIndex);
     if (!segment_snap)
@@ -2558,7 +2561,7 @@ void Segment::placeDeltaIndex(DMContext & dm_context) const
     placeDeltaIndex(dm_context, segment_snap);
 }
 
-void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
+void Segment::placeDeltaIndex(const DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
 {
     getReadInfo(
         dm_context,
@@ -2566,6 +2569,20 @@ void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr &
         segment_snap,
         {RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
         ReadTag::Internal);
+}
+
+void Segment::replayVersionChain(const DMContext & dm_context)
+{
+    RUNTIME_CHECK(dm_context.isVersionChainEnabled());
+    auto segment_snap
+        = createSnapshot(dm_context, /*for_update=*/false, CurrentMetrics::DT_SnapshotOfReplayVersionChain);
+    if (!segment_snap)
+        return;
+    std::ignore = std::visit(
+        [&dm_context, &segment_snap](auto & version_chain) {
+            return version_chain.replaySnapshot(dm_context, *segment_snap);
+        },
+        this->version_chain);
 }
 
 String Segment::simpleInfo() const
@@ -3104,9 +3121,22 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilter(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
-    size_t expected_block_size)
+    size_t expected_block_size,
+    bool enable_version_chain)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
+
+    if (enable_version_chain)
+    {
+        return ::DB::DM::buildMVCCBitmapFilter(
+            dm_context,
+            *segment_snap,
+            read_ranges,
+            pack_filter_results,
+            start_ts,
+            version_chain);
+    }
+
     if (readStableOnly(dm_context, segment_snap))
     {
         return buildMVCCBitmapFilterStableOnly(
@@ -3259,6 +3289,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
             "buildMVCCBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
+        bitmap_filter->runOptimize();
         return bitmap_filter;
     }
 
@@ -3298,6 +3329,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
         use_packs,
         segment_snap->stable->getDMFilesRows(),
         elapse_ms);
+    bitmap_filter->runOptimize();
     return bitmap_filter;
 }
 
@@ -3575,7 +3607,9 @@ BitmapFilterPtr Segment::buildBitmapFilter(
         read_ranges,
         pack_filter_results,
         start_ts,
-        build_bitmap_filter_block_rows);
+        build_bitmap_filter_block_rows,
+        dm_context.isVersionChainEnabled());
+
     if (bitmap_filter)
     {
         if (!readStableOnly(dm_context, segment_snap))

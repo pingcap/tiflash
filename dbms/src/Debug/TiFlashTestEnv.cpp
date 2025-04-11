@@ -25,6 +25,7 @@
 #include <Server/RaftConfigParser.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
