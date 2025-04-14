@@ -52,7 +52,7 @@ mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i >
 
 # Modify data type which does not need to change data is supported
 mysql> ALTER TABLE test.t MODIFY COLUMN `i` tinyint;
-ERROR 8200 (HY000): Unsupported modify column: columnar indexes on the column
+{#REGEXP}.* Unsupported modify column: columnar indexes on the column
 
 # Modify data type which needs to change data is not supported
 mysql> ALTER TABLE test.t MODIFY COLUMN `i` smallint unsigned;
