@@ -549,8 +549,12 @@ public:
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
-    void placeDeltaIndex(DMContext & dm_context) const;
-    void placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
+
+    /// Use to place delta index in background.
+    void placeDeltaIndex(const DMContext & dm_context) const;
+    void placeDeltaIndex(const DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
+    /// Use to replay version chain in background.
+    void replayVersionChain(const DMContext & dm_context);
 
     /// Compact the delta layer, merging fragment column files into bigger column files.
     /// It does not merge the delta into stable layer.
@@ -746,7 +750,8 @@ public:
         const RowKeyRanges & read_ranges,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
-        size_t expected_block_size);
+        size_t expected_block_size,
+        bool enable_version_chain);
     BitmapFilterPtr buildMVCCBitmapFilterNormal(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,

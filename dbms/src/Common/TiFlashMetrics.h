@@ -965,7 +965,16 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_sent_total, {"type", "sent_total"}),                                                                                   \
       F(type_sent_cross_zone, {"type", "sent_cross_zone"}),                                                                         \
       F(type_received_total, {"type", "received_total"}),                                                                           \
-      F(type_received_cross_zone, {"type", "received_cross_zone"}))
+      F(type_received_cross_zone, {"type", "received_cross_zone"}))                                                                 \
+    M(tiflash_storage_version_chain_ms,                                                                                             \
+      "Durations of VersionChain",                                                                                                  \
+      Histogram,                                                                                                                    \
+      F(type_replay, {{"type", "replay"}}, ExpBuckets{1, 2, 20}),                                                                   \
+      F(type_version_filter, {{"type", "version_filter"}}, ExpBuckets{1, 2, 20}),                                                   \
+      F(type_rowkey_filter, {{"type", "rowkey_filter"}}, ExpBuckets{1, 2, 20}),                                                     \
+      F(type_delete_filter, {{"type", "delete_filter"}}, ExpBuckets{1, 2, 20}),                                                     \
+      F(type_total, {{"type", "total"}}, ExpBuckets{1, 2, 20}),                                                                     \
+      F(type_bg_replay, {{"type", "bg_replay"}}, ExpBuckets{1, 2, 20}))
 
 
 /// Buckets with boundaries [start * base^0, start * base^1, ..., start * base^(size-1)]

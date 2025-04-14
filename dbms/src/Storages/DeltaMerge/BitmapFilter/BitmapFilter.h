@@ -51,10 +51,16 @@ public:
     bool isAllNotMatch(size_t start, size_t limit) const;
 
     void runOptimize();
+    void setAllMatch(bool all_match_) { all_match = all_match_; }
+    bool isAllMatch() const { return all_match; }
 
     String toDebugString() const;
     size_t count() const;
     inline size_t size() const { return filter.size(); }
+
+    ALWAYS_INLINE auto & operator[](size_t n) { return filter[n]; }
+
+    bool operator==(const BitmapFilter & other) const { return filter == other.filter && all_match == other.all_match; }
 
     friend class BitmapFilterView;
 
