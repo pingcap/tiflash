@@ -204,6 +204,8 @@ void AggregationBinder::buildAggFunc(tipb::Expr * agg_func, const ASTFunction * 
 
     if (agg_sig == tipb::ExprType::Count || agg_sig == tipb::ExprType::Sum)
     {
+        if (func->name == "uniqExact")
+            agg_func->set_has_distinct(true);
         auto * ft = agg_func->mutable_field_type();
         ft->set_tp(TiDB::TypeLongLong);
         ft->set_flag(TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull);
@@ -269,7 +271,7 @@ ExecutorBinderPtr compileAggregation(
             }
 
             TiDB::ColumnInfo ci;
-            if (func->name == "count")
+            if (func->name == "count" || func->name == "uniqExact")
             {
                 ci.tp = TiDB::TypeLongLong;
                 ci.flag = TiDB::ColumnFlagUnsigned | TiDB::ColumnFlagNotNull;
