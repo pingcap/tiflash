@@ -24,7 +24,8 @@ void HashJoinPointerTable::init(
     size_t row_count,
     size_t hash_value_bytes,
     size_t probe_prefetch_threshold,
-    bool enable_tagged_pointer_)
+    bool enable_tagged_pointer_,
+    bool is_unit_test)
 {
     hash_value_bits = hash_value_bytes * 8;
     if (method == HashJoinKeyMethod::OneKey8)
@@ -56,8 +57,12 @@ void HashJoinPointerTable::init(
 
     pointer_table_size_mask = (pointer_table_size - 1) << (hash_value_bits - pointer_table_size_degree);
 
-    pointer_table = static_cast<std::atomic<uintptr_t> *>(
-        alloc.alloc(pointer_table_size * sizeof(std::atomic<uintptr_t>), sizeof(std::atomic<RowPtr>)));
+    // Do not allocate memory to speed up the unit test
+    if likely (!is_unit_test)
+    {
+        pointer_table = static_cast<std::atomic<uintptr_t> *>(
+            alloc.alloc(pointer_table_size * sizeof(std::atomic<uintptr_t>), sizeof(std::atomic<RowPtr>)));
+    }
 
     enable_tagged_pointer = enable_tagged_pointer_;
 }
