@@ -333,6 +333,13 @@ void EstablishCallData::unexpectedWriteDone()
 void EstablishCallData::trySendOneMsg()
 {
     TrackedMppDataPacketPtr packet;
+    auto original_state = state;
+    // state must be set to `WAIT_IN_QUEUE` state before calling popWithTag, because if
+    // popWithTag returns `MPMCQueueResult::EMPTY`, current `EstablishCallData` will be
+    // put into the sender queue, and can be notified by other threads at anytime, which
+    // means we should not modify the data of current `EstablishCallData` if popWithTag
+    // returns `MPMCQueueResult::EMPTY`.
+    state = WAIT_IN_QUEUE;
     auto res = async_tunnel_sender->popWithTag(packet, asGRPCKickTag());
     switch (res)
     {
@@ -343,23 +350,29 @@ void EstablishCallData::trySendOneMsg()
         /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
         /// is destructed which may cause the memory tracker in `res` become invalid
         packet->switchMemTracker(nullptr);
+        // set state back to original_state so we can use setCallStateAndUpdateMetrics later
+        state = original_state;
         setCallStateAndUpdateMetrics(
             WAIT_WRITE,
             GET_METRIC(tiflash_establish_calldata_count, type_wait_write_calldata));
         write(packet->packet);
         return;
     case MPMCQueueResult::FINISHED:
+        // set state back to original_state so we can use setCallStateAndUpdateMetrics later
+        state = original_state;
         writeDone("", grpc::Status::OK);
         return;
     case MPMCQueueResult::CANCELLED:
         RUNTIME_ASSERT(!async_tunnel_sender->getCancelReason().empty(), "Tunnel sender cancelled without reason");
+        // set state back to original_state so we can use setCallStateAndUpdateMetrics later
+        state = original_state;
         writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
         return;
     case MPMCQueueResult::EMPTY:
-        setCallStateAndUpdateMetrics(
-            WAIT_IN_QUEUE,
-            GET_METRIC(tiflash_establish_calldata_count, type_wait_in_queue_calldata));
         // No new message.
+        // can not modify the data of current `EstablishCallData` but still we can update metrics here
+        decreaseStateMetrics(original_state);
+        GET_METRIC(tiflash_establish_calldata_count, type_wait_in_queue_calldata).Increment();
         return;
     default:
         RUNTIME_ASSERT(false, getLogger(), "Result {} is invalid", magic_enum::enum_name(res));
