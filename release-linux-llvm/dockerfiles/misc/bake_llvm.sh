@@ -13,6 +13,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+set -eox pipefail
+source $(cd $(dirname "$0"); pwd -P)/_bake_include.sh
+
 INSTALL_PREFIX=${INSTALL_PREFIX:-"/usr/local"}
 
 # Boostrap LLVM envriroment for CI/CD.
@@ -23,7 +26,7 @@ function bootstrap_llvm() {
     # $1: llvm_version
     source /opt/rh/gcc-toolset-10/enable
     git clone https://github.com/llvm/llvm-project --depth=1 -b llvmorg-$1
-   
+
     mkdir -p llvm-project/build
     cd llvm-project/build
 
@@ -34,7 +37,7 @@ function bootstrap_llvm() {
         -DLLVM_ENABLE_RUNTIMES="libcxx;libcxxabi" \
         -DLLVM_TARGETS_TO_BUILD=Native \
         ../llvm
-    
+
     ninja
     ninja install
 
@@ -63,7 +66,9 @@ function bootstrap_llvm() {
     ninja install
     cd ../..
     rm -rf llvm-project
-    
+
     echo "/usr/local/lib/$(uname -m)-unknown-linux-gnu" | tee /etc/ld.so.conf.d/llvm.conf
     ldconfig
 }
+
+bootstrap_llvm "17.0.6"
