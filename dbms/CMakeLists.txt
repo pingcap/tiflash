@@ -391,7 +391,7 @@ if (ENABLE_TESTS)
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
         )
-    set_target_properties(gtests_dbms PROPERTIES BUILD_RPATH "$ORIGIN/")
+    set_target_properties(bench_dbms PROPERTIES BUILD_RPATH "$ORIGIN/")
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
     target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_link_libraries(bench_dbms
