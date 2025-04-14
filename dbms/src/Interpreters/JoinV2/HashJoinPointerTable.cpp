@@ -57,7 +57,7 @@ void HashJoinPointerTable::init(
 
     pointer_table_size_mask = (pointer_table_size - 1) << (hash_value_bits - pointer_table_size_degree);
 
-    // If it's test, do not allocate memory
+    // Do not allocate memory to speed up the test
     if likely (!is_test)
     {
         pointer_table = static_cast<std::atomic<uintptr_t> *>(
