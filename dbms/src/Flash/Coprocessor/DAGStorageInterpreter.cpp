@@ -59,6 +59,7 @@
 #include <common/logger_useful.h>
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 
 namespace DB
 {
@@ -1565,6 +1566,8 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
             name = handle_column_name;
         else if (cid == MutSup::extra_table_id_col_id)
             name = MutSup::extra_table_id_column_name;
+        else if (cid == DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id)
+            name = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.name;
         else
             name = storage_for_logical_table->getTableInfo().getColumnName(cid);
         required_columns_tmp.emplace_back(std::move(name));

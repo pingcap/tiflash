@@ -15,11 +15,26 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Reader_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <VectorSearch/USearch.h>
 #include <tipb/executor.pb.h>
 
 namespace DB::DM
 {
+
+// Due to the discarding of column_id in the vector index, the value assigned to ann_query_info may be different
+// in different versions of tidb. For compatibility, use this function to get column_id.
+// For field changes, see: https://github.com/pingcap/tipb/pull/358
+inline ColumnID getVectorColumnID(const ANNQueryInfoPtr & ann_query_info)
+{
+    if (ann_query_info->has_column())
+        return ann_query_info->column().column_id();
+    else if (ann_query_info->has_deprecated_column_id())
+        return ann_query_info->deprecated_column_id();
+    else
+        throw DB::Exception("Can't get vector column id from tipb::ANNQueryInfo, please check the version of TiDB.");
+}
 
 inline unum::usearch::metric_kind_t getUSearchMetricKind(tipb::VectorDistanceMetric d)
 {

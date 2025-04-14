@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/DMFileInputStream.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/DistanceProjectionInputStream.h>
 
 namespace DB::DM
 {
@@ -157,13 +158,23 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
     RUNTIME_CHECK(vec_index_ctx != nullptr);
     RUNTIME_CHECK(read_columns.size() == vec_index_ctx->col_defs->size());
 
-    auto fallback = [&]() {
+    auto fallback = [&]() -> SkippableBlockInputStreamPtr {
         vec_index_ctx->perf->n_from_dmf_noindex += 1;
-        return buildNoLocalIndex(dmfile, read_columns, rowkey_ranges, scan_context);
+        if (!vec_index_ctx->ann_query_info->enable_distance_proj())
+        {
+            return buildNoLocalIndex(dmfile, read_columns, rowkey_ranges, scan_context);
+        }
+
+        // if enable_distance_proj, the result of read will have not distance but we need it, so return a
+        // DistanceProjectionInputStream to calc it.
+        auto stream
+            = buildNoLocalIndex(dmfile, *vec_index_ctx->dis_ctx->col_defs_no_index, rowkey_ranges, scan_context);
+
+        return DistanceProjectionInputStream::create(stream, vec_index_ctx);
     };
 
     auto local_index = dmfile->getLocalIndex( //
-        vec_index_ctx->ann_query_info->deprecated_column_id(),
+        vec_index_ctx->vec_col_id,
         vec_index_ctx->ann_query_info->index_id());
     if (!local_index.has_value())
         // Vector index is defined but does not exist on the data file,
