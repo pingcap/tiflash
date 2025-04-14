@@ -107,47 +107,21 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     size_t collision = 0;
 };
 
-template <ASTTableJoin::Kind kind, bool has_other_condition, bool late_materialization>
-struct JoinProbeAdder;
-
-#define JOIN_PROBE_TEMPLATE        \
-    template <                     \
-        typename KeyGetter,        \
-        ASTTableJoin::Kind kind,   \
-        bool has_null_map,         \
-        bool has_other_condition,  \
-        bool late_materialization, \
-        bool tagged_pointer>
-
-class HashJoin;
-class JoinProbeHelper
+class JoinProbeHelperUtil
 {
 public:
-    JoinProbeHelper(const HashJoin * join, bool late_materialization);
-
-    Block probe(JoinProbeContext & context, JoinProbeWorkerData & wd);
-
-private:
-    JOIN_PROBE_TEMPLATE
-    Block probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd);
-
-    JOIN_PROBE_TEMPLATE
-    void NO_INLINE
-    probeFillColumns(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
-    JOIN_PROBE_TEMPLATE
-    void NO_INLINE
-    probeFillColumnsPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
-
-    template <typename KeyGetter>
-    void initPrefetchStates(JoinProbeContext & context);
+    explicit JoinProbeHelperUtil(const HashJoinSettings & settings, const HashJoinRowLayout & row_layout)
+        : settings(settings)
+        , row_layout(row_layout)
+    {}
 
     template <typename KeyGetterType, typename KeyType, typename HashValueType>
-    bool ALWAYS_INLINE joinKeyIsEqual(
+    static bool ALWAYS_INLINE joinKeyIsEqual(
         KeyGetterType & key_getter,
         const KeyType & key1,
         const KeyType & key2,
         HashValueType hash1,
-        RowPtr row_ptr) const
+        RowPtr row_ptr)
     {
         if constexpr (KeyGetterType::joinKeyCompareHashFirst())
         {
@@ -172,6 +146,45 @@ private:
     template <bool late_materialization>
     void fillNullMapWithZero(MutableColumns & added_columns) const;
 
+protected:
+    const HashJoinSettings & settings;
+    const HashJoinRowLayout & row_layout;
+};
+
+template <ASTTableJoin::Kind kind, bool has_other_condition, bool late_materialization>
+struct JoinProbeAdder;
+
+#define JOIN_PROBE_TEMPLATE        \
+    template <                     \
+        typename KeyGetter,        \
+        ASTTableJoin::Kind kind,   \
+        bool has_null_map,         \
+        bool has_other_condition,  \
+        bool late_materialization, \
+        bool tagged_pointer>
+
+class HashJoin;
+class JoinProbeHelper final : public JoinProbeHelperUtil
+{
+public:
+    JoinProbeHelper(const HashJoin * join, bool late_materialization);
+
+    Block probe(JoinProbeContext & context, JoinProbeWorkerData & wd);
+
+private:
+    JOIN_PROBE_TEMPLATE
+    Block probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd);
+
+    JOIN_PROBE_TEMPLATE
+    void NO_INLINE
+    probeFillColumns(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+    JOIN_PROBE_TEMPLATE
+    void NO_INLINE
+    probeFillColumnsPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+
+    template <typename KeyGetter>
+    void initPrefetchStates(JoinProbeContext & context);
+
     Block handleOtherConditions(
         JoinProbeContext & context,
         JoinProbeWorkerData & wd,
@@ -190,9 +203,7 @@ private:
     FuncType func_ptr_has_null = nullptr;
     FuncType func_ptr_no_null = nullptr;
     const HashJoin * join;
-    const HashJoinSettings & settings;
     const HashJoinPointerTable & pointer_table;
-    const HashJoinRowLayout & row_layout;
 };
 
 } // namespace DB

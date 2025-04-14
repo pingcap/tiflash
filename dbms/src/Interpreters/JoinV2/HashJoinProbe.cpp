@@ -123,6 +123,94 @@ void JoinProbeContext::prepareForHashProbe(
     is_prepared = true;
 }
 
+template <bool late_materialization, bool last_flush>
+void JoinProbeHelperUtil::flushInsertBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns) const
+{
+    if constexpr (late_materialization)
+    {
+        size_t idx = 0;
+        for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
+        {
+            IColumn * column = added_columns[idx].get();
+            if (is_nullable)
+                column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
+            column->deserializeAndInsertFromPos(wd.insert_batch, true);
+            ++idx;
+        }
+        for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
+            added_columns[idx++]->deserializeAndInsertFromPos(wd.insert_batch, true);
+
+        wd.row_ptrs_for_lm.insert(wd.insert_batch.begin(), wd.insert_batch.end());
+    }
+    else
+    {
+        for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+        {
+            IColumn * column = added_columns[column_index].get();
+            if (is_nullable)
+                column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
+            column->deserializeAndInsertFromPos(wd.insert_batch, true);
+        }
+        for (auto [column_index, _] : row_layout.other_column_indexes)
+            added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch, true);
+    }
+
+    if constexpr (last_flush)
+    {
+        if constexpr (late_materialization)
+        {
+            size_t idx = 0;
+            for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
+            {
+                IColumn * column = added_columns[idx].get();
+                if (is_nullable)
+                    column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
+                column->flushNTAlignBuffer();
+                ++idx;
+            }
+            for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
+                added_columns[idx++]->flushNTAlignBuffer();
+        }
+        else
+        {
+            for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+            {
+                IColumn * column = added_columns[column_index].get();
+                if (is_nullable)
+                    column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
+                column->flushNTAlignBuffer();
+            }
+            for (auto [column_index, _] : row_layout.other_column_indexes)
+                added_columns[column_index]->flushNTAlignBuffer();
+        }
+    }
+
+    wd.insert_batch.clear();
+}
+
+template <bool late_materialization>
+void JoinProbeHelperUtil::fillNullMapWithZero(MutableColumns & added_columns) const
+{
+    size_t idx = 0;
+    for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+    {
+        if (is_nullable)
+        {
+            size_t index;
+            if constexpr (late_materialization)
+                index = idx;
+            else
+                index = column_index;
+            auto & nullable_column = static_cast<ColumnNullable &>(*added_columns[index]);
+            size_t data_size = nullable_column.getNestedColumn().size();
+            size_t nullmap_size = nullable_column.getNullMapColumn().size();
+            RUNTIME_CHECK(nullmap_size <= data_size);
+            nullable_column.getNullMapColumn().getData().resize_fill_zero(data_size);
+        }
+        ++idx;
+    }
+}
+
 /// The implemtation of prefetching in join probe process is inspired by a paper named
 /// `Asynchronous Memory Access Chaining` in vldb-15.
 /// Ref: https://www.vldb.org/pvldb/vol9/p252-kocberber.pdf
@@ -383,10 +471,9 @@ struct JoinProbeAdder<LeftOuterAnti, false, false>
 };
 
 JoinProbeHelper::JoinProbeHelper(const HashJoin * join, bool late_materialization)
-    : join(join)
-    , settings(join->settings)
+    : JoinProbeHelperUtil(join->settings, join->row_layout)
+    , join(join)
     , pointer_table(join->pointer_table)
-    , row_layout(join->row_layout)
 {
 #define CALL3(KeyGetter, JoinType, has_other_condition, late_materialization, tagged_pointer)                       \
     {                                                                                                               \
@@ -1220,94 +1307,6 @@ void JoinProbeHelper::initPrefetchStates(JoinProbeContext & context)
         context.prefetch_states = decltype(context.prefetch_states)(
             static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
             [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
-    }
-}
-
-template <bool late_materialization, bool last_flush>
-void JoinProbeHelper::flushInsertBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns) const
-{
-    if constexpr (late_materialization)
-    {
-        size_t idx = 0;
-        for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
-        {
-            IColumn * column = added_columns[idx].get();
-            if (is_nullable)
-                column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
-            column->deserializeAndInsertFromPos(wd.insert_batch, true);
-            ++idx;
-        }
-        for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
-            added_columns[idx++]->deserializeAndInsertFromPos(wd.insert_batch, true);
-
-        wd.row_ptrs_for_lm.insert(wd.insert_batch.begin(), wd.insert_batch.end());
-    }
-    else
-    {
-        for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
-        {
-            IColumn * column = added_columns[column_index].get();
-            if (is_nullable)
-                column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-            column->deserializeAndInsertFromPos(wd.insert_batch, true);
-        }
-        for (auto [column_index, _] : row_layout.other_column_indexes)
-            added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch, true);
-    }
-
-    if constexpr (last_flush)
-    {
-        if constexpr (late_materialization)
-        {
-            size_t idx = 0;
-            for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
-            {
-                IColumn * column = added_columns[idx].get();
-                if (is_nullable)
-                    column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
-                column->flushNTAlignBuffer();
-                ++idx;
-            }
-            for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
-                added_columns[idx++]->flushNTAlignBuffer();
-        }
-        else
-        {
-            for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
-            {
-                IColumn * column = added_columns[column_index].get();
-                if (is_nullable)
-                    column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-                column->flushNTAlignBuffer();
-            }
-            for (auto [column_index, _] : row_layout.other_column_indexes)
-                added_columns[column_index]->flushNTAlignBuffer();
-        }
-    }
-
-    wd.insert_batch.clear();
-}
-
-template <bool late_materialization>
-void JoinProbeHelper::fillNullMapWithZero(MutableColumns & added_columns) const
-{
-    size_t idx = 0;
-    for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
-    {
-        if (is_nullable)
-        {
-            size_t index;
-            if constexpr (late_materialization)
-                index = idx;
-            else
-                index = column_index;
-            auto & nullable_column = static_cast<ColumnNullable &>(*added_columns[index]);
-            size_t data_size = nullable_column.getNestedColumn().size();
-            size_t nullmap_size = nullable_column.getNullMapColumn().size();
-            RUNTIME_CHECK(nullmap_size <= data_size);
-            nullable_column.getNullMapColumn().getData().resize_fill_zero(data_size);
-        }
-        ++idx;
     }
 }
 
