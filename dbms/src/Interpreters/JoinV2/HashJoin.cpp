@@ -392,7 +392,8 @@ void HashJoin::workAfterBuildRowFinish()
         all_build_row_count,
         getHashValueByteSize(method),
         settings.probe_enable_prefetch_threshold,
-        enable_tagged_pointer);
+        enable_tagged_pointer,
+        false);
 
     LOG_INFO(
         log,

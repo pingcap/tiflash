@@ -39,7 +39,8 @@ public:
         size_t row_count_hint,
         size_t hash_value_bytes,
         size_t probe_prefetch_threshold,
-        bool enable_tagged_pointer_);
+        bool enable_tagged_pointer_,
+        bool is_test);
 
     template <typename HashValueType>
     bool build(
