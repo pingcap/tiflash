@@ -154,7 +154,7 @@ protected:
 template <ASTTableJoin::Kind kind, bool has_other_condition, bool late_materialization>
 struct JoinProbeAdder;
 
-#define JOIN_PROBE_TEMPLATE        \
+#define JOIN_PROBE_HELPER_TEMPLATE \
     template <                     \
         typename KeyGetter,        \
         ASTTableJoin::Kind kind,   \
@@ -172,13 +172,13 @@ public:
     Block probe(JoinProbeContext & context, JoinProbeWorkerData & wd);
 
 private:
-    JOIN_PROBE_TEMPLATE
+    JOIN_PROBE_HELPER_TEMPLATE
     Block probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd);
 
-    JOIN_PROBE_TEMPLATE
+    JOIN_PROBE_HELPER_TEMPLATE
     void NO_INLINE
     probeFillColumns(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
-    JOIN_PROBE_TEMPLATE
+    JOIN_PROBE_HELPER_TEMPLATE
     void NO_INLINE
     probeFillColumnsPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
 

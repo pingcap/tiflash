@@ -87,7 +87,7 @@ void JoinProbeContext::prepareForHashProbe(
     /// reuse null_map to record the filtered rows, the rows contains NULL or does not
     /// match the join filter won't join to anything
     recordFilteredRows(block, filter_column, null_map_holder, null_map);
-    /// Some useless columns maybe key columns and filter column so they must be removed after extracting key columns and filter column.
+    /// Some useless columns maybe key columns and filter column so they must be removed after extracting.
     for (size_t pos = 0; pos < block.columns();)
     {
         if (!probe_output_name_set.contains(block.getByPosition(pos).name))
@@ -557,7 +557,7 @@ Block JoinProbeHelper::probe(JoinProbeContext & context, JoinProbeWorkerData & w
         return (this->*func_ptr_no_null)(context, wd);
 }
 
-JOIN_PROBE_TEMPLATE
+JOIN_PROBE_HELPER_TEMPLATE
 Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd)
 {
     static_assert(has_other_condition || !late_materialization);
@@ -713,7 +713,7 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
     return join->output_block_after_finalize;
 }
 
-JOIN_PROBE_TEMPLATE
+JOIN_PROBE_HELPER_TEMPLATE
 void JoinProbeHelper::probeFillColumns(
     JoinProbeContext & context,
     JoinProbeWorkerData & wd,
@@ -847,7 +847,7 @@ void JoinProbeHelper::probeFillColumns(
 
 #define PREFETCH_READ(ptr) __builtin_prefetch((ptr), 0 /* rw==read */, 3 /* locality */)
 
-JOIN_PROBE_TEMPLATE
+JOIN_PROBE_HELPER_TEMPLATE
 void JoinProbeHelper::probeFillColumnsPrefetch(
     JoinProbeContext & context,
     JoinProbeWorkerData & wd,
