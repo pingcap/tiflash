@@ -344,14 +344,14 @@ void EstablishCallData::trySendOneMsg()
     switch (res)
     {
     case MPMCQueueResult::OK:
+        // set state back to original_state so we can use setCallStateAndUpdateMetrics later
+        state = original_state;
         async_tunnel_sender->subDataSizeMetric(packet->getPacket().ByteSizeLong());
         /// Note: has to switch the memory tracker before `write`
         /// because after `write`, `async_tunnel_sender` can be destroyed at any time
         /// so there is a risk that `res` is destructed after `aysnc_tunnel_sender`
         /// is destructed which may cause the memory tracker in `res` become invalid
         packet->switchMemTracker(nullptr);
-        // set state back to original_state so we can use setCallStateAndUpdateMetrics later
-        state = original_state;
         setCallStateAndUpdateMetrics(
             WAIT_WRITE,
             GET_METRIC(tiflash_establish_calldata_count, type_wait_write_calldata));
@@ -363,9 +363,9 @@ void EstablishCallData::trySendOneMsg()
         writeDone("", grpc::Status::OK);
         return;
     case MPMCQueueResult::CANCELLED:
-        RUNTIME_ASSERT(!async_tunnel_sender->getCancelReason().empty(), "Tunnel sender cancelled without reason");
         // set state back to original_state so we can use setCallStateAndUpdateMetrics later
         state = original_state;
+        RUNTIME_ASSERT(!async_tunnel_sender->getCancelReason().empty(), "Tunnel sender cancelled without reason");
         writeErr(getPacketWithError(async_tunnel_sender->getCancelReason()));
         return;
     case MPMCQueueResult::EMPTY:
