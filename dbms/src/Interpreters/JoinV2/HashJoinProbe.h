@@ -109,7 +109,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
 
 class JoinProbeHelperUtil
 {
-public:
+protected:
     explicit JoinProbeHelperUtil(const HashJoinSettings & settings, const HashJoinRowLayout & row_layout)
         : settings(settings)
         , row_layout(row_layout)
@@ -164,7 +164,7 @@ struct JoinProbeAdder;
         bool tagged_pointer>
 
 class HashJoin;
-class JoinProbeHelper final : public JoinProbeHelperUtil
+class JoinProbeHelper : public JoinProbeHelperUtil
 {
 public:
     JoinProbeHelper(const HashJoin * join, bool late_materialization);
