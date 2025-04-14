@@ -40,7 +40,7 @@ public:
         size_t hash_value_bytes,
         size_t probe_prefetch_threshold,
         bool enable_tagged_pointer_,
-        bool is_test);
+        bool is_unit_test);
 
     template <typename HashValueType>
     bool build(
