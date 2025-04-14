@@ -43,7 +43,7 @@ SkippableBlockInputStreamPtr ColumnFileProvideVectorIndexInputStream::createOrFa
                 ctx->col_defs,
                 ctx->read_tag);
         }
-        
+
         auto stream = ColumnFileInputStream::create(
             *ctx->dm_context,
             column_file,

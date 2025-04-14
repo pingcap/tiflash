@@ -41,6 +41,7 @@
 #include <Operators/NullSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -59,7 +60,6 @@
 #include <common/logger_useful.h>
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
-#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 
 namespace DB
 {

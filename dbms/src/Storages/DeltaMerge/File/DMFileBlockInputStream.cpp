@@ -18,9 +18,9 @@
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/DMFileInputStream.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/DistanceProjectionInputStream.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/DeltaMerge/Index/VectorIndex/Stream/DistanceProjectionInputStream.h>
 
 namespace DB::DM
 {
