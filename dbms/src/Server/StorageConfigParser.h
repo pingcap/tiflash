@@ -97,6 +97,9 @@ public:
     StorageS3Config s3_config;
     StorageRemoteCacheConfig remote_cache_config;
 
+    String tmp_path;
+    UInt64 tmp_capacity;
+
 public:
     TiFlashStorageConfig() = default;
 
@@ -112,7 +115,10 @@ private:
     bool parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
 
     void parseMisc(const String & storage_section, const LoggerPtr & log);
+
+    void parseAndCreateTmpPath(const String & content, UInt64 global_capacity_quota, const LoggerPtr & log);
 };
 
+String getNormalizedPath(const String & s);
 
 } // namespace DB

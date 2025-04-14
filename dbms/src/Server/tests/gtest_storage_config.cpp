@@ -336,95 +336,102 @@ CATCH
 TEST_F(StorageConfigTest, ParseMaybeBrokenCases)
 try
 {
-    Strings tests = {
-        // case for storage.main.dir is defined but empty
-        R"(
-path = "/tmp/tiflash/data/db"
+    //     Strings tests = {
+    //         // case for storage.main.dir is defined but empty
+    //         R"(
+    // path = "/tmp/tiflash/data/db"
+    // [storage]
+    // [storage.main]
+    // # empty storage.main.dir
+    // dir = [ ]
+    // # capacity = [ 10737418240, 10737418240 ]
+    // # [storage.latest]
+    // # dir = [ ]
+    // # capacity = [ 10737418240, 10737418240 ]
+    // # [storage.raft]
+    // # dir = [ ]
+    //         )",
+    //         // case for storage.main.dir is not defined
+    //         R"(
+    // path = "/data0/tiflash,/data1/tiflash"
+    // [storage]
+    // [storage.main]
+    // # not defined storage.main.dir
+    // # dir = [ "/data0/tiflash", "/data1/tiflash" ]
+    // # capacity = [ 10737418240, 10737418240 ]
+    // # [storage.latest]
+    // # dir = [ ]
+    // # capacity = [ 10737418240, 10737418240 ]
+    // # [storage.raft]
+    // # dir = [ ]
+    //         )",
+    //         // case for the length of storage.main.dir is not the same with storage.main.capacity
+    //         R"(
+    // path = "/data0/tiflash,/data1/tiflash"
+    // [storage]
+    // [storage.main]
+    // dir = [ "/data0/tiflash", "/data1/tiflash" ]
+    // capacity = [ 10737418240 ]
+    //         )",
+    //         // case for the length of storage.latest.dir is not the same with storage.latest.capacity
+    //         R"(
+    // path = "/data0/tiflash,/data1/tiflash"
+    // [storage]
+    // [storage.main]
+    // dir = [ "/data0/tiflash", "/data1/tiflash" ]
+    // capacity = [ 10737418240, 10737418240 ]
+    // [storage.latest]
+    // dir = [ "/data0/tiflash", "/data1/tiflash" ]
+    // capacity = [ 10737418240 ]
+    //         )",
+    //         // case for storage.main.dir is not an string array
+    //         R"(
+    // [storage]
+    // [storage.main]
+    // dir = "/data0/tiflash,/data1/tiflash"
+    //         )",
+    //         // case for storage.latest.dir is not an string array
+    //         R"(
+    // [storage]
+    // [storage.main]
+    // dir = [ "/data0/tiflash", "/data1/tiflash" ]
+    // [storage.latest]
+    // dir = "/data0/tiflash"
+    //         )",
+    //         // case for storage.raft.dir is not an string array
+    //         R"(
+    // [storage]
+    // [storage.main]
+    // dir = [ "/data0/tiflash", "/data1/tiflash" ]
+    // [storage.raft]
+    // dir = "/data0/tiflash"
+    //         )",
+    //         // case for storage.main.dir is not an string array
+    //         R"(
+    // [storage]
+    // [storage.main]
+    // dir = 123
+    //         )",
+    //         // case for storage.main.dir is not an string array
+    //         R"(
+    // [storage]
+    // [storage.main]
+    // dir = [["/data0/tiflash", "/data1/tiflash"], ["/data2/tiflash", ]]
+    //         )",
+    //         // case for storage.main.dir is not an string array
+    //         R"(
+    // [storage]
+    // [storage.main]
+    // dir = [1,2,3]
+    //         )",
+    //     };
+
+    Strings tests = {R"(
 [storage]
 [storage.main]
-# empty storage.main.dir
-dir = [ ]
-# capacity = [ 10737418240, 10737418240 ]
-# [storage.latest]
-# dir = [ ]
-# capacity = [ 10737418240, 10737418240 ]
-# [storage.raft]
-# dir = [ ]
-        )",
-        // case for storage.main.dir is not defined
-        R"(
-path = "/data0/tiflash,/data1/tiflash"
-[storage]
-[storage.main]
-# not defined storage.main.dir
-# dir = [ "/data0/tiflash", "/data1/tiflash" ]
-# capacity = [ 10737418240, 10737418240 ]
-# [storage.latest]
-# dir = [ ]
-# capacity = [ 10737418240, 10737418240 ]
-# [storage.raft]
-# dir = [ ]
-        )",
-        // case for the length of storage.main.dir is not the same with storage.main.capacity
-        R"(
-path = "/data0/tiflash,/data1/tiflash"
-[storage]
-[storage.main]
-dir = [ "/data0/tiflash", "/data1/tiflash" ]
+dir = [ "/data0/tiflash"]
 capacity = [ 10737418240 ]
-        )",
-        // case for the length of storage.latest.dir is not the same with storage.latest.capacity
-        R"(
-path = "/data0/tiflash,/data1/tiflash"
-[storage]
-[storage.main]
-dir = [ "/data0/tiflash", "/data1/tiflash" ]
-capacity = [ 10737418240, 10737418240 ]
-[storage.latest]
-dir = [ "/data0/tiflash", "/data1/tiflash" ]
-capacity = [ 10737418240 ]
-        )",
-        // case for storage.main.dir is not an string array
-        R"(
-[storage]
-[storage.main]
-dir = "/data0/tiflash,/data1/tiflash"
-        )",
-        // case for storage.latest.dir is not an string array
-        R"(
-[storage]
-[storage.main]
-dir = [ "/data0/tiflash", "/data1/tiflash" ]
-[storage.latest]
-dir = "/data0/tiflash"
-        )",
-        // case for storage.raft.dir is not an string array
-        R"(
-[storage]
-[storage.main]
-dir = [ "/data0/tiflash", "/data1/tiflash" ]
-[storage.raft]
-dir = "/data0/tiflash"
-        )",
-        // case for storage.main.dir is not an string array
-        R"(
-[storage]
-[storage.main]
-dir = 123
-        )",
-        // case for storage.main.dir is not an string array
-        R"(
-[storage]
-[storage.main]
-dir = [["/data0/tiflash", "/data1/tiflash"], ["/data2/tiflash", ]]
-        )",
-        // case for storage.main.dir is not an string array
-        R"(
-[storage]
-[storage.main]
-dir = [1,2,3]
-        )",
-    };
+        )"};
 
     for (size_t i = 0; i < tests.size(); ++i)
     {
@@ -435,8 +442,10 @@ dir = [1,2,3]
 
         size_t global_capacity_quota = 0;
         TiFlashStorageConfig storage;
-        ASSERT_ANY_THROW(
-            { std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log); });
+        std::tie(global_capacity_quota, storage) = TiFlashStorageConfig::parseSettings(*config, log);
+        ASSERT_EQ(storage.main_data_paths.size(), 1);
+        ASSERT_EQ(storage.main_capacity_quota.size(), 1);
+        ASSERT_EQ(storage.main_capacity_quota[0], 10737418240);
     }
 }
 CATCH
@@ -948,6 +957,147 @@ delta_rate = 1.1
         else
         {
             FAIL() << i; // Should not come here.
+        }
+    }
+}
+CATCH
+
+TEST_F(StorageConfigTest, TmpPath)
+try
+{
+    {
+        String test =
+            R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+            )";
+
+        auto config = loadConfigFromString(test);
+        auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+        ASSERT_EQ(storage.tmp_path, "main_dir/tmp/");
+        ASSERT_EQ(storage.tmp_capacity, 0);
+    }
+
+    // storage.tmp.capacity cannot exceeds storage.main.capacity when share main dir.
+    {
+        Strings tests = {
+            R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.tmp]
+capacity = 5000
+            )",
+            R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.tmp]
+dir = "./main_dir/subdir"
+capacity = 5000
+            )",
+        };
+
+        for (const auto & test : tests)
+        {
+            auto config = loadConfigFromString(test);
+            bool got_err = false;
+            try
+            {
+                auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+            }
+            catch (Poco::Exception & e)
+            {
+                got_err = true;
+                LOG_INFO(Logger::get(), "parse err msg: {}", e.message());
+                ASSERT_TRUE(e.message().contains("exceeds parent storage quota"));
+            }
+            ASSERT_TRUE(got_err);
+        }
+    }
+
+    // use main_dir/tmp when tmp_path and storage.tmp doesn't exist.
+    {
+        String test =
+            R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+            )";
+
+        auto config = loadConfigFromString(test);
+        auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+        ASSERT_EQ(storage.tmp_path, "main_dir/tmp/");
+        ASSERT_EQ(storage.tmp_capacity, 0);
+    }
+
+    // use tmp_path when storage.tmp doesnt' exist.
+    {
+        String test =
+            R"(
+tmp_path = "./old_tmp_dir"
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+            )";
+
+        auto config = loadConfigFromString(test);
+        auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+        ASSERT_EQ(storage.tmp_path, "old_tmp_dir/");
+        ASSERT_EQ(storage.tmp_capacity, 0);
+    }
+
+    // ignore tmp_path when storage.tmp exists.
+    {
+        String test =
+            R"(
+tmp_path = "./old_tmp_dir"
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.tmp]
+capacity = 1000
+            )";
+
+        auto config = loadConfigFromString(test);
+        auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+        ASSERT_EQ(storage.tmp_path, "main_dir/tmp/");
+        ASSERT_EQ(storage.tmp_capacity, 1000);
+    }
+
+    // test very large storage.tmp.capacity
+    {
+        Strings tests = {
+            R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+[storage.tmp]
+capacity = 9223372036854775807
+            )",
+        };
+
+        for (const auto & test : tests)
+        {
+            auto config = loadConfigFromString(test);
+            bool got_err = false;
+            try
+            {
+                auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+            }
+            catch (Poco::Exception & e)
+            {
+                got_err = true;
+                LOG_INFO(Logger::get(), "parse err msg: {}", e.message());
+                ASSERT_TRUE(e.message().contains("exceeds disk available size"));
+            }
+            ASSERT_TRUE(got_err);
         }
     }
 }

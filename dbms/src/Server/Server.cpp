@@ -743,9 +743,8 @@ try
 
     /// Directory with temporary data for processing of heavy queries.
     {
-        std::string tmp_path = config().getString("tmp_path", path + "tmp/");
+        std::string tmp_path = storage_config.tmp_path;
         global_context->setTemporaryPath(tmp_path);
-        Poco::File(tmp_path).createDirectories();
 
         /// Clearing old temporary files.
         Poco::DirectoryIterator dir_end;
@@ -757,6 +756,8 @@ try
                 global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
             }
         }
+
+        SpillLimiter::instance->setMaxSpilledBytes(storage_config.tmp_capacity);
     }
 
     /** Directory with 'flags': files indicating temporary settings for the server set by system administrator.
@@ -1061,8 +1062,6 @@ try
     });
 
     proxy_machine.restoreKVStore(global_context->getTMTContext(), global_context->getPathPool());
-
-    SpillLimiter::instance->setMaxSpilledBytes(settings.max_spilled_bytes);
 
     /// setting up elastic thread pool
     bool enable_elastic_threadpool = settings.enable_elastic_threadpool;

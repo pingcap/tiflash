@@ -337,8 +337,7 @@ struct Settings
     M(SettingUInt64, join_v2_probe_prefetch_step, 16, "hash join v2 probe prefetch length")                                                                                                                                             \
     M(SettingUInt64, join_v2_probe_insert_batch_size, 128, "hash join v2 probe insert batch size")                                                                                                                                      \
     M(SettingBool, join_v2_enable_tagged_pointer, true, "hash join v2 enable tagged pointer") \
-    M(SettingBool, hashagg_use_magic_hash, false, "whether to use magic hash for hashagg") \
-    M(SettingUInt64, max_spilled_bytes, 0, "max bytes that spill files can use")
+    M(SettingBool, hashagg_use_magic_hash, false, "whether to use magic hash for hashagg")
 
 
 // clang-format on

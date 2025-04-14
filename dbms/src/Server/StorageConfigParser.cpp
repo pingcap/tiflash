@@ -26,11 +26,13 @@
 #pragma GCC diagnostic pop
 #endif
 
+#include <Common/DiskSize.h>
 #include <Common/Exception.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/formatReadable.h>
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
+#include <Poco/File.h>
 #include <Poco/Path.h>
 #include <Poco/String.h>
 #include <Poco/StringTokenizer.h>
@@ -71,7 +73,7 @@ static std::string getCanonicalPath(std::string path, std::string_view hint = "p
     return path;
 }
 
-static String getNormalizedPath(const String & s)
+String getNormalizedPath(const String & s)
 {
     return getCanonicalPath(Poco::Path{s}.toString());
 }
@@ -444,7 +446,127 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(
         storage_config.remote_cache_config.parse(config.getString("storage.remote.cache"), log);
     }
 
+    if (config.has("storage.tmp"))
+    {
+        // Need to make sure storage.main/latest is parsed before storage.tmp.
+        storage_config.parseAndCreateTmpPath(config.getString("storage"), global_capacity_quota, log);
+    }
+    else if (config.has("tmp_path"))
+    {
+        storage_config.tmp_path = getNormalizedPath(config.getString("tmp_path"));
+        // If storage.tmp doesn't exist, tmp_capacity will be zero.
+        storage_config.tmp_capacity = 0;
+    }
+    else
+    {
+        storage_config.tmp_path = storage_config.latest_data_paths[0] + "tmp/";
+        // If storage.tmp doesn't exist, tmp_capacity will be zero.
+        storage_config.tmp_capacity = 0;
+    }
+
     return std::make_tuple(global_capacity_quota, storage_config);
+}
+
+void TiFlashStorageConfig::parseAndCreateTmpPath(
+    const String & content,
+    UInt64 global_capacity_quota,
+    const LoggerPtr & log)
+{
+    // global_capacity_quota and storage.main/latest.capacity cannot take effects at the same time.
+    RUNTIME_CHECK(!(!main_capacity_quota.empty() && global_capacity_quota > 0));
+    RUNTIME_CHECK_MSG(
+        (main_capacity_quota.size() == latest_capacity_quota.size()) && !main_capacity_quota.empty(),
+        "main_capacity_quota.size: {}, latest_capacity_quota.size: {}",
+        main_capacity_quota.size(),
+        latest_capacity_quota.size());
+
+    std::istringstream ss(content);
+    cpptoml::parser p(ss);
+    auto table = p.parse();
+
+    auto tmp_path_opt = table->get_qualified_as<String>("tmp.dir");
+    if (!tmp_path_opt || tmp_path_opt->empty())
+        tmp_path = latest_data_paths[0] + "tmp/";
+    else
+        tmp_path = *tmp_path_opt;
+
+    tmp_path = getNormalizedPath(tmp_path);
+    Poco::File(tmp_path).createDirectories();
+
+    struct statvfs vfs
+    {
+    };
+    UInt64 disk_available_size = 0;
+    auto err_msg = getFsStatsOfPath(tmp_path, vfs);
+    if unlikely (!err_msg.empty())
+        LOG_ERROR(log, "get tmp_path capacity failed: {}, ignore", err_msg);
+    else
+        disk_available_size = vfs.f_blocks * vfs.f_frsize;
+
+    // It can be global storage quota, latest quota or main quota.
+    UInt64 parent_storage_quota = 0;
+    String parent_storage_path{};
+    // check if tmp path is subdir of main/latest dir.
+    auto get_quota = [&](const Strings & path_vec, const std::vector<size_t> & quota_vec) -> std::pair<ssize_t, bool> {
+        RUNTIME_CHECK(path_vec.size() == quota_vec.size());
+        for (size_t i = 0; i < path_vec.size(); ++i)
+        {
+            if (tmp_path.contains(path_vec[i]))
+            {
+                parent_storage_path = path_vec[i];
+                if (i < quota_vec.size())
+                    return {quota_vec[i], true};
+                else
+                    return {0, true};
+            }
+        }
+        return {0, false};
+    };
+
+    if (global_capacity_quota != 0)
+    {
+        if (auto [global_path_quota, ok]
+            = get_quota(main_data_paths, std::vector<size_t>(main_data_paths.size(), global_capacity_quota));
+            ok)
+            parent_storage_quota = global_capacity_quota;
+    }
+    else
+    {
+        if (auto [main_path_quota, ok] = get_quota(main_data_paths, main_capacity_quota); ok)
+        {
+            parent_storage_quota = main_path_quota;
+        }
+        else
+        {
+            if (auto [latest_path_quota, ok] = get_quota(latest_data_paths, latest_capacity_quota); ok)
+                parent_storage_quota = latest_path_quota;
+        }
+    }
+
+    tmp_capacity = 0;
+    auto tmp_capacity_opt = table->get_qualified_as<UInt64>("tmp.capacity");
+    // If tmp_path is subdir of main.dir or latest.dir, tmp_capacity should respect main.capacity or latest.capacity.
+    if (tmp_capacity_opt)
+        tmp_capacity = *tmp_capacity_opt;
+
+    if (tmp_capacity != 0)
+    {
+        err_msg.clear();
+        if (disk_available_size > 0 && tmp_capacity > disk_available_size)
+            err_msg = fmt::format(
+                "exceeds disk available size(path: {}, available: {}, require: {})",
+                tmp_path,
+                disk_available_size,
+                tmp_capacity);
+        else if (parent_storage_quota > 0 && tmp_capacity > parent_storage_quota)
+            err_msg = fmt::format(
+                "exceeds parent storage quota(path_capacity, storage.main.capacity or storage.latest.capacity({}, {})",
+                parent_storage_path,
+                parent_storage_quota);
+
+        if (!err_msg.empty())
+            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "check storage.tmp.capacity failed: {}", err_msg);
+    }
 }
 
 void StorageS3Config::parse(const String & content)
