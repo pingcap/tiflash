@@ -15,6 +15,7 @@ header:
     - 'NOTICE'
     - 'tiflash-architecture.png'
     - 'contrib/'
+    - 'libs/libclara-prebuilt/'
     - '.github/'
     - 'docs/'
     - 'tests/testsdata/'
