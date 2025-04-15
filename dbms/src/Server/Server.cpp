@@ -743,21 +743,21 @@ try
 
     /// Directory with temporary data for processing of heavy queries.
     {
-        std::string tmp_path = storage_config.tmp_path;
-        RUNTIME_CHECK(!tmp_path.empty());
-        Poco::File(tmp_path).createDirectories();
+        const std::string & temp_path = storage_config.temp_path;
+        RUNTIME_CHECK(!temp_path.empty());
+        Poco::File(temp_path).createDirectories();
 
         Poco::DirectoryIterator dir_end;
-        for (Poco::DirectoryIterator it(tmp_path); it != dir_end; ++it)
+        for (Poco::DirectoryIterator it(temp_path); it != dir_end; ++it)
         {
             if (it->isFile() && startsWith(it.name(), "tmp"))
                 global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
         }
-        LOG_INFO(log, "tmp files in tmp directory({}) removed", tmp_path);
+        LOG_INFO(log, "temp files in temp directory({}) removed", temp_path);
 
-        storage_config.checkTmpCapacity(global_capacity_quota, log);
-        global_context->setTemporaryPath(tmp_path);
-        SpillLimiter::instance->setMaxSpilledBytes(storage_config.tmp_capacity);
+        storage_config.checkTempCapacity(global_capacity_quota, log);
+        global_context->setTemporaryPath(temp_path);
+        SpillLimiter::instance->setMaxSpilledBytes(storage_config.temp_capacity);
     }
 
     /** Directory with 'flags': files indicating temporary settings for the server set by system administrator.

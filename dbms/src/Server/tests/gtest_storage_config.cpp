@@ -953,18 +953,18 @@ delta_rate = 1.1
 }
 CATCH
 
-TEST_F(StorageConfigTest, TmpPath)
+TEST_F(StorageConfigTest, TempPath)
 try
 {
-    auto log = Logger::get("StorageConfigTest.TmpPath");
+    auto log = Logger::get("StorageConfigTest.TempPath");
 
     {
         LOG_INFO(log, "test suite 0");
         struct TestCase
         {
             String config_str;
-            String expected_tmp_path;
-            UInt64 expected_tmp_capacity;
+            String expected_temp_path;
+            UInt64 expected_temp_capacity;
         };
 
         std::vector<TestCase> tests = {
@@ -984,7 +984,7 @@ capacity = [1000]
 [storage.main]
 dir = ["./main_dir"]
 capacity = [1000]
-[storage.tmp]
+[storage.temp]
 capacity = 1000
 )",
                 "main_dir/tmp/",
@@ -1001,12 +1001,12 @@ path = "./main_dir"
                 R"(
 path = "./main_dir"
 [storage]
-[storage.tmp]
+[storage.temp]
 capacity = 2000)",
                 "main_dir/tmp/",
                 2000,
             },
-            // no storage.tmp, use tmp_path instead.
+            // no storage.temp, use tmp_path instead.
             {
                 R"(
 path = "./main_dir"
@@ -1016,7 +1016,7 @@ tmp_path = "./tmp_dir"
                 "tmp_dir/",
                 0,
             },
-            // ignore tmp_path when storage.tmp exists.
+            // ignore tmp_path when storage.temp exists.
             {
                 R"(
 tmp_path = "./old_tmp_dir"
@@ -1024,13 +1024,13 @@ tmp_path = "./old_tmp_dir"
 [storage.main]
 dir = ["./main_dir"]
 capacity = [2000]
-[storage.tmp]
+[storage.temp]
 capacity = 2000
             )",
                 "main_dir/tmp/",
                 2000,
             },
-            // use tmp_path when storage.tmp doesnt' exist.
+            // use tmp_path when storage.temp doesnt' exist.
             {
                 R"(
 tmp_path = "./old_tmp_dir"
@@ -1042,7 +1042,7 @@ capacity = [1000]
                 "old_tmp_dir/",
                 0,
             },
-            // use main_dir/tmp when tmp_path and storage.tmp doesn't exist.
+            // use main_dir/tmp when tmp_path and storage.temp doesn't exist.
             {
                 R"(
 [storage]
@@ -1063,13 +1063,13 @@ capacity = [1000]
 [storage.main]
 dir = ["./main_dir"]
 capacity = [8000]
-[storage.tmp]
+[storage.temp]
 capacity = 1000
             )",
                 "latest_dir/tmp/",
                 1000,
             },
-            // use storage.tmp.dir if storage.tmp.dir exist.
+            // use storage.temp.dir if storage.temp.dir exist.
             {
                 R"(
 [storage]
@@ -1079,14 +1079,14 @@ capacity = [8000]
 [storage.main]
 dir = ["./main_dir"]
 capacity = [1000]
-[storage.tmp]
+[storage.temp]
 dir = "./main_dir/subdir"
 capacity = 1000
             )",
                 "main_dir/subdir/",
                 1000,
             },
-            // storage.tmp.capacity is 1000, storage.latest.capacity is zero, it's ok.
+            // storage.temp.capacity is 1000, storage.latest.capacity is zero, it's ok.
             {
                 R"(
 [storage]
@@ -1095,7 +1095,7 @@ dir = ["./latest_dir"]
 [storage.main]
 dir = ["./main_dir"]
 capacity = [8000]
-[storage.tmp]
+[storage.temp]
 capacity = 1000
             )",
                 "latest_dir/tmp/",
@@ -1109,7 +1109,7 @@ dir = ["./latest_dir"]
 capacity = [8000]
 [storage.main]
 dir = ["./main_dir"]
-[storage.tmp]
+[storage.temp]
 dir = "./main_dir/subdir"
 capacity = 1000
             )",
@@ -1124,7 +1124,7 @@ dir = ["./latest_dir", "./latest_dir_1"]
 capacity = [8000, 0]
 [storage.main]
 dir = ["./main_dir"]
-[storage.tmp]
+[storage.temp]
 dir = "./latest_dir/subdir"
 capacity = 1000
             )",
@@ -1139,7 +1139,7 @@ dir = ["./latest_dir", "./latest_dir_1"]
 capacity = [8000, 0]
 [storage.main]
 dir = ["./main_dir"]
-[storage.tmp]
+[storage.temp]
 dir = "./latest_dir_1/subdir"
 capacity = 9000
             )",
@@ -1154,9 +1154,9 @@ capacity = 9000
             LOG_INFO(log, "case i: {}", i);
             auto config = loadConfigFromString(test.config_str);
             auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
-            storage.checkTmpCapacity(global_capacity_quota, log);
-            ASSERT_EQ(storage.tmp_path, test.expected_tmp_path);
-            ASSERT_EQ(storage.tmp_capacity, test.expected_tmp_capacity);
+            storage.checkTempCapacity(global_capacity_quota, log);
+            ASSERT_EQ(storage.temp_path, test.expected_temp_path);
+            ASSERT_EQ(storage.temp_capacity, test.expected_temp_capacity);
         }
     }
 
@@ -1178,19 +1178,19 @@ capacity = 9000
 [storage]
 [storage.main]
 dir = ["./main_dir"]
-[storage.tmp]
+[storage.temp]
 capacity = -1
             )",
                 "underflow_error",
             },
             {
-                // storage.tmp.capacity cannot exceeds storage.main.capacity when share main dir.
+                // storage.temp.capacity cannot exceeds storage.main.capacity when share main dir.
                 R"(
 [storage]
 [storage.main]
 dir = ["./main_dir"]
 capacity = [1000]
-[storage.tmp]
+[storage.temp]
 capacity = 5000
             )",
                 exceed_parent_quota_msg,
@@ -1201,7 +1201,7 @@ capacity = 5000
 [storage.main]
 dir = ["./main_dir"]
 capacity = [1000]
-[storage.tmp]
+[storage.temp]
 dir = "./main_dir/subdir"
 capacity = 5000
             )",
@@ -1216,7 +1216,7 @@ capacity = [1000]
 [storage.main]
 dir = ["./main_dir"]
 capacity = [8000]
-[storage.tmp]
+[storage.temp]
 capacity = 5000
             )",
                 exceed_parent_quota_msg,
@@ -1230,7 +1230,7 @@ capacity = [8000]
 [storage.main]
 dir = ["./main_dir"]
 capacity = [1000]
-[storage.tmp]
+[storage.temp]
 dir = "./main_dir/subdir"
 capacity = 5000
             )",
@@ -1243,28 +1243,28 @@ path = "./main_dir"
 capacity = 1000
 tmp_path = "./main_dir/subdir"
 [storage]
-[storage.tmp]
+[storage.temp]
 capacity = 2000)",
                 exceed_parent_quota_msg,
             },
-            // test very large storage.tmp.capacity
+            // test very large storage.temp.capacity
             {
                 R"(
 [storage]
 [storage.main]
 dir = ["./main_dir"]
-[storage.tmp]
+[storage.temp]
 capacity = 9223372036854775807
             )",
                 exceed_disk_capacity_msg,
             },
-            // test very large storage.tmp.capacity
+            // test very large storage.temp.capacity
             {
                 R"(
 [storage]
 [storage.main]
 dir = ["./main_dir"]
-[storage.tmp]
+[storage.temp]
 capacity = 9223372036854775808
             )",
                 "cpptoml::parse_exception, e.what() = Malformed number",
@@ -1280,7 +1280,7 @@ capacity = 9223372036854775808
             {
                 auto config = loadConfigFromString(test.config_str);
                 auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
-                storage.checkTmpCapacity(global_capacity_quota, log);
+                storage.checkTempCapacity(global_capacity_quota, log);
             }
             catch (Poco::Exception & e)
             {
