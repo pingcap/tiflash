@@ -462,6 +462,11 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(
         storage_config.tmp_path = storage_config.latest_data_paths[0] + "tmp/";
         storage_config.tmp_capacity = 0;
     }
+    LOG_INFO(
+        log,
+        "storage.tmp config parse done: tmp_path: {}, tmp_capacity: {}",
+        storage_config.tmp_path,
+        storage_config.tmp_capacity);
 
     return std::make_tuple(global_capacity_quota, storage_config);
 }
@@ -487,7 +492,7 @@ void TiFlashStorageConfig::parseTmpConfig(const String & content, UInt64 global_
         tmp_path = *tmp_path_opt;
     tmp_path = getNormalizedPath(tmp_path);
 
-    // Check if tmp_path is subdir of latest.dir of main.dir and use its quota to check if tmp.capacity valid.
+    // Check if tmp_path is subdir of latest.dir or main.dir, then use its quota to check if tmp.capacity is valid.
     UInt64 parent_storage_quota = 0;
     String parent_storage_path{};
     auto get_quota = [&](const Strings & path_vec, const std::vector<size_t> & quota_vec) -> std::pair<ssize_t, bool> {
