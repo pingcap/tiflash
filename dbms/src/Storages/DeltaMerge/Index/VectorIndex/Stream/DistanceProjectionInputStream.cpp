@@ -31,7 +31,7 @@ DistanceProjectionInputStream::DistanceProjectionInputStream(
     const auto & inner_header = input_->getHeader();
     // The inner stream should contain vec col at last, and this stream will replace the vec col into distance col.
     RUNTIME_CHECK(inner_header.columns() >= 1);
-    RUNTIME_CHECK(inner_header.columns() == getHeader().columns());
+    RUNTIME_CHECK(inner_header.columns() == ctx->header.columns());
     RUNTIME_CHECK(ctx_->dis_ctx.has_value() && ctx_->dis_ctx->col_defs_no_index != nullptr);
     // check if the last position of column is a vector type a vector type is Array<Float32>
     const auto last_col_type = inner_header.safeGetByPosition(inner_header.columns() - 1).type;
