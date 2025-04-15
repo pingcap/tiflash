@@ -336,10 +336,10 @@ std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(
             LOG_ERROR(log, "Could not calculate available disk space: {}", err_msg);
         return {};
     }
-    UInt64 disk_capacity_size = vfs.f_blocks * vfs.f_frsize;
 
     // capacity is limited by the actual disk capacity
     uint64_t capacity = 0;
+    const uint64_t disk_capacity_size = vfs.f_blocks * vfs.f_frsize;
     if (capacity_bytes == 0 || disk_capacity_size < capacity_bytes)
         capacity = disk_capacity_size;
     else

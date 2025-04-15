@@ -105,7 +105,7 @@ public:
 
     Strings getAllNormalPaths() const;
 
-    void checkTmpCapacity(const LoggerPtr & log) const;
+    void checkTmpCapacityWithDiskCapacity(const LoggerPtr & log) const;
 
     static std::tuple<size_t, TiFlashStorageConfig> parseSettings(
         Poco::Util::LayeredConfiguration & config,
@@ -120,7 +120,5 @@ private:
 
     void parseTmpConfig(const String & content, UInt64 global_capacity_quota);
 };
-
-String getNormalizedPath(const String & s);
 
 } // namespace DB

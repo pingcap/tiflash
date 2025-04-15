@@ -73,7 +73,7 @@ static std::string getCanonicalPath(std::string path, std::string_view hint = "p
     return path;
 }
 
-String getNormalizedPath(const String & s)
+static String getNormalizedPath(const String & s)
 {
     return getCanonicalPath(Poco::Path{s}.toString());
 }
@@ -459,7 +459,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(
     }
     else
     {
-        storage_config.tmp_path = storage_config.latest_data_paths[0] + "tmp/";
+        storage_config.tmp_path = getNormalizedPath(storage_config.latest_data_paths[0] + "tmp/");
         storage_config.tmp_capacity = 0;
     }
     LOG_INFO(
@@ -547,7 +547,9 @@ void TiFlashStorageConfig::parseTmpConfig(const String & content, UInt64 global_
     }
 }
 
-void TiFlashStorageConfig::checkTmpCapacity(const LoggerPtr & log) const
+// Check if tmp_capacity exceeds disk capacity.
+// Seperate this function from TiFlashStorageConfig::parseTmpConfig() because need to create tmp_path first.
+void TiFlashStorageConfig::checkTmpCapacityWithDiskCapacity(const LoggerPtr & log) const
 {
     /// Should not exceeds path capacity when storage.tmp.capacity > 0(0 means no limit).
     if (tmp_capacity > 0)
