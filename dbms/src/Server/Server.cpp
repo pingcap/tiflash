@@ -746,15 +746,14 @@ try
         std::string tmp_path = storage_config.tmp_path;
         RUNTIME_CHECK(!tmp_path.empty());
         Poco::File(tmp_path).createDirectories();
+
         Poco::DirectoryIterator dir_end;
         for (Poco::DirectoryIterator it(tmp_path); it != dir_end; ++it)
         {
             if (it->isFile() && startsWith(it.name(), "tmp"))
-            {
-                LOG_DEBUG(log, "Removing old temporary file {}", it->path());
                 global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
-            }
         }
+        LOG_INFO(log, "tmp files in tmp directory({}) removed", tmp_path);
 
         storage_config.checkTmpCapacity(global_capacity_quota, log);
         global_context->setTemporaryPath(tmp_path);
