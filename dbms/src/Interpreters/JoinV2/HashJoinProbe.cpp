@@ -211,36 +211,6 @@ void JoinProbeHelperUtil::fillNullMapWithZero(MutableColumns & added_columns) co
     }
 }
 
-/// The implemtation of prefetching in join probe process is inspired by a paper named
-/// `Asynchronous Memory Access Chaining` in vldb-15.
-/// Ref: https://www.vldb.org/pvldb/vol9/p252-kocberber.pdf
-enum class ProbePrefetchStage : UInt8
-{
-    None,
-    FindHeader,
-    FindNext,
-};
-
-template <typename KeyGetter>
-struct ProbePrefetchState
-{
-    using KeyGetterType = typename KeyGetter::Type;
-    using KeyType = typename KeyGetterType::KeyType;
-    using HashValueType = typename KeyGetter::HashValueType;
-
-    ProbePrefetchStage stage = ProbePrefetchStage::None;
-    bool is_matched = false;
-    UInt16 hash_tag = 0;
-    UInt32 index = 0;
-    HashValueType hash = 0;
-    KeyType key{};
-    union
-    {
-        RowPtr ptr = nullptr;
-        std::atomic<RowPtr> * pointer_ptr;
-    };
-};
-
 template <bool has_other_condition, bool late_materialization>
 struct JoinProbeAdder<Inner, has_other_condition, late_materialization>
 {
@@ -753,10 +723,13 @@ void JoinProbeHelper::probeFillColumns(
 
     for (; idx < context.rows; ++idx)
     {
-        if (has_null_map && (*context.null_map)[idx])
+        if constexpr (has_null_map)
         {
-            NOT_MATCHED(true)
-            continue;
+            if ((*context.null_map)[idx])
+            {
+                NOT_MATCHED(true)
+                continue;
+            }
         }
 
         const auto & key = key_getter.getJoinKey(idx);
@@ -845,6 +818,36 @@ void JoinProbeHelper::probeFillColumns(
 #undef NOT_MATCHED
 }
 
+/// The implemtation of prefetching in join probe process is inspired by a paper named
+/// `Asynchronous Memory Access Chaining` in vldb-15.
+/// Ref: https://www.vldb.org/pvldb/vol9/p252-kocberber.pdf
+enum class ProbePrefetchStage : UInt8
+{
+    None,
+    FindHeader,
+    FindNext,
+};
+
+template <typename KeyGetter>
+struct ProbePrefetchState
+{
+    using KeyGetterType = typename KeyGetter::Type;
+    using KeyType = typename KeyGetterType::KeyType;
+    using HashValueType = typename KeyGetter::HashValueType;
+
+    ProbePrefetchStage stage = ProbePrefetchStage::None;
+    bool is_matched = false;
+    UInt16 hash_tag = 0;
+    UInt32 index = 0;
+    HashValueType hash = 0;
+    KeyType key{};
+    union
+    {
+        RowPtr ptr = nullptr;
+        std::atomic<RowPtr> * pointer_ptr;
+    };
+};
+
 #define PREFETCH_READ(ptr) __builtin_prefetch((ptr), 0 /* rw==read */, 3 /* locality */)
 
 JOIN_PROBE_HELPER_TEMPLATE
@@ -859,7 +862,12 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     using Adder = JoinProbeAdder<kind, has_other_condition, late_materialization>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
-    initPrefetchStates<KeyGetter>(context);
+    if (!context.prefetch_states)
+    {
+        context.prefetch_states = decltype(context.prefetch_states)(
+            static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
+            [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
+    }
     auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(context.prefetch_states.get());
 
     size_t idx = context.start_row_idx;
@@ -1299,17 +1307,6 @@ Block JoinProbeHelper::handleOtherConditions(
     return output_block_after_finalize;
 }
 
-template <typename KeyGetter>
-void JoinProbeHelper::initPrefetchStates(JoinProbeContext & context)
-{
-    if (!context.prefetch_states)
-    {
-        context.prefetch_states = decltype(context.prefetch_states)(
-            static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
-            [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
-    }
-}
-
 Block JoinProbeHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context, JoinProbeWorkerData & wd)
 {
     RUNTIME_CHECK(join->kind == LeftOuter);
@@ -1397,14 +1394,9 @@ Block JoinProbeHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context
         context.rows_not_matched.clear();
     }
 
-    if (result_size >= remaining_insert_size)
-    {
-        Block res_block;
-        res_block.swap(wd.result_block_for_other_condition);
-        return res_block;
-    }
-
-    return output_block_after_finalize;
+    Block res_block;
+    res_block.swap(wd.result_block_for_other_condition);
+    return res_block;
 }
 
 Block JoinProbeHelper::genResultBlockForLeftOuterSemi(JoinProbeContext & context, JoinProbeWorkerData & wd)

@@ -182,9 +182,6 @@ private:
     void NO_INLINE
     probeFillColumnsPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
 
-    template <typename KeyGetter>
-    void initPrefetchStates(JoinProbeContext & context);
-
     Block handleOtherConditions(
         JoinProbeContext & context,
         JoinProbeWorkerData & wd,
