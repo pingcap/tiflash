@@ -495,11 +495,6 @@ void TiFlashStorageConfig::checkTmpCapacity(UInt64 global_capacity_quota, const 
 {
     // global_capacity_quota and storage.main/latest.capacity cannot take effects at the same time.
     RUNTIME_CHECK(!(!main_capacity_quota.empty() && global_capacity_quota > 0));
-    RUNTIME_CHECK_MSG(
-        main_capacity_quota.size() == latest_capacity_quota.size(),
-        "main_capacity_quota.size: {}, latest_capacity_quota.size: {}",
-        main_capacity_quota.size(),
-        latest_capacity_quota.size());
 
     // Check if storage.tmp.capacity is valid or not when it's greater than zero(0 means no limit).
     if (tmp_capacity <= 0)

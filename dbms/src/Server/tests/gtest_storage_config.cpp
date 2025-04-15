@@ -957,117 +957,9 @@ TEST_F(StorageConfigTest, TmpPath)
 try
 {
     auto log = Logger::get("StorageConfigTest.TmpPath");
-    {
-        LOG_INFO(log, "test suite 1");
-        Strings tests = {
-            // storage.tmp.capacity cannot exceeds storage.main.capacity when share main dir.
-            R"(
-[storage]
-[storage.main]
-dir = ["./main_dir"]
-capacity = [1000]
-[storage.tmp]
-capacity = 5000
-            )",
-            R"(
-[storage]
-[storage.main]
-dir = ["./main_dir"]
-capacity = [1000]
-[storage.tmp]
-dir = "./main_dir/subdir"
-capacity = 5000
-            )",
-            R"(
-[storage]
-[storage.latest]
-dir = ["./latest_dir"]
-capacity = [1000]
-[storage.main]
-dir = ["./main_dir"]
-capacity = [8000]
-[storage.tmp]
-capacity = 5000
-            )",
-            R"(
-[storage]
-[storage.latest]
-dir = ["./latest_dir"]
-capacity = [8000]
-[storage.main]
-dir = ["./main_dir"]
-capacity = [1000]
-[storage.tmp]
-dir = "./main_dir/subdir"
-capacity = 5000
-            )",
-            // test with global quota
-            R"(
-path = "./main_dir"
-capacity = 1000
-tmp_path = "./main_dir/subdir"
-[storage]
-[storage.tmp]
-capacity = 2000)",
-        };
-
-        for (size_t i = 0; i < tests.size(); ++i)
-        {
-            const auto & test = tests[i];
-            auto config = loadConfigFromString(test);
-            bool got_err = false;
-            try
-            {
-                LOG_INFO(log, "case i: {}", i);
-                auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
-                storage.checkTmpCapacity(global_capacity_quota, log);
-            }
-            catch (Poco::Exception & e)
-            {
-                got_err = true;
-                LOG_INFO(log, "parse err msg: {}", e.message());
-                ASSERT_TRUE(e.message().contains("exceeds parent storage quota"));
-            }
-            ASSERT_TRUE(got_err);
-        }
-    }
-
-    // test very large storage.tmp.capacity
-    {
-        LOG_INFO(log, "test suite 2");
-        Strings tests = {
-            R"(
-[storage]
-[storage.main]
-dir = ["./main_dir"]
-[storage.tmp]
-capacity = 9223372036854775807
-            )",
-        };
-
-        for (size_t i = 0; i < tests.size(); ++i)
-        {
-            const auto & test = tests[i];
-            auto config = loadConfigFromString(test);
-            bool got_err = false;
-            try
-            {
-                LOG_INFO(log, "case i: {}", i);
-                auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
-                storage.checkTmpCapacity(global_capacity_quota, log);
-            }
-            catch (Poco::Exception & e)
-            {
-                got_err = true;
-                LOG_INFO(log, "parse err msg: {}", e.message());
-                ASSERT_TRUE(e.message().contains("exceeds disk capacity"));
-            }
-            ASSERT_TRUE(got_err);
-        }
-    }
 
     {
-        LOG_INFO(log, "test suite 3");
+        LOG_INFO(log, "test suite 0");
         struct TestCase
         {
             String config_str;
@@ -1224,6 +1116,36 @@ capacity = 1000
                 "main_dir/subdir/",
                 1000,
             },
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir", "./latest_dir_1"]
+capacity = [8000, 0]
+[storage.main]
+dir = ["./main_dir"]
+[storage.tmp]
+dir = "./latest_dir/subdir"
+capacity = 1000
+            )",
+                "latest_dir/subdir/",
+                1000,
+            },
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir", "./latest_dir_1"]
+capacity = [8000, 0]
+[storage.main]
+dir = ["./main_dir"]
+[storage.tmp]
+dir = "./latest_dir_1/subdir"
+capacity = 9000
+            )",
+                "latest_dir_1/subdir/",
+                9000,
+            },
         };
 
         for (size_t i = 0; i < tests.size(); ++i)
@@ -1235,6 +1157,147 @@ capacity = 1000
             storage.checkTmpCapacity(global_capacity_quota, log);
             ASSERT_EQ(storage.tmp_path, test.expected_tmp_path);
             ASSERT_EQ(storage.tmp_capacity, test.expected_tmp_capacity);
+        }
+    }
+
+    {
+        struct TestCase
+        {
+            String config_str;
+            String expected_exception_msg;
+        };
+
+        const String exceed_parent_quota_msg = "exceeds parent storage quota";
+        const String exceed_disk_capacity_msg = "exceeds disk capacity";
+
+        LOG_INFO(log, "test suite 1");
+        std::vector<TestCase> tests = {
+            {
+                // test negative capacity.
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+[storage.tmp]
+capacity = -1
+            )",
+                "underflow_error",
+            },
+            {
+                // storage.tmp.capacity cannot exceeds storage.main.capacity when share main dir.
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.tmp]
+capacity = 5000
+            )",
+                exceed_parent_quota_msg,
+            },
+            {
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.tmp]
+dir = "./main_dir/subdir"
+capacity = 5000
+            )",
+                exceed_parent_quota_msg,
+            },
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir"]
+capacity = [1000]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [8000]
+[storage.tmp]
+capacity = 5000
+            )",
+                exceed_parent_quota_msg,
+            },
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir"]
+capacity = [8000]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.tmp]
+dir = "./main_dir/subdir"
+capacity = 5000
+            )",
+                exceed_parent_quota_msg,
+            },
+            // test with global quota
+            {
+                R"(
+path = "./main_dir"
+capacity = 1000
+tmp_path = "./main_dir/subdir"
+[storage]
+[storage.tmp]
+capacity = 2000)",
+                exceed_parent_quota_msg,
+            },
+            // test very large storage.tmp.capacity
+            {
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+[storage.tmp]
+capacity = 9223372036854775807
+            )",
+                exceed_disk_capacity_msg,
+            },
+            // test very large storage.tmp.capacity
+            {
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+[storage.tmp]
+capacity = 9223372036854775808
+            )",
+                "cpptoml::parse_exception, e.what() = Malformed number",
+            },
+        };
+
+        for (size_t i = 0; i < tests.size(); ++i)
+        {
+            LOG_INFO(log, "case i: {}", i);
+            const auto & test = tests[i];
+            bool got_err = false;
+            try
+            {
+                auto config = loadConfigFromString(test.config_str);
+                auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+                storage.checkTmpCapacity(global_capacity_quota, log);
+            }
+            catch (Poco::Exception & e)
+            {
+                got_err = true;
+                LOG_INFO(log, "parse err msg: {}", e.message());
+                ASSERT_TRUE(e.message().contains(test.expected_exception_msg));
+            }
+            catch (std::underflow_error & e)
+            {
+                got_err = true;
+            }
+            catch (std::exception & e)
+            {
+                got_err = true;
+                ASSERT_TRUE(std::string(e.what()).contains("Malformed number"));
+            }
+            ASSERT_TRUE(got_err);
         }
     }
 }
