@@ -17,10 +17,18 @@
 
 namespace DB::DM
 {
+
 BitmapFilter::BitmapFilter(UInt32 size_, bool default_value)
     : filter(size_, static_cast<UInt8>(default_value))
     , all_match(default_value)
 {}
+
+BitmapFilter::BitmapFilter(std::initializer_list<UInt8> init)
+    : filter(init)
+    , all_match(false)
+{
+    runOptimize();
+}
 
 void BitmapFilter::set(BlockInputStreamPtr & stream)
 {
