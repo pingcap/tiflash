@@ -21,13 +21,25 @@
 
 namespace DB
 {
-inline std::string getFsStatsOfPath(std::string_view file_path, struct statvfs & vfs)
+inline std::pair<struct statvfs, std::string> getFsStat(std::string_view file_path)
 {
+    struct statvfs vfs
+    {
+    };
+
     /// Get capacity, used, available size for one path.
     /// Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
     /// https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593
     if (int code = statvfs(file_path.data(), &vfs); code != 0)
-        return fmt::format("statvfs failed, path: {}, errno: {}", file_path, errno);
-    return "";
+        return {vfs, fmt::format("statvfs failed, path: {}, errno: {}", file_path, errno)};
+    return {vfs, ""};
+}
+
+inline std::pair<uint64_t, std::string> getFsCapacity(std::string_view file_path)
+{
+    auto [vfs, err_msg] = getFsStat(file_path);
+    if (err_msg.empty())
+        return {vfs.f_blocks * vfs.f_frsize, ""};
+    return {0, err_msg};
 }
 } // namespace DB

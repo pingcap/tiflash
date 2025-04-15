@@ -16,6 +16,7 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/DiskSize.h>
 #include <Common/DynamicThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
@@ -743,9 +744,8 @@ try
     /// Directory with temporary data for processing of heavy queries.
     {
         std::string tmp_path = storage_config.tmp_path;
-        global_context->setTemporaryPath(tmp_path);
-
-        /// Clearing old temporary files.
+        RUNTIME_CHECK(!tmp_path.empty());
+        Poco::File(tmp_path).createDirectories();
         Poco::DirectoryIterator dir_end;
         for (Poco::DirectoryIterator it(tmp_path); it != dir_end; ++it)
         {
@@ -756,6 +756,8 @@ try
             }
         }
 
+        storage_config.checkTmpCapacity(log);
+        global_context->setTemporaryPath(tmp_path);
         SpillLimiter::instance->setMaxSpilledBytes(storage_config.tmp_capacity);
     }
 

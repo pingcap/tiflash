@@ -449,7 +449,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(
     if (config.has("storage.tmp"))
     {
         // Need to make sure storage.main/latest is parsed before storage.tmp.
-        storage_config.parseAndCreateTmpPath(config.getString("storage"), global_capacity_quota, log);
+        storage_config.parseTmpConfig(config.getString("storage"), global_capacity_quota);
     }
     else if (config.has("tmp_path"))
     {
@@ -460,22 +460,18 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(
     else
     {
         storage_config.tmp_path = storage_config.latest_data_paths[0] + "tmp/";
-        // If storage.tmp doesn't exist, tmp_capacity will be zero.
         storage_config.tmp_capacity = 0;
     }
 
     return std::make_tuple(global_capacity_quota, storage_config);
 }
 
-void TiFlashStorageConfig::parseAndCreateTmpPath(
-    const String & content,
-    UInt64 global_capacity_quota,
-    const LoggerPtr & log)
+void TiFlashStorageConfig::parseTmpConfig(const String & content, UInt64 global_capacity_quota)
 {
     // global_capacity_quota and storage.main/latest.capacity cannot take effects at the same time.
     RUNTIME_CHECK(!(!main_capacity_quota.empty() && global_capacity_quota > 0));
     RUNTIME_CHECK_MSG(
-        (main_capacity_quota.size() == latest_capacity_quota.size()) && !main_capacity_quota.empty(),
+        main_capacity_quota.size() == latest_capacity_quota.size(),
         "main_capacity_quota.size: {}, latest_capacity_quota.size: {}",
         main_capacity_quota.size(),
         latest_capacity_quota.size());
@@ -489,26 +485,12 @@ void TiFlashStorageConfig::parseAndCreateTmpPath(
         tmp_path = latest_data_paths[0] + "tmp/";
     else
         tmp_path = *tmp_path_opt;
-
     tmp_path = getNormalizedPath(tmp_path);
-    Poco::File(tmp_path).createDirectories();
 
-    struct statvfs vfs
-    {
-    };
-    UInt64 disk_available_size = 0;
-    auto err_msg = getFsStatsOfPath(tmp_path, vfs);
-    if unlikely (!err_msg.empty())
-        LOG_ERROR(log, "get tmp_path capacity failed: {}, ignore", err_msg);
-    else
-        disk_available_size = vfs.f_blocks * vfs.f_frsize;
-
-    // It can be global storage quota, latest quota or main quota.
+    // Check if tmp_path is subdir of latest.dir of main.dir and use its quota to check if tmp.capacity valid.
     UInt64 parent_storage_quota = 0;
     String parent_storage_path{};
-    // check if tmp path is subdir of main/latest dir.
     auto get_quota = [&](const Strings & path_vec, const std::vector<size_t> & quota_vec) -> std::pair<ssize_t, bool> {
-        RUNTIME_CHECK(path_vec.size() == quota_vec.size());
         for (size_t i = 0; i < path_vec.size(); ++i)
         {
             if (tmp_path.contains(path_vec[i]))
@@ -523,7 +505,7 @@ void TiFlashStorageConfig::parseAndCreateTmpPath(
         return {0, false};
     };
 
-    if (global_capacity_quota != 0)
+    if (global_capacity_quota > 0)
     {
         if (auto [global_path_quota, ok]
             = get_quota(main_data_paths, std::vector<size_t>(main_data_paths.size(), global_capacity_quota));
@@ -545,27 +527,43 @@ void TiFlashStorageConfig::parseAndCreateTmpPath(
 
     tmp_capacity = 0;
     auto tmp_capacity_opt = table->get_qualified_as<UInt64>("tmp.capacity");
-    // If tmp_path is subdir of main.dir or latest.dir, tmp_capacity should respect main.capacity or latest.capacity.
     if (tmp_capacity_opt)
         tmp_capacity = *tmp_capacity_opt;
 
-    if (tmp_capacity != 0)
+    // If tmp_path is subdir of main.dir or latest.dir, tmp_capacity should respect main.capacity or latest.capacity.
+    if (tmp_capacity > 0 && parent_storage_quota > 0 && tmp_capacity > parent_storage_quota)
     {
-        err_msg.clear();
-        if (disk_available_size > 0 && tmp_capacity > disk_available_size)
-            err_msg = fmt::format(
-                "exceeds disk available size(path: {}, available: {}, require: {})",
-                tmp_path,
-                disk_available_size,
-                tmp_capacity);
-        else if (parent_storage_quota > 0 && tmp_capacity > parent_storage_quota)
-            err_msg = fmt::format(
-                "exceeds parent storage quota(path_capacity, storage.main.capacity or storage.latest.capacity({}, {})",
-                parent_storage_path,
-                parent_storage_quota);
+        throw Exception(
+            ErrorCodes::INVALID_CONFIG_PARAMETER,
+            "storage.tmp.capacity({}) exceeds parent storage quota({}), "
+            "you should check path_capacity, storage.main.capacity or storage.latest.capacity",
+            tmp_capacity,
+            parent_storage_quota);
+    }
+}
 
-        if (!err_msg.empty())
-            throw Exception(ErrorCodes::INVALID_CONFIG_PARAMETER, "check storage.tmp.capacity failed: {}", err_msg);
+void TiFlashStorageConfig::checkTmpCapacity(const LoggerPtr & log) const
+{
+    /// Should not exceeds path capacity when storage.tmp.capacity > 0(0 means no limit).
+    if (tmp_capacity > 0)
+    {
+        auto [path_capacity, err_msg] = DB::getFsCapacity(tmp_path);
+        if unlikely (!err_msg.empty())
+        {
+            LOG_ERROR(log, "get tmp_path capacity failed: {}, skip check storage.tmp.capacity", err_msg);
+        }
+        else
+        {
+            if (tmp_capacity > path_capacity)
+            {
+                throw Exception(
+                    ErrorCodes::INVALID_CONFIG_PARAMETER,
+                    "storage.tmp.capacity({}) exceeds disk capacity({}) of tmp path({})",
+                    tmp_capacity,
+                    path_capacity,
+                    tmp_path);
+            }
+        }
     }
 }
 

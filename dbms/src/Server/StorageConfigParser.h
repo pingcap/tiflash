@@ -97,13 +97,15 @@ public:
     StorageS3Config s3_config;
     StorageRemoteCacheConfig remote_cache_config;
 
-    String tmp_path;
-    UInt64 tmp_capacity;
+    String tmp_path{};
+    UInt64 tmp_capacity = 0;
 
 public:
     TiFlashStorageConfig() = default;
 
     Strings getAllNormalPaths() const;
+
+    void checkTmpCapacity(const LoggerPtr & log) const;
 
     static std::tuple<size_t, TiFlashStorageConfig> parseSettings(
         Poco::Util::LayeredConfiguration & config,
@@ -116,7 +118,7 @@ private:
 
     void parseMisc(const String & storage_section, const LoggerPtr & log);
 
-    void parseAndCreateTmpPath(const String & content, UInt64 global_capacity_quota, const LoggerPtr & log);
+    void parseTmpConfig(const String & content, UInt64 global_capacity_quota);
 };
 
 String getNormalizedPath(const String & s);

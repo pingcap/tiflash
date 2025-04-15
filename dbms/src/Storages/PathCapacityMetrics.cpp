@@ -329,17 +329,14 @@ ssize_t PathCapacityMetrics::locatePath(std::string_view file_path) const
 std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(const LoggerPtr & log) const
 {
     FsStats res{};
-    struct statvfs vfs
-    {
-    };
-    String err_msg = DB::getFsStatsOfPath(path, vfs);
+    auto [vfs, err_msg] = DB::getFsStat(path);
     if unlikely (!err_msg.empty())
     {
         if (log)
             LOG_ERROR(log, "Could not calculate available disk space: {}", err_msg);
         return {};
     }
-    const uint64_t disk_capacity_size = vfs.f_blocks * vfs.f_frsize;
+    UInt64 disk_capacity_size = vfs.f_blocks * vfs.f_frsize;
 
     // capacity is limited by the actual disk capacity
     uint64_t capacity = 0;
