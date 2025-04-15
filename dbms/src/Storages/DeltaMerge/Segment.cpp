@@ -38,6 +38,9 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/ColumnFileInputStream.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/InputStream.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromSegment.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/ColumnFileInputStream.h>
@@ -55,6 +58,7 @@
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
+#include <Storages/DeltaMerge/VersionChain/MVCCBitmapFilter.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/DeltaMerge/dtpb/segment.pb.h>
 #include <Storages/KVStore/KVStore.h>
@@ -120,6 +124,7 @@ extern const Metric DT_SnapshotOfSegmentSplit;
 extern const Metric DT_SnapshotOfSegmentMerge;
 extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
+extern const Metric DT_SnapshotOfReplayVersionChain;
 extern const Metric DT_SnapshotOfSegmentIngest;
 extern const Metric DT_SnapshotOfBitmapFilter;
 } // namespace CurrentMetrics
@@ -2549,8 +2554,9 @@ bool Segment::compactDelta(DMContext & dm_context)
     return delta->compact(dm_context);
 }
 
-void Segment::placeDeltaIndex(DMContext & dm_context) const
+void Segment::placeDeltaIndex(const DMContext & dm_context) const
 {
+    RUNTIME_CHECK(!dm_context.isVersionChainEnabled());
     // Update delta-index with persisted packs. TODO: can use a read snapshot here?
     auto segment_snap = createSnapshot(dm_context, /*for_update=*/true, CurrentMetrics::DT_SnapshotOfPlaceIndex);
     if (!segment_snap)
@@ -2558,7 +2564,7 @@ void Segment::placeDeltaIndex(DMContext & dm_context) const
     placeDeltaIndex(dm_context, segment_snap);
 }
 
-void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
+void Segment::placeDeltaIndex(const DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const
 {
     getReadInfo(
         dm_context,
@@ -2566,6 +2572,22 @@ void Segment::placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr &
         segment_snap,
         {RowKeyRange::newAll(is_common_handle, rowkey_column_size)},
         ReadTag::Internal);
+}
+
+void Segment::replayVersionChain(const DMContext & dm_context)
+{
+    RUNTIME_CHECK(dm_context.isVersionChainEnabled());
+    auto segment_snap
+        = createSnapshot(dm_context, /*for_update=*/false, CurrentMetrics::DT_SnapshotOfReplayVersionChain);
+    if (!segment_snap)
+        return;
+    Stopwatch sw;
+    std::ignore = std::visit(
+        [&dm_context, &segment_snap](auto & version_chain) {
+            return version_chain.replaySnapshot(dm_context, *segment_snap);
+        },
+        this->version_chain);
+    GET_METRIC(tiflash_storage_version_chain_ms, type_bg_replay).Observe(sw.elapsedMilliseconds());
 }
 
 String Segment::simpleInfo() const
@@ -3104,9 +3126,22 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilter(
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
-    size_t expected_block_size)
+    size_t expected_block_size,
+    bool enable_version_chain)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
+
+    if (enable_version_chain)
+    {
+        return ::DB::DM::buildMVCCBitmapFilter(
+            dm_context,
+            *segment_snap,
+            read_ranges,
+            pack_filter_results,
+            start_ts,
+            version_chain);
+    }
+
     if (readStableOnly(dm_context, segment_snap))
     {
         return buildMVCCBitmapFilterStableOnly(
@@ -3259,6 +3294,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
             "buildMVCCBitmapFilterStableOnly not have some packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             elapse_ms);
+        bitmap_filter->runOptimize();
         return bitmap_filter;
     }
 
@@ -3298,6 +3334,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
         use_packs,
         segment_snap->stable->getDMFilesRows(),
         elapse_ms);
+    bitmap_filter->runOptimize();
     return bitmap_filter;
 }
 
@@ -3407,6 +3444,68 @@ BlockInputStreamPtr Segment::getConcatVectorIndexBlockInputStream(
     // For vector search, there are more likely to return small blocks from different
     // sub-streams. Squash blocks to reduce the number of blocks thus improve the
     // performance of upper layer.
+    auto stream3 = std::make_shared<SquashingBlockInputStream>(
+        stream2,
+        /*min_block_size_rows=*/expected_block_size,
+        /*min_block_size_bytes=*/0,
+        dm_context.tracing_id);
+
+    return stream3;
+}
+
+BlockInputStreamPtr Segment::getConcatFullTextIndexBlockInputStream(
+    BitmapFilterPtr bitmap_filter,
+    const SegmentSnapshotPtr & segment_snap,
+    const DMContext & dm_context,
+    const ColumnDefines & columns_to_read,
+    const RowKeyRanges & read_ranges,
+    const FTSQueryInfoPtr & fts_query_info,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    size_t expected_block_size,
+    ReadTag read_tag)
+{
+    // set `is_fast_scan` to true to try to enable clean read
+    auto enable_handle_clean_read = !hasColumn(columns_to_read, MutSup::extra_handle_id);
+    constexpr auto is_fast_scan = true;
+    auto enable_del_clean_read = !hasColumn(columns_to_read, MutSup::version_col_id);
+
+    auto columns_to_read_ptr = std::make_shared<ColumnDefines>(columns_to_read);
+
+    auto memtable = segment_snap->delta->getMemTableSetSnapshot();
+    auto persisted = segment_snap->delta->getPersistedFileSetSnapshot();
+
+    auto ctx = FullTextIndexStreamCtx::create(
+        dm_context.global_context.getLightLocalIndexCache(),
+        dm_context.global_context.getHeavyLocalIndexCache(),
+        fts_query_info,
+        columns_to_read_ptr,
+        persisted->getDataProvider(),
+        dm_context,
+        read_tag);
+
+    // The order in the stream: stable1, stable2, ..., persist1, persist2, ..., memtable1, memtable2, ...
+
+    auto stream = segment_snap->stable->getInputStream(
+        dm_context,
+        columns_to_read,
+        read_ranges,
+        start_ts,
+        expected_block_size,
+        enable_handle_clean_read,
+        read_tag,
+        pack_filter_results,
+        is_fast_scan,
+        enable_del_clean_read,
+        /* read_packs */ {},
+        [=](DMFileBlockInputStreamBuilder & builder) { builder.setFtsIndexQuery(ctx); });
+
+    for (const auto & file : persisted->getColumnFiles())
+        stream->appendChild(ColumnFileProvideFullTextIndexInputStream::createOrFallback(ctx, file), file->getRows());
+    for (const auto & file : memtable->getColumnFiles())
+        stream->appendChild(ColumnFileProvideFullTextIndexInputStream::createOrFallback(ctx, file), file->getRows());
+
+    auto stream2 = FullTextIndexInputStream::create(ctx, bitmap_filter, stream);
     auto stream3 = std::make_shared<SquashingBlockInputStream>(
         stream2,
         /*min_block_size_rows=*/expected_block_size,
@@ -3575,7 +3674,9 @@ BitmapFilterPtr Segment::buildBitmapFilter(
         read_ranges,
         pack_filter_results,
         start_ts,
-        build_bitmap_filter_block_rows);
+        build_bitmap_filter_block_rows,
+        dm_context.isVersionChainEnabled());
+
     if (bitmap_filter)
     {
         if (!readStableOnly(dm_context, segment_snap))
@@ -3651,6 +3752,20 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     }
 
     BlockInputStreamPtr stream;
+    if (executor && executor->fts_query_info)
+    {
+        return getConcatFullTextIndexBlockInputStream(
+            bitmap_filter,
+            segment_snap,
+            dm_context,
+            columns_to_read,
+            read_ranges,
+            executor->fts_query_info,
+            pack_filter_results,
+            start_ts,
+            read_data_block_rows,
+            ReadTag::Query);
+    }
     if (executor && executor->ann_query_info)
     {
         // For ANN query, try to use vector index to accelerate.

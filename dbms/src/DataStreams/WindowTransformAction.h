@@ -51,6 +51,7 @@ public:
     void advanceRangeFrameEndCurrentRowShortcut();
 
     void writeOutCurrentRow();
+    RowNumber writeBatchResult();
 
     Block tryGetOutputBlock();
     void releaseAlreadyOutputWindowBlock();
@@ -146,6 +147,7 @@ private:
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
 
+    template <bool need_decrease, bool support_batch_calculate>
     void tryCalculate();
 
     template <
@@ -318,6 +320,9 @@ public:
     RowNumber prev_frame_end;
 
     bool has_rank_or_dense_rank = false;
+
+    // When all rows in same partition share one result, we set this var to true
+    bool support_batch_calculate = false;
 
     std::unique_ptr<Arena> arena;
 };

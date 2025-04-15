@@ -20,7 +20,7 @@
 namespace DB::DM
 {
 
-inline size_t ColumnFileInputStream::skipNextBlock()
+size_t ColumnFileInputStream::skipNextBlock()
 {
     if (!reader)
         return 0;
@@ -42,12 +42,12 @@ Block ColumnFileInputStream::readWithFilter(const IColumn::Filter & filter)
     return block;
 }
 
-inline Block ColumnFileInputStream::getHeader() const
+Block ColumnFileInputStream::getHeader() const
 {
     return toEmptyBlock(*col_defs);
 }
 
-inline Block ColumnFileInputStream::read()
+Block ColumnFileInputStream::read()
 {
     if (!reader)
         return {};

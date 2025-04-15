@@ -24,7 +24,8 @@ void HashJoinPointerTable::init(
     size_t row_count,
     size_t hash_value_bytes,
     size_t probe_prefetch_threshold,
-    bool enable_tagged_pointer_)
+    bool enable_tagged_pointer_,
+    bool is_unit_test)
 {
     hash_value_bits = hash_value_bytes * 8;
     if (method == HashJoinKeyMethod::OneKey8)
@@ -41,21 +42,27 @@ void HashJoinPointerTable::init(
     {
         pointer_table_size = pointerTableCapacity(row_count);
         /// Pointer table size cannot exceed the number that the hash value's byte number can express.
-        pointer_table_size = std::min(pointer_table_size, 1ULL << hash_value_bits);
+        /// If hash_value_bits >= 64, 1ULL << hash_value_bits is an undefined behavior.
+        if (hash_value_bits < 64)
+            pointer_table_size = std::min(pointer_table_size, 1ULL << hash_value_bits);
         /// It also cannot exceed 2^32 to avoid memory allocation error.
         pointer_table_size = std::min(pointer_table_size, 1ULL << 32);
     }
 
-    RUNTIME_ASSERT(isPowerOfTwo(pointer_table_size));
-    pointer_table_size_degree = log2(pointer_table_size);
-    RUNTIME_ASSERT((1ULL << pointer_table_size_degree) == pointer_table_size);
+    RUNTIME_CHECK(isPowerOfTwo(pointer_table_size) && pointer_table_size > 0);
+    pointer_table_size_degree = __builtin_ctzll(pointer_table_size);
+    RUNTIME_CHECK((1ULL << pointer_table_size_degree) == pointer_table_size);
 
     enable_probe_prefetch = pointer_table_size >= probe_prefetch_threshold;
 
     pointer_table_size_mask = (pointer_table_size - 1) << (hash_value_bits - pointer_table_size_degree);
 
-    pointer_table = static_cast<std::atomic<uintptr_t> *>(
-        alloc.alloc(pointer_table_size * sizeof(std::atomic<uintptr_t>), sizeof(std::atomic<RowPtr>)));
+    // Do not allocate memory to speed up the unit test
+    if likely (!is_unit_test)
+    {
+        pointer_table = static_cast<std::atomic<uintptr_t> *>(
+            alloc.alloc(pointer_table_size * sizeof(std::atomic<uintptr_t>), sizeof(std::atomic<RowPtr>)));
+    }
 
     enable_tagged_pointer = enable_tagged_pointer_;
 }
@@ -118,7 +125,7 @@ bool HashJoinPointerTable::buildImpl(
             if constexpr (tagged_pointer)
                 assert(isRowPtrTagZero(row_ptr));
 
-            size_t hash;
+            UInt64 hash;
             if constexpr (std::is_same_v<HashValueType, void>)
             {
                 hash = container->getHash(i);
@@ -167,7 +174,7 @@ template bool HashJoinPointerTable::build<UInt32>(
     JoinBuildWorkerData & worker_data,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size);
-template bool HashJoinPointerTable::build<size_t>(
+template bool HashJoinPointerTable::build<UInt64>(
     JoinBuildWorkerData & worker_data,
     std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     size_t max_build_size);
