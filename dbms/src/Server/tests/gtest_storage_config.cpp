@@ -956,8 +956,9 @@ CATCH
 TEST_F(StorageConfigTest, TmpPath)
 try
 {
+    auto log = Logger::get("StorageConfigTest.TmpPath");
     {
-        LOG_INFO(Logger::get(), "test suite 1");
+        LOG_INFO(log, "test suite 1");
         Strings tests = {
             // storage.tmp.capacity cannot exceeds storage.main.capacity when share main dir.
             R"(
@@ -1017,13 +1018,14 @@ capacity = 2000)",
             bool got_err = false;
             try
             {
-                LOG_INFO(Logger::get(), "case i: {}", i);
+                LOG_INFO(log, "case i: {}", i);
                 auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+                storage.checkTmpCapacity(global_capacity_quota, log);
             }
             catch (Poco::Exception & e)
             {
                 got_err = true;
-                LOG_INFO(Logger::get(), "parse err msg: {}", e.message());
+                LOG_INFO(log, "parse err msg: {}", e.message());
                 ASSERT_TRUE(e.message().contains("exceeds parent storage quota"));
             }
             ASSERT_TRUE(got_err);
@@ -1032,7 +1034,7 @@ capacity = 2000)",
 
     // test very large storage.tmp.capacity
     {
-        LOG_INFO(Logger::get(), "test suite 2");
+        LOG_INFO(log, "test suite 2");
         Strings tests = {
             R"(
 [storage]
@@ -1050,14 +1052,14 @@ capacity = 9223372036854775807
             bool got_err = false;
             try
             {
-                LOG_INFO(Logger::get(), "case i: {}", i);
+                LOG_INFO(log, "case i: {}", i);
                 auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
-                storage.checkTmpCapacity(global_capacity_quota, Logger::get());
+                storage.checkTmpCapacity(global_capacity_quota, log);
             }
             catch (Poco::Exception & e)
             {
                 got_err = true;
-                LOG_INFO(Logger::get(), "parse err msg: {}", e.message());
+                LOG_INFO(log, "parse err msg: {}", e.message());
                 ASSERT_TRUE(e.message().contains("exceeds disk capacity"));
             }
             ASSERT_TRUE(got_err);
@@ -1065,7 +1067,7 @@ capacity = 9223372036854775807
     }
 
     {
-        LOG_INFO(Logger::get(), "test suite 3");
+        LOG_INFO(log, "test suite 3");
         struct TestCase
         {
             String config_str;
@@ -1227,9 +1229,10 @@ capacity = 1000
         for (size_t i = 0; i < tests.size(); ++i)
         {
             const auto & test = tests[i];
-            LOG_INFO(Logger::get(), "case i: {}", i);
+            LOG_INFO(log, "case i: {}", i);
             auto config = loadConfigFromString(test.config_str);
             auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+            storage.checkTmpCapacity(global_capacity_quota, log);
             ASSERT_EQ(storage.tmp_path, test.expected_tmp_path);
             ASSERT_EQ(storage.tmp_capacity, test.expected_tmp_capacity);
         }

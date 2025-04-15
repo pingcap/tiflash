@@ -449,7 +449,7 @@ std::tuple<size_t, TiFlashStorageConfig> TiFlashStorageConfig::parseSettings(
     if (config.has("storage.tmp"))
     {
         // Need to make sure storage.main/latest is parsed before storage.tmp.
-        storage_config.parseTmpConfig(config.getString("storage"), global_capacity_quota);
+        storage_config.parseTmpConfig(config.getString("storage"));
     }
     else if (config.has("tmp_path"))
     {
