@@ -491,6 +491,7 @@ std::tuple<DM::RSOperatorPtr, DM::ColumnRangePtr> StorageDisaggregated::buildRSO
         LOG_DEBUG(log, "Rough set filter is disabled.");
         return {DM::EMPTY_RS_OPERATOR, nullptr};
     }
+
     auto dag_query = std::make_unique<DAGQueryInfo>(
         filter_conditions.conditions,
         table_scan.getANNQueryInfo(),
