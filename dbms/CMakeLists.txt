@@ -224,6 +224,7 @@ target_link_libraries (dbms
     absl::synchronization
     tiflash_contrib::aws_s3
     tiflash_vector_search
+    clara_shared
 
     etcdpb
     tiflash_parsers
@@ -339,6 +340,7 @@ if (ENABLE_TESTS)
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
     )
+    set_target_properties(gtests_dbms PROPERTIES BUILD_RPATH "$ORIGIN/")
     target_include_directories(gtests_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR})
     target_compile_definitions(gtests_dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_compile_definitions(dbms PUBLIC DBMS_PUBLIC_GTEST)
@@ -373,6 +375,10 @@ if (ENABLE_TESTS)
                 DESTINATION ".")
     endif ()
 
+    install (TARGETS clara_shared
+            COMPONENT tiflash-gtest
+            DESTINATION ".")
+
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 
@@ -385,12 +391,13 @@ if (ENABLE_TESTS)
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
         )
+    set_target_properties(bench_dbms PROPERTIES BUILD_RPATH "$ORIGIN/")
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
     target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_link_libraries(bench_dbms
         gtest
         benchmark
-    
+
         dbms
         test_util_bench_main
         tiflash_functions
