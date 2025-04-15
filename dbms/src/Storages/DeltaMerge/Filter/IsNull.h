@@ -39,6 +39,11 @@ public:
         auto rs_index = getRSIndex(param, attr);
         return rs_index ? rs_index->minmax->checkIsNull(start_pack, pack_count) : RSResults(pack_count, RSResult::Some);
     }
+
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> &) override
+    {
+        return UnsupportedColumnRange::create();
+    }
 };
 
 } // namespace DB::DM

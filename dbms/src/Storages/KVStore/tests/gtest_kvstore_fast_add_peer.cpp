@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
@@ -28,7 +29,6 @@
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/InputStreamTestUtils.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <common/logger_useful.h>
 
@@ -409,7 +409,8 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
         kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
         if (opt.mock_add_new_peer)
         {
-            *kvs.getRegion(id)->mutMeta().debugMutRegionState().getMutRegion().add_peers() = createPeer(peer_id, true);
+            *kvs.getRegion(id)->mutMeta().debugMutRegionState().getMutRegion().add_peers()
+                = RegionBench::createPeer(peer_id, true);
             proxy_instance->getRegion(id)->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
         }
         persistAfterWrite(global_context, kvs, proxy_instance, page_storage, id, index);

@@ -36,7 +36,7 @@ VectorIndexReaderPtr VectorIndexReaderFromDMFile::load(const VectorIndexStreamCt
 {
     Stopwatch w(CLOCK_MONOTONIC_COARSE);
 
-    const auto col_id = ctx->ann_query_info->column_id();
+    const auto col_id = ctx->ann_query_info->deprecated_column_id();
     const auto index_id = ctx->ann_query_info->index_id();
 
     RUNTIME_CHECK(dmfile->useMetaV2()); // v3
@@ -61,36 +61,11 @@ VectorIndexReaderPtr VectorIndexReaderFromDMFile::load(const VectorIndexStreamCt
         // Disaggregated mode
         auto * file_cache = FileCache::instance();
         RUNTIME_CHECK_MSG(file_cache, "Must enable S3 file cache to use vector index");
-
-        auto perf_begin = PerfContext::file_cache;
-
-        // If download file failed, retry a few times.
-        for (auto i = 3; i > 0; --i)
-        {
-            try
-            {
-                if (auto file_guard = file_cache->downloadFileForLocalRead( //
-                        s3_file_name,
-                        vector_index->index_props().file_size());
-                    file_guard)
-                {
-                    local_index_file_path = file_guard->getLocalFileName();
-                    break; // Successfully downloaded index into local cache
-                }
-
-                throw Exception(ErrorCodes::S3_ERROR, "Failed to download vector index file {}", index_file_path);
-            }
-            catch (...)
-            {
-                if (i <= 1)
-                    throw;
-            }
-        }
-
-        if ( //
-            PerfContext::file_cache.fg_download_from_s3 > perf_begin.fg_download_from_s3 || //
-            PerfContext::file_cache.fg_wait_download_from_s3 > perf_begin.fg_wait_download_from_s3)
-            has_s3_download = true;
+        auto [file_seg, downloaded]
+            = file_cache->downloadFileForLocalReadWithRetry(s3_file_name, vector_index->index_props().file_size(), 3);
+        RUNTIME_CHECK(file_seg);
+        local_index_file_path = file_seg->getLocalFileName();
+        has_s3_download = downloaded;
     }
     else
     {

@@ -460,7 +460,7 @@ public:
         const RowKeyRanges & sorted_ranges,
         size_t num_streams,
         UInt64 start_ts,
-        const PushDownExecutorPtr & filter,
+        const PushDownExecutorPtr & executor,
         const RuntimeFilteList & runtime_filter_list,
         int rf_max_wait_time_ms,
         const String & tracing_id,
@@ -485,7 +485,7 @@ public:
         const RowKeyRanges & sorted_ranges,
         size_t num_streams,
         UInt64 start_ts,
-        const PushDownExecutorPtr & filter,
+        const PushDownExecutorPtr & executor,
         const RuntimeFilteList & runtime_filter_list,
         int rf_max_wait_time_ms,
         const String & tracing_id,
@@ -588,7 +588,7 @@ public:
         const Context & db_context,
         bool is_fast_scan,
         bool keep_order,
-        const PushDownExecutorPtr & filter);
+        const PushDownExecutorPtr & executor);
 
     // Get a snap of local_index_infos for checking.
     // Note that this is just a shallow copy of `local_index_infos`, do not

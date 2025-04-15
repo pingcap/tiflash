@@ -30,9 +30,9 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
+#include <boost_wrapper/program_options.h>
 #include <pingcap/Config.h>
 
-#include <boost/program_options.hpp>
 #include <chrono>
 #include <iostream>
 #include <random>

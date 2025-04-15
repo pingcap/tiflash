@@ -17,14 +17,15 @@
 #include <Common/TiFlashMetrics.h>
 #include <Databases/IDatabase.h>
 #include <Debug/MockTiDB.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/InterpreterDropQuery.h>
 #include <Parsers/ASTDropQuery.h>
 #include <Parsers/IAST.h>
 #include <Storages/ColumnsDescription.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/tests/gtest_dm_vector_index_utils.h>
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
-#include <Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -32,7 +33,6 @@
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/registerStorages.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <common/defines.h>
@@ -853,7 +853,7 @@ try
 
         auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
         ann_query_info->set_index_id(idx_id);
-        ann_query_info->set_column_id(dmsv.vec_column_id);
+        ann_query_info->set_deprecated_column_id(dmsv.vec_column_id);
         ann_query_info->set_distance_metric(tipb::VectorDistanceMetric::L2);
 
         // read with ANN query

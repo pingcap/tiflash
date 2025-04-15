@@ -29,7 +29,6 @@
 #include <Parsers/ASTSelectWithUnionQuery.h>
 #include <Storages/IStorage.h>
 #include <Storages/MutableSupport.h>
-#include <TableFunctions/TableFunctionFactory.h>
 
 namespace DB
 {
@@ -53,13 +52,6 @@ InterpreterInsertQuery::InterpreterInsertQuery(
 
 StoragePtr InterpreterInsertQuery::getTable(const ASTInsertQuery & query)
 {
-    if (query.table_function)
-    {
-        const auto * table_function = typeid_cast<const ASTFunction *>(query.table_function.get());
-        const auto & factory = TableFunctionFactory::instance();
-        return factory.get(table_function->name, context)->execute(query.table_function, context);
-    }
-
     /// Into what table to write.
     return context.getTable(query.database, query.table);
 }
@@ -176,12 +168,10 @@ BlockIO InterpreterInsertQuery::execute()
 }
 
 
-void InterpreterInsertQuery::checkAccess(const ASTInsertQuery & query)
+void InterpreterInsertQuery::checkAccess(const ASTInsertQuery &)
 {
     const Settings & settings = context.getSettingsRef();
-    auto readonly = settings.readonly;
-
-    if (!readonly || (query.database.empty() && context.tryGetExternalTable(query.table) && readonly >= 2))
+    if (!settings.readonly)
     {
         return;
     }

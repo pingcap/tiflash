@@ -51,7 +51,7 @@
 #include <Server/ServerInfo.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
-#include <Storages/DeltaMerge/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
 #include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
@@ -69,7 +69,6 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
@@ -772,12 +771,6 @@ bool Context::isDatabaseExist(const String & database_name) const
     return shared->databases.end() != shared->databases.find(db);
 }
 
-bool Context::isExternalTableExist(const String & table_name) const
-{
-    return external_tables.end() != external_tables.find(table_name);
-}
-
-
 void Context::assertTableExists(const String & database_name, const String & table_name) const
 {
     auto lock = getLock();
@@ -841,39 +834,6 @@ void Context::assertDatabaseDoesntExist(const String & database_name) const
             ErrorCodes::DATABASE_ALREADY_EXISTS);
 }
 
-
-Tables Context::getExternalTables() const
-{
-    auto lock = getLock();
-
-    Tables res;
-    for (const auto & table : external_tables)
-        res[table.first] = table.second.first;
-
-    if (session_context && session_context != this)
-    {
-        Tables buf = session_context->getExternalTables();
-        res.insert(buf.begin(), buf.end());
-    }
-    else if (global_context && global_context != this)
-    {
-        Tables buf = global_context->getExternalTables();
-        res.insert(buf.begin(), buf.end());
-    }
-    return res;
-}
-
-
-StoragePtr Context::tryGetExternalTable(const String & table_name) const
-{
-    auto jt = external_tables.find(table_name);
-    if (external_tables.end() == jt)
-        return StoragePtr();
-
-    return jt->second.first;
-}
-
-
 StoragePtr Context::getTable(const String & database_name, const String & table_name) const
 {
     Exception exc;
@@ -893,13 +853,6 @@ StoragePtr Context::tryGetTable(const String & database_name, const String & tab
 StoragePtr Context::getTableImpl(const String & database_name, const String & table_name, Exception * exception) const
 {
     auto lock = getLock();
-
-    if (database_name.empty())
-    {
-        StoragePtr res = tryGetExternalTable(table_name);
-        if (res)
-            return res;
-    }
 
     String db = resolveDatabase(database_name, current_database);
     checkDatabaseAccessRightsImpl(db);
@@ -926,52 +879,6 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
 
     return table;
 }
-
-
-void Context::addExternalTable(const String & table_name, const StoragePtr & storage, const ASTPtr & ast)
-{
-    if (external_tables.end() != external_tables.find(table_name))
-        throw Exception(
-            fmt::format("Temporary table {} already exists.", backQuoteIfNeed(table_name)),
-            ErrorCodes::TABLE_ALREADY_EXISTS);
-
-    external_tables[table_name] = std::pair(storage, ast);
-}
-
-StoragePtr Context::tryRemoveExternalTable(const String & table_name)
-{
-    auto it = external_tables.find(table_name);
-
-    if (external_tables.end() == it)
-        return StoragePtr();
-
-    auto storage = it->second.first;
-    external_tables.erase(it);
-    return storage;
-}
-
-
-StoragePtr Context::executeTableFunction(const ASTPtr & table_expression)
-{
-    /// Slightly suboptimal.
-    auto hash = table_expression->getTreeHash();
-    String key = toString(hash.first) + '_' + toString(hash.second);
-
-    StoragePtr & res = table_function_results[key];
-
-    if (!res)
-    {
-        TableFunctionPtr table_function_ptr = TableFunctionFactory::instance().get(
-            typeid_cast<const ASTFunction *>(table_expression.get())->name,
-            *this);
-
-        /// Run it and remember the result
-        res = table_function_ptr->execute(table_expression, *this);
-    }
-
-    return res;
-}
-
 
 DDLGuard::DDLGuard(
     Map & map_,
@@ -1048,17 +955,6 @@ ASTPtr Context::getCreateTableQuery(const String & database_name, const String &
     assertDatabaseExists(db);
 
     return shared->databases[db]->getCreateTableQuery(*this, table_name);
-}
-
-ASTPtr Context::getCreateExternalTableQuery(const String & table_name) const
-{
-    auto jt = external_tables.find(table_name);
-    if (external_tables.end() == jt)
-        throw Exception(
-            fmt::format("Temporary table {} doesn't exist", backQuoteIfNeed(table_name)),
-            ErrorCodes::UNKNOWN_TABLE);
-
-    return jt->second.second;
 }
 
 ASTPtr Context::getCreateDatabaseQuery(const String & database_name) const

@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/ExternalTable.h>
+#include <Common/Exception.h>
 #include <Common/FmtUtils.h>
 #include <Common/NetException.h>
 #include <Common/ProfileEvents.h>
@@ -685,22 +685,7 @@ bool TCPHandler::receiveData()
     {
         /// If there is an insert request, then the data should be written directly to `state.io.out`.
         /// Otherwise, we write the blocks in the temporary `external_table_name` table.
-        if (!state.need_receive_data_for_insert)
-        {
-            StoragePtr storage;
-            /// If such a table does not exist, create it.
-            if (!(storage = query_context.tryGetExternalTable(external_table_name)))
-            {
-                NamesAndTypesList columns = block.getNamesAndTypesList();
-                storage = StorageMemory::create(
-                    external_table_name,
-                    ColumnsDescription{columns, NamesAndTypesList{}, NamesAndTypesList{}, ColumnDefaults{}});
-                storage->startup();
-                query_context.addExternalTable(external_table_name, storage);
-            }
-            /// The data will be written directly to the table.
-            state.io.out = storage->write(ASTPtr(), query_context.getSettingsRef());
-        }
+        RUNTIME_CHECK_MSG(state.need_receive_data_for_insert, "Does not support write the blocks into external table");
         if (block)
             state.io.out->write(block);
         return true;

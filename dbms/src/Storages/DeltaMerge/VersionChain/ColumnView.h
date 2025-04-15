@@ -31,7 +31,7 @@ template <>
 class ColumnView<Int64>
 {
 public:
-    ColumnView(const IColumn & col)
+    explicit ColumnView(const IColumn & col)
         : data(toColumnVectorData<Int64>(col))
     {}
 
@@ -55,7 +55,7 @@ template <>
 class ColumnView<String>
 {
 public:
-    ColumnView(const IColumn & col)
+    explicit ColumnView(const IColumn & col)
         : offsets(typeid_cast<const ColumnString &>(col).getOffsets())
         , chars(typeid_cast<const ColumnString &>(col).getChars())
     {}
@@ -99,14 +99,16 @@ public:
             return *this;
         }
 
-        Iterator operator++(int)
+        Iterator operator++(int) & // NOLINT(cert-dcl21-cpp)
         {
+            // https://stackoverflow.com/questions/66465402/clang-tidy-is-ambiguous-what-should-operatorint-return
+            // https://stackoverflow.com/questions/52871026/overloaded-operator-returns-a-non-const-and-clang-tidy-complains
             Iterator tmp = *this;
             ++pos;
             return tmp;
         }
 
-        Iterator operator--(int)
+        Iterator operator--(int) & // NOLINT(cert-dcl21-cpp)
         {
             Iterator tmp = *this;
             --pos;

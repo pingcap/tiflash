@@ -141,9 +141,6 @@ list (APPEND dbms_headers
     src/AggregateFunctions/FactoryHelpers.h
     src/AggregateFunctions/parseAggregateFunctionParameters.h)
 
-list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctions/TableFunctionFactory.cpp)
-list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
-
 add_library(tiflash_common_io ${SPLIT_SHARED} ${tiflash_common_io_headers} ${tiflash_common_io_sources})
 target_link_libraries(tiflash_common_io PUBLIC process_metrics)
 target_include_directories(tiflash_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR} ${TiFlash_SOURCE_DIR}/libs/libprocess_metrics/include)
@@ -170,10 +167,6 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
     set_source_files_properties(
         src/Dictionaries/CacheDictionary.cpp
         src/Dictionaries/TrieDictionary.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary_generate1.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary_generate2.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary_generate3.cpp
         src/Dictionaries/HTTPDictionarySource.cpp
         src/Dictionaries/LibraryDictionarySource.cpp
         src/Dictionaries/ExecutableDictionarySource.cpp
@@ -401,7 +394,7 @@ if (ENABLE_TESTS)
         dbms
         test_util_bench_main
         tiflash_functions
-        server_for_test
+        grpc_server_holder
         delta_merge
         tiflash_aggregate_functions
         kvstore)

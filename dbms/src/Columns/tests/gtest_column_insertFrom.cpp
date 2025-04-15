@@ -83,9 +83,17 @@ public:
             selective_offsets.push_back(4);
             for (size_t position : selective_offsets)
                 cols[0]->insertFrom(*column_ptr, position);
+            std::vector<std::pair<size_t, size_t>> range_test = {{0, 1}, {1, 2}, {0, 3}, {2, 1}, {1, 1}};
+            for (auto [start, length] : range_test)
+            {
+                for (size_t i = start; i < start + length; ++i)
+                    cols[0]->insertFrom(*column_ptr, selective_offsets[i]);
+            }
             for (size_t position : selective_offsets)
                 cols[0]->insertFrom(*column_ptr, position);
             cols[1]->insertSelectiveFrom(*column_ptr, selective_offsets);
+            for (auto [start, length] : range_test)
+                cols[1]->insertSelectiveRangeFrom(*column_ptr, selective_offsets, start, length);
             cols[1]->insertSelectiveFrom(*column_ptr, selective_offsets);
             {
                 ColumnWithTypeAndName ref(std::move(cols[0]), col_with_type_and_name.type, "");
