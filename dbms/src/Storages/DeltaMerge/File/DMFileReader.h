@@ -35,6 +35,7 @@ namespace DB::DM
 class DMFileReader
 {
     friend class DMFileInputStreamProvideVectorIndex;
+    friend class DMFileInputStreamProvideFullTextIndex;
     friend class DMFileReaderPoolSharding;
 
 public:

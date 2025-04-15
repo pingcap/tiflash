@@ -311,6 +311,7 @@ include (cmake/find_tipb.cmake)
 include (cmake/find_curl.cmake)
 include (cmake/find_prometheus.cmake)
 include (cmake/find_tiflash_proxy.cmake)
+include (cmake/find_libclara.cmake)
 include (cmake/find_xxhash.cmake)
 
 if (OS_LINUX AND ARCH_AMD64 AND TIFLASH_ENABLE_AVX512_SUPPORT)
