@@ -255,7 +255,9 @@ cmake .. -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DFOO=BAR
 
 ## Run Unit Tests
 
-Unit tests are automatically enabled in debug profile. To build these unit tests:
+Unit tests are automatically enabled in debug profile.
+
+To build these unit tests:
 
 ```shell
 # In the TiFlash repository root:
