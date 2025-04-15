@@ -312,6 +312,8 @@ private:
         {
         case TiDB::ColumnarIndexKind::Vector:
             return fmt::format("idx_{}.vector", index_id);
+        case TiDB::ColumnarIndexKind::FullText:
+            return fmt::format("idx_{}.fulltext", index_id);
         case TiDB::ColumnarIndexKind::Inverted:
             return fmt::format("idx_{}.inverted", index_id);
         default:
@@ -347,6 +349,7 @@ public:
 
     friend class VectorIndexReaderFromDMFile;
     friend class InvertedIndexReaderFromDMFile;
+    friend class FullTextIndexReaderFromDMFile;
     friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
     friend class DMFileLocalIndexWriter;
@@ -355,7 +358,6 @@ public:
     friend class ColumnReadStream;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
-    friend class DMFileInputStreamProvideVectorIndex;
     friend class tests::DMFileTest;
     friend class tests::DMFileMetaV2Test;
     friend class tests::DMStoreForSegmentReadTaskTest;

@@ -14,6 +14,11 @@
 
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Perf.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Reader.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/BruteScoreInputStream.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/DMFileInputStream.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
@@ -140,16 +145,17 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
     const RowKeyRanges & rowkey_ranges,
     const ScanContextPtr & scan_context)
 {
-    if (vec_index_ctx)
     {
         // Note: this file may not have index built
-        return tryBuildWithVectorIndex(dmfile, read_columns, rowkey_ranges, scan_context);
+        if (fts_index_ctx)
+            return buildForFullTextIndex(dmfile, read_columns, rowkey_ranges, scan_context);
+        if (vec_index_ctx)
+            return buildForVectorIndex(dmfile, read_columns, rowkey_ranges, scan_context);
     }
-
     return buildNoLocalIndex(dmfile, read_columns, rowkey_ranges, scan_context);
 }
 
-SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIndex(
+SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildForVectorIndex(
     const DMFilePtr & dmfile,
     const ColumnDefines & read_columns,
     const RowKeyRanges & rowkey_ranges,
@@ -231,6 +237,93 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
     vec_index_ctx->perf->n_from_dmf_index += 1;
     return DMFileInputStreamProvideVectorIndex::create( //
         vec_index_ctx,
+        dmfile,
+        std::move(rest_columns_reader));
+}
+
+SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildForFullTextIndex(
+    const DMFilePtr & dmfile,
+    const ColumnDefines & read_columns,
+    const RowKeyRanges & rowkey_ranges,
+    const ScanContextPtr & scan_context)
+{
+    RUNTIME_CHECK(fts_index_ctx != nullptr);
+    RUNTIME_CHECK(read_columns.size() == fts_index_ctx->schema->size());
+
+    auto fallback = [&]() {
+        fts_index_ctx->perf->n_from_dmf_noindex += 1;
+        fts_index_ctx->perf->rows_from_dmf_noindex += dmfile->getRows();
+
+        auto full_col_stream = buildNoLocalIndex( //
+            dmfile,
+            *fts_index_ctx->noindex_read_schema.get(),
+            rowkey_ranges,
+            scan_context);
+        RUNTIME_CHECK(full_col_stream != nullptr);
+
+        return FullTextBruteScoreInputStream::create(fts_index_ctx, full_col_stream);
+    };
+
+    auto local_index = dmfile->getLocalIndex( //
+        fts_index_ctx->fts_query_info->columns()[0].column_id(),
+        fts_index_ctx->fts_query_info->index_id());
+    if (!local_index.has_value())
+        // Vector index is defined but does not exist on the data file,
+        // or there is no data at all
+        return fallback();
+
+    RUNTIME_CHECK(local_index->index_props().kind() == dtpb::IndexFileKind::FULLTEXT_INDEX);
+
+    bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
+    bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
+
+    // If pack_filter is not set, load from EMPTY_RS_OPERATOR.
+    if (!pack_filter)
+    {
+        pack_filter = DMFilePackFilter::loadFrom(
+            index_cache,
+            file_provider,
+            read_limiter,
+            scan_context,
+            dmfile,
+            true,
+            rowkey_ranges,
+            EMPTY_RS_OPERATOR,
+            read_packs,
+            tracing_id);
+    }
+
+    DMFileReader rest_columns_reader(
+        dmfile,
+        *fts_index_ctx->rest_col_schema,
+        is_common_handle,
+        enable_handle_clean_read,
+        enable_del_clean_read,
+        is_fast_scan,
+        max_data_version,
+        pack_filter,
+        mark_cache,
+        enable_column_cache,
+        column_cache,
+        max_read_buffer_size,
+        file_provider,
+        read_limiter,
+        rows_threshold_per_read,
+        false, // read multiple packs at once
+        tracing_id,
+        enable_read_thread,
+        scan_context,
+        read_tag);
+
+    if (column_cache_long_term && pk_col_id)
+        // ColumnCacheLongTerm is only filled in Vector Search.
+        rest_columns_reader.setColumnCacheLongTerm(column_cache_long_term, pk_col_id);
+
+    fts_index_ctx->perf->n_from_dmf_index += 1;
+    fts_index_ctx->perf->rows_from_dmf_index += dmfile->getRows();
+
+    return DMFileInputStreamProvideFullTextIndex::create( //
+        fts_index_ctx,
         dmfile,
         std::move(rest_columns_reader));
 }

@@ -42,6 +42,7 @@
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -917,6 +918,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions.conditions,
             table_scan.getANNQueryInfo(),
+            table_scan.getFTSQueryInfo(),
             table_scan.getPushedDownFilters(),
             table_scan.getUsedIndexes(),
             table_scan.getColumns(),
@@ -1568,6 +1570,8 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
             name = MutSup::extra_table_id_column_name;
         else if (cid == DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id)
             name = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.name;
+        else if (cid == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.id)
+            name = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name;
         else
             name = storage_for_logical_table->getTableInfo().getColumnName(cid);
         required_columns_tmp.emplace_back(std::move(name));

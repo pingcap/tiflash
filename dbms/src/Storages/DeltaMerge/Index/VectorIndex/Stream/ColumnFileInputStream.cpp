@@ -65,7 +65,7 @@ SkippableBlockInputStreamPtr ColumnFileProvideVectorIndexInputStream::createOrFa
     return std::make_shared<ColumnFileProvideVectorIndexInputStream>(ctx, tiny_file);
 }
 
-inline VectorIndexReaderPtr ColumnFileProvideVectorIndexInputStream::getVectorIndexReader()
+VectorIndexReaderPtr ColumnFileProvideVectorIndexInputStream::getVectorIndexReader()
 {
     if (vec_index != nullptr)
         return vec_index;
@@ -197,7 +197,7 @@ Block ColumnFileProvideVectorIndexInputStream::read()
     return block;
 }
 
-inline Block ColumnFileProvideVectorIndexInputStream::getHeader() const
+Block ColumnFileProvideVectorIndexInputStream::getHeader() const
 {
     return ctx->header;
 }

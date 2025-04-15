@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader_fwd.h>
 
 namespace DB
@@ -37,6 +38,7 @@ public:
     PushDownExecutor(
         const RSOperatorPtr & rs_operator_,
         const ANNQueryInfoPtr & ann_query_info_,
+        const FTSQueryInfoPtr & fts_query_info_,
         const ExpressionActionsPtr & beofre_where_,
         const ExpressionActionsPtr & project_after_where_,
         const ColumnDefinesPtr & filter_columns_,
@@ -52,15 +54,18 @@ public:
         , extra_cast(extra_cast_)
         , columns_after_cast(columns_after_cast_)
         , ann_query_info(ann_query_info_)
+        , fts_query_info(fts_query_info_)
         , column_range(column_range_)
     {}
 
     explicit PushDownExecutor(
         const RSOperatorPtr & rs_operator_,
         const ANNQueryInfoPtr & ann_query_info_ = nullptr,
+        const FTSQueryInfoPtr & fts_query_info_ = nullptr,
         const ColumnRangePtr & column_range_ = nullptr)
         : rs_operator(rs_operator_)
         , ann_query_info(ann_query_info_)
+        , fts_query_info(fts_query_info_)
         , column_range(column_range_)
     {}
 
@@ -68,10 +73,15 @@ public:
         : ann_query_info(ann_query_info_)
     {}
 
+    explicit PushDownExecutor(const FTSQueryInfoPtr & fts_query_info_)
+        : fts_query_info(fts_query_info_)
+    {}
+
     // Use by StorageDisaggregated.
     static PushDownExecutorPtr build(
         const DM::RSOperatorPtr & rs_operator,
         const ANNQueryInfoPtr & ann_query_info,
+        const FTSQueryInfoPtr & fts_query_info,
         const TiDB::ColumnInfos & table_scan_column_info,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
         const ColumnDefines & columns_to_read,
@@ -106,6 +116,8 @@ public:
     const ColumnDefinesPtr columns_after_cast;
     // The ann_query_info contains the information of the ANN index
     const ANNQueryInfoPtr ann_query_info;
+    // The FTSQueryInfo contains the information of the FTS index
+    const FTSQueryInfoPtr fts_query_info;
     // The column_range contains the column values of the pushed down filters
     const ColumnRangePtr column_range;
 };
