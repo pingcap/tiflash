@@ -685,131 +685,129 @@ void setColumnsToRead(
             col_define.name = column_names[i];
             col_define.id = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id;
             col_define.type = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.type;
-            else if (column_names[i] == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name)
-            {
-                col_define = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD;
-            }
-            else
-            {
-                auto & column = header->getByName(column_names[i]);
-                col_define.name = column.name;
-                col_define.id = column.column_id;
-                col_define.type = column.type;
-                col_define.default_value = column.default_value;
-            }
-            columns_to_read.push_back(col_define);
         }
+        else if (column_names[i] == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name)
+        {
+            col_define = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD;
+        }
+        else
+        {
+            auto & column = header->getByName(column_names[i]);
+            col_define.name = column.name;
+            col_define.id = column.column_id;
+            col_define.type = column.type;
+            col_define.default_value = column.default_value;
+        }
+        columns_to_read.push_back(col_define);
     }
+}
 
-    // Check whether tso is smaller than TiDB GcSafePoint
-    void checkStartTs(UInt64 start_ts, const Context & context, const String & req_id, KeyspaceID keyspace_id)
+// Check whether tso is smaller than TiDB GcSafePoint
+void checkStartTs(UInt64 start_ts, const Context & context, const String & req_id, KeyspaceID keyspace_id)
+{
+    auto & tmt = context.getTMTContext();
+    RUNTIME_CHECK(tmt.isInitialized());
+    auto pd_client = tmt.getPDClient();
+    if (unlikely(pd_client->isMock()))
+        return;
+    auto safe_point = PDClientHelper::getGCSafePointWithRetry(
+        pd_client,
+        keyspace_id,
+        /* ignore_cache= */ false,
+        context.getSettingsRef().safe_point_update_interval_seconds);
+    if (start_ts < safe_point)
     {
-        auto & tmt = context.getTMTContext();
-        RUNTIME_CHECK(tmt.isInitialized());
-        auto pd_client = tmt.getPDClient();
-        if (unlikely(pd_client->isMock()))
-            return;
-        auto safe_point = PDClientHelper::getGCSafePointWithRetry(
-            pd_client,
-            keyspace_id,
-            /* ignore_cache= */ false,
-            context.getSettingsRef().safe_point_update_interval_seconds);
-        if (start_ts < safe_point)
-        {
-            throw TiFlashException(
-                Errors::Coprocessor::BadRequest,
-                "read tso is smaller than tidb gc safe point! start_ts={} safepoint={} req={}",
-                start_ts,
-                safe_point,
-                req_id);
-        }
+        throw TiFlashException(
+            Errors::Coprocessor::BadRequest,
+            "read tso is smaller than tidb gc safe point! start_ts={} safepoint={} req={}",
+            start_ts,
+            safe_point,
+            req_id);
     }
+}
 
-    DM::RowKeyRanges parseMvccQueryInfo(
-        const DB::MvccQueryInfo & mvcc_query_info,
-        KeyspaceID keyspace_id,
-        TableID table_id,
-        bool is_common_handle,
-        size_t rowkey_column_size,
-        unsigned num_streams,
-        const Context & context,
-        const String & req_id,
-        const LoggerPtr & tracing_logger)
+DM::RowKeyRanges parseMvccQueryInfo(
+    const DB::MvccQueryInfo & mvcc_query_info,
+    KeyspaceID keyspace_id,
+    TableID table_id,
+    bool is_common_handle,
+    size_t rowkey_column_size,
+    unsigned num_streams,
+    const Context & context,
+    const String & req_id,
+    const LoggerPtr & tracing_logger)
+{
+    checkStartTs(mvcc_query_info.start_ts, context, req_id, keyspace_id);
+
+    FmtBuffer fmt_buf;
+    if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
     {
-        checkStartTs(mvcc_query_info.start_ts, context, req_id, keyspace_id);
-
-        FmtBuffer fmt_buf;
-        if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
-        {
-            fmt_buf.append("orig, ");
-            fmt_buf.joinStr(
-                mvcc_query_info.regions_query_info.begin(),
-                mvcc_query_info.regions_query_info.end(),
-                [](const auto & region, FmtBuffer & fb) {
-                    if (!region.required_handle_ranges.empty())
-                    {
-                        fb.joinStr(
-                            region.required_handle_ranges.begin(),
-                            region.required_handle_ranges.end(),
-                            [region_id = region.region_id](const auto & range, FmtBuffer & fb) {
-                                fb.fmtAppend(
-                                    "{}{}",
-                                    region_id,
-                                    RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
-                            },
-                            ",");
-                    }
-                    else
-                    {
-                        /// only used for test cases
-                        const auto & range = region.range_in_table;
-                        fb.fmtAppend("{}{}", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
-                    }
-                },
-                ",");
-        }
-
-        auto ranges = getQueryRanges(
-            mvcc_query_info.regions_query_info,
-            table_id,
-            is_common_handle,
-            rowkey_column_size,
-            num_streams,
-            tracing_logger);
-
-        if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
-        {
-            fmt_buf.append(" merged, ");
-            fmt_buf.joinStr(
-                ranges.begin(),
-                ranges.end(),
-                [](const auto & range, FmtBuffer & fb) { fb.append(range.toDebugString()); },
-                ",");
-            LOG_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
-        }
-
-        return ranges;
+        fmt_buf.append("orig, ");
+        fmt_buf.joinStr(
+            mvcc_query_info.regions_query_info.begin(),
+            mvcc_query_info.regions_query_info.end(),
+            [](const auto & region, FmtBuffer & fb) {
+                if (!region.required_handle_ranges.empty())
+                {
+                    fb.joinStr(
+                        region.required_handle_ranges.begin(),
+                        region.required_handle_ranges.end(),
+                        [region_id = region.region_id](const auto & range, FmtBuffer & fb) {
+                            fb.fmtAppend("{}{}", region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
+                        },
+                        ",");
+                }
+                else
+                {
+                    /// only used for test cases
+                    const auto & range = region.range_in_table;
+                    fb.fmtAppend("{}{}", region.region_id, RecordKVFormat::DecodedTiKVKeyRangeToDebugString(range));
+                }
+            },
+            ",");
     }
 
-    RuntimeFilteList parseRuntimeFilterList(
-        const SelectQueryInfo & query_info,
-        const DM::ColumnDefines & table_column_defines,
-        const Context & db_context,
-        const LoggerPtr & log)
+    auto ranges = getQueryRanges(
+        mvcc_query_info.regions_query_info,
+        table_id,
+        is_common_handle,
+        rowkey_column_size,
+        num_streams,
+        tracing_logger);
+
+    if (unlikely(tracing_logger->is(Poco::Message::Priority::PRIO_TRACE)))
     {
-        if (db_context.getDAGContext() == nullptr || query_info.dag_query == nullptr)
-        {
-            return std::vector<RuntimeFilterPtr>{};
-        }
-        auto runtime_filter_list = db_context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(
-            query_info.dag_query->runtime_filter_ids);
-        LOG_DEBUG(log, "build runtime filter in local stream, list size:{}", runtime_filter_list.size());
-        for (auto & rf : runtime_filter_list)
-        {
-            rf->setTargetAttr(query_info.dag_query->source_columns, table_column_defines);
-        }
-        return runtime_filter_list;
+        fmt_buf.append(" merged, ");
+        fmt_buf.joinStr(
+            ranges.begin(),
+            ranges.end(),
+            [](const auto & range, FmtBuffer & fb) { fb.append(range.toDebugString()); },
+            ",");
+        LOG_TRACE(tracing_logger, "reading ranges: {}", fmt_buf.toString());
     }
+
+    return ranges;
+}
+
+RuntimeFilteList parseRuntimeFilterList(
+    const SelectQueryInfo & query_info,
+    const DM::ColumnDefines & table_column_defines,
+    const Context & db_context,
+    const LoggerPtr & log)
+{
+    if (db_context.getDAGContext() == nullptr || query_info.dag_query == nullptr)
+    {
+        return std::vector<RuntimeFilterPtr>{};
+    }
+    auto runtime_filter_list = db_context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(
+        query_info.dag_query->runtime_filter_ids);
+    LOG_DEBUG(log, "build runtime filter in local stream, list size:{}", runtime_filter_list.size());
+    for (auto & rf : runtime_filter_list)
+    {
+        rf->setTargetAttr(query_info.dag_query->source_columns, table_column_defines);
+    }
+    return runtime_filter_list;
+}
 } // namespace
 
 
