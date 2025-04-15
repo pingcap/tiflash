@@ -756,7 +756,7 @@ try
             }
         }
 
-        storage_config.checkTmpCapacityWithDiskCapacity(log);
+        storage_config.checkTmpCapacity(global_capacity_quota, log);
         global_context->setTemporaryPath(tmp_path);
         SpillLimiter::instance->setMaxSpilledBytes(storage_config.tmp_capacity);
     }

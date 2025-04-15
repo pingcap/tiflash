@@ -1052,7 +1052,7 @@ capacity = 9223372036854775807
             {
                 LOG_INFO(Logger::get(), "case i: {}", i);
                 auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
-                storage.checkTmpCapacityWithDiskCapacity(Logger::get());
+                storage.checkTmpCapacity(global_capacity_quota, Logger::get());
             }
             catch (Poco::Exception & e)
             {
