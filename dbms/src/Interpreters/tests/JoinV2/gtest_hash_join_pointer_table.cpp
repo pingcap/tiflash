@@ -38,7 +38,13 @@ public:
     {
         {
             HashJoinPointerTable t;
-            t.init(method, row_count, hash_value_bytes, pointer_table_size > 1 ? pointer_table_size - 1 : 0, true);
+            t.init(
+                method,
+                row_count,
+                hash_value_bytes,
+                pointer_table_size > 1 ? pointer_table_size - 1 : 0,
+                true,
+                true);
             ASSERT_EQ(t.pointer_table_size, pointer_table_size);
             ASSERT_EQ(t.pointer_table_size_degree, pointer_table_size_degree);
             ASSERT_EQ(t.enable_probe_prefetch, true);
@@ -47,7 +53,7 @@ public:
         }
         {
             HashJoinPointerTable t;
-            t.init(method, row_count, hash_value_bytes, pointer_table_size + 1, false);
+            t.init(method, row_count, hash_value_bytes, pointer_table_size + 1, false, true);
             ASSERT_EQ(t.pointer_table_size, pointer_table_size);
             ASSERT_EQ(t.pointer_table_size_degree, pointer_table_size_degree);
             ASSERT_EQ(t.enable_probe_prefetch, false);
