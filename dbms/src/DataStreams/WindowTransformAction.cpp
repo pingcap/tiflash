@@ -216,10 +216,7 @@ RowNumber getBoundary(const WindowTransformAction & action)
     }
     else
     {
-        if (action.window_description.frame.end_preceding)
-            return action.current_row;
-        else
-            return action.partition_end;
+        return action.partition_end;
     }
 }
 } // namespace
