@@ -37,7 +37,13 @@ enum class DisaggregatedMode
     Storage,
 };
 
-DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & config);
-bool useAutoScaler(const Poco::Util::LayeredConfiguration & config);
+struct DisaggOptions
+{
+    DisaggregatedMode mode = DisaggregatedMode::None;
+    bool use_autoscaler = false;
+
+    static DisaggOptions parseFromConfig(const Poco::Util::LayeredConfiguration & config);
+};
+
 std::string getProxyLabelByDisaggregatedMode(DisaggregatedMode mode);
 } // namespace DB

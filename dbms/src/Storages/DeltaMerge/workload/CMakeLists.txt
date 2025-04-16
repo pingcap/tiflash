@@ -14,7 +14,7 @@
 
 include_directories (${CMAKE_CURRENT_BINARY_DIR})
 
-set(dt-workload-src MainEntry.cpp DTWorkload.cpp KeyGenerator.cpp TableGenerator.cpp DataGenerator.cpp Limiter.cpp Options.cpp Utils.cpp ${TiFlash_SOURCE_DIR}/dbms/src/TestUtils/TiFlashTestEnv.cpp)
+set(dt-workload-src MainEntry.cpp DTWorkload.cpp KeyGenerator.cpp TableGenerator.cpp DataGenerator.cpp Limiter.cpp Options.cpp Utils.cpp)
 
 add_library(dt-workload-lib ${dt-workload-src})
 target_link_libraries(dt-workload-lib PRIVATE dbms delta_merge)

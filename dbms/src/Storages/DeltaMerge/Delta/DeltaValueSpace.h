@@ -28,10 +28,10 @@
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
-#include <Storages/DeltaMerge/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/Page/PageDefinesBase.h>
 
@@ -414,6 +414,18 @@ public:
     ColumnFileSetSnapshotPtr getMemTableSetSnapshot() const { return mem_table_snap; }
     ColumnFileSetSnapshotPtr getPersistedFileSetSnapshot() const { return persisted_files_snap; }
 
+    ColumnFiles getColumnFiles() const
+    {
+        auto cfs = persisted_files_snap->getColumnFiles();
+        const auto & memory_cfs = mem_table_snap->getColumnFiles();
+        cfs.insert(cfs.end(), memory_cfs.begin(), memory_cfs.end());
+        return cfs;
+    }
+    const auto & getDataProvider() const
+    {
+        RUNTIME_CHECK(persisted_files_snap->getDataProvider() == mem_table_snap->getDataProvider());
+        return persisted_files_snap->getDataProvider();
+    }
     size_t getColumnFileCount() const
     {
         return mem_table_snap->getColumnFileCount() + persisted_files_snap->getColumnFileCount();

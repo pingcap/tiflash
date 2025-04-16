@@ -149,6 +149,11 @@ OperatorStatus MergeSortTransformOp::transformImpl(Block & block)
 
         // store the sorted block in `sorted_blocks`.
         SortHelper::removeConstantsFromBlock(block);
+        RUNTIME_CHECK_MSG(
+            block.columns() == header_without_constants.columns(),
+            "Unexpected number of constant columns in block in MergeSortTransformOp, n_block={}, n_head={}",
+            block.columns(),
+            header_without_constants.columns());
         sum_bytes_in_blocks += block.estimateBytesForSpill();
         sorted_blocks.emplace_back(std::move(block));
 

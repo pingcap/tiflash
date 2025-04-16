@@ -16,6 +16,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Common/UniThreadPool.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <IO/FileProvider/EncryptionPath.h>
 #include <IO/IOThreadPools.h>
 #include <IO/UseSSL.h>
@@ -35,7 +36,6 @@
 #include <Storages/Page/PageConstants.h>
 #include <Storages/PathPool.h>
 #include <Storages/S3/S3Common.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <common/logger_useful.h>
 #include <cpptoml.h>
 #include <signal.h>

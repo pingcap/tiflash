@@ -25,6 +25,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
 namespace DTTool::Migrate
@@ -37,7 +38,6 @@ int migrateServiceMain(DB::Context & context, const MigrateArgs & args);
 
 namespace DB::DM
 {
-class DMFileWithVectorIndexBlockInputStream;
 namespace tests
 {
 class DMFileTest;
@@ -165,7 +165,7 @@ public:
     // Return std::nullopt if
     // - the col_id is not exist in the dmfile
     // - the index has not been built
-    std::optional<dtpb::VectorIndexFileProps> getLocalIndex(ColId col_id, IndexID index_id) const
+    std::optional<dtpb::DMFileIndexInfo> getLocalIndex(ColId col_id, IndexID index_id) const
     {
         return meta->getLocalIndex(col_id, index_id);
     }
@@ -190,7 +190,7 @@ public:
      */
     ColumnDefines getColumnDefines(bool sort_by_id = true) const
     {
-        ColumnDefines results{};
+        ColumnDefines results;
         results.reserve(this->meta->column_stats.size());
         for (const auto & cs : this->meta->column_stats)
         {
@@ -305,8 +305,24 @@ private:
         return IDataType::getFileNameForStream(DB::toString(col_id), substream);
     }
 
-    static String vectorIndexFileName(IndexID index_id) { return fmt::format("idx_{}.vector", index_id); }
-    String vectorIndexPath(IndexID index_id) const { return subFilePath(vectorIndexFileName(index_id)); }
+    static String localIndexFileName(IndexID index_id, TiDB::ColumnarIndexKind kind)
+    {
+        // Note: Keep sync with FileCache::getFileType()
+        switch (kind)
+        {
+        case TiDB::ColumnarIndexKind::Vector:
+            return fmt::format("idx_{}.vector", index_id);
+        case TiDB::ColumnarIndexKind::Inverted:
+            return fmt::format("idx_{}.inverted", index_id);
+        default:
+            throw Exception(fmt::format("Unsupported index kind: {}", magic_enum::enum_name(kind)));
+        }
+    }
+
+    String localIndexPath(IndexID index_id, TiDB::ColumnarIndexKind kind) const
+    {
+        return subFilePath(localIndexFileName(index_id, kind));
+    }
 
     void addPack(const DMFileMeta::PackStat & pack_stat) const { meta->pack_stats.push_back(pack_stat); }
 
@@ -329,16 +345,17 @@ public:
 #endif
     DMFileMetaPtr meta;
 
-    friend class DMFileVectorIndexReader;
+    friend class VectorIndexReaderFromDMFile;
+    friend class InvertedIndexReaderFromDMFile;
     friend class DMFileV3IncrementWriter;
     friend class DMFileWriter;
-    friend class DMFileVectorIndexWriter;
+    friend class DMFileLocalIndexWriter;
     friend class DMFileReader;
     friend class MarkLoader;
     friend class ColumnReadStream;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
-    friend class DMFileWithVectorIndexBlockInputStream;
+    friend class DMFileInputStreamProvideVectorIndex;
     friend class tests::DMFileTest;
     friend class tests::DMFileMetaV2Test;
     friend class tests::DMStoreForSegmentReadTaskTest;

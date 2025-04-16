@@ -20,6 +20,7 @@
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/Region.h>
@@ -42,6 +43,18 @@ namespace ErrorCodes
 extern const int LOGICAL_ERROR;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
+
+RegionPtrWithSnapshotFiles::RegionPtrWithSnapshotFiles(
+    const Base & base_,
+    std::vector<DM::ExternalDTFileInfo> && external_files_)
+    : base(base_)
+    , external_files(std::move(external_files_))
+{}
+
+RegionPtrWithCheckpointInfo::RegionPtrWithCheckpointInfo(const Base & base_, CheckpointIngestInfoPtr checkpoint_info_)
+    : base(base_)
+    , checkpoint_info(std::move(checkpoint_info_))
+{}
 
 template <typename RegionPtrWrap>
 void KVStore::checkAndApplyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTContext & tmt)
@@ -274,10 +287,8 @@ void KVStore::onSnapshot(
 
     // 2. Dump data to RegionTable.
     {
-        const auto range = new_region_wrap->getRange();
         auto & region_table = tmt.getRegionTable();
-        // extend region to make sure data won't be removed.
-        region_table.extendRegionRange(region_id, *range);
+        region_table.replaceRegion(old_region, new_region_wrap.base);
     }
 
     // Register the new Region.
@@ -341,7 +352,7 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
     {
         LOG_INFO(
             log,
-            "Begin apply snapshot, new_region={} keyspace_id={} table_id={}",
+            "Begin apply snapshot, new_region={} keyspace={} table_id={}",
             new_region->toString(true),
             keyspace_id,
             table_id);
@@ -359,7 +370,7 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
         // `new_region` may change in the previous function, just log the region_id down
         LOG_INFO(
             log,
-            "Finish apply snapshot, cost={:.3f}s region_id={} keyspace_id={} table_id={}",
+            "Finish apply snapshot, cost={:.3f}s region_id={} keyspace={} table_id={}",
             watch.elapsedSeconds(),
             new_region->id(),
             keyspace_id,
@@ -368,7 +379,7 @@ void KVStore::applyPreHandledSnapshot(const RegionPtrWrap & new_region, TMTConte
     catch (Exception & e)
     {
         e.addMessage(fmt::format(
-            "(while applyPreHandledSnapshot region_id={} keyspace_id={} table_id={})",
+            "(while applyPreHandledSnapshot region_id={} keyspace={} table_id={})",
             new_region->id(),
             keyspace_id,
             table_id));

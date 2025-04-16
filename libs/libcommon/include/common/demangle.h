@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <cstdlib>
 #include <memory>
 #include <string>
 
@@ -37,7 +38,7 @@ struct FreeingDeleter
     template <typename PointerType>
     void operator()(PointerType ptr)
     {
-        std::free(ptr);
+        std::free(ptr); // NOLINT(cppcoreguidelines-no-malloc)
     }
 };
 

@@ -195,17 +195,17 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
         if (size_t passed_count = countBytesInFilter(filter, offset_begin, block_info.read_rows);
             passed_count != block_info.read_rows)
         {
-            std::vector<size_t> positions;
-            positions.reserve(passed_count);
+            IColumn::Offsets offsets;
+            offsets.reserve(passed_count);
             for (size_t i = offset_begin; i < offset_end; ++i)
             {
                 if (filter[i])
-                    positions.push_back(i - offset_begin);
+                    offsets.push_back(i - offset_begin);
             }
             for (size_t i = 0; i < block.columns(); ++i)
             {
                 auto column = block.getByPosition(i).column;
-                columns[i]->insertDisjunctFrom(*column, positions);
+                columns[i]->insertSelectiveFrom(*column, offsets);
             }
         }
         else
@@ -635,29 +635,36 @@ ColumnPtr DMFileReader::getColumnFromCache(
 
     const auto col_id = cd.id;
     auto read_strategy = data_cache->getReadStrategy(start_pack_id, pack_count, col_id);
-    const auto & pack_stats = dmfile->getPackStats();
-    auto mutable_col = type_on_disk->createColumn();
-    mutable_col->reserve(read_rows);
-    for (auto & [range, strategy] : read_strategy)
+    if (read_strategy.size() == 1)
     {
+        auto [range, strategy] = read_strategy.front();
         if (strategy == ColumnCache::Strategy::Memory)
         {
-            for (size_t cursor = range.first; cursor < range.second; ++cursor)
-            {
-                auto cache_element = data_cache->getColumn(cursor, col_id);
-                mutable_col->insertRangeFrom(
-                    *(cache_element.first),
-                    cache_element.second.first,
-                    cache_element.second.second);
-            }
+            return data_cache->getColumn(range.first, range.second, read_rows, col_id);
         }
         else if (strategy == ColumnCache::Strategy::Disk)
         {
-            size_t rows_count = 0;
-            for (size_t cursor = range.first; cursor < range.second; cursor++)
-            {
-                rows_count += pack_stats[cursor].rows;
-            }
+            return on_cache_miss(cd, type_on_disk, range.first, range.second - range.first, read_rows);
+        }
+
+        throw Exception("Unknown strategy", ErrorCodes::LOGICAL_ERROR);
+    }
+
+    const auto & pack_stats = dmfile->getPackStats();
+    auto mutable_col = type_on_disk->createColumn();
+    for (auto & [range, strategy] : read_strategy)
+    {
+        size_t rows_count = 0;
+        for (size_t cursor = range.first; cursor < range.second; ++cursor)
+        {
+            rows_count += pack_stats[cursor].rows;
+        }
+        if (strategy == ColumnCache::Strategy::Memory)
+        {
+            data_cache->getColumn(mutable_col, range.first, range.second, rows_count, col_id);
+        }
+        else if (strategy == ColumnCache::Strategy::Disk)
+        {
             auto sub_col = on_cache_miss(cd, type_on_disk, range.first, range.second - range.first, rows_count);
             mutable_col->insertRangeFrom(*sub_col, 0, sub_col->size());
         }

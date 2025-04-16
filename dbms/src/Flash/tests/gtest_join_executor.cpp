@@ -33,14 +33,47 @@ public:
 
         /// disable spill
         context.context->setSetting("max_bytes_before_external_join", Field(static_cast<UInt64>(0)));
+
+        for (auto enable_pipeline : {false, true})
+        {
+            if (enable_pipeline)
+            {
+                for (auto enable_join_v2 : {false, true})
+                {
+                    if (enable_join_v2)
+                    {
+                        for (UInt64 prefetch_threshold : {0, 100000000})
+                            configs.emplace_back(enable_pipeline, enable_join_v2, prefetch_threshold);
+                    }
+                    else
+                        configs.emplace_back(enable_pipeline, enable_join_v2, 0);
+                }
+            }
+            else
+                configs.emplace_back(enable_pipeline, false, 0);
+        }
     }
+
+    struct JoinTestConfig
+    {
+        JoinTestConfig(bool enable_pipeline_, bool enable_join_v2_, UInt64 prefetch_threshold_)
+            : enable_pipeline(enable_pipeline_)
+            , enable_join_v2(enable_join_v2_)
+            , prefetch_threshold(prefetch_threshold_)
+        {}
+        bool enable_pipeline;
+        bool enable_join_v2;
+        UInt64 prefetch_threshold;
+    };
+    std::vector<JoinTestConfig> configs;
 };
 
-#define WRAP_FOR_JOIN_TEST_BEGIN                   \
-    std::vector<bool> pipeline_bools{false, true}; \
-    for (auto enable_pipeline : pipeline_bools)    \
-    {                                              \
-        enablePipeline(enable_pipeline);
+#define WRAP_FOR_JOIN_TEST_BEGIN                                                    \
+    for (auto cfg : configs)                                                        \
+    {                                                                               \
+        enablePipeline(cfg.enable_pipeline);                                        \
+        context.context->getSettingsRef().enable_hash_join_v2 = cfg.enable_join_v2; \
+        context.context->getSettingsRef().join_v2_probe_enable_prefetch_threshold = cfg.prefetch_threshold;
 
 #define WRAP_FOR_JOIN_TEST_END }
 
@@ -158,6 +191,7 @@ try
          toNullableVec<Int8>({0, 0, 0, 1, 1})},
     };
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     std::vector<UInt64> probe_cache_column_threshold{2, 1000};
     for (size_t i = 0; i < join_type_num; ++i)
     {
@@ -171,7 +205,6 @@ try
                                             .join(context.scan("simple_test", r), join_types[i], {col(k)})
                                             .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
                                             .build(context);
-
             for (auto threshold : probe_cache_column_threshold)
             {
                 context.context->setSetting(
@@ -184,6 +217,7 @@ try
             }
         }
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -194,25 +228,29 @@ try
         "multi_test",
         "t1",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 3, 0}), toVec<Int32>("b", {2, 2, 0}), toVec<Int32>("c", {3, 2, 0})});
+        {toNullableVec<Int32>("a", {1, 3, 0}),
+         toNullableVec<Int32>("b", {2, 2, 0}),
+         toNullableVec<Int32>("c", {3, 2, 0})});
 
     context.addMockTable(
         "multi_test",
         "t2",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {3, 3, 0}), toVec<Int32>("b", {4, 2, 0}), toVec<Int32>("c", {5, 3, 0})});
+        {toNullableVec<Int32>("a", {3, 3, 0}),
+         toNullableVec<Int32>("b", {4, 2, 0}),
+         toNullableVec<Int32>("c", {5, 3, 0})});
 
     context.addMockTable(
         "multi_test",
         "t3",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 2, 0}), toVec<Int32>("b", {2, 2, 0})});
+        {toNullableVec<Int32>("a", {1, 2, 0}), toNullableVec<Int32>("b", {2, 2, 0})});
 
     context.addMockTable(
         "multi_test",
         "t4",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {3, 2, 0}), toVec<Int32>("b", {4, 2, 0})});
+        {toNullableVec<Int32>("a", {3, 2, 0}), toNullableVec<Int32>("b", {4, 2, 0})});
 
     const ColumnsWithTypeAndName expected_cols[join_type_num * join_type_num] = {
         /// inner x inner x inner
@@ -556,6 +594,7 @@ try
          toNullableVec<Int8>({0, 0, 0})},
     };
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     /// select * from (t1 JT1 t2 using (a)) JT2 (t3 JT1 t4 using (a)) using (b)
     for (auto [i, jt1] : ext::enumerate(join_types))
     {
@@ -586,6 +625,7 @@ try
             }
         }
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -604,90 +644,92 @@ try
             .build(context);
     };
 
+    WRAP_FOR_JOIN_TEST_BEGIN
+
     ColumnsWithTypeAndName column_prune_ref_columns;
     column_prune_ref_columns.push_back(toVec<UInt64>({1}));
 
     /// int(1) == float(1.0)
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLong, false}}, {toVec<Int32>("a", {1})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeFloat}}, {toVec<Float32>("a", {1.0})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeFloat, false}}, {toVec<Float32>("a", {1.0})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float32>({1.0})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<Int32>({1}), toVec<Float32>({1.0})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// int(1) == double(1.0)
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLong, false}}, {toVec<Int32>("a", {1})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble}}, {toVec<Float64>("a", {1.0})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble, false}}, {toVec<Float64>("a", {1.0})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Int32>({1}), toNullableVec<Float64>({1.0})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<Int32>({1}), toVec<Float64>({1.0})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// float(1) == double(1.0)
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeFloat}}, {toVec<Float32>("a", {1})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeFloat, false}}, {toVec<Float32>("a", {1})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble}}, {toVec<Float64>("a", {1})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeDouble, false}}, {toVec<Float64>("a", {1})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<Float32>({1}), toNullableVec<Float64>({1})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<Float32>({1}), toVec<Float64>({1})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// varchar('x') == char('x')
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeString}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeString, false}}, {toVec<String>("a", {"x"})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar, false}}, {toVec<String>("a", {"x"})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<String>({"x"}), toVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// tinyblob('x') == varchar('x')
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeTinyBlob}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeTinyBlob, false}}, {toVec<String>("a", {"x"})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar, false}}, {toVec<String>("a", {"x"})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<String>({"x"}), toVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// mediumBlob('x') == varchar('x')
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeMediumBlob}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeMediumBlob, false}}, {toVec<String>("a", {"x"})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar, false}}, {toVec<String>("a", {"x"})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<String>({"x"}), toVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// blob('x') == varchar('x')
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeBlob}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeBlob, false}}, {toVec<String>("a", {"x"})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar, false}}, {toVec<String>("a", {"x"})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<String>({"x"}), toVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// longBlob('x') == varchar('x')
-    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLongBlob}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t1", {{"a", TiDB::TP::TypeLongBlob, false}}, {toVec<String>("a", {"x"})});
 
-    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar}}, {toVec<String>("a", {"x"})});
+    context.addMockTable("cast", "t2", {{"a", TiDB::TP::TypeVarchar, false}}, {toVec<String>("a", {"x"})});
 
-    executeAndAssertColumnsEqual(cast_request(), {toNullableVec<String>({"x"}), toNullableVec<String>({"x"})});
+    executeAndAssertColumnsEqual(cast_request(), {toVec<String>({"x"}), toVec<String>({"x"})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// decimal with different scale
     context.addMockTable(
         "cast",
         "t1",
-        {{"a", TiDB::TP::TypeNewDecimal}},
+        {{"a", TiDB::TP::TypeNewDecimal, false}},
         {createColumn<Decimal256>(std::make_tuple(9, 4), {"0.12"}, "a")});
 
     context.addMockTable(
         "cast",
         "t2",
-        {{"a", TiDB::TP::TypeNewDecimal}},
+        {{"a", TiDB::TP::TypeNewDecimal, false}},
         {createColumn<Decimal256>(std::make_tuple(9, 3), {"0.12"}, "a")});
 
     executeAndAssertColumnsEqual(
         cast_request(),
-        {createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}),
-         createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
+        {createColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0}),
+         createColumn<Decimal256>(std::make_tuple(65, 0), {"0.12"}, {0})});
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request(), 2));
 
     /// datetime(1970-01-01 00:00:01) == timestamp(1970-01-01 00:00:01)
@@ -719,6 +761,8 @@ try
         {createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0), createDateTimeColumn({{{1970, 1, 1, 0, 0, 1, 0}}}, 0)});
 
     ASSERT_COLUMNS_EQ_UR(column_prune_ref_columns, executeStreams(cast_column_prune_request_1(), 2));
+
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -729,13 +773,13 @@ try
         "join_agg",
         "t1",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 1, 3, 4}), toVec<Int32>("b", {1, 1, 4, 1})});
+        {toNullableVec<Int32>("a", {1, 1, 3, 4}), toNullableVec<Int32>("b", {1, 1, 4, 1})});
 
     context.addMockTable(
         "join_agg",
         "t2",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 4, 2}), toVec<Int32>("b", {2, 6, 2})});
+        {toNullableVec<Int32>("a", {1, 4, 2}), toNullableVec<Int32>("b", {2, 6, 2})});
 
     const ColumnsWithTypeAndName expected_cols[join_type_num] = {
         {toNullableVec<Int32>({4}), toNullableVec<Int32>({1}), toVec<UInt64>({3}), toNullableVec<Int32>({1})},
@@ -759,6 +803,7 @@ try
          toNullableVec<Int32>({1, 4})},
     };
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     for (auto [i, tp] : ext::enumerate(join_types))
     {
         auto request = context.scan("join_agg", "t1")
@@ -768,6 +813,7 @@ try
 
         executeAndAssertColumnsEqual(request, expected_cols[i]);
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -1470,6 +1516,7 @@ try
         {{"id", TiDB::TP::TypeLongLong}, {"probe_value", TiDB::TP::TypeLongLong}},
         {probe_key, probe_col});
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     context.context->setSetting("max_block_size", Field(static_cast<UInt64>(90)));
     {
         auto anti_join_request = context.scan("issue_8791", "probe_table")
@@ -1503,6 +1550,7 @@ try
         auto expected_columns = {toVec<UInt64>({240})};
         ASSERT_COLUMNS_EQ_UR(expected_columns, executeStreams(inner_join_request, 1));
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -1869,8 +1917,8 @@ try
     {
         executeAndAssertColumnsEqual(
             request,
-            {toNullableVec<String>({"banana", "banana"}),
-             toNullableVec<String>({"apple", "banana"}),
+            {toVec<String>({"banana", "banana"}),
+             toVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"})});
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request_column_prune, 2));
@@ -1878,12 +1926,12 @@ try
 
     request = context.scan("test_db", "l_table")
                   .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
-                  .project({"s", "join_c"})
+                  .project({"l_table.s", "r_table.join_c"})
                   .build(context);
     {
         executeAndAssertColumnsEqual(
             request,
-            {toNullableVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
+            {toVec<String>({"banana", "banana"}), toNullableVec<String>({"apple", "banana"})});
     }
 
     request = context.scan("test_db", "l_table")
@@ -1892,10 +1940,165 @@ try
     {
         executeAndAssertColumnsEqual(
             request,
-            {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
-             toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+            {toVec<String>({"banana", "banana", "banana", "banana"}),
+             toVec<String>({"apple", "apple", "apple", "banana"}),
              toNullableVec<String>({"banana", "banana", "banana", {}}),
              toNullableVec<String>({"apple", "apple", "apple", {}})});
+    }
+}
+CATCH
+
+TEST_F(JoinExecutorTestRunner, InnerJoinWithNullAndNotNullJoinKey)
+try
+{
+    context.addMockTable(
+        {"test_db", "inner_r_table"},
+        {
+            {"r1", TiDB::TP::TypeString, false},
+            {"k1", TiDB::TP::TypeLongLong, false},
+            {"k2", TiDB::TP::TypeShort, false},
+            {"r2", TiDB::TP::TypeString, false},
+            {"r3", TiDB::TP::TypeLong, false},
+        },
+        {
+            toVec<String>("r1", {"apple", "banana", "cat", "dog", "elephant", "frag"}),
+            toVec<Int64>("k1", {1, 1, 2, 3, 2, 4}),
+            toVec<Int16>("k2", {1, 1, 2, 3, 2, 5}),
+            toVec<String>("r2", {"aaa", "bbb", "ccc", "ddd", "eee", "fff"}),
+            toVec<Int32>("r3", {1, 2, 3, 4, 5, 6}),
+        });
+
+    context.addMockTable(
+        {"test_db", "inner_l_table"},
+        {
+            {"l1", TiDB::TP::TypeString, false},
+            {"k1", TiDB::TP::TypeLongLong, true},
+            {"k2", TiDB::TP::TypeShort, true},
+            {"l2", TiDB::TP::TypeLong, false},
+            {"l3", TiDB::TP::TypeLong, true},
+            {"l4", TiDB::TP::TypeLongLong, true},
+        },
+        {
+            toVec<String>("l1", {"AAA", "BBB", "CCC", "DDD", "EEE", "FFF", "GGG", "HHH", "III", "JJJ", "KKK", "LLL"}),
+            toNullableVec<Int64>("k1", {1, 1, 2, 2, {}, 3, 3, 3, 2, 3, 1, 2}),
+            toNullableVec<Int16>("k2", {1, {}, 2, 9, 2, 3, 3, 3, 2, 3, 1, 2}),
+            toVec<Int32>("l2", {1, 2, 3, 4, 5, 6, 6, 6, 7, 8, 9, 10}),
+            toNullableVec<Int32>("l3", {1, 2, 3, 4, 5, 0, {}, 6, 7, 8, 9, 10}),
+            toNullableVec<Int64>("l4", {3, 1, 2, 0, 2, 3, 3, {}, 4, 5, 0, 6}),
+        });
+
+    // No other condition
+    for (bool is_swap : {false, true})
+    {
+        String l_tb, r_tb;
+        if (is_swap)
+        {
+            l_tb = "inner_r_table";
+            r_tb = "inner_l_table";
+        }
+        else
+        {
+            l_tb = "inner_l_table";
+            r_tb = "inner_r_table";
+        }
+        auto request = context.scan("test_db", l_tb)
+                           .join(
+                               context.scan("test_db", r_tb),
+                               tipb::JoinType::TypeInnerJoin,
+                               {col("k1"), col("k2")},
+                               {},
+                               {},
+                               {},
+                               {})
+                           .project(
+                               {"inner_r_table.r1",
+                                "inner_r_table.r2",
+                                "inner_r_table.r3",
+                                "inner_r_table.k2",
+                                "inner_l_table.k2",
+                                "inner_l_table.l1",
+                                "inner_l_table.l2",
+                                "inner_l_table.l4"})
+                           .build(context);
+        WRAP_FOR_JOIN_TEST_BEGIN
+        executeAndAssertColumnsEqual(
+            request,
+            {
+                toVec<String>(
+                    {"apple",
+                     "banana",
+                     "cat",
+                     "elephant",
+                     "dog",
+                     "dog",
+                     "dog",
+                     "cat",
+                     "elephant",
+                     "dog",
+                     "apple",
+                     "banana",
+                     "cat",
+                     "elephant"}),
+                toVec<String>(
+                    {"aaa", "bbb", "ccc", "eee", "ddd", "ddd", "ddd", "ccc", "eee", "ddd", "aaa", "bbb", "ccc", "eee"}),
+                toVec<Int32>({1, 2, 3, 5, 4, 4, 4, 3, 5, 4, 1, 2, 3, 5}),
+                toVec<Int16>({1, 1, 2, 2, 3, 3, 3, 2, 2, 3, 1, 1, 2, 2}),
+                toNullableVec<Int16>({1, 1, 2, 2, 3, 3, 3, 2, 2, 3, 1, 1, 2, 2}),
+                toVec<String>(
+                    {"AAA", "AAA", "CCC", "CCC", "FFF", "GGG", "HHH", "III", "III", "JJJ", "KKK", "KKK", "LLL", "LLL"}),
+                toVec<Int32>({1, 1, 3, 3, 6, 6, 6, 7, 7, 8, 9, 9, 10, 10}),
+                toNullableVec<Int64>({3, 3, 2, 2, 3, 3, {}, 4, 4, 5, 0, 0, 6, 6}),
+            });
+        WRAP_FOR_JOIN_TEST_END
+    }
+
+    // Has other condition
+    for (bool is_swap : {false, true})
+    {
+        String l_tb, r_tb;
+        if (is_swap)
+        {
+            l_tb = "inner_r_table";
+            r_tb = "inner_l_table";
+        }
+        else
+        {
+            l_tb = "inner_l_table";
+            r_tb = "inner_r_table";
+        }
+        auto request = context.scan("test_db", l_tb)
+                           .join(
+                               context.scan("test_db", r_tb),
+                               tipb::JoinType::TypeInnerJoin,
+                               {col("k1"), col("k2")},
+                               {},
+                               {},
+                               {gt(col("inner_l_table.l4"), col("inner_r_table.r3"))},
+                               {})
+                           .project(
+                               {"inner_r_table.r1",
+                                "inner_r_table.r2",
+                                "inner_r_table.r3",
+                                "inner_r_table.k2",
+                                "inner_l_table.k2",
+                                "inner_l_table.l1",
+                                "inner_l_table.l2",
+                                "inner_l_table.l4"})
+                           .build(context);
+        WRAP_FOR_JOIN_TEST_BEGIN
+        executeAndAssertColumnsEqual(
+            request,
+            {
+                toVec<String>({"apple", "banana", "cat", "dog", "cat", "elephant"}),
+                toVec<String>({"aaa", "bbb", "ccc", "ddd", "ccc", "eee"}),
+                toVec<Int32>({1, 2, 3, 4, 3, 5}),
+                toVec<Int16>({1, 1, 2, 3, 2, 2}),
+                toNullableVec<Int16>({1, 1, 2, 3, 2, 2}),
+                toVec<String>({"AAA", "AAA", "III", "JJJ", "LLL", "LLL"}),
+                toVec<Int32>({1, 1, 7, 8, 10, 10}),
+                toNullableVec<Int64>({3, 3, 4, 5, 6, 6}),
+            });
+        WRAP_FOR_JOIN_TEST_END
     }
 }
 CATCH
@@ -1915,7 +2118,9 @@ try
                   {})
               .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
               .build(context);
+    WRAP_FOR_JOIN_TEST_BEGIN
     ASSERT_COLUMNS_EQ_UR(genScalarCountResults(2), executeStreams(request_column, 2));
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -1926,12 +2131,14 @@ try
                        .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
+        WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(
             request,
             {toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"})});
+        WRAP_FOR_JOIN_TEST_END
     }
 }
 CATCH
@@ -1943,12 +2150,14 @@ try
                        .join(context.receive("exchange_r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
                        .build(context);
     {
+        WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(
             request,
-            {toNullableVec<String>({"banana", "banana"}),
-             toNullableVec<String>({"apple", "banana"}),
+            {toVec<String>({"banana", "banana"}),
+             toVec<String>({"apple", "banana"}),
              toNullableVec<String>({"banana", "banana"}),
              toNullableVec<String>({"apple", "banana"})});
+        WRAP_FOR_JOIN_TEST_END
     }
 }
 CATCH
@@ -1960,18 +2169,19 @@ try
         "null_test",
         "t",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
-         toVec<Int32>("b", {1, 1, 1, 1, 1, 1, 1, 2, 2, 2}),
-         toVec<Int32>("c", {1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
+        {toNullableVec<Int32>("a", {1, 2, 3, 4, 5, 6, 7, 8, 9, 0}),
+         toNullableVec<Int32>("b", {1, 1, 1, 1, 1, 1, 1, 2, 2, 2}),
+         toNullableVec<Int32>("c", {1, 1, 1, 1, 1, 2, 2, 2, 2, 2})});
     context.addMockTable(
         "null_test",
         "null_table",
         {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
-        {toVec<Int32>("a", {}), toVec<Int32>("b", {}), toVec<Int32>("c", {})});
+        {toNullableVec<Int32>("a", {}), toNullableVec<Int32>("b", {}), toNullableVec<Int32>("c", {})});
 
     std::shared_ptr<tipb::DAGRequest> request;
     std::shared_ptr<tipb::DAGRequest> request_column_prune;
 
+    WRAP_FOR_JOIN_TEST_BEGIN
     // inner join
     {
         // null table join non-null table
@@ -2468,6 +2678,7 @@ try
                                    .build(context);
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(0), executeStreams(request_column_prune, 2));
     }
+    WRAP_FOR_JOIN_TEST_END
 }
 CATCH
 
@@ -2478,8 +2689,8 @@ try
 {
     String query = "select * from test_db.l_table left outer join test_db.r_table_2 using join_c";
     auto cols
-        = {toNullableVec<String>({"banana", "banana", "banana", "banana"}),
-           toNullableVec<String>({"apple", "apple", "apple", "banana"}),
+        = {toVec<String>({"banana", "banana", "banana", "banana"}),
+           toVec<String>({"apple", "apple", "apple", "banana"}),
            toNullableVec<String>({"banana", "banana", "banana", {}}),
            toNullableVec<String>({"apple", "apple", "apple", {}})};
     WRAP_FOR_JOIN_TEST_BEGIN
@@ -2494,9 +2705,9 @@ try
     context.addMockTable(
         "split_test",
         "t1",
-        {{"a", TiDB::TP::TypeLong}},
+        {{"a", TiDB::TP::TypeLong, false}},
         {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1})});
-    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong}}, {toVec<Int32>("a", {1, 1, 1, 1, 1})});
+    context.addMockTable("split_test", "t2", {{"a", TiDB::TP::TypeLong, false}}, {toVec<Int32>("a", {1, 1, 1, 1, 1})});
 
     auto request = context.scan("split_test", "t1")
                        .join(context.scan("split_test", "t2"), tipb::JoinType::TypeInnerJoin, {col("a")})
@@ -2516,18 +2727,49 @@ try
         {50},
         {50},
         {50}};
+    context.context->setSetting("enable_hash_join_v2", "false");
     for (size_t i = 0; i < block_sizes.size(); ++i)
     {
         context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-        WRAP_FOR_JOIN_TEST_BEGIN
-        auto blocks = getExecuteStreamsReturnBlocks(request);
-        ASSERT_EQ(expect[i].size(), blocks.size());
-        for (size_t j = 0; j < blocks.size(); ++j)
+        for (auto enable_pipeline : {false, true})
         {
-            ASSERT_EQ(expect[i][j], blocks[j].rows());
+            enablePipeline(enable_pipeline);
+            auto blocks = getExecuteStreamsReturnBlocks(request);
+            ASSERT_EQ(expect[i].size(), blocks.size());
+            for (size_t j = 0; j < blocks.size(); ++j)
+            {
+                ASSERT_EQ(expect[i][j], blocks[j].rows());
+            }
+            ASSERT_COLUMNS_EQ_UR(genScalarCountResults(50), executeStreams(request_column_prune, 2));
         }
-        ASSERT_COLUMNS_EQ_UR(genScalarCountResults(50), executeStreams(request_column_prune, 2));
-        WRAP_FOR_JOIN_TEST_END
+    }
+
+    context.context->setSetting("enable_hash_join_v2", "true");
+    enablePipeline(true);
+    std::vector<std::vector<size_t>> expect_v2{
+        {1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1,
+         1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+        {2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2},
+        {7, 7, 7, 7, 7, 7, 7, 1},
+        {25, 25},
+        {49, 1},
+        {50},
+        {50},
+        {50}};
+    for (size_t i = 0; i < block_sizes.size(); ++i)
+    {
+        context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+        for (UInt64 prefetch_threshold : {0, 100000000})
+        {
+            context.context->setSetting("join_v2_probe_enable_prefetch_threshold", prefetch_threshold);
+            auto blocks = getExecuteStreamsReturnBlocks(request);
+            ASSERT_EQ(expect_v2[i].size(), blocks.size());
+            for (size_t j = 0; j < blocks.size(); ++j)
+            {
+                ASSERT_EQ(expect_v2[i][j], blocks[j].rows());
+            }
+            ASSERT_COLUMNS_EQ_UR(genScalarCountResults(50), executeStreams(request_column_prune, 2));
+        }
     }
 }
 CATCH
@@ -2538,12 +2780,12 @@ try
     context.addMockTable(
         "split_test",
         "t1",
-        {{"a", TiDB::TP::TypeLong}, {"b", TiDB::TP::TypeLong}},
+        {{"a", TiDB::TP::TypeLong, false}, {"b", TiDB::TP::TypeLong, false}},
         {toVec<Int32>("a", {1, 1, 1, 1, 1, 1, 1, 1, 1, 1}), toVec<Int32>("b", {2, 2, 2, 2, 2, 2, 2, 2, 2, 2})});
     context.addMockTable(
         "split_test",
         "t2",
-        {{"a", TiDB::TP::TypeLong}, {"c", TiDB::TP::TypeLong}},
+        {{"a", TiDB::TP::TypeLong, false}, {"c", TiDB::TP::TypeLong, false}},
         {toVec<Int32>("a", {1, 1, 1, 1, 1}), toVec<Int32>("c", {1, 2, 3, 4, 5})});
 
     std::vector<size_t> block_sizes{1, 2, 7, 25, 49, 50, 51, DEFAULT_BLOCK_SIZE};
@@ -2555,6 +2797,62 @@ try
             {4, 3, 2, 1},
             {5, 5},
             {9, 1},
+            {10},
+            {10},
+            {10},
+        },
+        {
+            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+            {2, 2, 2, 2, 2},
+            {7, 3},
+            {10},
+            {10},
+            {10},
+            {10},
+            {10},
+        },
+    };
+
+    context.context->setSetting("enable_hash_join_v2", "false");
+    for (size_t index = 0; index < join_types.size(); index++)
+    {
+        auto request = context.scan("split_test", "t1")
+                           .join(
+                               context.scan("split_test", "t2"),
+                               *(join_types.begin() + index),
+                               {col("a")},
+                               {},
+                               {},
+                               {gt(col("b"), col("c"))},
+                               {})
+                           .build(context);
+        auto & expect = expects[index];
+
+        for (size_t i = 0; i < block_sizes.size(); ++i)
+        {
+            context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
+            for (auto enable_pipeline : {false, true})
+            {
+                enablePipeline(enable_pipeline);
+                auto blocks = getExecuteStreamsReturnBlocks(request);
+                ASSERT_EQ(expect[i].size(), blocks.size());
+                for (size_t j = 0; j < blocks.size(); ++j)
+                {
+                    ASSERT_EQ(expect[i][j], blocks[j].rows());
+                }
+            }
+        }
+    }
+
+    context.context->setSetting("enable_hash_join_v2", "true");
+    enablePipeline(true);
+    std::vector<std::vector<std::vector<size_t>>> expects2{
+        {
+            {1, 1, 1, 1, 1, 1, 1, 1, 1, 1},
+            {2, 2, 2, 2, 2},
+            {7, 3},
+            {10},
+            {10},
             {10},
             {10},
             {10},
@@ -2582,19 +2880,21 @@ try
                                {gt(col("b"), col("c"))},
                                {})
                            .build(context);
-        auto & expect = expects[index];
+        auto & expect = expects2[index];
 
         for (size_t i = 0; i < block_sizes.size(); ++i)
         {
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_sizes[i])));
-            WRAP_FOR_JOIN_TEST_BEGIN
-            auto blocks = getExecuteStreamsReturnBlocks(request);
-            ASSERT_EQ(expect[i].size(), blocks.size());
-            for (size_t j = 0; j < blocks.size(); ++j)
+            for (UInt64 prefetch_threshold : {0, 100000000})
             {
-                ASSERT_EQ(expect[i][j], blocks[j].rows());
+                context.context->setSetting("join_v2_probe_enable_prefetch_threshold", prefetch_threshold);
+                auto blocks = getExecuteStreamsReturnBlocks(request);
+                ASSERT_EQ(expect[i].size(), blocks.size());
+                for (size_t j = 0; j < blocks.size(); ++j)
+                {
+                    ASSERT_EQ(expect[i][j], blocks[j].rows());
+                }
             }
-            WRAP_FOR_JOIN_TEST_END
         }
     }
 }

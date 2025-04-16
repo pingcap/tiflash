@@ -18,18 +18,18 @@
 #include <Core/Block.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
-
 namespace DB
 {
 struct GeneralCancelHandle;
@@ -734,25 +734,32 @@ public:
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
+        const PushDownExecutorPtr & executor,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
-        size_t expected_block_size);
-    BitmapFilterPtr buildBitmapFilterNormal(
+        size_t build_bitmap_filter_block_rows);
+    BitmapFilterPtr buildMVCCBitmapFilter(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size);
-    BitmapFilterPtr buildBitmapFilterStableOnly(
+    BitmapFilterPtr buildMVCCBitmapFilterNormal(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size);
-    // Returns <InputStream, is_vector_stream>
-    std::tuple<SkippableBlockInputStreamPtr, bool> getConcatVectorIndexBlockInputStream(
+    BitmapFilterPtr buildMVCCBitmapFilterStableOnly(
+        const DMContext & dm_context,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & read_ranges,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts,
+        size_t expected_block_size);
+    static BlockInputStreamPtr getConcatVectorIndexBlockInputStream(
         BitmapFilterPtr bitmap_filter,
         const SegmentSnapshotPtr & segment_snap,
         const DMContext & dm_context,
@@ -838,6 +845,8 @@ public:
 
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;
+
+    GenericVersionChain version_chain;
 };
 
 void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info);

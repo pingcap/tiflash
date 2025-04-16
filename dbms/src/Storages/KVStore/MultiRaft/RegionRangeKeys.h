@@ -16,6 +16,7 @@
 
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVKeyValue.h>
 
 namespace DB
 {
@@ -52,16 +53,21 @@ class RegionRangeKeys : boost::noncopyable
 public:
     using RegionRange = std::pair<TiKVRangeKey, TiKVRangeKey>;
 
-    const RegionRange & comparableKeys() const;
     static RegionRange cloneRange(const RegionRange & from);
     static RegionRange makeComparableKeys(TiKVKey && start_key, TiKVKey && end_key);
-    const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys() const;
+
+
     explicit RegionRangeKeys(TiKVKey && start_key, TiKVKey && end_key);
     explicit RegionRangeKeys(RegionRange && range)
         : RegionRangeKeys(std::move(range.first.key), std::move(range.second.key))
     {}
-    TableID getMappedTableID() const;
-    KeyspaceID getKeyspaceID() const;
+
+    const std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr> & rawKeys() const { return raw; }
+    const RegionRange & comparableKeys() const { return ori; }
+
+    KeyspaceTableID getKeyspaceTableID() const { return KeyspaceTableID(keyspace_id, mapped_table_id); }
+    TableID getMappedTableID() const { return mapped_table_id; }
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
     std::string toDebugString() const;
 
     static bool isRangeOverlapped(const RegionRange & a, const RegionRange & b)

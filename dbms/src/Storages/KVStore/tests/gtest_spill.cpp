@@ -15,6 +15,7 @@
 #include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <Storages/KVStore/Decode/RegionBlockReader.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/MultiRaft/Spill/RegionUncommittedDataList.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/RegionQueryInfo.h>
@@ -134,7 +135,7 @@ try
         KVStore & kvs = getKVS();
         proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), 1, std::nullopt);
         auto region = kvs.getRegion(1);
-        RegionPtrWithSnapshotFiles region_with_cache = RegionPtrWithSnapshotFiles(region);
+        RegionPtrWithSnapshotFiles region_with_cache(region, {});
         // TODO(Spill) spill logic
         EXPECT_THROW(writeRegionDataToStorage(ctx, region_with_cache, data_list_read, log), Exception);
     }

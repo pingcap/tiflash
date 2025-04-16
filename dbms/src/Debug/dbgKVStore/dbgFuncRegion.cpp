@@ -25,6 +25,7 @@
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <fmt/core.h>
@@ -80,8 +81,9 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         }
 
         TMTContext & tmt = context.getTMTContext();
-        RegionPtr region = RegionBench::createRegion(table_info, region_id, start_keys, end_keys);
-        tmt.getKVStore()->onSnapshot<RegionPtrWithSnapshotFiles>(region, nullptr, 0, tmt);
+        RegionPtr region = MockTiKV::instance().createRegionCommonHandle(table_info, region_id, start_keys, end_keys);
+        tmt.getKVStore()
+            ->onSnapshot<RegionPtrWithSnapshotFiles>(RegionPtrWithSnapshotFiles{region, {}}, nullptr, 0, tmt);
 
         output(fmt::format(
             "put region #{}, range{} to table #{} with kvstore.onSnapshot",
@@ -95,7 +97,7 @@ void dbgFuncPutRegion(Context & context, const ASTs & args, DBGInvoker::Printer 
         auto end = static_cast<HandleID>(safeGet<UInt64>(typeid_cast<const ASTLiteral &>(*args[2]).value));
 
         TMTContext & tmt = context.getTMTContext();
-        RegionPtr region = RegionBench::createRegion(table_id, region_id, start, end);
+        RegionPtr region = MockTiKV::instance().createRegion(table_id, region_id, start, end);
         tmt.getKVStore()->onSnapshot<RegionPtrWithSnapshotFiles>(region, nullptr, 0, tmt);
 
         output(fmt::format(

@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
+#include <Debug/MockKVStore/MockUtils.h>
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/Decode/RegionTable.h>
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
@@ -22,8 +23,6 @@
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
-#include <Storages/KVStore/tests/region_helper.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Decode/RowCodec.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 

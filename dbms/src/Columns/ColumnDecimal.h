@@ -82,6 +82,7 @@ private:
     friend class COWPtrHelper<ColumnVectorHelper, Self>;
 
 public:
+    using value_type = T;
     using Container = DecimalPaddedPODArray<T>;
 
 private:
@@ -127,7 +128,11 @@ public:
     void insert(const Field & x) override { data.push_back(DB::get<typename NearestFieldType<T>::Type>(x)); }
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
     void insertManyFrom(const IColumn & src_, size_t position, size_t length) override;
-    void insertDisjunctFrom(const IColumn & src_, const std::vector<size_t> & position_vec) override;
+    void insertSelectiveRangeFrom(
+        const IColumn & src_,
+        const IColumn::Offsets & selective_offsets,
+        size_t start,
+        size_t length) override;
     void popBack(size_t n) override { data.resize_assume_reserved(data.size() - n); }
 
     StringRef getRawData() const override
@@ -148,13 +153,39 @@ public:
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
+    void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & byte_size,
+        const NullMap * /* nullmap */,
+        const TiDB::TiDBCollatorPtr &) const override
+    {
+        countSerializeByteSize(byte_size);
+    }
+
     void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & byte_size,
         const IColumn::Offsets & array_offsets) const override;
+    void countSerializeByteSizeForCmpColumnArray(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets,
+        const NullMap * nullmap,
+        const TiDB::TiDBCollatorPtr &) const override;
+    template <bool has_nullmap>
+    void countSerializeByteSizeForColumnArrayImpl(
+        PaddedPODArray<size_t> & byte_size,
+        const IColumn::Offsets & array_offsets,
+        const NullMap * nullmap) const;
 
     void serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const override;
-    template <bool has_null>
-    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const;
+    void serializeToPosForCmp(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const NullMap * nullmap,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const override;
+    template <bool has_null, bool compare_semantics, bool has_nullmap>
+    void serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length, const NullMap * nullmap) const;
 
     void serializeToPosForColumnArray(
         PaddedPODArray<char *> & pos,
@@ -162,20 +193,39 @@ public:
         size_t length,
         bool has_null,
         const IColumn::Offsets & array_offsets) const override;
-    template <bool has_null>
+    void serializeToPosForCmpColumnArray(
+        PaddedPODArray<char *> & pos,
+        size_t start,
+        size_t length,
+        bool has_null,
+        const NullMap * nullmap,
+        const IColumn::Offsets & array_offsets,
+        const TiDB::TiDBCollatorPtr &,
+        String *) const override;
+    template <bool has_null, bool compare_semantics, bool has_nullmap>
     void serializeToPosForColumnArrayImpl(
         PaddedPODArray<char *> & pos,
         size_t start,
         size_t length,
-        const IColumn::Offsets & array_offsets) const;
+        const IColumn::Offsets & array_offsets,
+        const NullMap * nullmap) const;
 
     void deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer) override;
+
     void deserializeAndInsertFromPosForColumnArray(
         PaddedPODArray<char *> & pos,
         const IColumn::Offsets & array_offsets,
         bool use_nt_align_buffer) override;
 
     void flushNTAlignBuffer() override;
+
+    void deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const override
+    {
+        IColumn::advancePosByOffset(pos, sizeof(T));
+    }
+
+    void deserializeAndAdvancePosForColumnArray(PaddedPODArray<char *> & pos, const IColumn::Offsets & array_offsets)
+        const override;
 
     void updateHashWithValue(size_t n, SipHash & hash, const TiDB::TiDBCollatorPtr &, String &) const override;
     void updateHashWithValues(IColumn::HashValues & hash_values, const TiDB::TiDBCollatorPtr &, String &)

@@ -18,7 +18,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
-#include <Storages/DeltaMerge/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
@@ -254,15 +254,15 @@ bool ColumnFilePersistedSet::updatePersistedColumnFilesAfterAddingIndex(
     return true;
 }
 
-MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & context)
+MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(size_t delta_small_column_file_rows)
 {
     // Every time we try to compact all column files.
     // For ColumnFileTiny, we will try to combine small `ColumnFileTiny`s to a bigger one.
     // For ColumnFileDeleteRange and ColumnFileBig, we keep them intact.
     // And only if there exists some small `ColumnFileTiny`s which can be combined, we will actually do the compaction.
-    auto compaction = std::make_shared<MinorCompaction>(minor_compaction_version);
     if (!persisted_files.empty())
     {
+        auto compaction = std::make_shared<MinorCompaction>(minor_compaction_version);
         bool is_all_trivial_move = true;
         MinorCompaction::Task cur_task;
         auto pack_up_cur_task = [&]() {
@@ -275,8 +275,8 @@ MinorCompactionPtr ColumnFilePersistedSet::pickUpMinorCompaction(DMContext & con
         {
             if (auto * t_file = file->tryToTinyFile(); t_file)
             {
-                bool cur_task_full = cur_task.total_rows >= context.delta_small_column_file_rows;
-                bool small_column_file = t_file->getRows() < context.delta_small_column_file_rows;
+                bool cur_task_full = cur_task.total_rows >= delta_small_column_file_rows;
+                bool small_column_file = t_file->getRows() < delta_small_column_file_rows;
                 bool schema_ok = cur_task.to_compact.empty();
 
                 if (!schema_ok)

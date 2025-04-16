@@ -21,6 +21,7 @@
 #include <Storages/IStorage.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/Decode/TiKVHandle.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/StorageEngineType.h>
 #include <Storages/KVStore/Types.h>
 
@@ -34,7 +35,6 @@ namespace DB
 {
 struct SchemaNameMapper;
 class ASTStorage;
-class Region;
 
 namespace DM
 {
@@ -123,7 +123,6 @@ public:
         const Context & context)
         = 0;
 
-    virtual DM::ColumnDefines getStoreColumnDefines() const = 0;
     /// Rename the table.
     ///
     /// Renaming a name in a file with metadata, the name in the list of tables in the RAM, is done separately.

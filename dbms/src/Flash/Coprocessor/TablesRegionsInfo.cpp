@@ -18,6 +18,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 
 namespace DB
@@ -25,6 +26,7 @@ namespace DB
 namespace FailPoints
 {
 extern const char force_no_local_region_for_mpp_task[];
+extern const char force_random_remote_read[];
 } // namespace FailPoints
 
 SingleTableRegions & TablesRegionsInfo::getOrCreateTableRegionInfoByTableID(Int64 table_id)
@@ -73,8 +75,9 @@ static void insertRegionInfoToTablesRegionInfo(
     const TMTContext & tmt_context)
 {
     auto & table_region_info = tables_region_infos.getOrCreateTableRegionInfoByTableID(table_id);
-    for (const auto & r : regions)
+    for (int i = 0; i < regions.size(); ++i) // NOLINT
     {
+        const auto & r = regions[i];
         RegionInfo region_info(
             r.region_id(),
             r.region_epoch().version(),
@@ -98,8 +101,15 @@ static void insertRegionInfoToTablesRegionInfo(
         /// 4. The remote read will fetch the newest region info via key ranges. So it is possible to find the region
         ///    is served by the same node (but still read from remote).
         bool duplicated_region = local_region_id_set.contains(region_info.region_id);
+        bool is_remote = duplicated_region || needRemoteRead(region_info, tmt_context);
+#ifndef NDEBUG
+        fiu_do_on(FailPoints::force_random_remote_read, {
+            if ((i % 2) != 0)
+                is_remote = true;
+        });
+#endif
 
-        if (duplicated_region || needRemoteRead(region_info, tmt_context))
+        if (is_remote)
             table_region_info.remote_regions.push_back(region_info);
         else
         {
@@ -139,6 +149,24 @@ TablesRegionsInfo TablesRegionsInfo::create(
         assert(static_cast<UInt64>(table_regions.size()) == tables_regions_info.tableCount());
     }
     return tables_regions_info;
+}
+
+std::vector<RegionID> TablesRegionsInfo::getAllRegionID() const
+{
+    std::vector<RegionID> all_regions;
+    for (const auto & ele : table_regions_info_map)
+    {
+        const auto & single_table_region = ele.second;
+        for (const auto & region : single_table_region.local_regions)
+        {
+            all_regions.push_back(region.first);
+        }
+        for (const auto & region : single_table_region.remote_regions)
+        {
+            all_regions.push_back(region.region_id);
+        }
+    }
+    return all_regions;
 }
 
 } // namespace DB

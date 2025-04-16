@@ -259,8 +259,7 @@ ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
             RUNTIME_CHECK_MSG(false, "Unexpected proto ColumnFile");
         }
     }
-    auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
-    return ColumnFileSetSnapshot::buildFromColumnFiles(empty_data_provider, std::move(column_files));
+    return ColumnFileSetSnapshot::buildFromColumnFiles(ColumnFileDataProviderNop::instance(), std::move(column_files));
 }
 
 RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMemory & cf_in_mem, bool need_mem_data)
@@ -358,18 +357,8 @@ RemotePb::ColumnFileRemote Serializer::serializeCFTiny(
 
     for (const auto & index_info : *cf_tiny.index_infos)
     {
-        auto * index_pb = remote_tiny->add_indexes();
-        index_pb->set_index_page_id(index_info.index_page_id);
-        if (index_info.vector_index.has_value())
-        {
-            RemotePb::VectorIndexFileProps index_props;
-            index_props.set_index_kind(index_info.vector_index->index_kind());
-            index_props.set_distance_metric(index_info.vector_index->distance_metric());
-            index_props.set_dimensions(index_info.vector_index->dimensions());
-            index_props.set_index_id(index_info.vector_index->index_id());
-            index_props.set_index_bytes(index_info.vector_index->index_bytes());
-            index_pb->mutable_vector_index()->Swap(&index_props);
-        }
+        auto serialized = index_info.SerializeAsString();
+        remote_tiny->add_indexes(std::move(serialized));
     }
 
     // TODO: read the checkpoint info from data_provider and send it to the compute node
@@ -391,18 +380,10 @@ ColumnFileTinyPtr Serializer::deserializeCFTiny(const DMContext & dm_context, co
     index_infos->reserve(proto.indexes().size());
     for (const auto & index_pb : proto.indexes())
     {
-        if (index_pb.has_vector_index())
-        {
-            dtpb::VectorIndexFileProps index_props;
-            index_props.set_index_kind(index_pb.vector_index().index_kind());
-            index_props.set_distance_metric(index_pb.vector_index().distance_metric());
-            index_props.set_dimensions(index_pb.vector_index().dimensions());
-            index_props.set_index_id(index_pb.vector_index().index_id());
-            index_props.set_index_bytes(index_pb.vector_index().index_bytes());
-            index_infos->emplace_back(index_pb.index_page_id(), index_props);
-        }
-        else
-            index_infos->emplace_back(index_pb.index_page_id(), std::nullopt);
+        auto index_info = dtpb::ColumnFileIndexInfo{};
+        auto ok = index_info.ParseFromString(index_pb);
+        RUNTIME_CHECK_MSG(ok, "Failed to parse ColumnFileIndexInfo from proto");
+        index_infos->emplace_back(std::move(index_info));
     }
 
     auto cf = std::make_shared<ColumnFileTiny>(

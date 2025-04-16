@@ -148,7 +148,7 @@ public:
         const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
         bool null_as_false = false);
 
-    std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownExecutor(
+    std::tuple<ExpressionActionsPtr, String, ExpressionActionsPtr> buildPushDownFilter(
         const google::protobuf::RepeatedPtrField<tipb::Expr> & conditions,
         bool null_as_false = false);
 
@@ -234,7 +234,8 @@ private:
         const String & window_func_name,
         WindowDescription & window_description,
         NamesAndTypes & source_columns,
-        NamesAndTypes & window_columns);
+        NamesAndTypes & window_columns,
+        bool is_agg);
 
     void fillArgumentDetail(
         const ExpressionActionsPtr & actions,

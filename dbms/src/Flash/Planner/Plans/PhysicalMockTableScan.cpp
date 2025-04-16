@@ -246,7 +246,7 @@ RuntimeFilteList PhysicalMockTableScan::getRuntimeFilterList(Context & context)
     auto rfs = context.getDAGContext()->runtime_filter_mgr.getLocalRuntimeFilterByIds(runtime_filter_ids);
     for (auto & rf : rfs)
     {
-        rf->setTargetAttr(column_infos, column_defines);
+        rf->setTargetAttr(column_infos, *column_defines);
     }
     return rfs;
 }

@@ -34,6 +34,12 @@ public:
         std::transform(results.begin(), results.end(), results.begin(), [](const auto result) { return !result; });
         return results;
     }
+
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_infos) override
+    {
+        auto sets = children[0]->buildSets(index_infos);
+        return sets->invert();
+    }
 };
 
 } // namespace DB::DM

@@ -16,7 +16,8 @@ syntax = "proto2";
 
 package dtpb;
 
-import "vector_index.proto"; // for VectorIndexFileProps
+import "index_file_deprecated.proto";
+import "index_file.proto"; // for IndexFilePropsV2
 
 message PackProperty {
     // when gc_safe_point exceed this version, there must be some data obsolete in this pack
@@ -66,8 +67,18 @@ message ColumnStat {
 
     // Only used in tests. Modifying other fields of ColumnStat is hard.
     optional string additional_data_for_test = 101;
-    optional VectorIndexFileProps vector_index = 102;
-    repeated VectorIndexFileProps vector_indexes = 103;
+    optional VectorIndexFilePropsV1Deprecated deprecated_vector_index = 102; // deprecated. See field 104.
+    repeated VectorIndexFilePropsV1Deprecated deprecated_vector_indexes = 103; // deprecated. See field 104.
+    repeated DMFileIndexInfo indexes = 104;
+}
+
+message DMFileIndexInfo {
+    // Currently it only contains nothing more than IndexFilePropsV2.
+    // However let's keep using this standalone message, because IndexFilePropsV2
+    // is also used by ColumnFile and there could be possibly something only
+    // needed by DMFile but not needed by ColumnFile.
+
+    optional IndexFilePropsV2 index_props = 1;
 }
 
 message ColumnStats {

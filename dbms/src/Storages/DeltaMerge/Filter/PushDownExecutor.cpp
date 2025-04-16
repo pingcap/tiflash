@@ -30,6 +30,7 @@ PushDownExecutorPtr PushDownExecutor::build(
     const TiDB::ColumnInfos & table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
     const ColumnDefines & columns_to_read,
+    const ColumnRangePtr & column_range,
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
@@ -41,7 +42,7 @@ PushDownExecutorPtr PushDownExecutor::build(
         bool is_matching_ann_query = std::any_of(
             columns_to_read.begin(),
             columns_to_read.end(),
-            [cid = ann_query_info->column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
+            [cid = ann_query_info->deprecated_column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
         if (!is_valid_ann_query || !is_matching_ann_query)
             valid_ann_query_info = nullptr;
     }
@@ -49,7 +50,7 @@ PushDownExecutorPtr PushDownExecutor::build(
     if (pushed_down_filters.empty())
     {
         LOG_DEBUG(tracing_logger, "Push down filter is empty");
-        return std::make_shared<PushDownExecutor>(rs_operator, valid_ann_query_info);
+        return std::make_shared<PushDownExecutor>(rs_operator, valid_ann_query_info, column_range);
     }
     std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
     for (const auto & column : columns_to_read)
@@ -136,7 +137,8 @@ PushDownExecutorPtr PushDownExecutor::build(
     }
 
     // build filter expression actions
-    auto [before_where, filter_column_name, project_after_where] = analyzer->buildPushDownExecutor(pushed_down_filters);
+    auto [before_where, filter_column_name, project_after_where]
+        = analyzer->buildPushDownFilter(pushed_down_filters, true);
     LOG_DEBUG(tracing_logger, "Push down filter: {}", before_where->dumpActions());
 
     // record current column defines
@@ -169,13 +171,15 @@ PushDownExecutorPtr PushDownExecutor::build(
         filter_columns,
         filter_column_name,
         extra_cast,
-        columns_after_cast);
+        columns_after_cast,
+        column_range);
 }
 
 PushDownExecutorPtr PushDownExecutor::build(
     const SelectQueryInfo & query_info,
     const ColumnDefines & columns_to_read,
     const ColumnDefines & table_column_defines,
+    const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & used_indexes,
     const Context & context,
     const LoggerPtr & tracing_logger)
 {
@@ -191,6 +195,8 @@ PushDownExecutorPtr PushDownExecutor::build(
         table_column_defines,
         context.getSettingsRef().dt_enable_rough_set_filter,
         tracing_logger);
+    // build column_range
+    const auto column_range = rs_operator && !used_indexes.empty() ? rs_operator->buildSets(used_indexes) : nullptr;
     // build ann_query_info
     ANNQueryInfoPtr ann_query_info = nullptr;
     if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)
@@ -209,6 +215,7 @@ PushDownExecutorPtr PushDownExecutor::build(
             columns_to_read_info,
             merged_filters,
             columns_to_read,
+            column_range,
             context,
             tracing_logger);
     }
@@ -218,6 +225,7 @@ PushDownExecutorPtr PushDownExecutor::build(
         columns_to_read_info,
         pushed_down_filters,
         columns_to_read,
+        column_range,
         context,
         tracing_logger);
 }

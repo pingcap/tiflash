@@ -268,9 +268,9 @@ void injectFailPointForLocalRead([[maybe_unused]] const SelectQueryInfo & query_
 String genErrMsgForLocalRead(const KeyspaceID keyspace_id, const TableID & table_id, const TableID & logical_table_id)
 {
     return table_id == logical_table_id
-        ? fmt::format("(while creating read sources from storage, keyspace_id={} table_id={})", keyspace_id, table_id)
+        ? fmt::format("(while creating read sources from storage, keyspace={} table_id={})", keyspace_id, table_id)
         : fmt::format(
-            "(while creating read sources from storage, keyspace_id={} table_id={} logical_table_id={})",
+            "(while creating read sources from storage, keyspace={} table_id={} logical_table_id={})",
             keyspace_id,
             table_id,
             logical_table_id);
@@ -917,6 +917,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
             filter_conditions.conditions,
             table_scan.getANNQueryInfo(),
             table_scan.getPushedDownFilters(),
+            table_scan.getUsedIndexes(),
             table_scan.getColumns(),
             table_scan.getRuntimeFilterIDs(),
             table_scan.getMaxWaitTimeMs(),

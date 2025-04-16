@@ -30,6 +30,17 @@ namespace DB
 
 namespace
 {
+
+constexpr std::array<UInt64, 65> MASKS = [] constexpr {
+    std::array<UInt64, 65> masks = {};
+    for (int i = 0; i < 64; ++i)
+    {
+        masks[i] = ~((1ULL << i) - 1);
+    }
+    masks[64] = 0;
+    return masks;
+}();
+
 /// Implementation details of filterArraysImpl function, used as template parameter.
 /// Allow to build or not to build offsets array.
 
@@ -134,28 +145,13 @@ void filterArraysImplGeneric(
     while (filt_pos < filt_end_aligned)
     {
         auto mask = ToBits64(filt_pos);
-        if likely (0 != mask)
+        while (mask)
         {
-            if (const auto prefix_to_copy = prefixToCopy(mask); 0xFF != prefix_to_copy)
-            {
-                copy_chunk(offsets_pos, prefix_to_copy);
-            }
-            else
-            {
-                if (const auto suffix_to_copy = suffixToCopy(mask); 0xFF != suffix_to_copy)
-                {
-                    copy_chunk(offsets_pos + FILTER_SIMD_BYTES - suffix_to_copy, suffix_to_copy);
-                }
-                else
-                {
-                    while (mask)
-                    {
-                        size_t index = std::countr_zero(mask);
-                        copy_chunk(offsets_pos + index, 1);
-                        mask &= mask - 1;
-                    }
-                }
-            }
+            // 100011111000 -> index: 3, length: 5, mask: 100000000000
+            size_t index = std::countr_zero(mask);
+            size_t length = std::countr_one(mask >> index);
+            copy_chunk(offsets_pos + index, length);
+            mask &= MASKS[index + length];
         }
 
         filt_pos += FILTER_SIMD_BYTES;
@@ -171,8 +167,59 @@ void filterArraysImplGeneric(
         ++offsets_pos;
     }
 }
-} // namespace
 
+/// filterImplAligned is used for aligned part of filter.
+template <typename T, typename Container>
+inline void filterImplAligned(
+    const UInt8 *& filt_pos,
+    const UInt8 *& filt_end_aligned,
+    const T *& data_pos,
+    Container & res_data)
+{
+    while (filt_pos < filt_end_aligned)
+    {
+        UInt64 mask = ToBits64(filt_pos);
+        if likely (0 != mask)
+        {
+            if (const UInt8 prefix_to_copy = prefixToCopy(mask); 0xFF != prefix_to_copy)
+            {
+                res_data.insert(data_pos, data_pos + prefix_to_copy);
+            }
+            else
+            {
+                if (const UInt8 suffix_to_copy = suffixToCopy(mask); 0xFF != suffix_to_copy)
+                {
+                    res_data.insert(data_pos + FILTER_SIMD_BYTES - suffix_to_copy, data_pos + FILTER_SIMD_BYTES);
+                }
+                else
+                {
+                    while (mask)
+                    {
+                        size_t index = std::countr_zero(mask);
+                        res_data.push_back(data_pos[index]);
+                        mask &= mask - 1;
+                    }
+                }
+            }
+        }
+        // There is an alternative implementation which is similar to the one in filterArraysImplGeneric.
+        // But according to the micro benchmark, the below implementation is slower.
+        // So we choose to still use the above implementation.
+        // while (mask)
+        // {
+        //     // 100011111000 -> index: 3, length: 5, mask: 100000000000
+        //     size_t index = std::countr_zero(mask);
+        //     size_t length = std::countr_one(mask >> index);
+        //     res_data.insert(data_pos + index, data_pos + index + length);
+        //     mask &= MASKS[index + length];
+        // }
+
+        filt_pos += FILTER_SIMD_BYTES;
+        data_pos += FILTER_SIMD_BYTES;
+    }
+}
+
+} // namespace
 
 template <typename T>
 void filterArraysImpl(
@@ -239,51 +286,8 @@ INSTANTIATE(Float64)
 
 #undef INSTANTIATE
 
-namespace
-{
 template <typename T, typename Container>
-inline void filterImplAligned(
-    const UInt8 *& filt_pos,
-    const UInt8 *& filt_end_aligned,
-    const T *& data_pos,
-    Container & res_data)
-{
-    while (filt_pos < filt_end_aligned)
-    {
-        UInt64 mask = ToBits64(filt_pos);
-        if likely (0 != mask)
-        {
-            if (const UInt8 prefix_to_copy = prefixToCopy(mask); 0xFF != prefix_to_copy)
-            {
-                res_data.insert(data_pos, data_pos + prefix_to_copy);
-            }
-            else
-            {
-                if (const UInt8 suffix_to_copy = suffixToCopy(mask); 0xFF != suffix_to_copy)
-                {
-                    res_data.insert(data_pos + FILTER_SIMD_BYTES - suffix_to_copy, data_pos + FILTER_SIMD_BYTES);
-                }
-                else
-                {
-                    while (mask)
-                    {
-                        size_t index = std::countr_zero(mask);
-                        res_data.push_back(data_pos[index]);
-                        mask &= mask - 1;
-                    }
-                }
-            }
-        }
-
-        filt_pos += FILTER_SIMD_BYTES;
-        data_pos += FILTER_SIMD_BYTES;
-    }
-}
-} // namespace
-
-
-template <typename T, typename Container>
-void filterImpl(const UInt8 *& filt_pos, const UInt8 *& filt_end, const T *& data_pos, Container & res_data)
+void filterImpl(const UInt8 * filt_pos, const UInt8 * filt_end, const T * data_pos, Container & res_data)
 {
     const UInt8 * filt_end_aligned = filt_pos + (filt_end - filt_pos) / FILTER_SIMD_BYTES * FILTER_SIMD_BYTES;
     filterImplAligned<T, Container>(filt_pos, filt_end_aligned, data_pos, res_data);
@@ -301,9 +305,9 @@ void filterImpl(const UInt8 *& filt_pos, const UInt8 *& filt_end, const T *& dat
 /// Explicit instantiations - not to place the implementation of the function above in the header file.
 #define INSTANTIATE(T, Container)           \
     template void filterImpl<T, Container>( \
-        const UInt8 *& filt_pos,            \
-        const UInt8 *& filt_end,            \
-        const T *& data_pos,                \
+        const UInt8 * filt_pos,             \
+        const UInt8 * filt_end,             \
+        const T * data_pos,                 \
         Container & res_data); // NOLINT
 
 INSTANTIATE(UInt8, PaddedPODArray<UInt8>)

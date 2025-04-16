@@ -16,8 +16,6 @@ if (USE_INCLUDE_WHAT_YOU_USE)
     set (CMAKE_CXX_INCLUDE_WHAT_YOU_USE ${IWYU_PATH})
 endif ()
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/find_vectorclass.cmake)
-
 set (CONFIG_VERSION ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config_version.h)
 set (CONFIG_COMMON ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config.h)
 set (CONFIG_BUILD ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config_build.cpp)
@@ -83,6 +81,7 @@ add_headers_and_sources(dbms src/IO/Compression)
 add_headers_and_sources(dbms src/IO/FileProvider)
 add_headers_and_sources(dbms src/Interpreters)
 add_headers_and_sources(dbms src/Interpreters/SharedContexts)
+add_headers_and_sources(dbms src/Interpreters/JoinV2)
 add_headers_and_sources(dbms src/Columns)
 add_headers_and_sources(dbms src/Storages)
 add_headers_and_sources(dbms src/Storages/S3)
@@ -111,6 +110,9 @@ check_then_add_sources_compile_flag (
     src/Columns/ColumnUtil.cpp
     src/DataTypes/DataTypeString.cpp
     src/Interpreters/Join.cpp
+    src/Interpreters/JoinV2/HashJoin.cpp
+    src/Interpreters/JoinV2/HashJoinBuild.cpp
+    src/Interpreters/JoinV2/HashJoinProbe.cpp
     src/IO/Compression/EncodingUtil.cpp
     src/Storages/DeltaMerge/BitmapFilter/BitmapFilter.cpp
     src/Storages/DeltaMerge/DMVersionFilterBlockInputStream.cpp
@@ -139,9 +141,6 @@ list (APPEND dbms_headers
     src/AggregateFunctions/FactoryHelpers.h
     src/AggregateFunctions/parseAggregateFunctionParameters.h)
 
-list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctions/TableFunctionFactory.cpp)
-list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
-
 add_library(tiflash_common_io ${SPLIT_SHARED} ${tiflash_common_io_headers} ${tiflash_common_io_sources})
 target_link_libraries(tiflash_common_io PUBLIC process_metrics)
 target_include_directories(tiflash_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR} ${TiFlash_SOURCE_DIR}/libs/libprocess_metrics/include)
@@ -168,10 +167,6 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
     set_source_files_properties(
         src/Dictionaries/CacheDictionary.cpp
         src/Dictionaries/TrieDictionary.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary_generate1.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary_generate2.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary_generate3.cpp
         src/Dictionaries/HTTPDictionarySource.cpp
         src/Dictionaries/LibraryDictionarySource.cpp
         src/Dictionaries/ExecutableDictionarySource.cpp
@@ -400,7 +395,7 @@ if (ENABLE_TESTS)
         dbms
         test_util_bench_main
         tiflash_functions
-        server_for_test
+        grpc_server_holder
         delta_merge
         tiflash_aggregate_functions
         kvstore)

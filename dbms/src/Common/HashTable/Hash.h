@@ -65,7 +65,7 @@ inline DB::UInt64 intHash64(DB::UInt64 x)
 #include <arm_neon.h>
 #endif
 
-inline DB::UInt64 intHashCRC32(DB::UInt64 x)
+inline DB::UInt32 intHashCRC32(DB::UInt64 x)
 {
 #ifdef __SSE4_2__
     return _mm_crc32_u64(-1ULL, x);
@@ -73,11 +73,12 @@ inline DB::UInt64 intHashCRC32(DB::UInt64 x)
     return __crc32cd(-1U, x);
 #else
     /// On other platforms we do not have CRC32. NOTE This can be confusing.
-    return intHash64(x);
+    UInt64 h = intHash64(x);
+    return static_cast<DB::UInt32>(h ^ (h >> 32));
 #endif
 }
 
-inline DB::UInt64 intHashCRC32(DB::UInt64 x, DB::UInt64 updated_value)
+inline DB::UInt32 intHashCRC32(DB::UInt64 x, DB::UInt32 updated_value)
 {
 #ifdef __SSE4_2__
     return _mm_crc32_u64(updated_value, x);
@@ -85,12 +86,13 @@ inline DB::UInt64 intHashCRC32(DB::UInt64 x, DB::UInt64 updated_value)
     return __crc32cd(updated_value, x);
 #else
     /// On other platforms we do not have CRC32. NOTE This can be confusing.
-    return intHash64(x) ^ updated_value;
+    UInt64 h = intHash64(x);
+    return static_cast<DB::UInt32>(h ^ (h >> 32)) ^ updated_value;
 #endif
 }
 
 template <typename T>
-inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
+inline DB::UInt32 wideIntHashCRC32(const T & x, DB::UInt32 updated_value)
 {
     if constexpr (DB::IsDecimal<T>)
     {
@@ -130,13 +132,13 @@ inline DB::UInt64 wideIntHashCRC32(const T & x, DB::UInt64 updated_value)
         return updated_value;
     }
     static_assert(
-        DB::IsDecimal<
-            T> || is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
+        DB::IsDecimal<T> || is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128>
+        || std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
 template <typename T>
-inline DB::UInt64 wideIntHashCRC32(const T & x)
+inline DB::UInt32 wideIntHashCRC32(const T & x)
 {
     return wideIntHashCRC32(x, -1);
 }
@@ -244,8 +246,8 @@ inline size_t defaultHash64(const std::enable_if_t<!is_fit_register<T>, T> & key
         return boost::multiprecision::hash_value(key);
     }
     static_assert(
-        is_boost_number_v<
-            T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128> || std::is_same_v<T, DB::UInt256>);
+        is_boost_number_v<T> || std::is_same_v<T, DB::UInt128> || std::is_same_v<T, DB::Int128>
+        || std::is_same_v<T, DB::UInt256>);
     __builtin_unreachable();
 }
 
@@ -276,7 +278,7 @@ struct DefaultHash<StringRef> : public StringRefHash
 };
 
 template <typename T>
-inline size_t hashCRC32(std::enable_if_t<is_fit_register<T>, T> key)
+inline UInt32 hashCRC32(std::enable_if_t<is_fit_register<T>, T> key)
 {
     union
     {
@@ -289,7 +291,7 @@ inline size_t hashCRC32(std::enable_if_t<is_fit_register<T>, T> key)
 }
 
 template <typename T>
-inline size_t hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
+inline UInt32 hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
 {
     return wideIntHashCRC32(key);
 }
@@ -297,20 +299,26 @@ inline size_t hashCRC32(const std::enable_if_t<!is_fit_register<T>, T> & key)
 template <typename T>
 struct HashCRC32;
 
-#define DEFINE_HASH(T)                                               \
-    template <>                                                      \
-    struct HashCRC32<T>                                              \
-    {                                                                \
-        static_assert(is_fit_register<T>);                           \
-        size_t operator()(T key) const { return hashCRC32<T>(key); } \
+#define DEFINE_HASH(T)                     \
+    template <>                            \
+    struct HashCRC32<T>                    \
+    {                                      \
+        static_assert(is_fit_register<T>); \
+        UInt32 operator()(T key) const     \
+        {                                  \
+            return hashCRC32<T>(key);      \
+        }                                  \
     };
 
-#define DEFINE_HASH_WIDE(T)                                                  \
-    template <>                                                              \
-    struct HashCRC32<T>                                                      \
-    {                                                                        \
-        static_assert(!is_fit_register<T>);                                  \
-        size_t operator()(const T & key) const { return hashCRC32<T>(key); } \
+#define DEFINE_HASH_WIDE(T)                    \
+    template <>                                \
+    struct HashCRC32<T>                        \
+    {                                          \
+        static_assert(!is_fit_register<T>);    \
+        UInt32 operator()(const T & key) const \
+        {                                      \
+            return hashCRC32<T>(key);          \
+        }                                      \
     };
 
 DEFINE_HASH(DB::UInt8)
@@ -336,7 +344,7 @@ DEFINE_HASH_WIDE(DB::Int512)
 struct TrivialHash
 {
     template <typename T, std::enable_if_t<is_fit_register<T>, int> = 0>
-    size_t operator()(T key) const
+    T operator()(T key) const
     {
         return key;
     }
@@ -348,7 +356,7 @@ struct TrivialHash
     size_t operator()(const UInt256 & key) const { return key.a; }
 
     template <typename T, std::enable_if_t<is_boost_number_v<T>, int> = 0>
-    size_t operator()(const T & key) const
+    T operator()(const T & key) const
     {
         return key;
     }
@@ -414,5 +422,132 @@ struct IntHash32<T, salt, std::enable_if_t<!is_fit_register<T>, void>>
         {
             return intHash32<salt>(defaultHash64(key));
         }
+    }
+};
+
+// MagicHash is a new set of hash functions for int types (int32/int64/int128/int256),
+// which utilize specific magic numbers ported from different libraries for hashing.
+// It's slower than HashCRC32 but produce more uniformly distributed results,
+// leading to fewer collisions in hash tables.
+inline uint64_t umul128(uint64_t v, uint64_t kmul, uint64_t * high)
+{
+    DB::Int128 res = static_cast<DB::Int128>(v) * static_cast<DB::Int128>(kmul);
+    *high = static_cast<uint64_t>(res >> 64);
+    return static_cast<uint64_t>(res);
+}
+
+template <typename T>
+inline void hash_combine(uint64_t & seed, const T & val)
+{
+    // Constant ported from https://github.com/HowardHinnant/hash_append/issues/7#issuecomment-629414712
+    seed ^= std::hash<T>{}(val) + 0x9e3779b97f4a7c15LLU + (seed << 12) + (seed >> 4);
+}
+
+inline uint64_t hash_int128(uint64_t seed, const DB::Int128 & v)
+{
+    auto low = static_cast<uint64_t>(v);
+    auto high = static_cast<uint64_t>(v >> 64);
+    hash_combine(seed, low);
+    hash_combine(seed, high);
+    return seed;
+}
+
+inline uint64_t hash_uint128(uint64_t seed, const DB::UInt128 & v)
+{
+    hash_combine(seed, v.low);
+    hash_combine(seed, v.high);
+    return seed;
+}
+
+inline uint64_t hash_int256(uint64_t seed, const DB::Int256 & v)
+{
+    const auto & backend_value = v.backend();
+    for (size_t i = 0; i < backend_value.size(); ++i)
+    {
+        hash_combine(seed, backend_value.limbs()[i]);
+    }
+    hash_combine(seed, backend_value.sign());
+    return seed;
+}
+
+inline uint64_t hash_uint256(uint64_t seed, const DB::UInt256 & v)
+{
+    hash_combine(seed, v.a);
+    hash_combine(seed, v.b);
+    hash_combine(seed, v.c);
+    hash_combine(seed, v.d);
+    return seed;
+}
+
+template <size_t n>
+struct MagicHashHelper
+{
+    static inline size_t operator()(size_t);
+};
+
+template <>
+struct MagicHashHelper<4>
+{
+    static inline size_t operator()(size_t v)
+    {
+        // Constant kmul is ported from https://github.com/aappleby/smhasher/blob/0ff96f7835817a27d0487325b6c16033e2992eb5/src/MurmurHash3.cpp#L102
+        static constexpr uint64_t kmul = 0xcc9e2d51UL;
+        uint64_t mul = v * kmul;
+        return static_cast<size_t>(mul ^ (mul >> 32u));
+    }
+};
+
+template <>
+struct MagicHashHelper<8>
+{
+    static inline size_t operator()(size_t v)
+    {
+        // Constant kmul is ported from https://github.com/martinus/robin-hood-hashing/blob/b21730713f4b5296bec411917c46919f7b38b178/src/include/robin_hood.h#L735
+        static constexpr uint64_t kmul = 0xde5fb9d2630458e9ULL;
+        uint64_t high = 0;
+        uint64_t low = umul128(v, kmul, &high);
+        return static_cast<size_t>(high + low);
+    }
+};
+
+template <typename T>
+struct MagicHash
+{
+    static size_t operator()(const T & v) { return MagicHashHelper<sizeof(size_t)>::operator()(std::hash<T>()(v)); }
+};
+
+template <>
+struct MagicHash<DB::Int128>
+{
+    static size_t operator()(const DB::Int128 & v)
+    {
+        return MagicHashHelper<sizeof(size_t)>::operator()(hash_int128(0, v));
+    }
+};
+
+template <>
+struct MagicHash<DB::UInt128>
+{
+    static inline size_t operator()(const DB::UInt128 & v)
+    {
+        return MagicHashHelper<sizeof(size_t)>::operator()(hash_uint128(0, v));
+    }
+};
+
+template <>
+struct MagicHash<DB::Int256>
+{
+    static inline size_t operator()(const DB::Int256 & v)
+    {
+        return MagicHashHelper<sizeof(size_t)>::operator()(hash_int256(0, v));
+    }
+};
+
+template <>
+struct MagicHash<DB::UInt256>
+{
+    static inline size_t operator()(const DB::UInt256 & v)
+    {
+        return MagicHashHelper<sizeof(size_t)>::operator()(hash_uint256(0, v));
     }
 };

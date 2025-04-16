@@ -51,14 +51,14 @@ namespace DB
 //
 // Storage key
 //  Meta
-//      Prefix = [optional KeyspaceID] + "tm" + NamespaceID
+//      Prefix = [optional KeyspaceID] + "tm"(0x746D) + NamespaceID
 //  Log
-//      Prefix = [optional KeyspaceID] + "tl" + NamespaceID
+//      Prefix = [optional KeyspaceID] + "tl"(0x746C) + NamespaceID
 //  Data
-//      Prefix = [optional KeyspaceID] + "td" + NamespaceID
+//      Prefix = [optional KeyspaceID] + "td"(0x7464) + NamespaceID
 //
 // KeyspaceID format is the same as in https://github.com/tikv/rfcs/blob/master/text/0069-api-v2.md
-//  'x'(TXN_MODE_PREFIX) + keyspace_id(3 bytes, big endian)
+//  'x'(TXN_MODE_PREFIX, which is 0x78) + keyspace_id(3 bytes, big endian)
 //  Note 'x' will be a reserved keyword, and should not be used in other prefix.
 //  If the first byte of a UniversalPageId is 'x', the next 3 bytes will be considered a KeyspaceID.
 //  If not, NullspaceID will be returned.

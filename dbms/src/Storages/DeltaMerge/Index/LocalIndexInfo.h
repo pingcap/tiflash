@@ -14,14 +14,19 @@
 
 #pragma once
 
+#include <Common/Exception.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo_fwd.h>
+#include <Storages/DeltaMerge/dtpb/index_file.pb.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/InvertedIndex.h>
+#include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/VectorIndex.h>
+
+#include <span>
 
 namespace TiDB
 {
 struct TableInfo;
-struct ColumnInfo;
-struct IndexInfo;
 } // namespace TiDB
 
 namespace DB
@@ -31,33 +36,74 @@ using LoggerPtr = std::shared_ptr<Logger>;
 } // namespace DB
 namespace DB::DM
 {
-enum class IndexType
-{
-    Vector = 1,
-};
 
 struct LocalIndexInfo
 {
-    IndexType type;
+    TiDB::ColumnarIndexKind kind;
     // If the index is defined on TiDB::ColumnInfo, use EmptyIndexID as index_id
     IndexID index_id = DB::EmptyIndexID;
     // Which column_id the index is built on
     ColumnID column_id = DB::EmptyColumnID;
-    // Now we only support vector index.
-    // In the future, we may support more types of indexes, using std::variant.
-    TiDB::VectorIndexDefinitionPtr index_definition;
+
+    TiDB::VectorIndexDefinitionPtr def_vector_index = nullptr;
+    TiDB::InvertedIndexDefinitionPtr def_inverted_index = nullptr;
+
+    LocalIndexInfo(IndexID index_id_, ColumnID column_id_, const TiDB::VectorIndexDefinitionPtr & def)
+        : kind(TiDB::ColumnarIndexKind::Vector)
+        , index_id(index_id_)
+        , column_id(column_id_)
+        , def_vector_index(def)
+    {}
+
+    LocalIndexInfo(IndexID index_id_, ColumnID column_id_, const TiDB::InvertedIndexDefinitionPtr & def)
+        : kind(TiDB::ColumnarIndexKind::Inverted)
+        , index_id(index_id_)
+        , column_id(column_id_)
+        , def_inverted_index(def)
+    {}
 };
 
-using LocalIndexInfos = std::vector<LocalIndexInfo>;
-using LocalIndexInfosPtr = std::shared_ptr<LocalIndexInfos>;
-using LocalIndexInfosSnapshot = std::shared_ptr<const LocalIndexInfos>;
-
 LocalIndexInfosPtr initLocalIndexInfos(const TiDB::TableInfo & table_info, const LoggerPtr & logger);
-
-struct LocalIndexInfosChangeset
+class LocalIndexInfosChangeset
 {
+public:
     LocalIndexInfosPtr new_local_index_infos;
-    std::vector<IndexID> dropped_indexes;
+    // This vector store all the keep/added/dropped index IDs.
+    // The keep indexes: [0, added_indexes_offset)
+    // The added indexes: [added_indexes_offset, dropped_indexes_offset)
+    // The dropped indexes: [dropped_index_offset, end-of-the-vector)
+    const std::vector<IndexID> all_indexes;
+    const size_t added_indexes_offset;
+    const size_t dropped_indexes_offset;
+
+public:
+    std::span<const IndexID> keepIndexes() const
+    {
+        assert(added_indexes_offset <= all_indexes.size());
+        return std::span(all_indexes.begin(), all_indexes.begin() + added_indexes_offset);
+    }
+    std::span<const IndexID> addedIndexes() const
+    {
+        assert(added_indexes_offset <= dropped_indexes_offset && added_indexes_offset <= all_indexes.size());
+        assert(dropped_indexes_offset <= all_indexes.size());
+        return std::span(all_indexes.begin() + added_indexes_offset, all_indexes.begin() + dropped_indexes_offset);
+    }
+    std::span<const IndexID> droppedIndexes() const
+    {
+        assert(dropped_indexes_offset <= all_indexes.size());
+        return std::span(all_indexes.begin() + dropped_indexes_offset, all_indexes.end());
+    }
+    std::vector<IndexID> copyDroppedIndexes() const
+    {
+        std::vector<IndexID> r;
+        for (const auto & id : droppedIndexes())
+        {
+            r.emplace_back(id);
+        }
+        return r;
+    }
+
+    String toString() const;
 };
 
 // Generate a changeset according to `existing_indexes` and `new_table_info`

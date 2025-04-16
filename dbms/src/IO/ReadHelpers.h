@@ -34,7 +34,11 @@
 #include <iterator>
 #include <type_traits>
 
-#define DEFAULT_MAX_STRING_SIZE 0x00FFFFFFULL
+static constexpr UInt64 DEFAULT_MAX_STRING_SIZE = 0x00FFFFFFULL; // 16777215, 16MiB-1
+
+// According to `txn-entry-size-limit` in TiDB, the max size of a TiKV key/value is 120MB.
+// https://docs.pingcap.com/tidb/stable/tidb-configuration-file/#txn-entry-size-limit-new-in-v4010-and-v500
+static constexpr UInt64 TIKV_MAX_VALUE_SIZE = 125829120;
 
 namespace DB
 {
@@ -130,7 +134,11 @@ inline void readStringBinary(std::string & s, ReadBuffer & buf, size_t MAX_STRIN
     readVarUInt(size, buf);
 
     if (size > MAX_STRING_SIZE)
-        throw Poco::Exception("Too large string size.");
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Too large string size, size={} max_size={}",
+            size,
+            MAX_STRING_SIZE);
 
     s.resize(size);
     buf.readStrict(&s[0], size);
@@ -161,7 +169,11 @@ void readVectorBinary(std::vector<T> & v, ReadBuffer & buf, size_t MAX_VECTOR_SI
     readVarUInt(size, buf);
 
     if (size > MAX_VECTOR_SIZE)
-        throw Poco::Exception("Too large vector size.");
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Too large vector size, size={}, max_size={}",
+            size,
+            MAX_VECTOR_SIZE);
 
     v.resize(size);
     for (size_t i = 0; i < size; ++i)
@@ -972,7 +984,11 @@ void readBinary(std::vector<T> & x, ReadBuffer & buf)
     readVarUInt(size, buf);
 
     if (size > DEFAULT_MAX_STRING_SIZE)
-        throw Poco::Exception("Too large vector size.");
+        throw DB::Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Too large vector size, size={} max_size={}",
+            size,
+            DEFAULT_MAX_STRING_SIZE);
 
     x.resize(size);
     for (size_t i = 0; i < size; ++i)

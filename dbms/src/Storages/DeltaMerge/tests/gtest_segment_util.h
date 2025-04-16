@@ -14,46 +14,79 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/tests/DMTestEnv.h>
 #include <common/defines.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
 
-
 namespace DB::DM::tests
 {
 
-// "[a, b)" => std::pair{a, b}
+// If including_right_boundary is false, it means [left, right).
+// If including_right_boundary is true, it means [left, right].
+// `including_right_boundary` is required if we want to generate data with std::numeric_limits<T>::max().
+// Theoretically, we could enforce the use of closed intervals, thereby eliminating the need for the parameter 'including_right_boundary'.
+// However, a multitude of existing tests are predicated on the assumption that the interval is left-closed and right-open.
 template <typename T>
-std::pair<T, T> parseRange(String & str_range);
-
-// "[a, b)|[c, d)" => [std::pair{a, b}, std::pair{c, d}]
-template <typename T>
-std::vector<std::pair<T, T>> parseRanges(std::string_view str_ranges);
+struct SegDataRange
+{
+    T left;
+    T right;
+    bool including_right_boundary;
+};
 
 struct SegDataUnit
 {
     String type;
-    std::pair<Int64, Int64> range; // Data range
+    SegDataRange<Int64> range;
     std::optional<size_t> pack_size; // For DMFile
+    bool shuffle = false; // For ColumnFileTiny and ColumnFileMemory
+    std::optional<UInt64> ts;
 };
-
-// "type:[a, b)" => SegDataUnit
-SegDataUnit parseSegDataUnit(String & s);
-
-void check(const std::vector<SegDataUnit> & seg_data_units);
 
 std::vector<SegDataUnit> parseSegData(std::string_view seg_data);
 
 template <typename T>
-std::vector<T> genSequence(T begin, T end);
-
-template <typename T>
-std::vector<T> genSequence(const std::vector<std::pair<T, T>> & ranges);
-
-template <typename T>
 std::vector<T> genSequence(std::string_view str_ranges);
 
+template <typename T>
+std::vector<T> genHandleSequence(std::string_view str_ranges)
+{
+    auto v = genSequence<Int64>(str_ranges);
+    if constexpr (std::is_same_v<T, Int64>)
+        return v;
+    else
+    {
+        static_assert(std::is_same_v<T, String>);
+        std::vector<String> res(v.size());
+        for (size_t i = 0; i < v.size(); i++)
+            res[i] = genMockCommonHandle(v[i], 1);
+        return res;
+    }
+}
+
 template <typename E, typename A>
-::testing::AssertionResult sequenceEqual(const E * expected, const A * actual, size_t size);
+::testing::AssertionResult sequenceEqual(const E & expected, const A & actual)
+{
+    if (expected.size() != actual.size())
+    {
+        return ::testing::AssertionFailure()
+            << fmt::format("Size mismatch: expected {} vs actual {}.", expected.size(), actual.size());
+    }
+    for (size_t i = 0; i < expected.size(); i++)
+    {
+        if (expected[i] != actual[i])
+        {
+            return ::testing::AssertionFailure() << fmt::format(
+                       "Value at index {} mismatch: expected {} vs actual {}. expected => {} actual => {}",
+                       i,
+                       expected[i],
+                       actual[i],
+                       expected,
+                       actual);
+        }
+    }
+    return ::testing::AssertionSuccess();
+}
 
 } // namespace DB::DM::tests

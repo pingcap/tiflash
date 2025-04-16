@@ -49,6 +49,8 @@ protected:
     using ColumnType = std::conditional_t<IsDecimal<T>, ColumnDecimal<T>, ColumnVector<T>>;
 
 public:
+    static bool needArena() { return false; }
+
     bool has() const { return has_value; }
 
     void setCollators(const TiDB::TiDBCollators &) {}
@@ -60,6 +62,20 @@ public:
         else
             static_cast<ColumnType &>(to).insertDefault();
     }
+
+    void batchInsertSameResultInto(IColumn & to, size_t num) const
+    {
+        if (has())
+        {
+            auto & container = static_cast<ColumnType &>(to).getData();
+            container.resize_fill(num + container.size(), value);
+        }
+        else
+        {
+            static_cast<ColumnType &>(to).insertManyDefaults(num);
+        }
+    }
+
 
     void write(WriteBuffer & buf, const IDataType & /*data_type*/) const
     {
@@ -225,6 +241,8 @@ protected:
     char small_data[MAX_SMALL_STRING_SIZE]{}; /// Including the terminating zero.
 
 public:
+    static bool needArena() { return true; }
+
     bool has() const { return size >= 0; }
 
     const char * getData() const { return size <= MAX_SMALL_STRING_SIZE ? small_data : large_data; }
@@ -237,6 +255,14 @@ public:
             static_cast<ColumnString &>(to).insertDataWithTerminatingZero(getData(), size);
         else
             static_cast<ColumnString &>(to).insertDefault();
+    }
+
+    void batchInsertSameResultInto(IColumn & to, size_t num) const
+    {
+        if (has())
+            static_cast<ColumnString &>(to).batchInsertDataWithTerminatingZero(num, getData(), size);
+        else
+            static_cast<ColumnString &>(to).insertManyDefaults(num);
     }
 
     void setCollators(const TiDB::TiDBCollators & collators_)
@@ -439,6 +465,8 @@ protected:
     Field value;
 
 public:
+    static bool needArena() { return false; }
+
     bool has() const { return !value.isNull(); }
 
     void setCollators(const TiDB::TiDBCollators &) {}
@@ -449,6 +477,16 @@ public:
             to.insert(value);
         else
             to.insertDefault();
+    }
+
+    void batchInsertSameResultInto(IColumn & to, size_t num) const
+    {
+        if (has())
+        {
+            to.insertMany(value, num);
+        }
+        else
+            to.insertManyDefaults(num);
     }
 
     void write(WriteBuffer & buf, const IDataType & data_type) const
@@ -791,7 +829,14 @@ public:
         this->data(place).insertResultInto(to);
     }
 
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        this->data(place).batchInsertSameResultInto(to, num);
+    }
+
     const char * getHeaderFilePath() const override { return __FILE__; }
+
+    bool allocatesMemoryInArena() const override { return Data::needArena(); }
 };
 
 } // namespace DB

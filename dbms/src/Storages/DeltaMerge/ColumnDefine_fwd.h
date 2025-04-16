@@ -18,7 +18,6 @@
 #include <TiDB/Schema/TiDB_fwd.h>
 
 #include <memory>
-#include <unordered_map>
 #include <vector>
 
 namespace DB::DM
@@ -26,6 +25,5 @@ namespace DB::DM
 struct ColumnDefine;
 using ColumnDefines = std::vector<ColumnDefine>;
 using ColumnDefinesPtr = std::shared_ptr<ColumnDefines>;
-using ColumnDefineMap = std::unordered_map<DB::ColumnID, ColumnDefine>;
 
 } // namespace DB::DM

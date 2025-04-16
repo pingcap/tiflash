@@ -36,7 +36,7 @@ class StringHolder
 {
 public:
     StringHolder() = default;
-    StringHolder(size_t init_size) { value.resize(init_size); }
+    explicit StringHolder(size_t init_size) { value.resize(init_size); }
 
 protected:
     std::string value;
@@ -53,7 +53,7 @@ public:
         : WriteBufferFromString(value)
     {}
 
-    WriteBufferFromOwnString(size_t init_size)
+    explicit WriteBufferFromOwnString(size_t init_size)
         : detail::StringHolder(init_size)
         , WriteBufferFromString(value)
     {}

@@ -34,8 +34,6 @@
 
 #include <random>
 
-#include "AggregateFunctions/AggregateFunctionNull.h"
-
 namespace DB
 {
 namespace tests
@@ -663,6 +661,8 @@ void ExecutorWindowAgg::executeWindowAggTest(TestCase<Op> & test_case)
             test_case.saveResult();
         }
     }
+
+    agg_func->destroy(agg_state.data());
 
     const std::vector<String> res_vec = test_case.getResults();
     size_t res_num = res_vec.size();

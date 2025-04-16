@@ -38,6 +38,14 @@ extern const int SIZES_OF_COLUMNS_DOESNT_MATCH;
 class Arena;
 class ColumnGathererStream;
 
+using NullMap = PaddedPODArray<UInt8>;
+using ConstNullMapPtr = const NullMap *;
+
+inline bool isNullAt(const NullMap & nullmap, size_t n)
+{
+    return nullmap[n] != 0;
+}
+
 /// Declares interface to store columns in memory.
 class IColumn : public COWPtr<IColumn>
 {
@@ -51,8 +59,6 @@ private:
     virtual MutablePtr clone() const = 0;
 
 public:
-    using Offset = UInt64;
-    using Offsets = PaddedPODArray<Offset>;
     /// Name of a Column. It is used in info messages.
     virtual std::string getName() const { return getFamilyName(); }
 
@@ -146,9 +152,20 @@ public:
     /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertManyFrom(ConstColumnXXX, ...)
     virtual void insertManyFrom(const IColumn & src, size_t position, size_t length) = 0;
 
-    /// Appends disjunctive elements from other column with the same type.
-    /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertDisjunctFrom(ConstColumnXXX, ...)
-    virtual void insertDisjunctFrom(const IColumn & src, const std::vector<size_t> & position_vec) = 0;
+    /// Appends selective elements from other column with the same type.
+    /// Note: the source column and the destination column must be of the same type, can not ColumnXXX->insertSelectiveFrom(ConstColumnXXX, ...)
+    using Offset = UInt64;
+    using Offsets = PaddedPODArray<Offset>;
+    void insertSelectiveFrom(const IColumn & src, const Offsets & selective_offsets)
+    {
+        insertSelectiveRangeFrom(src, selective_offsets, 0, selective_offsets.size());
+    }
+    virtual void insertSelectiveRangeFrom(
+        const IColumn & src,
+        const Offsets & selective_offsets,
+        size_t start,
+        size_t length)
+        = 0;
 
     /// Appends one field multiple times. Can be optimized in inherited classes.
     virtual void insertMany(const Field & field, size_t length)
@@ -239,12 +256,24 @@ public:
     /// Count the serialize byte size and added to the byte_size.
     /// The byte_size.size() must be equal to the column size.
     virtual void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const = 0;
+    virtual void countSerializeByteSizeForCmp(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const NullMap * /* nullmap */,
+        const TiDB::TiDBCollatorPtr & /* collator */) const
+        = 0;
+
     /// Count the serialize byte size and added to the byte_size called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The byte_size.size() must be equal to the array_offsets.size().
     virtual void countSerializeByteSizeForColumnArray(
         PaddedPODArray<size_t> & /* byte_size */,
         const Offsets & /* array_offsets */) const
+        = 0;
+    virtual void countSerializeByteSizeForCmpColumnArray(
+        PaddedPODArray<size_t> & /* byte_size */,
+        const Offsets & /* array_offsets */,
+        const NullMap * /* nullmap */,
+        const TiDB::TiDBCollatorPtr & /* collator */) const
         = 0;
 
     /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
@@ -258,6 +287,19 @@ public:
         size_t /* length */,
         bool /* has_null */) const
         = 0;
+    /// Similar to serializeToPos, but there are two changes to make sure compare semantics is kept:
+    /// 1. For ColumnString with collator, this method first decode collator and then serialize to pos.
+    /// 2. For ColumnNullable(ColumnXXX), a default value of the nested column will be serialized if this row is null.
+    virtual void serializeToPosForCmp(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const NullMap * /* nullmap */,
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        String * /* sort_key_container */) const
+        = 0;
+
     /// Serialize data of column from start to start + length into pointer of pos and forward each pos[i] to the end of
     /// serialized data.
     /// Only called by ColumnArray.
@@ -268,13 +310,24 @@ public:
         bool /* has_null */,
         const Offsets & /* array_offsets */) const
         = 0;
+    /// Similary to serializeToPosForCmp, but only called by ColumnArray.
+    virtual void serializeToPosForCmpColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        size_t /* start */,
+        size_t /* length */,
+        bool /* has_null */,
+        const NullMap * /* nullmap */,
+        const Offsets & /* array_offsets */,
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        String * /* sort_key_container */) const
+        = 0;
 
-    /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
+    /// Deserialize and insert data from pos and advance each pointer in pos to the end of serialized data.
     /// Note:
     /// 1. The pos pointer must not be nullptr.
-    /// 2. The memory of pos must be accessible to overflow 15 bytes(i.e. PaddedPODArray) for speeding up memcpy.(e.g. for ColumnString)
-    /// 3. If use_nt_align_buffer is true and AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes).
-    /// 4. If non-temporal store is used, the data will be copied to a align_buffer firstly and then flush to column data if full. After the
+    /// 2. If use_nt_align_buffer is true and AVX2 is enabled, non-temporal store may be used when data memory is aligned to FULL_VECTOR_SIZE_AVX2(64 bytes).
+    ///    The memory of pos must be accessible to **overflow 15 bytes**(i.e. PaddedPODArray) for speeding up memcpy when use_nt_align_buffer is true.
+    /// 3. If non-temporal store is used, the data will be copied to a align_buffer firstly and then flush to column data if full. After the
     ///    last call, flushNTAlignBuffer must be called to flush the remaining unaligned data from align_buffer into column data. During the
     ///    process, any function that may change the alignment of column data should not be called otherwise a exception will be thrown.
     /// Example:
@@ -288,7 +341,8 @@ public:
     ///     for (auto & column_ptr : mutable_columns)
     ///         column_ptr->flushNTAlignBuffer();
     virtual void deserializeAndInsertFromPos(PaddedPODArray<char *> & /* pos */, bool /* use_nt_align_buffer */) = 0;
-    /// Deserialize and insert data from pos and forward each pos[i] to the end of serialized data.
+
+    /// Deserialize and insert data from pos and advance each pointer in pos to the end of serialized data.
     /// Only called by ColumnArray.
     /// array_offsets is the offsets of ColumnArray.
     /// The last pos.size() elements of array_offsets can be used to get the length of elements from each pos.
@@ -298,7 +352,25 @@ public:
         bool /* use_nt_align_buffer */)
         = 0;
 
+    /// Flush any remaining data in the non-temporal align buffer into the column data.
+    /// This function must be called after all deserializeAndInsertFromPos calls when use_nt_align_buffer is enabled.
     virtual void flushNTAlignBuffer() = 0;
+
+    /// Deserialize from pos and advance each pointer in pos to the end of serialized data.
+    virtual void deserializeAndAdvancePos(PaddedPODArray<char *> & /* pos */) const = 0;
+    /// Advance each pointer in 'pos' by a fixed offset.
+    static void advancePosByOffset(PaddedPODArray<char *> & pos, size_t offset)
+    {
+        for (auto & p : pos)
+            p += offset;
+    }
+
+    /// Deserialize from pos and advance each pointer in pos to the end of serialized data.
+    /// Only called by ColumnArray.
+    virtual void deserializeAndAdvancePosForColumnArray(
+        PaddedPODArray<char *> & /* pos */,
+        const Offsets & /* array_offsets */) const
+        = 0;
 
     /// Update state of hash function with value of n-th element.
     /// On subsequent calls of this method for sequence of column values of arbitary types,
