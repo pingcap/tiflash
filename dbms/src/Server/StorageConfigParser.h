@@ -97,10 +97,15 @@ public:
     StorageS3Config s3_config;
     StorageRemoteCacheConfig remote_cache_config;
 
+    String temp_path{};
+    UInt64 temp_capacity = 0;
+
 public:
     TiFlashStorageConfig() = default;
 
     Strings getAllNormalPaths() const;
+
+    void checkTempCapacity(UInt64 global_capacity_quota, const LoggerPtr & log) const;
 
     static std::tuple<size_t, TiFlashStorageConfig> parseSettings(
         Poco::Util::LayeredConfiguration & config,
@@ -112,7 +117,8 @@ private:
     bool parseFromDeprecatedConfiguration(Poco::Util::LayeredConfiguration & config, const LoggerPtr & log);
 
     void parseMisc(const String & storage_section, const LoggerPtr & log);
-};
 
+    void parseTempConfig(const String & content);
+};
 
 } // namespace DB

@@ -75,8 +75,7 @@ try
     };
 
     // VectorIndexInputStream does not need this information, but ctx needs at least a correct vec column.
-    auto ann = std::make_shared<tipb::ANNQueryInfo>();
-    ann->set_deprecated_column_id(1);
+    auto ann = DeltaMergeStoreVectorBase::annQueryInfoTopK({.vec = {}, .top_k = 1, .column_id = 1});
     auto ctx = VectorIndexStreamCtx::createForStableOnlyTests(
         ann,
         std::make_shared<ColumnDefines>(
@@ -141,8 +140,7 @@ try
     };
 
     // VectorIndexInputStream does not need this information, but ctx needs at least a correct vec column.
-    auto ann = std::make_shared<tipb::ANNQueryInfo>();
-    ann->set_deprecated_column_id(1);
+    auto ann = DeltaMergeStoreVectorBase::annQueryInfoTopK({.vec = {}, .top_k = 1, .column_id = 1});
     auto ctx = VectorIndexStreamCtx::createForStableOnlyTests(
         ann,
         std::make_shared<ColumnDefines>(

@@ -413,5 +413,4 @@ String Spiller::nextSpillFileName(UInt64 partition_id)
 }
 
 std::atomic<Int64> Spiller::tmp_file_index = 0;
-
 } // namespace DB
