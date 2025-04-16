@@ -42,6 +42,7 @@
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/DeltaMerge/ScanContext.h>
@@ -1567,6 +1568,8 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
             name = handle_column_name;
         else if (cid == MutSup::extra_table_id_col_id)
             name = MutSup::extra_table_id_column_name;
+        else if (cid == DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id)
+            name = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.name;
         else if (cid == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.id)
             name = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name;
         else
