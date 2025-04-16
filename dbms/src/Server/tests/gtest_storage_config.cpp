@@ -965,6 +965,7 @@ try
             String config_str;
             String expected_temp_path;
             UInt64 expected_temp_capacity;
+            String remove_dir_str;
         };
 
         std::vector<TestCase> tests = {
@@ -977,6 +978,7 @@ capacity = [1000]
 )",
                 "main_dir/tmp/",
                 0,
+                "main_dir",
             },
             {
                 R"(
@@ -989,6 +991,7 @@ capacity = 1000
 )",
                 "main_dir/tmp/",
                 1000,
+                "main_dir",
             },
             {
                 R"(
@@ -996,6 +999,7 @@ path = "./main_dir"
 )",
                 "main_dir/tmp/",
                 0,
+                "main_dir",
             },
             {
                 R"(
@@ -1005,6 +1009,7 @@ path = "./main_dir"
 capacity = 2000)",
                 "main_dir/tmp/",
                 2000,
+                "main_dir",
             },
             // no storage.temp, use tmp_path instead.
             {
@@ -1015,6 +1020,7 @@ tmp_path = "./tmp_dir"
 )",
                 "tmp_dir/",
                 0,
+                "tmp_dir",
             },
             // ignore tmp_path when storage.temp exists.
             {
@@ -1029,6 +1035,7 @@ capacity = 2000
             )",
                 "main_dir/tmp/",
                 2000,
+                "main_dir",
             },
             // use tmp_path when storage.temp doesnt' exist.
             {
@@ -1041,6 +1048,7 @@ capacity = [1000]
             )",
                 "old_tmp_dir/",
                 0,
+                "old_tmp_dir/",
             },
             // use main_dir/tmp when tmp_path and storage.temp doesn't exist.
             {
@@ -1052,6 +1060,7 @@ capacity = [1000]
             )",
                 "main_dir/tmp/",
                 0,
+                "main_dir",
             },
             // use latest dir if storage.latest exist.
             {
@@ -1068,6 +1077,7 @@ capacity = 1000
             )",
                 "latest_dir/tmp/",
                 1000,
+                "latest_dir",
             },
             // use storage.temp.dir if storage.temp.dir exist.
             {
@@ -1085,6 +1095,7 @@ capacity = 1000
             )",
                 "main_dir/subdir/",
                 1000,
+                "main_dir",
             },
             // storage.temp.capacity is 1000, storage.latest.capacity is zero, it's ok.
             {
@@ -1100,6 +1111,7 @@ capacity = 1000
             )",
                 "latest_dir/tmp/",
                 1000,
+                "latest_dir",
             },
             {
                 R"(
@@ -1115,6 +1127,7 @@ capacity = 1000
             )",
                 "main_dir/subdir/",
                 1000,
+                "main_dir",
             },
             {
                 R"(
@@ -1130,6 +1143,7 @@ capacity = 1000
             )",
                 "latest_dir/subdir/",
                 1000,
+                "latest_dir/",
             },
             {
                 R"(
@@ -1145,6 +1159,7 @@ capacity = 9000
             )",
                 "latest_dir_1/subdir/",
                 9000,
+                "latest_dir_1",
             },
         };
 
@@ -1154,9 +1169,12 @@ capacity = 9000
             LOG_INFO(log, "case i: {}", i);
             auto config = loadConfigFromString(test.config_str);
             auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+            ASSERT_TRUE(!storage.temp_path.empty());
+            Poco::File(storage.temp_path).createDirectories();
             storage.checkTempCapacity(global_capacity_quota, log);
             ASSERT_EQ(storage.temp_path, test.expected_temp_path);
             ASSERT_EQ(storage.temp_capacity, test.expected_temp_capacity);
+            Poco::File(test.remove_dir_str).remove(true);
         }
     }
 
@@ -1165,6 +1183,7 @@ capacity = 9000
         {
             String config_str;
             String expected_exception_msg;
+            String remove_dir_str;
         };
 
         const String exceed_parent_quota_msg = "exceeds parent storage quota";
@@ -1182,6 +1201,7 @@ dir = ["./main_dir"]
 capacity = -1
             )",
                 "underflow_error",
+                "", // no need to remove, because parse will fail.
             },
             {
                 // storage.temp.capacity cannot exceeds storage.main.capacity when share main dir.
@@ -1194,6 +1214,7 @@ capacity = [1000]
 capacity = 5000
             )",
                 exceed_parent_quota_msg,
+                "main_dir",
             },
             {
                 R"(
@@ -1206,6 +1227,7 @@ dir = "./main_dir/subdir"
 capacity = 5000
             )",
                 exceed_parent_quota_msg,
+                "main_dir",
             },
             {
                 R"(
@@ -1220,6 +1242,7 @@ capacity = [8000]
 capacity = 5000
             )",
                 exceed_parent_quota_msg,
+                "latest_dir",
             },
             {
                 R"(
@@ -1235,6 +1258,7 @@ dir = "./main_dir/subdir"
 capacity = 5000
             )",
                 exceed_parent_quota_msg,
+                "main_dir",
             },
             // test with global quota
             {
@@ -1246,6 +1270,7 @@ tmp_path = "./main_dir/subdir"
 [storage.temp]
 capacity = 2000)",
                 exceed_parent_quota_msg,
+                "main_dir",
             },
             // test very large storage.temp.capacity
             {
@@ -1257,6 +1282,7 @@ dir = ["./main_dir"]
 capacity = 9223372036854775807
             )",
                 exceed_disk_capacity_msg,
+                "main_dir",
             },
             // test very large storage.temp.capacity
             {
@@ -1268,6 +1294,7 @@ dir = ["./main_dir"]
 capacity = 9223372036854775808
             )",
                 "cpptoml::parse_exception, e.what() = Malformed number",
+                "",
             },
         };
 
@@ -1280,6 +1307,8 @@ capacity = 9223372036854775808
             {
                 auto config = loadConfigFromString(test.config_str);
                 auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+                ASSERT_TRUE(!storage.temp_path.empty());
+                Poco::File(storage.temp_path).createDirectories();
                 storage.checkTempCapacity(global_capacity_quota, log);
             }
             catch (Poco::Exception & e)
@@ -1297,6 +1326,12 @@ capacity = 9223372036854775808
                 got_err = true;
                 ASSERT_TRUE(std::string(e.what()).contains("Malformed number"));
             }
+            catch (...)
+            {
+                LOG_INFO(log, "got unexpected error");
+            }
+            if (!test.remove_dir_str.empty())
+                Poco::File(test.remove_dir_str).remove(true);
             ASSERT_TRUE(got_err);
         }
     }
