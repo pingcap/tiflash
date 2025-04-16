@@ -41,15 +41,20 @@ PosixWritableFile::PosixWritableFile(
     bool truncate_when_exists_,
     int flags,
     mode_t mode,
-    const WriteLimiterPtr & write_limiter_)
+    const WriteLimiterPtr & write_limiter_,
+    const SpillLimiterPtr & spill_limiter_)
     : file_name{file_name_}
     , write_limiter{write_limiter_}
+    , spill_limiter{spill_limiter_}
 {
     doOpenFile(truncate_when_exists_, flags, mode);
 }
 
 PosixWritableFile::~PosixWritableFile()
 {
+    if (spill_limiter)
+        spill_limiter->release(total_write_bytes);
+
     metric_increment.destroy();
     if (fd < 0)
         return;
@@ -80,13 +85,19 @@ void PosixWritableFile::close()
 
 ssize_t PosixWritableFile::write(char * buf, size_t size)
 {
+    tryRequestSpillLimiter(size);
+    total_write_bytes += size;
+
     if (write_limiter)
         write_limiter->request(size);
     return ::write(fd, buf, size);
 }
 
-ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset) const
+ssize_t PosixWritableFile::pwrite(char * buf, size_t size, off_t offset)
 {
+    tryRequestSpillLimiter(size);
+    total_write_bytes += size;
+
     if (write_limiter)
         write_limiter->request(size);
     return ::pwrite(fd, buf, size, offset);

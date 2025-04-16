@@ -16,11 +16,13 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/DiskSize.h>
 #include <Common/DynamicThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/MemoryAllocTrace.h>
 #include <Common/RedactHelpers.h>
+#include <Common/SpillLimiter.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashBuildInfo.h>
@@ -741,20 +743,21 @@ try
 
     /// Directory with temporary data for processing of heavy queries.
     {
-        std::string tmp_path = config().getString("tmp_path", path + "tmp/");
-        global_context->setTemporaryPath(tmp_path);
-        Poco::File(tmp_path).createDirectories();
+        const std::string & temp_path = storage_config.temp_path;
+        RUNTIME_CHECK(!temp_path.empty());
+        Poco::File(temp_path).createDirectories();
 
-        /// Clearing old temporary files.
         Poco::DirectoryIterator dir_end;
-        for (Poco::DirectoryIterator it(tmp_path); it != dir_end; ++it)
+        for (Poco::DirectoryIterator it(temp_path); it != dir_end; ++it)
         {
             if (it->isFile() && startsWith(it.name(), "tmp"))
-            {
-                LOG_DEBUG(log, "Removing old temporary file {}", it->path());
                 global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
-            }
         }
+        LOG_INFO(log, "temp files in temp directory({}) removed", temp_path);
+
+        storage_config.checkTempCapacity(global_capacity_quota, log);
+        global_context->setTemporaryPath(temp_path);
+        SpillLimiter::instance->setMaxSpilledBytes(storage_config.temp_capacity);
     }
 
     /** Directory with 'flags': files indicating temporary settings for the server set by system administrator.
