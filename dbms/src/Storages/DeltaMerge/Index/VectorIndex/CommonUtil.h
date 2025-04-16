@@ -28,8 +28,8 @@ namespace DB::DM
 // For field changes, see: https://github.com/pingcap/tipb/pull/358
 inline ColumnID getVectorColumnID(const ANNQueryInfoPtr & ann_query_info)
 {
-    // Prioritize obtaining the deprecated_column_id because this field is set in
-    // the old version of tidb and is considered to be a valid value.
+    // Check `has_deprecated_column_id` first, because `column` is marked as
+    // not null in TiDB side so that it will be always populated with some value.
     if (ann_query_info->has_deprecated_column_id())
         return ann_query_info->deprecated_column_id();
     else if (ann_query_info->has_column())
