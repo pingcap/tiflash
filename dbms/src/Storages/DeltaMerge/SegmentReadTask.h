@@ -101,9 +101,6 @@ public:
 
     void fetchPages();
 
-    size_t prepareMVCCIndex(ReadMode read_mode);
-    void updateMVCCIndexSize(ReadMode read_mode, size_t initial_index_bytes);
-
     void initInputStream(
         const ColumnDefines & columns_to_read,
         UInt64 start_ts,
@@ -125,6 +122,8 @@ public:
 
 private:
     std::optional<Remote::RNMVCCIndexCache::CacheKey> getRNMVCCIndexCacheKey(ReadMode read_mode) const;
+    size_t prepareMVCCIndex(ReadMode read_mode);
+    void updateMVCCIndexSize(ReadMode read_mode, size_t initial_index_bytes);
 
     std::vector<Remote::PageOID> buildRemotePageOID() const;
 
