@@ -124,10 +124,17 @@ if (OS_LINUX)
                 DESTINATION ".")
     endif()
 
+    if (USE_INTERNAL_LIBCLARA)
+        install (TARGETS clara_shared
+                COMPONENT tiflash-release
+                DESTINATION ".")
+    endif()
+
     if (NOT (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR SAN_DEBUG))
         install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
     endif()
     install (SCRIPT ${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-cmake/tiflash_proxy_linux_post_install.cmake COMPONENT tiflash-release)
+    install (SCRIPT ${TiFlash_SOURCE_DIR}/libs/libclara-cmake/linux_post_install.cmake COMPONENT tiflash-release)
 elseif(APPLE)
     # set build rpaths, so that executables can be directly called in build tree (easy to debug)
     set_target_properties(tiflash PROPERTIES BUILD_RPATH "@executable_path/;@executable_path/${TIFLASH_PROXY_LIB_RPATH}/")
@@ -139,7 +146,7 @@ elseif(APPLE)
     install (RUNTIME_DEPENDENCY_SET tiflash-release-dependency
             COMPONENT tiflash-release
             DESTINATION "."
-            PRE_INCLUDE_REGEXES ".*proxy.*")
+            PRE_INCLUDE_REGEXES ".*proxy.*|.*clara.*")
 endif ()
 
 include(CMakePrintHelpers)

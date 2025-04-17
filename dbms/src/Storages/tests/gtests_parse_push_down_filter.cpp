@@ -95,6 +95,7 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
 
     // these variables need to live long enough as it is kept as reference in `dag_query`
     const auto ann_query_info = tipb::ANNQueryInfo{};
+    const auto fts_query_info = tipb::FTSQueryInfo{};
     const auto runtime_filter_ids = std::vector<int>();
 
     DM::ColumnDefines columns_to_read;
@@ -107,6 +108,7 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
     std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
         conditions,
         ann_query_info,
+        fts_query_info,
         pushed_down_filters,
         empty_used_indexes,
         table_info.columns,
@@ -124,6 +126,7 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
     auto push_down_executor = DM::PushDownExecutor::build(
         rs_operator,
         std::make_shared<tipb::ANNQueryInfo>(dag_query->ann_query_info),
+        std::make_shared<tipb::FTSQueryInfo>(dag_query->fts_query_info),
         table_info.columns,
         pushed_down_filters,
         columns_to_read,

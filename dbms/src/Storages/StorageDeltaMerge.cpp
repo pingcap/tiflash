@@ -44,7 +44,9 @@
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -677,6 +679,16 @@ void setColumnsToRead(
         {
             extra_table_id_index = i;
             continue;
+        }
+        else if (column_names[i] == DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.name)
+        {
+            col_define.name = column_names[i];
+            col_define.id = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id;
+            col_define.type = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.type;
+        }
+        else if (column_names[i] == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name)
+        {
+            col_define = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD;
         }
         else
         {

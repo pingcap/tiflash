@@ -899,6 +899,16 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_load_dmfile_local, {{"type", "load_dmfile_local"}}, ExpBuckets{0.001, 2, 20}),                                         \
       F(type_load_dmfile_s3, {{"type", "load_dmfile_s3"}}, ExpBuckets{0.001, 2, 20}),                                               \
       F(type_search, {{"type", "search"}}, ExpBuckets{0.001, 2, 20}))                                                               \
+    M(tiflash_fts_index_duration,                                                                                                   \
+      "FTS index operation duration (brute not included)",                                                                          \
+      Histogram,                                                                                                                    \
+      F(type_build, {{"type", "build"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+      F(type_load_cf, {{"type", "load_cf"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+      F(type_load_cache, {{"type", "load_cache"}}, ExpBuckets{0.001, 2, 20}),                                                       \
+      F(type_load_dmfile_local, {{"type", "load_dmfile_local"}}, ExpBuckets{0.001, 2, 20}),                                         \
+      F(type_load_dmfile_s3, {{"type", "load_dmfile_s3"}}, ExpBuckets{0.001, 2, 20}),                                               \
+      F(type_search_scored, {{"type", "search_scored"}}, ExpBuckets{0.001, 2, 20}),                                                 \
+      F(type_search_noscore, {{"type", "search_noscore"}}, ExpBuckets{0.001, 2, 20}))                                               \
     M(tiflash_inverted_index_active_instances,                                                                                      \
       "Active Inverted index instances",                                                                                            \
       Gauge,                                                                                                                        \
@@ -956,6 +966,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_sent_cross_zone, {"type", "sent_cross_zone"}),                                                                         \
       F(type_received_total, {"type", "received_total"}),                                                                           \
       F(type_received_cross_zone, {"type", "received_cross_zone"}))                                                                 \
+    M(tiflash_spilled_files,                                                                                                        \
+      "Information about spilled files",                                                                                            \
+      Gauge,                                                                                                                        \
+      F(type_current_spilled_bytes, {"type", "current_spilled_bytes"}))                                                             \
     M(tiflash_storage_version_chain_ms,                                                                                             \
       "Durations of VersionChain",                                                                                                  \
       Histogram,                                                                                                                    \
