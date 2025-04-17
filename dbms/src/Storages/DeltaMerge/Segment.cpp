@@ -51,7 +51,7 @@
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
-#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>

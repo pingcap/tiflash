@@ -816,16 +816,16 @@ bool SegmentReadTask::hasColumnFileToFetch() const
         || std::any_of(persisted_cfs.cbegin(), persisted_cfs.cend(), need_to_fetch);
 }
 
-std::optional<Remote::RNDeltaIndexCache::CacheKey> SegmentReadTask::getRNMVCCIndexCacheKey(ReadMode read_mode) const
+std::optional<Remote::RNMVCCIndexCache::CacheKey> SegmentReadTask::getRNMVCCIndexCacheKey(ReadMode read_mode) const
 {
     if (!dm_context->global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
         return std::nullopt;
 
-    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache;
+    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_mvcc_index_cache;
     if (!cache)
         return std::nullopt;
 
-    return Remote::RNDeltaIndexCache::CacheKey{
+    return Remote::RNMVCCIndexCache::CacheKey{
         .store_id = store_id,
         .table_id = dm_context->physical_table_id,
         .segment_id = segment->segmentId(),
@@ -842,7 +842,7 @@ size_t SegmentReadTask::prepareMVCCIndex(ReadMode read_mode)
     if (!cache_key)
         return 0;
 
-    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache;
+    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_mvcc_index_cache;
     assert(cache != nullptr);
     if (cache_key->is_version_chain)
     {
@@ -864,7 +864,7 @@ void SegmentReadTask::updateMVCCIndexSize(ReadMode read_mode, size_t initial_ind
     if (!cache_key)
         return;
 
-    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_delta_index_cache;
+    auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_mvcc_index_cache;
     assert(cache != nullptr);
     if (cache_key->is_version_chain && getVersionChainBytes(*(segment->getVersionChain())) != initial_index_bytes)
         cache->setVersionChain(*cache_key, segment->getVersionChain());

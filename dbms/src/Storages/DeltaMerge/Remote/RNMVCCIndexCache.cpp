@@ -15,7 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/DeltaIndex/DeltaIndex.h>
-#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache.h>
 #include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 namespace CurrentMetrics
 {
@@ -30,23 +30,23 @@ namespace
 void reportCacheHitStats(bool miss)
 {
     if (miss)
-        GET_METRIC(tiflash_storage_delta_index_cache, type_miss).Increment();
+        GET_METRIC(tiflash_storage_mvcc_index_cache, type_miss).Increment();
     else
-        GET_METRIC(tiflash_storage_delta_index_cache, type_hit).Increment();
+        GET_METRIC(tiflash_storage_mvcc_index_cache, type_hit).Increment();
 }
 } // namespace
 
-DeltaIndexPtr RNDeltaIndexCache::getDeltaIndex(const CacheKey & key)
+DeltaIndexPtr RNMVCCIndexCache::getDeltaIndex(const CacheKey & key)
 {
     RUNTIME_CHECK(!key.is_version_chain);
-    auto [value, miss] = cache.getOrSet(key, [&key] {
-        return std::make_shared<CacheValue>(CacheDeltaIndex(std::make_shared<DeltaIndex>(key), 0));
+    auto [value, miss] = cache.getOrSet(key, [] {
+        return std::make_shared<CacheValue>(CacheDeltaIndex(std::make_shared<DeltaIndex>(), 0));
     });
     reportCacheHitStats(miss);
     return value->getDeltaIndex();
 }
 
-void RNDeltaIndexCache::setDeltaIndex(const CacheKey & key, const DeltaIndexPtr & delta_index)
+void RNMVCCIndexCache::setDeltaIndex(const CacheKey & key, const DeltaIndexPtr & delta_index)
 {
     RUNTIME_CHECK(delta_index != nullptr);
     std::lock_guard lock(mtx);
@@ -57,7 +57,7 @@ void RNDeltaIndexCache::setDeltaIndex(const CacheKey & key, const DeltaIndexPtr 
     }
 }
 
-GenericVersionChainPtr RNDeltaIndexCache::getVersionChain(const CacheKey & key, bool is_common_handle)
+GenericVersionChainPtr RNMVCCIndexCache::getVersionChain(const CacheKey & key, bool is_common_handle)
 {
     RUNTIME_CHECK(key.is_version_chain);
     auto [value, miss] = cache.getOrSet(key, [is_common_handle] {
@@ -67,7 +67,7 @@ GenericVersionChainPtr RNDeltaIndexCache::getVersionChain(const CacheKey & key, 
     return value->getVersionChain();
 }
 
-void RNDeltaIndexCache::setVersionChain(const CacheKey & key, const GenericVersionChainPtr & version_chain)
+void RNMVCCIndexCache::setVersionChain(const CacheKey & key, const GenericVersionChainPtr & version_chain)
 {
     RUNTIME_CHECK(version_chain != nullptr);
     std::lock_guard lock(mtx);

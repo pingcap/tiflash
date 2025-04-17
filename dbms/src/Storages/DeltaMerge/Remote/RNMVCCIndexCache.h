@@ -15,7 +15,7 @@
 #pragma once
 
 #include <Common/LRUCache.h>
-#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache_fwd.h>
 #include <Storages/DeltaMerge/VersionChain/VersionChain_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <common/types.h>
@@ -34,10 +34,10 @@ namespace DB::DM::Remote
  * A LRU cache that holds delta-tree indexes from different remote write nodes.
  * Delta-tree indexes are used as much as possible when same segments are accessed multiple times.
  */
-class RNDeltaIndexCache : private boost::noncopyable
+class RNMVCCIndexCache : private boost::noncopyable
 {
 public:
-    explicit RNDeltaIndexCache(size_t max_cache_size)
+    explicit RNMVCCIndexCache(size_t max_cache_size)
         : cache(max_cache_size)
     {}
 

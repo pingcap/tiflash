@@ -15,7 +15,7 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
-#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
@@ -70,12 +70,12 @@ void SharedContextDisagg::initReadNodePageCache(
 
 void SharedContextDisagg::initReadNodeDeltaIndexCache(size_t max_size)
 {
-    RUNTIME_CHECK(rn_delta_index_cache == nullptr);
+    RUNTIME_CHECK(rn_mvcc_index_cache == nullptr);
 
     if (max_size > 0)
     {
         LOG_INFO(Logger::get(), "Initialize Read Node delta index cache, max_size={}", max_size);
-        rn_delta_index_cache = std::make_shared<DM::Remote::RNDeltaIndexCache>(max_size);
+        rn_mvcc_index_cache = std::make_shared<DM::Remote::RNMVCCIndexCache>(max_size);
     }
     else
     {

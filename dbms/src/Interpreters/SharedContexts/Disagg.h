@@ -19,7 +19,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
-#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService_fwd.h>
@@ -67,7 +67,7 @@ struct SharedContextDisagg : private boost::noncopyable
 
     /// Only for read node.
     /// It is a cache for the delta index, stores in the memory.
-    DB::DM::Remote::RNDeltaIndexCachePtr rn_delta_index_cache;
+    DB::DM::Remote::RNMVCCIndexCachePtr rn_mvcc_index_cache;
 
     static SharedContextDisaggPtr create(Context & global_context_)
     {

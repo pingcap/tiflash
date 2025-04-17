@@ -22,6 +22,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/KVStore/Types.h>
 #include <grpcpp/support/sync_stream.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache.h>
 
 namespace DB::DM
 {
@@ -123,7 +124,7 @@ public:
     String toString() const;
 
 private:
-    std::optional<Remote::RNDeltaIndexCache::CacheKey> getRNMVCCIndexCacheKey(ReadMode read_mode) const;
+    std::optional<Remote::RNMVCCIndexCache::CacheKey> getRNMVCCIndexCacheKey(ReadMode read_mode) const;
 
     std::vector<Remote::PageOID> buildRemotePageOID() const;
 

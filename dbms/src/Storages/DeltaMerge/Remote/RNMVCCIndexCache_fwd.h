@@ -19,7 +19,7 @@
 namespace DB::DM::Remote
 {
 
-class RNDeltaIndexCache;
-using RNDeltaIndexCachePtr = std::shared_ptr<RNDeltaIndexCache>;
+class RNMVCCIndexCache;
+using RNMVCCIndexCachePtr = std::shared_ptr<RNMVCCIndexCache>;
 
 } // namespace DB::DM::Remote
