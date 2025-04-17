@@ -18,11 +18,11 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/KVStore/Types.h>
 #include <grpcpp/support/sync_stream.h>
-#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache.h>
 
 namespace DB::DM
 {

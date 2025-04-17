@@ -19,8 +19,8 @@
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/SharedContexts/Disagg_fwd.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore_fwd.h>
-#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache_fwd.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache_fwd.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache_fwd.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager_fwd.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService_fwd.h>
 #include <Storages/PathPool_fwd.h>

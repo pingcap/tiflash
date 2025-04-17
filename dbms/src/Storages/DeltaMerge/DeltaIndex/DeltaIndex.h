@@ -102,8 +102,7 @@ private:
         if (delta_tree_copy)
         {
             auto new_delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
-            auto new_index
-                = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
+            auto new_index = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
             // try to do some updates before return it if need
             if (updates)
                 new_index->applyUpdates(*updates);
@@ -124,10 +123,7 @@ public:
         , placed_deletes(0)
     {}
 
-    DeltaIndex(
-        const DeltaTreePtr & delta_tree_,
-        size_t placed_rows_,
-        size_t placed_deletes_)
+    DeltaIndex(const DeltaTreePtr & delta_tree_, size_t placed_rows_, size_t placed_deletes_)
         : id(++NEXT_DELTA_INDEX_ID)
         , delta_tree(delta_tree_)
         , placed_rows(placed_rows_)

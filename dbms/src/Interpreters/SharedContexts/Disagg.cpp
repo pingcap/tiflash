@@ -15,8 +15,8 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Remote/DataStore/DataStoreS3.h>
-#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
