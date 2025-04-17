@@ -66,7 +66,7 @@ struct SharedContextDisagg : private boost::noncopyable
     DB::DM::Remote::RNLocalPageCachePtr rn_page_cache;
 
     /// Only for read node.
-    /// It is a cache for the delta index, stores in the memory.
+    /// It is a cache for the mvcc index, stores in the memory.
     DB::DM::Remote::RNMVCCIndexCachePtr rn_mvcc_index_cache;
 
     static SharedContextDisaggPtr create(Context & global_context_)
