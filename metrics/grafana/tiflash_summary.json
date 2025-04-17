@@ -9230,7 +9230,7 @@
               "expr": "tiflash_system_asynchronous_metric_RNMVCCIndexCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "hide": false,
               "interval": "",
-              "legendFormat": "rn_delta_index_cache_{{instance}}",
+              "legendFormat": "rn_mvcc_index_cache_{{instance}}",
               "refId": "B"
             }
           ],
@@ -17771,7 +17771,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "DeltaIndexCache",
+          "title": "MVCCIndexCache",
           "tooltip": {
             "shared": true,
             "sort": 0,
