@@ -32,6 +32,17 @@ mysql> use test; set tidb_enforce_mpp=1; select sum(a), max(b), avg(c) from t1 g
 |      6 |      6 |    NULL |
 +--------+--------+---------+
 
+mysql> use test; set tidb_enforce_mpp=1; select sum(a), max(b), avg(c) from t1 group by b with rollup order by b,grouping(b);
++--------+--------+---------+
+| sum(a) | max(b) | avg(c)  |
++--------+--------+---------+
+|     10 |   NULL |  4.0000 |
+|     33 |      6 |  3.8750 |
+|      4 |      1 |  2.5000 |
+|      3 |      2 |  2.0000 |
+|     16 |      6 | 10.0000 |
++--------+--------+---------+
+
 mysql> use test; set tidb_enforce_mpp=1; select a, b, grouping(a), grouping(b), sum(a), avg(b), count(c) from t1 group by a, b with rollup order by a,b,grouping(a),grouping(b);
 +------+------+-------------+-------------+--------+--------+----------+
 | a    | b    | grouping(a) | grouping(b) | sum(a) | avg(b) | count(c) |
@@ -76,8 +87,8 @@ mysql> use test; set tidb_enforce_mpp=1; select b, c, grouping(b), grouping(c), 
 +------+------+-------------+-------------+--------+--------+--------+
 | b    | c    | grouping(b) | grouping(c) | avg(b) | sum(c) | sum(c) |
 +------+------+-------------+-------------+--------+--------+--------+
-| NULL | NULL |           0 |           1 |   NULL |     12 |     12 |
 | NULL | NULL |           1 |           1 | 3.4286 |     31 |     31 |
+| NULL | NULL |           0 |           1 |   NULL |     12 |     12 |
 | NULL |    3 |           0 |           0 |   NULL |      3 |      3 |
 | NULL |    4 |           0 |           0 |   NULL |      4 |      4 |
 | NULL |    5 |           0 |           0 |   NULL |      5 |      5 |
