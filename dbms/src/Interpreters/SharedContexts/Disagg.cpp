@@ -68,7 +68,7 @@ void SharedContextDisagg::initReadNodePageCache(
     }
 }
 
-void SharedContextDisagg::initReadNodeDeltaIndexCache(size_t max_size)
+void SharedContextDisagg::initReadNodeMVCCIndexCache(size_t max_size)
 {
     RUNTIME_CHECK(rn_mvcc_index_cache == nullptr);
 

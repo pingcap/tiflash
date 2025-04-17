@@ -958,7 +958,7 @@ try
         LOG_INFO(log, "delta_index_cache_size={}", n);
         // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
         // Instead, we use RNMVCCIndexCache.
-        global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(n);
+        global_context->getSharedContextDisagg()->initReadNodeMVCCIndexCache(n);
     }
     else
     {

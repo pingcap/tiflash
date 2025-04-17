@@ -85,7 +85,7 @@ struct SharedContextDisagg : private boost::noncopyable
 
     /// Note that the unit of max_size is quantity, not byte size. It controls how
     /// **many** of delta index will be maintained.
-    void initReadNodeDeltaIndexCache(size_t max_size);
+    void initReadNodeMVCCIndexCache(size_t max_size);
 
     void initWriteNodeSnapManager();
 
