@@ -97,8 +97,6 @@ void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Execut
 void PhysicalPlan::buildTiCIScan(const String & executor_id, const tipb::Executor * executor)
 {
     TiCIScan tici_scan(executor, executor_id, dagContext());
-    //TiCIScan tici_scan(executor);
-    LOG_INFO(log, "build TiCI Scan");
     pushBack(PhysicalTiCIScan::build(executor_id, log, tici_scan));
     dagContext().table_scan_executor_id = executor_id;
 }
@@ -266,13 +264,13 @@ void PhysicalPlan::buildFinalProjection(const String & column_prefix, bool is_ro
 {
     const auto & final_projection = is_root
         ? PhysicalProjection::buildRootFinal(
-              context,
-              log,
-              dagContext().output_field_types,
-              dagContext().output_offsets,
-              column_prefix,
-              dagContext().keep_session_timezone_info,
-              popBack())
+            context,
+            log,
+            dagContext().output_field_types,
+            dagContext().output_offsets,
+            column_prefix,
+            dagContext().keep_session_timezone_info,
+            popBack())
         : PhysicalProjection::buildNonRootFinal(context, log, column_prefix, popBack());
     pushBack(final_projection);
 }
