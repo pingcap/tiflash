@@ -28,6 +28,7 @@
 #include <Debug/DBGInvoker.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <IO/BaseFile/fwd.h>
 #include <IO/Buffer/ReadBufferFromFile.h>
 #include <IO/FileProvider/FileProvider.h>
@@ -75,6 +76,7 @@
 #include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
+#include <memory>
 #include <pcg_random.hpp>
 #include <unordered_map>
 
@@ -227,12 +229,15 @@ struct ContextShared
 
     std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
 
+    std::unique_ptr<CTEManager> cte_manager;
+
     ContextShared(
         std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_,
         Context::ApplicationType app_type)
         : runtime_components_factory(std::move(runtime_components_factory_))
         , storage_run_mode(PageStorageRunMode::ONLY_V3)
         , application_type(app_type)
+        , cte_manager(std::make_unique<CTEManager>())
     {
         /// TODO: make it singleton (?)
 #ifndef MULTIPLE_CONTEXT_GTEST
@@ -567,6 +572,12 @@ PathPool & Context::getPathPool() const
 {
     auto lock = getLock();
     return shared->path_pool;
+}
+
+CTEManager * Context::getCTEManager() const
+{
+    auto lock = getLock();
+    return this->shared->cte_manager.get();
 }
 
 void Context::setPath(const String & path)

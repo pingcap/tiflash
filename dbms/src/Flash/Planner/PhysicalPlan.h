@@ -63,7 +63,7 @@ private:
     void buildTableScan(const String & executor_id, const tipb::Executor * executor);
 
 private:
-    std::vector<PhysicalPlanNodePtr> cur_plan_nodes{};
+    std::vector<PhysicalPlanNodePtr> cur_plan_nodes;
 
     // hold the root node of physical plan node tree after `outputAndOptimize`.
     PhysicalPlanNodePtr root_node;
