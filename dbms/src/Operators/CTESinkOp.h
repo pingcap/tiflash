@@ -43,6 +43,8 @@ public:
 protected:
     void operateSuffixImpl() override;
     OperatorStatus writeImpl(Block && block) override;
+    OperatorStatus executeIOImpl() override;
+    OperatorStatus awaitImpl() override;
 
 private:
     String query_id_and_cte_id;

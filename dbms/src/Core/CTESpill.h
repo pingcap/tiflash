@@ -29,8 +29,11 @@ namespace DB
 class CTESpill
 {
 public:
-    void writeBlocks(Blocks && blocks); // TODO implement
-    void readBlockAt(Int64 idx) const; // TODO implement
+    // TODO maybe we need an initialization function as spill may not be triggered and we can initialize it until spill is triggered
+
+    // TODO all function need lock as CTESpill may be concurrently accessed
+    void writeBlocks(const Blocks & blocks); // TODO implement, return value need other types
+    Block readBlockAt(Int64 idx) const; // TODO implement
     Int64 blockNum() const; // TODO implement
 
 private:

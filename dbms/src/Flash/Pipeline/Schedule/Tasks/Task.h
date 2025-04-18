@@ -57,6 +57,8 @@ enum class NotifyType
     WAIT_ON_JOIN_BUILD_FINISH,
     WAIT_ON_JOIN_PROBE_FINISH,
     WAIT_ON_RESULT_QUEUE_WRITE,
+    WAIT_ON_CTE_SINK,
+    WAIT_ON_CTE_SOURCE,
 };
 
 class PipelineExecutorContext;

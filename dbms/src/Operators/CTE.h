@@ -16,18 +16,22 @@
 
 #include <Common/RWLock.h>
 #include <Core/Block.h>
+#include <Core/CTESpill.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 
+#include <atomic>
 #include <shared_mutex>
 #include <utility>
 
 namespace DB
 {
-enum class FetchStatus
+enum class Status
 {
     Ok,
     Waiting,
+    IOOut,
+    IOIn,
     Eof,
     Cancelled
 };
@@ -37,26 +41,42 @@ class CTE : public NotifyFuture
 public:
     ~CTE() override = default;
 
-    std::pair<FetchStatus, Block> tryGetBlockAt(size_t idx);
-    FetchStatus checkAvailableBlockAt(size_t idx);
-    void pushBlock(const Block & block);
+    enum CTEStatus
+    {
+        Normal = 0,
+        NeedSpill,
+        InSpilling,
+    };
+
+    std::pair<Status, Block> tryGetBlockAt(size_t idx);
+    std::pair<Status, Block> getBlockFromDisk(size_t idx);
+    Status pushBlock(const Block & block);
     void notifyEOF();
+
+    // TODO should have return value to indicate if spill successes
+    void spillBlocks();
 
     void registerTask(TaskPtr && task) override;
 
 private:
-    // Return true if CTE has data
-    inline bool hasDataNoLock() const { return !this->blocks.empty(); }
-
     std::shared_mutex rw_lock;
     Blocks blocks;
 
     size_t memory_usage = 0;
+    size_t memory_threshold = 0; // TODO initialize it
 
-    // Tasks in WAITING_FOR_NOTIFY are saved in this deque
-    std::deque<TaskPtr> waiting_tasks;
+    std::atomic_int8_t cte_status; // TODO initialize it
+    std::shared_mutex aux_rw_lock;
+
+    // TODO handle this, some blocks can not be spilled when spill is in execution, they can only be stored temporary
+    Blocks tmp_blocks;
+
+    // TODO tasks waiting for notify may be lack of data or waiting for spill, do we need two pipe_cv to handle this?
     PipeConditionVariable pipe_cv;
 
+    CTESpill cte_spill;
+
     bool is_eof = false;
+    bool is_spill_triggered = false;
 };
 } // namespace DB

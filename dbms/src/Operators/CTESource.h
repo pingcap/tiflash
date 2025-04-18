@@ -46,7 +46,7 @@ protected:
 
     OperatorStatus readImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override;
+    OperatorStatus awaitImpl() override; // TODO implement awaitImpl
 
 private:
     String query_id_and_cte_id;

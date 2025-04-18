@@ -14,6 +14,7 @@
 
 #include <Operators/CTESinkOp.h>
 #include <Operators/Operator.h>
+#include <fmt/core.h>
 
 namespace DB
 {
@@ -36,7 +37,26 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
         return OperatorStatus::FINISHED;
     }
     this->total_rows += block.rows();
-    this->cte->pushBlock(block);
-    return OperatorStatus::NEED_INPUT;
+    auto status = this->cte->pushBlock(block);
+    switch (status)
+    {
+    case Status::IOOut:
+        return OperatorStatus::IO_OUT;
+    case Status::Ok:
+        return OperatorStatus::NEED_INPUT;
+    default:
+        throw Exception(fmt::format("Get unexpected Status: {}", magic_enum::enum_name(status)));
+    }
+}
+
+OperatorStatus CTESinkOp::executeIOImpl()
+{
+    // TODO handle return value
+    this->cte->spillBlocks();
+}
+
+OperatorStatus CTESinkOp::awaitImpl()
+{
+
 }
 } // namespace DB
