@@ -207,10 +207,10 @@ void AsynchronousMetrics::update()
     }
 
     {
-        if (auto rn_delta_index_cache = context.getSharedContextDisagg()->rn_delta_index_cache)
+        if (auto rn_mvcc_index_cache = context.getSharedContextDisagg()->rn_mvcc_index_cache)
         {
-            set("RNDeltaIndexCacheBytes", rn_delta_index_cache->getCacheWeight());
-            set("RNDeltaIndexFiles", rn_delta_index_cache->getCacheCount());
+            set("RNMVCCIndexCacheBytes", rn_mvcc_index_cache->getCacheWeight());
+            set("RNMVCCIndexFiles", rn_mvcc_index_cache->getCacheCount());
         }
     }
 

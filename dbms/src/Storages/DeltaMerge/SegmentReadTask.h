@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/KVStore/Types.h>
@@ -120,6 +121,10 @@ public:
     String toString() const;
 
 private:
+    std::optional<Remote::RNMVCCIndexCache::CacheKey> getRNMVCCIndexCacheKey(ReadMode read_mode) const;
+    size_t prepareMVCCIndex(ReadMode read_mode);
+    void updateMVCCIndexSize(ReadMode read_mode, size_t initial_index_bytes);
+
     std::vector<Remote::PageOID> buildRemotePageOID() const;
 
     Remote::RNLocalPageCache::OccupySpaceResult blockingOccupySpaceForTask() const;

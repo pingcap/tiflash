@@ -24,7 +24,6 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
-#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -122,12 +121,7 @@ RemotePb::RemoteSegment Serializer::serializeSegment(
     return remote;
 }
 
-SegmentSnapshotPtr Serializer::deserializeSegment(
-    const DMContext & dm_context,
-    StoreID remote_store_id,
-    KeyspaceID keyspace_id,
-    TableID table_id,
-    const RemotePb::RemoteSegment & proto)
+SegmentSnapshotPtr Serializer::deserializeSegment(const DMContext & dm_context, const RemotePb::RemoteSegment & proto)
 {
     RowKeyRange segment_range;
     {
@@ -140,21 +134,7 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
     auto mem_snap = deserializeColumnFileSet(dm_context, proto.column_files_memtable(), data_store, segment_range);
     auto persisted_snap
         = deserializeColumnFileSet(dm_context, proto.column_files_persisted(), data_store, segment_range);
-    auto delta_index = [&]() {
-        auto delta_index_cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache;
-        if (!delta_index_cache)
-        {
-            return std::make_shared<DeltaIndex>();
-        }
-        return delta_index_cache->getDeltaIndex({
-            .store_id = remote_store_id,
-            .keyspace_id = keyspace_id,
-            .table_id = table_id,
-            .segment_id = proto.segment_id(),
-            .segment_epoch = proto.segment_epoch(),
-            .delta_index_epoch = proto.delta_index_epoch(),
-        });
-    }();
+
     // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
     // because they are constructed using ColumnFileDataProviderNop.
     auto delta_snap = std::make_shared<DeltaValueSnapshot>(
@@ -164,7 +144,7 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
         std::move(persisted_snap),
         // There is no DeltaValueSpace in the disagg arch read node
         /*delta_vs*/ nullptr,
-        std::move(delta_index),
+        std::make_shared<DeltaIndex>(),
         // Actually we will not access delta_snap->delta_index_epoch in read node. Just for completeness.
         proto.delta_index_epoch());
 

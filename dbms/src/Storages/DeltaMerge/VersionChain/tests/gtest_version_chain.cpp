@@ -40,7 +40,7 @@ protected:
         auto [seg, snap] = getSegmentForRead(opts.seg_id);
         auto actual_base_versions = std::visit(
             [&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); },
-            seg->version_chain);
+            *(seg->version_chain));
         ASSERT_EQ(opts.expected_base_versions, *actual_base_versions) << "caller_line=" << opts.caller_line;
     }
 
@@ -54,7 +54,7 @@ protected:
                     version_chain.dmfile_or_delete_range_list.size(),
                 };
             },
-            seg->version_chain);
+            *(seg->version_chain));
         ASSERT_EQ(actutal_new_handle_count, expected_new_handle_count);
         ASSERT_EQ(actual_dmfile_or_delete_range_count, expected_dmfile_or_delete_range_count);
     }

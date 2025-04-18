@@ -16,7 +16,6 @@
 
 #include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/Page/PageDefinesBase.h>
 namespace DB::DM
 {
@@ -30,8 +29,6 @@ class DeltaIndex
 private:
     // `id` is used as Key in LRUCache in non-disaggregated mode.
     const UInt64 id;
-    // `rn_cache_key` is used as Key in RNDeltaIndexCache in disaggregated mode.
-    const std::optional<Remote::RNDeltaIndexCache::CacheKey> rn_cache_key;
 
     DeltaTreePtr delta_tree;
 
@@ -105,8 +102,7 @@ private:
         if (delta_tree_copy)
         {
             auto new_delta_tree = std::make_shared<DefaultDeltaTree>(*delta_tree_copy);
-            auto new_index
-                = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy, rn_cache_key);
+            auto new_index = std::make_shared<DeltaIndex>(new_delta_tree, placed_rows_copy, placed_deletes_copy);
             // try to do some updates before return it if need
             if (updates)
                 new_index->applyUpdates(*updates);
@@ -115,26 +111,20 @@ private:
         else
         {
             // Otherwise, create an empty new DeltaIndex.
-            return std::make_shared<DeltaIndex>(rn_cache_key);
+            return std::make_shared<DeltaIndex>();
         }
     }
 
 public:
-    explicit DeltaIndex(const std::optional<Remote::RNDeltaIndexCache::CacheKey> & rn_cache_key_ = std::nullopt)
+    explicit DeltaIndex()
         : id(++NEXT_DELTA_INDEX_ID)
-        , rn_cache_key(rn_cache_key_)
         , delta_tree(std::make_shared<DefaultDeltaTree>())
         , placed_rows(0)
         , placed_deletes(0)
     {}
 
-    DeltaIndex(
-        const DeltaTreePtr & delta_tree_,
-        size_t placed_rows_,
-        size_t placed_deletes_,
-        const std::optional<Remote::RNDeltaIndexCache::CacheKey> & rn_cache_key_ = std::nullopt)
+    DeltaIndex(const DeltaTreePtr & delta_tree_, size_t placed_rows_, size_t placed_deletes_)
         : id(++NEXT_DELTA_INDEX_ID)
-        , rn_cache_key(rn_cache_key_)
         , delta_tree(delta_tree_)
         , placed_rows(placed_rows_)
         , placed_deletes(placed_deletes_)
@@ -218,8 +208,6 @@ public:
         RUNTIME_CHECK_MSG(!updates.empty(), "Unexpected empty updates");
         return tryCloneInner(updates.front().rows_offset, updates.front().delete_ranges_offset, &updates);
     }
-
-    const std::optional<Remote::RNDeltaIndexCache::CacheKey> & getRNCacheKey() const { return rn_cache_key; }
 };
 
 } // namespace DB::DM

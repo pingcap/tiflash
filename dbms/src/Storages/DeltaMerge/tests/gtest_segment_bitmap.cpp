@@ -1193,7 +1193,7 @@ try
             RUNTIME_CHECK(cfs[0]->isInMemoryFile(), cfs[0]->toString());
 
         auto vc = createVersionChain(is_common_handle);
-        return std::visit([&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); }, vc);
+        return std::visit([&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); }, *vc);
     };
     auto base_ver1 = get_base_versions(false);
     writeSegmentGeneric("flush_cache"); // Flush never sort data when version chain enabled.

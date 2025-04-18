@@ -84,8 +84,7 @@ protected:
         auto broken_delta_index = std::make_shared<DeltaIndex>(
             second_snap->delta->getSharedDeltaIndex()->getDeltaTree(),
             placed_rows,
-            placed_deletes,
-            first_snap->delta->getSharedDeltaIndex()->getRNCacheKey());
+            placed_deletes);
 
         // hack to change the "immutable" delta-index on delta-snapshot for testing
         (*const_cast<DeltaIndexPtr *>(&first_snap->delta->getSharedDeltaIndex())) = broken_delta_index;

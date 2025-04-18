@@ -957,8 +957,8 @@ try
         size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
         LOG_INFO(log, "delta_index_cache_size={}", n);
         // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
-        // Instead, we use RNDeltaIndexCache.
-        global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(n);
+        // Instead, we use RNMVCCIndexCache.
+        global_context->getSharedContextDisagg()->initReadNodeMVCCIndexCache(n);
     }
     else
     {

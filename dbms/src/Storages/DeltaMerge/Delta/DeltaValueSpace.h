@@ -357,7 +357,7 @@ private:
     const bool is_update{false};
 
     // The delta index of cached.
-    const DeltaIndexPtr shared_delta_index;
+    DeltaIndexPtr shared_delta_index;
     const UInt64 delta_index_epoch;
 
     // mem-table may not be ready when the snapshot is creating under disagg arch, so it is not "const"
@@ -455,6 +455,9 @@ public:
     // But we need this because under disagg arch, we fetch the mem-table by streaming way.
     // After all mem-table fetched, we set the mem-table-set snapshot to the DeltaValueSnapshot.
     void setMemTableSetSnapshot(const ColumnFileSetSnapshotPtr & mem_table_snap_) { mem_table_snap = mem_table_snap_; }
+    // Under disagg arch, the DeltaIndex will be lazily fetched from the cache only before reading.
+    // Because we will decide whether to use DeltaIndex or VersionChain ​​before reading​​.
+    void setSharedDeltaIndex(const DeltaIndexPtr & delta_index) { shared_delta_index = delta_index; }
 };
 
 class DeltaValueReader
