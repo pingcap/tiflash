@@ -16,6 +16,7 @@
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
+#include <Flash/Coprocessor/TiCIScan.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/PipelineBuilder.h>
 #include <Flash/Planner/PhysicalPlan.h>
@@ -40,6 +41,9 @@
 #include <Flash/Planner/optimize.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
+
+#include "Flash/Planner/Plans/PhysicalTiCIScan.h"
+#include "tipb/executor.pb.h"
 
 namespace DB
 {
@@ -87,6 +91,13 @@ void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Execut
         pushBack(PhysicalMockTableScan::build(context, executor_id, log, table_scan));
     else
         pushBack(PhysicalTableScan::build(executor_id, log, table_scan));
+    dagContext().table_scan_executor_id = executor_id;
+}
+
+void PhysicalPlan::buildTiCIScan(const String & executor_id, const tipb::Executor * executor)
+{
+    TiCIScan tici_scan(executor, executor_id, dagContext());
+    pushBack(PhysicalTiCIScan::build(executor_id, log, tici_scan));
     dagContext().table_scan_executor_id = executor_id;
 }
 
@@ -198,6 +209,9 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     case tipb::ExecType::TypePartitionTableScan:
         GET_METRIC(tiflash_coprocessor_executor_count, type_partition_ts).Increment();
         buildTableScan(executor_id, executor);
+        break;
+    case tipb::ExecType::TypeTiCIScan:
+        buildTiCIScan(executor_id, executor);
         break;
     case tipb::ExecType::TypeJoin:
     {

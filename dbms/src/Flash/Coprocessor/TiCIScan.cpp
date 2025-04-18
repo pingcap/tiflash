@@ -1,0 +1,31 @@
+// Copyright 2025 PingCAP, Inc.
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+#include "Flash/Coprocessor/TiCIScan.h"
+
+#include "TiDB/Schema/TiDB.h"
+namespace DB
+{
+TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id_, const DAGContext &)
+    : tici_scan(tici_scan_)
+    , executor_id(executor_id_)
+    , table_id(tici_scan->tici_scan().table_id())
+    , index_id(tici_scan->tici_scan().index_id())
+    , return_columns(TiDB::toTiDBColumnInfos(tici_scan->tici_scan().return_columns()))
+    , query_columns(TiDB::toTiDBColumnInfos(tici_scan->tici_scan().query_columns()))
+    , query_type(tici_scan->tici_scan().type())
+    , query_json_str(tici_scan->tici_scan().query_json_str())
+    , limit(tici_scan->tici_scan().limit())
+{}
+} // namespace DB
