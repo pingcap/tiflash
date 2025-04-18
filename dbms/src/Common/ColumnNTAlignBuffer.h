@@ -28,7 +28,7 @@ static constexpr size_t VECTOR_SIZE_AVX2 = sizeof(__m256i);
 static constexpr size_t FULL_VECTOR_SIZE_AVX2 = 2 * VECTOR_SIZE_AVX2;
 static_assert(FULL_VECTOR_SIZE_AVX2 == 64);
 
-/// NT stand for non-temporal.
+/// NT stands for non-temporal.
 union alignas(FULL_VECTOR_SIZE_AVX2) NTAlignBufferAVX2
 {
     char data[FULL_VECTOR_SIZE_AVX2]{};

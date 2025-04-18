@@ -152,6 +152,8 @@ public:
         String &) const override;
     const char * deserializeAndInsertFromArena(const char * pos, const TiDB::TiDBCollatorPtr &) override;
 
+    size_t serializeByteSize() const override { return data.size() * sizeof(T); }
+
     void countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const override;
     void countSerializeByteSizeForCmp(
         PaddedPODArray<size_t> & byte_size,

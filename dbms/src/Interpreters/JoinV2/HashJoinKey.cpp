@@ -103,7 +103,7 @@ void resetHashJoinKeyGetter(
     case HashJoinKeyMethod::METHOD:                                                                   \
         using KeyGetter##METHOD = typename HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::Type; \
         static_cast<KeyGetter##METHOD *>(key_getter.get())                                            \
-            ->reset(key_columns, row_layout.raw_required_key_column_indexes.size());                  \
+            ->reset(key_columns, row_layout.raw_key_column_indexes.size());                           \
         break;
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M

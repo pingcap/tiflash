@@ -50,7 +50,7 @@ void HashJoinV2ProbeTransformOp::operateSuffixImpl()
 
 OperatorStatus HashJoinV2ProbeTransformOp::onOutput(Block & block)
 {
-    assert(!probe_context.isCurrentProbeFinished());
+    assert(!probe_context.isAllFinished());
     block = join_ptr->probeBlock(probe_context, op_index);
     size_t rows = block.rows();
     joined_rows += rows;
@@ -59,7 +59,7 @@ OperatorStatus HashJoinV2ProbeTransformOp::onOutput(Block & block)
 
 OperatorStatus HashJoinV2ProbeTransformOp::transformImpl(Block & block)
 {
-    assert(probe_context.isCurrentProbeFinished());
+    assert(probe_context.isAllFinished());
     if unlikely (!block)
     {
         join_ptr->finishOneProbe(op_index);
@@ -80,7 +80,7 @@ OperatorStatus HashJoinV2ProbeTransformOp::tryOutputImpl(Block & block)
         block = {};
         return OperatorStatus::HAS_OUTPUT;
     }
-    if (probe_context.isCurrentProbeFinished())
+    if (probe_context.isAllFinished())
         return OperatorStatus::NEED_INPUT;
     return onOutput(block);
 }
