@@ -68,6 +68,7 @@ add_custom_command(OUTPUT ${_CLARA_LIBRARY} ${_CLARA_GEN_SRC_FILES}
                 "${_CLARA_SOURCE_DIR}/rust-toolchain.toml")
 
 add_library(clara ${_CLARA_GEN_SRC_FILES})
+target_compile_options(clara PRIVATE -fPIC)
 target_link_libraries(clara PUBLIC ${_CLARA_LIBRARY})
 target_include_directories(clara PUBLIC ${_CLARA_INCLUDE_DIR})
 
