@@ -42,7 +42,7 @@ struct MPPGatherTaskSet
     State state = Normal;
     String error_message;
     /// <sender_task_id, <receiver_task_id, alarm>>
-    std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm>> alarms;
+    std::unordered_map<Int64, std::unordered_map<Int64, grpc::Alarm *>> alarms;
     /// only used in scheduler
     std::queue<MPPTaskId> waiting_tasks;
     bool isInNormalState() const { return state == Normal; }

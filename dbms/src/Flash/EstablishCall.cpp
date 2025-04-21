@@ -216,6 +216,11 @@ void EstablishCallData::initRpc()
     }
 }
 
+grpc::Alarm * EstablishCallData::getAlarm()
+{
+    return &alarm;
+}
+
 void EstablishCallData::tryConnectTunnel()
 {
     auto * task_manager = service->getContext()->getTMTContext().getMPPTaskManager().get();
