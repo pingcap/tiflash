@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CurrentMetrics.h>
+#include <Common/DiskSize.h>
 #include <Common/Exception.h>
 #include <Common/formatReadable.h>
 #include <Core/Types.h>
@@ -328,18 +329,11 @@ ssize_t PathCapacityMetrics::locatePath(std::string_view file_path) const
 std::tuple<FsStats, struct statvfs> PathCapacityMetrics::CapacityInfo::getStats(const LoggerPtr & log) const
 {
     FsStats res{};
-    /// Get capacity, used, available size for one path.
-    /// Similar to `handle_store_heartbeat` in TiKV release-4.0 branch
-    /// https://github.com/tikv/tikv/blob/f14e8288f3/components/raftstore/src/store/worker/pd.rs#L593
-    struct statvfs vfs
-    {
-    };
-    if (int code = statvfs(path.data(), &vfs); code != 0)
+    auto [vfs, err_msg] = DB::getFsStat(path);
+    if unlikely (!err_msg.empty())
     {
         if (log)
-        {
-            LOG_ERROR(log, "Could not calculate available disk space (statvfs) of path: {}, errno: {}", path, errno);
-        }
+            LOG_ERROR(log, "Could not calculate available disk space: {}", err_msg);
         return {};
     }
 

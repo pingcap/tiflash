@@ -184,6 +184,9 @@ private:
         case dtpb::IndexFileKind::INVERTED_INDEX:
             RUNTIME_CHECK(index_info.index_props().has_inverted_index());
             break;
+        case dtpb::IndexFileKind::FULLTEXT_INDEX:
+            RUNTIME_CHECK(index_info.index_props().has_fulltext_index());
+            break;
         default:
             RUNTIME_CHECK_MSG(
                 false,

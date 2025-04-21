@@ -67,13 +67,14 @@ add_custom_command(OUTPUT ${_CLARA_LIBRARY} ${_CLARA_GEN_SRC_FILES}
                 "${_CLARA_SOURCE_DIR}/Cargo.toml"
                 "${_CLARA_SOURCE_DIR}/rust-toolchain.toml")
 
-add_library(clara STATIC ${_CLARA_GEN_SRC_FILES})
-target_link_libraries(clara INTERFACE ${_CLARA_LIBRARY})
+add_library(clara ${_CLARA_GEN_SRC_FILES})
+target_compile_options(clara PRIVATE -fPIC)
+target_link_libraries(clara PUBLIC ${_CLARA_LIBRARY})
 target_include_directories(clara PUBLIC ${_CLARA_INCLUDE_DIR})
 
 # Rust cannot generate a dynamic library with correct visibility, so we generate a static library first and then link it to a shared library.
 # The reason we use dynamic library is to avoid symbol conflicts.
 
 add_library(clara_shared SHARED "${TiFlash_SOURCE_DIR}/libs/libclara-cmake/dummy.cpp")
-target_link_libraries(clara_shared PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,clara>")
+target_link_libraries(clara_shared PUBLIC "$<LINK_LIBRARY:WHOLE_ARCHIVE,clara>")
 target_include_directories(clara_shared PUBLIC ${_CLARA_INCLUDE_DIR})

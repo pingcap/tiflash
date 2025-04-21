@@ -12,10 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-find_program(OBJCOPY_EXECUTABLE "objcopy")
-if(OBJCOPY_EXECUTABLE)
-    message(STATUS "Compressing debug sections for libclara...")
-    execute_process(COMMAND ${OBJCOPY_EXECUTABLE} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/libclara_shared.so)
-else()
+find_program (OBJCOPY_EXECUTABLE "objcopy")
+if (OBJCOPY_EXECUTABLE)
+    message (STATUS "Compressing debug sections for libclara...")
+    # Note: CMAKE_SHARED_LIBRARY_PREFIX is not available in the cmake script mode. So we manually check the library name.
+    if (EXISTS ${CMAKE_INSTALL_PREFIX}/libclara_shared.so)
+        execute_process (COMMAND ${OBJCOPY_EXECUTABLE} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/libclara_shared.so)
+    elseif (EXISTS ${CMAKE_INSTALL_PREFIX}/libclara_sharedd.so)
+        execute_process (COMMAND ${OBJCOPY_EXECUTABLE} --compress-debug-sections=zlib-gnu ${CMAKE_INSTALL_PREFIX}/libclara_sharedd.so)
+    else ()
+        message (STATUS "libclara_shared.so or libclara_sharedd.so not found. Skipped debug section compression for libclara.")
+    endif ()
+else ()
     message(WARNING "objcopy not found in PATH. Skipped debug section compression for libclara.")
-endif()
+endif ()
