@@ -152,3 +152,6 @@
 [submodule "contrib/highfive"]
 	path = contrib/highfive
 	url = https://github.com/BlueBrain/HighFive
+[submodule "contrib/tici"]
+	path = contrib/tici
+	url = git@github.com:pingcap-inc/tici.git
