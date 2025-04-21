@@ -571,6 +571,8 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
             added_columns);
     wd.probe_hash_table_time += watch.elapsedFromLastTime();
 
+    // Move the mutable column pointers back into the wd.result_block, dropping the extra reference (ref_count 2→1).
+    // Alternative: added_columns.clear(); but that is less explicit and may misleadingly imply the columns are discarded.
     for (size_t i = 0; i < right_columns; ++i)
         wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
 
