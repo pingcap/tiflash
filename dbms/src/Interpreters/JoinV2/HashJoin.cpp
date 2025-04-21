@@ -475,7 +475,8 @@ void HashJoin::workAfterBuildRowFinish()
         enable_tagged_pointer,
         false);
 
-    const size_t lm_size_threshold = 16;
+    /// Conservative threshold: trigger late materialization when lm_row_size average >= 16 bytes.
+    constexpr size_t trigger_lm_row_size_threshold = 16;
     bool late_materialization = false;
     size_t avg_lm_row_size = 0;
     if (has_other_condition
@@ -489,10 +490,11 @@ void HashJoin::workAfterBuildRowFinish()
             total_lm_row_count += build_workers_data[i].lm_row_count;
         }
         avg_lm_row_size = total_lm_row_count == 0 ? 0 : total_lm_row_size / total_lm_row_count;
-        late_materialization = avg_lm_row_size >= lm_size_threshold;
+        late_materialization = avg_lm_row_size >= trigger_lm_row_size_threshold;
     }
     fiu_do_on(FailPoints::force_join_v2_probe_enable_lm, { late_materialization = true; });
     fiu_do_on(FailPoints::force_join_v2_probe_disable_lm, { late_materialization = false; });
+
     join_probe_helper = std::make_unique<JoinProbeHelper>(this, late_materialization);
 
     LOG_INFO(
