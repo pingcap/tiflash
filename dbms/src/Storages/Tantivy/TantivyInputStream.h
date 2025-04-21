@@ -14,18 +14,17 @@
 
 #pragma once
 
+#include <Common/Logger.h>
 #include <Core/Block.h>
+#include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
+#include <DataTypes/DataTypeNullable.h>
+#include <common/logger_useful.h>
+#include <common/types.h>
 #include <fcntl.h>
 #include <fmt/os.h>
-
-#include "Common/Logger.h"
-#include "Core/NamesAndTypes.h"
-#include "DataTypes/DataTypeNullable.h"
-#include "common/logger_useful.h"
-#include "common/types.h"
-#include "tici-search-lib/src/lib.rs.h"
+#include <tici-search-lib/src/lib.rs.h>
 
 namespace DB::TS
 {
@@ -75,7 +74,7 @@ protected:
             query_fields.push_back(name_and_type.name);
         }
 
-        rust::Vec<rust::String> return_fields = {};
+        rust::Vec<rust::String> return_fields;
         for (auto & name_and_type : return_columns)
         {
             LOG_INFO(log, name_and_type.name);

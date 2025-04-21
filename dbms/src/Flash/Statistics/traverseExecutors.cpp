@@ -14,8 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Statistics/traverseExecutors.h>
-
-#include "tipb/executor.pb.h"
+#include <tipb/executor.pb.h>
 
 namespace DB
 {

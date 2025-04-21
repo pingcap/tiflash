@@ -14,14 +14,12 @@
 
 #pragma once
 
-#include <Common/Logger.h>
+#include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/CoprocessorReader.h>
 #include <Operators/Operator.h>
+#include <Storages/Tantivy/TantivyInputStream.h>
+#include <common/types.h>
 #include <pingcap/coprocessor/Client.h>
-
-#include "Core/NamesAndTypes.h"
-#include "Storages/Tantivy/TantivyInputStream.h"
-#include "common/types.h"
 
 namespace DB
 {

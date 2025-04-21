@@ -35,15 +35,14 @@
 #include <Flash/Planner/Plans/PhysicalMockTableScan.h>
 #include <Flash/Planner/Plans/PhysicalProjection.h>
 #include <Flash/Planner/Plans/PhysicalTableScan.h>
+#include <Flash/Planner/Plans/PhysicalTiCIScan.h>
 #include <Flash/Planner/Plans/PhysicalTopN.h>
 #include <Flash/Planner/Plans/PhysicalWindow.h>
 #include <Flash/Planner/Plans/PhysicalWindowSort.h>
 #include <Flash/Planner/optimize.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Interpreters/Context.h>
-
-#include "Flash/Planner/Plans/PhysicalTiCIScan.h"
-#include "tipb/executor.pb.h"
+#include <tipb/executor.pb.h>
 
 namespace DB
 {

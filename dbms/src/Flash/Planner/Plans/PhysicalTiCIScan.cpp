@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/StorageDisaggregatedInterpreter.h>
+#include <Flash/Coprocessor/StorageTantivyInterpreter.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
@@ -25,8 +26,6 @@
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/ExpressionTransformOp.h>
-
-#include "Flash/Coprocessor/StorageTantivyInterpreter.h"
 
 
 namespace DB
@@ -103,7 +102,7 @@ void PhysicalTiCIScan::buildPipeline(
     PipelineExecutorContext & exec_context)
 {
     // For building PipelineExec in compile time.
-    StorageTantivyIterpreter storage_interpreter(context, tici_scan, filter_conditions, context.getMaxStreams());
+    StorageTantivyIterpreter storage_interpreter(context, tici_scan, context.getMaxStreams());
     storage_interpreter.execute(exec_context, pipeline_exec_builder);
     buildProjection(exec_context, pipeline_exec_builder);
 

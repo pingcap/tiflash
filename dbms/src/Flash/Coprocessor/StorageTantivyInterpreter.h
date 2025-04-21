@@ -14,21 +14,16 @@
 
 #pragma once
 
+#include <Core/Names.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
+#include <Flash/Coprocessor/TiCIScan.h>
 #include <Interpreters/Context.h>
+#include <Storages/SelectQueryInfo.h>
 #include <Storages/StorageTantivy.h>
-
-#include <algorithm>
-
-#include "Core/Names.h"
-#include "Core/NamesAndTypes.h"
-#include "Flash/Coprocessor/DAGContext.h"
-#include "Flash/Coprocessor/GenSchemaAndColumn.h"
-#include "Flash/Coprocessor/TiCIScan.h"
-#include "Storages/SelectQueryInfo.h"
 
 namespace DB
 {
@@ -36,24 +31,17 @@ namespace DB
 class StorageTantivyIterpreter
 {
 public:
-    StorageTantivyIterpreter(
-        Context & context_,
-        const TiCIScan & tici_scan_,
-        const FilterConditions & filter_conditions_,
-        size_t max_streams_)
+    StorageTantivyIterpreter(Context & context_, const TiCIScan & tici_scan_, size_t max_streams_)
         : context(context_)
         , storage(std::make_unique<StorageTantivy>(context_, tici_scan_))
         , max_streams(max_streams_)
         , log(Logger::get(context.getDAGContext()->log ? context.getDAGContext()->log->identifier() : ""))
         , tici_scan(tici_scan_)
-        , filter_conditions(filter_conditions_)
     {}
-
-    void execute(DAGPipeline &) {}
 
     void execute(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
     {
-        storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, 0);
+        storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, max_streams);
     }
 
     // Members will be transferred to DAGQueryBlockInterpreter after execute
@@ -62,10 +50,9 @@ public:
 private:
     Context & context;
     std::unique_ptr<StorageTantivy> storage;
-    [[maybe_unused]] size_t max_streams;
+    size_t max_streams;
 
     LoggerPtr log;
     const TiCIScan tici_scan;
-    [[maybe_unused]] const FilterConditions & filter_conditions;
 };
 } // namespace DB

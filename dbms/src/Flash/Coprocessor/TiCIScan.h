@@ -14,10 +14,9 @@
 
 #pragma once
 
+#include <Flash/Coprocessor/DAGContext.h>
 #include <TiDB/Schema/TiDB.h>
-
-#include "Flash/Coprocessor/DAGContext.h"
-#include "tipb/executor.pb.h"
+#include <tipb/executor.pb.h>
 namespace DB
 {
 class DAGContext;

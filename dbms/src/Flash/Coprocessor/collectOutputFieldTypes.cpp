@@ -17,8 +17,7 @@
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/types.h>
-
-#include "tipb/executor.pb.h"
+#include <tipb/executor.pb.h>
 
 namespace DB
 {

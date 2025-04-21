@@ -12,31 +12,30 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/TiFlashException.h>
+#include <Core/Names.h>
+#include <Core/NamesAndTypes.h>
+#include <DataStreams/ExpressionBlockInputStream.h>
+#include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
+#include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
+#include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Flash/Coprocessor/TiCIScan.h>
+#include <Flash/Coprocessor/TiDBTableScan.h>
+#include <Interpreters/Context.h>
+#include <Interpreters/ExpressionActions.h>
+#include <Operators/TantivyReaderSourceOp.h>
+#include <Storages/IStorage.h>
 #include <Storages/StorageTantivy.h>
+#include <Storages/Tantivy/TantivyInputStream.h>
+#include <common/defines.h>
+#include <common/logger_useful.h>
 
 #include <iostream>
 #include <memory>
 #include <utility>
-
-#include "Common/TiFlashException.h"
-#include "Core/Names.h"
-#include "Core/NamesAndTypes.h"
-#include "DataStreams/ExpressionBlockInputStream.h"
-#include "DataStreams/IBlockInputStream.h"
-#include "Flash/Coprocessor/DAGExpressionAnalyzer.h"
-#include "Flash/Coprocessor/DAGPipeline.h"
-#include "Flash/Coprocessor/TiCIScan.h"
-#include "Flash/Coprocessor/TiDBTableScan.h"
-#include "Interpreters/Context.h"
-#include "Interpreters/ExpressionActions.h"
-#include "Operators/TantivyReaderSourceOp.h"
-#include "Storages/IStorage.h"
-#include "Storages/Tantivy/TantivyInputStream.h"
-#include "common/defines.h"
-#include "common/logger_useful.h"
 
 namespace DB
 {

@@ -15,22 +15,21 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Core/NamesAndTypes.h>
+#include <Core/Types.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Coprocessor/TiCIScan.h>
+#include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
+#include <Operators/TantivyReaderSourceOp.h>
 #include <Storages/IStorage.h>
+#include <TiDB/Schema/TiDB.h>
 
 #include <cstdlib>
-
-#include "Core/NamesAndTypes.h"
-#include "Core/Types.h"
-#include "Flash/Coprocessor/GenSchemaAndColumn.h"
-#include "Flash/Coprocessor/TiCIScan.h"
-#include "IO/WriteHelpers.h"
-#include "Operators/TantivyReaderSourceOp.h"
-#include "TiDB/Schema/TiDB.h"
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"

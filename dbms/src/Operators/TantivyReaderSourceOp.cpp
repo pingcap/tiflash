@@ -12,14 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/CoprocessorReader.h>
+#include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Operators/Operator.h>
 #include <Operators/TantivyReaderSourceOp.h>
-
-#include "Core/NamesAndTypes.h"
-#include "Operators/Operator.h"
-#include "Storages/Tantivy/TantivyInputStream.h"
-#include "common/types.h"
+#include <Storages/Tantivy/TantivyInputStream.h>
+#include <common/types.h>
 
 namespace DB
 {
@@ -34,7 +32,7 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
     const UInt64 & limit)
     : SourceOp(exec_context_, req_id)
 {
-    setHeader(Block(getColumnWithTypeAndName(return_columns)));
+    setHeader(Block(return_columns));
     input = std::make_shared<TS::TantivyInputStream>(
         log,
         table_id,
