@@ -110,7 +110,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
 class JoinProbeHelperUtil
 {
 protected:
-    explicit JoinProbeHelperUtil(const HashJoinSettings & settings, const HashJoinRowLayout & row_layout)
+    JoinProbeHelperUtil(const HashJoinSettings & settings, const HashJoinRowLayout & row_layout)
         : settings(settings)
         , row_layout(row_layout)
     {}

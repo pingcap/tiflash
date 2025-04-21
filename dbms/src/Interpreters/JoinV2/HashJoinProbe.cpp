@@ -1229,7 +1229,7 @@ Block JoinProbeHelper::handleOtherConditions(
             for (size_t i = 0; i < right_columns; ++i)
             {
                 auto output_index = output_column_indexes.at(left_columns + i);
-                if (output_index == -1)
+                if (output_index < 0)
                     continue;
                 if unlikely (!filter_offsets_is_initialized)
                     init_filter_offsets();
@@ -1243,7 +1243,7 @@ Block JoinProbeHelper::handleOtherConditions(
         for (size_t i = 0; i < left_columns; ++i)
         {
             auto output_index = output_column_indexes.at(i);
-            if (output_index == -1)
+            if (output_index < 0)
                 continue;
             auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
             if (left_required_flag_for_other_condition[i])
@@ -1366,7 +1366,7 @@ Block JoinProbeHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context
     for (size_t i = 0; i < right_columns; ++i)
     {
         auto output_index = output_column_indexes.at(left_columns + i);
-        if (output_index == -1)
+        if (output_index < 0)
             continue;
         auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
         des_column.column->assumeMutable()->insertManyDefaults(length);
@@ -1375,7 +1375,7 @@ Block JoinProbeHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context
     for (size_t i = 0; i < left_columns; ++i)
     {
         auto output_index = output_column_indexes.at(i);
-        if (output_index == -1)
+        if (output_index < 0)
             continue;
         auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
         auto & src_column = context.block.safeGetByPosition(i);
