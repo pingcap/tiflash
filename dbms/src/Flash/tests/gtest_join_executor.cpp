@@ -2202,7 +2202,7 @@ try
             toNullableVec<Int64>("l4", {3, 1, 2, 0, 2, 3, 3, {}, 4, 5, 0, 6}),
         });
 
-    // No other condition: lj_l_table left join lj_r_table
+    // lj_l_table left join lj_r_table, no other condition
     auto request = context.scan("test_db", "lj_l_table")
                        .join(
                            context.scan("test_db", "lj_r_table"),
@@ -2288,7 +2288,7 @@ try
         });
     WRAP_FOR_JOIN_TEST_END
 
-    // No other condition: lj_r_table left join lj_l_table
+    // lj_r_table left join lj_l_table, no other condition
     request = context.scan("test_db", "lj_r_table")
                   .join(
                       context.scan("test_db", "lj_l_table"),
@@ -2354,7 +2354,7 @@ try
         });
     WRAP_FOR_JOIN_TEST_END
 
-    // Has other condition: lj_l_table left join lj_r_table
+    // lj_l_table left join lj_r_table, other condition: l4 > r3
     request = context.scan("test_db", "lj_l_table")
                   .join(
                       context.scan("test_db", "lj_r_table"),
@@ -2390,7 +2390,7 @@ try
         });
     WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
 
-    // Has other condition: lj_r_table left join lj_l_table
+    // lj_r_table left join lj_l_table, other condition: l4 > r3
     request = context.scan("test_db", "lj_r_table")
                   .join(
                       context.scan("test_db", "lj_l_table"),
@@ -2422,6 +2422,75 @@ try
             toNullableVec<String>({"AAA", "AAA", "LLL", "III", "JJJ", "LLL", {}}),
             toNullableVec<Int32>({1, 1, 10, 7, 8, 10, {}}),
             toNullableVec<Int64>({3, 3, 6, 4, 5, 6, {}}),
+        });
+    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
+
+    // lj_l_table left join lj_r_table, other condition: l4 > r3 or r3 < l3
+    request
+        = context.scan("test_db", "lj_l_table")
+              .join(
+                  context.scan("test_db", "lj_r_table"),
+                  tipb::JoinType::TypeLeftOuterJoin,
+                  {col("k1"), col("k2")},
+                  {eq(col("lj_l_table.l2"), col("lj_l_table.l3"))},
+                  {},
+                  {Or(gt(col("lj_l_table.l4"), col("lj_r_table.r3")), lt(col("lj_r_table.r3"), col("lj_l_table.l3")))},
+                  {})
+              .project(
+                  {"lj_l_table.l3",
+                   "lj_r_table.r2",
+                   "lj_r_table.r3",
+                   "lj_r_table.k2",
+                   "lj_l_table.k1",
+                   "lj_l_table.l2",
+                   "lj_l_table.l1",
+                   "lj_r_table.r1"})
+              .build(context);
+    WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_BEGIN
+    executeAndAssertColumnsEqual(
+        request,
+        {
+            toNullableVec<Int32>({1, 1, 2, 3, 4, 5, 0, {}, 6, 7, 7, 8, 9, 9, 10, 10}),
+            toNullableVec<String>(
+                {"aaa", "bbb", {}, {}, {}, {}, {}, {}, "ddd", "ccc", "eee", "ddd", "aaa", "bbb", "ccc", "eee"}),
+            toNullableVec<Int32>({1, 2, {}, {}, {}, {}, {}, {}, 4, 3, 5, 4, 1, 2, 3, 5}),
+            toNullableVec<Int16>({1, 1, {}, {}, {}, {}, {}, {}, 3, 2, 2, 3, 1, 1, 2, 2}),
+            toNullableVec<Int64>({1, 1, 1, 2, 2, {}, 3, 3, 3, 2, 2, 3, 1, 1, 2, 2}),
+            toVec<Int32>({1, 1, 2, 3, 4, 5, 6, 6, 6, 7, 7, 8, 9, 9, 10, 10}),
+            toVec<String>(
+                {"AAA",
+                 "AAA",
+                 "BBB",
+                 "CCC",
+                 "DDD",
+                 "EEE",
+                 "FFF",
+                 "GGG",
+                 "HHH",
+                 "III",
+                 "III",
+                 "JJJ",
+                 "KKK",
+                 "KKK",
+                 "LLL",
+                 "LLL"}),
+            toNullableVec<String>(
+                {"apple",
+                 "banana",
+                 {},
+                 {},
+                 {},
+                 {},
+                 {},
+                 {},
+                 "dog",
+                 "cat",
+                 "elephant",
+                 "dog",
+                 "apple",
+                 "banana",
+                 "cat",
+                 "elephant"}),
         });
     WRAP_FOR_JOIN_FOR_OTHER_CONDITION_TEST_END
 }

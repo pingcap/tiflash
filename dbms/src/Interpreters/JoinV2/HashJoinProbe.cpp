@@ -126,62 +126,46 @@ void JoinProbeContext::prepareForHashProbe(
 template <bool late_materialization, bool last_flush>
 void JoinProbeHelperUtil::flushInsertBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns) const
 {
-    if constexpr (late_materialization)
+    for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
     {
-        size_t idx = 0;
-        for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
-        {
-            IColumn * column = added_columns[idx].get();
-            if (is_nullable)
-                column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
-            column->deserializeAndInsertFromPos(wd.insert_batch, true);
-            ++idx;
-        }
-        for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
-            added_columns[idx++]->deserializeAndInsertFromPos(wd.insert_batch, true);
-
-        wd.row_ptrs_for_lm.insert(wd.insert_batch.begin(), wd.insert_batch.end());
+        IColumn * column = added_columns[column_index].get();
+        if (is_nullable)
+            column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
+        column->deserializeAndInsertFromPos(wd.insert_batch, true);
     }
+
+    size_t add_size;
+    if constexpr (late_materialization)
+        add_size = row_layout.other_column_count_for_other_condition;
     else
+        add_size = row_layout.other_column_indexes.size();
+    for (size_t i = 0; i < add_size; ++i)
+    {
+        size_t column_index = row_layout.other_column_indexes[i].first;
+        added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch, true);
+    }
+    if constexpr (late_materialization)
+        wd.row_ptrs_for_lm.insert(wd.insert_batch.begin(), wd.insert_batch.end());
+
+    if constexpr (last_flush)
     {
         for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
         {
             IColumn * column = added_columns[column_index].get();
             if (is_nullable)
                 column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-            column->deserializeAndInsertFromPos(wd.insert_batch, true);
+            column->flushNTAlignBuffer();
         }
-        for (auto [column_index, _] : row_layout.other_column_indexes)
-            added_columns[column_index]->deserializeAndInsertFromPos(wd.insert_batch, true);
-    }
 
-    if constexpr (last_flush)
-    {
+        size_t add_size;
         if constexpr (late_materialization)
-        {
-            size_t idx = 0;
-            for (auto [_, is_nullable] : row_layout.raw_key_column_indexes)
-            {
-                IColumn * column = added_columns[idx].get();
-                if (is_nullable)
-                    column = &static_cast<ColumnNullable &>(*added_columns[idx]).getNestedColumn();
-                column->flushNTAlignBuffer();
-                ++idx;
-            }
-            for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
-                added_columns[idx++]->flushNTAlignBuffer();
-        }
+            add_size = row_layout.other_column_count_for_other_condition;
         else
+            add_size = row_layout.other_column_indexes.size();
+        for (size_t i = 0; i < add_size; ++i)
         {
-            for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
-            {
-                IColumn * column = added_columns[column_index].get();
-                if (is_nullable)
-                    column = &static_cast<ColumnNullable &>(*added_columns[column_index]).getNestedColumn();
-                column->flushNTAlignBuffer();
-            }
-            for (auto [column_index, _] : row_layout.other_column_indexes)
-                added_columns[column_index]->flushNTAlignBuffer();
+            size_t column_index = row_layout.other_column_indexes[i].first;
+            added_columns[column_index]->flushNTAlignBuffer();
         }
     }
 
@@ -191,23 +175,16 @@ void JoinProbeHelperUtil::flushInsertBatch(JoinProbeWorkerData & wd, MutableColu
 template <bool late_materialization>
 void JoinProbeHelperUtil::fillNullMapWithZero(MutableColumns & added_columns) const
 {
-    size_t idx = 0;
     for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
     {
         if (is_nullable)
         {
-            size_t index;
-            if constexpr (late_materialization)
-                index = idx;
-            else
-                index = column_index;
-            auto & nullable_column = static_cast<ColumnNullable &>(*added_columns[index]);
+            auto & nullable_column = static_cast<ColumnNullable &>(*added_columns[column_index]);
             size_t data_size = nullable_column.getNestedColumn().size();
             size_t nullmap_size = nullable_column.getNullMapColumn().size();
             RUNTIME_CHECK(nullmap_size <= data_size);
             nullable_column.getNullMapColumn().getData().resize_fill_zero(data_size);
         }
-        ++idx;
     }
 }
 
@@ -574,30 +551,9 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
         }
     }
 
-    MutableColumns added_columns;
-    if constexpr (late_materialization)
-    {
-        for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
-        {
-            added_columns.emplace_back(
-                wd.result_block.safeGetByPosition(left_columns + column_index).column->assumeMutable());
-            RUNTIME_CHECK(added_columns.back()->isColumnNullable() == is_nullable);
-        }
-        for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
-        {
-            size_t column_index = row_layout.other_column_indexes[i].first;
-            added_columns.emplace_back(
-                wd.result_block.safeGetByPosition(left_columns + column_index).column->assumeMutable());
-        }
-    }
-    else
-    {
-        added_columns.resize(right_columns);
-        for (size_t i = 0; i < right_columns; ++i)
-            added_columns[i] = wd.result_block.safeGetByPosition(left_columns + i).column->assumeMutable();
-        for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
-            RUNTIME_CHECK(added_columns.at(column_index)->isColumnNullable() == is_nullable);
-    }
+    MutableColumns added_columns(right_columns);
+    for (size_t i = 0; i < right_columns; ++i)
+        added_columns[i] = wd.result_block.safeGetByPosition(left_columns + i).column->assumeMutable();
 
     Stopwatch watch;
     if (pointer_table.enableProbePrefetch())
@@ -615,6 +571,9 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
             added_columns);
     wd.probe_hash_table_time += watch.elapsedFromLastTime();
 
+    for (size_t i = 0; i < right_columns; ++i)
+        wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
+
     if constexpr (kind == Inner || kind == LeftOuter || kind == Semi || kind == Anti)
     {
         if (wd.selective_offsets.empty())
@@ -624,23 +583,6 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
     if constexpr (kind == LeftOuterSemi || kind == LeftOuterAnti)
     {
         return genResultBlockForLeftOuterSemi(context, wd);
-    }
-
-    if constexpr (late_materialization)
-    {
-        size_t idx = 0;
-        for (auto [column_index, _] : row_layout.raw_key_column_indexes)
-            wd.result_block.safeGetByPosition(left_columns + column_index).column = std::move(added_columns[idx++]);
-        for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
-        {
-            size_t column_index = row_layout.other_column_indexes[i].first;
-            wd.result_block.safeGetByPosition(left_columns + column_index).column = std::move(added_columns[idx++]);
-        }
-    }
-    else
-    {
-        for (size_t i = 0; i < right_columns; ++i)
-            wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
     }
 
     if constexpr (has_other_condition)

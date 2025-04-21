@@ -253,7 +253,7 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
             required_columns_flag[i] = true;
             continue;
         }
-        auto & c = right_sample_block_pruned.safeGetByPosition(i);
+        auto & c = right_sample_block_pruned.getByPosition(i);
         if (required_columns_names_set_for_other_condition.contains(c.name))
         {
             ++row_layout.other_column_count_for_other_condition;
@@ -273,7 +273,7 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
     {
         if (required_columns_flag[i])
             continue;
-        auto & c = right_sample_block_pruned.safeGetByPosition(i);
+        auto & c = right_sample_block_pruned.getByPosition(i);
         if (c.column->valuesHaveFixedSize())
         {
             row_layout.other_column_fixed_size += c.column->sizeOfValueIfFixed();
@@ -289,6 +289,9 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
             c.name);
     }
     RUNTIME_CHECK(row_layout.raw_key_column_indexes.size() + row_layout.other_column_indexes.size() == columns);
+    for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
+        RUNTIME_CHECK(
+            right_sample_block_pruned.safeGetByPosition(column_index).column->isColumnNullable() == is_nullable);
 }
 
 void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
@@ -622,7 +625,7 @@ Block HashJoin::probeBlock(JoinProbeContext & context, size_t stream_index)
     context.prepareForHashProbe(
         method,
         kind,
-        non_equal_conditions.other_cond_expr != nullptr,
+        has_other_condition,
         key_names_left,
         non_equal_conditions.left_filter_column,
         probe_output_name_set,
@@ -690,7 +693,7 @@ void HashJoin::initOutputBlock(Block & block) const
         size_t output_columns = output_block_after_finalize.columns();
         for (size_t i = 0; i < output_columns; ++i)
         {
-            ColumnWithTypeAndName new_column = output_block_after_finalize.safeGetByPosition(i).cloneEmpty();
+            ColumnWithTypeAndName new_column = output_block_after_finalize.getByPosition(i).cloneEmpty();
             new_column.column->assumeMutable()->reserveAlign(settings.max_block_size, FULL_VECTOR_SIZE_AVX2);
             block.insert(std::move(new_column));
         }
@@ -763,10 +766,8 @@ void HashJoin::finalize(const Names & parent_require)
         if (!match_helper_name.empty())
             output_columns_names_set_for_other_condition_after_finalize.insert(match_helper_name);
 
-        if (non_equal_conditions.other_cond_expr != nullptr)
-        {
-            const auto & actions = non_equal_conditions.other_cond_expr->getActions();
-            for (const auto & action : actions)
+        auto update_required_columns_names_set = [&](const ExpressionActionsPtr & expr) {
+            for (const auto & action : expr->getActions())
             {
                 Names needed_columns = action.getNeededColumns();
                 for (const auto & name : needed_columns)
@@ -775,21 +776,13 @@ void HashJoin::finalize(const Names & parent_require)
                         required_columns_names_set_for_other_condition.insert(name);
                 }
             }
-        }
+        };
+
+        if (non_equal_conditions.other_cond_expr != nullptr)
+            update_required_columns_names_set(non_equal_conditions.other_cond_expr);
 
         if (non_equal_conditions.null_aware_eq_cond_expr != nullptr)
-        {
-            const auto & actions = non_equal_conditions.null_aware_eq_cond_expr->getActions();
-            for (const auto & action : actions)
-            {
-                Names needed_columns = action.getNeededColumns();
-                for (const auto & name : needed_columns)
-                {
-                    if (output_columns_names_set_for_other_condition_after_finalize.contains(name))
-                        required_columns_names_set_for_other_condition.insert(name);
-                }
-            }
-        }
+            update_required_columns_names_set(non_equal_conditions.null_aware_eq_cond_expr);
     }
 
     /// remove duplicated column
