@@ -99,6 +99,7 @@ public:
     size_t getPositionByName(const std::string & name) const;
 
     const ColumnsWithTypeAndName & getColumnsWithTypeAndName() const;
+    NamesAndTypes getNamesAndTypes() const;
     NamesAndTypesList getNamesAndTypesList() const;
     Names getNames() const;
 
