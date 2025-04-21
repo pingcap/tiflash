@@ -58,7 +58,7 @@ std::pair<Status, Block> CTE::getBlockFromDisk(size_t idx)
 {
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
     if unlikely (!this->is_spill_triggered)
-        //  We can call this function only when spill is triggered
+        // We can call this function only when spill is triggered
         throw Exception("Spill should be triggered");
 
     if unlikely (static_cast<size_t>(this->cte_spill.blockNum()) <= idx)
