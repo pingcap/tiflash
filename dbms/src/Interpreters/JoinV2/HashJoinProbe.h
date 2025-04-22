@@ -36,8 +36,8 @@ struct JoinProbeContext
     /// original_block ensures that the reference counts for the key columns are never zero.
     Block orignal_block;
     size_t rows = 0;
-    size_t start_row_idx = 0;
-    RowPtr current_row_ptr = nullptr;
+    size_t current_row_idx = 0;
+    RowPtr current_build_row_ptr = nullptr;
     /// For left outer/(left outer) (anti) semi join without other conditions.
     bool current_row_is_matched = false;
     /// For left outer/(left outer) (anti) semi join with other conditions.
@@ -78,9 +78,9 @@ struct JoinProbeContext
 struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
 {
     IColumn::Offsets selective_offsets;
-    /// For left outer join with no other condition
+    /// For left outer join without other conditions
     IColumn::Offsets not_matched_selective_offsets;
-    /// For left outer (anti) semi join with no other condition
+    /// For left outer (anti) semi join without other conditions
     PaddedPODArray<Int8> match_helper_res;
 
     RowPtrs insert_batch;

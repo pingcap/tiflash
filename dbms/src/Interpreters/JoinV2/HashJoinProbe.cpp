@@ -37,7 +37,7 @@ using enum ASTTableJoin::Kind;
 
 bool JoinProbeContext::isProbeFinished() const
 {
-    return start_row_idx >= rows
+    return current_row_idx >= rows
         // For prefetching
         && prefetch_active_states == 0;
 }
@@ -54,8 +54,8 @@ void JoinProbeContext::resetBlock(Block & block_)
     block = block_;
     orignal_block = block_;
     rows = block.rows();
-    start_row_idx = 0;
-    current_row_ptr = nullptr;
+    current_row_idx = 0;
+    current_build_row_ptr = nullptr;
     current_row_is_matched = false;
 
     prefetch_active_states = 0;
@@ -597,8 +597,8 @@ void JoinProbeHelper::probeFillColumns(
 
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
     size_t current_offset = wd.result_block.rows();
-    size_t idx = context.start_row_idx;
-    RowPtr ptr = context.current_row_ptr;
+    size_t idx = context.current_row_idx;
+    RowPtr ptr = context.current_build_row_ptr;
     bool is_matched = context.current_row_is_matched;
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
@@ -710,8 +710,8 @@ void JoinProbeHelper::probeFillColumns(
 
     Adder::flush(*this, wd, added_columns);
 
-    context.start_row_idx = idx;
-    context.current_row_ptr = ptr;
+    context.current_row_idx = idx;
+    context.current_build_row_ptr = ptr;
     context.current_row_is_matched = is_matched;
     wd.collision += collision;
 
@@ -770,7 +770,7 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     }
     auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(context.prefetch_states.get());
 
-    size_t idx = context.start_row_idx;
+    size_t idx = context.current_row_idx;
     size_t active_states = context.prefetch_active_states;
     size_t k = context.prefetch_iter;
     size_t current_offset = wd.result_block.rows();
@@ -939,7 +939,7 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
 
     Adder::flush(*this, wd, added_columns);
 
-    context.start_row_idx = idx;
+    context.current_row_idx = idx;
     context.prefetch_active_states = active_states;
     context.prefetch_iter = k;
     wd.collision += collision;
