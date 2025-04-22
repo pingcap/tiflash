@@ -40,11 +40,13 @@ struct JoinProbeContext
     RowPtr current_build_row_ptr = nullptr;
     /// For left outer/(left outer) (anti) semi join without other conditions.
     bool current_row_is_matched = false;
-    /// For left outer/(left outer) (anti) semi join with other conditions.
+    /// For left outer with other conditions.
     IColumn::Filter rows_not_matched;
     /// < 0 means not_matched_offsets is not initialized.
     ssize_t not_matched_offsets_idx = -1;
     IColumn::Offsets not_matched_offsets;
+    /// For (left outer) (anti) semi join with other conditions.
+    std::unique_ptr<void, std::function<void(void *)>> semi_join_pending_probe_list;
 
     size_t prefetch_active_states = 0;
     size_t prefetch_iter = 0;

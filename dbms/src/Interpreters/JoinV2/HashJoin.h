@@ -26,6 +26,7 @@
 #include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
+#include <Interpreters/JoinV2/SemiJoinProbe.h>
 
 
 namespace DB
@@ -82,6 +83,7 @@ private:
 
 private:
     friend JoinProbeHelper;
+    friend SemiJoinProbeHelper;
 
     static const DataTypePtr match_helper_type;
 

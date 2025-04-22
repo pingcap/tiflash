@@ -21,6 +21,7 @@
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/JoinV2/HashJoin.h>
 #include <Interpreters/JoinV2/HashJoinProbe.h>
+#include <Interpreters/JoinV2/SemiJoinProbe.h>
 #include <Interpreters/NullableUtils.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
@@ -118,6 +119,17 @@ void JoinProbeContext::prepareForHashProbe(
         rows_not_matched.resize_fill(block.rows(), 1);
         not_matched_offsets_idx = -1;
         not_matched_offsets.clear();
+    }
+
+    if ((kind == Semi || kind == Anti || kind == LeftOuterSemi || kind == LeftOuterAnti) && has_other_condition)
+    {
+        if unlikely (!semi_join_pending_probe_list)
+        {
+            semi_join_pending_probe_list = decltype(semi_join_pending_probe_list)(
+                static_cast<void *>(new SemiJoinPendingProbeList),
+                [](void * ptr) { delete static_cast<SemiJoinPendingProbeList *>(ptr); });
+        }
+        static_cast<SemiJoinPendingProbeList *>(semi_join_pending_probe_list.get())->reset(block.rows() + 1);
     }
 
     is_prepared = true;
@@ -762,7 +774,7 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     using Adder = JoinProbeAdder<kind, has_other_condition, late_materialization>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
-    if (!context.prefetch_states)
+    if unlikely (!context.prefetch_states)
     {
         context.prefetch_states = decltype(context.prefetch_states)(
             static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
