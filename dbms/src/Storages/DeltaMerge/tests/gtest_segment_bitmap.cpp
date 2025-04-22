@@ -717,11 +717,7 @@ TEST_P(SegmentBitmapFilterTest, testSkipPackStableOnly)
             ASSERT_EQ(version, 3);
             const auto & dmfiles = snap->stable->getDMFiles();
             auto [skipped_ranges, new_pack_filter_results]
-                = DMFilePackFilter::getSkippedRangeAndFilterForBitmapStableOnly(
-                    *dm_context,
-                    dmfiles,
-                    pack_filter_results,
-                    2);
+                = DMFilePackFilter::getSkippedRangeAndFilter(*dm_context, dmfiles, pack_filter_results, 2);
             // [200, 500), [1500, 2000)
             ASSERT_EQ(skipped_ranges.size(), 2);
             ASSERT_EQ(skipped_ranges[0], DMFilePackFilter::Range(200, 300));
@@ -800,7 +796,7 @@ TEST_P(SegmentBitmapFilterTest, testSkipPackNormal)
                 getExtraHandleColumnDefine(seg->is_common_handle),
             };
             auto read_info = seg->getReadInfo(*dm_context, columns_to_read, snap, ranges, ReadTag::MVCC, start_ts);
-            auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
+            auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVerison(
                 *dm_context,
                 dmfiles,
                 pack_filter_results,

@@ -739,6 +739,7 @@ public:
 
     static bool useCleanRead(const SegmentSnapshotPtr & segment_snap, const ColumnDefines & columns_to_read);
     RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const;
+    template <bool is_fast_scan>
     BitmapFilterPtr buildBitmapFilter(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
@@ -747,6 +748,7 @@ public:
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t build_bitmap_filter_block_rows);
+    template <bool is_fast_scan = false>
     BitmapFilterPtr buildMVCCBitmapFilter(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
@@ -755,6 +757,7 @@ public:
         UInt64 start_ts,
         size_t expected_block_size,
         bool enable_version_chain);
+    template <bool is_fast_scan = false>
     BitmapFilterPtr buildMVCCBitmapFilterNormal(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
@@ -762,6 +765,7 @@ public:
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size);
+    template <bool is_fast_scan = false>
     BitmapFilterPtr buildMVCCBitmapFilterStableOnly(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
@@ -800,6 +804,7 @@ public:
         UInt64 start_ts,
         size_t expected_block_size,
         ReadTag read_tag);
+    template <bool is_fast_scan = false>
     BlockInputStreamPtr getBitmapFilterInputStream(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,

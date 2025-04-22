@@ -114,6 +114,7 @@ public:
 
         bool operator==(const Range &) const = default;
     };
+
     /**
     * @brief For all the packs in `pack_filter_results`, if all the rows in the pack
     *        compliant with RowKey filter and MVCC filter (by `start_ts`) requirements, then
@@ -124,23 +125,15 @@ public:
     *        - NewPackFilterResults: Those packs should be read from disk and go through the
     *                                RowKey filter and MVCC filter
     */
-    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmapStableOnly(
+    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilter(
         const DMContext & dm_context,
         const DMFiles & dmfiles,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts);
-    static std::pair<DataTypePtr, MinMaxIndexPtr> loadIndex(
-        const DMFile & dmfile,
-        const FileProviderPtr & file_provider,
-        const MinMaxIndexCachePtr & index_cache,
-        bool set_cache_if_miss,
-        ColId col_id,
-        const ReadLimiterPtr & read_limiter,
-        const ScanContextPtr & scan_context);
 
     /**
     * @brief For all the packs in `pack_filter_results`, if all the rows in the pack
-    *        comply with RowKey filter and MVCC filter (by `start_ts`) requirements,
+    *        compliant with RowKey filter and MVCC filter (by `start_ts`) requirements,
     *        and are continuously sorted in delta index, or are deleted, then we skip
     *        reading the packs from disk and return the skipped ranges(not deleted), 
     *        and new PackFilterResults for building bitmap.
@@ -149,13 +142,22 @@ public:
     *        - NewPackFilterResults: Those packs should be read from disk and go through
     *                                the delta merge, RowKey filter, and MVCC filter.
     */
-    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmapNormal(
+    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterWithMultiVerison(
         const DMContext & dm_context,
         const DMFiles & dmfiles,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         const DeltaIndexIterator & delta_index_begin,
         const DeltaIndexIterator & delta_index_end);
+
+    static std::pair<DataTypePtr, MinMaxIndexPtr> loadIndex(
+        const DMFile & dmfile,
+        const FileProviderPtr & file_provider,
+        const MinMaxIndexCachePtr & index_cache,
+        bool set_cache_if_miss,
+        ColId col_id,
+        const ReadLimiterPtr & read_limiter,
+        const ScanContextPtr & scan_context);
 
 private:
     DMFilePackFilter(
