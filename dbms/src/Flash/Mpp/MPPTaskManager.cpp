@@ -54,7 +54,7 @@ void MPPGatherTaskSet::cancelAlarmsBySenderTaskId(const MPPTaskId & task_id)
     if (alarm_it != alarms.end())
     {
         for (auto & alarm : alarm_it->second)
-            alarm.second->Cancel();
+            alarm.second.get().Cancel();
         alarms.erase(alarm_it);
     }
 }
@@ -185,14 +185,14 @@ std::pair<MPPTunnelPtr, String> MPPTaskManager::findAsyncTunnel(
                     context.getSettingsRef().auto_spill_check_min_interval_ms.get());
             if (gather_task_set == nullptr)
                 gather_task_set = query->addMPPGatherTaskSet(id.gather_id);
-            auto * alarm = call_data->getAlarm();
+            auto & alarm = call_data->getAlarm();
             call_data->setCallStateAndUpdateMetrics(
                 EstablishCallData::WAIT_TUNNEL,
                 GET_METRIC(tiflash_establish_calldata_count, type_wait_tunnel_calldata));
-            gather_task_set->alarms[sender_task_id][receiver_task_id] = alarm;
+            gather_task_set->alarms[sender_task_id].emplace(receiver_task_id, std::ref(alarm));
             if likely (cq != nullptr)
             {
-                alarm->Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());
+                alarm.Set(cq, Clock::now() + std::chrono::seconds(10), call_data->asGRPCKickTag());
             }
             return {nullptr, ""};
         }
@@ -315,7 +315,7 @@ void MPPTaskManager::abortMPPGather(const MPPGatherId & gather_id, const String 
         for (auto & alarms_per_task : gather_task_set->alarms)
         {
             for (auto & alarm : alarms_per_task.second)
-                alarm.second->Cancel();
+                alarm.second.get().Cancel();
         }
         gather_task_set->alarms.clear();
         if (!gather_task_set->hasMPPTask())

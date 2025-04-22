@@ -96,7 +96,7 @@ public:
     grpc::ServerContext * getGrpcContext() { return &ctx; }
 
     String getResourceGroupName() const { return resource_group_name; }
-    grpc::Alarm * getAlarm();
+    grpc::Alarm & getAlarm();
 
 
 private:

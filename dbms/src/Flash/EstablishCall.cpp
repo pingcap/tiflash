@@ -216,9 +216,9 @@ void EstablishCallData::initRpc()
     }
 }
 
-grpc::Alarm * EstablishCallData::getAlarm()
+grpc::Alarm & EstablishCallData::getAlarm()
 {
-    return &alarm;
+    return alarm;
 }
 
 void EstablishCallData::tryConnectTunnel()
