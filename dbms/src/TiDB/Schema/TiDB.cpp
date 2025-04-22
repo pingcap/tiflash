@@ -121,23 +121,9 @@ enum class IndexType
     HASH = 2,
     RTREE = 3,
     HYPO = 4,
-    HNSW = 5,
+    VECTOR = 5,
     INVERTED = 6,
 };
-
-inline tipb::VectorIndexKind toVectorIndexKind(IndexType index_type)
-{
-    switch (index_type)
-    {
-    case IndexType::HNSW:
-        return tipb::VectorIndexKind::HNSW;
-    default:
-        throw Exception(
-            DB::ErrorCodes::LOGICAL_ERROR,
-            "Invalid index type for vector index {}",
-            magic_enum::enum_name(index_type));
-    }
-}
 
 FullTextIndexDefinitionPtr parseFullTextIndexFromJSON(const Poco::JSON::Object::Ptr & json)
 {
@@ -165,11 +151,10 @@ Poco::JSON::Object::Ptr fullTextIndexToJSON(const FullTextIndexDefinitionPtr & f
     return json;
 }
 
-VectorIndexDefinitionPtr parseVectorIndexFromJSON(IndexType index_type, const Poco::JSON::Object::Ptr & json)
+VectorIndexDefinitionPtr parseVectorIndexFromJSON(const Poco::JSON::Object::Ptr & json)
 {
     assert(json); // not nullptr
 
-    auto kind = toVectorIndexKind(index_type);
     auto dimension = json->getValue<UInt64>("dimension");
     RUNTIME_CHECK(dimension > 0 && dimension <= TiDB::MAX_VECTOR_DIMENSION, dimension); // Just a protection
 
@@ -182,7 +167,8 @@ VectorIndexDefinitionPtr parseVectorIndexFromJSON(IndexType index_type, const Po
     RUNTIME_CHECK(distance_metric != tipb::VectorDistanceMetric::INVALID_DISTANCE_METRIC);
 
     return std::make_shared<const VectorIndexDefinition>(VectorIndexDefinition{
-        .kind = kind,
+        // TODO: To be removed. We will not expose real algorithm in future.
+        .kind = tipb::VectorIndexKind::HNSW,
         .dimension = dimension,
         .distance_metric = distance_metric,
     });
@@ -993,7 +979,8 @@ try
 
     if (auto vector_index_json = json->getObject("vector_index"); vector_index_json)
     {
-        vector_index = parseVectorIndexFromJSON(static_cast<IndexType>(index_type), vector_index_json);
+        RUNTIME_CHECK(static_cast<IndexType>(index_type) == IndexType::VECTOR);
+        vector_index = parseVectorIndexFromJSON(vector_index_json);
     }
     if (auto inverted_index_json = json->getObject("inverted_index"); inverted_index_json)
     {
