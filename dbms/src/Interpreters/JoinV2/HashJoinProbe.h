@@ -51,7 +51,7 @@ struct JoinProbeContext
     std::unique_ptr<void, std::function<void(void *)>> prefetch_states;
 
     bool is_prepared = false;
-    Columns materialized_columns;
+    Columns materialized_key_columns;
     ColumnRawPtrs key_columns;
     ColumnPtr null_map_holder = nullptr;
     ConstNullMapPtr null_map = nullptr;

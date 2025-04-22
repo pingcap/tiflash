@@ -61,7 +61,7 @@ void JoinProbeContext::resetBlock(Block & block_)
     prefetch_active_states = 0;
 
     is_prepared = false;
-    materialized_columns.clear();
+    materialized_key_columns.clear();
     key_columns.clear();
     null_map = nullptr;
     null_map_holder = nullptr;
@@ -81,7 +81,7 @@ void JoinProbeContext::prepareForHashProbe(
     if (is_prepared)
         return;
 
-    key_columns = extractAndMaterializeKeyColumns(block, materialized_columns, key_names);
+    key_columns = extractAndMaterializeKeyColumns(block, materialized_key_columns, key_names);
     /// Keys with NULL value in any column won't join to anything.
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);
     /// reuse null_map to record the filtered rows, the rows contains NULL or does not
