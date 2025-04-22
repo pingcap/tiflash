@@ -410,26 +410,26 @@ JoinProbeHelper::JoinProbeHelper(const HashJoin * join, bool late_materializatio
             CALL2(KeyGetter, JoinType, false, false)    \
     }
 
-#define CALL(KeyGetter)                                                                                          \
-    {                                                                                                            \
-        auto kind = join->kind;                                                                                  \
-        bool has_other_condition = join->has_other_condition;                                                    \
-        if (kind == Inner)                                                                                       \
-            CALL1(KeyGetter, Inner)                                                                              \
-        else if (kind == LeftOuter)                                                                              \
-            CALL1(KeyGetter, LeftOuter)                                                                          \
-        else if (kind == Semi && !has_other_condition)                                                           \
-            CALL2(KeyGetter, Semi, false, false)                                                                 \
-        else if (kind == Anti && !has_other_condition)                                                           \
-            CALL2(KeyGetter, Anti, false, false)                                                                 \
-        else if (kind == LeftOuterSemi && !has_other_condition)                                                  \
-            CALL2(KeyGetter, LeftOuterSemi, false, false)                                                        \
-        else if (kind == LeftOuterAnti && !has_other_condition)                                                  \
-            CALL2(KeyGetter, LeftOuterAnti, false, false)                                                        \
-        else                                                                                                     \
-            throw Exception(                                                                                     \
-                fmt::format("Logical error: unknown combination of JOIN {}", magic_enum::enum_name(join->kind)), \
-                ErrorCodes::LOGICAL_ERROR);                                                                      \
+#define CALL(KeyGetter)                                                                                    \
+    {                                                                                                      \
+        auto kind = join->kind;                                                                            \
+        bool has_other_condition = join->has_other_condition;                                              \
+        if (kind == Inner)                                                                                 \
+            CALL1(KeyGetter, Inner)                                                                        \
+        else if (kind == LeftOuter)                                                                        \
+            CALL1(KeyGetter, LeftOuter)                                                                    \
+        else if (kind == Semi && !has_other_condition)                                                     \
+            CALL2(KeyGetter, Semi, false, false)                                                           \
+        else if (kind == Anti && !has_other_condition)                                                     \
+            CALL2(KeyGetter, Anti, false, false)                                                           \
+        else if (kind == LeftOuterSemi && !has_other_condition)                                            \
+            CALL2(KeyGetter, LeftOuterSemi, false, false)                                                  \
+        else if (kind == LeftOuterAnti && !has_other_condition)                                            \
+            CALL2(KeyGetter, LeftOuterAnti, false, false)                                                  \
+        else                                                                                               \
+            throw Exception(                                                                               \
+                fmt::format("Logical error: unknown combination of JOIN {}", magic_enum::enum_name(kind)), \
+                ErrorCodes::LOGICAL_ERROR);                                                                \
     }
 
     switch (join->method)
