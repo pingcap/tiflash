@@ -197,7 +197,6 @@ struct JoinProbeAdder<Inner, has_other_condition, late_materialization>
 
     static bool ALWAYS_INLINE addMatched(
         JoinProbeHelper & helper,
-        JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns & added_columns,
         size_t idx,
@@ -211,8 +210,7 @@ struct JoinProbeAdder<Inner, has_other_condition, late_materialization>
         return current_offset >= helper.settings.max_block_size;
     }
 
-    static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &)
+    static bool ALWAYS_INLINE addNotMatched(JoinProbeHelper &, JoinProbeWorkerData &, size_t, size_t &)
     {
         return false;
     }
@@ -233,7 +231,6 @@ struct JoinProbeAdder<LeftOuter, has_other_condition, late_materialization>
 
     static bool ALWAYS_INLINE addMatched(
         JoinProbeHelper & helper,
-        JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns & added_columns,
         size_t idx,
@@ -247,13 +244,8 @@ struct JoinProbeAdder<LeftOuter, has_other_condition, late_materialization>
         return current_offset >= helper.settings.max_block_size;
     }
 
-    static bool ALWAYS_INLINE addNotMatched(
-        JoinProbeHelper & helper,
-        JoinProbeContext &,
-        JoinProbeWorkerData & wd,
-        MutableColumns &,
-        size_t idx,
-        size_t & current_offset)
+    static bool ALWAYS_INLINE
+    addNotMatched(JoinProbeHelper & helper, JoinProbeWorkerData & wd, size_t idx, size_t & current_offset)
     {
         if constexpr (!has_other_condition)
         {
@@ -294,7 +286,6 @@ struct JoinProbeAdder<Semi, false, false>
 
     static bool ALWAYS_INLINE addMatched(
         JoinProbeHelper & helper,
-        JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns &,
         size_t idx,
@@ -307,8 +298,7 @@ struct JoinProbeAdder<Semi, false, false>
         return current_offset >= helper.settings.max_block_size;
     }
 
-    static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &)
+    static bool ALWAYS_INLINE addNotMatched(JoinProbeHelper &, JoinProbeWorkerData &, size_t, size_t &)
     {
         return false;
     }
@@ -323,26 +313,14 @@ struct JoinProbeAdder<Anti, false, false>
     static constexpr bool need_not_matched = true;
     static constexpr bool break_on_first_match = true;
 
-    static bool ALWAYS_INLINE addMatched(
-        JoinProbeHelper &,
-        JoinProbeContext &,
-        JoinProbeWorkerData &,
-        MutableColumns &,
-        size_t,
-        size_t &,
-        RowPtr,
-        size_t)
+    static bool ALWAYS_INLINE
+    addMatched(JoinProbeHelper &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &, RowPtr, size_t)
     {
         return false;
     }
 
-    static bool ALWAYS_INLINE addNotMatched(
-        JoinProbeHelper & helper,
-        JoinProbeContext &,
-        JoinProbeWorkerData & wd,
-        MutableColumns &,
-        size_t idx,
-        size_t & current_offset)
+    static bool ALWAYS_INLINE
+    addNotMatched(JoinProbeHelper & helper, JoinProbeWorkerData & wd, size_t idx, size_t & current_offset)
     {
         ++current_offset;
         wd.selective_offsets.push_back(idx);
@@ -359,22 +337,14 @@ struct JoinProbeAdder<LeftOuterSemi, false, false>
     static constexpr bool need_not_matched = false;
     static constexpr bool break_on_first_match = true;
 
-    static bool ALWAYS_INLINE addMatched(
-        JoinProbeHelper &,
-        JoinProbeContext &,
-        JoinProbeWorkerData & wd,
-        MutableColumns &,
-        size_t idx,
-        size_t &,
-        RowPtr,
-        size_t)
+    static bool ALWAYS_INLINE
+    addMatched(JoinProbeHelper &, JoinProbeWorkerData & wd, MutableColumns &, size_t idx, size_t &, RowPtr, size_t)
     {
         wd.match_helper_res[idx] = 1;
         return false;
     }
 
-    static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &)
+    static bool ALWAYS_INLINE addNotMatched(JoinProbeHelper &, JoinProbeWorkerData &, size_t, size_t &)
     {
         return false;
     }
@@ -389,26 +359,13 @@ struct JoinProbeAdder<LeftOuterAnti, false, false>
     static constexpr bool need_not_matched = true;
     static constexpr bool break_on_first_match = true;
 
-    static bool ALWAYS_INLINE addMatched(
-        JoinProbeHelper &,
-        JoinProbeContext &,
-        JoinProbeWorkerData &,
-        MutableColumns &,
-        size_t,
-        size_t &,
-        RowPtr,
-        size_t)
+    static bool ALWAYS_INLINE
+    addMatched(JoinProbeHelper &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &, RowPtr, size_t)
     {
         return false;
     }
 
-    static bool ALWAYS_INLINE addNotMatched(
-        JoinProbeHelper &,
-        JoinProbeContext &,
-        JoinProbeWorkerData & wd,
-        MutableColumns &,
-        size_t idx,
-        size_t &)
+    static bool ALWAYS_INLINE addNotMatched(JoinProbeHelper &, JoinProbeWorkerData & wd, size_t idx, size_t &)
     {
         wd.match_helper_res[idx] = 1;
         return false;
@@ -650,19 +607,19 @@ void JoinProbeHelper::probeFillColumns(
         key_offset += sizeof(HashValueType);
     }
 
-#define NOT_MATCHED(not_matched)                                                                        \
-    if constexpr (Adder::need_not_matched)                                                              \
-    {                                                                                                   \
-        assert(ptr == nullptr);                                                                         \
-        if (not_matched)                                                                                \
-        {                                                                                               \
-            bool is_end = Adder::addNotMatched(*this, context, wd, added_columns, idx, current_offset); \
-            if unlikely (is_end)                                                                        \
-            {                                                                                           \
-                ++idx;                                                                                  \
-                break;                                                                                  \
-            }                                                                                           \
-        }                                                                                               \
+#define NOT_MATCHED(not_matched)                                                \
+    if constexpr (Adder::need_not_matched)                                      \
+    {                                                                           \
+        assert(ptr == nullptr);                                                 \
+        if (not_matched)                                                        \
+        {                                                                       \
+            bool is_end = Adder::addNotMatched(*this, wd, idx, current_offset); \
+            if unlikely (is_end)                                                \
+            {                                                                   \
+                ++idx;                                                          \
+                break;                                                          \
+            }                                                                   \
+        }                                                                       \
     }
 
     for (; idx < context.rows; ++idx)
@@ -715,7 +672,6 @@ void JoinProbeHelper::probeFillColumns(
                 {
                     bool is_end = Adder::addMatched(
                         *this,
-                        context,
                         wd,
                         added_columns,
                         idx,
@@ -825,15 +781,15 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
         key_offset += sizeof(HashValueType);
     }
 
-#define NOT_MATCHED(not_matched, idx)                                                                   \
-    if constexpr (Adder::need_not_matched)                                                              \
-    {                                                                                                   \
-        if (not_matched)                                                                                \
-        {                                                                                               \
-            bool is_end = Adder::addNotMatched(*this, context, wd, added_columns, idx, current_offset); \
-            if unlikely (is_end)                                                                        \
-                break;                                                                                  \
-        }                                                                                               \
+#define NOT_MATCHED(not_matched, idx)                                           \
+    if constexpr (Adder::need_not_matched)                                      \
+    {                                                                           \
+        if (not_matched)                                                        \
+        {                                                                       \
+            bool is_end = Adder::addNotMatched(*this, wd, idx, current_offset); \
+            if unlikely (is_end)                                                \
+                break;                                                          \
+        }                                                                       \
     }
 
     const size_t probe_prefetch_step = settings.probe_prefetch_step;
@@ -859,7 +815,6 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
                 {
                     bool is_end = Adder::addMatched(
                         *this,
-                        context,
                         wd,
                         added_columns,
                         state->index,
@@ -939,7 +894,7 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
 
                 if constexpr (Adder::need_not_matched)
                 {
-                    is_end = Adder::addNotMatched(*this, context, wd, added_columns, idx, current_offset);
+                    is_end = Adder::addNotMatched(*this, wd, idx, current_offset);
                     if unlikely (is_end)
                     {
                         ++idx;
