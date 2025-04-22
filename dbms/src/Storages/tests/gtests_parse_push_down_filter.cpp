@@ -170,7 +170,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -192,7 +192,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"666\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -214,7 +214,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -236,7 +236,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -258,7 +258,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"776\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -294,7 +294,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -316,7 +316,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"not_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -338,7 +338,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"667\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -360,7 +360,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -382,7 +382,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -404,7 +404,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"777\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -447,7 +447,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -474,7 +474,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -503,7 +503,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -531,7 +531,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -560,7 +560,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -591,7 +591,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 789, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -618,7 +618,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -645,7 +645,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -670,7 +670,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -695,7 +695,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -770,7 +770,7 @@ try
              toVec<Int64>(
                  "col_date",
                  {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
-        EXPECT_TRUE(filter->extra_cast);
+        ASSERT_TRUE(filter->extra_cast);
         filter->extra_cast->execute(before_where_block);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -826,7 +826,7 @@ try
              toVec<Int64>(
                  "col_date",
                  {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
-        EXPECT_TRUE(filter->extra_cast);
+        ASSERT_TRUE(filter->extra_cast);
         filter->extra_cast->execute(before_where_block);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -882,7 +882,7 @@ try
              toVec<Int64>(
                  "col_date",
                  {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
-        EXPECT_TRUE(filter->extra_cast);
+        ASSERT_TRUE(filter->extra_cast);
         filter->extra_cast->execute(before_where_block);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
