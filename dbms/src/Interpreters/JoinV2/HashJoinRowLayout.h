@@ -54,7 +54,7 @@ constexpr size_t ROW_PTR_TAG_SHIFT = 8 * sizeof(RowPtr) - ROW_PTR_TAG_BITS;
 static_assert(sizeof(RowPtr) == sizeof(uintptr_t));
 static_assert(sizeof(RowPtr) == 8);
 
-inline RowPtr getNextRowPtr(const RowPtr ptr)
+inline RowPtr getNextRowPtr(RowPtr ptr)
 {
     return unalignedLoad<RowPtr>(ptr);
 }
