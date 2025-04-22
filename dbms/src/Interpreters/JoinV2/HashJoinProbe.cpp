@@ -1023,24 +1023,24 @@ Block JoinProbeHelper::handleOtherConditions(
     size_t remaining_insert_size = settings.max_block_size - wd.result_block_for_other_condition.rows();
     size_t result_size = countBytesInFilter(wd.filter);
 
-    bool filter_offsets_is_initialized = false;
-    auto init_filter_offsets = [&]() {
+    bool block_filter_offsets_is_initialized = false;
+    auto init_block_filter_offsets = [&]() {
         RUNTIME_CHECK(wd.filter.size() == rows);
-        wd.filter_offsets.clear();
-        wd.filter_offsets.reserve(result_size);
-        filterImpl(&wd.filter[0], &wd.filter[rows], &BASE_OFFSETS[0], wd.filter_offsets);
-        RUNTIME_CHECK(wd.filter_offsets.size() == result_size);
-        filter_offsets_is_initialized = true;
+        wd.block_filter_offsets.clear();
+        wd.block_filter_offsets.reserve(result_size);
+        filterImpl(&wd.filter[0], &wd.filter[rows], &BASE_OFFSETS[0], wd.block_filter_offsets);
+        RUNTIME_CHECK(wd.block_filter_offsets.size() == result_size);
+        block_filter_offsets_is_initialized = true;
     };
 
-    bool filter_selective_offsets_is_initialized = false;
-    auto init_filter_selective_offsets = [&]() {
+    bool result_block_filter_offsets_is_initialized = false;
+    auto init_result_block_filter_offsets = [&]() {
         RUNTIME_CHECK(wd.selective_offsets.size() == rows);
-        wd.filter_selective_offsets.clear();
-        wd.filter_selective_offsets.reserve(result_size);
-        filterImpl(&wd.filter[0], &wd.filter[rows], &wd.selective_offsets[0], wd.filter_selective_offsets);
-        RUNTIME_CHECK(wd.filter_selective_offsets.size() == result_size);
-        filter_selective_offsets_is_initialized = true;
+        wd.result_block_filter_offsets.clear();
+        wd.result_block_filter_offsets.reserve(result_size);
+        filterImpl(&wd.filter[0], &wd.filter[rows], &wd.selective_offsets[0], wd.result_block_filter_offsets);
+        RUNTIME_CHECK(wd.result_block_filter_offsets.size() == result_size);
+        result_block_filter_offsets_is_initialized = true;
     };
 
     bool filter_row_ptrs_for_lm_is_initialized = false;
@@ -1064,12 +1064,12 @@ Block JoinProbeHelper::handleOtherConditions(
                 auto output_index = output_column_indexes.at(left_columns + column_index);
                 if (output_index < 0)
                     continue;
-                if unlikely (!filter_offsets_is_initialized)
-                    init_filter_offsets();
+                if unlikely (!block_filter_offsets_is_initialized)
+                    init_block_filter_offsets();
                 auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
                 auto & src_column = wd.result_block.safeGetByPosition(left_columns + column_index);
                 des_column.column->assumeMutable()
-                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
+                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.block_filter_offsets, start, length);
             }
             for (size_t i = 0; i < row_layout.other_column_count_for_other_condition; ++i)
             {
@@ -1077,12 +1077,12 @@ Block JoinProbeHelper::handleOtherConditions(
                 auto output_index = output_column_indexes.at(left_columns + column_index);
                 if (output_index < 0)
                     continue;
-                if unlikely (!filter_offsets_is_initialized)
-                    init_filter_offsets();
+                if unlikely (!block_filter_offsets_is_initialized)
+                    init_block_filter_offsets();
                 auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
                 auto & src_column = wd.result_block.safeGetByPosition(left_columns + column_index);
                 des_column.column->assumeMutable()
-                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
+                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.block_filter_offsets, start, length);
             }
 
             if (!filter_row_ptrs_for_lm_is_initialized)
@@ -1130,12 +1130,12 @@ Block JoinProbeHelper::handleOtherConditions(
                 auto output_index = output_column_indexes.at(left_columns + i);
                 if (output_index < 0)
                     continue;
-                if unlikely (!filter_offsets_is_initialized)
-                    init_filter_offsets();
+                if unlikely (!block_filter_offsets_is_initialized)
+                    init_block_filter_offsets();
                 auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
                 auto & src_column = wd.result_block.safeGetByPosition(left_columns + i);
                 des_column.column->assumeMutable()
-                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
+                    ->insertSelectiveRangeFrom(*src_column.column.get(), wd.block_filter_offsets, start, length);
             }
         }
 
@@ -1147,30 +1147,30 @@ Block JoinProbeHelper::handleOtherConditions(
             auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
             if (left_required_flag_for_other_condition[i])
             {
-                if unlikely (!filter_offsets_is_initialized && !filter_selective_offsets_is_initialized)
-                    init_filter_selective_offsets();
-                if (filter_offsets_is_initialized)
+                if unlikely (!block_filter_offsets_is_initialized && !result_block_filter_offsets_is_initialized)
+                    init_result_block_filter_offsets();
+                if (block_filter_offsets_is_initialized)
                 {
                     auto & src_column = wd.result_block.safeGetByPosition(i);
                     des_column.column->assumeMutable()
-                        ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_offsets, start, length);
+                        ->insertSelectiveRangeFrom(*src_column.column.get(), wd.block_filter_offsets, start, length);
                 }
                 else
                 {
                     auto & src_column = context.block.safeGetByPosition(i);
                     des_column.column->assumeMutable()->insertSelectiveRangeFrom(
                         *src_column.column.get(),
-                        wd.filter_selective_offsets,
+                        wd.result_block_filter_offsets,
                         start,
                         length);
                 }
                 continue;
             }
-            if unlikely (!filter_selective_offsets_is_initialized)
-                init_filter_selective_offsets();
+            if unlikely (!result_block_filter_offsets_is_initialized)
+                init_result_block_filter_offsets();
             auto & src_column = context.block.safeGetByPosition(i);
             des_column.column->assumeMutable()
-                ->insertSelectiveRangeFrom(*src_column.column.get(), wd.filter_selective_offsets, start, length);
+                ->insertSelectiveRangeFrom(*src_column.column.get(), wd.result_block_filter_offsets, start, length);
         }
     };
 

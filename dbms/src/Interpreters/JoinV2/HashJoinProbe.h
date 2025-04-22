@@ -87,8 +87,8 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
 
     /// For other condition
     ColumnVector<UInt8>::Container filter;
-    IColumn::Offsets filter_offsets;
-    IColumn::Offsets filter_selective_offsets;
+    IColumn::Offsets block_filter_offsets;
+    IColumn::Offsets result_block_filter_offsets;
     /// For late materialization
     RowPtrs row_ptrs_for_lm;
     RowPtrs filter_row_ptrs_for_lm;
