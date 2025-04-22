@@ -123,6 +123,10 @@ enum class IndexType
     HYPO = 4,
     VECTOR = 5,
     INVERTED = 6,
+    // Note: HNSW here only for complementary purpose.
+    // It shall never be used, because TiDB only use it as a parser token and will
+    // never leak it to the outside.
+    // HNSW = 7,
 };
 
 FullTextIndexDefinitionPtr parseFullTextIndexFromJSON(const Poco::JSON::Object::Ptr & json)
