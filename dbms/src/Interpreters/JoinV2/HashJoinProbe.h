@@ -46,7 +46,7 @@ struct JoinProbeContext
     ssize_t not_matched_offsets_idx = -1;
     IColumn::Offsets not_matched_offsets;
     /// For left outer (anti) semi join.
-    PaddedPODArray<Int8> semi_match_res;
+    PaddedPODArray<Int8> left_semi_match_res;
 
     size_t prefetch_active_states = 0;
     size_t prefetch_iter = 0;

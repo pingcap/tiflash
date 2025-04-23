@@ -120,9 +120,7 @@ void JoinProbeContext::prepareForHashProbe(
         not_matched_offsets.clear();
     }
     if (kind == LeftOuterSemi || kind == LeftOuterAnti)
-    {
-        semi_match_res.resize(rows);
-    }
+        left_semi_match_res.resize(rows);
 
     is_prepared = true;
 }
@@ -371,13 +369,14 @@ struct JoinProbeAdder<LeftOuterSemi, false, false>
         RowPtr,
         size_t)
     {
-        ctx.semi_match_res[idx] = 1;
+        ctx.left_semi_match_res[idx] = 1;
         return false;
     }
 
     static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, size_t, size_t &)
+    addNotMatched(JoinProbeHelper &, JoinProbeContext & ctx, JoinProbeWorkerData &, size_t idx, size_t &)
     {
+        ctx.left_semi_match_res[idx] = 0;
         return false;
     }
 
@@ -391,16 +390,24 @@ struct JoinProbeAdder<LeftOuterAnti, false, false>
     static constexpr bool need_not_matched = true;
     static constexpr bool break_on_first_match = true;
 
-    static bool ALWAYS_INLINE
-    addMatched(JoinProbeHelper &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &, RowPtr, size_t)
+    static bool ALWAYS_INLINE addMatched(
+        JoinProbeHelper &,
+        JoinProbeContext & ctx,
+        JoinProbeWorkerData &,
+        MutableColumns &,
+        size_t idx,
+        size_t &,
+        RowPtr,
+        size_t)
     {
+        ctx.left_semi_match_res[idx] = 0;
         return false;
     }
 
     static bool ALWAYS_INLINE
     addNotMatched(JoinProbeHelper &, JoinProbeContext & ctx, JoinProbeWorkerData &, size_t idx, size_t &)
     {
-        ctx.semi_match_res[idx] = 1;
+        ctx.left_semi_match_res[idx] = 1;
         return false;
     }
 
@@ -510,7 +517,7 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData & w
     if constexpr (kind == LeftOuterSemi || kind == LeftOuterAnti)
     {
         // Sanity check
-        RUNTIME_CHECK(ctx.semi_match_res.size() == ctx.rows);
+        RUNTIME_CHECK(ctx.left_semi_match_res.size() == ctx.rows);
     }
 
     wd.insert_batch.clear();
@@ -1348,7 +1355,7 @@ Block JoinProbeHelper::genResultBlockForLeftOuterSemi(JoinProbeContext & ctx)
     auto * match_helper_column = typeid_cast<ColumnNullable *>(match_helper_column_ptr.get());
     match_helper_column->getNullMapColumn().getData().resize_fill_zero(ctx.rows);
     auto * match_helper_res = &typeid_cast<ColumnVector<Int8> &>(match_helper_column->getNestedColumn()).getData();
-    match_helper_res->swap(ctx.semi_match_res);
+    match_helper_res->swap(ctx.left_semi_match_res);
 
     res_block.getByPosition(match_helper_column_index).column = std::move(match_helper_column_ptr);
 
