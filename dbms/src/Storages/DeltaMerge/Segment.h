@@ -669,6 +669,9 @@ public:
         }
     }
 
+    void setVersionChain(const GenericVersionChainPtr & version_chain_) { version_chain = version_chain_; }
+    const GenericVersionChainPtr & getVersionChain() const { return version_chain; }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -864,7 +867,7 @@ public:
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;
 
-    GenericVersionChain version_chain;
+    GenericVersionChainPtr version_chain;
 };
 
 void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info);

@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -14,12 +14,12 @@
 
 #pragma once
 
-#include <memory>
+#include <Storages/DeltaMerge/VersionChain/Common.h>
 
-namespace DB::DM::Remote
+namespace DB::DM
 {
-
-class RNDeltaIndexCache;
-using RNDeltaIndexCachePtr = std::shared_ptr<RNDeltaIndexCache>;
-
-} // namespace DB::DM::Remote
+template <ExtraHandleType HandleType>
+class VersionChain;
+using GenericVersionChain = std::variant<VersionChain<Int64>, VersionChain<String>>;
+using GenericVersionChainPtr = std::shared_ptr<GenericVersionChain>;
+} // namespace DB::DM

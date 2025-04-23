@@ -1987,12 +1987,7 @@ public:
             nullptr);
 
         auto read_dm_context = dmContext(read_scan_context);
-        auto cn_segment_snap = Remote::Serializer::deserializeSegment(
-            *read_dm_context,
-            /* store_id */ 100,
-            /* keyspace_id */ 0,
-            /* table_id */ 100,
-            snap_proto);
+        auto cn_segment_snap = Remote::Serializer::deserializeSegment(*read_dm_context, snap_proto);
 
         auto stream = cn_segment->getInputStream(
             ReadMode::Bitmap,
