@@ -86,8 +86,6 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     IColumn::Offsets selective_offsets;
     /// For left outer join without other conditions
     IColumn::Offsets not_matched_selective_offsets;
-    /// For left outer (anti) semi join without other conditions
-    PaddedPODArray<Int8> match_helper_res;
 
     RowPtrs insert_batch;
 
@@ -175,28 +173,27 @@ class JoinProbeHelper : public JoinProbeHelperUtil
 public:
     JoinProbeHelper(const HashJoin * join, bool late_materialization);
 
-    Block probe(JoinProbeContext & context, JoinProbeWorkerData & wd);
+    Block probe(JoinProbeContext & ctx, JoinProbeWorkerData & wd);
 
 private:
     JOIN_PROBE_HELPER_TEMPLATE
-    Block probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd);
+    Block probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData & wd);
 
     JOIN_PROBE_HELPER_TEMPLATE
-    void NO_INLINE
-    probeFillColumns(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+    void NO_INLINE probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
     JOIN_PROBE_HELPER_TEMPLATE
     void NO_INLINE
-    probeFillColumnsPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+    probeFillColumnsPrefetch(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
 
     Block handleOtherConditions(
-        JoinProbeContext & context,
+        JoinProbeContext & ctx,
         JoinProbeWorkerData & wd,
         ASTTableJoin::Kind kind,
         bool late_materialization);
 
-    Block fillNotMatchedRowsForLeftOuter(JoinProbeContext & context, JoinProbeWorkerData & wd);
+    Block fillNotMatchedRowsForLeftOuter(JoinProbeContext & ctx, JoinProbeWorkerData & wd);
 
-    Block genResultBlockForLeftOuterSemi(JoinProbeContext & context, JoinProbeWorkerData & wd);
+    Block genResultBlockForLeftOuterSemi(JoinProbeContext & ctx);
 
 private:
     template <ASTTableJoin::Kind kind, bool has_other_condition, bool late_materialization>

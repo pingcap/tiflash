@@ -123,22 +123,22 @@ bool SemiJoinProbeHelper::isSupported(ASTTableJoin::Kind kind, bool has_other_co
     return has_other_condition && (kind == Semi || kind == Anti || kind == LeftOuterSemi || kind == LeftOuterAnti);
 }
 
-Block SemiJoinProbeHelper::probe(JoinProbeContext & context, JoinProbeWorkerData & wd)
+Block SemiJoinProbeHelper::probe(JoinProbeContext & ctx, JoinProbeWorkerData & wd)
 {
-    if (context.null_map)
-        return (this->*func_ptr_has_null)(context, wd);
+    if (ctx.null_map)
+        return (this->*func_ptr_has_null)(ctx, wd);
     else
-        return (this->*func_ptr_no_null)(context, wd);
+        return (this->*func_ptr_no_null)(ctx, wd);
 }
 
 template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer>
-Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd)
+Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData & wd)
 {
-    if unlikely (context.rows == 0)
+    if unlikely (ctx.rows == 0)
         return join->output_block_after_finalize;
 
-    auto * probe_list = static_cast<SemiJoinPendingProbeList *>(context.semi_join_pending_probe_list.get());
-    RUNTIME_CHECK(probe_list->size() == context.rows);
+    auto * probe_list = static_cast<SemiJoinPendingProbeList *>(ctx.semi_join_pending_probe_list.get());
+    RUNTIME_CHECK(probe_list->slotSize() == ctx.rows);
 
     size_t left_columns = join->left_sample_block_pruned.columns();
     size_t right_columns = join->right_sample_block_pruned.columns();
@@ -160,29 +160,15 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorker
     Stopwatch watch;
     if (pointer_table.enableProbePrefetch())
     {
-        probeFillColumnsPrefetch<
-            KeyGetter,
-            kind,
-            has_null_map,
-            tagged_pointer, true>(context, wd, added_columns);
-        
-        probeFillColumnsPrefetch<
-            KeyGetter,
-            kind,
-            has_null_map,
-            tagged_pointer, false>(context, wd, added_columns);
+        probeFillColumnsPrefetch<KeyGetter, kind, has_null_map, tagged_pointer, true>(ctx, wd, added_columns);
+
+        probeFillColumnsPrefetch<KeyGetter, kind, has_null_map, tagged_pointer, false>(ctx, wd, added_columns);
     }
     else
     {
-        probeFillColumns<KeyGetter, kind, has_null_map, tagged_pointer, true>(
-            context,
-            wd,
-            added_columns);
+        probeFillColumns<KeyGetter, kind, has_null_map, tagged_pointer, true>(ctx, wd, added_columns);
 
-        probeFillColumns<KeyGetter, kind, has_null_map, tagged_pointer, false>(
-            context,
-            wd,
-            added_columns);
+        probeFillColumns<KeyGetter, kind, has_null_map, tagged_pointer, false>(ctx, wd, added_columns);
     }
     wd.probe_hash_table_time += watch.elapsedFromLastTime();
 
@@ -193,18 +179,21 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorker
 }
 
 template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer, bool fill_list>
-void SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns)
+void SemiJoinProbeHelper::probeFillColumns(
+    JoinProbeContext & ctx,
+    JoinProbeWorkerData & wd,
+    MutableColumns & added_columns)
 {
     using KeyGetterType = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
     using Adder = SemiJoinProbeAdder<kind>;
 
-    auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
+    auto & key_getter = *static_cast<KeyGetterType *>(ctx.key_getter.get());
     size_t current_offset = wd.result_block.rows();
-    size_t idx = context.current_row_idx;
-    RowPtr ptr = context.current_build_row_ptr;
-    bool is_matched = context.current_row_is_matched;
+    size_t idx = ctx.current_row_idx;
+    RowPtr ptr = ctx.current_build_row_ptr;
+    bool is_matched = ctx.current_row_is_matched;
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
     if constexpr (KeyGetterType::joinKeyCompareHashFirst())
@@ -227,11 +216,11 @@ void SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & context, JoinProbe
         }                                                                       \
     }
 
-    for (; idx < context.rows; ++idx)
+    for (; idx < ctx.rows; ++idx)
     {
         if constexpr (has_null_map)
         {
-            if ((*context.null_map)[idx])
+            if ((*ctx.null_map)[idx])
             {
                 NOT_MATCHED(true)
                 continue;
@@ -315,18 +304,19 @@ void SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & context, JoinProbe
 
     Adder::flush(*this, wd, added_columns);
 
-    context.current_row_idx = idx;
-    context.current_build_row_ptr = ptr;
-    context.current_row_is_matched = is_matched;
+    ctx.current_row_idx = idx;
+    ctx.current_build_row_ptr = ptr;
+    ctx.current_row_is_matched = is_matched;
     wd.collision += collision;
 
 #undef NOT_MATCHED
 }
 
 template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer, bool fill_list>
-void SemiJoinProbeHelper::probeFillColumnsPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns)
-{
-
-}
+void SemiJoinProbeHelper::probeFillColumnsPrefetch(
+    JoinProbeContext & ctx,
+    JoinProbeWorkerData & wd,
+    MutableColumns & added_columns)
+{}
 
 } // namespace DB

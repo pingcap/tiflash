@@ -28,7 +28,6 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
-#include "Interpreters/JoinV2/SemiJoinProbe.h"
 
 namespace DB
 {
@@ -615,7 +614,7 @@ bool HashJoin::buildPointerTable(size_t stream_index)
     return is_end;
 }
 
-Block HashJoin::probeBlock(JoinProbeContext & context, size_t stream_index)
+Block HashJoin::probeBlock(JoinProbeContext & ctx, size_t stream_index)
 {
     RUNTIME_ASSERT(stream_index < probe_concurrency);
     RUNTIME_CHECK_MSG(probe_initialized, "Logical error: Join probe was not initialized");
@@ -626,7 +625,7 @@ Block HashJoin::probeBlock(JoinProbeContext & context, size_t stream_index)
     const NameSet & probe_output_name_set = has_other_condition
         ? output_columns_names_set_for_other_condition_after_finalize
         : output_column_names_set_after_finalize;
-    context.prepareForHashProbe(
+    ctx.prepareForHashProbe(
         method,
         kind,
         has_other_condition,
@@ -640,13 +639,13 @@ Block HashJoin::probeBlock(JoinProbeContext & context, size_t stream_index)
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
 
     auto & wd = probe_workers_data[stream_index];
-    Block res; 
+    Block res;
     if (semi_join_probe_helper)
-        res = semi_join_probe_helper->probe(context, wd);
+        res = semi_join_probe_helper->probe(ctx, wd);
     else
-        res = join_probe_helper->probe(context, wd);
-    if (context.isAllFinished())
-        wd.probe_handle_rows += context.rows;
+        res = join_probe_helper->probe(ctx, wd);
+    if (ctx.isAllFinished())
+        wd.probe_handle_rows += ctx.rows;
     return res;
 }
 

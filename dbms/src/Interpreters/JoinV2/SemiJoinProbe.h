@@ -74,24 +74,26 @@ public:
         probe_rows[sentinel_idx].prev_idx = sentinel_idx;
         probe_rows[sentinel_idx].next_idx = sentinel_idx;
 
-#ifndef NDEBUG 
-        // reset should be called after all slots are removed.
+#ifndef NDEBUG
+        // reset should be called after all slots are removed
         assert(slot_count == 0);
         // Isolate all slots
-        for (IndexType i = 0; i < n; ++i) {
+        for (IndexType i = 0; i < n; ++i)
+        {
             probe_rows[i].prev_idx = i;
             probe_rows[i].next_idx = i;
         }
 #endif
     }
 
-    inline size_t size() { return probe_rows.size() - 1; }
+    /// Returns the number of usable slots in the list (excluding the sentinel).
+    inline size_t slotSize() const { return probe_rows.size() - 1; }
 
-    /// Append an existing slot by index at the tail (before sentinel)
+    /// Append an existing slot by index at the tail (before sentinel).
     inline void append(IndexType idx)
     {
 #ifndef NDEBUG
-        assert(idx < size());
+        assert(idx < slotSize());
         assert(probe_rows[idx].prev_idx == idx && probe_rows[idx].next_idx == idx);
         ++slot_count;
 #endif
@@ -102,11 +104,11 @@ public:
         probe_rows[sentinel_idx].prev_idx = idx;
     }
 
-    /// Remove a slot by index from the list
+    /// Remove a slot by index from the list.
     inline void remove(IndexType idx)
     {
 #ifndef NDEBUG
-        assert(idx < size());
+        assert(idx < slotSize());
         assert(probe_rows[idx].prev_idx != idx && probe_rows[idx].next_idx != idx);
         assert(slot_count > 0);
         --slot_count;
@@ -139,17 +141,18 @@ public:
 
     static bool isSupported(ASTTableJoin::Kind kind, bool has_other_condition);
 
-    Block probe(JoinProbeContext & context, JoinProbeWorkerData & wd);
+    Block probe(JoinProbeContext & ctx, JoinProbeWorkerData & wd);
 
 private:
     template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer>
-    Block probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd);
+    Block probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData & wd);
 
     template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer, bool fill_list>
-    void NO_INLINE probeFillColumns(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+    void NO_INLINE probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
 
     template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer, bool fill_list>
-    void NO_INLINE probeFillColumnsPrefetch(JoinProbeContext & context, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+    void NO_INLINE
+    probeFillColumnsPrefetch(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
 
 private:
     template <ASTTableJoin::Kind kind>
