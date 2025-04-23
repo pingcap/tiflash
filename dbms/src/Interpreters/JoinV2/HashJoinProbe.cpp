@@ -836,9 +836,7 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
                 }
 
                 if constexpr (Adder::break_on_first_match)
-                {
                     next_ptr = nullptr;
-                }
             }
 
             if (next_ptr)
