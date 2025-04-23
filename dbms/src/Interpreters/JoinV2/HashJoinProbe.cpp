@@ -115,9 +115,13 @@ void JoinProbeContext::prepareForHashProbe(
     if (kind == LeftOuter && has_other_condition)
     {
         rows_not_matched.clear();
-        rows_not_matched.resize_fill(block.rows(), 1);
+        rows_not_matched.resize_fill(rows, 1);
         not_matched_offsets_idx = -1;
         not_matched_offsets.clear();
+    }
+    if (kind == LeftOuterSemi || kind == LeftOuterAnti)
+    {
+        semi_match_res.resize(rows);
     }
 
     is_prepared = true;
@@ -197,6 +201,7 @@ struct JoinProbeAdder<Inner, has_other_condition, late_materialization>
 
     static bool ALWAYS_INLINE addMatched(
         JoinProbeHelper & helper,
+        JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns & added_columns,
         size_t idx,
@@ -210,7 +215,8 @@ struct JoinProbeAdder<Inner, has_other_condition, late_materialization>
         return current_offset >= helper.settings.max_block_size;
     }
 
-    static bool ALWAYS_INLINE addNotMatched(JoinProbeHelper &, JoinProbeWorkerData &, size_t, size_t &)
+    static bool ALWAYS_INLINE
+    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, size_t, size_t &)
     {
         return false;
     }
@@ -231,6 +237,7 @@ struct JoinProbeAdder<LeftOuter, has_other_condition, late_materialization>
 
     static bool ALWAYS_INLINE addMatched(
         JoinProbeHelper & helper,
+        JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns & added_columns,
         size_t idx,
@@ -244,8 +251,12 @@ struct JoinProbeAdder<LeftOuter, has_other_condition, late_materialization>
         return current_offset >= helper.settings.max_block_size;
     }
 
-    static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper & helper, JoinProbeWorkerData & wd, size_t idx, size_t & current_offset)
+    static bool ALWAYS_INLINE addNotMatched(
+        JoinProbeHelper & helper,
+        JoinProbeContext &,
+        JoinProbeWorkerData & wd,
+        size_t idx,
+        size_t & current_offset)
     {
         if constexpr (!has_other_condition)
         {
@@ -286,6 +297,7 @@ struct JoinProbeAdder<Semi, false, false>
 
     static bool ALWAYS_INLINE addMatched(
         JoinProbeHelper & helper,
+        JoinProbeContext &,
         JoinProbeWorkerData & wd,
         MutableColumns &,
         size_t idx,
@@ -298,7 +310,8 @@ struct JoinProbeAdder<Semi, false, false>
         return current_offset >= helper.settings.max_block_size;
     }
 
-    static bool ALWAYS_INLINE addNotMatched(JoinProbeHelper &, JoinProbeWorkerData &, size_t, size_t &)
+    static bool ALWAYS_INLINE
+    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, size_t, size_t &)
     {
         return false;
     }
@@ -313,14 +326,25 @@ struct JoinProbeAdder<Anti, false, false>
     static constexpr bool need_not_matched = true;
     static constexpr bool break_on_first_match = true;
 
-    static bool ALWAYS_INLINE
-    addMatched(JoinProbeHelper &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &, RowPtr, size_t)
+    static bool ALWAYS_INLINE addMatched(
+        JoinProbeHelper &,
+        JoinProbeContext &,
+        JoinProbeWorkerData &,
+        MutableColumns &,
+        size_t,
+        size_t &,
+        RowPtr,
+        size_t)
     {
         return false;
     }
 
-    static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper & helper, JoinProbeWorkerData & wd, size_t idx, size_t & current_offset)
+    static bool ALWAYS_INLINE addNotMatched(
+        JoinProbeHelper & helper,
+        JoinProbeContext &,
+        JoinProbeWorkerData & wd,
+        size_t idx,
+        size_t & current_offset)
     {
         ++current_offset;
         wd.selective_offsets.push_back(idx);
@@ -337,14 +361,22 @@ struct JoinProbeAdder<LeftOuterSemi, false, false>
     static constexpr bool need_not_matched = false;
     static constexpr bool break_on_first_match = true;
 
-    static bool ALWAYS_INLINE
-    addMatched(JoinProbeHelper &, JoinProbeWorkerData & wd, MutableColumns &, size_t idx, size_t &, RowPtr, size_t)
+    static bool ALWAYS_INLINE addMatched(
+        JoinProbeHelper &,
+        JoinProbeContext & ctx,
+        JoinProbeWorkerData &,
+        MutableColumns &,
+        size_t idx,
+        size_t &,
+        RowPtr,
+        size_t)
     {
-        wd.match_helper_res[idx] = 1;
+        ctx.semi_match_res[idx] = 1;
         return false;
     }
 
-    static bool ALWAYS_INLINE addNotMatched(JoinProbeHelper &, JoinProbeWorkerData &, size_t, size_t &)
+    static bool ALWAYS_INLINE
+    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, size_t, size_t &)
     {
         return false;
     }
@@ -365,9 +397,10 @@ struct JoinProbeAdder<LeftOuterAnti, false, false>
         return false;
     }
 
-    static bool ALWAYS_INLINE addNotMatched(JoinProbeHelper &, JoinProbeWorkerData & wd, size_t idx, size_t &)
+    static bool ALWAYS_INLINE
+    addNotMatched(JoinProbeHelper &, JoinProbeContext & ctx, JoinProbeWorkerData &, size_t idx, size_t &)
     {
-        wd.match_helper_res[idx] = 1;
+        ctx.semi_match_res[idx] = 1;
         return false;
     }
 
@@ -453,26 +486,26 @@ JoinProbeHelper::JoinProbeHelper(const HashJoin * join, bool late_materializatio
 #undef CALL3
 }
 
-Block JoinProbeHelper::probe(JoinProbeContext & context, JoinProbeWorkerData & wd)
+Block JoinProbeHelper::probe(JoinProbeContext & ctx, JoinProbeWorkerData & wd)
 {
-    if (context.null_map)
-        return (this->*func_ptr_has_null)(context, wd);
+    if (ctx.null_map)
+        return (this->*func_ptr_has_null)(ctx, wd);
     else
-        return (this->*func_ptr_no_null)(context, wd);
+        return (this->*func_ptr_no_null)(ctx, wd);
 }
 
 JOIN_PROBE_HELPER_TEMPLATE
-Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData & wd)
+Block JoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData & wd)
 {
     static_assert(has_other_condition || !late_materialization);
 
-    if unlikely (context.rows == 0)
+    if unlikely (ctx.rows == 0)
         return join->output_block_after_finalize;
 
     if constexpr (kind == LeftOuter && has_other_condition)
     {
-        if (context.isProbeFinished())
-            return fillNotMatchedRowsForLeftOuter(context, wd);
+        if (ctx.isProbeFinished())
+            return fillNotMatchedRowsForLeftOuter(ctx, wd);
     }
 
     wd.insert_batch.clear();
@@ -483,11 +516,6 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
     {
         wd.not_matched_selective_offsets.clear();
         wd.not_matched_selective_offsets.reserve(settings.max_block_size);
-    }
-    if constexpr ((kind == LeftOuterSemi || kind == LeftOuterAnti) && !has_other_condition)
-    {
-        wd.match_helper_res.clear();
-        wd.match_helper_res.resize_fill_zero(context.rows);
     }
     if constexpr (late_materialization)
     {
@@ -520,10 +548,10 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
             has_null_map,
             has_other_condition,
             late_materialization,
-            tagged_pointer>(context, wd, added_columns);
+            tagged_pointer>(ctx, wd, added_columns);
     else
         probeFillColumns<KeyGetter, kind, has_null_map, has_other_condition, late_materialization, tagged_pointer>(
-            context,
+            ctx,
             wd,
             added_columns);
     wd.probe_hash_table_time += watch.elapsedFromLastTime();
@@ -541,7 +569,7 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
 
     if constexpr (kind == LeftOuterSemi || kind == LeftOuterAnti)
     {
-        return genResultBlockForLeftOuterSemi(context, wd);
+        return genResultBlockForLeftOuterSemi(ctx);
     }
 
     if constexpr (has_other_condition)
@@ -552,7 +580,7 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
             if (!join->left_required_flag_for_other_condition[i])
                 continue;
             wd.result_block.safeGetByPosition(i).column->assumeMutable()->insertSelectiveFrom(
-                *context.block.safeGetByPosition(i).column.get(),
+                *ctx.block.safeGetByPosition(i).column.get(),
                 wd.selective_offsets);
         }
     }
@@ -561,7 +589,7 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
         for (size_t i = 0; i < left_columns; ++i)
         {
             wd.result_block.safeGetByPosition(i).column->assumeMutable()->insertSelectiveFrom(
-                *context.block.safeGetByPosition(i).column.get(),
+                *ctx.block.safeGetByPosition(i).column.get(),
                 wd.selective_offsets);
         }
     }
@@ -570,7 +598,7 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
 
     if constexpr (has_other_condition)
     {
-        auto res_block = handleOtherConditions(context, wd, kind, late_materialization);
+        auto res_block = handleOtherConditions(ctx, wd, kind, late_materialization);
         wd.other_condition_time += watch.elapsedFromLastTime();
         return res_block;
     }
@@ -585,21 +613,18 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & context, JoinProbeWorkerData
 }
 
 JOIN_PROBE_HELPER_TEMPLATE
-void JoinProbeHelper::probeFillColumns(
-    JoinProbeContext & context,
-    JoinProbeWorkerData & wd,
-    MutableColumns & added_columns)
+void JoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns)
 {
     using KeyGetterType = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
     using Adder = JoinProbeAdder<kind, has_other_condition, late_materialization>;
 
-    auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
+    auto & key_getter = *static_cast<KeyGetterType *>(ctx.key_getter.get());
     size_t current_offset = wd.result_block.rows();
-    size_t idx = context.current_row_idx;
-    RowPtr ptr = context.current_build_row_ptr;
-    bool is_matched = context.current_row_is_matched;
+    size_t idx = ctx.current_row_idx;
+    RowPtr ptr = ctx.current_build_row_ptr;
+    bool is_matched = ctx.current_row_is_matched;
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
     if constexpr (KeyGetterType::joinKeyCompareHashFirst())
@@ -607,26 +632,26 @@ void JoinProbeHelper::probeFillColumns(
         key_offset += sizeof(HashValueType);
     }
 
-#define NOT_MATCHED(not_matched)                                                \
-    if constexpr (Adder::need_not_matched)                                      \
-    {                                                                           \
-        assert(ptr == nullptr);                                                 \
-        if (not_matched)                                                        \
-        {                                                                       \
-            bool is_end = Adder::addNotMatched(*this, wd, idx, current_offset); \
-            if unlikely (is_end)                                                \
-            {                                                                   \
-                ++idx;                                                          \
-                break;                                                          \
-            }                                                                   \
-        }                                                                       \
+#define NOT_MATCHED(not_matched)                                                     \
+    if constexpr (Adder::need_not_matched)                                           \
+    {                                                                                \
+        assert(ptr == nullptr);                                                      \
+        if (not_matched)                                                             \
+        {                                                                            \
+            bool is_end = Adder::addNotMatched(*this, ctx, wd, idx, current_offset); \
+            if unlikely (is_end)                                                     \
+            {                                                                        \
+                ++idx;                                                               \
+                break;                                                               \
+            }                                                                        \
+        }                                                                            \
     }
 
-    for (; idx < context.rows; ++idx)
+    for (; idx < ctx.rows; ++idx)
     {
         if constexpr (has_null_map)
         {
-            if ((*context.null_map)[idx])
+            if ((*ctx.null_map)[idx])
             {
                 NOT_MATCHED(true)
                 continue;
@@ -672,6 +697,7 @@ void JoinProbeHelper::probeFillColumns(
                 {
                     bool is_end = Adder::addMatched(
                         *this,
+                        ctx,
                         wd,
                         added_columns,
                         idx,
@@ -710,9 +736,9 @@ void JoinProbeHelper::probeFillColumns(
 
     Adder::flush(*this, wd, added_columns);
 
-    context.current_row_idx = idx;
-    context.current_build_row_ptr = ptr;
-    context.current_row_is_matched = is_matched;
+    ctx.current_row_idx = idx;
+    ctx.current_build_row_ptr = ptr;
+    ctx.current_row_is_matched = is_matched;
     wd.collision += collision;
 
 #undef NOT_MATCHED
@@ -752,7 +778,7 @@ struct ProbePrefetchState
 
 JOIN_PROBE_HELPER_TEMPLATE
 void JoinProbeHelper::probeFillColumnsPrefetch(
-    JoinProbeContext & context,
+    JoinProbeContext & ctx,
     JoinProbeWorkerData & wd,
     MutableColumns & added_columns)
 {
@@ -761,18 +787,18 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     using HashValueType = typename KeyGetter::HashValueType;
     using Adder = JoinProbeAdder<kind, has_other_condition, late_materialization>;
 
-    auto & key_getter = *static_cast<KeyGetterType *>(context.key_getter.get());
-    if (!context.prefetch_states)
+    auto & key_getter = *static_cast<KeyGetterType *>(ctx.key_getter.get());
+    if (!ctx.prefetch_states)
     {
-        context.prefetch_states = decltype(context.prefetch_states)(
+        ctx.prefetch_states = decltype(ctx.prefetch_states)(
             static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
             [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
     }
-    auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(context.prefetch_states.get());
+    auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(ctx.prefetch_states.get());
 
-    size_t idx = context.current_row_idx;
-    size_t active_states = context.prefetch_active_states;
-    size_t k = context.prefetch_iter;
+    size_t idx = ctx.current_row_idx;
+    size_t active_states = ctx.prefetch_active_states;
+    size_t k = ctx.prefetch_iter;
     size_t current_offset = wd.result_block.rows();
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
@@ -781,19 +807,19 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
         key_offset += sizeof(HashValueType);
     }
 
-#define NOT_MATCHED(not_matched, idx)                                           \
-    if constexpr (Adder::need_not_matched)                                      \
-    {                                                                           \
-        if (not_matched)                                                        \
-        {                                                                       \
-            bool is_end = Adder::addNotMatched(*this, wd, idx, current_offset); \
-            if unlikely (is_end)                                                \
-                break;                                                          \
-        }                                                                       \
+#define NOT_MATCHED(not_matched, idx)                                                \
+    if constexpr (Adder::need_not_matched)                                           \
+    {                                                                                \
+        if (not_matched)                                                             \
+        {                                                                            \
+            bool is_end = Adder::addNotMatched(*this, ctx, wd, idx, current_offset); \
+            if unlikely (is_end)                                                     \
+                break;                                                               \
+        }                                                                            \
     }
 
     const size_t probe_prefetch_step = settings.probe_prefetch_step;
-    while (idx < context.rows || active_states > 0)
+    while (idx < ctx.rows || active_states > 0)
     {
         k = k == probe_prefetch_step ? 0 : k;
         auto * state = &states[k];
@@ -815,6 +841,7 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
                 {
                     bool is_end = Adder::addMatched(
                         *this,
+                        ctx,
                         wd,
                         added_columns,
                         state->index,
@@ -885,14 +912,14 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
         if constexpr (has_null_map)
         {
             bool is_end = false;
-            while (idx < context.rows)
+            while (idx < ctx.rows)
             {
-                if (!(*context.null_map)[idx])
+                if (!(*ctx.null_map)[idx])
                     break;
 
                 if constexpr (Adder::need_not_matched)
                 {
-                    is_end = Adder::addNotMatched(*this, wd, idx, current_offset);
+                    is_end = Adder::addNotMatched(*this, ctx, wd, idx, current_offset);
                     if unlikely (is_end)
                     {
                         ++idx;
@@ -909,7 +936,7 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
             }
         }
 
-        if unlikely (idx >= context.rows)
+        if unlikely (idx >= ctx.rows)
         {
             ++k;
             continue;
@@ -937,16 +964,16 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
 
     Adder::flush(*this, wd, added_columns);
 
-    context.current_row_idx = idx;
-    context.prefetch_active_states = active_states;
-    context.prefetch_iter = k;
+    ctx.current_row_idx = idx;
+    ctx.prefetch_active_states = active_states;
+    ctx.prefetch_iter = k;
     wd.collision += collision;
 
 #undef NOT_MATCHED
 }
 
 Block JoinProbeHelper::handleOtherConditions(
-    JoinProbeContext & context,
+    JoinProbeContext & ctx,
     JoinProbeWorkerData & wd,
     ASTTableJoin::Kind kind,
     bool late_materialization)
@@ -1007,7 +1034,7 @@ Block JoinProbeHelper::handleOtherConditions(
         {
             size_t idx = wd.selective_offsets[i];
             bool is_matched = wd.filter[i];
-            context.rows_not_matched[idx] &= !is_matched;
+            ctx.rows_not_matched[idx] &= !is_matched;
         }
     }
 
@@ -1155,7 +1182,7 @@ Block JoinProbeHelper::handleOtherConditions(
                 }
                 else
                 {
-                    auto & src_column = context.block.safeGetByPosition(i);
+                    auto & src_column = ctx.block.safeGetByPosition(i);
                     des_column.column->assumeMutable()->insertSelectiveRangeFrom(
                         *src_column.column.get(),
                         wd.result_block_filter_offsets,
@@ -1166,7 +1193,7 @@ Block JoinProbeHelper::handleOtherConditions(
             }
             if unlikely (!result_block_filter_offsets_is_initialized)
                 init_result_block_filter_offsets();
-            auto & src_column = context.block.safeGetByPosition(i);
+            auto & src_column = ctx.block.safeGetByPosition(i);
             des_column.column->assumeMutable()
                 ->insertSelectiveRangeFrom(*src_column.column.get(), wd.result_block_filter_offsets, start, length);
         }
@@ -1198,48 +1225,48 @@ Block JoinProbeHelper::handleOtherConditions(
         return res_block;
     }
 
-    if (kind == LeftOuter && context.isProbeFinished())
-        return fillNotMatchedRowsForLeftOuter(context, wd);
+    if (kind == LeftOuter && ctx.isProbeFinished())
+        return fillNotMatchedRowsForLeftOuter(ctx, wd);
 
     return output_block_after_finalize;
 }
 
-Block JoinProbeHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context, JoinProbeWorkerData & wd)
+Block JoinProbeHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & ctx, JoinProbeWorkerData & wd)
 {
     RUNTIME_CHECK(join->kind == LeftOuter);
     RUNTIME_CHECK(join->has_other_condition);
-    RUNTIME_CHECK(context.isProbeFinished());
-    if (context.not_matched_offsets_idx < 0)
+    RUNTIME_CHECK(ctx.isProbeFinished());
+    if (ctx.not_matched_offsets_idx < 0)
     {
-        size_t rows = context.rows;
-        size_t not_matched_result_size = countBytesInFilter(context.rows_not_matched);
-        auto & offsets = context.not_matched_offsets;
+        size_t rows = ctx.rows;
+        size_t not_matched_result_size = countBytesInFilter(ctx.rows_not_matched);
+        auto & offsets = ctx.not_matched_offsets;
 
         offsets.clear();
         offsets.reserve(not_matched_result_size);
         if likely (rows <= BASE_OFFSETS.size())
         {
-            filterImpl(&context.rows_not_matched[0], &context.rows_not_matched[rows], &BASE_OFFSETS[0], offsets);
+            filterImpl(&ctx.rows_not_matched[0], &ctx.rows_not_matched[rows], &BASE_OFFSETS[0], offsets);
             RUNTIME_CHECK(offsets.size() == not_matched_result_size);
         }
         else
         {
             for (size_t i = 0; i < rows; ++i)
             {
-                if (context.rows_not_matched[i])
+                if (ctx.rows_not_matched[i])
                     offsets.push_back(i);
             }
         }
 
-        context.not_matched_offsets_idx = 0;
+        ctx.not_matched_offsets_idx = 0;
     }
     const auto & output_block_after_finalize = join->output_block_after_finalize;
 
-    if (static_cast<size_t>(context.not_matched_offsets_idx) >= context.not_matched_offsets.size())
+    if (static_cast<size_t>(ctx.not_matched_offsets_idx) >= ctx.not_matched_offsets.size())
     {
         // JoinProbeContext::isAllFinished checks if all not matched rows have been output
         // by verifying whether rows_not_matched is empty.
-        context.rows_not_matched.clear();
+        ctx.rows_not_matched.clear();
         return output_block_after_finalize;
     }
 
@@ -1256,7 +1283,7 @@ Block JoinProbeHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context
     }
 
     size_t remaining_insert_size = settings.max_block_size - wd.result_block_for_other_condition.rows();
-    size_t result_size = context.not_matched_offsets.size() - context.not_matched_offsets_idx;
+    size_t result_size = ctx.not_matched_offsets.size() - ctx.not_matched_offsets_idx;
     size_t length = std::min(result_size, remaining_insert_size);
 
     const auto & output_column_indexes = join->output_column_indexes;
@@ -1275,20 +1302,20 @@ Block JoinProbeHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context
         if (output_index < 0)
             continue;
         auto & des_column = wd.result_block_for_other_condition.safeGetByPosition(output_index);
-        auto & src_column = context.block.safeGetByPosition(i);
+        auto & src_column = ctx.block.safeGetByPosition(i);
         des_column.column->assumeMutable()->insertSelectiveRangeFrom(
             *src_column.column.get(),
-            context.not_matched_offsets,
-            context.not_matched_offsets_idx,
+            ctx.not_matched_offsets,
+            ctx.not_matched_offsets_idx,
             length);
     }
-    context.not_matched_offsets_idx += length;
+    ctx.not_matched_offsets_idx += length;
 
-    if (static_cast<size_t>(context.not_matched_offsets_idx) >= context.not_matched_offsets.size())
+    if (static_cast<size_t>(ctx.not_matched_offsets_idx) >= ctx.not_matched_offsets.size())
     {
         // JoinProbeContext::isAllFinished checks if all not matched rows have been output
         // by verifying whether rows_not_matched is empty.
-        context.rows_not_matched.clear();
+        ctx.rows_not_matched.clear();
     }
 
     Block res_block;
@@ -1296,11 +1323,11 @@ Block JoinProbeHelper::fillNotMatchedRowsForLeftOuter(JoinProbeContext & context
     return res_block;
 }
 
-Block JoinProbeHelper::genResultBlockForLeftOuterSemi(JoinProbeContext & context, JoinProbeWorkerData & wd)
+Block JoinProbeHelper::genResultBlockForLeftOuterSemi(JoinProbeContext & ctx)
 {
     RUNTIME_CHECK(join->kind == LeftOuterSemi || join->kind == LeftOuterAnti);
     RUNTIME_CHECK(!join->has_other_condition);
-    RUNTIME_CHECK(context.isProbeFinished());
+    RUNTIME_CHECK(ctx.isProbeFinished());
 
     Block res_block = join->output_block_after_finalize.cloneEmpty();
     size_t columns = res_block.columns();
@@ -1309,14 +1336,14 @@ Block JoinProbeHelper::genResultBlockForLeftOuterSemi(JoinProbeContext & context
     {
         if (i == match_helper_column_index)
             continue;
-        res_block.getByPosition(i) = context.block.getByName(res_block.getByPosition(i).name);
+        res_block.getByPosition(i) = ctx.block.getByName(res_block.getByPosition(i).name);
     }
 
     MutableColumnPtr match_helper_column_ptr = res_block.getByPosition(match_helper_column_index).column->cloneEmpty();
     auto * match_helper_column = typeid_cast<ColumnNullable *>(match_helper_column_ptr.get());
-    match_helper_column->getNullMapColumn().getData().resize_fill_zero(context.rows);
+    match_helper_column->getNullMapColumn().getData().resize_fill_zero(ctx.rows);
     auto * match_helper_res = &typeid_cast<ColumnVector<Int8> &>(match_helper_column->getNestedColumn()).getData();
-    match_helper_res->swap(wd.match_helper_res);
+    match_helper_res->swap(ctx.semi_match_res);
 
     res_block.getByPosition(match_helper_column_index).column = std::move(match_helper_column_ptr);
 
