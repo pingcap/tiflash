@@ -58,6 +58,7 @@ void JoinProbeContext::resetBlock(Block & block_)
     current_row_idx = 0;
     current_build_row_ptr = nullptr;
     current_row_is_matched = false;
+    semi_join_pending_probe_list.reset();
 
     prefetch_active_states = 0;
 
@@ -121,7 +122,7 @@ void JoinProbeContext::prepareForHashProbe(
         not_matched_offsets.clear();
     }
 
-    if ((kind == Semi || kind == Anti || kind == LeftOuterSemi || kind == LeftOuterAnti) && has_other_condition)
+    if (SemiJoinProbeHelper::isSupported(kind, has_other_condition))
     {
         if unlikely (!semi_join_pending_probe_list)
         {
@@ -129,7 +130,7 @@ void JoinProbeContext::prepareForHashProbe(
                 static_cast<void *>(new SemiJoinPendingProbeList),
                 [](void * ptr) { delete static_cast<SemiJoinPendingProbeList *>(ptr); });
         }
-        static_cast<SemiJoinPendingProbeList *>(semi_join_pending_probe_list.get())->reset(block.rows() + 1);
+        static_cast<SemiJoinPendingProbeList *>(semi_join_pending_probe_list.get())->reset(block.rows());
     }
 
     is_prepared = true;

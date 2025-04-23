@@ -28,6 +28,7 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
+#include "Interpreters/JoinV2/SemiJoinProbe.h"
 
 namespace DB
 {
@@ -498,7 +499,10 @@ void HashJoin::workAfterBuildRowFinish()
     fiu_do_on(FailPoints::force_join_v2_probe_enable_lm, { late_materialization = true; });
     fiu_do_on(FailPoints::force_join_v2_probe_disable_lm, { late_materialization = false; });
 
-    join_probe_helper = std::make_unique<JoinProbeHelper>(this, late_materialization);
+    if (SemiJoinProbeHelper::isSupported(kind, has_other_condition))
+        semi_join_probe_helper = std::make_unique<SemiJoinProbeHelper>(this);
+    else
+        join_probe_helper = std::make_unique<JoinProbeHelper>(this, late_materialization);
 
     LOG_INFO(
         log,
@@ -636,7 +640,11 @@ Block HashJoin::probeBlock(JoinProbeContext & context, size_t stream_index)
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
 
     auto & wd = probe_workers_data[stream_index];
-    Block res = join_probe_helper->probe(context, wd);
+    Block res; 
+    if (semi_join_probe_helper)
+        res = semi_join_probe_helper->probe(context, wd);
+    else
+        res = join_probe_helper->probe(context, wd);
     if (context.isAllFinished())
         wd.probe_handle_rows += context.rows;
     return res;

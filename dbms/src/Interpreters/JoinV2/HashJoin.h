@@ -153,6 +153,7 @@ private:
     std::vector<JoinProbeWorkerData> probe_workers_data;
     std::atomic<size_t> active_probe_worker = 0;
     std::unique_ptr<JoinProbeHelper> join_probe_helper;
+    std::unique_ptr<SemiJoinProbeHelper> semi_join_probe_helper;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 

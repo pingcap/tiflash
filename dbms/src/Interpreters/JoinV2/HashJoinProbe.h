@@ -45,6 +45,10 @@ struct JoinProbeContext
     /// < 0 means not_matched_offsets is not initialized.
     ssize_t not_matched_offsets_idx = -1;
     IColumn::Offsets not_matched_offsets;
+    /// For left outer (anti) semi join.
+    PaddedPODArray<Int8> semi_match_res;
+    /// For left outer (anti) semi join with null-eq-from-in conditions.
+    PaddedPODArray<UInt8> semi_match_null_res;
     /// For (left outer) (anti) semi join with other conditions.
     std::unique_ptr<void, std::function<void(void *)>> semi_join_pending_probe_list;
 
