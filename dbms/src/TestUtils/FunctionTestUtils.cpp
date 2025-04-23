@@ -189,7 +189,7 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 {
     if (auto ret = dataTypeEqual(expected.type, actual.type); !ret)
         return ret;
-    
+
     // When the type is wrapped by Nullable, the underlying floating point type cannot be directly detected.
     // Remove Nullable to expose the real type, enabling proper comparison of floating point numbers (exact
     // match or error-tolerant match). This solves the problem of value comparison failure caused by small
