@@ -37,6 +37,8 @@
 #define SIMSIMD_TARGET_ICE 1
 #define SIMSIMD_TARGET_GENOA 0
 #define SIMSIMD_TARGET_SAPPHIRE 0
+#define SIMSIMD_TARGET_TURIN 0
+#define SIMSIMD_TARGET_SIERRA 0
 #include <simsimd/simsimd.h>
 
 namespace simsimd_details

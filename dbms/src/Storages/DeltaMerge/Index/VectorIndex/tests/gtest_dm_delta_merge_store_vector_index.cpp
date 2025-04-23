@@ -821,7 +821,7 @@ try
             range,
             filter,
             {VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD},
-            {createNullableColumn<Float32>({-0.00003883534373017028, -0.000036860677937511355}, {0, 0})});
+            {createNullableColumn<Float32>({0.0, 0.0}, {0, 0})});
     }
 }
 CATCH

@@ -34,6 +34,8 @@
 #define SIMSIMD_TARGET_ICE 1
 #define SIMSIMD_TARGET_GENOA 0
 #define SIMSIMD_TARGET_SAPPHIRE 0
+#define SIMSIMD_TARGET_TURIN 0
+#define SIMSIMD_TARGET_SIERRA 0
 
 #if __clang__
 #pragma clang diagnostic push

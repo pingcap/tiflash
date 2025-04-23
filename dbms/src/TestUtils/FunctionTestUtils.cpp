@@ -144,6 +144,29 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
         }
         else
         {
+            constexpr Float64 tolerance = 1e-10;
+            if (expected_field.isNull() != actual_field.isNull())
+            {
+                return ::testing::AssertionFailure() << fmt::format(
+                           "Value at index {} mismatch, expected: {}, actual: {}",
+                           i,
+                           expected_field.toString(),
+                           actual_field.toString());
+            }
+            else if (expected_field.isNull() && actual_field.isNull())
+            {
+                continue;
+            }
+            Float64 expected_value = expected_field.safeGet<Float64>();
+            Float64 actual_value = actual_field.safeGet<Float64>();
+
+            Float64 diff = std::abs(expected_value - actual_value);
+            if (diff <= tolerance)
+            {
+                continue;
+            }
+
+            // TODO: consider remove these code and using all of the above comparison methods with the allowable error range?
             auto expected_field_expr = expected_field.toString();
             auto actual_field_expr = actual_field.toString();
             if (auto res = ::testing::internal::CmpHelperFloatingPointEQ(
@@ -166,12 +189,24 @@ template <typename ExpectedT, typename ActualT, typename ExpectedDisplayT, typen
 {
     if (auto ret = dataTypeEqual(expected.type, actual.type); !ret)
         return ret;
+    
+    // When the type is wrapped by Nullable, the underlying floating point type cannot be directly detected.
+    // Remove Nullable to expose the real type, enabling proper comparison of floating point numbers (exact
+    // match or error-tolerant match). This solves the problem of value comparison failure caused by small
+    // differences in floating point calculation results on different architectures (such as ARM/x86).
+    DataTypePtr expected_type = expected.type;
+    DataTypePtr actual_type = actual.type;
+    if (expected.type->isNullable() && actual.type->isNullable())
+    {
+        expected_type = removeNullable(expected.type);
+        actual_type = removeNullable(expected.type);
+    }
 
     return columnEqual(
         expected.column,
         actual.column,
         collator,
-        expected.type->isFloatingPoint(),
+        expected_type->isFloatingPoint(),
         exact_match_for_floating_point);
 }
 
