@@ -53,7 +53,7 @@ Float64 VectorFloat32Ref::l2SquaredDistance(VectorFloat32Ref b) const
             simsimd_datatype_f32_k,
             simsimd_details::simd_capabilities(),
             simsimd_cap_any_k,
-            (simsimd_kernel_punned_t *)(&metric),
+            reinterpret_cast<simsimd_kernel_punned_t *>(&metric),
             &used_capability);
     });
 
@@ -80,7 +80,7 @@ Float64 VectorFloat32Ref::innerProduct(VectorFloat32Ref b) const
             simsimd_datatype_f32_k,
             simsimd_details::simd_capabilities(),
             simsimd_cap_any_k,
-            (simsimd_kernel_punned_t *)(&metric),
+            reinterpret_cast<simsimd_kernel_punned_t *>(&metric),
             &used_capability);
     });
 
@@ -107,7 +107,7 @@ Float64 VectorFloat32Ref::cosineDistance(VectorFloat32Ref b) const
             simsimd_datatype_f32_k,
             simsimd_details::simd_capabilities(),
             simsimd_cap_any_k,
-            (simsimd_kernel_punned_t *)(&metric),
+            reinterpret_cast<simsimd_kernel_punned_t *>(&metric),
             &used_capability);
     });
 
