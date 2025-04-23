@@ -2476,7 +2476,7 @@ void Segment::placeDeltaIndex(const DMContext & dm_context, const SegmentSnapsho
         ReadTag::Internal);
 }
 
-void Segment::replayVersionChain(const DMContext & dm_context)
+void Segment::replayVersionChain(const DMContext & dm_context) const
 {
     RUNTIME_CHECK(dm_context.isVersionChainEnabled());
     auto segment_snap
@@ -3238,17 +3238,23 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ true);
     }
 
-    UInt64 use_packs = 0;
-    for (const auto & res : new_pack_filter_results)
-        use_packs += res->countUsePack();
-    if (!use_packs)
+    if (std::none_of(new_pack_filter_results.begin(), new_pack_filter_results.end(), [](const auto & res) {
+            return res->countUsePack() > 0;
+        }))
     {
+        auto bitmap_filter
+            = std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ false);
+        for (const auto & range : skipped_ranges)
+        {
+            bitmap_filter->set(range.offset, range.rows);
+        }
+        bitmap_filter->runOptimize();
         LOG_DEBUG(
             segment_snap->log,
             "buildMVCCBitmapFilterStableOnly not have use packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
             commit_elapse());
-        return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ false);
+        return bitmap_filter;
     }
 
     BlockInputStreamPtr stream;

@@ -267,14 +267,6 @@ public:
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         bool reorganize_block = true) const;
 
-    BlockInputStreamPtr getInputStreamModeFast(
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
-        const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & read_ranges,
-        const DMFilePackFilterResults & pack_filter_results,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
-
     BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
@@ -554,7 +546,7 @@ public:
     void placeDeltaIndex(const DMContext & dm_context) const;
     void placeDeltaIndex(const DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
     /// Use to replay version chain in background.
-    void replayVersionChain(const DMContext & dm_context);
+    void replayVersionChain(const DMContext & dm_context) const;
 
     /// Compact the delta layer, merging fragment column files into bigger column files.
     /// It does not merge the delta into stable layer.
