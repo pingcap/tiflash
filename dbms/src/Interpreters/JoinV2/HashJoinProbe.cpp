@@ -520,6 +520,11 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData & w
         if (ctx.isProbeFinished())
             return fillNotMatchedRowsForLeftOuter(ctx, wd);
     }
+    if constexpr (kind == LeftOuterSemi || kind == LeftOuterAnti)
+    {
+        // Sanity check
+        RUNTIME_CHECK(ctx.semi_match_res.size() == ctx.rows);
+    }
 
     wd.insert_batch.clear();
     wd.insert_batch.reserve(settings.probe_insert_batch_size);
