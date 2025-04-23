@@ -70,13 +70,13 @@ public:
         RUNTIME_CHECK(n <= UINT32_MAX);
         probe_rows.resize(n + 1);
         sentinel_idx = static_cast<IndexType>(n);
-        // Sentinel circular self-loop
+        // Initialize sentinel self-loop
         probe_rows[sentinel_idx].prev_idx = sentinel_idx;
         probe_rows[sentinel_idx].next_idx = sentinel_idx;
 
 #ifndef NDEBUG
         // reset should be called after all slots are removed
-        assert(slot_count == 0);
+        assert(linked_count == 0);
         // Isolate all slots
         for (IndexType i = 0; i < n; ++i)
         {
@@ -95,7 +95,7 @@ public:
 #ifndef NDEBUG
         assert(idx < slotSize());
         assert(probe_rows[idx].prev_idx == idx && probe_rows[idx].next_idx == idx);
-        ++slot_count;
+        ++linked_count;
 #endif
         IndexType tail = probe_rows[sentinel_idx].prev_idx;
         probe_rows[tail].next_idx = idx;
@@ -110,8 +110,8 @@ public:
 #ifndef NDEBUG
         assert(idx < slotSize());
         assert(probe_rows[idx].prev_idx != idx && probe_rows[idx].next_idx != idx);
-        assert(slot_count > 0);
-        --slot_count;
+        assert(linked_count > 0);
+        --linked_count;
 #endif
         IndexType prev = probe_rows[idx].prev_idx;
         IndexType next = probe_rows[idx].next_idx;
@@ -126,7 +126,7 @@ private:
     PaddedPODArray<PendingProbeRow> probe_rows;
     IndexType sentinel_idx = 0;
 #ifndef NDEBUG
-    size_t slot_count = 0;
+    size_t linked_count = 0;
 #endif
 };
 

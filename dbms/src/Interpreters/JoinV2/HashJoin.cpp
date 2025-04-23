@@ -629,6 +629,7 @@ Block HashJoin::probeBlock(JoinProbeContext & ctx, size_t stream_index)
         method,
         kind,
         has_other_condition,
+        !non_equal_conditions.other_eq_cond_from_in_name.empty(),
         key_names_left,
         non_equal_conditions.left_filter_column,
         probe_output_name_set,

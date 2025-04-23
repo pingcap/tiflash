@@ -46,9 +46,11 @@ struct JoinProbeContext
     ssize_t not_matched_offsets_idx = -1;
     IColumn::Offsets not_matched_offsets;
     /// For left outer (anti) semi join.
-    PaddedPODArray<Int8> semi_match_res;
-    /// For left outer (anti) semi join with null-eq-from-in conditions.
-    PaddedPODArray<UInt8> semi_match_null_res;
+    PaddedPODArray<Int8> left_semi_match_res;
+    /// For left outer (anti) semi join with other-eq-from-in conditions.
+    PaddedPODArray<UInt8> left_semi_match_null_res;
+    /// For (anti) semi join with other conditions.
+    IColumn::Offsets semi_selective_offsets;
     /// For (left outer) (anti) semi join with other conditions.
     std::unique_ptr<void, std::function<void(void *)>> semi_join_pending_probe_list;
 
@@ -73,6 +75,7 @@ struct JoinProbeContext
         HashJoinKeyMethod method,
         ASTTableJoin::Kind kind,
         bool has_other_condition,
+        bool has_other_eq_from_in_condition,
         const Names & key_names,
         const String & filter_column,
         const NameSet & probe_output_name_set,

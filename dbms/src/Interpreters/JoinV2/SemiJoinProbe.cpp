@@ -140,6 +140,14 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData
     auto * probe_list = static_cast<SemiJoinPendingProbeList *>(ctx.semi_join_pending_probe_list.get());
     RUNTIME_CHECK(probe_list->slotSize() == ctx.rows);
 
+    if constexpr (kind == LeftOuterSemi || kind == LeftOuterAnti)
+    {
+        // Sanity check
+        RUNTIME_CHECK(ctx.left_semi_match_res.size() == ctx.rows);
+        if (!join->non_equal_conditions.other_eq_cond_from_in_name.empty())
+            RUNTIME_CHECK(ctx.left_semi_match_null_res.size() == ctx.rows);
+    }
+
     size_t left_columns = join->left_sample_block_pruned.columns();
     size_t right_columns = join->right_sample_block_pruned.columns();
     if (!wd.result_block)
@@ -176,6 +184,12 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData
     // Alternative: added_columns.clear(); but that is less explicit and may misleadingly imply the columns are discarded.
     for (size_t i = 0; i < right_columns; ++i)
         wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
+
+    if (ctx.isProbeFinished())
+    {
+        
+    }
+    return join->output_block_after_finalize;
 }
 
 template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer, bool fill_list>
