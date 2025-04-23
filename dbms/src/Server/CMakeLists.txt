@@ -139,6 +139,11 @@ elseif(APPLE)
     # set build rpaths, so that executables can be directly called in build tree (easy to debug)
     set_target_properties(tiflash PROPERTIES BUILD_RPATH "@executable_path/;@executable_path/${TIFLASH_PROXY_LIB_RPATH}/")
     set_target_properties(tiflash PROPERTIES INSTALL_RPATH "@executable_path/")
+    if (USE_INTERNAL_LIBCLARA)
+        install (TARGETS clara_shared
+                COMPONENT tiflash-release
+                DESTINATION ".")
+    endif()
     install (TARGETS tiflash
             COMPONENT tiflash-release
             DESTINATION "."
