@@ -397,8 +397,9 @@ struct JoinProbeAdder<LeftOuterSemi, false, false>
     }
 
     static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, size_t, size_t &)
+    addNotMatched(JoinProbeHelper &, JoinProbeContext & ctx, JoinProbeWorkerData &, size_t idx, size_t &)
     {
+        ctx.left_semi_match_res[idx] = 0;
         return false;
     }
 
@@ -412,9 +413,17 @@ struct JoinProbeAdder<LeftOuterAnti, false, false>
     static constexpr bool need_not_matched = true;
     static constexpr bool break_on_first_match = true;
 
-    static bool ALWAYS_INLINE
-    addMatched(JoinProbeHelper &, JoinProbeWorkerData &, MutableColumns &, size_t, size_t &, RowPtr, size_t)
+    static bool ALWAYS_INLINE addMatched(
+        JoinProbeHelper &,
+        JoinProbeContext & ctx,
+        JoinProbeWorkerData &,
+        MutableColumns &,
+        size_t idx,
+        size_t &,
+        RowPtr,
+        size_t)
     {
+        ctx.left_semi_match_res[idx] = 0;
         return false;
     }
 

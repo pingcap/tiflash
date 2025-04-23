@@ -185,10 +185,7 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData
     for (size_t i = 0; i < right_columns; ++i)
         wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
 
-    if (ctx.isProbeFinished())
-    {
-        
-    }
+    if (ctx.isProbeFinished()) {}
     return join->output_block_after_finalize;
 }
 
