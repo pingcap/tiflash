@@ -3332,7 +3332,7 @@ SkippableBlockInputStreamPtr Segment::getConcatSkippableBlockInputStream(
     // set `is_fast_scan` to true to try to enable clean read
     auto enable_handle_clean_read = !hasColumn(columns_to_read, MutSup::extra_handle_id);
     constexpr auto is_fast_scan = true;
-    auto enable_del_clean_read = !hasColumn(columns_to_read, MutSup::version_col_id);
+    auto enable_del_clean_read = !hasColumn(columns_to_read, MutSup::delmark_col_id);
 
     auto stream = segment_snap->stable->getInputStream(
         dm_context,
