@@ -352,16 +352,9 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsFromList(
         auto & probe_row = *iter;
         RowPtr ptr = probe_row.build_row_ptr;
         auto idx = iter.getIndex();
-        if (ptr == nullptr)
-        {
-            setNotMatched<kind, has_other_eq_from_in_cond>(ctx, idx, probe_row.has_null_eq_from_in);
-            ++iter;
-            probe_list->remove(idx);
-            continue;
-        }
         size_t end_offset = std::min(settings.max_block_size, current_offset + probe_row.pace);
         size_t prev_offset = current_offset;
-        while (true)
+        while (ptr != nullptr)
         {
             const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
             bool key_is_equal = joinKeyIsEqual(key_getter, probe_row.key, key2, probe_row.hash, ptr);
@@ -379,8 +372,6 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsFromList(
             }
 
             ptr = getNextRowPtr(ptr);
-            if (ptr == nullptr)
-                break;
         }
         if (prev_offset == current_offset)
         {
