@@ -136,8 +136,16 @@ public:
     Iterator begin() { return Iterator(*this, probe_rows[sentinel_idx].next_idx); }
     Iterator end() { return Iterator(*this, sentinel_idx); }
 
-    ProbeRow & at(IndexType idx) { assert(idx < slotCapacity()); return probe_rows[idx]; }
-    const ProbeRow & at(IndexType idx) const { assert(idx < slotCapacity()); return probe_rows[idx]; }
+    ProbeRow & at(IndexType idx)
+    {
+        assert(idx < slotCapacity());
+        return probe_rows[idx];
+    }
+    const ProbeRow & at(IndexType idx) const
+    {
+        assert(idx < slotCapacity());
+        return probe_rows[idx];
+    }
 
 private:
     struct WrapProbeRow : ProbeRow
