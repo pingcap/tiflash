@@ -14,6 +14,7 @@
 
 #include <Interpreters/JoinV2/HashJoin.h>
 #include <Interpreters/JoinV2/SemiJoinProbe.h>
+#include "Parsers/ASTTablesInSelectQuery.h"
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 ASSERT_USE_AVX2_COMPILE_FLAG
@@ -31,33 +32,68 @@ enum class SemiJoinProbeResType : UInt8
     NULL_VALUE,
 };
 
-template <>
-struct SemiJoinProbeAdder<Semi>
+namespace {
+    template <ASTTableJoin::Kind kind>
+    void ALWAYS_INLINE setMatched(JoinProbeContext & ctx, size_t idx)
+    {
+        static_assert(kind == Semi || kind == Anti || kind == LeftOuterSemi || kind == LeftOuterAnti);
+        if constexpr (kind == Semi)
+        {
+            ctx.semi_selective_offsets.push_back(idx);
+        }
+        else if constexpr (kind == LeftOuterSemi)
+        {
+            ctx.left_semi_match_res[idx] = 1;
+        }
+    }
+
+    template <ASTTableJoin::Kind kind, bool check_other_eq_from_in_cond>
+    void ALWAYS_INLINE setNotMatched(JoinProbeContext & ctx, size_t idx, bool has_null_eq_from_in = false)
+    {
+        static_assert(kind == Semi || kind == Anti || kind == LeftOuterSemi || kind == LeftOuterAnti);
+        if constexpr (check_other_eq_from_in_cond)
+        {
+            if constexpr (kind == Anti)
+            {
+                if (!has_null_eq_from_in)
+                    ctx.semi_selective_offsets.push_back(idx);
+            }
+            else if constexpr (kind == LeftOuterSemi)
+            {
+                ctx.left_semi_match_null_res[idx] = has_null_eq_from_in;
+            }
+            else if constexpr (kind == LeftOuterAnti)
+            {
+                ctx.left_semi_match_res[idx] = 1;
+                ctx.left_semi_match_null_res[idx] = has_null_eq_from_in;
+            }
+        }
+        else
+        {
+            if constexpr (kind == Anti)
+            {
+                ctx.semi_selective_offsets.push_back(idx);
+            }
+            else if constexpr (kind == LeftOuterAnti)
+            {
+                ctx.left_semi_match_res[idx] = 1;
+            }
+        }
+    }
+
+} // namespace
+
+template <bool has_other_eq_from_in_cond>
+struct SemiJoinProbeAdder<Semi, has_other_eq_from_in_cond>
 {
-    static constexpr bool need_matched = true;
-    static constexpr bool need_not_matched = false;
-    static constexpr bool break_on_first_match = true;
-
-    static bool ALWAYS_INLINE addMatched(
-        SemiJoinProbeHelper & helper,
-        JoinProbeWorkerData & wd,
-        MutableColumns &,
-        size_t idx,
-        size_t & current_offset,
-        RowPtr,
-        size_t)
+    static void ALWAYS_INLINE setMatched(
+        JoinProbeContext & ctx,
+        size_t idx)
     {
-        ++current_offset;
-        wd.selective_offsets.push_back(idx);
-        return current_offset >= helper.settings.max_block_size;
+        ctx.semi_selective_offsets.push_back(idx);
     }
 
-    static bool ALWAYS_INLINE addNotMatched(SemiJoinProbeHelper &, JoinProbeWorkerData &, size_t, size_t &)
-    {
-        return false;
-    }
-
-    static void flush(SemiJoinProbeHelper &, JoinProbeWorkerData &, MutableColumns &) {}
+    static void ALWAYS_INLINE addNotMatched(JoinProbeContext &, size_t) {}
 };
 
 SemiJoinProbeHelper::SemiJoinProbeHelper(const HashJoin * join)
@@ -65,20 +101,29 @@ SemiJoinProbeHelper::SemiJoinProbeHelper(const HashJoin * join)
     , join(join)
     , pointer_table(join->pointer_table)
 {
+    // SemiJoinProbeHelper only handles semi join with other conditions
     RUNTIME_CHECK(join->has_other_condition);
 
-#define CALL2(KeyGetter, JoinType, tagged_pointer)                                                      \
+#define CALL3(KeyGetter, JoinType, has_other_eq_from_in_cond, tagged_pointer)                                                      \
     {                                                                                                   \
-        func_ptr_has_null = &SemiJoinProbeHelper::probeImpl<KeyGetter, JoinType, true, tagged_pointer>; \
-        func_ptr_no_null = &SemiJoinProbeHelper::probeImpl<KeyGetter, JoinType, false, tagged_pointer>; \
+        func_ptr_has_null = &SemiJoinProbeHelper::probeImpl<KeyGetter, JoinType, true, has_other_eq_from_in_cond, tagged_pointer>; \
+        func_ptr_no_null = &SemiJoinProbeHelper::probeImpl<KeyGetter, JoinType, false, has_other_eq_from_in_cond, tagged_pointer>; \
     }
 
-#define CALL1(KeyGetter, JoinType)               \
+#define CALL2(KeyGetter, JoinType, has_other_eq_from_in_cond)               \
     {                                            \
         if (pointer_table.enableTaggedPointer()) \
-            CALL2(KeyGetter, JoinType, true)     \
+            CALL3(KeyGetter, JoinType, has_other_eq_from_in_cond, true)     \
         else                                     \
-            CALL2(KeyGetter, JoinType, false)    \
+            CALL3(KeyGetter, JoinType, has_other_eq_from_in_cond, false)    \
+    }
+
+#define CALL1(KeyGetter, JoinType) \
+    { \
+        if (join->non_equal_conditions.other_eq_cond_from_in_name.empty()) \
+            CALL2(KeyGetter, JoinType, false) \
+        else \
+            CALL2(KeyGetter, JoinType, true) \
     }
 
 #define CALL(KeyGetter)                                                                                    \
@@ -131,14 +176,11 @@ Block SemiJoinProbeHelper::probe(JoinProbeContext & ctx, JoinProbeWorkerData & w
         return (this->*func_ptr_no_null)(ctx, wd);
 }
 
-template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer>
+SEMI_JOIN_PROBE_HELPER_TEMPLATE
 Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData & wd)
 {
     if unlikely (ctx.rows == 0)
         return join->output_block_after_finalize;
-
-    auto * probe_list = static_cast<SemiJoinPendingProbeList *>(ctx.semi_join_pending_probe_list.get());
-    RUNTIME_CHECK(probe_list->slotSize() == ctx.rows);
 
     if constexpr (kind == LeftOuterSemi || kind == LeftOuterAnti)
     {
@@ -192,7 +234,7 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData
     return join->output_block_after_finalize;
 }
 
-template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer, bool fill_list>
+SEMI_JOIN_PROBE_HELPER_TEMPLATE
 void SemiJoinProbeHelper::probeFillColumns(
     JoinProbeContext & ctx,
     JoinProbeWorkerData & wd,
@@ -201,12 +243,13 @@ void SemiJoinProbeHelper::probeFillColumns(
     using KeyGetterType = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
-    using Adder = SemiJoinProbeAdder<kind>;
+    using Adder = SemiJoinProbeAdder<kind, has_other_eq_from_in_cond>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(ctx.key_getter.get());
+    auto * probe_list = static_cast<SemiJoinPendingProbeList *>(ctx.semi_join_pending_probe_list.get());
+    RUNTIME_CHECK(probe_list->slotSize() == ctx.rows);
     size_t current_offset = wd.result_block.rows();
     size_t idx = ctx.current_row_idx;
-    RowPtr ptr = ctx.current_build_row_ptr;
     bool is_matched = ctx.current_row_is_matched;
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
@@ -215,28 +258,13 @@ void SemiJoinProbeHelper::probeFillColumns(
         key_offset += sizeof(HashValueType);
     }
 
-#define NOT_MATCHED(not_matched)                                                \
-    if constexpr (Adder::need_not_matched)                                      \
-    {                                                                           \
-        assert(ptr == nullptr);                                                 \
-        if (not_matched)                                                        \
-        {                                                                       \
-            bool is_end = Adder::addNotMatched(*this, wd, idx, current_offset); \
-            if unlikely (is_end)                                                \
-            {                                                                   \
-                ++idx;                                                          \
-                break;                                                          \
-            }                                                                   \
-        }                                                                       \
-    }
-
     for (; idx < ctx.rows; ++idx)
     {
         if constexpr (has_null_map)
         {
             if ((*ctx.null_map)[idx])
             {
-                NOT_MATCHED(true)
+                setNotMatched<kind, false>(ctx, idx);
                 continue;
             }
         }
@@ -244,28 +272,29 @@ void SemiJoinProbeHelper::probeFillColumns(
         const auto & key = key_getter.getJoinKey(idx);
         auto hash = static_cast<HashValueType>(Hash()(key));
         UInt16 hash_tag = hash & ROW_PTR_TAG_MASK;
-        if likely (ptr == nullptr)
+        RowPtr ptr = pointer_table.getHeadPointer(hash);
+        if (ptr == nullptr)
         {
-            ptr = pointer_table.getHeadPointer(hash);
-            if (ptr == nullptr)
+            setNotMatched<kind, false>(ctx, idx);
+            continue;
+        }
+
+        if constexpr (tagged_pointer)
+        {
+            if (!containOtherTag(ptr, hash_tag))
             {
-                NOT_MATCHED(true)
+                ptr = nullptr;
+                setNotMatched<kind, false>(ctx, idx);
                 continue;
             }
-
-            if constexpr (tagged_pointer)
-            {
-                if (!containOtherTag(ptr, hash_tag))
-                {
-                    ptr = nullptr;
-                    NOT_MATCHED(true)
-                    continue;
-                }
-                ptr = removeRowPtrTag(ptr);
-            }
-            if constexpr (Adder::need_not_matched)
-                is_matched = false;
+            ptr = removeRowPtrTag(ptr);
         }
+
+        probe_list->append(idx);
+        auto & pending_probe_row = probe_list->at(idx);
+        pending_probe_row.has_null_eq_from_in = false;
+        pending_probe_row.pace = 4;
+        size_t end_offset = std::min(settings.max_block_size, current_offset + pending_probe_row.pace);
         while (true)
         {
             const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
@@ -273,31 +302,12 @@ void SemiJoinProbeHelper::probeFillColumns(
             collision += !key_is_equal;
             if (key_is_equal)
             {
-                if constexpr (Adder::need_not_matched)
-                    is_matched = true;
-
-                if constexpr (Adder::need_matched)
+                ++current_offset;
+                wd.selective_offsets.push_back(idx);
+                insertRowToBatch<false>(wd, added_columns, ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
+                if unlikely (current_offset >= end_offset)
                 {
-                    bool is_end = Adder::addMatched(
-                        *this,
-                        wd,
-                        added_columns,
-                        idx,
-                        current_offset,
-                        ptr,
-                        key_offset + key_getter.getRequiredKeyOffset(key2));
-
-                    if unlikely (is_end)
-                    {
-                        if constexpr (Adder::break_on_first_match)
-                            ptr = nullptr;
-                        break;
-                    }
-                }
-
-                if constexpr (Adder::break_on_first_match)
-                {
-                    ptr = nullptr;
+                    ptr = getNextRowPtr(ptr);
                     break;
                 }
             }
@@ -306,27 +316,21 @@ void SemiJoinProbeHelper::probeFillColumns(
             if (ptr == nullptr)
                 break;
         }
-        if unlikely (ptr != nullptr)
+        pending_probe_row.build_row_ptr = ptr;
+        if unlikely (current_offset >= settings.max_block_size)
         {
-            ptr = getNextRowPtr(ptr);
             if (ptr == nullptr)
                 ++idx;
             break;
         }
-        NOT_MATCHED(!is_matched)
     }
 
-    Adder::flush(*this, wd, added_columns);
-
     ctx.current_row_idx = idx;
-    ctx.current_build_row_ptr = ptr;
     ctx.current_row_is_matched = is_matched;
     wd.collision += collision;
-
-#undef NOT_MATCHED
 }
 
-template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer, bool fill_list>
+SEMI_JOIN_PROBE_HELPER_TEMPLATE
 void SemiJoinProbeHelper::probeFillColumnsPrefetch(
     JoinProbeContext & ctx,
     JoinProbeWorkerData & wd,

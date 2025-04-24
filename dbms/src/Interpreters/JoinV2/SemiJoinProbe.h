@@ -31,9 +31,6 @@ public:
         RowPtr build_row_ptr;
         bool has_null_eq_from_in;
         UInt32 pace;
-        /// Embedded list indexes
-        IndexType prev_idx;
-        IndexType next_idx;
     };
 
     class Iterator
@@ -122,16 +119,29 @@ public:
     Iterator begin() { return Iterator(*this, probe_rows[sentinel_idx].next_idx); }
     Iterator end() { return Iterator(*this, sentinel_idx); }
 
+    PendingProbeRow & at(IndexType idx) { assert(idx < slotSize()); return probe_rows[idx]; }
+    const PendingProbeRow & at(IndexType idx) const { assert(idx < slotSize()); return probe_rows[idx]; }
+
 private:
-    PaddedPODArray<PendingProbeRow> probe_rows;
+    struct WrapPendingProbeRow : PendingProbeRow
+    {
+        /// Embedded list indexes
+        IndexType prev_idx;
+        IndexType next_idx;
+    };
+
+    PaddedPODArray<WrapPendingProbeRow> probe_rows;
     IndexType sentinel_idx = 0;
 #ifndef NDEBUG
     size_t linked_count = 0;
 #endif
 };
 
-template <ASTTableJoin::Kind kind>
+template <ASTTableJoin::Kind kind, bool has_other_eq_from_in_cond>
 struct SemiJoinProbeAdder;
+
+#define SEMI_JOIN_PROBE_HELPER_TEMPLATE \
+template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool has_other_eq_from_in_cond, bool tagged_pointer>
 
 class HashJoin;
 class SemiJoinProbeHelper : public JoinProbeHelperUtil
@@ -144,18 +154,18 @@ public:
     Block probe(JoinProbeContext & ctx, JoinProbeWorkerData & wd);
 
 private:
-    template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer>
+    SEMI_JOIN_PROBE_HELPER_TEMPLATE
     Block probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData & wd);
 
-    template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer, bool fill_list>
+    SEMI_JOIN_PROBE_HELPER_TEMPLATE
     void NO_INLINE probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
 
-    template <typename KeyGetter, ASTTableJoin::Kind kind, bool has_null_map, bool tagged_pointer, bool fill_list>
+    SEMI_JOIN_PROBE_HELPER_TEMPLATE
     void NO_INLINE
     probeFillColumnsPrefetch(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
 
 private:
-    template <ASTTableJoin::Kind kind>
+    template <ASTTableJoin::Kind kind, bool has_other_eq_from_in_cond>
     friend struct SemiJoinProbeAdder;
 
     using FuncType = Block (SemiJoinProbeHelper::*)(JoinProbeContext &, JoinProbeWorkerData &);

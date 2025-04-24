@@ -124,9 +124,13 @@ void JoinProbeContext::prepareForHashProbe(
     }
     if (kind == LeftOuterSemi || kind == LeftOuterAnti)
     {
+        left_semi_match_res.clear();
         left_semi_match_res.resize_fill_zero(rows);
         if (has_other_eq_from_in_condition)
-            left_semi_match_null_res.resize(rows);
+        {
+            left_semi_match_null_res.clear();
+            left_semi_match_null_res.resize_fill_zero(rows);
+        }
     }
     if ((kind == Semi || kind == Anti) && has_other_condition)
     {
