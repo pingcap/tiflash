@@ -53,10 +53,14 @@ OperatorStatus CTESinkOp::executeIOImpl()
 {
     // TODO handle return value
     this->cte->spillBlocks();
+    return OperatorStatus::NEED_INPUT; // TODO handle
 }
 
 OperatorStatus CTESinkOp::awaitImpl()
 {
-
+    // CTESinkOp waits for the finish of spill
+    if (this->cte->getStatus() == CTE::CTEStatus::Normal)
+        return OperatorStatus::NEED_INPUT;
+    return OperatorStatus::WAITING;
 }
 } // namespace DB

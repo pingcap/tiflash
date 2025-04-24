@@ -35,6 +35,7 @@ public:
         , query_id_and_cte_id(query_id_and_cte_id_)
         , cte_manager(cte_manager_)
         , cte(cte_manager_->getCTE(query_id_and_cte_id_))
+        , wait_type(NeedMoreBlock)
     {}
 
     ~CTESourceOp() override { assert(!this->cte); }
@@ -49,6 +50,12 @@ protected:
     OperatorStatus awaitImpl() override; // TODO implement awaitImpl
 
 private:
+    enum WaitType
+    {
+        NeedMoreBlock,
+        Spill,
+    };
+
     String query_id_and_cte_id;
     CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
@@ -56,5 +63,6 @@ private:
 
     uint64_t total_rows{};
     std::queue<Block> block_queue;
+    WaitType wait_type;
 };
 } // namespace DB

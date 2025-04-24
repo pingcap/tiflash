@@ -50,6 +50,7 @@ public:
 
     std::pair<Status, Block> tryGetBlockAt(size_t idx);
     std::pair<Status, Block> getBlockFromDisk(size_t idx);
+    CTEStatus getStatus();
     Status pushBlock(const Block & block);
     void notifyEOF();
 
@@ -65,11 +66,13 @@ private:
     size_t memory_usage = 0;
     size_t memory_threshold = 0; // TODO initialize it
 
-    std::atomic_int8_t cte_status; // TODO initialize it
-    std::shared_mutex aux_rw_lock;
+    CTEStatus cte_status = CTEStatus::Normal;
 
     // TODO handle this, some blocks can not be spilled when spill is in execution, they can only be stored temporary
     Blocks tmp_blocks;
+
+    // Protecting cte_status and tmp_blocks
+    std::shared_mutex aux_rw_lock;
 
     // TODO tasks waiting for notify may be lack of data or waiting for spill, do we need two pipe_cv to handle this?
     PipeConditionVariable pipe_cv;

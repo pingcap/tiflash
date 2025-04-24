@@ -74,7 +74,11 @@ Status CTE::pushBlock(const Block & block)
     {
         std::unique_lock<std::shared_mutex> status_lock(this->aux_rw_lock);
         if (this->cte_status != CTE::Normal)
+        {
+            // Block memory usage will be calculated after the finish of spill
+            this->tmp_blocks.push_back(block);
             return Status::IOOut;
+        }
 
 
         // This function is called in cpu pool, we don't want to wait for this lock too long.
@@ -108,11 +112,24 @@ void CTE::spillBlocks()
 {
     std::unique_lock<std::shared_mutex> lock(this->rw_lock);
 
-    this->cte_spill.writeBlocks(this->blocks); // TODO need to handle return value
-    this->blocks.resize(0);
-    this->memory_usage = 0;
+    while (true)
+    {
+        this->cte_spill.writeBlocks(this->blocks); // TODO need to handle return value
+        this->blocks.clear();
+        this->memory_usage = 0;
+        
+        std::unique_lock<std::shared_mutex> aux_lock(this->aux_rw_lock);
+        for (const auto & block : this->tmp_blocks)
+        {
+            this->blocks.push_back(block);
+            this->memory_usage += block.bytes();
+        }
 
-    // TODO handle tmp_blocks
+        this->tmp_blocks.clear();
+
+        if (this->memory_usage < this->memory_threshold)
+            break;
+    }
 
     // Many tasks may be waiting for the finish of spill
     this->pipe_cv.notifyAll();
@@ -122,5 +139,11 @@ void CTE::registerTask(TaskPtr && task)
 {
     // TODO can we directly register the task? Can we ensure that someone must wake it up?
     pipe_cv.registerTask(std::move(task));
+}
+
+CTE::CTEStatus CTE::getStatus()
+{
+    std::shared_lock<std::shared_mutex> lock(this->aux_rw_lock);
+    return this->cte_status;
 }
 } // namespace DB

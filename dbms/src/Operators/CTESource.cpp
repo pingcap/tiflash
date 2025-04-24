@@ -25,42 +25,50 @@ void CTESourceOp::operateSuffixImpl()
     LOG_DEBUG(log, "finish read {} rows from cte source", total_rows);
 }
 
-// TODO in some cases, source needs to manually filter some data when cte saves all data(start here)
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {
     auto res = this->cte->tryGetBlockAt(this->block_fetch_idx);
     switch (res.first)
     {
-    case DB::FetchStatus::Eof:
-    case DB::FetchStatus::Ok:
+    case Status::Eof:
+    case Status::Ok:
         block = res.second;
         ++(this->block_fetch_idx);
         return OperatorStatus::HAS_OUTPUT;
-    case DB::FetchStatus::Waiting:
+    case Status::IOIn:
+        // Expected block is in disk, we need to read it from disk
+        return OperatorStatus::IO_IN;
+    case Status::IOOut:
+        {
+            // CTE is spilling blocks to disk, we need to wait the finish of spill
+            this->wait_type = CTESourceOp::Spill;
+            return OperatorStatus::WAITING;
+        }
+    case Status::Waiting:
         if unlikely (this->block_fetch_idx == 0)
             // CTE has not begun to receive data yet when block_fetch_idx == 0
             // So we need to wait the notify from CTE
             return OperatorStatus::WAIT_FOR_NOTIFY;
         else
+        {
+            // CTE not have enough block, we need to wait for it
+            this->wait_type = CTESourceOp::NeedMoreBlock;
             return OperatorStatus::WAITING;
-    case DB::FetchStatus::Cancelled:
+        }
+    case Status::Cancelled:
         return OperatorStatus::CANCELLED;
     }
 }
 
 OperatorStatus CTESourceOp::awaitImpl()
 {
-    auto res = this->cte->checkAvailableBlockAt(this->block_fetch_idx);
-    switch (res)
+    if (this->wait_type == CTESourceOp::NeedMoreBlock)
     {
-    case DB::FetchStatus::Eof:
-    case DB::FetchStatus::Ok:
-        // Do not add block_fetch_idx here, as we just judge if there are available blocks
-        return OperatorStatus::HAS_OUTPUT;
-    case DB::FetchStatus::Waiting:
-        return OperatorStatus::WAITING;
-    case DB::FetchStatus::Cancelled:
-        return OperatorStatus::CANCELLED;
+
+    }
+    else
+    {
+
     }
 }
 } // namespace DB
