@@ -120,7 +120,10 @@ void JoinProbeContext::prepareForHashProbe(
         not_matched_offsets.clear();
     }
     if (kind == LeftOuterSemi || kind == LeftOuterAnti)
+    {
+        left_semi_match_res.clear();
         left_semi_match_res.resize_fill_zero(rows);
+    }
 
     is_prepared = true;
 }
