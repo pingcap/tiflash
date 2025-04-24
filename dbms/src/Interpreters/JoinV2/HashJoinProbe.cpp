@@ -120,7 +120,7 @@ void JoinProbeContext::prepareForHashProbe(
         not_matched_offsets.clear();
     }
     if (kind == LeftOuterSemi || kind == LeftOuterAnti)
-        left_semi_match_res.resize(rows);
+        left_semi_match_res.resize_fill_zero(rows);
 
     is_prepared = true;
 }
@@ -374,9 +374,8 @@ struct JoinProbeAdder<LeftOuterSemi, false, false>
     }
 
     static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper &, JoinProbeContext & ctx, JoinProbeWorkerData &, size_t idx, size_t &)
+    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, size_t, size_t &)
     {
-        ctx.left_semi_match_res[idx] = 0;
         return false;
     }
 
@@ -405,9 +404,8 @@ struct JoinProbeAdder<LeftOuterAnti, false, false>
     }
 
     static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper &, JoinProbeContext & ctx, JoinProbeWorkerData &, size_t idx, size_t &)
+    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, size_t, size_t &)
     {
-        ctx.left_semi_match_res[idx] = 1;
         return false;
     }
 
