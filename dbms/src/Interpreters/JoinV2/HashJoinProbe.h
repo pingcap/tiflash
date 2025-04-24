@@ -23,6 +23,7 @@
 #include <Interpreters/JoinV2/HashJoinKey.h>
 #include <Interpreters/JoinV2/HashJoinPointerTable.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
+#include <Interpreters/JoinV2/SemiJoinProbeList.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <absl/base/optimization.h>
 
@@ -52,7 +53,7 @@ struct JoinProbeContext
     /// For (anti) semi join with other conditions.
     IColumn::Offsets semi_selective_offsets;
     /// For (left outer) (anti) semi join with other conditions.
-    std::unique_ptr<void, std::function<void(void *)>> semi_join_pending_probe_list;
+    std::unique_ptr<SemiJoinProbeListBase> semi_join_probe_list;
 
     size_t prefetch_active_states = 0;
     size_t prefetch_iter = 0;

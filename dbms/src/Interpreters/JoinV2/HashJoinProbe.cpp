@@ -40,7 +40,9 @@ bool JoinProbeContext::isProbeFinished() const
 {
     return current_row_idx >= rows
         // For prefetching
-        && prefetch_active_states == 0;
+        && prefetch_active_states == 0
+        // For (left outer) (anti) semi join with other conditions
+        && (semi_join_probe_list == nullptr || semi_join_probe_list->activeSlots() == 0);
 }
 
 bool JoinProbeContext::isAllFinished() const
@@ -58,7 +60,6 @@ void JoinProbeContext::resetBlock(Block & block_)
     current_row_idx = 0;
     current_build_row_ptr = nullptr;
     current_row_is_matched = false;
-    semi_join_pending_probe_list.reset();
 
     prefetch_active_states = 0;
 
@@ -140,13 +141,7 @@ void JoinProbeContext::prepareForHashProbe(
 
     if (SemiJoinProbeHelper::isSupported(kind, has_other_condition))
     {
-        if unlikely (!semi_join_pending_probe_list)
-        {
-            semi_join_pending_probe_list = decltype(semi_join_pending_probe_list)(
-                static_cast<void *>(new SemiJoinPendingProbeList),
-                [](void * ptr) { delete static_cast<SemiJoinPendingProbeList *>(ptr); });
-        }
-        static_cast<SemiJoinPendingProbeList *>(semi_join_pending_probe_list.get())->reset(block.rows());
+        //semi_join_probe_list->reset(rows);
     }
 
     is_prepared = true;
