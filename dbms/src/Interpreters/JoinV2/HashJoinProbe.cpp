@@ -394,21 +394,21 @@ struct JoinProbeAdder<LeftOuterAnti, false, false>
 
     static bool ALWAYS_INLINE addMatched(
         JoinProbeHelper &,
-        JoinProbeContext & ctx,
+        JoinProbeContext &,
         JoinProbeWorkerData &,
         MutableColumns &,
-        size_t idx,
+        size_t,
         size_t &,
         RowPtr,
         size_t)
     {
-        ctx.left_semi_match_res[idx] = 0;
         return false;
     }
 
     static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, size_t, size_t &)
+    addNotMatched(JoinProbeHelper &, JoinProbeContext & ctx, JoinProbeWorkerData &, size_t idx, size_t &)
     {
+        ctx.left_semi_match_res[idx] = 1;
         return false;
     }
 
