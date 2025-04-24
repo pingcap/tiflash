@@ -155,69 +155,12 @@ void DMFileInputStreamProvideFullTextIndex::setReturnRows(IProvideFullTextIndex:
     // Vector index is very likely to filter out some packs. For example,
     // if we query for Top 1, then only 1 pack will be remained. So we
     // update the reader's read_block_infos to avoid reading unnecessary data for other columns.
-
-    // The following logic is nearly the same with DMFileReader::initReadBlockInfos.
-
-    auto & read_block_infos = rest_col_reader.read_block_infos;
-    const auto & pack_offset = rest_col_reader.pack_offset;
-
-    read_block_infos.clear();
-    const auto & pack_stats = dmfile->getPackStats();
-    const auto & pack_res = rest_col_reader.pack_filter->getPackRes();
-
-    // Update read_block_infos
-    size_t start_pack_id = 0;
-    size_t read_rows = 0;
-    auto prev_block_pack_res = RSResult::All;
-    auto sorted_results_it = sorted_results_view.begin();
-    size_t pack_id = 0;
-    for (; pack_id < pack_stats.size(); ++pack_id)
-    {
-        if (sorted_results_it == sorted_results_view.end())
-            break;
-        const auto begin = std::lower_bound( //
-            sorted_results_it,
-            sorted_results_view.end(),
-            pack_offset[pack_id],
-            [](const auto & lhs, const auto & rhs) { return lhs.rowid < rhs; });
-        const auto end = std::lower_bound( //
-            begin,
-            sorted_results_view.end(),
-            pack_offset[pack_id] + pack_stats[pack_id].rows,
-            [](const auto & lhs, const auto & rhs) { return lhs.rowid < rhs; });
-        bool is_use = begin != end;
-        bool reach_limit = read_rows >= rest_col_reader.rows_threshold_per_read;
-        bool break_all_match = prev_block_pack_res.allMatch() && !pack_res[pack_id].allMatch()
-            && read_rows >= rest_col_reader.rows_threshold_per_read / 2;
-
-        if (!is_use)
-        {
-            if (read_rows > 0)
-                read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, prev_block_pack_res, read_rows);
-            start_pack_id = pack_id + 1;
-            read_rows = 0;
-            prev_block_pack_res = RSResult::All;
-        }
-        else if (reach_limit || break_all_match)
-        {
-            if (read_rows > 0)
-                read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, prev_block_pack_res, read_rows);
-            start_pack_id = pack_id;
-            read_rows = pack_stats[pack_id].rows;
-            prev_block_pack_res = pack_res[pack_id];
-        }
-        else
-        {
-            prev_block_pack_res = prev_block_pack_res && pack_res[pack_id];
-            read_rows += pack_stats[pack_id].rows;
-        }
-
-        sorted_results_it = end;
-    }
-    if (read_rows > 0)
-        read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, prev_block_pack_res, read_rows);
-
-    RUNTIME_CHECK_MSG(sorted_results_it == sorted_results_view.end(), "All results are not consumed");
+    rest_col_reader.read_block_infos = ReadBlockInfo::createWithRowIDs(
+        sorted_results_view,
+        rest_col_reader.pack_offset,
+        rest_col_reader.pack_filter->getPackRes(),
+        dmfile->getPackStats(),
+        rest_col_reader.rows_threshold_per_read);
 }
 
 Block DMFileInputStreamProvideFullTextIndex::getHeader() const
