@@ -124,7 +124,7 @@ void JoinProbeContext::prepareForHashProbe(
     }
     if (kind == LeftOuterSemi || kind == LeftOuterAnti)
     {
-        left_semi_match_res.resize(rows);
+        left_semi_match_res.resize_fill_zero(rows);
         if (has_other_eq_from_in_condition)
             left_semi_match_null_res.resize(rows);
     }
@@ -397,9 +397,8 @@ struct JoinProbeAdder<LeftOuterSemi, false, false>
     }
 
     static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper &, JoinProbeContext & ctx, JoinProbeWorkerData &, size_t idx, size_t &)
+    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, size_t, size_t &)
     {
-        ctx.left_semi_match_res[idx] = 0;
         return false;
     }
 
@@ -428,9 +427,8 @@ struct JoinProbeAdder<LeftOuterAnti, false, false>
     }
 
     static bool ALWAYS_INLINE
-    addNotMatched(JoinProbeHelper &, JoinProbeContext & ctx, JoinProbeWorkerData &, size_t idx, size_t &)
+    addNotMatched(JoinProbeHelper &, JoinProbeContext &, JoinProbeWorkerData &, size_t, size_t &)
     {
-        ctx.left_semi_match_res[idx] = 1;
         return false;
     }
 
