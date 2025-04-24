@@ -1504,8 +1504,19 @@ try
                 .distance_metric = metric,
             });
             auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
-            readVec(range, filter, createVecFloat32Column<Array>(result_1));
+            if (metric == tipb::VectorDistanceMetric::L2)
+            {
+                readVec(range, filter, createVecFloat32Column<Array>(result_1));
+            }
+            else
+            {
+                ann_query_info->set_enable_distance_proj(true);
+                readColumns(
+                    range,
+                    filter,
+                    {VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD},
+                    {createNullableColumn<Float32>({0}, {0})});
+            }
         }
 
         // read with ANN query
@@ -1517,18 +1528,29 @@ try
                 .distance_metric = metric,
             });
             auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
-            readVec(range, filter, createVecFloat32Column<Array>(result_2));
+            if (metric == tipb::VectorDistanceMetric::L2)
+            {
+                readVec(range, filter, createVecFloat32Column<Array>(result_2));
+            }
+            else
+            {
+                ann_query_info->set_enable_distance_proj(true);
+                readColumns(
+                    range,
+                    filter,
+                    {VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD},
+                    {createNullableColumn<Float32>({0}, {0})});
+            }
         }
     };
 
-    // Add COSINE vector index
+    // Add COSINE vector index (the COSINE distance of 1 dimension is always 0, so check if distance equal to 0 instead of checking vec)
     add_vector_index({1}, {tipb::VectorDistanceMetric::COSINE});
-    query(1, tipb::VectorDistanceMetric::COSINE, {{32.0}}, {{126.0}});
+    query(1, tipb::VectorDistanceMetric::COSINE, {}, {});
 
     // Add L2 vector index
     add_vector_index({1, 2}, {tipb::VectorDistanceMetric::COSINE, tipb::VectorDistanceMetric::L2});
-    query(1, tipb::VectorDistanceMetric::COSINE, {{32.0}}, {{126.0}});
+    query(1, tipb::VectorDistanceMetric::COSINE, {}, {});
     query(2, tipb::VectorDistanceMetric::L2, {{2.0}}, {{222.0}});
 
     {
