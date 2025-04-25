@@ -77,7 +77,7 @@ public:
         return s;
     }
 
-    void write(size_t begin, size_t end, bool is_delete = false)
+    void write(size_t begin, size_t end, bool is_delete = false, int dimension = 1)
     {
         String sequence = fmt::format("[{}, {})", begin, end);
         Block block;
@@ -95,7 +95,7 @@ public:
                 /*with_internal_columns=*/true,
                 is_delete);
             // Add a column of vector for test
-            block.insert(colVecFloat32(sequence, vec_column_name, vec_column_id));
+            block.insert(colVecFloat32(sequence, vec_column_name, vec_column_id, dimension));
         }
         store->write(*db_context, db_context->getSettingsRef(), block);
     }
@@ -821,7 +821,7 @@ try
             range,
             filter,
             {VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD},
-            {createNullableColumn<Float32>({-0.00003883534373017028, -0.000036860677937511355}, {0, 0})});
+            {createNullableColumn<Float32>({0.0, 0.0}, {0, 0})});
     }
 }
 CATCH
@@ -1442,48 +1442,49 @@ try
     const size_t num_rows_write = 128;
 
     // write [0, 128) to store
-    write(0, num_rows_write);
+    write(0, num_rows_write, false, 2);
     // trigger mergeDelta for all segments
     triggerMergeDelta();
 
     // write [128, 256) to store
-    write(num_rows_write, num_rows_write * 2);
+    write(num_rows_write, num_rows_write * 2, false, 2);
 
     // trigger FlushCache for all segments
     triggerFlushCache();
 
-    auto add_vector_index = [&](std::vector<IndexID> index_id, std::vector<tipb::VectorDistanceMetric> metrics) {
-        TiDB::TableInfo new_table_info_with_vector_index;
-        TiDB::ColumnInfo column_info;
-        column_info.name = VectorIndexTestUtils::vec_column_name;
-        column_info.id = VectorIndexTestUtils::vec_column_id;
-        new_table_info_with_vector_index.columns.emplace_back(column_info);
-        TiDB::IndexColumnInfo index_col_info;
-        index_col_info.name = VectorIndexTestUtils::vec_column_name;
-        index_col_info.offset = 0;
-        for (size_t i = 0; i < index_id.size(); ++i)
-        {
-            TiDB::IndexInfo index;
-            index.id = index_id[i];
-            index.idx_cols.push_back(index_col_info);
-            index.vector_index = TiDB::VectorIndexDefinitionPtr(new TiDB::VectorIndexDefinition{
-                .kind = tipb::VectorIndexKind::HNSW,
-                .dimension = 1,
-                .distance_metric = metrics[i],
-            });
-            new_table_info_with_vector_index.index_infos.emplace_back(index);
-        }
-        // apply local index change, should
-        // - create the local index
-        // - generate the background tasks for building index on stable and delta
-        store->applyLocalIndexChange(new_table_info_with_vector_index);
-        ASSERT_EQ(store->local_index_infos->size(), index_id.size());
+    auto add_vector_index
+        = [&](std::vector<IndexID> index_id, std::vector<tipb::VectorDistanceMetric> metrics, UInt64 dimension) {
+              TiDB::TableInfo new_table_info_with_vector_index;
+              TiDB::ColumnInfo column_info;
+              column_info.name = VectorIndexTestUtils::vec_column_name;
+              column_info.id = VectorIndexTestUtils::vec_column_id;
+              new_table_info_with_vector_index.columns.emplace_back(column_info);
+              TiDB::IndexColumnInfo index_col_info;
+              index_col_info.name = VectorIndexTestUtils::vec_column_name;
+              index_col_info.offset = 0;
+              for (size_t i = 0; i < index_id.size(); ++i)
+              {
+                  TiDB::IndexInfo index;
+                  index.id = index_id[i];
+                  index.idx_cols.push_back(index_col_info);
+                  index.vector_index = TiDB::VectorIndexDefinitionPtr(new TiDB::VectorIndexDefinition{
+                      .kind = tipb::VectorIndexKind::HNSW,
+                      .dimension = dimension,
+                      .distance_metric = metrics[i],
+                  });
+                  new_table_info_with_vector_index.index_infos.emplace_back(index);
+              }
+              // apply local index change, should
+              // - create the local index
+              // - generate the background tasks for building index on stable and delta
+              store->applyLocalIndexChange(new_table_info_with_vector_index);
+              ASSERT_EQ(store->local_index_infos->size(), index_id.size());
 
-        // check delta index has built for all segments
-        waitDeltaIndexReady();
-        // check stable index has built for all segments
-        waitStableLocalIndexReady();
-    };
+              // check delta index has built for all segments
+              waitDeltaIndexReady();
+              // check stable index has built for all segments
+              waitStableLocalIndexReady();
+          };
 
     const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
     auto query = [&](IndexID index_id,
@@ -1492,44 +1493,42 @@ try
                      const InferredDataVector<Array> & result_2) {
         // read from store
         {
-            readVec(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id));
+            readVec(range, EMPTY_FILTER, colVecFloat32("[0, 256)", vec_column_name, vec_column_id, 2));
         }
 
         // read with ANN query
         {
             const auto ann_query_info = annQueryInfoTopK({
-                .vec = {2.0},
+                .vec = {12.0, 42.0},
                 .top_k = 1,
                 .index_id = index_id,
                 .distance_metric = metric,
             });
             auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
             readVec(range, filter, createVecFloat32Column<Array>(result_1));
         }
 
         // read with ANN query
         {
             const auto ann_query_info = annQueryInfoTopK({
-                .vec = {222.1},
+                .vec = {106.5, 62.3},
                 .top_k = 1,
                 .index_id = index_id,
                 .distance_metric = metric,
             });
             auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-
             readVec(range, filter, createVecFloat32Column<Array>(result_2));
         }
     };
 
     // Add COSINE vector index
-    add_vector_index({1}, {tipb::VectorDistanceMetric::COSINE});
-    query(1, tipb::VectorDistanceMetric::COSINE, {{129.0}}, {{129.0}});
+    add_vector_index({1}, {tipb::VectorDistanceMetric::COSINE}, 2);
+    query(1, tipb::VectorDistanceMetric::COSINE, {{113.0, 113.0}}, {{101.0, 101.0}});
 
     // Add L2 vector index
-    add_vector_index({1, 2}, {tipb::VectorDistanceMetric::COSINE, tipb::VectorDistanceMetric::L2});
-    query(1, tipb::VectorDistanceMetric::COSINE, {{129.0}}, {{129.0}});
-    query(2, tipb::VectorDistanceMetric::L2, {{2.0}}, {{222.0}});
+    add_vector_index({1, 2}, {tipb::VectorDistanceMetric::COSINE, tipb::VectorDistanceMetric::L2}, 2);
+    query(1, tipb::VectorDistanceMetric::COSINE, {{113.0, 113.0}}, {{101.0, 101.0}});
+    query(2, tipb::VectorDistanceMetric::L2, {{27.0, 27.0}}, {{84.0, 84.0}});
 
     {
         // vector index is dropped
