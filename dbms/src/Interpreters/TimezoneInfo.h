@@ -45,6 +45,7 @@ struct TimezoneInfo
     void resetByDAGRequest(const tipb::DAGRequest & rqst);
     void resetByTimezoneName(const String & timezone_name);
     void resetByTimezoneOffset(Int64 timezone_offset);
+    String toString();
 };
 
 } // namespace DB

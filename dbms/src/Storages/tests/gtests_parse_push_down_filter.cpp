@@ -736,6 +736,8 @@ try
         // Greater between TimeStamp col and Datetime literal, use local timezone
         auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
+        std::cout << "timezone_info: " << timezone_info.toString() << std::endl;
+
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
         // converted_time: 0
 
