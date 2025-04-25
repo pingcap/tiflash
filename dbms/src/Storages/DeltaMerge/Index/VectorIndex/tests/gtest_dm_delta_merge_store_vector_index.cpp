@@ -1499,7 +1499,7 @@ try
         // read with ANN query
         {
             const auto ann_query_info = annQueryInfoTopK({
-                .vec = {2.0, 2.0},
+                .vec = {12.0, 42.0},
                 .top_k = 1,
                 .index_id = index_id,
                 .distance_metric = metric,
@@ -1511,7 +1511,7 @@ try
         // read with ANN query
         {
             const auto ann_query_info = annQueryInfoTopK({
-                .vec = {222.1, 222.1},
+                .vec = {106.5, 62.3},
                 .top_k = 1,
                 .index_id = index_id,
                 .distance_metric = metric,
@@ -1523,12 +1523,12 @@ try
 
     // Add COSINE vector index
     add_vector_index({1}, {tipb::VectorDistanceMetric::COSINE}, 2);
-    query(1, tipb::VectorDistanceMetric::COSINE, {{171.0, 171.0}}, {{23.0, 23.0}});
+    query(1, tipb::VectorDistanceMetric::COSINE, {{103.0, 103.0}}, {{101.0, 101.0}});
 
     // Add L2 vector index
     add_vector_index({1, 2}, {tipb::VectorDistanceMetric::COSINE, tipb::VectorDistanceMetric::L2}, 2);
-    query(1, tipb::VectorDistanceMetric::COSINE, {{171.0, 171.0}}, {{23.0, 23.0}});
-    query(2, tipb::VectorDistanceMetric::L2, {{2.0, 2.0}}, {{222.0, 222.0}});
+    query(1, tipb::VectorDistanceMetric::COSINE, {{103.0, 103.0}}, {{101.0, 101.0}});
+    query(2, tipb::VectorDistanceMetric::L2, {{27.0, 27.0}}, {{84.0, 84.0}});
 
     {
         // vector index is dropped
