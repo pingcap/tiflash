@@ -1523,11 +1523,11 @@ try
 
     // Add COSINE vector index
     add_vector_index({1}, {tipb::VectorDistanceMetric::COSINE}, 2);
-    query(1, tipb::VectorDistanceMetric::COSINE, {{103.0, 103.0}}, {{101.0, 101.0}});
+    query(1, tipb::VectorDistanceMetric::COSINE, {{113.0, 113.0}}, {{101.0, 101.0}});
 
     // Add L2 vector index
     add_vector_index({1, 2}, {tipb::VectorDistanceMetric::COSINE, tipb::VectorDistanceMetric::L2}, 2);
-    query(1, tipb::VectorDistanceMetric::COSINE, {{103.0, 103.0}}, {{101.0, 101.0}});
+    query(1, tipb::VectorDistanceMetric::COSINE, {{113.0, 113.0}}, {{101.0, 101.0}});
     query(2, tipb::VectorDistanceMetric::L2, {{27.0, 27.0}}, {{84.0, 84.0}});
 
     {
