@@ -47,7 +47,7 @@ void TokenBucket::reConfig(const TokenBucketConfig & config)
     RUNTIME_CHECK(config.capacity >= 0.0);
 
     auto now = std::chrono::steady_clock::now();
-    tokens = config.tokens;
+    tokens += config.tokens;
     fill_rate = config.fill_rate;
     fill_rate_ms = config.fill_rate / 1000;
     capacity = config.capacity;
