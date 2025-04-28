@@ -56,6 +56,14 @@ public:
             , idx(idx)
         {}
 
+        Iterator(const Iterator & other) = default;
+        Iterator & operator=(const Iterator & other)
+        {
+            assert(&list == &other.list);
+            idx = other.idx;
+            return *this;
+        }
+
         inline IndexType getIndex() const { return idx; }
 
         ProbeRow & operator*() const { return list.probe_rows[idx]; }
@@ -67,7 +75,11 @@ public:
             return *this;
         }
 
-        bool operator!=(const Iterator & other) const { return idx != other.idx; }
+        bool operator!=(const Iterator & other) const
+        {
+            assert(&list == &other.list);
+            return idx != other.idx;
+        }
 
     private:
         SemiJoinProbeList & list;
@@ -106,12 +118,12 @@ public:
     /// Append an existing slot by index at the tail (before sentinel).
     inline void append(IndexType idx)
     {
-#ifndef NDEBUG
         assert(idx < slotCapacity());
+#ifndef NDEBUG
         assert(probe_rows[idx].prev_idx == idx && probe_rows[idx].next_idx == idx);
 #endif
         ++active_count;
-        IndexType tail = probe_rows[sentinel_idx].prev_idx;
+        auto tail = probe_rows[sentinel_idx].prev_idx;
         probe_rows[tail].next_idx = idx;
         probe_rows[idx].prev_idx = tail;
         probe_rows[idx].next_idx = sentinel_idx;
@@ -121,16 +133,25 @@ public:
     /// Remove a slot by index from the list.
     inline void remove(IndexType idx)
     {
-#ifndef NDEBUG
         assert(idx < slotCapacity());
-        assert(probe_rows[idx].prev_idx != idx && probe_rows[idx].next_idx != idx);
         assert(active_count > 0);
+#ifndef NDEBUG
+        assert(probe_rows[idx].prev_idx != idx && probe_rows[idx].next_idx != idx);
 #endif
         --active_count;
         IndexType prev = probe_rows[idx].prev_idx;
         IndexType next = probe_rows[idx].next_idx;
         probe_rows[prev].next_idx = next;
         probe_rows[next].prev_idx = prev;
+    }
+
+    /// Remove a slot by iterator.
+    inline Iterator remove(Iterator iter)
+    {
+        auto idx = iter.getIndex();
+        ++iter;
+        remove(idx);
+        return iter;
     }
 
     Iterator begin() { return Iterator(*this, probe_rows[sentinel_idx].next_idx); }

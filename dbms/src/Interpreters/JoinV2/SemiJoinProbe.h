@@ -44,16 +44,10 @@ private:
 
     SEMI_JOIN_PROBE_HELPER_TEMPLATE
     void NO_INLINE probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+
     SEMI_JOIN_PROBE_HELPER_TEMPLATE
     void NO_INLINE
-    probeFillColumnsFromList(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
-
-    //SEMI_JOIN_PROBE_HELPER_TEMPLATE
-    //void NO_INLINE
-    //probeFillColumnsPrefetch(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
-    //SEMI_JOIN_PROBE_HELPER_TEMPLATE
-    //void NO_INLINE
-    //probeFillColumnsPrefetchFromList(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+    probeFillColumnsPrefetch(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
 
 private:
     using FuncType = Block (SemiJoinProbeHelper::*)(JoinProbeContext &, JoinProbeWorkerData &);

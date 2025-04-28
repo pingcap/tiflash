@@ -17,6 +17,7 @@
 
 #include "Interpreters/JoinV2/SemiJoinProbeList.h"
 #include "Parsers/ASTTablesInSelectQuery.h"
+#include "ext/scope_guard.h"
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 ASSERT_USE_AVX2_COMPILE_FLAG
@@ -195,22 +196,17 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData
     Stopwatch watch;
     if (pointer_table.enableProbePrefetch())
     {
-        //probeFillColumnsPrefetch<KeyGetter, kind, has_null_map, has_other_eq_from_in_cond, tagged_pointer>(
-        //    ctx,
-        //    wd,
-        //    added_columns);
-    }
-    else
-    {
-        probeFillColumnsFromList<KeyGetter, kind, has_null_map, has_other_eq_from_in_cond, tagged_pointer>(
+        probeFillColumnsPrefetch<KeyGetter, kind, has_null_map, has_other_eq_from_in_cond, tagged_pointer>(
             ctx,
             wd,
             added_columns);
-        if (wd.result_block.rows() < settings.max_block_size)
-            probeFillColumns<KeyGetter, kind, has_null_map, has_other_eq_from_in_cond, tagged_pointer>(
-                ctx,
-                wd,
-                added_columns);
+    }
+    else
+    {
+        probeFillColumns<KeyGetter, kind, has_null_map, has_other_eq_from_in_cond, tagged_pointer>(
+            ctx,
+            wd,
+            added_columns);
     }
     wd.probe_hash_table_time += watch.elapsedFromLastTime();
 
@@ -227,10 +223,8 @@ static constexpr UInt16 INITIAL_PACE = 4;
 static constexpr UInt16 MAX_PACE = 8192;
 
 SEMI_JOIN_PROBE_HELPER_TEMPLATE
-void SemiJoinProbeHelper::probeFillColumns(
-    JoinProbeContext & ctx,
-    JoinProbeWorkerData & wd,
-    MutableColumns & added_columns)
+void NO_INLINE
+SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns)
 {
     using KeyGetterType = typename KeyGetter::Type;
     using Hash = typename KeyGetter::Hash;
@@ -240,7 +234,6 @@ void SemiJoinProbeHelper::probeFillColumns(
     auto * probe_list = static_cast<SemiJoinProbeList<KeyGetter> *>(ctx.semi_join_probe_list.get());
     RUNTIME_CHECK(probe_list->slotCapacity() == ctx.rows);
     size_t current_offset = wd.result_block.rows();
-    size_t idx = ctx.current_row_idx;
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
     if constexpr (KeyGetterType::joinKeyCompareHashFirst())
@@ -248,6 +241,59 @@ void SemiJoinProbeHelper::probeFillColumns(
         key_offset += sizeof(HashValueType);
     }
 
+    SCOPE_EXIT({
+        flushInsertBatch<false, true>(wd, added_columns);
+        fillNullMapWithZero<false>(added_columns);
+
+        wd.collision += collision;
+    });
+
+    auto iter_end = probe_list->end();
+    for (auto iter = probe_list->begin(); iter != iter_end;)
+    {
+        auto & probe_row = *iter;
+        RowPtr ptr = probe_row.build_row_ptr;
+        auto idx = iter.getIndex();
+        size_t end_offset = std::min(settings.max_block_size, current_offset + probe_row.pace);
+        size_t prev_offset = current_offset;
+        while (ptr != nullptr)
+        {
+            const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
+            bool key_is_equal = joinKeyIsEqual(key_getter, probe_row.key, key2, probe_row.hash, ptr);
+            collision += !key_is_equal;
+            current_offset += key_is_equal;
+            if (key_is_equal)
+            {
+                wd.selective_offsets.push_back(idx);
+                insertRowToBatch<false>(wd, added_columns, ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
+                if unlikely (current_offset >= end_offset)
+                {
+                    ptr = getNextRowPtr(ptr);
+                    break;
+                }
+            }
+
+            ptr = getNextRowPtr(ptr);
+        }
+        if (prev_offset == current_offset)
+        {
+            setNotMatched<kind, has_other_eq_from_in_cond>(ctx, idx, probe_row.has_null_eq_from_in);
+            iter = probe_list->remove(iter);
+            continue;
+        }
+        probe_row.build_row_ptr = ptr;
+        if (current_offset - prev_offset >= probe_row.pace)
+            probe_row.pace = std::min<uint32_t>(MAX_PACE, probe_row.pace * 2U);
+        if unlikely (current_offset >= settings.max_block_size)
+            break;
+
+        ++iter;
+    }
+
+    if (current_offset >= settings.max_block_size)
+        return;
+
+    size_t idx = ctx.current_row_idx;
     for (; idx < ctx.rows; ++idx)
     {
         if constexpr (has_null_map)
@@ -273,7 +319,6 @@ void SemiJoinProbeHelper::probeFillColumns(
         {
             if (!containOtherTag(ptr, hash_tag))
             {
-                ptr = nullptr;
                 setNotMatched<kind, false>(ctx, idx);
                 continue;
             }
@@ -287,9 +332,9 @@ void SemiJoinProbeHelper::probeFillColumns(
             const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
             bool key_is_equal = joinKeyIsEqual(key_getter, key, key2, hash, ptr);
             collision += !key_is_equal;
+            current_offset += key_is_equal;
             if (key_is_equal)
             {
-                ++current_offset;
                 wd.selective_offsets.push_back(idx);
                 insertRowToBatch<false>(wd, added_columns, ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
                 if unlikely (current_offset >= end_offset)
@@ -311,85 +356,276 @@ void SemiJoinProbeHelper::probeFillColumns(
         probe_list->append(idx);
         auto & probe_row = probe_list->at(idx);
         probe_row.build_row_ptr = ptr;
-        probe_row.has_null_eq_from_in = false;
-        probe_row.pace = INITIAL_PACE * 2;
+        if constexpr (has_other_eq_from_in_cond)
+            probe_row.has_null_eq_from_in = false;
+        probe_row.pace = std::min<uint32_t>(MAX_PACE, INITIAL_PACE * 2U);
         probe_row.hash = hash;
         probe_row.key = key;
         if unlikely (current_offset >= settings.max_block_size)
         {
-            if (ptr == nullptr)
-                ++idx;
+            ++idx;
             break;
         }
     }
-
     ctx.current_row_idx = idx;
-    wd.collision += collision;
 }
 
+enum class ProbePrefetchStage : UInt8
+{
+    None,
+    FindHeader,
+    FindNext,
+};
+
+template <typename KeyGetter>
+struct ProbePrefetchState
+{
+    using KeyGetterType = typename KeyGetter::Type;
+    using KeyType = typename KeyGetterType::KeyType;
+    using HashValueType = typename KeyGetter::HashValueType;
+
+    ProbePrefetchStage stage = ProbePrefetchStage::None;
+    bool is_matched : 1 = false;
+    bool has_null_eq_from_in : 1 = false;
+    union
+    {
+        /// Used when stage is FindHeader
+        UInt16 hash_tag = 0;
+        /// Used when stage is FindNext
+        UInt16 remaining_pace;
+    };
+    UInt32 index = 0;
+    HashValueType hash = 0;
+    KeyType key{};
+    union
+    {
+        /// Used when stage is FindHeader
+        std::atomic<RowPtr> * pointer_ptr = nullptr;
+        /// Used when stage is FindNext
+        RowPtr ptr;
+    };
+};
+
+#define PREFETCH_READ(ptr) __builtin_prefetch((ptr), 0 /* rw==read */, 3 /* locality */)
+
 SEMI_JOIN_PROBE_HELPER_TEMPLATE
-void NO_INLINE SemiJoinProbeHelper::probeFillColumnsFromList(
+void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
     JoinProbeContext & ctx,
     JoinProbeWorkerData & wd,
     MutableColumns & added_columns)
 {
     using KeyGetterType = typename KeyGetter::Type;
+    using Hash = typename KeyGetter::Hash;
     using HashValueType = typename KeyGetter::HashValueType;
 
     auto & key_getter = *static_cast<KeyGetterType *>(ctx.key_getter.get());
     auto * probe_list = static_cast<SemiJoinProbeList<KeyGetter> *>(ctx.semi_join_probe_list.get());
     RUNTIME_CHECK(probe_list->slotCapacity() == ctx.rows);
+    const size_t probe_prefetch_step = settings.probe_prefetch_step;
+    if unlikely (!ctx.prefetch_states)
+    {
+        ctx.prefetch_states = decltype(ctx.prefetch_states)(
+            static_cast<void *>(new ProbePrefetchState<KeyGetter>[probe_prefetch_step]),
+            [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
+    }
+    auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(ctx.prefetch_states.get());
+
+    size_t idx = ctx.current_row_idx;
+    size_t active_states = ctx.prefetch_active_states;
+    size_t k = ctx.prefetch_iter;
     size_t current_offset = wd.result_block.rows();
     size_t collision = 0;
-    size_t key_offset = sizeof(RowPtr);
-    if constexpr (KeyGetterType::joinKeyCompareHashFirst())
-    {
-        key_offset += sizeof(HashValueType);
-    }
+    constexpr size_t key_offset
+        = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
+
+    size_t list_active_slots = probe_list->activeSlots();
+    auto iter = probe_list->begin();
     auto iter_end = probe_list->end();
-    for (auto iter = probe_list->begin(); iter != iter_end;)
+    while (idx < ctx.rows || active_states > 0 || list_active_slots > 0)
     {
-        auto & probe_row = *iter;
-        RowPtr ptr = probe_row.build_row_ptr;
-        auto idx = iter.getIndex();
-        size_t end_offset = std::min(settings.max_block_size, current_offset + probe_row.pace);
-        size_t prev_offset = current_offset;
-        while (ptr != nullptr)
+        k = k == probe_prefetch_step ? 0 : k;
+        auto * state = &states[k];
+        if (state->stage == ProbePrefetchStage::FindNext)
         {
+            RowPtr ptr = state->ptr;
+            RowPtr next_ptr = getNextRowPtr(ptr);
+
             const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
-            bool key_is_equal = joinKeyIsEqual(key_getter, probe_row.key, key2, probe_row.hash, ptr);
+            bool key_is_equal = joinKeyIsEqual(key_getter, state->key, key2, state->hash, ptr);
             collision += !key_is_equal;
+            state->is_matched |= key_is_equal;
+            current_offset += key_is_equal;
+            state->remaining_pace -= key_is_equal;
+            bool remaining_pace_is_zero = false;
             if (key_is_equal)
             {
-                ++current_offset;
-                wd.selective_offsets.push_back(idx);
+                wd.selective_offsets.push_back(state->index);
                 insertRowToBatch<false>(wd, added_columns, ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
-                if unlikely (current_offset >= end_offset)
+                if unlikely (current_offset >= settings.max_block_size)
                 {
-                    ptr = getNextRowPtr(ptr);
+                    probe_list->at(state->index).build_row_ptr = next_ptr;
+                    state->stage = ProbePrefetchStage::None;
+                    --active_states;
                     break;
+                }
+                if unlikely (state->remaining_pace == 0)
+                {
+                    auto & probe_row = probe_list->at(state->index);
+                    probe_row.build_row_ptr = next_ptr;
+                    probe_row.pace = std::min<uint32_t>(MAX_PACE, INITIAL_PACE * 2U);
+                    remaining_pace_is_zero = true;
                 }
             }
 
-            ptr = getNextRowPtr(ptr);
+            if likely (!remaining_pace_is_zero)
+            {
+                if (next_ptr)
+                {
+                    PREFETCH_READ(next_ptr);
+                    state->ptr = next_ptr;
+                    ++k;
+                    continue;
+                }
+
+                probe_list->at(state->index).build_row_ptr = next_ptr;
+                if (!state->is_matched)
+                {
+                    setNotMatched<kind, has_other_eq_from_in_cond>(ctx, state->index, state->has_null_eq_from_in);
+                    probe_list->remove(state->index);
+                }
+            }
+
+            state->stage = ProbePrefetchStage::None;
+            --active_states;
         }
-        if (prev_offset == current_offset)
+        else if (state->stage == ProbePrefetchStage::FindHeader)
         {
-            setNotMatched<kind, has_other_eq_from_in_cond>(ctx, idx, probe_row.has_null_eq_from_in);
-            auto idx = iter.getIndex();
+            RowPtr ptr = state->pointer_ptr->load(std::memory_order_relaxed);
+            if (ptr)
+            {
+                bool forward = true;
+                if constexpr (tagged_pointer)
+                {
+                    if (containOtherTag(ptr, state->hash_tag))
+                        ptr = removeRowPtrTag(ptr);
+                    else
+                        forward = false;
+                }
+                if (forward)
+                {
+                    PREFETCH_READ(ptr);
+                    state->stage = ProbePrefetchStage::FindNext;
+                    state->is_matched = false;
+                    if constexpr (has_other_eq_from_in_cond)
+                        state->has_null_eq_from_in = false;
+                    state->remaining_pace = INITIAL_PACE;
+                    state->ptr = ptr;
+                    ++k;
+
+                    probe_list->append(state->index);
+                    auto & probe_row = probe_list->at(state->index);
+                    //probe_row.build_row_ptr = ptr;
+                    if constexpr (has_other_eq_from_in_cond)
+                        probe_row.has_null_eq_from_in = false;
+                    probe_row.pace = INITIAL_PACE;
+                    if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+                        probe_row.hash = state->hash;
+                    probe_row.key = state->key;
+                    continue;
+                }
+            }
+
+            state->stage = ProbePrefetchStage::None;
+            --active_states;
+
+            setNotMatched<kind, false>(ctx, state->index);
+        }
+
+        assert(state->stage == ProbePrefetchStage::None);
+
+        while (list_active_slots > 0 && !iter->build_row_ptr)
+        {
+            setNotMatched<kind, false>(ctx, iter.getIndex());
+            --list_active_slots;
             ++iter;
-            probe_list->remove(idx);
+        }
+
+        if (list_active_slots > 0)
+        {
+            assert(iter != iter_end);
+            assert(iter->build_row_ptr);
+
+            auto & probe_row = *iter;
+            PREFETCH_READ(probe_row.build_row_ptr);
+            state->stage = ProbePrefetchStage::FindNext;
+            state->is_matched = false;
+            if constexpr (has_other_eq_from_in_cond)
+                state->has_null_eq_from_in = probe_row.has_null_eq_from_in;
+            state->remaining_pace = probe_row.pace;
+            if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+                state->hash = probe_row.hash;
+            state->key = probe_row.key;
+            state->ptr = probe_row.build_row_ptr;
+
+            ++iter;
+            --list_active_slots;
+            ++active_states;
+            ++k;
             continue;
         }
-        probe_row.build_row_ptr = ptr;
-        if (current_offset - prev_offset >= probe_row.pace)
-            probe_row.pace = std::min<uint32_t>(MAX_PACE, probe_row.pace * 2U);
-        if unlikely (current_offset >= settings.max_block_size)
-            break;
 
-        ++iter;
+        if constexpr (has_null_map)
+        {
+            while (idx < ctx.rows)
+            {
+                if (!(*ctx.null_map)[idx])
+                    break;
+
+                setNotMatched<kind, false>(ctx, idx);
+                ++idx;
+            }
+        }
+
+        if unlikely (idx >= ctx.rows)
+        {
+            ++k;
+            continue;
+        }
+
+        const auto & key = key_getter.getJoinKeyWithBuffer(idx);
+        auto hash = static_cast<HashValueType>(Hash()(key));
+        size_t bucket = pointer_table.getBucketNum(hash);
+        state->pointer_ptr = pointer_table.getPointerTable() + bucket;
+        PREFETCH_READ(state->pointer_ptr);
+
+        state->key = key;
+        if constexpr (tagged_pointer)
+            state->hash_tag = hash & ROW_PTR_TAG_MASK;
+        if constexpr (KeyGetterType::joinKeyCompareHashFirst())
+            state->hash = hash;
+        state->index = idx;
+        state->stage = ProbePrefetchStage::FindHeader;
+        ++active_states;
+        ++idx;
+        ++k;
     }
 
+    for (size_t i = 0; i < probe_prefetch_step; ++i)
+    {
+        auto * state = &states[i];
+        if (state->stage == ProbePrefetchStage::FindNext)
+        {
+            auto & probe_row = probe_list->at(state->index);
+            probe_row.build_row_ptr = state->ptr;
+        }
+    }
+
+    flushInsertBatch<false, true>(wd, added_columns);
+    fillNullMapWithZero<false>(added_columns);
+
+    ctx.current_row_idx = idx;
+    ctx.prefetch_active_states = active_states;
+    ctx.prefetch_iter = k;
     wd.collision += collision;
 }
 

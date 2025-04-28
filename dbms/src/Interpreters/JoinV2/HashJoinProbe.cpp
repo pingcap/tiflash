@@ -658,11 +658,8 @@ void JoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDa
     RowPtr ptr = ctx.current_build_row_ptr;
     bool is_matched = ctx.current_row_is_matched;
     size_t collision = 0;
-    size_t key_offset = sizeof(RowPtr);
-    if constexpr (KeyGetterType::joinKeyCompareHashFirst())
-    {
-        key_offset += sizeof(HashValueType);
-    }
+    constexpr size_t key_offset
+        = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
 
 #define NOT_MATCHED(not_matched)                                                     \
     if constexpr (Adder::need_not_matched)                                           \
@@ -801,8 +798,10 @@ struct ProbePrefetchState
     KeyType key{};
     union
     {
-        RowPtr ptr = nullptr;
-        std::atomic<RowPtr> * pointer_ptr;
+        /// Used when stage is FindHeader
+        std::atomic<RowPtr> * pointer_ptr = nullptr;
+        /// Used when stage is FindNext
+        RowPtr ptr;
     };
 };
 
@@ -820,10 +819,11 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     using Adder = JoinProbeAdder<kind, has_other_condition, late_materialization>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(ctx.key_getter.get());
+    const size_t probe_prefetch_step = settings.probe_prefetch_step;
     if unlikely (!ctx.prefetch_states)
     {
         ctx.prefetch_states = decltype(ctx.prefetch_states)(
-            static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
+            static_cast<void *>(new ProbePrefetchState<KeyGetter>[probe_prefetch_step]),
             [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
     }
     auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(ctx.prefetch_states.get());
@@ -833,11 +833,8 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     size_t k = ctx.prefetch_iter;
     size_t current_offset = wd.result_block.rows();
     size_t collision = 0;
-    size_t key_offset = sizeof(RowPtr);
-    if constexpr (KeyGetterType::joinKeyCompareHashFirst())
-    {
-        key_offset += sizeof(HashValueType);
-    }
+    constexpr size_t key_offset
+        = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
 
 #define NOT_MATCHED(not_matched, idx)                                                \
     if constexpr (Adder::need_not_matched)                                           \
@@ -850,7 +847,6 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
         }                                                                            \
     }
 
-    const size_t probe_prefetch_step = settings.probe_prefetch_step;
     while (idx < ctx.rows || active_states > 0)
     {
         k = k == probe_prefetch_step ? 0 : k;
@@ -864,11 +860,10 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
             const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
             bool key_is_equal = joinKeyIsEqual(key_getter, state->key, key2, state->hash, ptr);
             collision += !key_is_equal;
+            if constexpr (Adder::need_not_matched)
+                state->is_matched |= key_is_equal;
             if (key_is_equal)
             {
-                if constexpr (Adder::need_not_matched)
-                    state->is_matched = true;
-
                 if constexpr (Adder::need_matched)
                 {
                     bool is_end = Adder::addMatched(
