@@ -17,6 +17,8 @@
 #include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/JoinV2/SemiJoinProbeList.h>
 
+#include "Parsers/ASTTablesInSelectQuery.h"
+
 namespace DB
 {
 
@@ -25,7 +27,7 @@ namespace DB
         typename KeyGetter,             \
         ASTTableJoin::Kind kind,        \
         bool has_null_map,              \
-        bool has_other_eq_from_in_cond, \
+        bool has_other_eq_cond_from_in, \
         bool tagged_pointer>
 
 class HashJoin;
@@ -48,6 +50,26 @@ private:
     SEMI_JOIN_PROBE_HELPER_TEMPLATE
     void NO_INLINE
     probeFillColumnsPrefetch(JoinProbeContext & ctx, JoinProbeWorkerData & wd, MutableColumns & added_columns);
+
+    template <typename KeyGetter, ASTTableJoin::Kind kind>
+    void handleOtherConditions(JoinProbeContext & ctx, JoinProbeWorkerData & wd);
+
+    template <
+        typename KeyGetter,
+        ASTTableJoin::Kind kind,
+        bool has_other_eq_cond_from_in,
+        bool has_other_cond,
+        bool has_other_cond_null_map>
+    void checkExprResults(
+        JoinProbeContext & ctx,
+        IColumn::Offsets & selective_offsets,
+        const ColumnUInt8::Container * other_eq_column,
+        ConstNullMapPtr other_eq_null_map,
+        const ColumnUInt8::Container * other_column,
+        ConstNullMapPtr other_null_map);
+
+    Block genResultBlockForSemi(JoinProbeContext & ctx);
+    Block genResultBlockForLeftOuterSemi(JoinProbeContext & ctx, bool has_other_eq_cond_from_in);
 
 private:
     using FuncType = Block (SemiJoinProbeHelper::*)(JoinProbeContext &, JoinProbeWorkerData &);

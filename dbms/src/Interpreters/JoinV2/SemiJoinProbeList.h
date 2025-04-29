@@ -15,22 +15,24 @@
 #pragma once
 
 #include <Common/PODArray.h>
+#include <Interpreters/JoinV2/HashJoinKey.h>
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 
 namespace DB
 {
 
-class SemiJoinProbeListBase
+class ISemiJoinProbeList
 {
 public:
-    virtual ~SemiJoinProbeListBase() = 0;
+    virtual ~ISemiJoinProbeList() = default;
+    virtual void reset(size_t n) = 0;
     virtual size_t activeSlots() const = 0;
 };
 
 /// A reusable, index‑based doubly‑linked circular list for managing semi join pending probe rows.
 /// Supports O(1) append/remove by index.
 template <typename KeyGetter>
-class SemiJoinProbeList final : public SemiJoinProbeListBase
+class SemiJoinProbeList final : public ISemiJoinProbeList
 {
 public:
     using IndexType = UInt32;
@@ -89,7 +91,7 @@ public:
     SemiJoinProbeList() = default;
 
     /// After reset(n), it holds n entries plus a sentinel at index n.
-    void reset(size_t n)
+    void reset(size_t n) override
     {
         // reset should be called after all active slots are removed
         RUNTIME_CHECK(active_count == 0);
@@ -99,15 +101,6 @@ public:
         // Initialize sentinel self-loop
         probe_rows[sentinel_idx].prev_idx = sentinel_idx;
         probe_rows[sentinel_idx].next_idx = sentinel_idx;
-
-#ifndef NDEBUG
-        // Isolate all slots
-        for (IndexType i = 0; i < n; ++i)
-        {
-            probe_rows[i].prev_idx = i;
-            probe_rows[i].next_idx = i;
-        }
-#endif
     }
 
     /// Returns the number of usable slots in the list (excluding the sentinel).
@@ -115,13 +108,19 @@ public:
 
     size_t activeSlots() const override { return active_count; }
 
+    /// Returns true if the slot is currently linked in the list.
+    inline bool contains(IndexType idx)
+    {
+        assert(idx < slotCapacity());
+        return probe_rows[idx].in_list;
+    }
+
     /// Append an existing slot by index at the tail (before sentinel).
     inline void append(IndexType idx)
     {
         assert(idx < slotCapacity());
-#ifndef NDEBUG
-        assert(probe_rows[idx].prev_idx == idx && probe_rows[idx].next_idx == idx);
-#endif
+        assert(!contains(idx));
+        probe_rows[idx].in_list = true;
         ++active_count;
         auto tail = probe_rows[sentinel_idx].prev_idx;
         probe_rows[tail].next_idx = idx;
@@ -134,10 +133,9 @@ public:
     inline void remove(IndexType idx)
     {
         assert(idx < slotCapacity());
+        assert(contains(idx));
+        probe_rows[idx].in_list = false;
         assert(active_count > 0);
-#ifndef NDEBUG
-        assert(probe_rows[idx].prev_idx != idx && probe_rows[idx].next_idx != idx);
-#endif
         --active_count;
         IndexType prev = probe_rows[idx].prev_idx;
         IndexType next = probe_rows[idx].next_idx;
@@ -171,6 +169,7 @@ public:
 private:
     struct WrapProbeRow : ProbeRow
     {
+        bool in_list;
         /// Embedded list indexes
         IndexType prev_idx;
         IndexType next_idx;
@@ -180,5 +179,7 @@ private:
     IndexType sentinel_idx = 0;
     size_t active_count = 0;
 };
+
+std::unique_ptr<ISemiJoinProbeList> createSemiJoinProbeList(HashJoinKeyMethod method);
 
 } // namespace DB

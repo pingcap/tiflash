@@ -53,7 +53,7 @@ struct JoinProbeContext
     /// For (anti) semi join with other conditions.
     IColumn::Offsets semi_selective_offsets;
     /// For (left outer) (anti) semi join with other conditions.
-    std::unique_ptr<SemiJoinProbeListBase> semi_join_probe_list;
+    std::unique_ptr<ISemiJoinProbeList> semi_join_probe_list;
 
     size_t prefetch_active_states = 0;
     size_t prefetch_iter = 0;
@@ -76,7 +76,7 @@ struct JoinProbeContext
         HashJoinKeyMethod method,
         ASTTableJoin::Kind kind,
         bool has_other_condition,
-        bool has_other_eq_from_in_condition,
+        bool has_other_eq_cond_from_in,
         const Names & key_names,
         const String & filter_column,
         const NameSet & probe_output_name_set,

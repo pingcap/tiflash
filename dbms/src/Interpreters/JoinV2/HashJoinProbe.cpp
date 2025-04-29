@@ -74,7 +74,7 @@ void JoinProbeContext::prepareForHashProbe(
     HashJoinKeyMethod method,
     ASTTableJoin::Kind kind,
     bool has_other_condition,
-    bool has_other_eq_from_in_condition,
+    bool has_other_eq_cond_from_in,
     const Names & key_names,
     const String & filter_column,
     const NameSet & probe_output_name_set,
@@ -127,7 +127,7 @@ void JoinProbeContext::prepareForHashProbe(
     {
         left_semi_match_res.clear();
         left_semi_match_res.resize_fill_zero(rows);
-        if (has_other_eq_from_in_condition)
+        if (has_other_eq_cond_from_in)
         {
             left_semi_match_null_res.clear();
             left_semi_match_null_res.resize_fill_zero(rows);
@@ -141,7 +141,9 @@ void JoinProbeContext::prepareForHashProbe(
 
     if (SemiJoinProbeHelper::isSupported(kind, has_other_condition))
     {
-        //semi_join_probe_list->reset(rows);
+        if unlikely (!semi_join_probe_list)
+            semi_join_probe_list = createSemiJoinProbeList(method);
+        semi_join_probe_list->reset(rows);
     }
 
     is_prepared = true;
@@ -1040,6 +1042,17 @@ Block JoinProbeHelper::handleOtherConditions(
 
     non_equal_conditions.other_cond_expr->execute(exec_block);
 
+    SCOPE_EXIT({
+        RUNTIME_CHECK(wd.result_block.columns() == left_columns + right_columns);
+        /// Clear the data in result_block.
+        for (size_t i = 0; i < left_columns + right_columns; ++i)
+        {
+            auto column = wd.result_block.getByPosition(i).column->assumeMutable();
+            column->popBack(column->size());
+            wd.result_block.getByPosition(i).column = std::move(column);
+        }
+    });
+
     size_t rows = exec_block.rows();
     // Ensure BASE_OFFSETS is accessed within bound.
     // It must be true because max_block_size <= BASE_OFFSETS.size(HASH_JOIN_MAX_BLOCK_SIZE_UPPER_BOUND).
@@ -1225,17 +1238,6 @@ Block JoinProbeHelper::handleOtherConditions(
                 ->insertSelectiveRangeFrom(*src_column.column.get(), wd.result_block_filter_offsets, start, length);
         }
     };
-
-    SCOPE_EXIT({
-        RUNTIME_CHECK(wd.result_block.columns() == left_columns + right_columns);
-        /// Clear the data in result_block.
-        for (size_t i = 0; i < left_columns + right_columns; ++i)
-        {
-            auto column = wd.result_block.getByPosition(i).column->assumeMutable();
-            column->popBack(column->size());
-            wd.result_block.getByPosition(i).column = std::move(column);
-        }
-    });
 
     size_t length = std::min(result_size, remaining_insert_size);
     fill_matched(0, length);

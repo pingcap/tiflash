@@ -17,6 +17,7 @@
 
 #include "Interpreters/JoinV2/SemiJoinProbeList.h"
 #include "Parsers/ASTTablesInSelectQuery.h"
+#include "common/defines.h"
 #include "ext/scope_guard.h"
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
@@ -88,20 +89,20 @@ SemiJoinProbeHelper::SemiJoinProbeHelper(const HashJoin * join)
     // SemiJoinProbeHelper only handles semi join with other conditions
     RUNTIME_CHECK(join->has_other_condition);
 
-#define CALL3(KeyGetter, JoinType, has_other_eq_from_in_cond, tagged_pointer)                                         \
+#define CALL3(KeyGetter, JoinType, has_other_eq_cond_from_in, tagged_pointer)                                         \
     {                                                                                                                 \
         func_ptr_has_null                                                                                             \
-            = &SemiJoinProbeHelper::probeImpl<KeyGetter, JoinType, true, has_other_eq_from_in_cond, tagged_pointer>;  \
+            = &SemiJoinProbeHelper::probeImpl<KeyGetter, JoinType, true, has_other_eq_cond_from_in, tagged_pointer>;  \
         func_ptr_no_null                                                                                              \
-            = &SemiJoinProbeHelper::probeImpl<KeyGetter, JoinType, false, has_other_eq_from_in_cond, tagged_pointer>; \
+            = &SemiJoinProbeHelper::probeImpl<KeyGetter, JoinType, false, has_other_eq_cond_from_in, tagged_pointer>; \
     }
 
-#define CALL2(KeyGetter, JoinType, has_other_eq_from_in_cond)            \
+#define CALL2(KeyGetter, JoinType, has_other_eq_cond_from_in)            \
     {                                                                    \
         if (pointer_table.enableTaggedPointer())                         \
-            CALL3(KeyGetter, JoinType, has_other_eq_from_in_cond, true)  \
+            CALL3(KeyGetter, JoinType, has_other_eq_cond_from_in, true)  \
         else                                                             \
-            CALL3(KeyGetter, JoinType, has_other_eq_from_in_cond, false) \
+            CALL3(KeyGetter, JoinType, has_other_eq_cond_from_in, false) \
     }
 
 #define CALL1(KeyGetter, JoinType)                                         \
@@ -165,6 +166,8 @@ Block SemiJoinProbeHelper::probe(JoinProbeContext & ctx, JoinProbeWorkerData & w
 SEMI_JOIN_PROBE_HELPER_TEMPLATE
 Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData & wd)
 {
+    static_assert(kind == Semi || kind == Anti || kind == LeftOuterAnti || kind == LeftOuterSemi);
+
     if unlikely (ctx.rows == 0)
         return join->output_block_after_finalize;
 
@@ -175,6 +178,9 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData
         if (!join->non_equal_conditions.other_eq_cond_from_in_name.empty())
             RUNTIME_CHECK(ctx.left_semi_match_null_res.size() == ctx.rows);
     }
+
+    wd.selective_offsets.clear();
+    wd.selective_offsets.reserve(settings.max_block_size);
 
     size_t left_columns = join->left_sample_block_pruned.columns();
     size_t right_columns = join->right_sample_block_pruned.columns();
@@ -196,14 +202,14 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData
     Stopwatch watch;
     if (pointer_table.enableProbePrefetch())
     {
-        probeFillColumnsPrefetch<KeyGetter, kind, has_null_map, has_other_eq_from_in_cond, tagged_pointer>(
+        probeFillColumnsPrefetch<KeyGetter, kind, has_null_map, has_other_eq_cond_from_in, tagged_pointer>(
             ctx,
             wd,
             added_columns);
     }
     else
     {
-        probeFillColumns<KeyGetter, kind, has_null_map, has_other_eq_from_in_cond, tagged_pointer>(
+        probeFillColumns<KeyGetter, kind, has_null_map, has_other_eq_cond_from_in, tagged_pointer>(
             ctx,
             wd,
             added_columns);
@@ -215,7 +221,30 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData
     for (size_t i = 0; i < right_columns; ++i)
         wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
 
-    if (ctx.isProbeFinished()) {}
+    if (!wd.selective_offsets.empty())
+    {
+        for (size_t i = 0; i < left_columns; ++i)
+        {
+            if (!join->left_required_flag_for_other_condition[i])
+                continue;
+            wd.result_block.safeGetByPosition(i).column->assumeMutable()->insertSelectiveFrom(
+                *ctx.block.safeGetByPosition(i).column.get(),
+                wd.selective_offsets);
+        }
+
+        wd.replicate_time += watch.elapsedFromLastTime();
+
+        handleOtherConditions<KeyGetter, kind>(ctx, wd);
+    }
+
+    if (ctx.isProbeFinished())
+    {
+        if constexpr (kind == Semi || kind == Anti)
+            return genResultBlockForSemi(ctx);
+        else
+            return genResultBlockForLeftOuterSemi(ctx, has_other_eq_cond_from_in);
+    }
+
     return join->output_block_after_finalize;
 }
 
@@ -277,7 +306,7 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
         }
         if (prev_offset == current_offset)
         {
-            setNotMatched<kind, has_other_eq_from_in_cond>(ctx, idx, probe_row.has_null_eq_from_in);
+            setNotMatched<kind, has_other_eq_cond_from_in>(ctx, idx, probe_row.has_null_eq_from_in);
             iter = probe_list->remove(iter);
             continue;
         }
@@ -356,7 +385,7 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
         probe_list->append(idx);
         auto & probe_row = probe_list->at(idx);
         probe_row.build_row_ptr = ptr;
-        if constexpr (has_other_eq_from_in_cond)
+        if constexpr (has_other_eq_cond_from_in)
             probe_row.has_null_eq_from_in = false;
         probe_row.pace = std::min<uint32_t>(MAX_PACE, INITIAL_PACE * 2U);
         probe_row.hash = hash;
@@ -449,6 +478,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
         {
             RowPtr ptr = state->ptr;
             RowPtr next_ptr = getNextRowPtr(ptr);
+            state->ptr = next_ptr;
 
             const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
             bool key_is_equal = joinKeyIsEqual(key_getter, state->key, key2, state->hash, ptr);
@@ -472,7 +502,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
                 {
                     auto & probe_row = probe_list->at(state->index);
                     probe_row.build_row_ptr = next_ptr;
-                    probe_row.pace = std::min<uint32_t>(MAX_PACE, INITIAL_PACE * 2U);
+                    probe_row.pace = std::min<uint32_t>(MAX_PACE, probe_row.pace * 2U);
                     remaining_pace_is_zero = true;
                 }
             }
@@ -482,7 +512,6 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
                 if (next_ptr)
                 {
                     PREFETCH_READ(next_ptr);
-                    state->ptr = next_ptr;
                     ++k;
                     continue;
                 }
@@ -490,7 +519,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
                 probe_list->at(state->index).build_row_ptr = next_ptr;
                 if (!state->is_matched)
                 {
-                    setNotMatched<kind, has_other_eq_from_in_cond>(ctx, state->index, state->has_null_eq_from_in);
+                    setNotMatched<kind, has_other_eq_cond_from_in>(ctx, state->index, state->has_null_eq_from_in);
                     probe_list->remove(state->index);
                 }
             }
@@ -516,7 +545,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
                     PREFETCH_READ(ptr);
                     state->stage = ProbePrefetchStage::FindNext;
                     state->is_matched = false;
-                    if constexpr (has_other_eq_from_in_cond)
+                    if constexpr (has_other_eq_cond_from_in)
                         state->has_null_eq_from_in = false;
                     state->remaining_pace = INITIAL_PACE;
                     state->ptr = ptr;
@@ -524,8 +553,8 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
 
                     probe_list->append(state->index);
                     auto & probe_row = probe_list->at(state->index);
-                    //probe_row.build_row_ptr = ptr;
-                    if constexpr (has_other_eq_from_in_cond)
+                    probe_row.build_row_ptr = ptr;
+                    if constexpr (has_other_eq_cond_from_in)
                         probe_row.has_null_eq_from_in = false;
                     probe_row.pace = INITIAL_PACE;
                     if constexpr (KeyGetterType::joinKeyCompareHashFirst())
@@ -545,9 +574,9 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
 
         while (list_active_slots > 0 && !iter->build_row_ptr)
         {
-            setNotMatched<kind, false>(ctx, iter.getIndex());
+            setNotMatched<kind, has_other_eq_cond_from_in>(ctx, iter.getIndex(), iter->has_null_eq_from_in);
+            iter = probe_list->remove(iter);
             --list_active_slots;
-            ++iter;
         }
 
         if (list_active_slots > 0)
@@ -559,7 +588,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
             PREFETCH_READ(probe_row.build_row_ptr);
             state->stage = ProbePrefetchStage::FindNext;
             state->is_matched = false;
-            if constexpr (has_other_eq_from_in_cond)
+            if constexpr (has_other_eq_cond_from_in)
                 state->has_null_eq_from_in = probe_row.has_null_eq_from_in;
             state->remaining_pace = probe_row.pace;
             if constexpr (KeyGetterType::joinKeyCompareHashFirst())
@@ -627,6 +656,226 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
     ctx.prefetch_active_states = active_states;
     ctx.prefetch_iter = k;
     wd.collision += collision;
+}
+
+template <typename KeyGetter, ASTTableJoin::Kind kind>
+void SemiJoinProbeHelper::handleOtherConditions(JoinProbeContext & ctx, JoinProbeWorkerData & wd)
+{
+    const auto & left_sample_block_pruned = join->left_sample_block_pruned;
+    const auto & right_sample_block_pruned = join->right_sample_block_pruned;
+    const auto & non_equal_conditions = join->non_equal_conditions;
+    const auto & left_required_flag_for_other_condition = join->left_required_flag_for_other_condition;
+
+    size_t left_columns = left_sample_block_pruned.columns();
+    size_t right_columns = right_sample_block_pruned.columns();
+    // Some columns in wd.result_block may be empty so need to create another block to execute other condition expressions
+    Block exec_block;
+    RUNTIME_CHECK(wd.result_block.columns() == left_columns + right_columns);
+    for (size_t i = 0; i < left_columns; ++i)
+    {
+        if (left_required_flag_for_other_condition[i])
+            exec_block.insert(wd.result_block.getByPosition(i));
+    }
+    for (size_t i = 0; i < right_columns; ++i)
+        exec_block.insert(wd.result_block.getByPosition(left_columns + i));
+
+    non_equal_conditions.other_cond_expr->execute(exec_block);
+
+    SCOPE_EXIT({
+        RUNTIME_CHECK(wd.result_block.columns() == left_columns + right_columns);
+        /// Clear the data in result_block.
+        for (size_t i = 0; i < left_columns + right_columns; ++i)
+        {
+            auto column = wd.result_block.getByPosition(i).column->assumeMutable();
+            column->popBack(column->size());
+            wd.result_block.getByPosition(i).column = std::move(column);
+        }
+    });
+
+    const ColumnUInt8::Container *other_eq_from_in_column_data = nullptr, *other_column_data = nullptr;
+    ConstNullMapPtr other_eq_from_in_null_map = nullptr, other_null_map = nullptr;
+    ColumnPtr other_eq_from_in_column, other_column;
+
+    bool has_other_eq_cond_from_in = !non_equal_conditions.other_eq_cond_from_in_name.empty();
+    if (has_other_eq_cond_from_in)
+    {
+        other_eq_from_in_column = exec_block.getByName(non_equal_conditions.other_eq_cond_from_in_name).column;
+        auto is_nullable_col = [&]() {
+            if (other_eq_from_in_column->isColumnNullable())
+                return true;
+            if (other_eq_from_in_column->isColumnConst())
+            {
+                const auto & const_col = typeid_cast<const ColumnConst &>(*other_eq_from_in_column);
+                return const_col.getDataColumn().isColumnNullable();
+            }
+            return false;
+        };
+        // nullable, const(nullable)
+        RUNTIME_CHECK_MSG(
+            is_nullable_col(),
+            "The equal condition from in column should be nullable, otherwise it should be used as join key");
+
+        std::tie(other_eq_from_in_column_data, other_eq_from_in_null_map)
+            = getDataAndNullMapVectorFromFilterColumn(other_eq_from_in_column);
+    }
+
+    bool has_other_cond = !non_equal_conditions.other_cond_name.empty();
+    bool has_other_cond_null_map = false;
+    if (has_other_cond)
+    {
+        other_column = exec_block.getByName(non_equal_conditions.other_cond_name).column;
+        std::tie(other_column_data, other_null_map) = getDataAndNullMapVectorFromFilterColumn(other_column);
+        has_other_cond_null_map = other_null_map != nullptr;
+    }
+
+#define CALL(has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map)                               \
+    {                                                                                                          \
+        checkExprResults<KeyGetter, kind, has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>( \
+            ctx,                                                                                               \
+            wd.selective_offsets,                                                                              \
+            other_eq_from_in_column_data,                                                                      \
+            other_eq_from_in_null_map,                                                                         \
+            other_column_data,                                                                                 \
+            other_null_map);                                                                                   \
+    }
+
+    if (has_other_eq_cond_from_in)
+    {
+        if (has_other_cond)
+        {
+            if (has_other_cond_null_map)
+                CALL(true, true, true)
+            else
+                CALL(true, true, false)
+        }
+        else
+            CALL(true, false, false)
+    }
+    else
+    {
+        RUNTIME_CHECK(has_other_cond);
+        if (has_other_cond_null_map)
+            CALL(false, true, true)
+        else
+            CALL(false, true, false)
+    }
+#undef CALL
+}
+
+template <
+    typename KeyGetter,
+    ASTTableJoin::Kind kind,
+    bool has_other_eq_cond_from_in,
+    bool has_other_cond,
+    bool has_other_cond_null_map>
+void SemiJoinProbeHelper::checkExprResults(
+    JoinProbeContext & ctx,
+    IColumn::Offsets & selective_offsets,
+    const ColumnUInt8::Container * other_eq_column,
+    ConstNullMapPtr other_eq_null_map,
+    const ColumnUInt8::Container * other_column,
+    ConstNullMapPtr other_null_map)
+{
+    static_assert(has_other_cond || has_other_eq_cond_from_in);
+    auto * probe_list = static_cast<SemiJoinProbeList<KeyGetter> *>(ctx.semi_join_probe_list.get());
+    size_t sz = selective_offsets.size();
+    if constexpr (has_other_eq_cond_from_in)
+    {
+        RUNTIME_CHECK(sz == other_eq_column->size());
+        RUNTIME_CHECK(sz == other_eq_null_map->size());
+    }
+    if constexpr (has_other_cond)
+    {
+        RUNTIME_CHECK(sz == other_column->size());
+        if constexpr (has_other_cond_null_map)
+            RUNTIME_CHECK(sz == other_null_map->size());
+    }
+    for (size_t i = 0; i < sz; ++i)
+    {
+        auto index = selective_offsets[i];
+        if (!probe_list->contains(index))
+            continue;
+        if constexpr (has_other_cond)
+        {
+            if constexpr (has_other_cond_null_map)
+            {
+                if ((*other_null_map)[i])
+                {
+                    // If other expr is NULL, this row is not included in the result set.
+                    continue;
+                }
+            }
+            if (!(*other_column)[i])
+            {
+                // If other expr is 0, this row is not included in the result set.
+                continue;
+            }
+        }
+        if constexpr (has_other_eq_cond_from_in)
+        {
+            auto & probe_row = probe_list->at(index);
+            bool is_eq_null = (*other_eq_null_map)[i];
+            probe_row.has_null_eq_from_in |= is_eq_null;
+            if (!is_eq_null && (*other_eq_column)[i])
+            {
+                setMatched<kind>(ctx, index);
+                probe_list->remove(index);
+            }
+        }
+        else
+        {
+            // other expr is true, so the result is true for this row that has matched right row(s).
+            setMatched<kind>(ctx, index);
+            probe_list->remove(index);
+        }
+    }
+}
+
+Block SemiJoinProbeHelper::genResultBlockForSemi(JoinProbeContext & ctx)
+{
+    RUNTIME_CHECK(join->kind == Semi || join->kind == Anti);
+    RUNTIME_CHECK(ctx.isProbeFinished());
+
+    Block res_block = join->output_block_after_finalize.cloneEmpty();
+    size_t columns = res_block.columns();
+    for (size_t i = 0; i < columns; ++i)
+    {
+        auto & dst_column = res_block.getByPosition(i);
+        dst_column.column->assumeMutable()->insertSelectiveFrom(
+            *ctx.block.getByName(dst_column.name).column.get(),
+            ctx.semi_selective_offsets);
+    }
+
+    return res_block;
+}
+
+Block SemiJoinProbeHelper::genResultBlockForLeftOuterSemi(JoinProbeContext & ctx, bool has_other_eq_cond_from_in)
+{
+    RUNTIME_CHECK(join->kind == LeftOuterSemi || join->kind == LeftOuterAnti);
+    RUNTIME_CHECK(ctx.isProbeFinished());
+
+    Block res_block = join->output_block_after_finalize.cloneEmpty();
+    size_t columns = res_block.columns();
+    size_t match_helper_column_index = res_block.getPositionByName(join->match_helper_name);
+    for (size_t i = 0; i < columns; ++i)
+    {
+        if (i == match_helper_column_index)
+            continue;
+        res_block.getByPosition(i) = ctx.block.getByName(res_block.getByPosition(i).name);
+    }
+
+    MutableColumnPtr match_helper_column_ptr = res_block.getByPosition(match_helper_column_index).column->cloneEmpty();
+    auto * match_helper_column = typeid_cast<ColumnNullable *>(match_helper_column_ptr.get());
+    if (has_other_eq_cond_from_in)
+        match_helper_column->getNullMapColumn().getData().swap(ctx.left_semi_match_null_res);
+    else
+        match_helper_column->getNullMapColumn().getData().resize_fill_zero(ctx.rows);
+    auto * match_helper_res = &typeid_cast<ColumnVector<Int8> &>(match_helper_column->getNestedColumn()).getData();
+    match_helper_res->swap(ctx.left_semi_match_res);
+
+    res_block.getByPosition(match_helper_column_index).column = std::move(match_helper_column_ptr);
+
+    return res_block;
 }
 
 } // namespace DB
