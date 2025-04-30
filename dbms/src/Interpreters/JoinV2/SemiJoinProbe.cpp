@@ -262,7 +262,7 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
     auto & key_getter = *static_cast<KeyGetterType *>(ctx.key_getter.get());
     auto * probe_list = static_cast<SemiJoinProbeList<KeyGetter> *>(ctx.semi_join_probe_list.get());
     RUNTIME_CHECK(probe_list->slotCapacity() == ctx.rows);
-    size_t current_offset = wd.result_block.rows();
+    size_t current_offset = 0;
     size_t collision = 0;
     size_t key_offset = sizeof(RowPtr);
     if constexpr (KeyGetterType::joinKeyCompareHashFirst())
@@ -462,7 +462,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
     size_t idx = ctx.current_row_idx;
     size_t active_states = ctx.prefetch_active_states;
     size_t k = ctx.prefetch_iter;
-    size_t current_offset = wd.result_block.rows();
+    size_t current_offset = 0;
     size_t collision = 0;
     constexpr size_t key_offset
         = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
@@ -647,6 +647,8 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
         {
             auto & probe_row = probe_list->at(state->index);
             probe_row.build_row_ptr = state->ptr;
+            state->stage = ProbePrefetchStage::None;
+            --active_states;
         }
     }
 

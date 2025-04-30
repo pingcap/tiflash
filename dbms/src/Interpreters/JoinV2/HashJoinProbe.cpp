@@ -655,7 +655,11 @@ void JoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDa
     using Adder = JoinProbeAdder<kind, has_other_condition, late_materialization>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(ctx.key_getter.get());
+    // Some columns in wd.result_block may remain empty due to late materialization for join with other conditions.
+    // But since all columns are cleared after handling other conditions, wd.result_block.rows() is always 0.
     size_t current_offset = wd.result_block.rows();
+    if constexpr (has_other_condition)
+        RUNTIME_CHECK(current_offset == 0);
     size_t idx = ctx.current_row_idx;
     RowPtr ptr = ctx.current_build_row_ptr;
     bool is_matched = ctx.current_row_is_matched;
@@ -833,7 +837,11 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     size_t idx = ctx.current_row_idx;
     size_t active_states = ctx.prefetch_active_states;
     size_t k = ctx.prefetch_iter;
+    // Some columns in wd.result_block may remain empty due to late materialization for join with other conditions.
+    // But since all columns are cleared after handling other conditions, wd.result_block.rows() is always 0.
     size_t current_offset = wd.result_block.rows();
+    if constexpr (has_other_condition)
+        RUNTIME_CHECK(current_offset == 0);
     size_t collision = 0;
     constexpr size_t key_offset
         = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
