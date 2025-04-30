@@ -734,7 +734,6 @@ try
 
     {
         // Greater between TimeStamp col and Datetime literal, use Asia/Shanghai timezone
-        auto ctx = TiFlashTestEnv::getContext();
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneName("Asia/Shanghai");
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
