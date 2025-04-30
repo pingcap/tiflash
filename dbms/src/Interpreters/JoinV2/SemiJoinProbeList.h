@@ -101,6 +101,8 @@ public:
         // Initialize sentinel self-loop
         probe_rows[sentinel_idx].prev_idx = sentinel_idx;
         probe_rows[sentinel_idx].next_idx = sentinel_idx;
+        for (size_t i = 0; i < n; ++i)
+            probe_rows[i].in_list = false;
     }
 
     /// Returns the number of usable slots in the list (excluding the sentinel).
