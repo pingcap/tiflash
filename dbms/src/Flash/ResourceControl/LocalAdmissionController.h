@@ -208,7 +208,7 @@ class ResourceGroup final : private boost::noncopyable
             {
                 return std::chrono::duration_cast<std::chrono::seconds>(trickle_deadline - tp).count() * bucket->getConfig().fill_rate;
             }
-            return 0.0
+            return 0.0;
         }
 
         void updateBucketMetrics(const TokenBucket::TokenBucketConfig & config) const
@@ -386,68 +386,12 @@ public:
 private:
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
     static const std::string WATCH_GAC_ERR_PREFIX;
-    static const auto NETWORK_EXCEPTION_RETRY_DURATION_SEC = 3;
+    static constexpr auto NETWORK_EXCEPTION_RETRY_DURATION_SEC = 3;
 
     // For tidb_enable_resource_control is disabled.
     static constexpr uint64_t HIGHEST_RESOURCE_GROUP_PRIORITY = 0;
 
-    void stop()
-    {
-        if (stopped)
-        {
-            LOG_DEBUG(log, "LAC already stopped");
-            return;
-        }
-
-        stopped.store(true);
-
-        // TryCancel() is thread safe(https://github.com/grpc/grpc/pull/30416).
-        // But we will to create a new grpc_context for each new grpc reader/writer(https://github.com/grpc/grpc/issues/18348#issuecomment-477402608).
-        // So still need to lock.
-        {
-            std::lock_guard lock(mu);
-            watch_gac_grpc_context->TryCancel();
-            cv.notify_all();
-        }
-        {
-            std::lock_guard lock(gac_requests_mu);
-            gac_requests_cv.notify_all();
-        }
-        for (auto & thread : background_threads)
-        {
-            if (thread.joinable())
-                thread.join();
-        }
-
-        // Report final RU consumption before stop:
-        // 1. to avoid RU consumption missed.
-        // 2. clear GAC's unique_client_id by setting acquire_tokens as zero to avoid affecting burst limit calculation.
-        // This can happend when disagg CN is scaled-in/out frequently.
-        const auto gac_req = buildGACRequest(/*is_final_report=*/true);
-        RUNTIME_CHECK(resource_groups.empty() || gac_req.has_value());
-        // todo: maybe should add timeout to avoid slow down termination process.
-        auto resp = cluster->pd_client->acquireTokenBuckets(gac_req.value());
-
-        if (resp.has_error())
-            LOG_ERROR(log, "LAC stop got error: {}", resp.error().message());
-
-        if (need_reset_unique_client_id.load())
-        {
-            try
-            {
-                etcd_client->deleteServerIDFromGAC(unique_client_id);
-            }
-            catch (...)
-            {
-                LOG_ERROR(
-                    log,
-                    "LAC stop got error: delete server id({}) from GAC failed: {}",
-                    unique_client_id,
-                    getCurrentExceptionMessage(false));
-            }
-        }
-        LOG_INFO(log, "LAC({}) stop finish", unique_client_id);
-    }
+    void stop();
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {

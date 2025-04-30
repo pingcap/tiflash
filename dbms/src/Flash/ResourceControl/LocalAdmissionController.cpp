@@ -374,13 +374,6 @@ void LocalAdmissionController::mainLoop()
                 gac_requests_cv.notify_one();
             }
 
-            {
-                // Need lock here to avoid RCQ has already been destroied.
-                std::lock_guard lock(mu);
-                if (refill_token_callback)
-                    refill_token_callback();
-            }
-
             checkDegradeMode();
         }
         catch (...)
@@ -414,13 +407,13 @@ void LocalAdmissionController::updateRUConsumptionSpeed()
 
 std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::buildGACRequest(bool is_final_report)
 {
-    std::vector<RequestInfo> request_infos;
+    std::vector<GACRequestInfo> request_infos;
     if (is_final_report)
     {
-        // Doesn't need to lock for resource_groups because all threads should have been joined!
+        // Doesn't need to lock for resource_groups because all threads should have been joined!:
         for (const auto & resource_group : resource_groups)
         {
-            const auto consumption_delta_info = resource_group.second->updateRUConsumptionDeltaInfo();
+            const auto consumption_delta_info = resource_group.second->updateRUConsumptionDeltaInfoWithoutLock();
             request_infos.push_back(
                 {.resource_group_name = resource_group.first,
                  .acquire_tokens = 0,
@@ -498,7 +491,7 @@ void LocalAdmissionController::requestGACLoop()
         }
         catch (...)
         {
-            LOG_ERROR(log, "doRequestGAC got error: {}, retry {} sec later", getCurrentExceptionMessage(false));
+            LOG_ERROR(log, "doRequestGAC got error: {}, retry {} sec later", getCurrentExceptionMessage(false), NETWORK_EXCEPTION_RETRY_DURATION_SEC);
         }
 
         // Got here when network exception happens or stopped is true.
@@ -678,6 +671,14 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
             resource_group->updateTrickleMode(added_tokens, capacity, trickle_ms, now);
         }
     }
+
+    {
+        // Need lock here to avoid RCQ has already been destroied.
+        std::lock_guard lock(mu);
+        if (refill_token_callback)
+            refill_token_callback();
+    }
+
     return handled_resource_group_names;
 }
 
@@ -692,7 +693,7 @@ void LocalAdmissionController::watchGACLoop()
         catch (...)
         {
             // todo 10sec
-            LOG_ERROR(log, "watchGACLoop failed: {}, retry 10sec later", getCurrentExceptionMessage(false));
+            LOG_ERROR(log, "watchGACLoop failed: {}, retry {} sec later", getCurrentExceptionMessage(false), NETWORK_EXCEPTION_RETRY_DURATION_SEC);
         }
 
         // Got here when:
@@ -700,7 +701,7 @@ void LocalAdmissionController::watchGACLoop()
         // 2. watch is cancel or stopped is true.
         {
             std::unique_lock lock(mu);
-            if (cv.wait_for(lock, std::chrono::seconds(2), [this]() { return stopped.load(); }))
+            if (cv.wait_for(lock, std::chrono::seconds(NETWORK_EXCEPTION_RETRY_DURATION_SEC), [this]() { return stopped.load(); }))
                 return;
 
             // Create new grpc_context for each reader/writer.
@@ -842,6 +843,65 @@ void LocalAdmissionController::checkGACRespValid(const resource_manager::Resourc
 {
     RUNTIME_CHECK_MSG(!new_group_pb.name().empty(), "resource group name from GAC is empty");
     RUNTIME_CHECK_MSG(new_group_pb.mode() == resource_manager::GroupMode::RUMode, "resource group is not RUMode");
+}
+
+void LocalAdmissionController::stop()
+{
+    if (stopped)
+    {
+        LOG_DEBUG(log, "LAC already stopped");
+        return;
+    }
+
+    stopped.store(true);
+
+    // TryCancel() is thread safe(https://github.com/grpc/grpc/pull/30416).
+    // But we will to create a new grpc_context for each new grpc reader/writer(https://github.com/grpc/grpc/issues/18348#issuecomment-477402608).
+    // So still need to lock.
+    {
+        std::lock_guard lock(mu);
+        watch_gac_grpc_context->TryCancel();
+        cv.notify_all();
+    }
+    {
+        std::lock_guard lock(gac_requests_mu);
+        gac_requests_cv.notify_all();
+    }
+    for (auto & thread : background_threads)
+    {
+        if (thread.joinable())
+            thread.join();
+    }
+
+    // Report final RU consumption before stop:
+    // 1. to avoid RU consumption missed.
+    // 2. clear GAC's unique_client_id by setting acquire_tokens as zero to avoid affecting burst limit calculation.
+    // This can happend when disagg CN is scaled-in/out frequently.
+    // NOTE: Make sure to all threads have been joined before call buildGACRequest().
+    const auto gac_req = buildGACRequest(/*is_final_report=*/true);
+    RUNTIME_CHECK(resource_groups.empty() || gac_req.has_value());
+    // todo: maybe should add timeout to avoid slow down termination process.
+    auto resp = cluster->pd_client->acquireTokenBuckets(gac_req.value());
+
+    if (resp.has_error())
+        LOG_ERROR(log, "LAC stop got error: {}", resp.error().message());
+
+    if (need_reset_unique_client_id.load())
+    {
+        try
+        {
+            etcd_client->deleteServerIDFromGAC(unique_client_id);
+        }
+        catch (...)
+        {
+            LOG_ERROR(
+                log,
+                "LAC stop got error: delete server id({}) from GAC failed: {}",
+                unique_client_id,
+                getCurrentExceptionMessage(false));
+        }
+    }
+    LOG_INFO(log, "LAC({}) stop finish", unique_client_id);
 }
 
 #ifdef DBMS_PUBLIC_GTEST

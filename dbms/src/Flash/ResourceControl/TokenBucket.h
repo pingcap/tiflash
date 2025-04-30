@@ -80,7 +80,7 @@ public:
     // Return current tokens count.
     double peek() const { return peek(std::chrono::steady_clock::now()); }
 
-    double peek(const TimePoint & timepoint) const;
+    double peek(const TimePoint & tp) const;
 
     void reConfig(const TokenBucketConfig & config, const TimePoint & tp);
 
@@ -103,7 +103,7 @@ public:
     {
         // gjt todo refine when refill rate is zero.
         const auto tokens = peek();
-        static const uint64_t min_wait_dura_ms = 100;
+        static const uint64_t min_wait_dura_ms = 10;
         assert(max_wait_dura_ms > min_wait_dura_ms);
 
         if (tokens >= 0 || fill_rate_ms == 0.0)
@@ -117,8 +117,8 @@ private:
     static constexpr auto MIN_COMPACT_INTERVAL = std::chrono::milliseconds(10);
 
     // Merge dynamic token into static token.
-    void compact(const TimePoint & timepoint);
-    double getDynamicTokens(const TimePoint & timepoint) const;
+    void compact(const TimePoint & tp);
+    double getDynamicTokens(const TimePoint & tp) const;
 
     double fill_rate;
     double fill_rate_ms;

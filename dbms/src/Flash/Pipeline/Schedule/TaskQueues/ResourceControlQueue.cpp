@@ -114,7 +114,8 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if unlikely (updateResourceGroupInfosWithoutLock())
             continue;
 
-        UInt64 wait_dura = LocalAdmissionController::DEFAULT_FETCH_GAC_INTERVAL_MS;
+        // gjt todo smaller value?
+        UInt64 wait_dura = LocalAdmissionController::DEFAULT_TARGET_PERIOD_MS.count();
         if (!resource_group_infos.empty())
         {
             const ResourceGroupInfo & group_info = resource_group_infos.top();
@@ -143,8 +144,9 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         assert(!task);
         // Wakeup when:
         // 1. finish() is called.
-        // 2. refill_token_callback is called by LAC.
-        // 3. token refilled in trickle mode.
+        // 2. new task submit.
+        // 3. LAC got resp from GAC, but we cannot make sure the notify from LAC is always catched,
+        // so wait_dura is used to avoid stuck.
         cv.wait_for(lock, std::chrono::milliseconds(wait_dura));
     }
 }
