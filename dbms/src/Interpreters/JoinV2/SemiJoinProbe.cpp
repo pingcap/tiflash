@@ -516,7 +516,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
                     continue;
                 }
 
-                probe_list->at(state->index).build_row_ptr = next_ptr;
+                probe_list->at(state->index).build_row_ptr = nullptr;
                 if (!state->is_matched)
                 {
                     setNotMatched<kind, has_other_eq_cond_from_in>(ctx, state->index, state->has_null_eq_from_in);
@@ -591,6 +591,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
             if constexpr (has_other_eq_cond_from_in)
                 state->has_null_eq_from_in = probe_row.has_null_eq_from_in;
             state->remaining_pace = probe_row.pace;
+            state->index = iter.getIndex();
             if constexpr (KeyGetterType::joinKeyCompareHashFirst())
                 state->hash = probe_row.hash;
             state->key = probe_row.key;
