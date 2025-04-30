@@ -71,6 +71,7 @@ uint64_t ResourceGroup::getPriority(uint64_t max_ru_per_sec) const
 
 std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const SteadyClock::time_point & now)
 {
+    LOG_DEBUG(log, "gjt debug buildRequestInfoIfNecessary beg");
     std::lock_guard lock(mu);
     if (!beginRequestWithoutLock(now))
     {
@@ -92,6 +93,8 @@ std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const S
         assert(acquire_tokens >= 0.0);
     }
 
+    LOG_DEBUG(log, "gjt debug buildRequestInfoIfNecessary done {}, acq: {}, burstable: {}, speed: {}", report_token_consumption, acquire_tokens,
+            burstable, consumption_delta_info.speed);
     if (report_token_consumption == 0.0 && acquire_tokens == 0.0)
         return std::nullopt;
     else
@@ -121,6 +124,7 @@ bool ResourceGroup::shouldReportRUConsumption(const SteadyClock::time_point & no
 {
     std::lock_guard lock(mu);
     const auto elapsed = now - last_request_gac_timepoint;
+    RUNTIME_CHECK(elapsed.count() >= 0);
     // gjt todo: tidb also plus state_update_duration/2
     if (elapsed >= LocalAdmissionController::DEFAULT_TARGET_PERIOD)
     {
@@ -259,7 +263,7 @@ void ResourceGroup::updateDegradeMode(const SteadyClock::time_point & now)
 void ResourceGroup::updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_point & now)
 {
     std::lock_guard lock(mu);
-
+                LOG_DEBUG(log, "gjt debug compute speed beg, smooth: {}", smooth_ru_consumption_speed);
     const auto elapsed = now - last_compute_ru_consumption_speed;
     RUNTIME_CHECK(elapsed.count() >= 0);
     if (elapsed < COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL)
@@ -272,6 +276,8 @@ void ResourceGroup::updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_
     static_assert(MOVING_RU_CONSUMPTION_SPEED_FACTOR < 1);
     smooth_ru_consumption_speed = current_ru_consumption_speed * MOVING_RU_CONSUMPTION_SPEED_FACTOR
         + (1 - MOVING_RU_CONSUMPTION_SPEED_FACTOR) * smooth_ru_consumption_speed;
+    LOG_DEBUG(log, "gjt debug compute speed done, cur: {}, delta: {}, elapsed: {}, smooth: {}",
+            current_ru_consumption_speed, ru_consumption_delta_for_compute_speed, elapsed.count(), smooth_ru_consumption_speed);
 
     ru_consumption_delta_for_compute_speed = 0.0;
     last_compute_ru_consumption_speed = now;
@@ -352,16 +358,24 @@ void LocalAdmissionController::mainLoop()
     }
     LOG_INFO(log, "get unique_client_id succeed: {}", unique_client_id);
 
+
+    // Wakeup every n seconds to:
+    // 1. compute RU consumption speed(COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL, default 1s)
+    // 2. report RU consumption to GAC(DEFAULT_TARGET_PERIOD, default 5s)
+    // 3. check if need to step into degrade mode(DEGRADE_MODE_DURATION, default 120s)
+    const auto tick_interval = ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL;
+    RUNTIME_CHECK(tick_interval <= ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL &&
+            tick_interval <= DEGRADE_MODE_DURATION && tick_interval <= DEFAULT_TARGET_PERIOD);
+    auto cur_tick_beg = current_tick;
+    auto cur_tick_end = cur_tick_beg + tick_interval;
     while (!stopped.load())
     {
-        current_tick = SteadyClock::now();
-        const auto wakeup_timepoint = calcWaitDurationForMainLoop();
-        if (current_tick < wakeup_timepoint)
+        if (current_tick < cur_tick_end)
         {
             std::unique_lock<std::mutex> lock(mu);
             if (low_token_resource_groups.empty())
             {
-                if (cv.wait_until(lock, wakeup_timepoint, [this]() {
+                if (cv.wait_until(lock, cur_tick_end, [this]() {
                         return stopped.load() || !low_token_resource_groups.empty();
                     }))
                 {
@@ -369,19 +383,26 @@ void LocalAdmissionController::mainLoop()
                         return;
                 }
             }
+
+            current_tick = SteadyClock::now();
         }
 
         try
         {
-            updateRUConsumptionSpeed();
+            while (current_tick >= cur_tick_end)
+            {
+                updateRUConsumptionSpeed();
+                cur_tick_beg = cur_tick_end;
+                cur_tick_end += tick_interval;
+            }
 
             if (const auto gac_req_opt = buildGACRequest(/*is_final_report=*/false); gac_req_opt.has_value())
             {
+                LOG_DEBUG(log, "gjt debug got gac_opt");
                 std::lock_guard lock(gac_requests_mu);
                 gac_requests.push_back(gac_req_opt.value());
-                gac_requests_cv.notify_one();
+                gac_requests_cv.notify_all();
             }
-
             checkDegradeMode();
         }
         catch (...)
@@ -389,22 +410,6 @@ void LocalAdmissionController::mainLoop()
             LOG_ERROR(log, getCurrentExceptionMessage(true));
         }
     }
-}
-
-// Wakeup every n seconds to:
-// 1. compute RU consumption speed(COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL, default 1s)
-// 2. report RU consumption to GAC(DEFAULT_TARGET_PERIOD, default 5s)
-// 3. check if need to step into degrade mode(DEGRADE_MODE_DURATION, default 120s)
-SteadyClock::time_point LocalAdmissionController::calcWaitDurationForMainLoop()
-{
-    const auto compute_speed
-        = lac_last_compute_ru_consumption_speed + ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL;
-    const auto report_consumption = last_report_ru_consumption_delta + DEFAULT_TARGET_PERIOD;
-    const auto degrade_mode_deadline = last_fetch_tokens_from_gac + DEGRADE_MODE_DURATION;
-
-    const auto next_wakeup_tp = std::min(compute_speed, std::min(report_consumption, degrade_mode_deadline));
-
-    return next_wakeup_tp;
 }
 
 void LocalAdmissionController::updateRUConsumptionSpeed()
@@ -417,7 +422,7 @@ void LocalAdmissionController::updateRUConsumptionSpeed()
 std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::buildGACRequest(bool is_final_report)
 {
     std::vector<GACRequestInfo> request_infos;
-    if (is_final_report)
+    if unlikely (is_final_report)
     {
         // Doesn't need to lock for resource_groups because all threads should have been joined!:
         for (const auto & resource_group : resource_groups)
@@ -453,6 +458,7 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
         }
     }
 
+    LOG_DEBUG(log, "gjt debug request_infos: {}", request_infos.size());
     if (request_infos.empty())
         return {};
 
@@ -492,7 +498,7 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
 
 void LocalAdmissionController::requestGACLoop()
 {
-    while (stopped.load())
+    while (!stopped.load())
     {
         try
         {
@@ -533,10 +539,12 @@ void LocalAdmissionController::doRequestGAC()
 {
     while (!stopped.load())
     {
+        LOG_DEBUG(log, "gjt debug doRequestGAC");
         std::vector<resource_manager::TokenBucketsRequest> local_gac_requests;
         {
             std::unique_lock<std::mutex> lock(gac_requests_mu);
             gac_requests_cv.wait(lock, [this]() { return stopped.load() || !gac_requests.empty(); });
+            LOG_DEBUG(log, "gjt debug doRequestGAC wakup");
             if unlikely (stopped.load())
                 return;
             local_gac_requests = gac_requests;
@@ -696,7 +704,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
 
 void LocalAdmissionController::watchGACLoop()
 {
-    while (stopped.load())
+    while (!stopped.load())
     {
         try
         {

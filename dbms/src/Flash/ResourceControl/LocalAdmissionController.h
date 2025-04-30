@@ -76,7 +76,7 @@ struct LACRUConsumptionDeltaInfo
 class ResourceGroup final : private boost::noncopyable
 {
 public:
-    explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_)
+    explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_, const SteadyClock::time_point & tp)
         : name(group_pb_.name())
         , group_pb(group_pb_)
         , log(Logger::get("resource group:" + group_pb_.name()))
@@ -84,6 +84,12 @@ public:
         resetResourceGroup(group_pb_);
         const auto & setting = group_pb.r_u_settings().r_u().settings();
         initStaticTokenBucket(setting.burst_limit());
+
+        last_compute_ru_consumption_speed = tp;
+        last_request_gac_timepoint = tp;
+        degrade_deadline = SteadyClock::time_point::max();
+        trickle_expire_timepoint = SteadyClock::time_point::min();
+        trickle_deadline = SteadyClock::time_point::min();
     }
 
 #ifdef DBMS_PUBLIC_GTEST
@@ -248,18 +254,18 @@ private:
 
     // For compute avg ru consumption speed.
     double ru_consumption_delta_for_compute_speed = 0.0;
-    SteadyClock::time_point last_compute_ru_consumption_speed = SteadyClock::now();
+    SteadyClock::time_point last_compute_ru_consumption_speed;
     double smooth_ru_consumption_speed = 1000;
 
     // To avoid too many request sent to GAC at the same time.
     bool request_in_progress = false;
-    SteadyClock::time_point degrade_deadline = SteadyClock::time_point::max();
+    SteadyClock::time_point degrade_deadline;
 
     // To decide when to report ru consumption.
-    SteadyClock::time_point last_request_gac_timepoint = SteadyClock::now();
+    SteadyClock::time_point last_request_gac_timepoint;
     // For trickle mode.
-    SteadyClock::time_point trickle_expire_timepoint = SteadyClock::time_point::min();
-    SteadyClock::time_point trickle_deadline = SteadyClock::time_point::min();
+    SteadyClock::time_point trickle_expire_timepoint;
+    SteadyClock::time_point trickle_deadline;
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -282,9 +288,6 @@ public:
         background_threads.emplace_back([this] { this->requestGACLoop(); });
 
         current_tick = SteadyClock::now();
-        last_fetch_tokens_from_gac = current_tick;
-        lac_last_compute_ru_consumption_speed = current_tick;
-        last_report_ru_consumption_delta = current_tick;
     }
 
     ~LocalAdmissionController() { safeStop(); }
@@ -424,7 +427,8 @@ private:
                 std::lock_guard lock(mu);
                 low_token_resource_groups.insert(name);
             }
-            cv.notify_one();
+            cv.notify_all();
+            LOG_DEBUG(log, "gjt debug low token notifyed");
         }
     }
 
@@ -450,7 +454,7 @@ private:
             return;
 
         LOG_INFO(log, "add new resource group, info: {}", new_group_pb.DebugString());
-        auto new_group = std::make_shared<ResourceGroup>(new_group_pb);
+        auto new_group = std::make_shared<ResourceGroup>(new_group_pb, current_tick);
         resource_groups.insert({new_group_pb.name(), new_group});
 
         if (refill_token_callback)
@@ -471,7 +475,6 @@ private:
     void requestGACLoop();
 
     // mainLoop related methods.
-    SteadyClock::time_point calcWaitDurationForMainLoop();
     void updateRUConsumptionSpeed();
     std::optional<resource_manager::TokenBucketsRequest> buildGACRequest(bool is_final_report);
     void checkDegradeMode();
@@ -511,11 +514,7 @@ private:
     std::unique_ptr<grpc::ClientContext> watch_gac_grpc_context = nullptr;
     std::vector<std::thread> background_threads;
 
-    // time related.
-    SteadyClock::time_point current_tick;
-    SteadyClock::time_point last_fetch_tokens_from_gac;
-    SteadyClock::time_point lac_last_compute_ru_consumption_speed;
-    SteadyClock::time_point last_report_ru_consumption_delta;
+    SteadyClock::time_point current_tick = SteadyClock::time_point::min();
 
     std::function<void()> refill_token_callback = nullptr;
 
