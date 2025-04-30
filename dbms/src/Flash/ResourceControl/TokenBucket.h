@@ -44,7 +44,7 @@ public:
         , tokens(init_tokens_)
         , capacity(capacity_)
         , last_compact_timepoint(std::chrono::steady_clock::now())
-        , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * capacity_)
+        , low_token_threshold(LOW_TOKEN_THRESHOLD_RATE * init_tokens_)
         , log(Logger::get(log_id))
     {}
 
@@ -56,38 +56,41 @@ public:
             : tokens(0.0)
             , fill_rate(0.0)
             , capacity(0.0)
+            , low_token_threshold(0.0)
         {}
 
-        TokenBucketConfig(double tokens_, double fill_rate_, double capacity_)
+        TokenBucketConfig(double tokens_, double fill_rate_, double capacity_, double low_token_threshold_)
             : tokens(tokens_)
             , fill_rate(fill_rate_)
             , capacity(capacity_)
+            , low_token_threshold(low_token_threshold_)
         {}
 
         double tokens;
         double fill_rate;
         double capacity;
+        double low_token_threshold;
     };
 
     // Put n tokens into bucket.
     void put(double n);
 
-    bool consume(double n);
+    bool consume(double n, const std::chrono::steady_clock::time_point & tp);
 
     // Return current tokens count.
     double peek() const { return peek(std::chrono::steady_clock::now()); }
 
     double peek(const TimePoint & timepoint) const;
 
-    void reConfig(const TokenBucketConfig & config);
+    void reConfig(const TokenBucketConfig & config, const TimePoint & tp);
 
     TokenBucketConfig getConfig(const std::chrono::steady_clock::time_point & tp = std::chrono::steady_clock::now())
     {
         compact(tp);
-        return {tokens, fill_rate, capacity};
+        return {tokens, fill_rate, capacity, low_token_threshold};
     }
 
-    bool lowToken() const { return peek() <= low_token_threshold; }
+    bool lowToken() const { return low_token_threshold >= 0.0 && peek() <= low_token_threshold; }
 
     bool isStatic() const { return fill_rate == 0.0; }
 
@@ -98,6 +101,7 @@ public:
 
     uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
     {
+        // gjt todo refine when refill rate is zero.
         const auto tokens = peek();
         static const uint64_t min_wait_dura_ms = 100;
         assert(max_wait_dura_ms > min_wait_dura_ms);
@@ -108,12 +112,12 @@ public:
         return std::min(est_dura_ms, max_wait_dura_ms);
     }
 
-private:
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.3;
+private:
     static constexpr auto MIN_COMPACT_INTERVAL = std::chrono::milliseconds(10);
 
     // Merge dynamic token into static token.
-    void compact(const TokenBucket::TimePoint & timepoint);
+    void compact(const TimePoint & timepoint);
     double getDynamicTokens(const TimePoint & timepoint) const;
 
     double fill_rate;
