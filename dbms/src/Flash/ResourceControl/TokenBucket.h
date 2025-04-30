@@ -113,6 +113,7 @@ public:
     }
 
     static constexpr auto LOW_TOKEN_THRESHOLD_RATE = 0.3;
+
 private:
     static constexpr auto MIN_COMPACT_INTERVAL = std::chrono::milliseconds(10);
 

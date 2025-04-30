@@ -56,16 +56,16 @@ uint64_t ResourceGroup::getPriority(uint64_t max_ru_per_sec) const
     uint64_t priority = (((static_cast<uint64_t>(user_priority) - 1) << 60) | virtual_time);
 
     LOG_TRACE(
-            log,
-            "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, "
-            "user_priority: {}, "
-            "priority: {}, remaining_token: {}",
-            name,
-            weight,
-            virtual_time,
-            user_priority,
-            priority,
-            remaining_token);
+        log,
+        "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, "
+        "user_priority: {}, "
+        "priority: {}, remaining_token: {}",
+        name,
+        weight,
+        virtual_time,
+        user_priority,
+        priority,
+        remaining_token);
     return priority;
 }
 
@@ -85,9 +85,9 @@ std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const S
     if (!burstable && !trickleModeLeaseExpireWithoutLock(now))
     {
         acquire_tokens = getAcquireRUNumWithoutLock(
-                consumption_delta_info.speed,
-                LocalAdmissionController::DEFAULT_TARGET_PERIOD.count(),
-                LocalAdmissionController::ACQUIRE_RU_AMPLIFICATION);
+            consumption_delta_info.speed,
+            LocalAdmissionController::DEFAULT_TARGET_PERIOD.count(),
+            LocalAdmissionController::ACQUIRE_RU_AMPLIFICATION);
 
         assert(acquire_tokens >= 0.0);
     }
@@ -151,14 +151,14 @@ double ResourceGroup::getAcquireRUNumWithoutLock(double speed, uint32_t n_sec, d
     acquire_num = (acquire_num > 0.0 ? acquire_num : 0.0);
 
     LOG_TRACE(
-            log,
-            "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, amplification: {}, "
-            "acquire num: {}",
-            name,
-            speed,
-            remaining_ru,
-            amplification,
-            acquire_num);
+        log,
+        "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, amplification: {}, "
+        "acquire num: {}",
+        name,
+        speed,
+        remaining_ru,
+        amplification,
+        acquire_num);
     return acquire_num;
 }
 
@@ -184,16 +184,20 @@ void ResourceGroup::updateNormalMode(double add_tokens, double new_capacity, con
     config.low_token_threshold = config.tokens * TokenBucket::LOW_TOKEN_THRESHOLD_RATE;
     bucket->reConfig(config, now);
     LOG_DEBUG(
-            log,
-            "token bucket of rg {} reconfig to normal mode. from: {}, to: {}",
-            name,
-            ori_bucket_info,
-            bucket->toString());
+        log,
+        "token bucket of rg {} reconfig to normal mode. from: {}, to: {}",
+        name,
+        ori_bucket_info,
+        bucket->toString());
 
     updateBucketMetrics(config);
 }
 
-void ResourceGroup::updateTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms, const SteadyClock::time_point & now)
+void ResourceGroup::updateTrickleMode(
+    double add_tokens,
+    double new_capacity,
+    int64_t trickle_ms,
+    const SteadyClock::time_point & now)
 {
     RUNTIME_CHECK(add_tokens >= 0.0);
     RUNTIME_CHECK(trickle_ms > 0);
@@ -214,7 +218,9 @@ void ResourceGroup::updateTrickleMode(double add_tokens, double new_capacity, in
 
     std::string ori_bucket_info = bucket->toString();
     const auto ori_tokens = bucket->peek();
-    bucket->reConfig(TokenBucket::TokenBucketConfig(ori_tokens, new_fill_rate, new_capacity, /*low_token_threshold_=*/0.0), now);
+    bucket->reConfig(
+        TokenBucket::TokenBucketConfig(ori_tokens, new_fill_rate, new_capacity, /*low_token_threshold_=*/0.0),
+        now);
 
     const auto trickle_dura = std::chrono::milliseconds(trickle_ms);
     trickle_deadline = now + trickle_dura;
@@ -222,11 +228,11 @@ void ResourceGroup::updateTrickleMode(double add_tokens, double new_capacity, in
     if (trickle_dura >= 2 * GAC_RTT_ANTICIPATION)
         trickle_expire_timepoint = now + trickle_dura - GAC_RTT_ANTICIPATION;
     LOG_DEBUG(
-            log,
-            "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}",
-            name,
-            ori_bucket_info,
-            bucket->toString());
+        log,
+        "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}",
+        name,
+        ori_bucket_info,
+        bucket->toString());
 
     updateBucketMetrics(bucket->getConfig());
 }
@@ -240,12 +246,12 @@ void ResourceGroup::updateDegradeMode(const SteadyClock::time_point & now)
     {
         endRequestWithoutLock();
         LOG_INFO(
-                log,
-                "resource group({}) cannot receive gac response(bucket: {}, mode: {}) for {} seconds",
-                name,
-                bucket->toString(),
-                magic_enum::enum_name(bucket_mode),
-                std::chrono::duration_cast<std::chrono::seconds>(LocalAdmissionController::DEGRADE_MODE_DURATION).count());
+            log,
+            "resource group({}) cannot receive gac response(bucket: {}, mode: {}) for {} seconds",
+            name,
+            bucket->toString(),
+            magic_enum::enum_name(bucket_mode),
+            std::chrono::duration_cast<std::chrono::seconds>(LocalAdmissionController::DEGRADE_MODE_DURATION).count());
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_enter_degrade_mode, name).Increment();
     }
 }
@@ -264,8 +270,8 @@ void ResourceGroup::updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_
     auto current_ru_consumption_speed = ru_consumption_delta_for_compute_speed / elapsed.count();
 
     static_assert(MOVING_RU_CONSUMPTION_SPEED_FACTOR < 1);
-    smooth_ru_consumption_speed = current_ru_consumption_speed * MOVING_RU_CONSUMPTION_SPEED_FACTOR +
-        (1 - MOVING_RU_CONSUMPTION_SPEED_FACTOR) * smooth_ru_consumption_speed;
+    smooth_ru_consumption_speed = current_ru_consumption_speed * MOVING_RU_CONSUMPTION_SPEED_FACTOR
+        + (1 - MOVING_RU_CONSUMPTION_SPEED_FACTOR) * smooth_ru_consumption_speed;
 
     ru_consumption_delta_for_compute_speed = 0.0;
     last_compute_ru_consumption_speed = now;
@@ -311,7 +317,7 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & 
     catch (...)
     {
         throw ::DB::Exception(
-                fmt::format("warmupResourceGroupInfoCache({}) failed: {}", name, getCurrentExceptionMessage(false)));
+            fmt::format("warmupResourceGroupInfoCache({}) failed: {}", name, getCurrentExceptionMessage(false)));
     }
 
     RUNTIME_CHECK_MSG(!resp.has_error(), "warmupResourceGroupInfoCache({}) failed: {}", name, resp.error().message());
@@ -355,7 +361,9 @@ void LocalAdmissionController::mainLoop()
             std::unique_lock<std::mutex> lock(mu);
             if (low_token_resource_groups.empty())
             {
-                if (cv.wait_until(lock, wakeup_timepoint, [this]() { return stopped.load() || !low_token_resource_groups.empty(); }))
+                if (cv.wait_until(lock, wakeup_timepoint, [this]() {
+                        return stopped.load() || !low_token_resource_groups.empty();
+                    }))
                 {
                     if (stopped.load())
                         return;
@@ -389,7 +397,8 @@ void LocalAdmissionController::mainLoop()
 // 3. check if need to step into degrade mode(DEGRADE_MODE_DURATION, default 120s)
 SteadyClock::time_point LocalAdmissionController::calcWaitDurationForMainLoop()
 {
-    const auto compute_speed = lac_last_compute_ru_consumption_speed + ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL;
+    const auto compute_speed
+        = lac_last_compute_ru_consumption_speed + ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL;
     const auto report_consumption = last_report_ru_consumption_delta + DEFAULT_TARGET_PERIOD;
     const auto degrade_mode_deadline = last_fetch_tokens_from_gac + DEGRADE_MODE_DURATION;
 
@@ -491,13 +500,19 @@ void LocalAdmissionController::requestGACLoop()
         }
         catch (...)
         {
-            LOG_ERROR(log, "doRequestGAC got error: {}, retry {} sec later", getCurrentExceptionMessage(false), NETWORK_EXCEPTION_RETRY_DURATION_SEC);
+            LOG_ERROR(
+                log,
+                "doRequestGAC got error: {}, retry {} sec later",
+                getCurrentExceptionMessage(false),
+                NETWORK_EXCEPTION_RETRY_DURATION_SEC);
         }
 
         // Got here when network exception happens or stopped is true.
         {
             std::unique_lock lock(mu);
-            if (cv.wait_for(lock, std::chrono::seconds(NETWORK_EXCEPTION_RETRY_DURATION_SEC), [this]() { return stopped.load(); }))
+            if (cv.wait_for(lock, std::chrono::seconds(NETWORK_EXCEPTION_RETRY_DURATION_SEC), [this]() {
+                    return stopped.load();
+                }))
                 return;
         }
     }
@@ -536,11 +551,7 @@ void LocalAdmissionController::doRequestGAC()
                 GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_request_gac_count, req_rg_name).Increment();
 
             const auto resp = cluster->pd_client->acquireTokenBuckets(req);
-            LOG_DEBUG(
-                    log,
-                    "request to GAC done, req: {}. resp: {}",
-                    req.DebugString(),
-                    resp.DebugString());
+            LOG_DEBUG(log, "request to GAC done, req: {}. resp: {}", req.DebugString(), resp.DebugString());
 
             auto handled = handleTokenBucketsResp(resp);
 
@@ -560,11 +571,12 @@ void LocalAdmissionController::doRequestGAC()
                 {
                     auto erase_num = resource_groups.erase(name);
                     LOG_INFO(
-                            log,
-                            "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already delete "
-                            "it. erase_num: {}",
-                            name,
-                            erase_num);
+                        log,
+                        "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already "
+                        "delete "
+                        "it. erase_num: {}",
+                        name,
+                        erase_num);
                 }
             }
         }
@@ -693,7 +705,11 @@ void LocalAdmissionController::watchGACLoop()
         catch (...)
         {
             // todo 10sec
-            LOG_ERROR(log, "watchGACLoop failed: {}, retry {} sec later", getCurrentExceptionMessage(false), NETWORK_EXCEPTION_RETRY_DURATION_SEC);
+            LOG_ERROR(
+                log,
+                "watchGACLoop failed: {}, retry {} sec later",
+                getCurrentExceptionMessage(false),
+                NETWORK_EXCEPTION_RETRY_DURATION_SEC);
         }
 
         // Got here when:
@@ -701,7 +717,9 @@ void LocalAdmissionController::watchGACLoop()
         // 2. watch is cancel or stopped is true.
         {
             std::unique_lock lock(mu);
-            if (cv.wait_for(lock, std::chrono::seconds(NETWORK_EXCEPTION_RETRY_DURATION_SEC), [this]() { return stopped.load(); }))
+            if (cv.wait_for(lock, std::chrono::seconds(NETWORK_EXCEPTION_RETRY_DURATION_SEC), [this]() {
+                    return stopped.load();
+                }))
                 return;
 
             // Create new grpc_context for each reader/writer.

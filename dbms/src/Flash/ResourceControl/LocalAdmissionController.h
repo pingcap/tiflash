@@ -47,10 +47,10 @@ struct GACRequestInfo
     {
         FmtBuffer fmt_buf;
         fmt_buf.fmtAppend(
-                "rg: {}, acquire_tokens: {}, ru_consumption_delta: {}",
-                resource_group_name,
-                acquire_tokens,
-                ru_consumption_delta);
+            "rg: {}, acquire_tokens: {}, ru_consumption_delta: {}",
+            resource_group_name,
+            acquire_tokens,
+            ru_consumption_delta);
         return fmt_buf.toString();
     }
 };
@@ -75,11 +75,11 @@ struct LACRUConsumptionDeltaInfo
 // which helps to avoid dead lock.
 class ResourceGroup final : private boost::noncopyable
 {
-    public:
-        explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_)
-            : name(group_pb_.name())
-              , group_pb(group_pb_)
-              , log(Logger::get("resource group:" + group_pb_.name()))
+public:
+    explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_)
+        : name(group_pb_.name())
+        , group_pb(group_pb_)
+        , log(Logger::get("resource group:" + group_pb_.name()))
     {
         resetResourceGroup(group_pb_);
         const auto & setting = group_pb.r_u_settings().r_u().settings();
@@ -87,172 +87,179 @@ class ResourceGroup final : private boost::noncopyable
     }
 
 #ifdef DBMS_PUBLIC_GTEST
-        ResourceGroup(const std::string & group_name_, uint32_t user_priority_, uint64_t user_ru_per_sec_, bool burstable_)
-            : name(group_name_)
-              , user_priority(user_priority_)
-              , user_ru_per_sec(user_ru_per_sec_)
-              , burstable(burstable_)
-              , log(Logger::get("resource group:" + group_name_))
+    ResourceGroup(const std::string & group_name_, uint32_t user_priority_, uint64_t user_ru_per_sec_, bool burstable_)
+        : name(group_name_)
+        , user_priority(user_priority_)
+        , user_ru_per_sec(user_ru_per_sec_)
+        , burstable(burstable_)
+        , log(Logger::get("resource group:" + group_name_))
     {
         initStaticTokenBucket(user_ru_per_sec_);
     }
 #endif
 
-        ~ResourceGroup() = default;
+    ~ResourceGroup() = default;
 
 #ifndef DBMS_PUBLIC_GTEST
-    private:
+private:
 #endif
-        enum TokenBucketMode
+    enum TokenBucketMode
+    {
+        normal_mode,
+        degrade_mode,
+        trickle_mode,
+    };
+
+    void initStaticTokenBucket(int64_t capacity);
+
+    // Priority of resource group set by user.
+    // This is specified by tidb: parser/model/model.go
+    static constexpr int32_t LowPriorityValue = 1;
+    static constexpr int32_t MediumPriorityValue = 8;
+    static constexpr int32_t HighPriorityValue = 16;
+
+    // Minus 1 because uint64 max is used as special flag.
+    static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4) - 1;
+    static constexpr double MOVING_RU_CONSUMPTION_SPEED_FACTOR = 0.5;
+    static constexpr auto COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL = std::chrono::seconds(1);
+    static constexpr auto REPORT_RU_CONSUMPTION_DELTA_THRESHOLD = 100;
+    static constexpr auto EXTENDING_REPORT_RU_CONSUMPTION_FACTOR = 4;
+    static constexpr auto DEFAULT_BUFFER_TOKENS = 5000;
+
+    // Indicate the round trip time of gac request.
+    static constexpr auto GAC_RTT_ANTICIPATION = std::chrono::seconds(1);
+
+    friend class LocalAdmissionController;
+    friend class MockLocalAdmissionController;
+
+    std::string getName() const { return name; }
+
+    void consumeResource(double ru, uint64_t cpu_time_in_ns_)
+    {
+        const auto now = SteadyClock::now();
+        std::lock_guard lock(mu);
+        cpu_time_in_ns += cpu_time_in_ns_;
+        ru_consumption_delta += ru;
+        ru_consumption_delta_for_compute_speed += ru;
+        if (!burstable)
         {
-            normal_mode,
-            degrade_mode,
-            trickle_mode,
-        };
-
-        void initStaticTokenBucket(int64_t capacity);
-
-        // Priority of resource group set by user.
-        // This is specified by tidb: parser/model/model.go
-        static constexpr int32_t LowPriorityValue = 1;
-        static constexpr int32_t MediumPriorityValue = 8;
-        static constexpr int32_t HighPriorityValue = 16;
-
-        // Minus 1 because uint64 max is used as special flag.
-        static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4) - 1;
-        static constexpr double MOVING_RU_CONSUMPTION_SPEED_FACTOR = 0.5;
-        static constexpr auto COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL = std::chrono::seconds(1);
-        static constexpr auto REPORT_RU_CONSUMPTION_DELTA_THRESHOLD = 100;
-        static constexpr auto EXTENDING_REPORT_RU_CONSUMPTION_FACTOR = 4;
-        static constexpr auto DEFAULT_BUFFER_TOKENS = 5000;
-
-        // Indicate the round trip time of gac request.
-        static constexpr auto GAC_RTT_ANTICIPATION = std::chrono::seconds(1);
-
-        friend class LocalAdmissionController;
-        friend class MockLocalAdmissionController;
-
-        std::string getName() const { return name; }
-
-        void consumeResource(double ru, uint64_t cpu_time_in_ns_)
-        {
-            const auto now = SteadyClock::now();
-            std::lock_guard lock(mu);
-            cpu_time_in_ns += cpu_time_in_ns_;
-            ru_consumption_delta += ru;
-            ru_consumption_delta_for_compute_speed += ru;
-            if (!burstable)
-            {
-                bucket->consume(ru, now);
-                GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(bucket->peek());
-            }
+            bucket->consume(ru, now);
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(bucket->peek());
         }
+    }
 
-        uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
+    uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
+    {
+        std::lock_guard lock(mu);
+        return bucket->estWaitDuraMS(max_wait_dura_ms);
+    }
+
+    // Priority greater than zero: Less number means higher priority.
+    // Zero priority means has no RU left, should not schedule this resource group at all.
+    uint64_t getPriority(uint64_t max_ru_per_sec) const;
+    bool lowToken() const
+    {
+        std::lock_guard lock(mu);
+        return !burstable && bucket->lowToken();
+    }
+
+    // Related to sending GAC request.
+    std::optional<GACRequestInfo> buildRequestInfoIfNecessary(const SteadyClock::time_point & now);
+    bool beginRequestWithoutLock(const SteadyClock::time_point & tp);
+    void endRequestWithoutLock();
+    bool shouldReportRUConsumption(const SteadyClock::time_point & now) const;
+    LACRUConsumptionDeltaInfo updateRUConsumptionDeltaInfoWithoutLock();
+    double getAcquireRUNumWithoutLock(double speed, uint32_t n_sec, double amplification) const;
+    void updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_point & now);
+
+    // Called when user change config of resource group.
+    // Only update meta, will not touch runtime state(like bucket remaining tokens).
+    void resetResourceGroup(const resource_manager::ResourceGroup & group_pb_)
+    {
+        std::lock_guard lock(mu);
+        group_pb = group_pb_;
+        user_priority = group_pb_.priority();
+        const auto & setting = group_pb.r_u_settings().r_u().settings();
+        user_ru_per_sec = setting.fill_rate();
+        burstable = (setting.burst_limit() <= 0);
+        RUNTIME_CHECK(
+            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
+            || user_priority == HighPriorityValue);
+    }
+
+    // Change bucket status according to the gac response.
+    void updateNormalMode(double add_tokens, double new_capacity, const SteadyClock::time_point & now);
+    void updateTrickleMode(
+        double add_tokens,
+        double new_capacity,
+        int64_t trickle_ms,
+        const SteadyClock::time_point & now);
+    void updateDegradeMode(const SteadyClock::time_point & now);
+
+    bool trickleModeLeaseExpire(const SteadyClock::time_point & tp)
+    {
+        std::lock_guard lock(mu);
+        return trickleModeLeaseExpireWithoutLock(tp);
+    }
+    bool trickleModeLeaseExpireWithoutLock(const SteadyClock::time_point & tp)
+    {
+        return bucket_mode == trickle_mode && tp >= trickle_expire_timepoint;
+    }
+    double getTrickleLeftTokens(const SteadyClock::time_point & tp)
+    {
+        std::lock_guard lock(mu);
+        if (bucket_mode == TokenBucketMode::trickle_mode && trickle_deadline > tp)
         {
-            std::lock_guard lock(mu);
-            return bucket->estWaitDuraMS(max_wait_dura_ms);
+            return std::chrono::duration_cast<std::chrono::seconds>(trickle_deadline - tp).count()
+                * bucket->getConfig().fill_rate;
         }
+        return 0.0;
+    }
 
-        // Priority greater than zero: Less number means higher priority.
-        // Zero priority means has no RU left, should not schedule this resource group at all.
-        uint64_t getPriority(uint64_t max_ru_per_sec) const;
-        bool lowToken() const
-        {
-            std::lock_guard lock(mu);
-            return !burstable && bucket->lowToken();
-        }
+    void updateBucketMetrics(const TokenBucket::TokenBucketConfig & config) const
+    {
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_low_token_threshold, name)
+            .Set(config.low_token_threshold);
+    }
 
-        // Related to sending GAC request.
-        std::optional<GACRequestInfo> buildRequestInfoIfNecessary(const SteadyClock::time_point & now);
-        bool beginRequestWithoutLock(const SteadyClock::time_point & tp);
-        void endRequestWithoutLock();
-        bool shouldReportRUConsumption(const SteadyClock::time_point & now) const;
-        LACRUConsumptionDeltaInfo updateRUConsumptionDeltaInfoWithoutLock();
-        double getAcquireRUNumWithoutLock(double speed, uint32_t n_sec, double amplification) const;
-        void updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_point & now);
+private:
+    mutable std::mutex mu;
+    const std::string name;
 
-        // Called when user change config of resource group.
-        // Only update meta, will not touch runtime state(like bucket remaining tokens).
-        void resetResourceGroup(const resource_manager::ResourceGroup & group_pb_)
-        {
-            std::lock_guard lock(mu);
-            group_pb = group_pb_;
-            user_priority = group_pb_.priority();
-            const auto & setting = group_pb.r_u_settings().r_u().settings();
-            user_ru_per_sec = setting.fill_rate();
-            burstable = (setting.burst_limit() <= 0);
-            RUNTIME_CHECK(
-                    user_priority == LowPriorityValue || user_priority == MediumPriorityValue
-                    || user_priority == HighPriorityValue);
-        }
+    uint32_t user_priority = 0;
+    uint64_t user_ru_per_sec = 0;
+    bool burstable = false;
+    resource_manager::ResourceGroup group_pb;
 
-        // Change bucket status according to the gac response.
-        void updateNormalMode(double add_tokens, double new_capacity, const SteadyClock::time_point & now);
-        void updateTrickleMode(double add_tokens, double new_capacity, int64_t trickle_ms, const SteadyClock::time_point & now);
-        void updateDegradeMode(const SteadyClock::time_point & now);
+    LoggerPtr log;
 
-        bool trickleModeLeaseExpire(const SteadyClock::time_point & tp)
-        {
-            std::lock_guard lock(mu);
-            return trickleModeLeaseExpireWithoutLock(tp);
-        }
-        bool trickleModeLeaseExpireWithoutLock(const SteadyClock::time_point & tp)
-        {
-            return bucket_mode == trickle_mode && tp >= trickle_expire_timepoint;
-        }
-        double getTrickleLeftTokens(const SteadyClock::time_point & tp)
-        {
-            std::lock_guard lock(mu);
-            if (bucket_mode == TokenBucketMode::trickle_mode && trickle_deadline > tp)
-            {
-                return std::chrono::duration_cast<std::chrono::seconds>(trickle_deadline - tp).count() * bucket->getConfig().fill_rate;
-            }
-            return 0.0;
-        }
+    // Local token bucket.
+    TokenBucketPtr bucket;
+    TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
 
-        void updateBucketMetrics(const TokenBucket::TokenBucketConfig & config) const
-        {
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_low_token_threshold, name).Set(config.low_token_threshold);
-        }
-    private:
-        mutable std::mutex mu;
-        const std::string name;
+    // For metrics.
+    double total_ru_consumption = 0.0;
+    uint64_t cpu_time_in_ns = 0;
+    // For report to GAC.
+    double ru_consumption_delta = 0.0;
 
-        uint32_t user_priority = 0;
-        uint64_t user_ru_per_sec = 0;
-        bool burstable = false;
-        resource_manager::ResourceGroup group_pb;
+    // For compute avg ru consumption speed.
+    double ru_consumption_delta_for_compute_speed = 0.0;
+    SteadyClock::time_point last_compute_ru_consumption_speed = SteadyClock::now();
+    double smooth_ru_consumption_speed = 1000;
 
-        LoggerPtr log;
+    // To avoid too many request sent to GAC at the same time.
+    bool request_in_progress = false;
+    SteadyClock::time_point degrade_deadline = SteadyClock::time_point::max();
 
-        // Local token bucket.
-        TokenBucketPtr bucket;
-        TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
-
-        // For metrics.
-        double total_ru_consumption = 0.0;
-        uint64_t cpu_time_in_ns = 0;
-        // For report to GAC.
-        double ru_consumption_delta = 0.0;
-
-        // For compute avg ru consumption speed.
-        double ru_consumption_delta_for_compute_speed = 0.0;
-        SteadyClock::time_point last_compute_ru_consumption_speed = SteadyClock::now();
-        double smooth_ru_consumption_speed = 1000;
-
-        // To avoid too many request sent to GAC at the same time.
-        bool request_in_progress = false;
-        SteadyClock::time_point degrade_deadline = SteadyClock::time_point::max();
-
-        // To decide when to report ru consumption.
-        SteadyClock::time_point last_request_gac_timepoint = SteadyClock::now();
-        // For trickle mode.
-        SteadyClock::time_point trickle_expire_timepoint = SteadyClock::time_point::min();
-        SteadyClock::time_point trickle_deadline = SteadyClock::time_point::min();
+    // To decide when to report ru consumption.
+    SteadyClock::time_point last_request_gac_timepoint = SteadyClock::now();
+    // For trickle mode.
+    SteadyClock::time_point trickle_expire_timepoint = SteadyClock::time_point::min();
+    SteadyClock::time_point trickle_deadline = SteadyClock::time_point::min();
 };
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
@@ -349,7 +356,7 @@ public:
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
-        if unlikely(stopped.load())
+        if unlikely (stopped.load())
             return;
 
         // NOTE: Better not use lock inside refill_token_callback,
@@ -378,7 +385,8 @@ public:
 
     // Interval of fetch from GAC periodically.
     static constexpr auto DEFAULT_TARGET_PERIOD = std::chrono::seconds(5);
-    static constexpr auto DEFAULT_TARGET_PERIOD_MS = std::chrono::duration_cast<std::chrono::milliseconds>(DEFAULT_TARGET_PERIOD);
+    static constexpr auto DEFAULT_TARGET_PERIOD_MS
+        = std::chrono::duration_cast<std::chrono::milliseconds>(DEFAULT_TARGET_PERIOD);
     // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
     static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
