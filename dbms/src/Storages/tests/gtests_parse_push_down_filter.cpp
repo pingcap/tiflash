@@ -50,15 +50,17 @@ public:
             // Maybe another test has already registed, ignore exception here.
         }
     }
+    void SetUp() override
+    {
+        ctx = DB::tests::TiFlashTestEnv::getContext();
+        ctx->getTimezoneInfo().resetByTimezoneName("Asia/Shanghai");
+        default_timezone_info = DB::tests::TiFlashTestEnv::getContext()->getTimezoneInfo();
+    }
 
 protected:
     LoggerPtr log = Logger::get();
-    ContextPtr ctx = DB::tests::TiFlashTestEnv::getContext();
-    TimezoneInfo default_timezone_info = DB::tests::TiFlashTestEnv::getContext()->getTimezoneInfo();
-    DM::PushDownExecutorPtr generatePushDownExecutor(
-        const String & table_info_json,
-        const String & query,
-        TimezoneInfo & timezone_info);
+    ContextPtr ctx;
+    TimezoneInfo default_timezone_info;
 };
 
 DM::PushDownExecutorPtr generatePushDownExecutor(
@@ -136,14 +138,6 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
     return push_down_executor;
 }
 
-DM::PushDownExecutorPtr ParsePushDownExecutorTest::generatePushDownExecutor(
-    const String & table_info_json,
-    const String & query,
-    TimezoneInfo & timezone_info)
-{
-    return ::DB::tests::generatePushDownExecutor(*ctx, table_info_json, query, timezone_info);
-}
-
 // Test cases for col and literal
 TEST_F(ParsePushDownExecutorTest, ColAndLiteral)
 try
@@ -160,6 +154,7 @@ try
     {
         // Equal between col and literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 = 666",
             default_timezone_info);
@@ -182,6 +177,7 @@ try
     {
         // Greater between col and literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 > 666",
             default_timezone_info);
@@ -204,6 +200,7 @@ try
     {
         // GreaterEqual between col and literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 >= 667",
             default_timezone_info);
@@ -226,6 +223,7 @@ try
     {
         // Less between col and literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 < 777",
             default_timezone_info);
@@ -248,6 +246,7 @@ try
     {
         // LessEqual between col and literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 <= 776",
             default_timezone_info);
@@ -284,6 +283,7 @@ try
     {
         // Equal between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 667 = col_2",
             default_timezone_info);
@@ -306,6 +306,7 @@ try
     {
         // NotEqual between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 667 != col_2",
             default_timezone_info);
@@ -328,6 +329,7 @@ try
     {
         // Greater between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 667 < col_2",
             default_timezone_info);
@@ -350,6 +352,7 @@ try
     {
         // GreaterEqual between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 667 <= col_2",
             default_timezone_info);
@@ -372,6 +375,7 @@ try
     {
         // Less between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 777 > col_2",
             default_timezone_info);
@@ -394,6 +398,7 @@ try
     {
         // LessEqual between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 777 >= col_2",
             default_timezone_info);
@@ -432,6 +437,7 @@ try
     {
         // Not
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select col_1, col_2 from default.t_111 where NOT col_2=666",
             default_timezone_info);
@@ -459,6 +465,7 @@ try
     {
         // And
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_1 = 'test1' and col_2 = 666",
             default_timezone_info);
@@ -486,6 +493,7 @@ try
     {
         // OR
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 = 789 or col_2 = 777",
             default_timezone_info);
@@ -516,6 +524,7 @@ try
     {
         // And with "not supported"
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_1 = 'test1' and not col_2 = 666",
             default_timezone_info);
@@ -543,6 +552,7 @@ try
     {
         // And with not
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 = 789 and not col_3 = 666",
             default_timezone_info);
@@ -572,6 +582,7 @@ try
     {
         // And with or
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 = 789 and (col_3 = 666 or col_3 = 678)",
             default_timezone_info);
@@ -603,6 +614,7 @@ try
     {
         // Or with "not supported"
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_1 = 'test1' or col_2 = 666",
             default_timezone_info);
@@ -630,6 +642,7 @@ try
     {
         // Or with not
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_1 = 'test1' or not col_2 = 666",
             default_timezone_info);
@@ -657,6 +670,7 @@ try
     {
         // And between col and literal (not supported since And only support when child is ColumnExpr)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 and 1",
             default_timezone_info);
@@ -682,6 +696,7 @@ try
     {
         // Or between col and literal (not supported since Or only support when child is ColumnExpr)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 or 1",
             default_timezone_info);
@@ -733,6 +748,7 @@ try
     // origin_time_stamp: 1802216106174185472
 
     {
+        auto ctx = TiFlashTestEnv::getContext();
         // Greater between TimeStamp col and Datetime literal, use Asia/Shanghai timezone
         auto & timezone_info = ctx->getTimezoneInfo();
         timezone_info.resetByTimezoneName("Asia/Shanghai");
@@ -740,6 +756,7 @@ try
         // converted_time: 0
 
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
                 + String("')"),
@@ -789,6 +806,7 @@ try
         // converted_time: 1802216518491045888
 
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
                 + String("')"),
@@ -845,6 +863,7 @@ try
         // converted_time: 0
 
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
                 + String("')"),
@@ -895,6 +914,7 @@ try
     {
         // Greater between Datetime col and Datetime literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             String("select * from default.t_111 where col_datetime > cast_string_datetime('") + datetime + String("')"),
             default_timezone_info);
@@ -943,6 +963,7 @@ try
     {
         // Greater between Date col and Datetime literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             String("select * from default.t_111 where col_date > cast_string_datetime('") + datetime + String("')"),
             default_timezone_info);
