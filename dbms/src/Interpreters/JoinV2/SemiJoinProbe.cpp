@@ -248,7 +248,7 @@ Block SemiJoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData
     return join->output_block_after_finalize;
 }
 
-static constexpr UInt16 INITIAL_PACE = 2;
+static constexpr UInt16 INITIAL_PACE = 4;
 static constexpr UInt16 MAX_PACE = 8192;
 
 SEMI_JOIN_PROBE_HELPER_TEMPLATE
