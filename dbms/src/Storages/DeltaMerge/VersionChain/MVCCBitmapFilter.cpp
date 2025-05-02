@@ -51,10 +51,14 @@ BitmapFilterPtr buildMVCCBitmapFilter(
         stable_filter_res,
         *bitmap_filter);
     const auto build_version_filter_ms = sw.elapsedMillisecondsFromLastTime();
+    if (unlikely(dm_context.enableVersionChainForTest()))
+        bitmap_filter->saveVersionFilterForDebug();
 
     const auto rowkey_filtered_out_rows
         = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, stable_filter_res, *bitmap_filter);
     const auto build_rowkey_filter_ms = sw.elapsedMillisecondsFromLastTime();
+    if (unlikely(dm_context.enableVersionChainForTest()))
+        bitmap_filter->saveRowKeyFilterForDebug();
 
     const auto delete_filtered_out_rows
         = buildDeleteMarkFilter(dm_context, snapshot, stable_filter_res, *bitmap_filter);
