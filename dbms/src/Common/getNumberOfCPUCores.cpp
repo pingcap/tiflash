@@ -20,7 +20,7 @@
 namespace CPUCores
 {
 UInt16 number_of_logical_cpu_cores = std::thread::hardware_concurrency();
-UInt16 number_of_physical_cpu_cores = std::thread::hardware_concurrency() / 2;
+UInt16 number_of_physical_cpu_cores = std::max<UInt16>(1, std::thread::hardware_concurrency() / 2);
 } // namespace CPUCores
 
 
