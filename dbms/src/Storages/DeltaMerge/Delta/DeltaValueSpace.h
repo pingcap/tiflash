@@ -578,7 +578,7 @@ class DeltaValueInputStreamWithRowID : public IBlockInputStream
 {
 private:
     DeltaValueInputStream stream;
-    size_t delta_offset;
+    const size_t delta_offset;
 
 public:
     DeltaValueInputStreamWithRowID(
