@@ -3067,7 +3067,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilter(
     }
 }
 
-BitmapFilterPtr buildBitmapFilter(
+BitmapFilterPtr buildBitmapFilterByStream(
     const DMContext & dm_context,
     const SegmentSnapshotPtr & segment_snap,
     BlockInputStreamPtr & stream,
@@ -3078,8 +3078,9 @@ BitmapFilterPtr buildBitmapFilter(
     // `total_rows` is the rows read for building bitmap
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
-    // Generate the bitmap according to the MVCC filter result
+    // Generate the bitmap according to the `stream`
     bitmap_filter->set(stream);
+    // skip the rows in `skipped_ranges`
     for (const auto & range : skipped_ranges)
         bitmap_filter->set(range.offset, range.rows);
     bitmap_filter->runOptimize();
@@ -3100,6 +3101,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterNormal(
     size_t expected_block_size)
 {
     Stopwatch sw_total;
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
     const auto & dmfiles = segment_snap->stable->getDMFiles();
     auto read_tag = ReadTag::MVCC;
 
@@ -3108,10 +3110,10 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterNormal(
     std::vector<DMFilePackFilter::Range> skipped_ranges;
     if constexpr (is_fast_scan)
     {
-        auto columns_to_read = std::make_shared<ColumnDefines>();
-        columns_to_read->reserve(2);
-        columns_to_read->push_back(getExtraHandleColumnDefine(is_common_handle));
-        columns_to_read->push_back(getTagColumnDefine());
+        auto columns_to_read = std::make_shared<ColumnDefines>(ColumnDefines{
+            getExtraHandleColumnDefine(is_common_handle),
+            getTagColumnDefine(),
+        });
 
         DMFilePackFilterResults new_pack_filter_results;
         std::tie(skipped_ranges, new_pack_filter_results)
@@ -3158,7 +3160,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterNormal(
         auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, start_ts);
 
         DMFilePackFilterResults new_pack_filter_results;
-        std::tie(skipped_ranges, new_pack_filter_results) = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVerison(
+        std::tie(skipped_ranges, new_pack_filter_results) = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVersion(
             dm_context,
             dmfiles,
             pack_filter_results,
@@ -3197,7 +3199,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterNormal(
         read_ranges.size(),
         read_ranges);
 
-    return ::DB::DM::buildBitmapFilter(
+    return ::DB::DM::buildBitmapFilterByStream(
         dm_context,
         segment_snap,
         stream,
@@ -3230,11 +3232,12 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
     if (skipped_ranges.size() == 1 && skipped_ranges[0].offset == 0
         && skipped_ranges[0].rows == segment_snap->stable->getDMFilesRows())
     {
+        auto elapse_ms = commit_elapse();
         LOG_DEBUG(
             segment_snap->log,
             "buildMVCCBitmapFilterStableOnly all match, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
-            commit_elapse());
+            elapse_ms);
         return std::make_shared<BitmapFilter>(segment_snap->stable->getDMFilesRows(), /*default_value*/ true);
     }
 
@@ -3249,11 +3252,12 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
             bitmap_filter->set(range.offset, range.rows);
         }
         bitmap_filter->runOptimize();
+        auto elapse_ms = commit_elapse();
         LOG_DEBUG(
             segment_snap->log,
             "buildMVCCBitmapFilterStableOnly not have use packs, total_rows={}, cost={:.3f}ms",
             segment_snap->stable->getDMFilesRows(),
-            commit_elapse());
+            elapse_ms);
         return bitmap_filter;
     }
 
@@ -3310,7 +3314,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
             dm_context.tracing_id);
     }
 
-    return ::DB::DM::buildBitmapFilter(
+    return ::DB::DM::buildBitmapFilterByStream(
         dm_context,
         segment_snap,
         stream,

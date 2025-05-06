@@ -142,7 +142,7 @@ public:
     *        - NewPackFilterResults: Those packs should be read from disk and go through
     *                                the delta merge, RowKey filter, and MVCC filter.
     */
-    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterWithMultiVerison(
+    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterWithMultiVersion(
         const DMContext & dm_context,
         const DMFiles & dmfiles,
         const DMFilePackFilterResults & pack_filter_results,

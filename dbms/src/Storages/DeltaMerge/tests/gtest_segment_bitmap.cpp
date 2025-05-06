@@ -796,7 +796,7 @@ TEST_P(SegmentBitmapFilterTest, testSkipPackNormal)
                 getExtraHandleColumnDefine(seg->is_common_handle),
             };
             auto read_info = seg->getReadInfo(*dm_context, columns_to_read, snap, ranges, ReadTag::MVCC, start_ts);
-            auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVerison(
+            auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVersion(
                 *dm_context,
                 dmfiles,
                 pack_filter_results,

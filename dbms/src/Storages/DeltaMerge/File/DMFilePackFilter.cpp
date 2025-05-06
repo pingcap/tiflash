@@ -383,7 +383,7 @@ std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFileP
 }
 
 std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFilePackFilter::
-    getSkippedRangeAndFilterWithMultiVerison(
+    getSkippedRangeAndFilterWithMultiVersion(
         const DMContext & dm_context,
         const DMFiles & dmfiles,
         const DMFilePackFilterResults & pack_filter_results,
