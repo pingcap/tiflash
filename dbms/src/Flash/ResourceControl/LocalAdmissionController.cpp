@@ -23,7 +23,7 @@ void ResourceGroup::initStaticTokenBucket(int64_t capacity)
 {
     std::lock_guard lock(mu);
     const double init_fill_rate = 0.0;
-    // gjt todo a reasonable init value
+    // todo maybe a better init value, for now just use user_ru_per_sec like tidb.
     const double init_tokens = user_ru_per_sec;
     int64_t init_cap = capacity;
     if (capacity < 0)
@@ -83,7 +83,7 @@ std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const S
     double report_token_consumption = consumption_delta_info.delta;
 
     double acquire_tokens = 0.0;
-    if (!burstable && !trickleModeLeaseExpireWithoutLock(now))
+    if (okToAcquireTokenWithoutLock(now))
     {
         acquire_tokens = getAcquireRUNumWithoutLock(
             consumption_delta_info.speed,
@@ -93,15 +93,21 @@ std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const S
         assert(acquire_tokens >= 0.0);
     }
 
-    LOG_DEBUG(log, "gjt debug buildRequestInfoIfNecessary done {}, acq: {}, burstable: {}, speed: {}", report_token_consumption, acquire_tokens,
+    LOG_DEBUG(log, "gjt debug buildRequestInfoIfNecessary done {}, acq: {}, burstable: {}, speed: {}",
+            report_token_consumption, acquire_tokens,
             burstable, consumption_delta_info.speed);
     if (report_token_consumption == 0.0 && acquire_tokens == 0.0)
+    {
+        endRequestWithoutLock();
         return std::nullopt;
+    }
     else
+    {
         return {GACRequestInfo{
             .resource_group_name = name,
             .acquire_tokens = acquire_tokens,
             .ru_consumption_delta = report_token_consumption}};
+    }
 }
 
 bool ResourceGroup::beginRequestWithoutLock(const SteadyClock::time_point & tp)
@@ -228,15 +234,16 @@ void ResourceGroup::updateTrickleMode(
 
     const auto trickle_dura = std::chrono::milliseconds(trickle_ms);
     trickle_deadline = now + trickle_dura;
-    trickle_expire_timepoint = now + trickle_dura;
+    trickle_expire_timepoint = trickle_deadline;
     if (trickle_dura >= 2 * GAC_RTT_ANTICIPATION)
         trickle_expire_timepoint = now + trickle_dura - GAC_RTT_ANTICIPATION;
     LOG_DEBUG(
         log,
-        "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}",
+        "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}, trickel_dura: {}ms",
         name,
         ori_bucket_info,
-        bucket->toString());
+        bucket->toString(),
+        trickle_dura.count());
 
     updateBucketMetrics(bucket->getConfig());
 }
@@ -245,6 +252,9 @@ void ResourceGroup::updateDegradeMode(const SteadyClock::time_point & now)
 {
     // Disable degrade mode like tidb, just print log.
     // https://github.com/tikv/pd/blob/7c3b9a35139dc404f0782f8300d8d3f04c65aa17/client/resource_group/controller/config.go#L82
+    // In normal mode, the LAC will exhaust all tokens, causing all queries to hang.
+    // In trickle mode, the LAC will continue working using the original trickle refill rate.
+    // And it will try to send a request to the GAC every DEGRADE_MODE_DURATION.
     std::lock_guard lock(mu);
     if (now >= degrade_deadline)
     {
@@ -263,7 +273,8 @@ void ResourceGroup::updateDegradeMode(const SteadyClock::time_point & now)
 void ResourceGroup::updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_point & now)
 {
     std::lock_guard lock(mu);
-                LOG_DEBUG(log, "gjt debug compute speed beg, smooth: {}", smooth_ru_consumption_speed);
+    LOG_DEBUG(log, "gjt debug compute speed beg, smooth: {}", smooth_ru_consumption_speed);
+
     const auto elapsed = now - last_compute_ru_consumption_speed;
     RUNTIME_CHECK(elapsed.count() >= 0);
     if (elapsed < COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL)
@@ -271,17 +282,21 @@ void ResourceGroup::updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_
 
     // static_assert here because the computation assume time unit is seconds.
     static_assert(COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL >= std::chrono::seconds(1));
-    auto current_ru_consumption_speed = ru_consumption_delta_for_compute_speed / elapsed.count();
+    const auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
+    auto current_ru_consumption_speed_per_sec = (ru_consumption_delta_for_compute_speed * 1000) / elapsed_ms;
 
     static_assert(MOVING_RU_CONSUMPTION_SPEED_FACTOR < 1);
-    smooth_ru_consumption_speed = current_ru_consumption_speed * MOVING_RU_CONSUMPTION_SPEED_FACTOR
+    smooth_ru_consumption_speed = current_ru_consumption_speed_per_sec * MOVING_RU_CONSUMPTION_SPEED_FACTOR
         + (1 - MOVING_RU_CONSUMPTION_SPEED_FACTOR) * smooth_ru_consumption_speed;
     LOG_DEBUG(log, "gjt debug compute speed done, cur: {}, delta: {}, elapsed: {}, smooth: {}",
-            current_ru_consumption_speed, ru_consumption_delta_for_compute_speed, elapsed.count(), smooth_ru_consumption_speed);
+            current_ru_consumption_speed_per_sec, ru_consumption_delta_for_compute_speed, elapsed_ms, smooth_ru_consumption_speed);
 
     ru_consumption_delta_for_compute_speed = 0.0;
     last_compute_ru_consumption_speed = now;
     GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(smooth_ru_consumption_speed);
+
+    // todo maybe LAC level instead of rg level.
+    clearCPUTimeWithoutLock(now);
 }
 
 LACRUConsumptionDeltaInfo ResourceGroup::updateRUConsumptionDeltaInfoWithoutLock()
@@ -358,7 +373,6 @@ void LocalAdmissionController::mainLoop()
     }
     LOG_INFO(log, "get unique_client_id succeed: {}", unique_client_id);
 
-
     // Wakeup every n seconds to:
     // 1. compute RU consumption speed(COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL, default 1s)
     // 2. report RU consumption to GAC(DEFAULT_TARGET_PERIOD, default 5s)
@@ -424,7 +438,7 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
     std::vector<GACRequestInfo> request_infos;
     if unlikely (is_final_report)
     {
-        // Doesn't need to lock for resource_groups because all threads should have been joined!:
+        // Doesn't need to lock for resource_groups because all threads should already been joined!
         for (const auto & resource_group : resource_groups)
         {
             const auto consumption_delta_info = resource_group.second->updateRUConsumptionDeltaInfoWithoutLock();
@@ -627,12 +641,23 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
             continue;
         }
 
-        handled_resource_group_names.push_back(one_resp.resource_group_name());
+        const auto & name = one_resp.resource_group_name();
+        auto resource_group = findResourceGroup(name);
+        if (resource_group == nullptr)
+        {
+            LOG_ERROR(log, "cannot find resource group: {}", name);
+            continue;
+        }
+
+        handled_resource_group_names.push_back(name);
 
         // It's possible for one_resp.granted_r_u_tokens() to be empty
         // when the acquire_token_req is only for report RU consumption.
         if (one_resp.granted_r_u_tokens().empty())
+        {
+            resource_group->endRequest();
             continue;
+        }
 
         if unlikely (one_resp.granted_r_u_tokens().size() != 1)
         {
@@ -643,11 +668,6 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
                 one_resp.resource_group_name());
             continue;
         }
-
-        const auto & name = one_resp.resource_group_name();
-        auto resource_group = findResourceGroup(name);
-        if (resource_group == nullptr)
-            continue;
 
         const resource_manager::GrantedRUTokenBucket & granted_token_bucket = one_resp.granted_r_u_tokens()[0];
         if unlikely (granted_token_bucket.type() != resource_manager::RequestUnitType::RU)
