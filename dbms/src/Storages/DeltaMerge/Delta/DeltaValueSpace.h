@@ -33,6 +33,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/SegmentRowID.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 
@@ -570,6 +571,39 @@ public:
             persisted_files_done = true;
             return mem_table_input_stream.read();
         }
+    }
+};
+
+class DeltaValueInputStreamWithRowID : public IBlockInputStream
+{
+private:
+    DeltaValueInputStream stream;
+    const size_t delta_offset;
+
+public:
+    DeltaValueInputStreamWithRowID(
+        const DMContext & context_,
+        const DeltaSnapshotPtr & delta_snap_,
+        const ColumnDefinesPtr & col_defs_,
+        const RowKeyRange & segment_range_,
+        ReadTag read_tag_,
+        size_t delta_offset_)
+        : stream(context_, delta_snap_, col_defs_, segment_range_, read_tag_)
+        , delta_offset(delta_offset_)
+    {}
+
+    String getName() const override { return "DeltaValueWithRowID"; }
+    Block getHeader() const override { return stream.getHeader(); }
+
+    Block read() override
+    {
+        auto block = stream.read();
+        if (!block)
+            return block;
+
+        block.setStartOffset(block.startOffset() + delta_offset);
+        block.setSegmentRowIdCol(createSegmentRowIdCol(block.startOffset(), block.rows()));
+        return block;
     }
 };
 
