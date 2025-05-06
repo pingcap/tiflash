@@ -87,6 +87,8 @@ public:
 
         last_compute_ru_consumption_speed = tp;
         last_request_gac_timepoint = tp;
+        last_clear_cpu_time = tp;
+
         degrade_deadline = SteadyClock::time_point::max();
         trickle_expire_timepoint = SteadyClock::time_point::min();
         trickle_deadline = SteadyClock::time_point::min();
@@ -132,6 +134,8 @@ private:
     static constexpr auto EXTENDING_REPORT_RU_CONSUMPTION_FACTOR = 4;
     static constexpr auto DEFAULT_BUFFER_TOKENS = 5000;
 
+    static constexpr auto CLEAR_CPU_TIME_DURATION = std::chrono::seconds(5);
+
     // Indicate the round trip time of gac request.
     static constexpr auto GAC_RTT_ANTICIPATION = std::chrono::seconds(1);
 
@@ -173,10 +177,24 @@ private:
     std::optional<GACRequestInfo> buildRequestInfoIfNecessary(const SteadyClock::time_point & now);
     bool beginRequestWithoutLock(const SteadyClock::time_point & tp);
     void endRequestWithoutLock();
+    void endRequest()
+    {
+        std::lock_guard lock(mu);
+        endRequestWithoutLock();
+    }
     bool shouldReportRUConsumption(const SteadyClock::time_point & now) const;
     LACRUConsumptionDeltaInfo updateRUConsumptionDeltaInfoWithoutLock();
     double getAcquireRUNumWithoutLock(double speed, uint32_t n_sec, double amplification) const;
     void updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_point & now);
+    void clearCPUTimeWithoutLock(const SteadyClock::time_point & now)
+    {
+        static_assert(CLEAR_CPU_TIME_DURATION > COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL);
+        if (now - last_clear_cpu_time >= CLEAR_CPU_TIME_DURATION)
+        {
+            cpu_time_in_ns = 0;
+            last_clear_cpu_time = now;
+        }
+    }
 
     // Called when user change config of resource group.
     // Only update meta, will not touch runtime state(like bucket remaining tokens).
@@ -202,12 +220,16 @@ private:
         const SteadyClock::time_point & now);
     void updateDegradeMode(const SteadyClock::time_point & now);
 
-    bool trickleModeLeaseExpire(const SteadyClock::time_point & tp)
+    bool okToAcquireTokenWithoutLock(const SteadyClock::time_point & tp) const
+    {
+        return !burstable && (bucket_mode != trickle_mode || trickleModeLeaseExpireWithoutLock(tp));
+    }
+    bool trickleModeLeaseExpire(const SteadyClock::time_point & tp) const
     {
         std::lock_guard lock(mu);
         return trickleModeLeaseExpireWithoutLock(tp);
     }
-    bool trickleModeLeaseExpireWithoutLock(const SteadyClock::time_point & tp)
+    bool trickleModeLeaseExpireWithoutLock(const SteadyClock::time_point & tp) const
     {
         return bucket_mode == trickle_mode && tp >= trickle_expire_timepoint;
     }
@@ -216,8 +238,8 @@ private:
         std::lock_guard lock(mu);
         if (bucket_mode == TokenBucketMode::trickle_mode && trickle_deadline > tp)
         {
-            return std::chrono::duration_cast<std::chrono::seconds>(trickle_deadline - tp).count()
-                * bucket->getConfig().fill_rate;
+            return static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(trickle_deadline - tp).count()
+                * bucket->getConfig().fill_rate) / 1000.0;
         }
         return 0.0;
     }
@@ -249,6 +271,7 @@ private:
     // For metrics.
     double total_ru_consumption = 0.0;
     uint64_t cpu_time_in_ns = 0;
+    SteadyClock::time_point last_clear_cpu_time;
     // For report to GAC.
     double ru_consumption_delta = 0.0;
 
