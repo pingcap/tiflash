@@ -20,7 +20,6 @@
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 
-#include <atomic>
 #include <shared_mutex>
 #include <utility>
 
@@ -29,7 +28,7 @@ namespace DB
 enum class Status
 {
     Ok,
-    Waiting,
+    BlockUnavailable, // It means that we do not have specified block so far
     IOOut,
     IOIn,
     Eof,
@@ -49,7 +48,7 @@ public:
     };
 
     std::pair<Status, Block> tryGetBlockAt(size_t idx);
-    std::pair<Status, Block> getBlockFromDisk(size_t idx);
+    Block getBlockFromDisk(size_t idx);
     CTEStatus getStatus();
     Status pushBlock(const Block & block);
     void notifyEOF();

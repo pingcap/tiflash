@@ -46,8 +46,8 @@ protected:
     void operateSuffixImpl() override;
 
     OperatorStatus readImpl(Block & block) override;
-
-    OperatorStatus awaitImpl() override; // TODO implement awaitImpl
+    OperatorStatus executeIOImpl() override;
+    OperatorStatus awaitImpl() override;
 
 private:
     enum WaitType
@@ -61,8 +61,9 @@ private:
     std::shared_ptr<CTE> cte;
     size_t block_fetch_idx = 0;
 
+    Block block_from_disk;
+
     uint64_t total_rows{};
-    std::queue<Block> block_queue;
     WaitType wait_type;
 };
 } // namespace DB

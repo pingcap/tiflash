@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <Operators/CTE.h>
+#include <Common/Exception.h>
+#include <Core/Block.h>
 
 #include <mutex>
 #include <shared_mutex>
 #include <utility>
-#include "Common/Exception.h"
-#include "Core/Block.h"
 
 namespace DB
 {
@@ -49,12 +49,12 @@ std::pair<Status, Block> CTE::tryGetBlockAt(size_t idx)
         if (this->is_eof)
             return {Status::Eof, Block()};
         else
-            return {Status::Waiting, Block()};
+            return {Status::BlockUnavailable, Block()};
     }
     return {Status::Ok, this->blocks[idx]};
 }
 
-std::pair<Status, Block> CTE::getBlockFromDisk(size_t idx)
+Block CTE::getBlockFromDisk(size_t idx)
 {
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
     if unlikely (!this->is_spill_triggered)
@@ -64,7 +64,7 @@ std::pair<Status, Block> CTE::getBlockFromDisk(size_t idx)
     if unlikely (static_cast<size_t>(this->cte_spill.blockNum()) <= idx)
         throw Exception("Requested block is not in disk");
 
-    return {Status::Ok, this->cte_spill.readBlockAt(idx)};
+    return this->cte_spill.readBlockAt(idx);
 }
 
 Status CTE::pushBlock(const Block & block)
