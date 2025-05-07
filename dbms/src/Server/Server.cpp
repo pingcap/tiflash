@@ -1220,7 +1220,7 @@ try
         {
             auto size = settings.grpc_completion_queue_pool_size;
             if (size == 0)
-                size = std::thread::hardware_concurrency();
+                size = getNumberOfLogicalCPUCores();
             GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         }
 
