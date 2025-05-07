@@ -72,18 +72,22 @@ public:
     std::span<const IndexID> keepIndexes() const
     {
         assert(added_indexes_offset <= all_indexes.size());
-        return std::span(all_indexes.begin(), all_indexes.begin() + added_indexes_offset);
+        return std::span<const IndexID>(&*all_indexes.begin(), added_indexes_offset);
     }
     std::span<const IndexID> addedIndexes() const
     {
         assert(added_indexes_offset <= dropped_indexes_offset && added_indexes_offset <= all_indexes.size());
         assert(dropped_indexes_offset <= all_indexes.size());
-        return std::span(all_indexes.begin() + added_indexes_offset, all_indexes.begin() + dropped_indexes_offset);
+        return std::span<const IndexID>(
+            &*(all_indexes.begin() + added_indexes_offset),
+            dropped_indexes_offset - added_indexes_offset);
     }
     std::span<const IndexID> droppedIndexes() const
     {
         assert(dropped_indexes_offset <= all_indexes.size());
-        return std::span(all_indexes.begin() + dropped_indexes_offset, all_indexes.end());
+        return std::span<const IndexID>(
+            &*(all_indexes.begin() + dropped_indexes_offset),
+            all_indexes.size() - dropped_indexes_offset);
     }
     std::vector<IndexID> copyDroppedIndexes() const
     {
