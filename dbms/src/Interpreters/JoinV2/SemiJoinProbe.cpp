@@ -466,7 +466,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
 
     size_t list_active_slots = probe_list->activeSlots();
     auto iter = probe_list->begin();
-    auto iter_end = probe_list->end();
+    auto iter_end [[maybe_unused]] = probe_list->end();
     while (idx < ctx.rows || active_states > 0 || list_active_slots > 0)
     {
         k = k == probe_prefetch_step ? 0 : k;
