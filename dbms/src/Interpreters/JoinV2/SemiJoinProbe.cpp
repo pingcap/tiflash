@@ -15,10 +15,7 @@
 #include <Interpreters/JoinV2/HashJoin.h>
 #include <Interpreters/JoinV2/SemiJoinProbe.h>
 
-#include "Interpreters/JoinV2/SemiJoinProbeList.h"
-#include "Parsers/ASTTablesInSelectQuery.h"
-#include "common/defines.h"
-#include "ext/scope_guard.h"
+#include <ext/scope_guard.h>
 
 #ifdef TIFLASH_ENABLE_AVX_SUPPORT
 ASSERT_USE_AVX2_COMPILE_FLAG
@@ -731,15 +728,20 @@ void SemiJoinProbeHelper::handleOtherConditions(JoinProbeContext & ctx, JoinProb
         has_other_cond_null_map = other_null_map != nullptr;
     }
 
-#define CALL(has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map)                               \
-    {                                                                                                          \
-        checkExprResults<KeyGetter, kind, has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map>( \
-            ctx,                                                                                               \
-            wd.selective_offsets,                                                                              \
-            other_eq_from_in_column_data,                                                                      \
-            other_eq_from_in_null_map,                                                                         \
-            other_column_data,                                                                                 \
-            other_null_map);                                                                                   \
+#define CALL(has_other_eq_cond_from_in, has_other_cond, has_other_cond_null_map) \
+    {                                                                            \
+        checkOtherConditionResults<                                              \
+            KeyGetter,                                                           \
+            kind,                                                                \
+            has_other_eq_cond_from_in,                                           \
+            has_other_cond,                                                      \
+            has_other_cond_null_map>(                                            \
+            ctx,                                                                 \
+            wd.selective_offsets,                                                \
+            other_eq_from_in_column_data,                                        \
+            other_eq_from_in_null_map,                                           \
+            other_column_data,                                                   \
+            other_null_map);                                                     \
     }
 
     if (has_other_eq_cond_from_in)
@@ -771,7 +773,7 @@ template <
     bool has_other_eq_cond_from_in,
     bool has_other_cond,
     bool has_other_cond_null_map>
-void SemiJoinProbeHelper::checkExprResults(
+void SemiJoinProbeHelper::checkOtherConditionResults(
     JoinProbeContext & ctx,
     IColumn::Offsets & selective_offsets,
     const ColumnUInt8::Container * other_eq_column,

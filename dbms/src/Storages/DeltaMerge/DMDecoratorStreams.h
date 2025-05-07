@@ -19,12 +19,10 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <common/logger_useful.h>
 
-#include <unordered_set>
 
-namespace DB
+namespace DB::DM
 {
-namespace DM
-{
+
 /// DMDeleteFilterBlockInputStream is used to filter the column and filter out the rows whose del_mark is true
 class DMDeleteFilterBlockInputStream : public IBlockInputStream
 {
@@ -132,6 +130,10 @@ public:
                 column.column = column.column->filter(delete_filter, passed_count);
                 res.insert(std::move(column));
             }
+            if (block.segmentRowIdCol())
+            {
+                res.setSegmentRowIdCol(block.segmentRowIdCol()->filter(delete_filter, passed_count));
+            }
             return res;
         }
     }
@@ -229,5 +231,4 @@ private:
     const Context & context;
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

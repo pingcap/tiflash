@@ -17,8 +17,6 @@
 #include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/JoinV2/SemiJoinProbeList.h>
 
-#include "Parsers/ASTTablesInSelectQuery.h"
-
 namespace DB
 {
 
@@ -60,7 +58,7 @@ private:
         bool has_other_eq_cond_from_in,
         bool has_other_cond,
         bool has_other_cond_null_map>
-    void checkExprResults(
+    void checkOtherConditionResults(
         JoinProbeContext & ctx,
         IColumn::Offsets & selective_offsets,
         const ColumnUInt8::Container * other_eq_column,

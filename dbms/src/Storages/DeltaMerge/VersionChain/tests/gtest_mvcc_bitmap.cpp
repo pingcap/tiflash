@@ -38,13 +38,13 @@ try
     segment->placeDeltaIndex(*dm_context, segment_snapshot);
     ASSERT_EQ(segment_snapshot->delta->getSharedDeltaIndex()->getPlacedStatus().first, delta_rows);
 
-    std::visit([&](auto & version_chain) { ASSERT_EQ(version_chain.getReplayedRows(), 0); }, segment->version_chain);
+    std::visit([&](auto & version_chain) { ASSERT_EQ(version_chain.getReplayedRows(), 0); }, *(segment->version_chain));
     std::ignore = std::visit(
         [&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *segment_snapshot); },
-        segment->version_chain);
+        *(segment->version_chain));
     std::visit(
         [&](auto & version_chain) { ASSERT_EQ(version_chain.getReplayedRows(), delta_rows); },
-        segment->version_chain);
+        *(segment->version_chain));
 
     auto rs_results = loadPackFilterResults(*dm_context, segment_snapshot, {segment->getRowKeyRange()});
     auto bitmap_filter_delta_index = segment->buildMVCCBitmapFilter(

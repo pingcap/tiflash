@@ -64,12 +64,7 @@ public:
         MemTrackerWrapper & mem_tracker_wrapper,
         bool need_mem_data);
 
-    static SegmentSnapshotPtr deserializeSegment(
-        const DMContext & dm_context,
-        StoreID remote_store_id,
-        KeyspaceID keyspace_id,
-        TableID table_id,
-        const RemotePb::RemoteSegment & proto);
+    static SegmentSnapshotPtr deserializeSegment(const DMContext & dm_context, const RemotePb::RemoteSegment & proto);
 
     /// Note: This function always build a snapshot over nop data provider. In order to read from this snapshot,
     /// you must explicitly assign a proper data provider.

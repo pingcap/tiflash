@@ -44,14 +44,21 @@ public:
         return ::DB::tests::createColumn<Int64>(data, name, column_id);
     }
 
-    static ColumnWithTypeAndName colVecFloat32(std::string_view sequence, const String & name = "", Int64 column_id = 0)
+    static ColumnWithTypeAndName colVecFloat32(
+        std::string_view sequence,
+        const String & name = "",
+        Int64 column_id = 0,
+        int dimension = 1)
     {
         auto data = genSequence<Int64>(sequence);
         std::vector<Array> data_in_array;
         for (auto & v : data)
         {
             Array vec;
-            vec.push_back(static_cast<Float64>(v));
+            for (int i = 0; i < dimension; i++)
+            {
+                vec.push_back(static_cast<Float64>(v));
+            }
             data_in_array.push_back(vec);
         }
         return ::DB::tests::createVecFloat32Column<Array>(data_in_array, name, column_id);

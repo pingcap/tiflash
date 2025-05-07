@@ -9227,10 +9227,10 @@
             },
             {
               "exemplar": true,
-              "expr": "tiflash_system_asynchronous_metric_RNDeltaIndexCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "expr": "tiflash_system_asynchronous_metric_RNMVCCIndexCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "hide": false,
               "interval": "",
-              "legendFormat": "rn_delta_index_cache_{{instance}}",
+              "legendFormat": "rn_mvcc_index_cache_{{instance}}",
               "refId": "B"
             }
           ],
@@ -17750,7 +17750,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_delta_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, instance)",
+              "expr": "sum(rate(tiflash_storage_mvcc_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type, instance)",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -17760,7 +17760,7 @@
             },
             {
               "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_delta_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit\"}[1m])) by (instance) /sum(rate(tiflash_storage_delta_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
+              "expr": "sum(rate(tiflash_storage_mvcc_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=~\"hit\"}[1m])) by (instance) /sum(rate(tiflash_storage_mvcc_index_cache{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (instance)",
               "hide": false,
               "interval": "",
               "legendFormat": "hit_ratio-{{instance}}",
@@ -17771,7 +17771,7 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "DeltaIndexCache",
+          "title": "MVCCIndexCache",
           "tooltip": {
             "shared": true,
             "sort": 0,
