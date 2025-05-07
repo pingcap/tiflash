@@ -101,8 +101,8 @@ public:
         // Initialize sentinel self-loop
         probe_rows[sentinel_idx].prev_idx = sentinel_idx;
         probe_rows[sentinel_idx].next_idx = sentinel_idx;
-        probe_rows_in_list.clear();
-        probe_rows_in_list.resize_fill_zero(n);
+        active_rows_in_list.clear();
+        active_rows_in_list.resize_fill_zero(n);
     }
 
     /// Returns the number of usable slots in the list (excluding the sentinel).
@@ -114,7 +114,7 @@ public:
     inline bool contains(IndexType idx)
     {
         assert(idx < slotCapacity());
-        return probe_rows_in_list[idx];
+        return active_rows_in_list[idx];
     }
 
     /// Append an existing slot by index at the tail (before sentinel).
@@ -122,7 +122,7 @@ public:
     {
         assert(idx < slotCapacity());
         assert(!contains(idx));
-        probe_rows_in_list[idx] = true;
+        active_rows_in_list[idx] = true;
         ++active_count;
         auto tail = probe_rows[sentinel_idx].prev_idx;
         probe_rows[tail].next_idx = idx;
@@ -136,11 +136,11 @@ public:
     {
         assert(idx < slotCapacity());
         assert(contains(idx));
-        probe_rows_in_list[idx] = false;
+        active_rows_in_list[idx] = false;
         assert(active_count > 0);
         --active_count;
-        IndexType prev = probe_rows[idx].prev_idx;
-        IndexType next = probe_rows[idx].next_idx;
+        auto prev = probe_rows[idx].prev_idx;
+        auto next = probe_rows[idx].next_idx;
         probe_rows[prev].next_idx = next;
         probe_rows[next].prev_idx = prev;
     }
@@ -177,7 +177,7 @@ private:
     };
 
     PaddedPODArray<WrapProbeRow> probe_rows;
-    PaddedPODArray<UInt8> probe_rows_in_list;
+    PaddedPODArray<UInt8> active_rows_in_list;
     IndexType sentinel_idx = 0;
     size_t active_count = 0;
 };
