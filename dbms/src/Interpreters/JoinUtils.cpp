@@ -204,6 +204,7 @@ void mergeNullAndFilterResult(
         }
         else
         {
+            RUNTIME_CHECK(filter_column.size() == nullmap_vec->size());
             if (null_as_true)
             {
                 for (size_t i = 0; i < nullmap_vec->size(); ++i)
@@ -224,6 +225,7 @@ void mergeNullAndFilterResult(
         }
         else
         {
+            RUNTIME_CHECK(filter_column.size() == filter_vec->size());
             for (size_t i = 0; i < filter_vec->size(); ++i)
                 filter_column[i] = filter_column[i] && (*filter_vec)[i];
         }

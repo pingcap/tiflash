@@ -415,7 +415,7 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
         left_semi_null_map = &left_semi_column->getNullMapColumn().getData();
         if constexpr (STRICTNESS == ASTTableJoin::Strictness::Any)
         {
-            left_semi_null_map->resize_fill(probe_rows, 0);
+            left_semi_null_map->resize_fill_zero(probe_rows);
         }
         else
         {
@@ -429,17 +429,9 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
         auto result = join_result[i].getResult();
         if constexpr (KIND == ASTTableJoin::Kind::Semi || KIND == ASTTableJoin::Kind::Anti)
         {
-            if (isTrueSemiJoinResult(result))
-            {
-                // If the result is true, this row should be kept.
-                (*filter)[i] = 1;
-                ++rows_for_semi_anti;
-            }
-            else
-            {
-                // If the result is null or false, this row should be filtered.
-                (*filter)[i] = 0;
-            }
+            // If the result is true, this row should be kept.
+            (*filter)[i] = isTrueSemiJoinResult(result);
+            rows_for_semi_anti += (*filter)[i];
         }
         else
         {
@@ -449,21 +441,10 @@ Block SemiJoinHelper<KIND, STRICTNESS, Maps>::genJoinResult(const NameSet & outp
             }
             else
             {
-                switch (result)
-                {
-                case SemiJoinResultType::FALSE_VALUE:
-                    left_semi_column_data->push_back(0);
-                    left_semi_null_map->push_back(0);
-                    break;
-                case SemiJoinResultType::TRUE_VALUE:
-                    left_semi_column_data->push_back(1);
-                    left_semi_null_map->push_back(0);
-                    break;
-                case SemiJoinResultType::NULL_VALUE:
-                    left_semi_column_data->push_back(0);
-                    left_semi_null_map->push_back(1);
-                    break;
-                }
+                Int8 res = result == SemiJoinResultType::TRUE_VALUE;
+                UInt8 is_null = result == SemiJoinResultType::NULL_VALUE;
+                left_semi_column_data->push_back(res);
+                left_semi_null_map->push_back(is_null);
             }
         }
     }
