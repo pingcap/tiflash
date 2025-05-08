@@ -15,6 +15,7 @@
 #include <Common/RandomData.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
 #include <random>
@@ -122,6 +123,25 @@ TEST(RowKey, ToNextKeyIntHandle)
             /* is_common_handle */ false,
             /* row_key_column_size */ 1);
         EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
+    }
+    {
+        auto key_end = RecordKVFormat::genRawKey(445, 200000);
+        key_end.push_back('\x00');
+        auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
+        LOG_INFO(Logger::get(), "key_end={}", tikv_key_end.toDebugString());
+    }
+    {
+        auto key_end = RecordKVFormat::genRawKey(445, 200000);
+        key_end.push_back('\x01');
+        auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
+        LOG_INFO(Logger::get(), "key_end={}", tikv_key_end.toDebugString());
+    }
+    {
+        auto key_end = RecordKVFormat::genRawKey(445, 200000);
+        key_end.push_back('\x01');
+        key_end.push_back('\x30');
+        auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
+        LOG_INFO(Logger::get(), "key_end={}", tikv_key_end.toDebugString());
     }
     // tiflash#7762
     // Note: {20,00} will be regarded as Key=21 in RowKeyRange::fromRegionRange.
