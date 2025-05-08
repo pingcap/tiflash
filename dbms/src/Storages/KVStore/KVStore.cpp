@@ -221,7 +221,7 @@ bool KVStore::tryFlushRegionCacheInStorage(
             table_id,
             storage->isCommonHandle(),
             storage->getRowKeyColumnSize(),
-            fmt::format("region_id={} KVStore::tryFlushRegionCacheInStorage", region.id()));
+            fmt::format("region {} KVStore::tryFlushRegionCacheInStorage", region.toString()));
         return storage->flushCache(tmt.getContext(), rowkey_range, try_until_succeed);
     }
     catch (DB::Exception & e)
