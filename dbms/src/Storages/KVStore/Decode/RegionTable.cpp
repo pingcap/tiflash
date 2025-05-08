@@ -183,7 +183,8 @@ void removeObsoleteDataInStorage(
             ks_table_id.second,
             ks_table_id.second,
             storage->isCommonHandle(),
-            storage->getRowKeyColumnSize());
+            storage->getRowKeyColumnSize(),
+            "removeObsoleteDataInStorage");
         dm_storage->deleteRange(rowkey_range, context->getSettingsRef());
         dm_storage->flushCache(*context, rowkey_range, /*try_until_succeed*/ true); // flush to disk
     }
