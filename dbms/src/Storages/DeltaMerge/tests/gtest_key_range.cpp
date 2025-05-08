@@ -12,10 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/RandomData.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <random>
 namespace DB
 {
 namespace DM
@@ -101,6 +103,7 @@ TEST(RowKeyRange_test, RedactRangeFromCommonHandle)
 
 TEST(RowKey, ToNextKeyIntHandle)
 {
+    const TableID table_id = 1;
     const auto key = RowKeyValue::fromHandle(20);
     const auto next = key.toNext();
     EXPECT_EQ("21", next.toDebugString());
@@ -110,28 +113,71 @@ TEST(RowKey, ToNextKeyIntHandle)
         EXPECT_EQ(next.toRowKeyValueRef(), expected_next_int.toRowKeyValueRef());
     }
     {
-        const auto range_keys
-            = std::make_shared<RegionRangeKeys>(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 21));
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genKey(table_id, 0),
+            RecordKVFormat::genKey(table_id, 21));
         const auto range = RowKeyRange::fromRegionRange(
             range_keys,
-            /* table_id */ 1,
+            /* table_id */ table_id,
             /* is_common_handle */ false,
             /* row_key_column_size */ 1);
         EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
     }
+    // tiflash#7762
     // Note: {20,00} will be regarded as Key=21 in RowKeyRange::fromRegionRange.
     {
-        auto key_end = RecordKVFormat::genRawKey(1, 20);
-        key_end.push_back(0);
-        auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
-        const auto range_keys
-            = std::make_shared<RegionRangeKeys>(RecordKVFormat::genKey(1, 0), std::move(tikv_key_end));
+        auto key_end = RecordKVFormat::genRawKey(table_id, 20);
+        key_end.push_back('\x00');
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genKey(table_id, 0),
+            RecordKVFormat::encodeAsTiKVKey(key_end));
         const auto range = RowKeyRange::fromRegionRange(
             range_keys,
-            /* table_id */ 1,
+            /* table_id */ table_id,
             /* is_common_handle */ false,
             /* row_key_column_size */ 1);
         EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
+        EXPECT_EQ(range.getEnd().toDebugString(), "21");
+    }
+    // tiflash#10147
+    // Note: {20,01} will be regarded as Key=21 in RowKeyRange::fromRegionRange.
+    {
+        auto key_end = RecordKVFormat::genRawKey(table_id, 20);
+        key_end.push_back('\x01');
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genKey(table_id, 0),
+            RecordKVFormat::encodeAsTiKVKey(key_end));
+        const auto range = RowKeyRange::fromRegionRange(
+            range_keys,
+            /* table_id */ table_id,
+            /* is_common_handle */ false,
+            /* row_key_column_size */ 1);
+        EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
+        EXPECT_EQ(range.getEnd().toDebugString(), "21");
+    }
+    // any suffix will be regarded as Key=21 in RowKeyRange::fromRegionRange.
+    {
+        auto key_end = RecordKVFormat::genRawKey(table_id, 20);
+        std::mt19937_64 rand_gen(std::random_device{}());
+        size_t rand_length = rand_gen() % 255;
+        auto rand_suffix = DB::random::randomString(rand_length);
+        key_end.insert(key_end.end(), rand_suffix.begin(), rand_suffix.end());
+        LOG_INFO(
+            Logger::get(),
+            "key_end={} rand_suffix={}",
+            key_end.toDebugString(),
+            Redact::keyToDebugString(rand_suffix.data(), rand_length));
+
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genKey(table_id, 0),
+            RecordKVFormat::encodeAsTiKVKey(key_end));
+        const auto range = RowKeyRange::fromRegionRange(
+            range_keys,
+            /* table_id */ table_id,
+            /* is_common_handle */ false,
+            /* row_key_column_size */ 1);
+        EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
+        EXPECT_EQ(range.getEnd().toDebugString(), "21");
     }
 }
 
