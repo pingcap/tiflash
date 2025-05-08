@@ -50,9 +50,9 @@ RowKeyRange RowKeyRange::fromRegionRange(
         return newNone(is_common_handle, rowkey_column_size);
     }
 
-    auto & start_key = *raw_keys.first;
-    auto & end_key = *raw_keys.second;
-    auto keyspace_id = start_key.getKeyspaceID();
+    const auto & start_key = *raw_keys.first;
+    const auto & end_key = *raw_keys.second;
+    const auto keyspace_id = start_key.getKeyspaceID();
     const auto & table_range_min_max = getTableMinMaxData(keyspace_id, table_id, is_common_handle);
     RowKeyValue start_value, end_value;
     std::string warning_message;
