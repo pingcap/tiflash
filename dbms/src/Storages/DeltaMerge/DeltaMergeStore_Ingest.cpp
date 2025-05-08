@@ -30,6 +30,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
+#include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
 
@@ -617,13 +618,13 @@ UInt64 DeltaMergeStore::ingestFiles(
         }
 
         // Check whether all external files are contained by the range.
-        if (dm_context->global_context.getSettingsRef().dt_enable_ingest_check)
+        for (const auto & ext_file : external_files)
         {
-            for (const auto & ext_file : external_files)
+            if (dm_context->global_context.getSettingsRef().dt_enable_ingest_check)
             {
                 RUNTIME_CHECK_MSG(
                     range.getStart() <= ext_file.range.getStart() && range.getEnd() >= ext_file.range.getEnd(),
-                    "Detected illegal region boundary: range={} file_range={} keyspace={} table_id={}. "
+                    "Detected illegal region boundary: keyspace={} table_id={} range={} file_range={}. "
                     "TiFlash will exit to prevent data inconsistency. "
                     "If you accept data inconsistency and want to continue the service, "
                     "set profiles.default.dt_enable_ingest_check=false .",
@@ -631,6 +632,21 @@ UInt64 DeltaMergeStore::ingestFiles(
                     physical_table_id,
                     range.toDebugString(),
                     ext_file.range.toDebugString());
+            }
+            else
+            {
+                // If the check is disabled, we just log a warning for better diagnosing.
+                if (unlikely(
+                        !(range.getStart() <= ext_file.range.getStart() && range.getEnd() >= ext_file.range.getEnd())))
+                {
+                    LOG_WARNING(
+                        log,
+                        "Detected illegal region boundary: keyspace={} table_id={} range={} file_range={}",
+                        keyspace_id,
+                        physical_table_id,
+                        range.toDebugString(),
+                        ext_file.range.toDebugString());
+                }
             }
         }
     }
