@@ -48,7 +48,9 @@ time_t randomUTCTimestamp()
 struct tm randomLocalTime()
 {
     time_t t = randomUTCTimestamp();
-    struct tm res{};
+    struct tm res
+    {
+    };
     if (localtime_r(&t, &res) == nullptr)
     {
         throw std::invalid_argument(fmt::format("localtime_r({}) ret {}", t, strerror(errno)));
