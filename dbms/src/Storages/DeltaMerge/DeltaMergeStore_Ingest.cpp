@@ -626,7 +626,8 @@ UInt64 DeltaMergeStore::ingestFiles(
             {
                 // If the check is disabled, we just log a warning for better diagnosing.
                 if (unlikely(
-                        !(range.getStart() <= ext_file.range.getStart() && range.getEnd() >= ext_file.range.getEnd())))
+                        !(compare(range.getStart(), ext_file.range.getStart()) <= 0
+                          && compare(range.getEnd(), ext_file.range.getEnd()) >= 0)))
                 {
                     LOG_WARNING(
                         log,
