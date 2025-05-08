@@ -46,32 +46,17 @@ uint64_t ResourceGroup::getPriority(uint64_t max_ru_per_sec) const
     if unlikely (user_ru_per_sec == 0)
         return std::numeric_limits<uint64_t>::max() - 1;
 
-    // gjt todo check tidb code, how to compute weight, maybe use total share.
     double weight = static_cast<double>(max_ru_per_sec) / user_ru_per_sec;
 
     uint64_t virtual_time = cpu_time_in_ns * weight;
     if unlikely (virtual_time > MAX_VIRTUAL_TIME)
         virtual_time = MAX_VIRTUAL_TIME;
 
-    uint64_t priority = (((static_cast<uint64_t>(user_priority) - 1) << 60) | virtual_time);
-
-    LOG_TRACE(
-        log,
-        "getPriority detailed info: resource group name: {}, weight: {}, virtual_time: {}, "
-        "user_priority: {}, "
-        "priority: {}, remaining_token: {}",
-        name,
-        weight,
-        virtual_time,
-        user_priority,
-        priority,
-        remaining_token);
-    return priority;
+    return (((static_cast<uint64_t>(user_priority) - 1) << 60) | virtual_time);
 }
 
 std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const SteadyClock::time_point & now)
 {
-    LOG_DEBUG(log, "gjt debug buildRequestInfoIfNecessary beg");
     std::lock_guard lock(mu);
     if (!beginRequestWithoutLock(now))
     {
@@ -93,9 +78,6 @@ std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const S
         assert(acquire_tokens >= 0.0);
     }
 
-    LOG_DEBUG(log, "gjt debug buildRequestInfoIfNecessary done {}, acq: {}, burstable: {}, speed: {}",
-            report_token_consumption, acquire_tokens,
-            burstable, consumption_delta_info.speed);
     if (report_token_consumption == 0.0 && acquire_tokens == 0.0)
     {
         endRequestWithoutLock();
@@ -131,7 +113,6 @@ bool ResourceGroup::shouldReportRUConsumption(const SteadyClock::time_point & no
     std::lock_guard lock(mu);
     const auto elapsed = now - last_request_gac_timepoint;
     RUNTIME_CHECK(elapsed.count() >= 0);
-    // gjt todo: tidb also plus state_update_duration/2
     if (elapsed >= LocalAdmissionController::DEFAULT_TARGET_PERIOD)
     {
         if (ru_consumption_delta >= REPORT_RU_CONSUMPTION_DELTA_THRESHOLD)
@@ -159,16 +140,6 @@ double ResourceGroup::getAcquireRUNumWithoutLock(double speed, uint32_t n_sec, d
 
     acquire_num -= remaining_ru;
     acquire_num = (acquire_num > 0.0 ? acquire_num : 0.0);
-
-    LOG_TRACE(
-        log,
-        "acquire num for rg {}: avg_speed: {}, remaining_ru: {}, amplification: {}, "
-        "acquire num: {}",
-        name,
-        speed,
-        remaining_ru,
-        amplification,
-        acquire_num);
     return acquire_num;
 }
 
@@ -273,7 +244,6 @@ void ResourceGroup::updateDegradeMode(const SteadyClock::time_point & now)
 void ResourceGroup::updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_point & now)
 {
     std::lock_guard lock(mu);
-    LOG_DEBUG(log, "gjt debug compute speed beg, smooth: {}", smooth_ru_consumption_speed);
 
     const auto elapsed = now - last_compute_ru_consumption_speed;
     RUNTIME_CHECK(elapsed.count() >= 0);
@@ -288,8 +258,6 @@ void ResourceGroup::updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_
     static_assert(MOVING_RU_CONSUMPTION_SPEED_FACTOR < 1);
     smooth_ru_consumption_speed = current_ru_consumption_speed_per_sec * MOVING_RU_CONSUMPTION_SPEED_FACTOR
         + (1 - MOVING_RU_CONSUMPTION_SPEED_FACTOR) * smooth_ru_consumption_speed;
-    LOG_DEBUG(log, "gjt debug compute speed done, cur: {}, delta: {}, elapsed: {}, smooth: {}",
-            current_ru_consumption_speed_per_sec, ru_consumption_delta_for_compute_speed, elapsed_ms, smooth_ru_consumption_speed);
 
     ru_consumption_delta_for_compute_speed = 0.0;
     last_compute_ru_consumption_speed = now;
@@ -375,8 +343,9 @@ void LocalAdmissionController::mainLoop()
     // 2. report RU consumption to GAC(DEFAULT_TARGET_PERIOD, default 5s)
     // 3. check if need to step into degrade mode(DEGRADE_MODE_DURATION, default 120s)
     const auto tick_interval = ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL;
-    RUNTIME_CHECK(tick_interval <= ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL &&
-            tick_interval <= DEGRADE_MODE_DURATION && tick_interval <= DEFAULT_TARGET_PERIOD);
+    RUNTIME_CHECK(
+        tick_interval <= ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL && tick_interval <= DEGRADE_MODE_DURATION
+        && tick_interval <= DEFAULT_TARGET_PERIOD);
     auto cur_tick_beg = current_tick;
     auto cur_tick_end = cur_tick_beg + tick_interval;
     while (!stopped.load())
@@ -409,7 +378,6 @@ void LocalAdmissionController::mainLoop()
 
             if (const auto gac_req_opt = buildGACRequest(/*is_final_report=*/false); gac_req_opt.has_value())
             {
-                LOG_DEBUG(log, "gjt debug got gac_opt");
                 std::lock_guard lock(gac_requests_mu);
                 gac_requests.push_back(gac_req_opt.value());
                 gac_requests_cv.notify_all();
@@ -470,7 +438,6 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
         }
     }
 
-    LOG_DEBUG(log, "gjt debug request_infos: {}", request_infos.size());
     if (request_infos.empty())
         return {};
 
@@ -551,12 +518,10 @@ void LocalAdmissionController::doRequestGAC()
 {
     while (!stopped.load())
     {
-        LOG_DEBUG(log, "gjt debug doRequestGAC");
         std::vector<resource_manager::TokenBucketsRequest> local_gac_requests;
         {
             std::unique_lock<std::mutex> lock(gac_requests_mu);
             gac_requests_cv.wait(lock, [this]() { return stopped.load() || !gac_requests.empty(); });
-            LOG_DEBUG(log, "gjt debug doRequestGAC wakup");
             if unlikely (stopped.load())
                 return;
             local_gac_requests = gac_requests;
@@ -683,7 +648,11 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         double added_tokens = granted_token_bucket.granted_tokens().tokens();
         RUNTIME_CHECK_MSG(added_tokens >= 0, "{}, expect added_tokens >= 0, but got: {}", err_msg, added_tokens);
         const auto trickle_left_tokens = resource_group->getTrickleLeftTokens(now);
-        RUNTIME_CHECK_MSG(trickle_left_tokens >= 0, "{}, expect trickle_left_tokens >= 0, but got: {}", err_msg, trickle_left_tokens);
+        RUNTIME_CHECK_MSG(
+            trickle_left_tokens >= 0,
+            "{}, expect trickle_left_tokens >= 0, but got: {}",
+            err_msg,
+            trickle_left_tokens);
         added_tokens += trickle_left_tokens;
 
         // capacity can be zero
@@ -905,7 +874,7 @@ void LocalAdmissionController::updateMaxRUPerSecAfterDeleteWithoutLock(uint64_t 
 {
     if (max_ru_per_sec == deleted_user_ru_per_sec)
     {
-         max_ru_per_sec = 0;
+        max_ru_per_sec = 0;
         for (const auto & resource_group : resource_groups)
         {
             if (max_ru_per_sec < resource_group.second->user_ru_per_sec)

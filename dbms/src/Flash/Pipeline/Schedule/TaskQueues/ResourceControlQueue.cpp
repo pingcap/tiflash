@@ -114,22 +114,11 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         if unlikely (updateResourceGroupInfosWithoutLock())
             continue;
 
-        // gjt todo smaller value?
-        UInt64 wait_dura = LocalAdmissionController::DEFAULT_TARGET_PERIOD_MS.count();
+        UInt64 wait_dura = LocalAdmissionController::DEFAULT_MAX_EST_WAIT_DURATION.count();
         if (!resource_group_infos.empty())
         {
             const ResourceGroupInfo & group_info = resource_group_infos.top();
             const bool ru_exhausted = LocalAdmissionController::isRUExhausted(group_info.priority);
-
-            LOG_TRACE(
-                logger,
-                "trying to schedule task of resource group {}, priority: {}, ru exhausted: {}, is_finished: {}, "
-                "task_queue.empty(): {}",
-                group_info.name,
-                group_info.priority,
-                ru_exhausted,
-                is_finished,
-                group_info.task_queue->empty());
 
             // When highest priority of resource group is less than zero, means RU of all resource groups are exhausted.
             // Should not take any task from nested task queue for this situation.
@@ -145,7 +134,7 @@ bool ResourceControlQueue<NestedTaskQueueType>::take(TaskPtr & task)
         // Wakeup when:
         // 1. finish() is called.
         // 2. new task submit.
-        // 3. LAC got resp from GAC, but we cannot make sure the notify from LAC is always catched,
+        // 3. LAC got resp from GAC or estWaitDura timeout.
         // so wait_dura is used to avoid stuck.
         cv.wait_for(lock, std::chrono::milliseconds(wait_dura));
     }
@@ -160,7 +149,6 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
     assert(task);
     auto ru = cpuTimeToRU(inc_value);
     const String & resource_group_name = task->getResourceGroupName();
-    LOG_TRACE(logger, "resource group {} will consume {} RU(or {} cpu time in ns)", resource_group_name, ru, inc_value);
     LocalAdmissionController::global_instance->consumeCPUResource(resource_group_name, ru, inc_value);
 
     NestedTaskQueuePtr group_queue = nullptr;
