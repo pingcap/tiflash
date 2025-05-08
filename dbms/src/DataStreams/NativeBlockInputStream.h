@@ -101,6 +101,12 @@ public:
 
     Block getHeader() const override;
 
+    void seek(Int64 pos)
+    {
+        this->istr.seek(pos);
+        this->istr.next(); // Trigger update for read buffer
+    }
+
 protected:
     Block readImpl() override;
 

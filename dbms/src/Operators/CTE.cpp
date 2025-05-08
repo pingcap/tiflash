@@ -114,7 +114,7 @@ void CTE::spillBlocks()
 
     while (true)
     {
-        this->cte_spill.writeBlocks(this->blocks); // TODO need to handle return value
+        this->cte_spill.writeBlocks(this->blocks);
         this->blocks.clear();
         this->memory_usage = 0;
         

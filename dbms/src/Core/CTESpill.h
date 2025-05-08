@@ -17,6 +17,9 @@
 #include <Core/SpillConfig.h>
 #include <Core/Spiller.h>
 #include <common/types.h>
+#include <IO/BaseFile/WriteReadableFile.h>
+#include <DataStreams/NativeBlockInputStream.h>
+#include <DataStreams/NativeBlockOutputStream.h>
 
 #include <shared_mutex>
 #include <utility>
@@ -24,8 +27,6 @@
 
 namespace DB
 {
-// TODO we can use WriteBufferFromWritableFile(used SpillHandler::SpillWriter) to write file
-// TODO we can use ReadBufferFromRandomAccessFile to write file
 class CTESpill
 {
 public:
@@ -33,15 +34,23 @@ public:
 
     // TODO all function need lock as CTESpill may be concurrently accessed
     void writeBlocks(const Blocks & blocks); // TODO implement, return value need other types
-    Block readBlockAt(Int64 idx) const; // TODO implement
-    Int64 blockNum() const; // TODO implement
+    Block readBlockAt(Int64 idx);
+    Int64 blockNum();
 
 private:
+    Int64 getBlockSizeNoLock(Int64 idx) const;
+
     std::shared_mutex rw_lock;
-    std::vector<std::pair<Int64, Int64>> block_offsets;
     std::vector<SpilledFile> spilled_files;
+    // TODO maybe we need to use compressed stream
+    // TODO maybe each one stream need one lock
+    std::vector<NativeBlockInputStream> read_streams;
+    std::vector<NativeBlockOutputStream> write_streams;
+    std::vector<std::pair<Int64, Int64>> block_offsets;
+    FileProviderPtr file_provider;
+    Int64 write_offset; // Always write to the last file, so we need only one offset
     SpillConfig config; // TODO initialize it
-    
-    // TODO maybe we need a queue to transfer block
+
+    std::vector<char> buf;
 };
 } // namespace DB

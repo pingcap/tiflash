@@ -43,7 +43,7 @@ public:
 protected:
     void operateSuffixImpl() override;
     OperatorStatus writeImpl(Block && block) override;
-    OperatorStatus executeIOImpl() override; // TODO implement it
+    OperatorStatus executeIOImpl() override;
     OperatorStatus awaitImpl() override;
 
 private:

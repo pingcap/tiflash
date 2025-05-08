@@ -51,9 +51,8 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
 
 OperatorStatus CTESinkOp::executeIOImpl()
 {
-    // TODO handle return value
     this->cte->spillBlocks();
-    return OperatorStatus::NEED_INPUT; // TODO handle
+    return OperatorStatus::NEED_INPUT;
 }
 
 OperatorStatus CTESinkOp::awaitImpl()

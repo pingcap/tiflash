@@ -175,6 +175,9 @@ public:
       */
     virtual size_t readBig(char * to, size_t n) { return read(to, n); }
 
+    // Set the read position for file
+    virtual void seek(Int64) { throw Exception("Not implemented yet"); }
+
 protected:
     /// The number of bytes to ignore from the initial position of `working_buffer` buffer.
     size_t working_buffer_offset = 0;
