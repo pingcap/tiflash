@@ -87,7 +87,6 @@ public:
 
         last_compute_ru_consumption_speed = tp;
         last_request_gac_timepoint = tp;
-        last_clear_cpu_time = tp;
 
         degrade_deadline = SteadyClock::time_point::max();
         trickle_expire_timepoint = SteadyClock::time_point::min();
@@ -134,8 +133,6 @@ private:
     static constexpr auto EXTENDING_REPORT_RU_CONSUMPTION_FACTOR = 4;
     static constexpr auto DEFAULT_BUFFER_TOKENS = 5000;
 
-    static constexpr auto CLEAR_CPU_TIME_DURATION = std::chrono::seconds(5);
-
     // Indicate the round trip time of gac request.
     static constexpr auto GAC_RTT_ANTICIPATION = std::chrono::seconds(1);
 
@@ -174,7 +171,6 @@ private:
     }
 
     // Related to sending GAC request.
-    std::optional<GACRequestInfo> buildRequestInfoIfNecessary(const SteadyClock::time_point & now);
     bool beginRequestWithoutLock(const SteadyClock::time_point & tp);
     void endRequestWithoutLock();
     void endRequest()
@@ -183,18 +179,10 @@ private:
         endRequestWithoutLock();
     }
     bool shouldReportRUConsumption(const SteadyClock::time_point & now) const;
+    std::optional<GACRequestInfo> buildRequestInfoIfNecessary(const SteadyClock::time_point & now);
     LACRUConsumptionDeltaInfo updateRUConsumptionDeltaInfoWithoutLock();
     double getAcquireRUNumWithoutLock(double speed, uint32_t n_sec, double amplification) const;
     void updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_point & now);
-    void clearCPUTimeWithoutLock(const SteadyClock::time_point & now)
-    {
-        static_assert(CLEAR_CPU_TIME_DURATION > COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL);
-        if (now - last_clear_cpu_time >= CLEAR_CPU_TIME_DURATION)
-        {
-            cpu_time_in_ns = 0;
-            last_clear_cpu_time = now;
-        }
-    }
 
     // Called when user change config of resource group.
     // Only update meta, will not touch runtime state(like bucket remaining tokens).
@@ -220,6 +208,7 @@ private:
         const SteadyClock::time_point & now);
     void updateDegradeMode(const SteadyClock::time_point & now);
 
+    // Trickle mode related.
     bool okToAcquireTokenWithoutLock(const SteadyClock::time_point & tp) const
     {
         return !burstable && (bucket_mode != trickle_mode || trickleModeLeaseExpireWithoutLock(tp));
@@ -253,10 +242,12 @@ private:
             .Set(config.low_token_threshold);
     }
 
+    void clearCPUTime() { cpu_time_in_ns = 0; }
 private:
     mutable std::mutex mu;
-    const std::string name;
 
+    // Meta info.
+    const std::string name;
     uint32_t user_priority = 0;
     uint64_t user_ru_per_sec = 0;
     bool burstable = false;
@@ -270,8 +261,10 @@ private:
 
     // For metrics.
     double total_ru_consumption = 0.0;
+
+    // For compute priority.
     uint64_t cpu_time_in_ns = 0;
-    SteadyClock::time_point last_clear_cpu_time;
+
     // For report to GAC.
     double ru_consumption_delta = 0.0;
 
@@ -282,6 +275,8 @@ private:
 
     // To avoid too many request sent to GAC at the same time.
     bool request_in_progress = false;
+
+    // Fro degrade mode.
     SteadyClock::time_point degrade_deadline;
 
     // To decide when to report ru consumption.
@@ -311,6 +306,7 @@ public:
         background_threads.emplace_back([this] { this->requestGACLoop(); });
 
         current_tick = SteadyClock::now();
+        last_clear_cpu_time = current_tick;
     }
 
     ~LocalAdmissionController() { safeStop(); }
@@ -330,12 +326,14 @@ public:
     void consumeCPUResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         consumeResource(name, ru, cpu_time_in_ns);
+        // todo Increment instead of Set.
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_consumption, name).Set(ru);
     }
 
     void consumeBytesResource(const std::string & name, double ru)
     {
         consumeResource(name, ru, 0);
+        // todo Increment instead of Set.
         GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_storage_ru_consumption, name).Set(ru);
     }
 
@@ -364,14 +362,14 @@ public:
         if (name.empty())
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
-        ResourceGroupPtr group = findResourceGroup(name);
+        auto [group, tmp_max_ru_per_sec] = findResourceGroupAndMaxRUPerSec(name);
         if unlikely (!group)
         {
             LOG_DEBUG(log, "cannot get priority for {}, maybe it has been deleted", name);
             return std::nullopt;
         }
 
-        return {group->getPriority(max_ru_per_sec.load())};
+        return {group->getPriority(tmp_max_ru_per_sec)};
     }
 
     // Fetch resource group info from GAC if necessary and store in local cache.
@@ -413,7 +411,6 @@ public:
     static constexpr auto DEFAULT_TARGET_PERIOD = std::chrono::seconds(5);
     static constexpr auto DEFAULT_TARGET_PERIOD_MS
         = std::chrono::duration_cast<std::chrono::milliseconds>(DEFAULT_TARGET_PERIOD);
-    // If we cannot get GAC resp for DEGRADE_MODE_DURATION seconds, enter degrade mode.
     static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
 
@@ -425,7 +422,7 @@ private:
     // For tidb_enable_resource_control is disabled.
     static constexpr uint64_t HIGHEST_RESOURCE_GROUP_PRIORITY = 0;
 
-    void stop();
+    static constexpr auto CLEAR_CPU_TIME_DURATION = std::chrono::seconds(5);
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
@@ -464,14 +461,22 @@ private:
         auto iter = resource_groups.find(name);
         return iter == resource_groups.end() ? nullptr : iter->second;
     }
+    std::pair<ResourceGroupPtr, uint64_t> findResourceGroupAndMaxRUPerSec(const std::string & name) const
+    {
+        std::lock_guard lock(mu);
+        auto iter = resource_groups.find(name);
+        auto rg = (iter == resource_groups.end() ? nullptr : iter->second);
+        return {rg, max_ru_per_sec};
+    }
 
     void addResourceGroup(const resource_manager::ResourceGroup & new_group_pb)
     {
         uint64_t user_ru_per_sec = new_group_pb.r_u_settings().r_u().settings().fill_rate();
-        if (max_ru_per_sec.load() < user_ru_per_sec)
-            max_ru_per_sec.store(user_ru_per_sec);
-
         std::lock_guard lock(mu);
+
+        if (max_ru_per_sec < user_ru_per_sec)
+            max_ru_per_sec = user_ru_per_sec;
+
         auto iter = resource_groups.find(new_group_pb.name());
         if (iter != resource_groups.end())
             return;
@@ -514,6 +519,20 @@ private:
         const std::string & etcd_key,
         std::string & parsed_rg_name,
         std::string & err_msg);
+    void updateMaxRUPerSecAfterDeleteWithoutLock(uint64_t deleted_user_ru_per_sec);
+
+    void clearCPUTimeWithoutLock(const SteadyClock::time_point & now)
+    {
+        static_assert(CLEAR_CPU_TIME_DURATION > ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL);
+        if (now - last_clear_cpu_time >= CLEAR_CPU_TIME_DURATION)
+        {
+            for (auto & resource_group : resource_groups)
+                resource_group.second->clearCPUTime();
+            last_clear_cpu_time = now;
+        }
+    }
+
+    void stop();
 
 private:
     mutable std::mutex mu;
@@ -528,7 +547,7 @@ private:
     std::unordered_map<std::string, ResourceGroupPtr> resource_groups{};
     std::unordered_set<std::string> low_token_resource_groups{};
 
-    std::atomic<uint64_t> max_ru_per_sec = 0;
+    uint64_t max_ru_per_sec = 0;
 
     ::pingcap::kv::Cluster * cluster = nullptr;
     std::atomic<bool> need_reset_unique_client_id{false};
@@ -538,6 +557,7 @@ private:
     std::vector<std::thread> background_threads;
 
     SteadyClock::time_point current_tick = SteadyClock::time_point::min();
+    SteadyClock::time_point last_clear_cpu_time = SteadyClock::time_point::min();
 
     std::function<void()> refill_token_callback = nullptr;
 
