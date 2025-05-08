@@ -61,8 +61,7 @@ struct LACRUConsumptionDeltaInfo
     double delta = 0.0;
 };
 
-// gjt todo more checks
-// gjt todo check burstable, support -2!
+// TODO need also support burst_limit == -2
 // gac_resp.burst_limit < 0: resource group is burstable, and will not use bucket at all.
 // gac_resp.burst_limit >= 0: resource group is not burstable, will use bucket to limit the speed of the resource group.
 //     1. normal_mode: bucket is static(a.k.a. bucket.fill_rate is zero), LAC will fetch tokens from GAC to fill bucket.
@@ -227,8 +226,10 @@ private:
         std::lock_guard lock(mu);
         if (bucket_mode == TokenBucketMode::trickle_mode && trickle_deadline > tp)
         {
-            return static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(trickle_deadline - tp).count()
-                * bucket->getConfig().fill_rate) / 1000.0;
+            return static_cast<double>(
+                       std::chrono::duration_cast<std::chrono::milliseconds>(trickle_deadline - tp).count()
+                       * bucket->getConfig().fill_rate)
+                / 1000.0;
         }
         return 0.0;
     }
@@ -243,6 +244,7 @@ private:
     }
 
     void clearCPUTime() { cpu_time_in_ns = 0; }
+
 private:
     mutable std::mutex mu;
 
@@ -349,7 +351,7 @@ public:
             LOG_DEBUG(log, "cannot get priority for {}, maybe it has been deleted", name);
             return 0;
         }
-        return group->estWaitDuraMS(DEFAULT_TARGET_PERIOD_MS.count());
+        return group->estWaitDuraMS(DEFAULT_MAX_EST_WAIT_DURATION.count());
     }
 
     std::optional<uint64_t> getPriority(const std::string & name)
@@ -411,6 +413,7 @@ public:
         = std::chrono::duration_cast<std::chrono::milliseconds>(DEFAULT_TARGET_PERIOD);
     static constexpr auto DEGRADE_MODE_DURATION = std::chrono::seconds(120);
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
+    static constexpr auto DEFAULT_MAX_EST_WAIT_DURATION = std::chrono::milliseconds(1000);
 
 private:
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
@@ -446,7 +449,6 @@ private:
                 low_token_resource_groups.insert(name);
             }
             cv.notify_all();
-            LOG_DEBUG(log, "gjt debug low token notifyed");
         }
     }
 
