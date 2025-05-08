@@ -101,7 +101,6 @@ public:
 
     uint64_t estWaitDuraMS(uint64_t max_wait_dura_ms) const
     {
-        // gjt todo refine when refill rate is zero.
         const auto tokens = peek();
         static const uint64_t min_wait_dura_ms = 10;
         assert(max_wait_dura_ms > min_wait_dura_ms);
