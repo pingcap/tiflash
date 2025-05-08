@@ -294,9 +294,6 @@ void ResourceGroup::updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_
     ru_consumption_delta_for_compute_speed = 0.0;
     last_compute_ru_consumption_speed = now;
     GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(smooth_ru_consumption_speed);
-
-    // todo maybe LAC level instead of rg level.
-    clearCPUTimeWithoutLock(now);
 }
 
 LACRUConsumptionDeltaInfo ResourceGroup::updateRUConsumptionDeltaInfoWithoutLock()
@@ -417,6 +414,7 @@ void LocalAdmissionController::mainLoop()
                 gac_requests.push_back(gac_req_opt.value());
                 gac_requests_cv.notify_all();
             }
+            clearCPUTimeWithoutLock(current_tick);
             checkDegradeMode();
         }
         catch (...)
@@ -826,7 +824,13 @@ bool LocalAdmissionController::handleDeleteEvent(const mvccpb::KeyValue & kv, st
     size_t erase_num = 0;
     {
         std::lock_guard lock(mu);
-        erase_num = resource_groups.erase(name);
+        if (auto delete_iter = resource_groups.find(name); delete_iter != resource_groups.end())
+        {
+            erase_num = 1;
+            const auto deleted_user_ru_per_sec = delete_iter->second->user_ru_per_sec;
+            resource_groups.erase(delete_iter);
+            updateMaxRUPerSecAfterDeleteWithoutLock(deleted_user_ru_per_sec);
+        }
     }
     LOG_DEBUG(log, "delete resource group {}, erase_num: {}", name, erase_num);
     return true;
@@ -858,7 +862,9 @@ bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::
         }
         else
         {
+            const auto deleted_user_ru_per_sec = iter->second->user_ru_per_sec;
             iter->second->resetResourceGroup(group_pb);
+            updateMaxRUPerSecAfterDeleteWithoutLock(deleted_user_ru_per_sec);
         }
     }
     LOG_DEBUG(log, "modify resource group to: {}", group_pb.DebugString());
@@ -889,6 +895,19 @@ void LocalAdmissionController::checkGACRespValid(const resource_manager::Resourc
 {
     RUNTIME_CHECK_MSG(!new_group_pb.name().empty(), "resource group name from GAC is empty");
     RUNTIME_CHECK_MSG(new_group_pb.mode() == resource_manager::GroupMode::RUMode, "resource group is not RUMode");
+}
+
+void LocalAdmissionController::updateMaxRUPerSecAfterDeleteWithoutLock(uint64_t deleted_user_ru_per_sec)
+{
+    if (max_ru_per_sec == deleted_user_ru_per_sec)
+    {
+         max_ru_per_sec = 0;
+        for (const auto & resource_group : resource_groups)
+        {
+            if (max_ru_per_sec < resource_group.second->user_ru_per_sec)
+                max_ru_per_sec = resource_group.second->user_ru_per_sec;
+        }
+    }
 }
 
 void LocalAdmissionController::stop()
