@@ -20,12 +20,9 @@ namespace DB
 {
 void CTESourceOp::operateSuffixImpl()
 {
-    this->cte.reset();
-    this->cte_manager->releaseCTE(this->query_id_and_cte_id);
     LOG_DEBUG(log, "finish read {} rows from cte source", total_rows);
 }
 
-// TODO in some cases, source needs to manually filter some data when cte saves all data(start here)
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {
     auto res = this->cte->tryGetBlockAt(this->block_fetch_idx);
@@ -38,9 +35,12 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         return OperatorStatus::HAS_OUTPUT;
     case DB::FetchStatus::Waiting:
         if unlikely (this->block_fetch_idx == 0)
+        {
             // CTE has not begun to receive data yet when block_fetch_idx == 0
             // So we need to wait the notify from CTE
+            setNotifyFuture(this->cte.get());
             return OperatorStatus::WAIT_FOR_NOTIFY;
+        }
         else
             return OperatorStatus::WAITING;
     case DB::FetchStatus::Cancelled:

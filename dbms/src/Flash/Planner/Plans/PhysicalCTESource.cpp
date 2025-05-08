@@ -66,7 +66,8 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
             exec_context,
             log->identifier(),
             query_id_and_cte_id,
-            context.getCTEManager()));
+            context.getCTEManager(),
+            schema));
     }
     context.getDAGContext()->addInboundIOProfileInfos(this->executor_id, group_builder.getCurIOProfileInfos());
 }

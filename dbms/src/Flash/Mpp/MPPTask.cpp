@@ -205,6 +205,14 @@ void MPPTask::run()
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
+    if unlikely (!dag_context->dag_request.rootExecutor().has_exchange_sender())
+    {
+        if unlikely (!dag_context->dag_request.rootExecutor().has_cte_sink())
+            throw Exception("Task has either exchange sender or cte sink");
+
+        // There is no need to register tunnel for cte sink
+        return;
+    }
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();
@@ -808,13 +816,16 @@ int MPPTask::estimateCountOfNewThreads()
 {
     auto query_executor = query_executor_holder.tryGet();
     RUNTIME_CHECK_MSG(
-        query_executor && dag_context->tunnel_set != nullptr,
+        query_executor && (dag_context->tunnel_set != nullptr || dag_context->dag_request->root_executor().has_cte_sink()),
         "It should not estimate the threads for the uninitialized task {}",
         id.toString());
 
     // Estimated count of new threads from query executor, MppTunnels, mpp_receivers.
     assert(query_executor.value());
-    return (*query_executor)->estimateNewThreadCount() + 1 + dag_context->tunnel_set->getExternalThreadCnt()
+    int external_thread_count = 0;
+    if likely (dag_context->tunnel_set != nullptr)
+        external_thread_count = dag_context->tunnel_set->getExternalThreadCnt();
+    return (*query_executor)->estimateNewThreadCount() + 1 + external_thread_count
         + new_thread_count_of_mpp_receiver;
 }
 

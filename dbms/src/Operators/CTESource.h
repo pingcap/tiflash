@@ -30,16 +30,25 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         const String & query_id_and_cte_id_,
-        CTEManager * cte_manager_)
+        CTEManager * cte_manager_,
+        const NamesAndTypes & schema)
         : SourceOp(exec_context_, req_id)
         , query_id_and_cte_id(query_id_and_cte_id_)
         , cte_manager(cte_manager_)
         , cte(cte_manager_->getCTE(query_id_and_cte_id_))
-    {}
+    {
+        setHeader(Block(getColumnWithTypeAndName(schema)));
+    }
 
-    ~CTESourceOp() override { assert(!this->cte); }
+    ~CTESourceOp() override
+    {
+        this->cte.reset();
+        this->cte_manager->releaseCTE(this->query_id_and_cte_id);
+    }
 
     String getName() const override { return "CTESourceOp"; }
+
+    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
 
 protected:
     void operateSuffixImpl() override;
