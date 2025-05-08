@@ -362,7 +362,8 @@ FastAddPeerRes FastAddPeerImplWrite(
         region->getRange(),
         table_id,
         storage->isCommonHandle(),
-        storage->getRowKeyColumnSize());
+        storage->getRowKeyColumnSize(),
+        fmt::format("region_id={} new_peer_id={} FastAddPeerImplWrite", region_id, new_peer_id));
 
     if (cancel_handle->isCanceled())
     {

@@ -133,7 +133,7 @@ void DeltaMergeStore::cleanPreIngestFiles(
         {
             // For disagg mode
             // - if the job has been finished, it means the local files is likely all uploaded to S3
-            // - if the job is intrrupted, it means the `SSTFilesToDTFilesOutputStream::cancel` is called
+            // - if the job is interrupted, it means the `SSTFilesToDTFilesOutputStream::cancel` is called
             //   and local files are also removed.
             // So we ignore the files on disk.
             removePreIngestFile(f.id, false);
@@ -271,9 +271,9 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
                 /*throw_if_notfound*/ true);
 
             const auto delete_range = remaining_delete_range.shrink(segment->getRowKeyRange());
+            // as remaining_delete_range is not none, we expect the shrunk range to be not none.
             RUNTIME_CHECK(
-                !delete_range
-                     .none(), // as remaining_delete_range is not none, we expect the shrinked range to be not none.
+                !delete_range.none(),
                 delete_range.toDebugString(),
                 segment->simpleInfo(),
                 remaining_delete_range.toDebugString());
@@ -879,9 +879,9 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
                 /*throw_if_notfound*/ true);
 
             const auto delete_range = remaining_delete_range.shrink(segment->getRowKeyRange());
+            // as remaining_delete_range is not none, we expect the shrunk range to be not none.
             RUNTIME_CHECK(
-                !delete_range
-                     .none(), // as remaining_delete_range is not none, we expect the shrinked range to be not none.
+                !delete_range.none(),
                 delete_range.toDebugString(),
                 segment->simpleInfo(),
                 remaining_delete_range.toDebugString());

@@ -1213,9 +1213,9 @@ RowKeyRange SegmentTestBasic::buildRowKeyRange(
             DB::EncodeInt64(v, ss);
             return std::make_shared<String>(ss.releaseStr());
         };
-        auto left = RowKeyValue{is_common_handle, create_rowkey_value(begin)};
+        auto left = RowKeyValue::fromHandle(is_common_handle, create_rowkey_value(begin));
         auto right = including_right_boundary ? RowKeyValue::COMMON_HANDLE_MAX_KEY
-                                              : RowKeyValue{is_common_handle, create_rowkey_value(end)};
+                                              : RowKeyValue::fromHandle(is_common_handle, create_rowkey_value(end));
         return RowKeyRange{left, right, is_common_handle, 1};
     }
 

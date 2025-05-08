@@ -3407,9 +3407,7 @@ try
     // Delete range [0, 64)
     const size_t num_deleted_rows = 64;
     {
-        RowKeyValue start(true, std::make_shared<String>(genMockCommonHandle(0, rowkey_column_size)));
-        RowKeyValue end(true, std::make_shared<String>(genMockCommonHandle(num_deleted_rows, rowkey_column_size)));
-        RowKeyRange range(start, end, true, rowkey_column_size);
+        auto range = DMTestEnv::getRowKeyRangeForClusteredIndex(0, num_deleted_rows, rowkey_column_size);
         store->deleteRange(*db_context, db_context->getSettingsRef(), range);
     }
     // Read after deletion
