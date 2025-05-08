@@ -648,6 +648,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         }
 
         handled_resource_group_names.push_back(name);
+        const String err_msg = fmt::format("handle acquire token resp failed: rg: {}", name);
 
         // It's possible for one_resp.granted_r_u_tokens() to be empty
         // when the acquire_token_req is only for report RU consumption.
@@ -675,14 +676,14 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         }
 
         int64_t trickle_ms = granted_token_bucket.trickle_time_ms();
-        RUNTIME_CHECK(trickle_ms >= 0);
+        RUNTIME_CHECK_MSG(trickle_ms >= 0, "{}, expect trickle_ms >= 0, but got: {}", err_msg, trickle_ms);
 
         const auto now = SteadyClock::now();
 
         double added_tokens = granted_token_bucket.granted_tokens().tokens();
-        RUNTIME_CHECK(added_tokens >= 0);
+        RUNTIME_CHECK_MSG(added_tokens >= 0, "{}, expect added_tokens >= 0, but got: {}", err_msg, added_tokens);
         const auto trickle_left_tokens = resource_group->getTrickleLeftTokens(now);
-        RUNTIME_CHECK(trickle_left_tokens >= 0);
+        RUNTIME_CHECK_MSG(trickle_left_tokens >= 0, "{}, expect trickle_left_tokens >= 0, but got: {}", err_msg, trickle_left_tokens);
         added_tokens += trickle_left_tokens;
 
         // capacity can be zero
@@ -696,7 +697,10 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
             GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_capacity, name).Set(capacity);
 
         // fill_rate should never be setted.
-        RUNTIME_CHECK(granted_token_bucket.granted_tokens().settings().fill_rate() == 0);
+        {
+            const auto fill_rate = granted_token_bucket.granted_tokens().settings().fill_rate();
+            RUNTIME_CHECK_MSG(fill_rate == 0, "{}, expect fill_rate is 0, but got: {}", err_msg, fill_rate);
+        }
 
         if (trickle_ms == 0)
         {
