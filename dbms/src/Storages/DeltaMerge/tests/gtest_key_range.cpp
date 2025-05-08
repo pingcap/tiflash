@@ -16,9 +16,11 @@
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/Types.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
 
+#include <limits>
 #include <random>
 
 namespace DB::DM::tests
@@ -115,6 +117,91 @@ TEST(HandleRangeTest, RedactRangeFromCommonHandle)
 
 TEST(RowKey, ToNextKeyIntHandle)
 {
+    {
+        TableID table_id = 471;
+        auto key_end = RecordKVFormat::genRawKey(table_id, 20);
+        key_end.push_back('\x00');
+        auto tikv_key = RecordKVFormat::encodeAsTiKVKey(key_end);
+        LOG_INFO(
+            Logger::get(),
+            "split with table_id={}, row_id={}, suffix='\\x00' key={}",
+            table_id,
+            20,
+            Redact::keyToHexString(tikv_key.data(), tikv_key.length()));
+    }
+    {
+        TableID table_id = 471;
+        auto key_end = RecordKVFormat::genRawKey(table_id, 20);
+        key_end.push_back('\x01');
+        auto tikv_key = RecordKVFormat::encodeAsTiKVKey(key_end);
+        LOG_INFO(
+            Logger::get(),
+            "split with table_id={}, row_id={}, suffix='\\x01' key={}",
+            table_id,
+            20,
+            Redact::keyToHexString(tikv_key.data(), tikv_key.length()));
+    }
+    {
+        TableID table_id = 471;
+        auto key_end = RecordKVFormat::genRawKey(table_id, 20);
+        key_end.push_back('\x01');
+        key_end.push_back('\x30');
+        key_end.push_back('\xFF');
+        auto tikv_key = RecordKVFormat::encodeAsTiKVKey(key_end);
+        LOG_INFO(
+            Logger::get(),
+            "split with table_id={}, row_id={}, suffix='\\x0130FF' key={}",
+            table_id,
+            20,
+            Redact::keyToHexString(tikv_key.data(), tikv_key.length()));
+    }
+    {
+        TableID table_id = 471;
+        auto key_end = RecordKVFormat::genRawKey(table_id, std::numeric_limits<HandleID>::min());
+        auto tikv_key = RecordKVFormat::encodeAsTiKVKey(key_end);
+        LOG_INFO(
+            Logger::get(),
+            "split with table_id={}, row_id={}, suffix='' key={}",
+            table_id,
+            std::numeric_limits<HandleID>::min(),
+            Redact::keyToHexString(tikv_key.data(), tikv_key.length()));
+    }
+    {
+        TableID table_id = 471;
+        auto key_end = RecordKVFormat::genRawKey(table_id, std::numeric_limits<HandleID>::min());
+        key_end.push_back('\x01');
+        auto tikv_key = RecordKVFormat::encodeAsTiKVKey(key_end);
+        LOG_INFO(
+            Logger::get(),
+            "split with table_id={}, row_id={}, suffix='\\x01' key={}",
+            table_id,
+            std::numeric_limits<HandleID>::min(),
+            Redact::keyToHexString(tikv_key.data(), tikv_key.length()));
+    }
+    {
+        TableID table_id = 471;
+        auto key_end = RecordKVFormat::genRawKey(table_id, std::numeric_limits<HandleID>::max());
+        auto tikv_key = RecordKVFormat::encodeAsTiKVKey(key_end);
+        LOG_INFO(
+            Logger::get(),
+            "split with table_id={}, row_id={}, suffix='' key={}",
+            table_id,
+            std::numeric_limits<HandleID>::max(),
+            Redact::keyToHexString(tikv_key.data(), tikv_key.length()));
+    }
+    {
+        TableID table_id = 471;
+        auto key_end = RecordKVFormat::genRawKey(table_id, std::numeric_limits<HandleID>::max());
+        key_end.push_back('\x01');
+        auto tikv_key = RecordKVFormat::encodeAsTiKVKey(key_end);
+        LOG_INFO(
+            Logger::get(),
+            "split with table_id={}, row_id={}, suffix='\\x01' key={}",
+            table_id,
+            std::numeric_limits<HandleID>::max(),
+            Redact::keyToHexString(tikv_key.data(), tikv_key.length()));
+    }
+
     const TableID table_id = 1;
     const auto key = RowKeyValue::fromHandle(20);
     const auto next = key.toNext();
@@ -134,26 +221,22 @@ TEST(RowKey, ToNextKeyIntHandle)
             /* is_common_handle */ false,
             /* row_key_column_size */ 1);
         EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
+        EXPECT_EQ(range.getEnd().toDebugString(), "21");
     }
+
+    // The whole key range of a specified table_id
     {
-        auto key_end = RecordKVFormat::genRawKey(445, 200000);
-        key_end.push_back('\x00');
-        auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
-        LOG_INFO(Logger::get(), "key_end={}", tikv_key_end.toDebugString());
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genTableRecordStartKey(table_id),
+            RecordKVFormat::genTableRecordEndKey(table_id));
+        const auto range = RowKeyRange::fromRegionRange(
+            range_keys,
+            /* table_id */ table_id,
+            /* is_common_handle */ false,
+            /* row_key_column_size */ 1);
+        EXPECT_EQ(range.toDebugString(), "[-9223372036854775808,9223372036854775807)");
     }
-    {
-        auto key_end = RecordKVFormat::genRawKey(445, 200000);
-        key_end.push_back('\x01');
-        auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
-        LOG_INFO(Logger::get(), "key_end={}", tikv_key_end.toDebugString());
-    }
-    {
-        auto key_end = RecordKVFormat::genRawKey(445, 200000);
-        key_end.push_back('\x01');
-        key_end.push_back('\x30');
-        auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
-        LOG_INFO(Logger::get(), "key_end={}", tikv_key_end.toDebugString());
-    }
+
     // tiflash#7762
     // Note: {20,00} will be regarded as Key=21 in RowKeyRange::fromRegionRange.
     {
