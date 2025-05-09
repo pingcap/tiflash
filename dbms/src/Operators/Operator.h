@@ -84,9 +84,12 @@ public:
     }
     void setHeader(const Block & header_)
     {
+        setHeaderImpl();
         assert(header_ && !header);
         header = header_;
     }
+
+    virtual void setHeaderImpl() {}
 
     const OperatorProfileInfoPtr & getProfileInfo() const { return profile_info_ptr; }
 

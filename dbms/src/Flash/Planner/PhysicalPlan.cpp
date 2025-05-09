@@ -303,7 +303,8 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
 void PhysicalPlan::addRootFinalProjectionIfNeed()
 {
     RUNTIME_CHECK(root_node);
-    if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender)
+    if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender
+        && root_node->tp() != PlanType::CTESink)
     {
         pushBack(root_node);
         buildFinalProjection(fmt::format("{}_", root_node->execId()), true);

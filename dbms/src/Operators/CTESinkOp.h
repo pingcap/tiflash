@@ -38,13 +38,15 @@ public:
     {
         // In case some tasks are still in WAITING_FOR_NOTIFY status
         this->cte->notifyEOF();
-        
+
         this->cte.reset();
         this->cte_manager->releaseCTE(this->query_id_and_cte_id);
     }
 
     String getName() const override { return "CTESinkOp"; }
     bool canHandleSelectiveBlock() const override { return true; }
+
+    void setHeaderImpl() override { std::cout << "1"; }
 
 protected:
     void operateSuffixImpl() override;
