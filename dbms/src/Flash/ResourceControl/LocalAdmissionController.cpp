@@ -23,7 +23,8 @@ void ResourceGroup::initStaticTokenBucket(int64_t capacity)
 {
     std::lock_guard lock(mu);
     const double init_fill_rate = 0.0;
-    // todo maybe a better init value, for now just use user_ru_per_sec like tidb.
+    // TODO maybe a better init value like user_ru_per_sec/instance_num,
+    // for now just use user_ru_per_sec like tidb.
     const double init_tokens = user_ru_per_sec;
     int64_t init_cap = capacity;
     if (capacity < 0)
@@ -271,12 +272,12 @@ LACRUConsumptionDeltaInfo ResourceGroup::updateRUConsumptionDeltaInfoWithoutLock
     // 2. report ru consumption
     LACRUConsumptionDeltaInfo info;
 
-    total_ru_consumption += ru_consumption_delta;
     info.speed = smooth_ru_consumption_speed;
     info.delta = ru_consumption_delta;
-    ru_consumption_delta = 0;
 
-    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Set(total_ru_consumption);
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Increment(ru_consumption_delta);
+
+    ru_consumption_delta = 0;
     return info;
 }
 
@@ -703,7 +704,6 @@ void LocalAdmissionController::watchGACLoop()
         }
         catch (...)
         {
-            // todo 10sec
             LOG_ERROR(
                 log,
                 "watchGACLoop failed: {}, retry {} sec later",
@@ -918,7 +918,6 @@ void LocalAdmissionController::stop()
     // NOTE: Make sure to all threads have been joined before call buildGACRequest().
     const auto gac_req = buildGACRequest(/*is_final_report=*/true);
     RUNTIME_CHECK(resource_groups.empty() || gac_req.has_value());
-    // todo: maybe should add timeout to avoid slow down termination process.
     auto resp = cluster->pd_client->acquireTokenBuckets(gac_req.value());
 
     if (resp.has_error())
