@@ -448,10 +448,23 @@ void ColumnArray::updateHashWithValues(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
-    for (size_t i = 0, sz = size(); i < sz; ++i)
+    updateHashWithValues(0, size(), hash_values, collator, sort_key_container);
+}
+
+void ColumnArray::updateHashWithValues(
+    size_t start,
+    size_t length,
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
+{
+    RUNTIME_CHECK(size() >= start + length);
+    RUNTIME_CHECK(hash_values.size() >= length);
+
+    for (size_t i = 0, row = start; i < length; ++i, ++row)
     {
-        size_t array_size = sizeAt(i);
-        size_t offset = offsetAt(i);
+        size_t array_size = sizeAt(row);
+        size_t offset = offsetAt(row);
 
         hash_values[i].update(array_size);
         for (size_t j = 0; j < array_size; ++j)
