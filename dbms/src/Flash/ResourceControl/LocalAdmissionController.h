@@ -245,7 +245,9 @@ private:
 
     void clearCPUTime() { cpu_time_in_ns = 0; }
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     mutable std::mutex mu;
 
     // Meta info.
