@@ -95,7 +95,7 @@ public:
 #ifdef DBMS_PUBLIC_GTEST
     ResourceGroup(const std::string & group_name_, uint32_t user_priority_, uint64_t user_ru_per_sec_, bool burstable_)
         : name(group_name_)
-        , user_priority(user_priority_)
+        , user_priority_val(getUserPriorityVal(user_priority_))
         , user_ru_per_sec(user_ru_per_sec_)
         , burstable(burstable_)
         , log(Logger::get("resource group:" + group_name_))
@@ -120,12 +120,16 @@ private:
 
     // Priority of resource group set by user.
     // This is specified by tidb: parser/model/model.go
-    static constexpr int32_t LowPriorityValue = 1;
-    static constexpr int32_t MediumPriorityValue = 8;
-    static constexpr int32_t HighPriorityValue = 16;
+    static constexpr auto USER_PRIORITY_BITS = 4;
+    static constexpr int32_t UserLowPriority = 1;
+    static constexpr int32_t UserMediumPriority = 8;
+    static constexpr int32_t UserHighPriority = 16;
+    static constexpr int32_t LowPriorityValue = 15;
+    static constexpr int32_t MediumPriorityValue = 7;
+    static constexpr int32_t HighPriorityValue = 0;
 
     // Minus 1 because uint64 max is used as special flag.
-    static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> 4) - 1;
+    static constexpr uint64_t MAX_VIRTUAL_TIME = (std::numeric_limits<uint64_t>::max() >> USER_PRIORITY_BITS) - 1;
     static constexpr double MOVING_RU_CONSUMPTION_SPEED_FACTOR = 0.5;
     static constexpr auto COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL = std::chrono::seconds(1);
     static constexpr auto REPORT_RU_CONSUMPTION_DELTA_THRESHOLD = 100;
@@ -189,13 +193,10 @@ private:
     {
         std::lock_guard lock(mu);
         group_pb = group_pb_;
-        user_priority = group_pb_.priority();
+        user_priority_val = getUserPriorityVal(group_pb_.priority());
         const auto & setting = group_pb.r_u_settings().r_u().settings();
         user_ru_per_sec = setting.fill_rate();
         burstable = (setting.burst_limit() <= 0);
-        RUNTIME_CHECK(
-            user_priority == LowPriorityValue || user_priority == MediumPriorityValue
-            || user_priority == HighPriorityValue);
     }
 
     // Change bucket status according to the gac response.
@@ -245,6 +246,21 @@ private:
 
     void clearCPUTime() { cpu_time_in_ns = 0; }
 
+    static uint32_t getUserPriorityVal(uint32_t user_priority_from_pb)
+    {
+        switch (user_priority_from_pb)
+        {
+        case UserLowPriority:
+            return LowPriorityValue;
+        case UserMediumPriority:
+            return MediumPriorityValue;
+        case UserHighPriority:
+            return HighPriorityValue;
+        default:
+            throw Exception(fmt::format("unexpected user priority: {}", user_priority_from_pb));
+        }
+    }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
@@ -252,7 +268,7 @@ private:
 
     // Meta info.
     const std::string name;
-    uint32_t user_priority = 0;
+    uint32_t user_priority_val = 0;
     uint64_t user_ru_per_sec = 0;
     bool burstable = false;
     resource_manager::ResourceGroup group_pb;
