@@ -334,10 +334,69 @@ FastAddPeerRes FastAddPeerImpl(EngineStoreServerWrap * server, uint64_t region_i
         auto wn_ps = server->tmt->getContext().getWriteNodePageStorage();
         wn_ps->write(std::move(wb));
 
+<<<<<<< HEAD
         return genFastAddPeerRes(
             FastAddPeerStatus::Ok,
             apply_state.SerializeAsString(),
             region_state.region().SerializeAsString());
+=======
+FastAddPeerRes FastAddPeerImplWrite(
+    TMTContext & tmt,
+    const TiFlashRaftProxyHelper * proxy_helper,
+    UInt64 region_id,
+    UInt64 new_peer_id,
+    CheckpointRegionInfoAndData && checkpoint,
+    UInt64 start_time)
+{
+    auto fap_ctx = tmt.getContext().getSharedContextDisagg()->fap_context;
+    auto cancel_handle = fap_ctx->tasks_trace->getCancelHandleFromExecutor(region_id);
+    const auto & settings = tmt.getContext().getSettingsRef();
+    Stopwatch watch;
+    SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage).Observe(watch.elapsedSeconds()); });
+    GET_METRIC(tiflash_fap_task_state, type_writing_stage).Increment();
+    SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_writing_stage).Decrement(); });
+
+    auto [checkpoint_info, region, apply_state, region_state] = checkpoint;
+
+    auto keyspace_id = region->getKeyspaceID();
+    auto table_id = region->getMappedTableID();
+
+    auto log = Logger::get(fmt::format(
+        "FastAddPeer(region_id={} keyspace={} table_id={} new_peer_id={})",
+        region_id,
+        keyspace_id,
+        table_id,
+        new_peer_id));
+
+    const auto [table_drop_lock, storage, schema_snap] = AtomicGetStorageSchema(region_id, keyspace_id, table_id, tmt);
+    if (!storage)
+    {
+        LOG_WARNING(log, "FAP failed because the table can not be found");
+        return genFastAddPeerResFail(FastAddPeerStatus::BadData);
+    }
+    UNUSED(schema_snap);
+    RUNTIME_CHECK_MSG(storage->engineType() == TiDB::StorageEngine::DT, "ingest into unsupported storage engine");
+    auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+    auto new_key_range = DM::RowKeyRange::fromRegionRange(
+        region->getRange(),
+        table_id,
+        storage->isCommonHandle(),
+        storage->getRowKeyColumnSize(),
+        fmt::format("region_id={} new_peer_id={} FastAddPeerImplWrite", region_id, new_peer_id));
+
+    if (cancel_handle->isCanceled())
+    {
+        LOG_INFO(log, "FAP is canceled before write");
+        fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
+        GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+        return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
+    }
+
+    DM::Segments segments;
+    try
+    {
+        segments = dm_storage->buildSegmentsFromCheckpointInfo(cancel_handle, new_key_range, checkpoint_info, settings);
+>>>>>>> b35176b1cd (Storage: Adapt to ingesting snapshot with irregular region range (#10151))
     }
     catch (...)
     {
