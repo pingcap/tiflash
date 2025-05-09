@@ -66,8 +66,8 @@ void TokenBucket::compact(const TimePoint & tp)
 double TokenBucket::getDynamicTokens(const TimePoint & tp) const
 {
     RUNTIME_CHECK(tp >= last_compact_timepoint);
-    auto elspased = tp - last_compact_timepoint;
-    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elspased).count();
+    auto elapsed = tp - last_compact_timepoint;
+    auto elapsed_ms = std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count();
     return elapsed_ms * fill_rate_ms;
 }
 
