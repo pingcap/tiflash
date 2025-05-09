@@ -22,7 +22,6 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/dtpb/column_file.pb.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
-#include <Storages/KVStore/Region_fwd.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <Storages/KVStore/Types.h>
 #include <TiDB/Decode/DatumCodec.h>
