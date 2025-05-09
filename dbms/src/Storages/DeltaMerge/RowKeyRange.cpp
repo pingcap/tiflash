@@ -57,7 +57,7 @@ std::pair<RowKeyValue, std::string_view> RowKeyValue::fromHandleWithSuffix(
     }
 
     assert(!is_common_handle_);
-    // According to the tidb encoding rule, the int handle must be larger than 8 bytes.
+    // According to the tidb encoding rule, the int handle must be larger or equal to 8 bytes.
     RUNTIME_CHECK_MSG(
         value_->size() >= sizeof(Int64),
         "Meet illegal int handle size less than expected, value_size={} value={}",
@@ -93,7 +93,7 @@ std::pair<RowKeyValue, std::string_view> RowKeyValue::fromHandleWithSuffix(
         }
         else
         {
-            // ignore RowKeyValue::INT_HANDLE_MAX_KEY
+            // keep the int_value unchanged if it is RowKeyValue::INT_HANDLE_MAX_KEY
         }
     }
     return {RowKeyValue(is_common_handle_, value_, int_value), std::string_view{nullptr, 0}};

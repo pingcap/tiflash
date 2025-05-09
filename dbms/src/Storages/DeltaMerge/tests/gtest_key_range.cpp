@@ -118,12 +118,12 @@ TEST(HandleRangeTest, RedactRangeFromCommonHandle)
 TEST(RowKey, ToNextKeyIntHandle)
 {
     const TableID table_id = 1;
-    const auto key = RowKeyValue::fromHandle(20);
+    const auto key = RowKeyValue::fromIntHandle(20);
     const auto next = key.toNext();
     EXPECT_EQ("21", next.toDebugString());
 
     {
-        const auto expected_next_int = RowKeyValue::fromHandle(21);
+        const auto expected_next_int = RowKeyValue::fromIntHandle(21);
         EXPECT_EQ(next.toRowKeyValueRef(), expected_next_int.toRowKeyValueRef());
     }
     {
@@ -225,7 +225,7 @@ TEST(RowKey, ToNextKeyCommonHandle)
 TEST(RowKey, NextIntHandleCompare)
 {
     auto int_max = RowKeyValue::INT_HANDLE_MAX_KEY;
-    auto int_max_i64 = RowKeyValue::fromHandle(static_cast<Handle>(std::numeric_limits<HandleID>::max()));
+    auto int_max_i64 = RowKeyValue::fromIntHandle(static_cast<Handle>(std::numeric_limits<HandleID>::max()));
 
     EXPECT_GT(int_max.toRowKeyValueRef(), int_max_i64.toRowKeyValueRef());
 
@@ -242,9 +242,9 @@ TEST(RowKey, NextIntHandleCompare)
 
 TEST(RowKey, NextIntHandleMinMax)
 {
-    auto v0 = RowKeyValue::fromHandle(static_cast<Handle>(1178400));
+    auto v0 = RowKeyValue::fromIntHandle(static_cast<Handle>(1178400));
     auto v0_next = v0.toNext();
-    auto v1 = RowKeyValue::fromHandle(static_cast<Handle>(1178401));
+    auto v1 = RowKeyValue::fromIntHandle(static_cast<Handle>(1178401));
 
     EXPECT_EQ(v0, std::min(v0, v1));
     EXPECT_EQ(v0, std::min(v0, v0_next));
