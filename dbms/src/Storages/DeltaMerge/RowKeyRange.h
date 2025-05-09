@@ -103,13 +103,15 @@ struct RowKeyValue
         int_value = rowkey_value.int_value;
     }
 
+#ifndef NDEBUG
     // Generate from int handle
-    static RowKeyValue fromHandle(Handle value)
+    static RowKeyValue fromIntHandle(Handle value)
     {
         WriteBufferFromOwnString ss;
         DB::EncodeInt64(value, ss);
         return RowKeyValue(false, std::make_shared<String>(ss.releaseStr()), value);
     }
+#endif
 
     static RowKeyValue fromHandle(bool is_common_handle_, const HandleValuePtr value_)
     {
@@ -123,6 +125,8 @@ struct RowKeyValue
      * Specially, for int handle, if there is any suffix rather than the regular format,
      * a.k.a "t${tableID}_r{handleID}{AnySuffix}" `AnySuffix` is not empty, then
      * the `int_value` will be the next int value, and the `AnySuffix` will be returned.
+     *
+     * Note that the `AnySuffix` rely on the lifetime of `value_`
      */
     static std::pair<RowKeyValue, std::string_view> fromHandleWithSuffix(bool is_common_handle_, HandleValuePtr value_);
 
