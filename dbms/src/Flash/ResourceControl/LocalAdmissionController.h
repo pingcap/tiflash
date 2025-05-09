@@ -442,7 +442,7 @@ private:
     // For tidb_enable_resource_control is disabled.
     static constexpr uint64_t HIGHEST_RESOURCE_GROUP_PRIORITY = 0;
 
-    static constexpr auto CLEAR_CPU_TIME_DURATION = std::chrono::seconds(5);
+    static constexpr auto CLEAR_CPU_TIME_DURATION = std::chrono::seconds(30);
 
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
