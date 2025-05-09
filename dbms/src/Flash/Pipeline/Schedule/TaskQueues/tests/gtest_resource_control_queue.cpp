@@ -81,8 +81,9 @@ std::shared_ptr<ResourceGroup> createResourceGroupOfDynamicTokenBucket(
     TokenBucket::TokenBucketConfig config(
         user_ru_per_sec,
         user_ru_per_sec,
+        static_cast<double>(std::numeric_limits<uint64_t>::max()),
         static_cast<double>(std::numeric_limits<uint64_t>::max()));
-    resource_group->bucket->reConfig(config);
+    resource_group->bucket->reConfig(config, std::chrono::steady_clock::now());
     return resource_group;
 }
 
