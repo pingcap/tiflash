@@ -183,7 +183,7 @@ std::optional<PageIdU64> SegmentTestBasic::splitSegmentAt(
     }
     else
     {
-        split_at_key = RowKeyValue::fromHandle(split_at);
+        split_at_key = RowKeyValue::fromIntHandle(split_at);
     }
 
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());

@@ -33,6 +33,7 @@
 #include <Storages/KVStore/Types.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <common/likely.h>
+#include <fmt/core.h>
 
 #include <mutex>
 #include <tuple>
@@ -222,9 +223,10 @@ bool KVStore::tryFlushRegionCacheInStorage(
         auto storage_lock = storage->lockForShare(getThreadNameAndID());
         auto rowkey_range = DM::RowKeyRange::fromRegionRange(
             region.getRange(),
-            region.getRange()->getMappedTableID(),
+            table_id,
             storage->isCommonHandle(),
-            storage->getRowKeyColumnSize());
+            storage->getRowKeyColumnSize(),
+            fmt::format("region {} KVStore::tryFlushRegionCacheInStorage", region.toString()));
         return storage->flushCache(tmt.getContext(), rowkey_range, try_until_succeed);
     }
     catch (DB::Exception & e)
