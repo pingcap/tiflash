@@ -915,7 +915,7 @@ void LocalAdmissionController::stop()
     // 1. to avoid RU consumption missed.
     // 2. clear GAC's unique_client_id by setting acquire_tokens as zero to avoid affecting burst limit calculation.
     // This can happend when disagg CN is scaled-in/out frequently.
-    // NOTE: Make sure to all threads have been joined before call buildGACRequest().
+    // NOTE: Make sure all threads have been joined before call buildGACRequest().
     const auto gac_req = buildGACRequest(/*is_final_report=*/true);
     RUNTIME_CHECK(resource_groups.empty() || gac_req.has_value());
     auto resp = cluster->pd_client->acquireTokenBuckets(gac_req.value());
