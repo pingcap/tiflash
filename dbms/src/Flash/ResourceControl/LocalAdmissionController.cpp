@@ -52,7 +52,7 @@ uint64_t ResourceGroup::getPriority(uint64_t max_ru_per_sec) const
     if unlikely (virtual_time > MAX_VIRTUAL_TIME)
         virtual_time = MAX_VIRTUAL_TIME;
 
-    return (((static_cast<uint64_t>(user_priority) - 1) << 60) | virtual_time);
+    return (((static_cast<uint64_t>(user_priority_val)) << 60) | virtual_time);
 }
 
 std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const SteadyClock::time_point & now)
