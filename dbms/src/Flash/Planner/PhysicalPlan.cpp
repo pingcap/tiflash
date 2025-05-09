@@ -21,6 +21,8 @@
 #include <Flash/Planner/PhysicalPlan.h>
 #include <Flash/Planner/PhysicalPlanVisitor.h>
 #include <Flash/Planner/Plans/PhysicalAggregation.h>
+#include <Flash/Planner/Plans/PhysicalCTESink.h>
+#include <Flash/Planner/Plans/PhysicalCTESource.h>
 #include <Flash/Planner/Plans/PhysicalExchangeReceiver.h>
 #include <Flash/Planner/Plans/PhysicalExchangeSender.h>
 #include <Flash/Planner/Plans/PhysicalExpand.h>
@@ -239,6 +241,21 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         pushBack(PhysicalExpand2::build(context, executor_id, log, executor->expand2(), popBack()));
         break;
     }
+    case tipb::ExecType::TypeCTESource:
+    {
+        auto fine_grained_shuffle = FineGrainedShuffle(executor);
+        GET_METRIC(tiflash_coprocessor_executor_count, type_cte_source).Increment();
+        pushBack(PhysicalCTESource::build(context, executor_id, log, fine_grained_shuffle, executor->cte_source()));
+        break;
+    }
+    case tipb::ExecType::TypeCTESink:
+    {
+        auto fine_grained_shuffle = FineGrainedShuffle(executor);
+        GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
+        pushBack(
+            PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack(), executor->cte_sink().cte_id()));
+        break;
+    }
     default:
         throw TiFlashException(
             fmt::format("{} executor is not supported", fmt::underlying(executor->tp())),
@@ -286,7 +303,8 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
 void PhysicalPlan::addRootFinalProjectionIfNeed()
 {
     RUNTIME_CHECK(root_node);
-    if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender)
+    if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender
+        && root_node->tp() != PlanType::CTESink)
     {
         pushBack(root_node);
         buildFinalProjection(fmt::format("{}_", root_node->execId()), true);

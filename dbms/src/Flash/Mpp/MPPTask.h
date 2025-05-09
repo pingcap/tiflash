@@ -199,6 +199,8 @@ private:
 
     MPPReceiverSetPtr receiver_set;
 
+    bool has_cte_sink = false;
+
     int new_thread_count_of_mpp_receiver = 0;
 
     const LoggerPtr log;
