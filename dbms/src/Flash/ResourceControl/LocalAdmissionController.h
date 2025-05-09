@@ -118,12 +118,12 @@ private:
 
     void initStaticTokenBucket(int64_t capacity);
 
-    // Priority of resource group set by user.
-    // This is specified by tidb: parser/model/model.go
     static constexpr auto USER_PRIORITY_BITS = 4;
+    // UserXXXPriority is specified by tidb: parser/model/model.go
     static constexpr int32_t UserLowPriority = 1;
     static constexpr int32_t UserMediumPriority = 8;
     static constexpr int32_t UserHighPriority = 16;
+    // XXXPriorityValue is used to calculate priority for pipeline engine scheduling.
     static constexpr int32_t LowPriorityValue = 15;
     static constexpr int32_t MediumPriorityValue = 7;
     static constexpr int32_t HighPriorityValue = 0;
@@ -244,7 +244,11 @@ private:
             .Set(config.low_token_threshold);
     }
 
-    void clearCPUTime() { cpu_time_in_ns = 0; }
+    void clearCPUTime()
+    {
+        std::lock_guard lock(mu);
+        cpu_time_in_ns = 0;
+    }
 
     static uint32_t getUserPriorityVal(uint32_t user_priority_from_pb)
     {
@@ -278,9 +282,6 @@ private:
     // Local token bucket.
     TokenBucketPtr bucket;
     TokenBucketMode bucket_mode = TokenBucketMode::normal_mode;
-
-    // For metrics.
-    double total_ru_consumption = 0.0;
 
     // For compute priority.
     uint64_t cpu_time_in_ns = 0;
