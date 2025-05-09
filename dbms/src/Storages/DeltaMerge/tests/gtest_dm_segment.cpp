@@ -1914,8 +1914,8 @@ try
         ASSERT_EQ(stable->getRows(), num_rows_write_every_round * write_round);
         // calculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
-        auto start = RowKeyValue::fromHandle(0);
-        auto end = RowKeyValue::fromHandle(num_rows_write_every_round);
+        auto start = RowKeyValue::fromIntHandle(0);
+        auto end = RowKeyValue::fromIntHandle(num_rows_write_every_round);
         RowKeyRange range(start, end, false, 1);
         // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
         stable->calculateStableProperty(dmContext(), range, false);
@@ -1965,10 +1965,10 @@ try
         // clear PackProperties to force it to calculate from scratch
         dmfile->clearPackProperties();
         ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);
-        // caculate StableProperty
+        // calculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
-        auto start = RowKeyValue::fromHandle(0);
-        auto end = RowKeyValue::fromHandle(num_rows_write_every_round);
+        auto start = RowKeyValue::fromIntHandle(0);
+        auto end = RowKeyValue::fromIntHandle(num_rows_write_every_round);
         RowKeyRange range(start, end, false, 1);
         // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
         stable->calculateStableProperty(dmContext(), range, false);
