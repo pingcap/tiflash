@@ -148,7 +148,12 @@ RegionPtr KVStore::handleIngestSSTByDTFile(
                     region->getRange(),
                     table_id,
                     storage->isCommonHandle(),
-                    storage->getRowKeyColumnSize());
+                    storage->getRowKeyColumnSize(),
+                    fmt::format(
+                        "region_id={} index={} term={} KVStore::handleIngestSSTByDTFile",
+                        region->id(),
+                        index,
+                        term));
                 // Call `ingestFiles` to ingest external DTFiles.
                 // Note that ingest sst won't remove the data in the key range
                 auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);

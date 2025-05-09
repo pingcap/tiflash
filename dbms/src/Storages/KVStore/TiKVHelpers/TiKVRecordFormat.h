@@ -168,6 +168,27 @@ inline TiKVKey genKey(const TiDB::TableInfo & table_info, std::vector<Field> key
     return encodeAsTiKVKey(key + ss.releaseStr());
 }
 
+inline TiKVKey genTableRecordStartKey(const TableID tableId)
+{
+    // The key format is "t${tableId}_r"
+    std::string key(RecordKVFormat::RAW_KEY_NO_HANDLE_SIZE, 0);
+    memcpy(key.data(), &RecordKVFormat::TABLE_PREFIX, 1);
+    auto big_endian_table_id = encodeInt64(tableId);
+    memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
+    memcpy(key.data() + 1 + 8, RecordKVFormat::RECORD_PREFIX_SEP, 2);
+    return encodeAsTiKVKey(key);
+}
+
+inline TiKVKey genTableRecordEndKey(const TableID tableId)
+{
+    // The key format is "t${tableId+1}"
+    std::string key(1 + 8, 0);
+    memcpy(key.data(), &RecordKVFormat::TABLE_PREFIX, 1);
+    auto big_endian_table_id = encodeInt64(tableId + 1);
+    memcpy(key.data() + 1, reinterpret_cast<const char *>(&big_endian_table_id), 8);
+    return encodeAsTiKVKey(key);
+}
+
 inline bool checkKeyPaddingValid(const char * ptr, const UInt8 pad_size)
 {
     UInt64 p = (*reinterpret_cast<const UInt64 *>(ptr)) >> ((ENC_GROUP_SIZE - pad_size) * 8);
