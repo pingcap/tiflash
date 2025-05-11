@@ -192,25 +192,21 @@ public:
             resource_groups = std::vector<ResourceGroupPtr>{
                 createResourceGroupOfStaticTokenBucket(
                     "rg1",
-                    ResourceGroup::MediumPriorityValue,
+                    ResourceGroup::UserMediumPriority,
                     rg1_ru_per_sec,
                     rg1_burstable),
-                createResourceGroupOfStaticTokenBucket(
-                    "rg2",
-                    ResourceGroup::MediumPriorityValue,
-                    rg2_ru_per_sec,
-                    false),
+                createResourceGroupOfStaticTokenBucket("rg2", ResourceGroup::UserMediumPriority, rg2_ru_per_sec, false),
             };
         else
             resource_groups = std::vector<ResourceGroupPtr>{
                 createResourceGroupOfDynamicTokenBucket(
                     "rg1",
-                    ResourceGroup::MediumPriorityValue,
+                    ResourceGroup::UserMediumPriority,
                     rg1_ru_per_sec,
                     rg1_burstable),
                 createResourceGroupOfDynamicTokenBucket(
                     "rg2",
-                    ResourceGroup::MediumPriorityValue,
+                    ResourceGroup::UserMediumPriority,
                     rg2_ru_per_sec,
                     false),
             };
@@ -249,15 +245,15 @@ public:
         std::vector<ResourceGroupPtr> resource_groups;
         if (static_token_bucket)
             resource_groups = std::vector<ResourceGroupPtr>{
-                createResourceGroupOfStaticTokenBucket("rg-ru20", ResourceGroup::MediumPriorityValue, 20, false),
-                createResourceGroupOfStaticTokenBucket("rg-ru100", ResourceGroup::MediumPriorityValue, 100, false),
-                createResourceGroupOfStaticTokenBucket("rg-ru200", ResourceGroup::MediumPriorityValue, 200, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru20", ResourceGroup::UserMediumPriority, 20, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru100", ResourceGroup::UserMediumPriority, 100, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru200", ResourceGroup::UserMediumPriority, 200, false),
             };
         else
             resource_groups = std::vector<ResourceGroupPtr>{
-                createResourceGroupOfDynamicTokenBucket("rg-ru20", ResourceGroup::MediumPriorityValue, 20, false),
-                createResourceGroupOfDynamicTokenBucket("rg-ru100", ResourceGroup::MediumPriorityValue, 100, false),
-                createResourceGroupOfDynamicTokenBucket("rg-ru200", ResourceGroup::MediumPriorityValue, 200, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru20", ResourceGroup::UserMediumPriority, 20, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru100", ResourceGroup::UserMediumPriority, 100, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru200", ResourceGroup::UserMediumPriority, 200, false),
             };
 
         setupMockLAC(resource_groups);
@@ -306,15 +302,15 @@ public:
         // RU proportion is 1:5:10.
         if (static_token_bucket)
             resource_groups = std::vector<ResourceGroupPtr>{
-                createResourceGroupOfStaticTokenBucket("rg-ru20K", ResourceGroup::MediumPriorityValue, 20000, false),
-                createResourceGroupOfStaticTokenBucket("rg-ru100K", ResourceGroup::MediumPriorityValue, 100000, false),
-                createResourceGroupOfStaticTokenBucket("rg-ru200K", ResourceGroup::MediumPriorityValue, 200000, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru20K", ResourceGroup::UserMediumPriority, 20000, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru100K", ResourceGroup::UserMediumPriority, 100000, false),
+                createResourceGroupOfStaticTokenBucket("rg-ru200K", ResourceGroup::UserMediumPriority, 200000, false),
             };
         else
             resource_groups = std::vector<ResourceGroupPtr>{
-                createResourceGroupOfDynamicTokenBucket("rg-ru20K", ResourceGroup::MediumPriorityValue, 20000, false),
-                createResourceGroupOfDynamicTokenBucket("rg-ru100K", ResourceGroup::MediumPriorityValue, 100000, false),
-                createResourceGroupOfDynamicTokenBucket("rg-ru200K", ResourceGroup::MediumPriorityValue, 200000, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru20K", ResourceGroup::UserMediumPriority, 20000, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru100K", ResourceGroup::UserMediumPriority, 100000, false),
+                createResourceGroupOfDynamicTokenBucket("rg-ru200K", ResourceGroup::UserMediumPriority, 200000, false),
             };
 
         setupMockLAC(resource_groups);
@@ -437,7 +433,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
     // 1. When RU is exhausted, expect that task cannot be executed.
     const uint64_t ru_per_sec = 1;
     auto resource_group
-        = createResourceGroupOfDynamicTokenBucket(rg_name, ResourceGroup::MediumPriorityValue, ru_per_sec, false);
+        = createResourceGroupOfDynamicTokenBucket(rg_name, ResourceGroup::UserMediumPriority, ru_per_sec, false);
     setupMockLAC({resource_group});
 
     const int thread_num = 10;
@@ -464,7 +460,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
         const uint64_t new_ru_per_sec = 1000000;
         resource_group = createResourceGroupOfDynamicTokenBucket(
             rg_name,
-            ResourceGroup::MediumPriorityValue,
+            ResourceGroup::UserMediumPriority,
             new_ru_per_sec,
             false);
         LocalAdmissionController::global_instance->resource_groups.insert({rg_name, resource_group});
@@ -576,9 +572,9 @@ TEST_F(TestResourceControlQueue, cancel)
 {
     const auto rg_names = std::vector<String>{"rg-ru20K", "rg-ru100K", "rg-ru200K"};
     auto resource_groups = std::vector<ResourceGroupPtr>{
-        createResourceGroupOfDynamicTokenBucket(rg_names[0], ResourceGroup::MediumPriorityValue, 20000, false),
-        createResourceGroupOfDynamicTokenBucket(rg_names[1], ResourceGroup::MediumPriorityValue, 100000, false),
-        createResourceGroupOfDynamicTokenBucket(rg_names[2], ResourceGroup::MediumPriorityValue, 200000, false),
+        createResourceGroupOfDynamicTokenBucket(rg_names[0], ResourceGroup::UserMediumPriority, 20000, false),
+        createResourceGroupOfDynamicTokenBucket(rg_names[1], ResourceGroup::UserMediumPriority, 100000, false),
+        createResourceGroupOfDynamicTokenBucket(rg_names[2], ResourceGroup::UserMediumPriority, 200000, false),
     };
     const String query_id_prefix = "mock_query_id";
     const String req_id_prefix = "mock_req_id";
