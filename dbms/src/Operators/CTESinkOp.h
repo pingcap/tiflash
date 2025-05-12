@@ -46,7 +46,6 @@ public:
     String getName() const override { return "CTESinkOp"; }
     bool canHandleSelectiveBlock() const override { return true; }
 
-    void setHeaderImpl() override { std::cout << "1"; }
 
 protected:
     void operateSuffixImpl() override;

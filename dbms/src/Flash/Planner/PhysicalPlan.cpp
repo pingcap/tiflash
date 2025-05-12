@@ -250,6 +250,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     }
     case tipb::ExecType::TypeCTESink:
     {
+        buildFinalProjectionForCTE();
         auto fine_grained_shuffle = FineGrainedShuffle(executor);
         GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
         pushBack(
@@ -275,6 +276,12 @@ void PhysicalPlan::buildFinalProjection(const String & column_prefix, bool is_ro
             dagContext().keep_session_timezone_info,
             popBack())
         : PhysicalProjection::buildNonRootFinal(context, log, column_prefix, popBack());
+    pushBack(final_projection);
+}
+
+void PhysicalPlan::buildFinalProjectionForCTE()
+{
+    const auto & final_projection = PhysicalProjection::buildRootFinalForCTE(context, log, popBack());
     pushBack(final_projection);
 }
 

@@ -61,6 +61,11 @@ String genNameForExchangeReceiver(Int32 col_index)
     return fmt::format("exchange_receiver_{}", col_index);
 }
 
+String genNameForCTESource(Int32 col_index)
+{
+    return fmt::format("cte_source_{}", col_index);
+}
+
 NamesAndTypes genNamesAndTypes(const TiDB::ColumnInfos & column_infos, const StringRef & column_prefix)
 {
     NamesAndTypes names_and_types;

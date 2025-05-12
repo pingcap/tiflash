@@ -54,6 +54,8 @@ private:
 
     void buildFinalProjection(const String & column_prefix, bool is_root);
 
+    void buildFinalProjectionForCTE();
+
     PhysicalPlanNodePtr popBack();
 
     void pushBack(const PhysicalPlanNodePtr & plan);

@@ -23,6 +23,9 @@
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
+
+#include <utility>
 
 namespace DB
 {
@@ -122,6 +125,45 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
         const auto & alias = final_project_aliases[i].second;
         RUNTIME_CHECK(!alias.empty());
         const auto & type = analyzer.getCurrentInputColumns()[output_offsets[i]].type;
+        schema.emplace_back(alias, type);
+    }
+
+    auto physical_projection = std::make_shared<PhysicalProjection>(
+        child->execId(),
+        schema,
+        child->getFineGrainedShuffle(),
+        log->identifier(),
+        child,
+        "final projection",
+        project_actions);
+    // Final Projection is not a tidb operator, so no need to record profile streams.
+    physical_projection->notTiDBOperator();
+    return physical_projection;
+}
+
+PhysicalPlanNodePtr PhysicalProjection::buildRootFinalForCTE(
+    const Context & context,
+    const LoggerPtr & log,
+    const PhysicalPlanNodePtr & child)
+{
+    RUNTIME_CHECK(child);
+
+    const NamesAndTypes & child_schema = child->getSchema();
+    DAGExpressionAnalyzer analyzer{child_schema, context};
+    ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
+
+    NamesWithAliases final_project_aliases;
+    auto col_num = child_schema.size();
+    for (size_t i = 0; i < col_num; i++)
+        final_project_aliases.push_back(std::make_pair(child_schema[i].name, genNameForCTESource(i)));
+
+    project_actions->add(ExpressionAction::project(final_project_aliases));
+    NamesAndTypes schema;
+    for (size_t i = 0; i < final_project_aliases.size(); ++i)
+    {
+        const auto & alias = final_project_aliases[i].second;
+        RUNTIME_CHECK(!alias.empty());
+        const auto & type = analyzer.getCurrentInputColumns()[i].type;
         schema.emplace_back(alias, type);
     }
 
