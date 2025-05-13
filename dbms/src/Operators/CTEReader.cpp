@@ -24,7 +24,7 @@ std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
     std::lock_guard<std::mutex> lock(this->mu);
     if (!this->blocks.empty())
     {
-        auto & block = this->blocks.front();
+        auto block = this->blocks.front();
         this->blocks.pop_front();
         return {FetchStatus::Ok, block};
     }
@@ -38,7 +38,7 @@ std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
         return {ret, Block()};
     case FetchStatus::Ok:
         this->block_fetch_idx += this->blocks.size();
-        auto & block = this->blocks.front();
+        auto block = this->blocks.front();
         this->blocks.pop_front();
         return {ret, block};
     }
