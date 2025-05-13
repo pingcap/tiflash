@@ -53,7 +53,9 @@ public:
     static PhysicalPlanNodePtr buildRootFinalForCTE(
         const Context & context,
         const LoggerPtr & log,
-        const PhysicalPlanNodePtr & child);
+        const PhysicalPlanNodePtr & child,
+        const tipb::CTESink & sink,
+        bool keep_session_timezone_info);
 
     PhysicalProjection(
         const String & executor_id_,

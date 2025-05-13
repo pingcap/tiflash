@@ -17,13 +17,13 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
-#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 
 #include <utility>
 
@@ -144,7 +144,9 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
 PhysicalPlanNodePtr PhysicalProjection::buildRootFinalForCTE(
     const Context & context,
     const LoggerPtr & log,
-    const PhysicalPlanNodePtr & child)
+    const PhysicalPlanNodePtr & child,
+    const tipb::CTESink & sink,
+    bool keep_session_timezone_info)
 {
     RUNTIME_CHECK(child);
 
@@ -152,10 +154,25 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinalForCTE(
     DAGExpressionAnalyzer analyzer{child_schema, context};
     ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
 
+    auto required_schema_size = sink.field_types_size();
+    std::vector<tipb::FieldType> required_schema;
+    required_schema.reserve(required_schema_size);
+    std::vector<Int32> output_offsets;
+    output_offsets.reserve(required_schema_size);
+    for (int i = 0; i < required_schema_size; i++)
+    {
+        required_schema.push_back(sink.field_types(i));
+        output_offsets.push_back(i);
+    }
+
+    NamesWithAliases project_aliases
+        = analyzer
+              .buildFinalProjection(project_actions, required_schema, output_offsets, "", keep_session_timezone_info);
     NamesWithAliases final_project_aliases;
     auto col_num = child_schema.size();
+    RUNTIME_CHECK(required_schema_size == static_cast<int>(col_num));
     for (size_t i = 0; i < col_num; i++)
-        final_project_aliases.push_back(std::make_pair(child_schema[i].name, genNameForCTESource(i)));
+        final_project_aliases.push_back(std::make_pair(project_aliases[i].first, genNameForCTESource(i)));
 
     project_actions->add(ExpressionAction::project(final_project_aliases));
     NamesAndTypes schema;

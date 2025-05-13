@@ -54,7 +54,7 @@ private:
 
     void buildFinalProjection(const String & column_prefix, bool is_root);
 
-    void buildFinalProjectionForCTE();
+    void buildFinalProjectionForCTE(const tipb::CTESink &);
 
     PhysicalPlanNodePtr popBack();
 
