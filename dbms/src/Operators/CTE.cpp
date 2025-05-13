@@ -14,13 +14,14 @@
 
 #include <Operators/CTE.h>
 
+#include <deque>
 #include <mutex>
 #include <shared_mutex>
 #include <utility>
 
 namespace DB
 {
-FetchStatus CTE::checkAvailableBlockAt(size_t idx)
+FetchStatus CTE::tryGetBunchBlocks(size_t idx, std::deque<Block> & queue)
 {
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
     auto block_num = this->blocks.size();
@@ -31,21 +32,10 @@ FetchStatus CTE::checkAvailableBlockAt(size_t idx)
         else
             return FetchStatus::Waiting;
     }
-    return FetchStatus::Ok;
-}
 
-std::pair<FetchStatus, Block> CTE::tryGetBlockAt(size_t idx)
-{
-    std::shared_lock<std::shared_mutex> lock(this->rw_lock);
-    auto block_num = this->blocks.size();
-    if (block_num <= idx)
-    {
-        if (this->is_eof)
-            return {FetchStatus::Eof, Block()};
-        else
-            return {FetchStatus::Waiting, Block()};
-    }
-    return {FetchStatus::Ok, this->blocks[idx]};
+    for (size_t i = 0; i < block_num; i++)
+        queue.push_back(this->blocks[i]);
+    return FetchStatus::Ok;
 }
 
 void CTE::pushBlock(const Block & block)

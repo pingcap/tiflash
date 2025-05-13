@@ -20,7 +20,6 @@
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 
 #include <shared_mutex>
-#include <utility>
 
 namespace DB
 {
@@ -37,8 +36,7 @@ class CTE : public NotifyFuture
 public:
     ~CTE() override = default;
 
-    std::pair<FetchStatus, Block> tryGetBlockAt(size_t idx);
-    FetchStatus checkAvailableBlockAt(size_t idx);
+    FetchStatus tryGetBunchBlocks(size_t idx, std::deque<Block> & queue);
     void pushBlock(const Block & block);
     void notifyEOF();
 

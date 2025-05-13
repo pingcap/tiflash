@@ -25,37 +25,37 @@ void CTESourceOp::operateSuffixImpl()
 
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {
-    auto res = this->cte->tryGetBlockAt(this->block_fetch_idx);
+    auto res = this->cte_reader->fetchNextBlock();
     switch (res.first)
     {
-    case DB::FetchStatus::Eof:
-    case DB::FetchStatus::Ok:
+    case FetchStatus::Eof:
+    case FetchStatus::Ok:
         block = res.second;
-        ++(this->block_fetch_idx);
         return OperatorStatus::HAS_OUTPUT;
-    case DB::FetchStatus::Waiting:
-        if unlikely (this->block_fetch_idx == 0)
+    case FetchStatus::Waiting:
+        if likely (this->cte_reader->isBlockGenerated())
         {
-            // CTE has not begun to receive data yet when block_fetch_idx == 0
-            // So we need to wait the notify from CTE
-            setNotifyFuture(this->cte.get());
-            return OperatorStatus::WAIT_FOR_NOTIFY;
+            return OperatorStatus::WAITING;
         }
         else
-            return OperatorStatus::WAITING;
-    case DB::FetchStatus::Cancelled:
+        {
+            // CTE has not begun to receive data yet
+            // So we need to wait the notify from CTE
+            this->cte_reader->setNotifyFuture();
+            return OperatorStatus::WAIT_FOR_NOTIFY;
+        }
+    case FetchStatus::Cancelled:
         return OperatorStatus::CANCELLED;
     }
 }
 
 OperatorStatus CTESourceOp::awaitImpl()
 {
-    auto res = this->cte->checkAvailableBlockAt(this->block_fetch_idx);
+    auto res = this->cte_reader->checkAvailableBlock();
     switch (res)
     {
     case DB::FetchStatus::Eof:
     case DB::FetchStatus::Ok:
-        // Do not add block_fetch_idx here, as we just judge if there are available blocks
         return OperatorStatus::HAS_OUTPUT;
     case DB::FetchStatus::Waiting:
         return OperatorStatus::WAITING;

@@ -18,8 +18,10 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/Plans/PhysicalCTESource.h>
 #include <Interpreters/Context.h>
+#include <Operators/CTEReader.h>
 #include <Operators/CTESource.h>
 
+#include <memory>
 
 namespace DB
 {
@@ -57,18 +59,31 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
     if (fine_grained_shuffle.enabled())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
 
-    String query_id_and_cte_id_prefix = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
+    String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
 
-    for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
+    if (fine_grained_shuffle.enabled())
     {
-        String query_id_and_cte_id = fmt::format("{}_{}", query_id_and_cte_id_prefix, partition_id);
-        group_builder.addConcurrency(std::make_unique<CTESourceOp>(
-            exec_context,
-            log->identifier(),
-            query_id_and_cte_id,
-            context.getCTEManager(),
-            schema));
+        for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
+        {
+            group_builder.addConcurrency(std::make_unique<CTESourceOp>(
+                exec_context,
+                log->identifier(),
+                std::make_shared<CTEReader>(
+                    fmt::format("{}_{}", query_id_and_cte_id, partition_id),
+                    context.getCTEManager()),
+                schema));
+        }
     }
+    else
+    {
+        auto cte_reader = std::make_shared<CTEReader>(query_id_and_cte_id, context.getCTEManager());
+        for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
+        {
+            group_builder.addConcurrency(
+                std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, schema));
+        }
+    }
+
     context.getDAGContext()->addInboundIOProfileInfos(this->executor_id, group_builder.getCurIOProfileInfos());
 }
 
