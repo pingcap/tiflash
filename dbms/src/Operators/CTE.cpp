@@ -14,6 +14,7 @@
 
 #include <Operators/CTE.h>
 
+#include <cassert>
 #include <deque>
 #include <mutex>
 #include <shared_mutex>
@@ -23,6 +24,8 @@ namespace DB
 {
 FetchStatus CTE::tryGetBunchBlocks(size_t idx, std::deque<Block> & queue)
 {
+    assert(queue.empty());
+
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
     auto block_num = this->blocks.size();
     if (block_num <= idx)
@@ -33,7 +36,7 @@ FetchStatus CTE::tryGetBunchBlocks(size_t idx, std::deque<Block> & queue)
             return FetchStatus::Waiting;
     }
 
-    for (size_t i = 0; i < block_num; i++)
+    for (size_t i = idx; i < block_num; i++)
         queue.push_back(this->blocks[i]);
     return FetchStatus::Ok;
 }

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Operators/CTEReader.h>
 #include <Operators/CTE.h>
+#include <Operators/CTEReader.h>
 
 #include <mutex>
 
@@ -51,6 +51,17 @@ FetchStatus CTEReader::checkAvailableBlock()
     if (!this->blocks.empty())
         return FetchStatus::Ok;
 
-    return this->cte->tryGetBunchBlocks(this->block_fetch_idx, this->blocks);
+    auto ret = this->cte->tryGetBunchBlocks(this->block_fetch_idx, this->blocks);
+    switch (ret)
+    {
+    case FetchStatus::Waiting:
+    case FetchStatus::Cancelled:
+    case FetchStatus::Eof:
+        return ret;
+    case FetchStatus::Ok:
+        this->block_fetch_idx += this->blocks.size();
+        return FetchStatus::Ok;
+    }
+    throw Exception("Should not reach here");
 }
 } // namespace DB

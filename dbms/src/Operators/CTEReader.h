@@ -14,9 +14,9 @@
 
 #pragma once
 
-#include <Operators/CTE.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Operators/CTE.h>
 
 #include <deque>
 #include <mutex>
@@ -26,9 +26,7 @@ namespace DB
 class CTEReader
 {
 public:
-    CTEReader(
-        const String & query_id_and_cte_id_,
-        CTEManager * cte_manager_)
+    CTEReader(const String & query_id_and_cte_id_, CTEManager * cte_manager_)
         : query_id_and_cte_id(query_id_and_cte_id_)
         , cte_manager(cte_manager_)
         , cte(cte_manager_->getCTE(query_id_and_cte_id_))

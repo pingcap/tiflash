@@ -19,8 +19,8 @@
 #include <Flash/Mpp/CTEManager.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Operators/CTE.h>
-#include <Operators/Operator.h>
 #include <Operators/CTEReader.h>
+#include <Operators/Operator.h>
 
 #include <memory>
 
