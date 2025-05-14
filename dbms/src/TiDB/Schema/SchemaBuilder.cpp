@@ -41,7 +41,6 @@
 #include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
-#include <TiDB/Schema/TiDBTypes.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
@@ -1050,28 +1049,7 @@ std::tuple<NamesAndTypes, Strings> parseColumnsFromTableInfo(const TiDB::TableIn
     std::vector<String> primary_keys;
     for (const auto & column : table_info.columns)
     {
-        DataTypePtr type;
-        if (likely(column.tp != TiDB::TP::TypeNull))
-        {
-            type = getDataTypeByColumnInfo(column);
-        }
-        else
-        {
-            LOG_WARNING(
-                Logger::get(),
-                "Column type is TiDB::TP::TypeNull, change it to int8 for compatibility,"
-                " keyspace={} table_id={} column_id={}",
-                table_info.keyspace_id,
-                table_info.id,
-                column.id);
-
-            // Storing a column with `ColumnNothing` is not allowed in `StorageFactory::get/checkAllTypesAreAllowedInTable`
-            // Using `ColumnNothing` in IStorage may bring unexpected behavior when we
-            // try to write or read the column. So we change it to `ColumnInt8`.
-            auto compatible_col = column;
-            compatible_col.tp = TiDB::TP::TypeTiny;
-            type = getDataTypeByColumnInfo(compatible_col);
-        }
+        DataTypePtr type = getDataTypeByColumnInfo(column);
         columns.emplace_back(column.name, type);
         if (column.hasPriKeyFlag())
         {

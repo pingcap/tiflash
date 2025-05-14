@@ -27,13 +27,9 @@ private:
 
     ColumnNothing(const ColumnNothing &) = default;
 
-    size_t byteSize() const override { return 0; }
-
-    size_t byteSize(size_t /*offset*/, size_t /*limit*/) const override { return 0; }
-
 public:
     const char * getFamilyName() const override { return "Nothing"; }
-    MutableColumnPtr cloneDummy(size_t s) const override { return ColumnNothing::create(s); }
+    MutableColumnPtr cloneDummy(size_t s) const override { return ColumnNothing::create(s); };
 
     bool canBeInsideNullable() const override { return true; }
 };
