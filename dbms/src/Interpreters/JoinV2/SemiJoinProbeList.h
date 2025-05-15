@@ -29,7 +29,7 @@ public:
     virtual size_t activeSlots() const = 0;
 };
 
-/// A reusable, index‑based doubly‑linked circular list for managing semi join pending probe rows.
+/// A reusable, index‑based, doubly‑linked circular list for managing semi join pending probe rows.
 /// Supports O(1) append/remove by index.
 template <typename KeyGetter>
 class SemiJoinProbeList final : public ISemiJoinProbeList
