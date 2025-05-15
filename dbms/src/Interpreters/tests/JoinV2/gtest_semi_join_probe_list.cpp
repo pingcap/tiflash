@@ -14,6 +14,7 @@
 
 #include <Interpreters/JoinV2/SemiJoinProbeList.h>
 #include <TestUtils/FunctionTestUtils.h>
+
 #include <cstddef>
 #include <random>
 
@@ -47,7 +48,7 @@ try
     while (!s1.empty() && !s2.empty())
     {
         EXPECT_EQ(list.activeSlots(), s1.size());
-        bool is_append = !s1.empty() && dist(g) % 2 == 0; 
+        bool is_append = !s1.empty() && dist(g) % 2 == 0;
         if (is_append)
         {
             size_t append_idx = *s1.begin();
