@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>

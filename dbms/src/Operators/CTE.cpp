@@ -18,7 +18,6 @@
 #include <deque>
 #include <mutex>
 #include <shared_mutex>
-#include <utility>
 
 namespace DB
 {
@@ -49,18 +48,6 @@ void CTE::pushBlock(const Block & block)
     if unlikely (this->blocks.empty())
         this->pipe_cv.notifyAll();
     this->blocks.push_back(block);
-}
-
-template <bool has_lock>
-void CTE::notifyEOFImpl()
-{
-    std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
-    if constexpr (has_lock)
-        lock.lock();
-    this->is_eof = true;
-
-    // Just in case someone is in WAITING_FOR_NOTIFY status
-    this->pipe_cv.notifyAll();
 }
 
 void CTE::registerTask(TaskPtr && task)

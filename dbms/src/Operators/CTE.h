@@ -43,7 +43,16 @@ public:
     void notifyEOFNoLock() { this->notifyEOFImpl<false>(); }
 
     template <bool has_lock>
-    void notifyEOFImpl();
+    void notifyEOFImpl()
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
+        // if constexpr (has_lock)
+        //     lock.lock();
+        this->is_eof = true;
+
+        // Just in case someone is in WAITING_FOR_NOTIFY status
+        this->pipe_cv.notifyAll();
+    }
 
     void registerTask(TaskPtr && task) override;
 
@@ -69,7 +78,6 @@ private:
     std::deque<TaskPtr> waiting_tasks;
     PipeConditionVariable pipe_cv;
 
-    // TODO eof can be set only when execution summary has been sent
     bool is_eof = false;
 
     tipb::SelectResponse resp;

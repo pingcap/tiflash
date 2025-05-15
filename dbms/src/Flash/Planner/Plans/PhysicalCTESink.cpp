@@ -51,6 +51,7 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
 {
     size_t partition_id = 0;
     String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
+    exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
 
     group_builder.transform([&](auto & builder) {
         builder.setSinkOp(std::make_unique<CTESinkOp>(

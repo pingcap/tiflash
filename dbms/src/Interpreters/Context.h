@@ -18,7 +18,6 @@
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Core/Types.h>
 #include <Debug/MockServerInfo.h>
-#include <Flash/Mpp/CTEManager.h>
 #include <IO/FileProvider/FileProvider_fwd.h>
 #include <Interpreters/CancellationHook.h>
 #include <Interpreters/ClientInfo.h>
@@ -103,6 +102,7 @@ using TiFlashSecurityConfigPtr = std::shared_ptr<TiFlashSecurityConfig>;
 class MockStorage;
 class JointThreadInfoJeallocMap;
 using JointThreadInfoJeallocMapPtr = std::shared_ptr<JointThreadInfoJeallocMap>;
+class CTEManager;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
