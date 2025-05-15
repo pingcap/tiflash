@@ -48,6 +48,7 @@ public:
         std::lock_guard<std::mutex> lock(this->mu);
         if (this->resp_fetched)
             return;
+        this->resp_fetched = true;
         resp.CopyFrom(this->resp);
     }
 
