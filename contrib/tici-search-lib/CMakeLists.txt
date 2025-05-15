@@ -14,12 +14,17 @@ add_custom_command(
 )
 
 add_custom_target(rustbuild ALL DEPENDS ${TICI_LIB})
-add_library(tici_search_lib STATIC IMPORTED GLOBAL)
-set_target_properties(tici_search_lib PROPERTIES
+add_library(tici_search_lib_static STATIC IMPORTED GLOBAL)
+set_target_properties(tici_search_lib_static PROPERTIES
     IMPORTED_LOCATION ${TICI_LIB}
 )
 
-add_dependencies(tici_search_lib rustbuild)
+add_dependencies(tici_search_lib_static rustbuild)
+target_include_directories(tici_search_lib_static  INTERFACE
+    ${CMAKE_CURRENT_BINARY_DIR}/cxxbridge)
+
+add_library(tici_search_lib SHARED "${TiFlash_SOURCE_DIR}/libs/libclara-cmake/dummy.cpp")
+target_link_libraries(tici_search_lib PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,tici_search_lib_static>")
 target_include_directories(tici_search_lib  INTERFACE
     ${CMAKE_CURRENT_BINARY_DIR}/cxxbridge)
 
