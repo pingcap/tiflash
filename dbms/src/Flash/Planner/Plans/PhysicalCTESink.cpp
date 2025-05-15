@@ -19,6 +19,7 @@
 #include <Operators/CTESinkOp.h>
 
 #include <memory>
+#include <string>
 
 namespace DB
 {
@@ -49,13 +50,15 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     size_t /*concurrency*/)
 {
     size_t partition_id = 0;
-    String query_id_and_cte_id_prefix = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
+    String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
+
     group_builder.transform([&](auto & builder) {
-        String query_id_and_cte_id = query_id_and_cte_id_prefix;
-        if (fine_grained_shuffle.enabled())
-            query_id_and_cte_id = fmt::format("{}_{}", query_id_and_cte_id_prefix, partition_id);
-        builder.setSinkOp(
-            std::make_unique<CTESinkOp>(exec_context, log->identifier(), query_id_and_cte_id, context.getCTEManager()));
+        builder.setSinkOp(std::make_unique<CTESinkOp>(
+            exec_context,
+            log->identifier(),
+            query_id_and_cte_id,
+            fine_grained_shuffle.enabled() ? std::to_string(partition_id) : "",
+            context.getCTEManager()));
         partition_id++;
     });
 }

@@ -51,9 +51,12 @@ void CTE::pushBlock(const Block & block)
     this->blocks.push_back(block);
 }
 
-void CTE::notifyEOF()
+template <bool has_lock>
+void CTE::notifyEOFImpl()
 {
-    std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+    std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
+    if constexpr (has_lock)
+        lock.lock();
     this->is_eof = true;
 
     // Just in case someone is in WAITING_FOR_NOTIFY status

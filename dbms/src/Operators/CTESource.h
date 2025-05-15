@@ -36,13 +36,14 @@ public:
         const NamesAndTypes & schema)
         : SourceOp(exec_context_, req_id)
         , cte_reader(cte_reader_)
+        , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, 1))
     {
         setHeader(Block(getColumnWithTypeAndName(schema)));
     }
 
     String getName() const override { return "CTESourceOp"; }
 
-    IOProfileInfoPtr getIOProfileInfo() const override { return IOProfileInfo::createForLocal(profile_info_ptr); }
+    IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 
 protected:
     void operateSuffixImpl() override;
@@ -54,5 +55,7 @@ protected:
 private:
     std::shared_ptr<CTEReader> cte_reader;
     uint64_t total_rows{};
+    IOProfileInfoPtr io_profile_info;
+    tipb::SelectResponse resp;
 };
 } // namespace DB

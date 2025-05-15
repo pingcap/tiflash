@@ -27,7 +27,6 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
     if (!block)
     {
         this->input_done = true;
-        this->cte->notifyEOF();
         return OperatorStatus::FINISHED;
     }
     this->total_rows += block.rows();

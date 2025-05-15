@@ -29,6 +29,9 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
     switch (res.first)
     {
     case FetchStatus::Eof:
+        this->cte_reader->getResp(this->resp);
+        if (this->resp.execution_summaries_size() != 0)
+            this->io_profile_info->remote_execution_summary.add(this->resp);
     case FetchStatus::Ok:
         block = res.second;
         return OperatorStatus::HAS_OUTPUT;

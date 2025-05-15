@@ -22,6 +22,7 @@
 #include <Operators/CTESource.h>
 
 #include <memory>
+#include <string>
 
 namespace DB
 {
@@ -68,15 +69,13 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
             group_builder.addConcurrency(std::make_unique<CTESourceOp>(
                 exec_context,
                 log->identifier(),
-                std::make_shared<CTEReader>(
-                    fmt::format("{}_{}", query_id_and_cte_id, partition_id),
-                    context.getCTEManager()),
+                std::make_shared<CTEReader>(query_id_and_cte_id, std::to_string(partition_id), context.getCTEManager()),
                 schema));
         }
     }
     else
     {
-        auto cte_reader = std::make_shared<CTEReader>(query_id_and_cte_id, context.getCTEManager());
+        auto cte_reader = std::make_shared<CTEReader>(query_id_and_cte_id, "", context.getCTEManager());
         for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
         {
             group_builder.addConcurrency(

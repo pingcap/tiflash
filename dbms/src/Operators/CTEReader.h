@@ -17,6 +17,7 @@
 #include <Flash/Mpp/CTEManager.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/CTE.h>
+#include <tipb/select.pb.h>
 
 #include <deque>
 #include <mutex>
@@ -26,20 +27,29 @@ namespace DB
 class CTEReader
 {
 public:
-    CTEReader(const String & query_id_and_cte_id_, CTEManager * cte_manager_)
+    CTEReader(const String & query_id_and_cte_id_, const String & partition_id_, CTEManager * cte_manager_)
         : query_id_and_cte_id(query_id_and_cte_id_)
+        , partition_id(partition_id_)
         , cte_manager(cte_manager_)
-        , cte(cte_manager_->getCTE(query_id_and_cte_id_))
+        , cte(cte_manager_->getCTE(query_id_and_cte_id_, partition_id))
     {}
 
     ~CTEReader()
     {
         this->cte.reset();
-        this->cte_manager->releaseCTE(this->query_id_and_cte_id);
+        this->cte_manager->releaseCTE(this->query_id_and_cte_id, this->partition_id);
     }
 
     std::pair<FetchStatus, Block> fetchNextBlock();
     FetchStatus checkAvailableBlock();
+
+    void getResp(tipb::SelectResponse & resp)
+    {
+        std::lock_guard<std::mutex> lock(this->mu);
+        if (this->resp_fetched)
+            return;
+        resp.CopyFrom(this->resp);
+    }
 
     bool isBlockGenerated()
     {
@@ -54,11 +64,15 @@ public:
 
 private:
     String query_id_and_cte_id;
+    String partition_id;
     CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
 
     std::mutex mu;
     std::deque<Block> blocks;
     size_t block_fetch_idx = 0;
+
+    bool resp_fetched = false;
+    tipb::SelectResponse resp;
 };
 } // namespace DB

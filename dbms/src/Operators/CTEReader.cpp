@@ -24,7 +24,7 @@ std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
     std::lock_guard<std::mutex> lock(this->mu);
     if (!this->blocks.empty())
     {
-        auto block = this->blocks.front();
+        Block block = std::move(this->blocks.front());
         this->blocks.pop_front();
         return {FetchStatus::Ok, block};
     }
@@ -32,13 +32,15 @@ std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
     auto ret = this->cte->tryGetBunchBlocks(this->block_fetch_idx, this->blocks);
     switch (ret)
     {
-    case FetchStatus::Waiting:
     case FetchStatus::Eof:
+        if (this->resp.execution_summaries_size() == 0)
+            this->resp = this->cte->getResp();
+    case FetchStatus::Waiting:
     case FetchStatus::Cancelled:
         return {ret, Block()};
     case FetchStatus::Ok:
         this->block_fetch_idx += this->blocks.size();
-        auto block = this->blocks.front();
+        Block block = std::move(this->blocks.front());
         this->blocks.pop_front();
         return {ret, block};
     }

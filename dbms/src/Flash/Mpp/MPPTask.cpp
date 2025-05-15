@@ -191,11 +191,25 @@ void MPPTask::abortQueryExecutor()
 
 void MPPTask::finishWrite()
 {
-    RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
-    if (dag_context->collect_execution_summaries
-        && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
-        tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
-    tunnel_set->finishWrite();
+    if (this->has_cte_sink)
+    {
+        const String & query_id_and_cte_id = this->dag_context->getQueryIDAndCTEID();
+        if (dag_context->collect_execution_summaries)
+        {
+            const tipb::SelectResponse & resp = mpp_task_statistics.genExecutionSummaryResponse();
+            this->context->getCTEManager()->setRespAndNotifyEOF(resp, query_id_and_cte_id);
+        }
+        else
+            this->context->getCTEManager()->notifyEOF(query_id_and_cte_id);
+    }
+    else
+    {
+        RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+        if (dag_context->collect_execution_summaries
+            && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
+            tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
+        tunnel_set->finishWrite();
+    }
 }
 
 void MPPTask::run()
@@ -621,8 +635,8 @@ void MPPTask::runImpl()
             /// tidb(limit)◄──┼──tiflash(limit)◄─┼─tiflash(no limit)
             ///               └──tiflash(limit)◄─┴─tiflash(no limit)
 
-            if likely (!this->has_cte_sink)
-                finishWrite(); // finish MPPTunnel
+            // finish MPPTunnel
+            finishWrite();
 
             // finish receiver
             receiver_set->close();

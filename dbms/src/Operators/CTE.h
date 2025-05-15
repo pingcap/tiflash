@@ -18,6 +18,7 @@
 #include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
+#include <tipb/select.pb.h>
 
 #include <shared_mutex>
 
@@ -38,9 +39,22 @@ public:
 
     FetchStatus tryGetBunchBlocks(size_t idx, std::deque<Block> & queue);
     void pushBlock(const Block & block);
-    void notifyEOF();
+    void notifyEOF() { this->notifyEOFImpl<true>(); }
+    void notifyEOFNoLock() { this->notifyEOFImpl<false>(); }
+
+    template <bool has_lock>
+    void notifyEOFImpl();
 
     void registerTask(TaskPtr && task) override;
+
+    void setRespAndNotifyEOF(const tipb::SelectResponse & resp)
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        this->resp = resp;
+        this->notifyEOFNoLock();
+    }
+
+    tipb::SelectResponse getResp() const noexcept { return this->resp; }
 
 private:
     // Return true if CTE has data
@@ -55,6 +69,9 @@ private:
     std::deque<TaskPtr> waiting_tasks;
     PipeConditionVariable pipe_cv;
 
+    // TODO eof can be set only when execution summary has been sent
     bool is_eof = false;
+
+    tipb::SelectResponse resp;
 };
 } // namespace DB
