@@ -45,7 +45,7 @@ void insertRowToList(JoinArenaPool & pool, List * list, Elem * elem, size_t cach
         if unlikely (cache_columns_threshold == list->list_length)
         {
             auto * cached_column_info
-                = reinterpret_cast<CachedColumnInfo *>(pool.arena.alloc(sizeof(CachedColumnInfo)));
+                = reinterpret_cast<CachedColumnInfo *>(pool.arena.alignedAlloc(sizeof(CachedColumnInfo), 16));
             new (cached_column_info) CachedColumnInfo(list->next);
             pool.cached_column_infos.push_back(cached_column_info);
             list->cached_column_info = cached_column_info;
