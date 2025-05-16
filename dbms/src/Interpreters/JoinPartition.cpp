@@ -20,7 +20,6 @@
 #include <Interpreters/ProbeProcessInfo.h>
 
 #include <ext/scope_guard.h>
-#include <type_traits>
 
 namespace DB
 {
