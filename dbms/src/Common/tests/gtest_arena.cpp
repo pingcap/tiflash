@@ -26,15 +26,15 @@ TEST(ArenaTest, AlignedAlloc)
     auto pool = DB::Arena(1024);
     auto * p = pool.alloc(3);
     p = pool.alloc(2);
-    // the first allocation is not aligned
-    ASSERT_NE(reinterpret_cast<uintptr_t>(p) % 16, 0);
-    // the second allocation is aligned
     auto align = alignof(CachedColumnInfo);
+    // the first allocation is not aligned
+    ASSERT_NE(reinterpret_cast<uintptr_t>(p) % align, 0);
+    // the second allocation is aligned
     p = pool.alignedAlloc(sizeof(CachedColumnInfo), align);
     ASSERT_EQ(reinterpret_cast<uintptr_t>(p) % align, 0);
     auto * cached_column_info = reinterpret_cast<CachedColumnInfo *>(p);
     new (cached_column_info) CachedColumnInfo(nullptr);
-    // double check the alignment
+    // double check the alignment, will raise bus error if not aligned in some platforms
     cached_column_info->mu.lock();
     cached_column_info->mu.unlock();
 }
