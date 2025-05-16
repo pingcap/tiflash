@@ -20,6 +20,7 @@
 #include <Interpreters/ProbeProcessInfo.h>
 
 #include <ext/scope_guard.h>
+#include <type_traits>
 
 namespace DB
 {
@@ -44,8 +45,8 @@ void insertRowToList(JoinArenaPool & pool, List * list, Elem * elem, size_t cach
     {
         if unlikely (cache_columns_threshold == list->list_length)
         {
-            auto * cached_column_info
-                = reinterpret_cast<CachedColumnInfo *>(pool.arena.alignedAlloc(sizeof(CachedColumnInfo), 16));
+            auto * cached_column_info = reinterpret_cast<CachedColumnInfo *>(
+                pool.arena.alignedAlloc(sizeof(CachedColumnInfo), alignof(CachedColumnInfo)));
             new (cached_column_info) CachedColumnInfo(list->next);
             pool.cached_column_infos.push_back(cached_column_info);
             list->cached_column_info = cached_column_info;
