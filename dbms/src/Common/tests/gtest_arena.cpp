@@ -16,6 +16,9 @@
 #include <Interpreters/JoinHashMap.h>
 #include <gtest/gtest.h>
 
+#include <mutex>
+#include <type_traits>
+
 namespace DB::tests
 {
 TEST(ArenaTest, AlignedAlloc)
@@ -26,7 +29,13 @@ TEST(ArenaTest, AlignedAlloc)
     // the first allocation is not aligned
     ASSERT_NE(reinterpret_cast<uintptr_t>(p) % 16, 0);
     // the second allocation is aligned
-    p = pool.alignedAlloc(sizeof(CachedColumnInfo), 16);
-    ASSERT_EQ(reinterpret_cast<uintptr_t>(p) % 16, 0);
+    auto align = alignof(CachedColumnInfo);
+    p = pool.alignedAlloc(sizeof(CachedColumnInfo), align);
+    ASSERT_EQ(reinterpret_cast<uintptr_t>(p) % align, 0);
+    auto * cached_column_info = reinterpret_cast<CachedColumnInfo *>(p);
+    new (cached_column_info) CachedColumnInfo(nullptr);
+    // double check the alignment
+    cached_column_info->mu.lock();
+    cached_column_info->mu.unlock();
 }
 } // namespace DB::tests
