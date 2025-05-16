@@ -44,8 +44,8 @@ void insertRowToList(JoinArenaPool & pool, List * list, Elem * elem, size_t cach
     {
         if unlikely (cache_columns_threshold == list->list_length)
         {
-            auto * cached_column_info
-                = reinterpret_cast<CachedColumnInfo *>(pool.arena.alignedAlloc(sizeof(CachedColumnInfo), 16));
+            auto * cached_column_info = reinterpret_cast<CachedColumnInfo *>(
+                pool.arena.alignedAlloc(sizeof(CachedColumnInfo), alignof(CachedColumnInfo)));
             new (cached_column_info) CachedColumnInfo(list->next);
             pool.cached_column_infos.push_back(cached_column_info);
             list->cached_column_info = cached_column_info;
@@ -652,18 +652,18 @@ void NO_INLINE insertBlockIntoMapsTypeCase(
         insert_indexes.emplace_back(insert_index);
     }
 
-#define INSERT_TO_MAP(join_partition, segment_index)          \
-    auto & current_map = (join_partition)->getHashMap<Map>(); \
-    for (auto & s_i : (segment_index))                        \
-    {                                                         \
-        Inserter<STRICTNESS, Map, KeyGetter>::insert(         \
-            current_map,                                      \
-            key_getter,                                       \
-            stored_block,                                     \
-            s_i,                                              \
-            pool,                                             \
-            sort_key_containers,                              \
-            probe_cache_column_threshold);                    \
+#define INSERT_TO_MAP(join_partition, segment_index)            \
+    auto & current_map = (join_partition) -> getHashMap<Map>(); \
+    for (auto & s_i : (segment_index))                          \
+    {                                                           \
+        Inserter<STRICTNESS, Map, KeyGetter>::insert(           \
+            current_map,                                        \
+            key_getter,                                         \
+            stored_block,                                       \
+            s_i,                                                \
+            pool,                                               \
+            sort_key_containers,                                \
+            probe_cache_column_threshold);                      \
     }
 
 #define INSERT_TO_NOT_INSERTED_MAP                                                                      \
