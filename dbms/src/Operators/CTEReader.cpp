@@ -34,7 +34,7 @@ std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
     {
     case FetchStatus::Eof:
         if (this->resp.execution_summaries_size() == 0)
-            this->resp = this->cte->getResp();
+            this->cte->tryToGetResp(this->resp);
     case FetchStatus::Waiting:
     case FetchStatus::Cancelled:
         return {ret, Block()};

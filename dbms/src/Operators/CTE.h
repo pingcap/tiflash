@@ -63,7 +63,14 @@ public:
         this->notifyEOFNoLock();
     }
 
-    tipb::SelectResponse getResp() const noexcept { return this->resp; }
+    void tryToGetResp(tipb::SelectResponse & resp)
+    {
+        if (!this->get_resp)
+        {
+            this->get_resp = true;
+            resp.CopyFrom(this->resp);
+        }
+    }
 
 private:
     // Return true if CTE has data
@@ -80,6 +87,7 @@ private:
 
     bool is_eof = false;
 
+    bool get_resp = false;
     tipb::SelectResponse resp;
 };
 } // namespace DB
