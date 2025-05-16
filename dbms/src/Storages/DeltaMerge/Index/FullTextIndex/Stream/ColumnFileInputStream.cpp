@@ -104,6 +104,7 @@ Block ColumnFileProvideFullTextIndexInputStream::read()
     }
     // Fill score column
     MutableColumnPtr score_col_p = nullptr;
+    if (ctx->score_cd_in_schema.has_value())
     {
         score_col_p = ColumnFloat32::create();
         auto * score_col = typeid_cast<ColumnFloat32 *>(score_col_p.get());
@@ -139,6 +140,7 @@ Block ColumnFileProvideFullTextIndexInputStream::read()
     if (ctx->fts_idx_in_schema.has_value())
     {
         RUNTIME_CHECK(ctx->fts_cd_in_schema.has_value());
+        RUNTIME_CHECK(fts_col_p != nullptr);
         block.insert(
             ctx->fts_idx_in_schema.value(),
             ColumnWithTypeAndName( //
@@ -147,12 +149,15 @@ Block ColumnFileProvideFullTextIndexInputStream::read()
                 ctx->fts_cd_in_schema->name,
                 ctx->fts_cd_in_schema->id));
     }
+    if (ctx->score_cd_in_schema.has_value())
     {
+        // Score column is always at last.
+        RUNTIME_CHECK(score_col_p != nullptr);
         block.insert(ColumnWithTypeAndName( //
             std::move(score_col_p),
-            ctx->score_cd_in_schema.type,
-            ctx->score_cd_in_schema.name,
-            ctx->score_cd_in_schema.id));
+            ctx->score_cd_in_schema->type,
+            ctx->score_cd_in_schema->name,
+            ctx->score_cd_in_schema->id));
     }
 
     // After a successful read, clear out the ordered_return_rows so that

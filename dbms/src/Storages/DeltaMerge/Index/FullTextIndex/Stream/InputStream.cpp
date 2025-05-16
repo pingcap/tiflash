@@ -34,7 +34,7 @@ void FullTextIndexInputStream::initSearchResults()
     UInt32 precedes_rows = 0;
     auto search_results = std::make_shared<std::vector<IProvideFullTextIndex::SearchResult>>();
     // Note, we do not reserve size=topN, because we first append all matching results, then perform the topn.
-    search_results->reserve(bitmap_filter->size() / 2);
+    search_results->reserve(bitmap_filter->size());
 
     // 1. Do full text search for all index streams.
     for (size_t i = 0, i_max = stream->children.size(); i < i_max; ++i)
@@ -44,16 +44,40 @@ void FullTextIndexInputStream::initSearchResults()
             auto reader = index_stream->getFullTextIndexReader();
             RUNTIME_CHECK(reader != nullptr);
             auto current_filter = BitmapFilterView(bitmap_filter, precedes_rows, stream->rows[i]);
-            reader->searchScored(ctx->perf, ctx->fts_query_info->query_text(), current_filter, ctx->results);
-            const size_t results_n = ctx->results.size();
-            for (size_t i = 0; i < results_n; ++i)
+            if (ctx->fts_query_info->query_type() == tipb::FTSQueryType::FTSQueryTypeTopK)
             {
-                search_results->emplace_back(IProvideFullTextIndex::SearchResult{
-                    // We need to sort globally so convert it to a global offset temporarily.
-                    // We will convert it back to local offset when we feed it back to substreams.
-                    .rowid = ctx->results[i].doc_id + precedes_rows,
-                    .score = ctx->results[i].score,
-                });
+                reader->searchScored( //
+                    ctx->perf,
+                    ctx->fts_query_info->query_text(),
+                    current_filter,
+                    ctx->results);
+                const size_t results_n = ctx->results.size();
+                for (size_t i = 0; i < results_n; ++i)
+                {
+                    search_results->emplace_back(IProvideFullTextIndex::SearchResult{
+                        // We need to sort globally so convert it to a global offset temporarily.
+                        // We will convert it back to local offset when we feed it back to substreams.
+                        .rowid = ctx->results[i].doc_id + precedes_rows,
+                        .score = ctx->results[i].score,
+                    });
+                }
+            }
+            else
+            {
+                reader->searchNoScore( //
+                    ctx->perf,
+                    ctx->fts_query_info->query_text(),
+                    current_filter,
+                    ctx->results_no_score);
+                const size_t results_n = ctx->results_no_score.size();
+                for (size_t i = 0; i < results_n; ++i)
+                {
+                    search_results->emplace_back(IProvideFullTextIndex::SearchResult{
+                        // TODO (wenxuan): Reduce memory footprint for this path.
+                        .rowid = ctx->results_no_score[i],
+                        .score = 1.0,
+                    });
+                }
             }
         }
         precedes_rows += stream->rows[i];
@@ -61,18 +85,23 @@ void FullTextIndexInputStream::initSearchResults()
 
     // 2. Keep the top k minimum scored rows.
     // [0, top_k) will be the top k largest score rows. (However it is not sorted)
-    const auto top_k = ctx->fts_query_info->top_k();
-    if (top_k < search_results->size())
+    if (ctx->fts_query_info->query_type() == tipb::FTSQueryType::FTSQueryTypeTopK)
     {
-        std::nth_element( //
-            search_results->begin(),
-            search_results->begin() + top_k,
-            search_results->end(),
-            [](const auto & lhs, const auto & rhs) { return lhs.score > rhs.score; });
-        search_results->resize(top_k);
+        const auto top_k = ctx->fts_query_info->top_k();
+        if (top_k < search_results->size())
+        {
+            std::nth_element( //
+                search_results->begin(),
+                search_results->begin() + top_k,
+                search_results->end(),
+                [](const auto & lhs, const auto & rhs) { return lhs.score > rhs.score; });
+            search_results->resize(top_k);
+        }
     }
 
     // 3. Sort by rowid for the first K rows.
+    // Unlike non-indexed version, results from index does not have a specific
+    // order so that sort by rowid is required.
     std::sort( //
         search_results->begin(),
         search_results->end(),

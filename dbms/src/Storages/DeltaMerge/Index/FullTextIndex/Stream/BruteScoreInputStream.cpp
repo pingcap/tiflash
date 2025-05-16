@@ -67,8 +67,10 @@ Block FullTextBruteScoreInputStream::read()
         // We filter rows only at the search time.
         const auto raw_filter = bitmap_filter->getRawSubFilter(block.startOffset(), block.rows());
         ClaraFTS::BitmapFilter filter;
-        filter.match_partial = rust::Slice<const UInt8>(raw_filter.data(), raw_filter.size());
+        filter.match_partial = rust::Slice<const UInt8>(raw_filter);
         filter.match_all = false;
+
+        // TODO (wenxuan): Use an optimized version when score is not needed.
         brute_searcher.search(filter, ctx->results);
     }
 
@@ -81,6 +83,7 @@ Block FullTextBruteScoreInputStream::read()
 
     // Try to reduce what we will produce to the upper layer. This could reduce RPC cost, because FullTextInputStream
     // will not do a TopK again for unindexed data.
+    if (ctx->fts_query_info->query_type() == tipb::FTSQueryType::FTSQueryTypeTopK)
     {
         const auto top_k = ctx->fts_query_info->top_k();
         if (top_k < ctx->results.size())
@@ -91,12 +94,14 @@ Block FullTextBruteScoreInputStream::read()
                 ctx->results.end(),
                 [](const auto & lhs, const auto & rhs) { return lhs.score > rhs.score; });
             ctx->results.truncate(top_k);
+            std::sort( //
+                ctx->results.begin(),
+                ctx->results.end(),
+                [](const auto & lhs, const auto & rhs) { return lhs.doc_id < rhs.doc_id; });
         }
+        // No need to sort by RowID if there is no nth_element, because brute_searcher.search
+        // always return sorted results.
     }
-    std::sort( //
-        ctx->results.begin(),
-        ctx->results.end(),
-        [](const auto & lhs, const auto & rhs) { return lhs.doc_id < rhs.doc_id; });
 
     if (ctx->results.size() < block.rows())
     {
@@ -113,7 +118,7 @@ Block FullTextBruteScoreInputStream::read()
 
     // Finally, reassemble the block.
     // The current layout of block is `noindex_read_schema` which is `rest_col_schema + fts_col`.
-    // The target layout of block is `schema` which is `rest_col_schema + (possibly fts column somewhere) + score_col`.
+    // The target layout of block is `schema` which is `rest_col_schema + (possibly fts column somewhere) + (possibly score_col at last)`.
     {
         // 1. Remove the FTS column at last
         const auto fts_column_filtered = block.safeGetByPosition(block.columns() - 1).column;
@@ -133,19 +138,22 @@ Block FullTextBruteScoreInputStream::read()
                     ctx->fts_cd_in_schema->id));
         }
         // 3. Add Score column at last
-        auto score_column = ctx->score_cd_in_schema.type->createColumn();
-        score_column->reserve(ctx->results.size());
-        // ctx->results are already sorted by rowid, so let's just insert them sequentially.
-        // An alternative is to first create a score Column with full length, then assign the scores according to rowid
-        // and finally filter the column. This does not need to sort the `results` by `doc_id`. However this requires
-        // allocating large bulk of memory and could be slower then the current approach.
-        for (const auto & result : ctx->results)
-            score_column->insert(static_cast<Float64>(result.score));
-        block.insert(ColumnWithTypeAndName( //
-            std::move(score_column),
-            ctx->score_cd_in_schema.type,
-            ctx->score_cd_in_schema.name,
-            ctx->score_cd_in_schema.id));
+        if (ctx->score_cd_in_schema.has_value())
+        {
+            auto score_column = ctx->score_cd_in_schema->type->createColumn();
+            score_column->reserve(ctx->results.size());
+            // ctx->results are already sorted by rowid, so let's just insert them sequentially.
+            // An alternative is to first create a score Column with full length, then assign the scores according to rowid
+            // and finally filter the column. This does not need to sort the `results` by `doc_id`. However this requires
+            // allocating large bulk of memory and could be slower then the current approach.
+            for (const auto & result : ctx->results)
+                score_column->insert(static_cast<Float64>(result.score));
+            block.insert(ColumnWithTypeAndName( //
+                std::move(score_column),
+                ctx->score_cd_in_schema->type,
+                ctx->score_cd_in_schema->name,
+                ctx->score_cd_in_schema->id));
+        }
     }
 
     RUNTIME_CHECK(block.columns() == ctx->schema->size());

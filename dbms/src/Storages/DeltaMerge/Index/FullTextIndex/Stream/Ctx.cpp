@@ -46,18 +46,30 @@ auto buildCtx(
     RUNTIME_CHECK(fts_query_info != nullptr);
     RUNTIME_CHECK(schema != nullptr);
 
-    // Currently only TopK is supported.
-    RUNTIME_CHECK(fts_query_info->query_type() == tipb::FTSQueryTypeTopK);
+    RUNTIME_CHECK(fts_query_info->query_type() != tipb::FTSQueryTypeInvalid);
     RUNTIME_CHECK(fts_query_info->has_index_id());
     RUNTIME_CHECK(fts_query_info->columns().size() == 1);
 
     RUNTIME_CHECK(!schema->empty());
-    auto score_cd_in_schema = schema->back();
-    RUNTIME_CHECK(score_cd_in_schema.id == FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.id);
-    RUNTIME_CHECK(score_cd_in_schema.type->equals(*FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.type));
+
+    std::optional<ColumnDefine> score_cd_in_schema;
+    switch (fts_query_info->query_type())
+    {
+    case tipb::FTSQueryTypeTopK:
+        // In FTSQueryTypeTopK, the score column is always at the end of the schema.
+        score_cd_in_schema = schema->back();
+        RUNTIME_CHECK(score_cd_in_schema->id == FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.id);
+        RUNTIME_CHECK(score_cd_in_schema->type->equals(*FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.type));
+        break;
+    case tipb::FTSQueryTypeFilter:
+        RUNTIME_CHECK(schema->back().id != FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.id);
+        break;
+    default:
+        RUNTIME_CHECK_MSG(false, "Unsupported FTSQueryType: {}", magic_enum::enum_name(fts_query_info->query_type()));
+    }
 
     auto rest_col_schema = std::make_shared<ColumnDefines>();
-    rest_col_schema->reserve(schema->size() - 1);
+    rest_col_schema->reserve(schema->size());
 
     ColumnID fts_col_id = fts_query_info->columns()[0].column_id();
     std::optional<size_t> fts_idx_in_schema;
@@ -70,9 +82,10 @@ auto buildCtx(
             fts_idx_in_schema.emplace(i);
             fts_cd_in_schema.emplace(cd);
         }
-        if (cd.id != score_cd_in_schema.id && cd.id != fts_col_id)
+        else
         {
-            rest_col_schema->emplace_back(cd);
+            if (!score_cd_in_schema.has_value() || cd.id != score_cd_in_schema->id)
+                rest_col_schema->emplace_back(cd);
         }
     }
 
