@@ -14,18 +14,24 @@
 
 #include "Flash/Coprocessor/TiCIScan.h"
 
+#include <cassert>
+
 #include "TiDB/Schema/TiDB.h"
+#include "tipb/executor.pb.h"
+#include "tipb/expression.pb.h"
 namespace DB
 {
 TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id_, const DAGContext &)
     : tici_scan(tici_scan_)
     , executor_id(executor_id_)
-    , table_id(tici_scan->tici_scan().table_id())
-    , index_id(tici_scan->tici_scan().index_id())
-    , return_columns(TiDB::toTiDBColumnInfos(tici_scan->tici_scan().return_columns()))
-    , query_columns(TiDB::toTiDBColumnInfos(tici_scan->tici_scan().query_columns()))
-    , query_type(tici_scan->tici_scan().type())
-    , query_json_str(tici_scan->tici_scan().query_json_str())
-    , limit(tici_scan->tici_scan().limit())
-{}
+    , table_id(tici_scan->idx_scan().table_id())
+    , index_id(tici_scan->idx_scan().index_id())
+    , return_columns(TiDB::toTiDBColumnInfos(tici_scan->idx_scan().columns()))
+    , query_columns(TiDB::toTiDBColumnInfos(tici_scan->idx_scan().fts_query_info().columns()))
+    , query_type(tici_scan->idx_scan().fts_query_info().query_type())
+    , query_json_str(tici_scan->idx_scan().fts_query_info().query_text())
+    , limit(tici_scan->idx_scan().fts_query_info().top_k())
+{
+    assert(tici_scan->idx_scan().fts_query_info().query_func() == tipb::ScalarFuncSig::FTSMatchWord);
+}
 } // namespace DB

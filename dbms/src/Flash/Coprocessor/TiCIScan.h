@@ -41,8 +41,8 @@ private:
     const int index_id;
     TiDB::ColumnInfos return_columns;
     TiDB::ColumnInfos query_columns;
-    [[maybe_unused]] tipb::TiCIScanQueryType query_type;
-    const std::string query_json_str;
+    [[maybe_unused]] tipb::FTSQueryType query_type;
+    std::string query_json_str;
     const int limit;
 };
 } // namespace DB
