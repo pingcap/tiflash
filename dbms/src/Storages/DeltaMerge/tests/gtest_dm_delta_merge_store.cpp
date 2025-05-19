@@ -17,11 +17,7 @@
 #include <Common/MyTime.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <DataTypes/DataTypeMyDateTime.h>
-<<<<<<< HEAD
-=======
 #include <DataTypes/DataTypesNumber.h>
-#include <Debug/TiFlashTestEnv.h>
->>>>>>> 8e3d5476b4 (ddl: Fix compatibility with null expression index (#10162))
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
@@ -2430,7 +2426,7 @@ try
     {
         TiDB::TableInfo new_table_info;
         static const String json_table_info = R"(
-    {"cols":[{"id":1,"name":{"L":"id","O":"id"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":11,"Tp":3}},{"id":2,"name":{"L":"_v$_idx_name_0","O":"_v$_idx_name_0"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":136,"Flen":0,"Tp":6}}],"id":1145,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t","O":"t"},"pk_is_handle":false,"schema_version":-1,"state":5,"tiflash_replica":{"Available":false,"Count":1},"update_timestamp":456163970651521027}
+    {"cols":[{"comment": "","default": null,"default_bit": null,"id":1,"name":{"L":"id","O":"id"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":11,"Tp":3}},{"comment": "","default": null,"default_bit": null,"id":2,"name":{"L":"_v$_idx_name_0","O":"_v$_idx_name_0"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":136,"Flen":0,"Tp":6}}],"comment": "","id":242807,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t","O":"t"},"pk_is_handle":false,"schema_version":-1,"state":5,"tiflash_replica":{"Available":false,"Count":1},"update_timestamp":456163970651521027}
             )";
         new_table_info.deserialize(json_table_info);
         store->applySchemaChanges(new_table_info);
