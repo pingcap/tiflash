@@ -109,27 +109,34 @@ void setupNopLAC()
 {
     LocalAdmissionController::global_instance.reset();
     LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
-    LocalAdmissionController::global_instance->consume_resource_func = nopConsumeResource;
-    LocalAdmissionController::global_instance->get_priority_func = nopGetPriority;
+    {
+        std::lock_guard lock(LocalAdmissionController::global_instance->mu);
+        LocalAdmissionController::global_instance->consume_resource_func = nopConsumeResource;
+        LocalAdmissionController::global_instance->get_priority_func = nopGetPriority;
+    }
 }
 
 void setupMockLAC(const std::vector<ResourceGroupPtr> & resource_groups)
 {
     LocalAdmissionController::global_instance.reset();
     LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
-    LocalAdmissionController::global_instance->consume_resource_func = dynamicConsumeResource;
-    LocalAdmissionController::global_instance->get_priority_func = dynamicGetPriority;
 
     uint64_t max_ru_per_sec = 0;
-    for (const auto & resource_group : resource_groups)
     {
-        auto cur_ru_per_sec = resource_group->user_ru_per_sec;
-        if (max_ru_per_sec < cur_ru_per_sec)
-            max_ru_per_sec = cur_ru_per_sec;
+        std::lock_guard lock(LocalAdmissionController::global_instance->mu);
+        LocalAdmissionController::global_instance->consume_resource_func = dynamicConsumeResource;
+        LocalAdmissionController::global_instance->get_priority_func = dynamicGetPriority;
 
-        LocalAdmissionController::global_instance->resource_groups.insert({resource_group->name, resource_group});
+        for (const auto & resource_group : resource_groups)
+        {
+            auto cur_ru_per_sec = resource_group->user_ru_per_sec;
+            if (max_ru_per_sec < cur_ru_per_sec)
+                max_ru_per_sec = cur_ru_per_sec;
+
+            LocalAdmissionController::global_instance->resource_groups.insert({resource_group->name, resource_group});
+        }
+        LocalAdmissionController::global_instance->max_ru_per_sec = max_ru_per_sec;
     }
-    LocalAdmissionController::global_instance->max_ru_per_sec = max_ru_per_sec;
 }
 
 std::vector<TaskPtr> setupTasks(
@@ -469,7 +476,10 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
         LocalAdmissionController::global_instance->resource_groups.insert({rg_name, resource_group});
         LocalAdmissionController::global_instance->max_ru_per_sec = new_ru_per_sec;
     }
-    LocalAdmissionController::global_instance->refill_token_callback();
+    {
+        std::lock_guard lock(LocalAdmissionController::global_instance->call_back_mutex);
+        LocalAdmissionController::global_instance->refill_token_callback();
+    }
     ASSERT_NO_THROW(exec_context.waitFor(std::chrono::seconds(10)));
 }
 
