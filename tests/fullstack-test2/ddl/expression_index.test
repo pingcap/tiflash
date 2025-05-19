@@ -15,7 +15,7 @@
 mysql> drop table if exists test.t;
 
 # test for null expression express tiflash#9891
-mysql> CREATE TABLE test.t (id int, KEY idx_name ((null)));
+mysql> CREATE TABLE test.t (id int);
 mysql> alter table test.t set tiflash replica 1;
 mysql> insert test.t values(0),(1);
 
@@ -33,15 +33,10 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t o
 +----+
 
 mysql> CREATE INDEX idx_n ON test.t ((null));
-mysql> alter table test.t add column c1 int;
-mysql> set session tidb_isolation_read_engines='tiflash'; select id,c1 from test.t order by id;
-+------+------+
-| id   | c1   |
-+------+------+
-|    0 | NULL |
-|    1 | NULL |
-|    2 | NULL |
-|    3 | NULL |
-+------+------+
+ERROR 3761 (HY000) at line 1: The used storage engine cannot index the expression 'null'
 
+mysql> drop table if exists test.t;
+
+mysql> CREATE TABLE test.t (id int, KEY idx_name ((null)));
+ERROR 3761 (HY000) at line 1: The used storage engine cannot index the expression 'null'
 mysql> drop table if exists test.t;
