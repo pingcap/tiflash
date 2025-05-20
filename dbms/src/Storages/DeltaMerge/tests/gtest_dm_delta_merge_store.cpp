@@ -17,6 +17,7 @@
 #include <Common/MyTime.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
@@ -2214,6 +2215,84 @@ try
             createColumns({
                 createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
                 createColumn<String>(Strings(num_rows_write, "test_add_string_col")),
+            }));
+    }
+}
+CATCH
+
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnInvalidExpressionIndex)
+try
+{
+    // const String col_name_to_add = "_v$_idx_name_0";
+    // const DataTypePtr col_type_to_add = DataTypeFactory::instance().getOrSet("Int8");
+
+    // write some rows before DDL
+    size_t num_rows_write = 1;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    // DDL add column for invalid expression index
+    // actual ddl is like: ADD COLUMN `_v$_idx_name_0` Nullable(Int8)
+    {
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"comment": "","default": null,"default_bit": null,"id":1,"name":{"L":"id","O":"id"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":11,"Tp":3}},{"comment": "","default": null,"default_bit": null,"id":2,"name":{"L":"_v$_idx_name_0","O":"_v$_idx_name_0"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":136,"Flen":0,"Tp":6}}],"comment": "","id":242807,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t","O":"t"},"pk_is_handle":false,"schema_version":-1,"state":5,"tiflash_replica":{"Available":false,"Count":1},"update_timestamp":456163970651521027}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
+    }
+
+    // try read
+    {
+        ColumnDefines cols_to_read;
+        bool has_v_index = false;
+        bool has_id = false;
+        for (const auto & col : store->getTableColumns())
+        {
+            if (col.name == DMTestEnv::pk_name)
+            {
+                cols_to_read.emplace_back(col);
+            }
+            else if (col.name == "id")
+            {
+                cols_to_read.emplace_back(col);
+                has_id = true;
+            }
+            else if (col.name == "_v$_idx_name_0")
+            {
+                // we check the type of this column, but not read from it
+                ASSERT_EQ(col.type->getName(), "Nullable(Int8)") << store->getHeader()->dumpJsonStructure();
+                has_v_index = true;
+            }
+        }
+        ASSERT_TRUE(has_id) << store->getHeader()->dumpJsonStructure();
+        ASSERT_TRUE(has_v_index) << store->getHeader()->dumpJsonStructure();
+
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            cols_to_read,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, "id"}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                // all "id" are NULL
+                createNullableColumn<Int32>(
+                    std::vector<Int64>(num_rows_write, 0),
+                    std::vector<Int32>(num_rows_write, 1)),
             }));
     }
 }
