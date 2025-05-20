@@ -17,11 +17,7 @@
 #include <Common/MyTime.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <DataTypes/DataTypeMyDateTime.h>
-<<<<<<< HEAD
-=======
 #include <DataTypes/DataTypesNumber.h>
-#include <Debug/TiFlashTestEnv.h>
->>>>>>> 8e3d5476b4 (ddl: Fix compatibility with null expression index (#10162))
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
