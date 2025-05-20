@@ -39,7 +39,11 @@ endif()
 
 if(NOT EXTERNAL_TIFLASH_PROXY_FOUND)
     if(NOT MISSING_INTERNAL_TIFLASH_PROXY)
-        set(TIFLASH_PROXY_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/raftstore-proxy/ffi/src")
+        if (ENABLE_NEXT_GEN)
+            set(TIFLASH_PROXY_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen/raftstore-proxy/ffi/src")
+        else()
+            set(TIFLASH_PROXY_INCLUDE_DIR "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/raftstore-proxy/ffi/src")
+        endif()
         set(TIFLASH_PROXY_LIBRARY libtiflash_proxy)
         set(USE_INTERNAL_TIFLASH_PROXY 1)
     else()
@@ -48,15 +52,18 @@ if(NOT EXTERNAL_TIFLASH_PROXY_FOUND)
 endif()
 
 set(TIFLASH_PROXY_FOUND TRUE)
-# SERVERLESS_PROXY=0 if using normal proxy.
-# SERVERLESS_PROXY=1 if using serverless proxy.
-if (EXISTS "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy/proxy_components/proxy_ffi/src/cloud_helper.rs")
+if (ENABLE_NEXT_GEN)
+    if (NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen/proxy_components/proxy_ffi/src/cloud_helper.rs")
+        message(FATAL "Can't find next-gen tiflash proxy")
+    endif()
+    # SERVERLESS_PROXY=1 if using next-gen proxy.
     add_definitions(-DSERVERLESS_PROXY=1)
 else()
+    # SERVERLESS_PROXY=0 if using classic proxy.
     add_definitions(-DSERVERLESS_PROXY=0)
 endif()
 
-message(STATUS "Using tiflash proxy: ${USE_INTERNAL_TIFLASH_PROXY} : ${TIFLASH_PROXY_INCLUDE_DIR}, ${TIFLASH_PROXY_LIBRARY}")
+message(STATUS "Using tiflash-proxy: ${USE_INTERNAL_TIFLASH_PROXY}: ${TIFLASH_PROXY_INCLUDE_DIR}, ${TIFLASH_PROXY_LIBRARY}, ENABLE_NEXT_GEN:${ENABLE_NEXT_GEN}")
 
 if (NOT USE_INTERNAL_TIFLASH_PROXY)
     add_custom_target(tiflash_proxy ALL DEPENDS ${TIFLASH_PROXY_LIBRARY})
