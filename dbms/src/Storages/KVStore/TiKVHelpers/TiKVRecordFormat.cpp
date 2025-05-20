@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
 #include <TiDB/Schema/TiDB.h>
 
@@ -53,7 +54,7 @@ TiKVValue encodeLockCfValue(
     TiKV::writeVarUInt(ttl, res);
     if (short_value)
     {
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
         TiKV::writeVarUInt(short_value->size(), res);
 #else
         res.write(SHORT_VALUE_PREFIX);
@@ -90,7 +91,7 @@ DecodedWriteCFValue decodeWriteCfValue(const TiKVValue & value)
         {
         case RecordKVFormat::SHORT_VALUE_PREFIX:
         {
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
             size_t slen = RecordKVFormat::readVarUInt(data, len);
 #else
             size_t slen = RecordKVFormat::readUInt8(data, len);
@@ -145,7 +146,7 @@ TiKVValue encodeWriteCfValue(UInt8 write_type, Timestamp ts, std::string_view sh
     if (!short_value.empty())
     {
         res.write(SHORT_VALUE_PREFIX);
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
         TiKV::writeVarUInt(short_value.size(), res);
 #else
         res.write(static_cast<char>(short_value.size()));

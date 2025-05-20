@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/MemoryTracker.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Debug/MockTiDB.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
@@ -939,10 +940,10 @@ CATCH
 TEST(ProxyMode, Normal)
 try
 {
-#if SERVERLESS_PROXY == 0
-    ASSERT_EQ(SERVERLESS_PROXY, 0);
+#if ENABLE_NEXT_GEN == 0
+    ASSERT_EQ(ENABLE_NEXT_GEN, 0);
 #else
-    ASSERT_EQ(SERVERLESS_PROXY, 1);
+    ASSERT_EQ(ENABLE_NEXT_GEN, 1);
 #endif
 }
 CATCH

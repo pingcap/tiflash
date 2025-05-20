@@ -15,6 +15,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/RequestUtils.h>
@@ -130,7 +131,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             TablesRegionsInfo tables_regions_info(true);
             auto & table_regions_info = tables_regions_info.getSingleTableRegions();
 
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
             if (cop_context.db_context.isKeyspaceInBlocklist(cop_request->context().keyspace_id())
                 || cop_context.db_context.isRegionInBlocklist(cop_context.kv_context.region_id()))
             {

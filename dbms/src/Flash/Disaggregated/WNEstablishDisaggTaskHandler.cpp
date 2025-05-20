@@ -14,6 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Common/TiFlashException.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Disaggregated/WNEstablishDisaggTaskHandler.h>
@@ -54,7 +55,7 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
         tables_regions_info.regionCount(),
         tables_regions_info.tableCount());
 
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
     if (context->isKeyspaceInBlocklist(meta.keyspace_id())
         || context->isRegionsContainsInBlocklist(tables_regions_info.getAllRegionID()))
     {
