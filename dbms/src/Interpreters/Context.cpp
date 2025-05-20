@@ -19,6 +19,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/TiFlashSecurity.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
 #include <Common/randomSeed.h>
@@ -2057,7 +2058,7 @@ const std::unordered_set<uint64_t> * Context::getStoreIdBlockList() const
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 bool Context::initializeStoreIdBlockList(const String & comma_sep_string)
 {
-#if SERVERLESS_PROXY == 1
+#if ENABLE_NEXT_GEN
     std::istringstream iss(comma_sep_string);
     std::string token;
 

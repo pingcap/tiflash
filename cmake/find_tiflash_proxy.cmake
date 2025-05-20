@@ -56,11 +56,6 @@ if (ENABLE_NEXT_GEN)
     if (NOT EXISTS "${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-next-gen/proxy_components/proxy_ffi/src/cloud_helper.rs")
         message(FATAL "Can't find next-gen tiflash proxy")
     endif()
-    # SERVERLESS_PROXY=1 if using next-gen proxy.
-    add_definitions(-DSERVERLESS_PROXY=1)
-else()
-    # SERVERLESS_PROXY=0 if using classic proxy.
-    add_definitions(-DSERVERLESS_PROXY=0)
 endif()
 
 message(STATUS "Using tiflash-proxy: ${USE_INTERNAL_TIFLASH_PROXY}: ${TIFLASH_PROXY_INCLUDE_DIR}, ${TIFLASH_PROXY_LIBRARY}, ENABLE_NEXT_GEN:${ENABLE_NEXT_GEN}")
