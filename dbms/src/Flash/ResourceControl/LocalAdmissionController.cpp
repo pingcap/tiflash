@@ -86,10 +86,11 @@ std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const S
     }
     else
     {
-        return {GACRequestInfo{
+        return GACRequestInfo{
             .resource_group_name = name,
             .acquire_tokens = acquire_tokens,
-            .ru_consumption_delta = report_token_consumption}};
+            .ru_consumption_delta = report_token_consumption,
+        };
     }
 }
 
@@ -113,7 +114,7 @@ bool ResourceGroup::shouldReportRUConsumption(const SteadyClock::time_point & no
 {
     std::lock_guard lock(mu);
     const auto elapsed = now - last_request_gac_timepoint;
-    RUNTIME_CHECK(elapsed.count() >= 0);
+    RUNTIME_CHECK(elapsed.count() >= 0, elapsed.count());
     if (elapsed >= LocalAdmissionController::DEFAULT_TARGET_PERIOD)
     {
         if (ru_consumption_delta >= REPORT_RU_CONSUMPTION_DELTA_THRESHOLD)
@@ -146,7 +147,7 @@ double ResourceGroup::getAcquireRUNumWithoutLock(double speed, uint32_t n_sec, d
 
 void ResourceGroup::updateNormalMode(double add_tokens, double new_capacity, const SteadyClock::time_point & now)
 {
-    RUNTIME_CHECK(add_tokens >= 0);
+    RUNTIME_CHECK(add_tokens >= 0, add_tokens);
 
     std::lock_guard lock(mu);
     endRequestWithoutLock();
@@ -181,8 +182,8 @@ void ResourceGroup::updateTrickleMode(
     int64_t trickle_ms,
     const SteadyClock::time_point & now)
 {
-    RUNTIME_CHECK(add_tokens >= 0.0);
-    RUNTIME_CHECK(trickle_ms > 0);
+    RUNTIME_CHECK(add_tokens >= 0.0, add_tokens);
+    RUNTIME_CHECK(trickle_ms > 0, trickle_ms);
 
     std::lock_guard lock(mu);
     endRequestWithoutLock();
@@ -211,7 +212,7 @@ void ResourceGroup::updateTrickleMode(
         trickle_expire_timepoint = now + trickle_dura - GAC_RTT_ANTICIPATION;
     LOG_DEBUG(
         log,
-        "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}, trickel_dura: {}ms",
+        "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}, trickle_dura: {}ms",
         name,
         ori_bucket_info,
         bucket->toString(),
@@ -247,7 +248,7 @@ void ResourceGroup::updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_
     std::lock_guard lock(mu);
 
     const auto elapsed = now - last_compute_ru_consumption_speed;
-    RUNTIME_CHECK(elapsed.count() >= 0);
+    RUNTIME_CHECK(elapsed.count() >= 0, elapsed.count());
     if (elapsed < COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL)
         return;
 
@@ -304,7 +305,10 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & 
     catch (...)
     {
         throw ::DB::Exception(
-            fmt::format("warmupResourceGroupInfoCache({}) failed: {}", name, getCurrentExceptionMessage(false)));
+            ErrorCodes::LOGICAL_ERROR,
+            "warmupResourceGroupInfoCache({}) failed: {}",
+            name,
+            getCurrentExceptionMessage(false));
     }
 
     RUNTIME_CHECK_MSG(!resp.has_error(), "warmupResourceGroupInfoCache({}) failed: {}", name, resp.error().message());
@@ -409,10 +413,11 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
         for (const auto & resource_group : resource_groups)
         {
             const auto consumption_delta_info = resource_group.second->updateRUConsumptionDeltaInfoWithoutLock();
-            request_infos.push_back(
-                {.resource_group_name = resource_group.first,
-                 .acquire_tokens = 0,
-                 .ru_consumption_delta = consumption_delta_info.delta});
+            request_infos.push_back({
+                .resource_group_name = resource_group.first,
+                .acquire_tokens = 0,
+                .ru_consumption_delta = consumption_delta_info.delta,
+            });
         }
     }
     else
@@ -559,8 +564,7 @@ void LocalAdmissionController::doRequestGAC()
                     LOG_INFO(
                         log,
                         "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already "
-                        "delete "
-                        "it. erase_num: {}",
+                        "delete it. erase_num: {}",
                         name,
                         erase_num);
                 }
@@ -592,7 +596,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
     handled_resource_group_names.reserve(resp.responses_size());
     if (resp.responses().empty())
     {
-        LOG_ERROR(log, "got empty TokenBuckets resp from GAC");
+        LOG_ERROR(log, "got empty TokenBuckets resp from GAC, {}", resp.ShortDebugString());
         return {};
     }
 
@@ -693,7 +697,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
     }
 
     {
-        // Need lock here to avoid RCQ has already been destroied.
+        // Need lock here to avoid RCQ has already been destroyed.
         std::lock_guard lock(mu);
         if (refill_token_callback)
             refill_token_callback();
@@ -922,7 +926,7 @@ void LocalAdmissionController::stop()
     // Report final RU consumption before stop:
     // 1. to avoid RU consumption missed.
     // 2. clear GAC's unique_client_id by setting acquire_tokens as zero to avoid affecting burst limit calculation.
-    // This can happend when disagg CN is scaled-in/out frequently.
+    // This can happen when disagg CN is scaled-in/out frequently.
     // NOTE: Make sure all threads have been joined before call buildGACRequest().
     const auto gac_req = buildGACRequest(/*is_final_report=*/true);
     RUNTIME_CHECK(resource_groups.empty() || gac_req.has_value());
