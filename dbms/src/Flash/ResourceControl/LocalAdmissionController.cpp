@@ -347,8 +347,8 @@ void LocalAdmissionController::mainLoop()
     // 1. compute RU consumption speed(COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL, default 1s)
     // 2. report RU consumption to GAC(DEFAULT_TARGET_PERIOD, default 5s)
     // 3. check if need to step into degrade mode(DEGRADE_MODE_DURATION, default 120s)
-    const auto tick_interval = ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL;
-    RUNTIME_CHECK(
+    constexpr auto tick_interval = ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL;
+    static_assert(
         tick_interval <= ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL && tick_interval <= DEGRADE_MODE_DURATION
         && tick_interval <= DEFAULT_TARGET_PERIOD);
     auto cur_tick_beg = current_tick;
