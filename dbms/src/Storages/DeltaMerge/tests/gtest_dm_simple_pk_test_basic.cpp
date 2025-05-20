@@ -129,7 +129,7 @@ std::vector<Int64> SimplePKTestBasic::getSegmentBreakpoints() const
 RowKeyValue SimplePKTestBasic::buildRowKey(Int64 pk) const
 {
     if (!is_common_handle)
-        return RowKeyValue::fromHandle(pk);
+        return RowKeyValue::fromIntHandle(pk);
 
     WriteBufferFromOwnString ss;
     ::DB::EncodeUInt(static_cast<UInt8>(TiDB::CodecFlagInt), ss);

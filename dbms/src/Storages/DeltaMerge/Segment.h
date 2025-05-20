@@ -267,14 +267,6 @@ public:
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         bool reorganize_block = true) const;
 
-    BlockInputStreamPtr getInputStreamModeFast(
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
-        const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & read_ranges,
-        const DMFilePackFilterResults & pack_filter_results,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
-
     BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
@@ -554,7 +546,7 @@ public:
     void placeDeltaIndex(const DMContext & dm_context) const;
     void placeDeltaIndex(const DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
     /// Use to replay version chain in background.
-    void replayVersionChain(const DMContext & dm_context);
+    void replayVersionChain(const DMContext & dm_context) const;
 
     /// Compact the delta layer, merging fragment column files into bigger column files.
     /// It does not merge the delta into stable layer.
@@ -739,6 +731,7 @@ public:
 
     static bool useCleanRead(const SegmentSnapshotPtr & segment_snap, const ColumnDefines & columns_to_read);
     RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const;
+    template <bool is_fast_scan>
     BitmapFilterPtr buildBitmapFilter(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
@@ -747,6 +740,7 @@ public:
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t build_bitmap_filter_block_rows);
+    template <bool is_fast_scan = false>
     BitmapFilterPtr buildMVCCBitmapFilter(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
@@ -755,6 +749,7 @@ public:
         UInt64 start_ts,
         size_t expected_block_size,
         bool enable_version_chain);
+    template <bool is_fast_scan = false>
     BitmapFilterPtr buildMVCCBitmapFilterNormal(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
@@ -762,6 +757,7 @@ public:
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size);
+    template <bool is_fast_scan = false>
     BitmapFilterPtr buildMVCCBitmapFilterStableOnly(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
@@ -800,6 +796,7 @@ public:
         UInt64 start_ts,
         size_t expected_block_size,
         ReadTag read_tag);
+    template <bool is_fast_scan = false>
     BlockInputStreamPtr getBitmapFilterInputStream(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
