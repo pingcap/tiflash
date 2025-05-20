@@ -641,19 +641,27 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
             continue;
         }
 
-        int64_t trickle_ms = granted_token_bucket.trickle_time_ms();
-        RUNTIME_CHECK_MSG(trickle_ms >= 0, "{}, expect trickle_ms >= 0, but got: {}", err_msg, trickle_ms);
+        const auto trickle_ms = granted_token_bucket.trickle_time_ms();
+        if unlikely (trickle_ms < 0)
+        {
+            LOG_ERROR(log, "{}, expect trickle_ms >= 0, but got: {}", err_msg, trickle_ms);
+            continue;
+        }
 
         const auto now = SteadyClock::now();
 
         double added_tokens = granted_token_bucket.granted_tokens().tokens();
-        RUNTIME_CHECK_MSG(added_tokens >= 0, "{}, expect added_tokens >= 0, but got: {}", err_msg, added_tokens);
-        const auto trickle_left_tokens = resource_group->getTrickleLeftTokens(now);
-        RUNTIME_CHECK_MSG(
-            trickle_left_tokens >= 0,
-            "{}, expect trickle_left_tokens >= 0, but got: {}",
-            err_msg,
-            trickle_left_tokens);
+        if unlikely (!std::isfinite(added_tokens) || added_tokens < 0.0)
+        {
+            LOG_ERROR(log, "{}, invalid added_tokens: {}", err_msg, added_tokens);
+            continue;
+        }
+        auto trickle_left_tokens = resource_group->getTrickleLeftTokens(now);
+        if unlikely (!std::isfinite(trickle_left_tokens) || trickle_left_tokens < 0.0)
+        {
+            LOG_ERROR(log, "{}, invalid trickel_left_tokens {}, reset to zero", err_msg, trickle_left_tokens);
+            trickle_left_tokens = 0;
+        }
         added_tokens += trickle_left_tokens;
 
         // capacity can be zero
@@ -667,10 +675,10 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
             GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_capacity, name).Set(capacity);
 
         // fill_rate should never be setted.
-        {
-            const auto fill_rate = granted_token_bucket.granted_tokens().settings().fill_rate();
-            RUNTIME_CHECK_MSG(fill_rate == 0, "{}, expect fill_rate is 0, but got: {}", err_msg, fill_rate);
-        }
+        // This is not critical error, just ignore and handle rest resource groups.
+        const auto fill_rate = granted_token_bucket.granted_tokens().settings().fill_rate();
+        if unlikely (fill_rate != 0)
+            LOG_ERROR(log, "{}, expect fill_rate is 0, but got: {}", err_msg, fill_rate);
 
         if (trickle_ms == 0)
         {
