@@ -618,8 +618,8 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         }
 
         handled_resource_group_names.push_back(name);
-        const String err_msg = fmt::format("handle acquire token resp failed: rg: {}", name);
 
+        const String err_msg = fmt::format("handle acquire token resp failed: rg: {} ", name);
         // It's possible for one_resp.granted_r_u_tokens() to be empty
         // when the acquire_token_req is only for report RU consumption.
         if (one_resp.granted_r_u_tokens().empty())
@@ -632,9 +632,10 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         {
             LOG_ERROR(
                 log,
-                "expect resp.granted_r_u_tokens().size() is 1 or 0, but got {} for rg {}",
+                "{}unexpect resp.granted_r_u_tokens().size(): {} one_resp: {}",
+                err_msg,
                 one_resp.granted_r_u_tokens().size(),
-                one_resp.resource_group_name());
+                one_resp.ShortDebugString());
             continue;
         }
 
@@ -648,7 +649,12 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         const auto trickle_ms = granted_token_bucket.trickle_time_ms();
         if unlikely (trickle_ms < 0)
         {
-            LOG_ERROR(log, "{}, expect trickle_ms >= 0, but got: {}", err_msg, trickle_ms);
+            LOG_ERROR(
+                log,
+                "{} unexpect trickle_ms: {} one_resp: {}",
+                err_msg,
+                trickle_ms,
+                one_resp.ShortDebugString());
             continue;
         }
 
@@ -657,13 +663,23 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         double added_tokens = granted_token_bucket.granted_tokens().tokens();
         if unlikely (!std::isfinite(added_tokens) || added_tokens < 0.0)
         {
-            LOG_ERROR(log, "{}, invalid added_tokens: {}", err_msg, added_tokens);
+            LOG_ERROR(
+                log,
+                "{} invalid added_tokens: {} one_resp: {}",
+                err_msg,
+                added_tokens,
+                one_resp.ShortDebugString());
             continue;
         }
         auto trickle_left_tokens = resource_group->getTrickleLeftTokens(now);
         if unlikely (!std::isfinite(trickle_left_tokens) || trickle_left_tokens < 0.0)
         {
-            LOG_ERROR(log, "{}, invalid trickel_left_tokens {}, reset to zero", err_msg, trickle_left_tokens);
+            LOG_ERROR(
+                log,
+                "{} invalid trickle_left_tokens: {} one_resp: {}, reset to zero",
+                err_msg,
+                trickle_left_tokens,
+                one_resp.ShortDebugString());
             trickle_left_tokens = 0;
         }
         added_tokens += trickle_left_tokens;
@@ -682,7 +698,12 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         // This is not critical error, just ignore and handle rest resource groups.
         const auto fill_rate = granted_token_bucket.granted_tokens().settings().fill_rate();
         if unlikely (fill_rate != 0)
-            LOG_ERROR(log, "{}, expect fill_rate is 0, but got: {}", err_msg, fill_rate);
+            LOG_ERROR(
+                log,
+                "{} unexpect fill_rate: {} one_resp: {}",
+                err_msg,
+                fill_rate,
+                one_resp.ShortDebugString());
 
         if (trickle_ms == 0)
         {
