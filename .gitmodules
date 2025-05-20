@@ -152,3 +152,6 @@
 [submodule "contrib/highfive"]
 	path = contrib/highfive
 	url = https://github.com/BlueBrain/HighFive
+[submodule "contrib/tiflash-proxy-next-gen"]
+	path = contrib/tiflash-proxy-next-gen
+	url = git@github.com:tidbcloud/cloud-storage-engine.git
