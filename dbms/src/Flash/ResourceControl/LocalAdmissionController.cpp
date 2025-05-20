@@ -619,7 +619,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
 
         handled_resource_group_names.push_back(name);
 
-        const String err_msg = fmt::format("handle acquire token resp failed: rg: {} ", name);
+        const String err_msg = fmt::format("handle acquire token resp failed: rg: {}", name);
         // It's possible for one_resp.granted_r_u_tokens() to be empty
         // when the acquire_token_req is only for report RU consumption.
         if (one_resp.granted_r_u_tokens().empty())
@@ -632,7 +632,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         {
             LOG_ERROR(
                 log,
-                "{}unexpect resp.granted_r_u_tokens().size(): {} one_resp: {}",
+                "{} unexpected resp.granted_r_u_tokens().size(): {} one_resp: {}",
                 err_msg,
                 one_resp.granted_r_u_tokens().size(),
                 one_resp.ShortDebugString());
@@ -642,19 +642,14 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         const resource_manager::GrantedRUTokenBucket & granted_token_bucket = one_resp.granted_r_u_tokens()[0];
         if unlikely (granted_token_bucket.type() != resource_manager::RequestUnitType::RU)
         {
-            LOG_ERROR(log, "unexpected request type");
+            LOG_ERROR(log, "{} unexpected request type, one_resp: {}", err_msg, one_resp.ShortDebugString());
             continue;
         }
 
         const auto trickle_ms = granted_token_bucket.trickle_time_ms();
         if unlikely (trickle_ms < 0)
         {
-            LOG_ERROR(
-                log,
-                "{} unexpect trickle_ms: {} one_resp: {}",
-                err_msg,
-                trickle_ms,
-                one_resp.ShortDebugString());
+            LOG_ERROR(log, "{} unexpected trickle_ms: {} one_resp: {}", err_msg, trickle_ms, one_resp.ShortDebugString());
             continue;
         }
 
@@ -698,12 +693,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         // This is not critical error, just ignore and handle rest resource groups.
         const auto fill_rate = granted_token_bucket.granted_tokens().settings().fill_rate();
         if unlikely (fill_rate != 0)
-            LOG_ERROR(
-                log,
-                "{} unexpect fill_rate: {} one_resp: {}",
-                err_msg,
-                fill_rate,
-                one_resp.ShortDebugString());
+            LOG_ERROR(log, "{} unexpected fill_rate: {} one_resp: {}", err_msg, fill_rate, one_resp.ShortDebugString());
 
         if (trickle_ms == 0)
         {
