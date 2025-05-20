@@ -45,13 +45,11 @@ struct GACRequestInfo
 
     std::string toString() const
     {
-        FmtBuffer fmt_buf;
-        fmt_buf.fmtAppend(
+        return fmt::format(
             "rg: {}, acquire_tokens: {}, ru_consumption_delta: {}",
             resource_group_name,
             acquire_tokens,
             ru_consumption_delta);
-        return fmt_buf.toString();
     }
 };
 

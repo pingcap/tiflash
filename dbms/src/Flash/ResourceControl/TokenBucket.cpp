@@ -19,13 +19,13 @@ namespace DB
 {
 void TokenBucket::put(double n)
 {
-    RUNTIME_CHECK(n >= 0.0);
+    RUNTIME_CHECK(n >= 0.0, n);
     tokens += n;
 }
 
 bool TokenBucket::consume(double n, const std::chrono::steady_clock::time_point & tp)
 {
-    RUNTIME_CHECK(n >= 0.0);
+    RUNTIME_CHECK(n >= 0.0, n);
 
     compact(tp);
 
@@ -40,8 +40,8 @@ double TokenBucket::peek(const TimePoint & tp) const
 
 void TokenBucket::reConfig(const TokenBucketConfig & config, const TimePoint & tp)
 {
-    RUNTIME_CHECK(config.fill_rate >= 0.0);
-    RUNTIME_CHECK(config.capacity >= 0.0);
+    RUNTIME_CHECK(config.fill_rate >= 0.0, config.fill_rate);
+    RUNTIME_CHECK(config.capacity >= 0.0, config.capacity);
 
     tokens = config.tokens;
     fill_rate = config.fill_rate;
