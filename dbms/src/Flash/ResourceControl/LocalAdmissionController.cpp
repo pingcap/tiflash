@@ -649,7 +649,12 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         const auto trickle_ms = granted_token_bucket.trickle_time_ms();
         if unlikely (trickle_ms < 0)
         {
-            LOG_ERROR(log, "{} unexpected trickle_ms: {} one_resp: {}", err_msg, trickle_ms, one_resp.ShortDebugString());
+            LOG_ERROR(
+                log,
+                "{} unexpected trickle_ms: {} one_resp: {}",
+                err_msg,
+                trickle_ms,
+                one_resp.ShortDebugString());
             continue;
         }
 
