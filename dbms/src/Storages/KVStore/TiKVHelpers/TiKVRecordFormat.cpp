@@ -54,12 +54,12 @@ TiKVValue encodeLockCfValue(
     TiKV::writeVarUInt(ttl, res);
     if (short_value)
     {
+        res.write(SHORT_VALUE_PREFIX);
 #if ENABLE_NEXT_GEN
         TiKV::writeVarUInt(short_value->size(), res);
 #else
-        res.write(SHORT_VALUE_PREFIX);
-#endif
         res.write(static_cast<char>(short_value->size()));
+#endif
         res.write(short_value->data(), short_value->size());
     }
     if (min_commit_ts)
