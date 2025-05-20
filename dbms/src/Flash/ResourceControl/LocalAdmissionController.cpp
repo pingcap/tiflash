@@ -542,7 +542,7 @@ void LocalAdmissionController::doRequestGAC()
                 GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_request_gac_count, req_rg_name).Increment();
 
             const auto resp = cluster->pd_client->acquireTokenBuckets(req);
-            LOG_DEBUG(log, "request to GAC done, req: {}. resp: {}", req.DebugString(), resp.DebugString());
+            LOG_DEBUG(log, "request to GAC done, req: {}. resp: {}", req.ShortDebugString(), resp.ShortDebugString());
 
             auto handled = handleTokenBucketsResp(resp);
 
@@ -743,7 +743,7 @@ void LocalAdmissionController::doWatch()
 {
     auto stream = etcd_client->watch(watch_gac_grpc_context.get());
     auto watch_req = setupWatchReq();
-    LOG_DEBUG(log, "watchGAC req: {}", watch_req.DebugString());
+    LOG_DEBUG(log, "watchGAC req: {}", watch_req.ShortDebugString());
     const bool write_ok = stream->Write(watch_req);
     if (!write_ok)
     {
@@ -762,7 +762,7 @@ void LocalAdmissionController::doWatch()
             LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + "read watch stream failed, " + status.error_message());
             break;
         }
-        LOG_DEBUG(log, "watchGAC got resp: {}", resp.DebugString());
+        LOG_DEBUG(log, "watchGAC got resp: {}", resp.ShortDebugString());
         if (resp.canceled())
         {
             LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + "watch is canceled");
@@ -842,7 +842,7 @@ bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::
             LOG_DEBUG(
                 log,
                 "trying to modify resource group config({}), but cannot find its info",
-                group_pb.DebugString());
+                group_pb.ShortDebugString());
             return true;
         }
         else
@@ -852,7 +852,7 @@ bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::
             updateMaxRUPerSecAfterDeleteWithoutLock(deleted_user_ru_per_sec);
         }
     }
-    LOG_DEBUG(log, "modify resource group to: {}", group_pb.DebugString());
+    LOG_DEBUG(log, "modify resource group to: {}", group_pb.ShortDebugString());
     return true;
 }
 

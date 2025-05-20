@@ -498,7 +498,7 @@ private:
         if (iter != resource_groups.end())
             return;
 
-        LOG_INFO(log, "add new resource group, info: {}", new_group_pb.DebugString());
+        LOG_INFO(log, "add new resource group, info: {}", new_group_pb.ShortDebugString());
         auto new_group = std::make_shared<ResourceGroup>(new_group_pb, current_tick);
         resource_groups.insert({new_group_pb.name(), new_group});
 
@@ -516,7 +516,7 @@ private:
     void mainLoop();
     // Watch GAC event to delete resource group.
     void watchGACLoop();
-    // Send request to gac, seperate from mainLoop() to avoid affect the ru consumption speed computation.
+    // Send request to gac, separate from mainLoop() to avoid affect the ru consumption speed computation.
     void requestGACLoop();
 
     // mainLoop related methods.
@@ -581,9 +581,9 @@ private:
     const LoggerPtr log = Logger::get("LocalAdmissionController");
 };
 
-// This is to reduce the calling frequence of LAC::consumeResource() to avoid lock contension.
+// This is to reduce the calling frequency of LAC::consumeResource() to avoid lock contention.
 // TODO: Need to optimize LAC::consumeResource().
-// Because the lock contension still increase when the thread num of storage layer or the data to be read is very large.
+// Because the lock contention still increase when the thread num of storage layer or the data to be read is very large.
 class LACBytesCollector
 {
 public:
@@ -601,7 +601,7 @@ public:
     void collect(uint64_t bytes)
     {
         delta_bytes += bytes;
-        // Call LAC::consumeResource() when accumulated to `bytes_of_one_hundred_ru` to avoid lock contension.
+        // Call LAC::consumeResource() when accumulated to `bytes_of_one_hundred_ru` to avoid lock contention.
         if (delta_bytes >= bytes_of_one_hundred_ru)
         {
             consume();
