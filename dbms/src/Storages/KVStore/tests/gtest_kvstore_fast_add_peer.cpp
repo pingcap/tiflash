@@ -365,7 +365,6 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
     KVStore & kvs = getKVS();
     global_context.getTMTContext().debugSetKVStore(kvstore);
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
-#if ENABLE_NEXT_GEN
     if (opt.fap_use_segment_to_end_map_cache)
     {
         global_context.getSettingsRef().fap_use_segment_to_end_map_cache = true;
@@ -376,7 +375,6 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
         global_context.getSettingsRef().fap_use_segment_to_end_map_cache = false;
         global_context.getTMTContext().getContext().getSettingsRef().fap_use_segment_to_end_map_cache = false;
     }
-#endif
     auto page_storage = global_context.getWriteNodePageStorage();
 
     table_id = proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
@@ -964,7 +962,6 @@ try
 }
 CATCH
 
-#if ENABLE_NEXT_GEN
 // Test cancel when building segments
 TEST_F(RegionKVStoreTestFAP, Cancel5_1)
 try
@@ -1086,7 +1083,6 @@ try
     ASSERT_EQ(result2.get().status, FastAddPeerStatus::Ok);
 }
 CATCH
-#endif
 
 TEST_F(RegionKVStoreTestFAP, EmptySegment)
 try
