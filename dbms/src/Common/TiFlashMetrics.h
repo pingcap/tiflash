@@ -833,6 +833,9 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_remaining_tokens, {"type", "remaining_tokens"}),                                                                       \
       F(type_avg_speed, {"type", "avg_speed"}),                                                                                     \
       F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
+      F(type_low_token_threshold, {"type", "low_token_threshold"}),                                                                 \
+      F(type_request_gac_count, {"type", "request_gac_count"}),                                                                     \
+      F(type_enter_degrade_mode, {"type", "enter_degrade_mode"}),                                                                   \
       F(type_bucket_fill_rate, {"type", "bucket_fill_rate"}),                                                                       \
       F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
       F(type_compute_ru_consumption, {"type", "compute_ru_consumption"}),                                                           \
