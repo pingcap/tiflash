@@ -18,7 +18,10 @@
 namespace DB::DM
 {
 BitmapFilter::BitmapFilter(UInt32 size_, bool default_value)
-    : filter(size_, static_cast<UInt8>(default_value))
+    : version_filter_by_delta(size_, static_cast<UInt8>(0))
+    , version_filter_by_read_ts(size_, static_cast<UInt8>(0))
+    , version_filter_by_stable(size_, static_cast<UInt8>(0))
+    , filter(size_, static_cast<UInt8>(default_value))
     , all_match(default_value)
 {}
 

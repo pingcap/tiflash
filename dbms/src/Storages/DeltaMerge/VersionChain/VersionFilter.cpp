@@ -181,6 +181,7 @@ template <ExtraHandleType HandleType>
                 if (filter[pack_start_row_id + i] && versions[i] > read_ts)
                 {
                     filter[pack_start_row_id + i] = 0;
+                    filter.version_filter_by_read_ts[pack_start_row_id + i] = 1;
                     ++filtered_out_rows;
                 }
             }
@@ -212,6 +213,15 @@ template <ExtraHandleType HandleType>
                 // So we just filter out all versions of the same handle.
                 if (!filter[base_row_id])
                 {
+                    if (!filter.version_filter_by_read_ts[base_row_id])
+                    {
+                        std::fill_n(filter.version_filter_by_delta.begin() + base_row_id, count, 1);
+                    }
+                    else
+                    {
+                        std::fill_n(filter.version_filter_by_read_ts.begin() + base_row_id, count, 1);
+                    }
+
                     filter.set(base_row_id + 1, count - 1, false);
                     filtered_out_rows += count - 1;
                 }
@@ -224,6 +234,7 @@ template <ExtraHandleType HandleType>
                     {
                         if (filter[base_row_id + i])
                         {
+                            filter.version_filter_by_stable[base_row_id + i - 1] = 1;
                             filter[base_row_id + i - 1] = 0;
                             ++filtered_out_rows;
                         }

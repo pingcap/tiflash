@@ -3688,7 +3688,7 @@ void Segment::checkMVCCBitmap(
     {
         LOG_DEBUG(
             segment_snap->log,
-            "{} success, snapshot={}, new_bitmap_filter={}/{}, bitmap_filter={}/{}",
+            "{} success, snapshot={}, dt_bitmap_filter={}/{}, bitmap_filter={}/{}",
             __FUNCTION__,
             segment_snap->detailInfo(),
             new_bitmap_filter->count(),
@@ -3715,7 +3715,7 @@ void Segment::checkMVCCBitmap(
     {
         LOG_ERROR(
             segment_snap->log,
-            "{} failed, snapshot={}, new_bitmap_filter_size={}, bitmap_filter_size={}",
+            "{} failed, snapshot={}, dt_bitmap_filter_size={}, bitmap_filter_size={}",
             __FUNCTION__,
             segment_snap->detailInfo(),
             new_bitmap_filter->size(),
@@ -3727,7 +3727,7 @@ void Segment::checkMVCCBitmap(
     {
         LOG_ERROR(
             segment_snap->log,
-            "{} failed, snapshot={}, new_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
+            "{} failed, snapshot={}, dt_bitmap_filter_all_match={}, bitmap_filter_all_match={}",
             __FUNCTION__,
             segment_snap->detailInfo(),
             new_bitmap_filter->isAllMatch(),
@@ -3737,7 +3737,7 @@ void Segment::checkMVCCBitmap(
 
     LOG_ERROR(
         segment_snap->log,
-        "{} failed, snapshot={}, new_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{} "
+        "{} failed, snapshot={}, dt_bitmap_filter: count/size={}/{}, bitmap_filter: count/size={}/{} "
         "read_ranges={}, segment_range={}",
         __FUNCTION__,
         segment_snap->detailInfo(),
@@ -3794,8 +3794,8 @@ void Segment::checkMVCCBitmap(
 
             LOG_ERROR(
                 segment_snap->log,
-                "{} {} delte_index={} version_chain={} handle={} version={} delmark={} version_filter={} "
-                "rowkey_filter={}",
+                "{} {} dt={} vc={} handle={} version={} delmark={} version_filter={} "
+                "rowkey_filter={} ver_by_delta={} ver_by_stable={} ver_by_rs={}",
                 __FUNCTION__,
                 i,
                 new_bitmap_filter->get(i),
@@ -3804,7 +3804,10 @@ void Segment::checkMVCCBitmap(
                 versions[i],
                 delmarks[i],
                 bitmap_filter.version_filter[i],
-                bitmap_filter.rowkey_filter[i]);
+                bitmap_filter.rowkey_filter[i],
+                bitmap_filter.version_filter_by_delta[i],
+                bitmap_filter.version_filter_by_stable[i],
+                bitmap_filter.version_filter_by_read_ts[i]);
         }
     }
     throw Exception("Bitmap not equal", ErrorCodes::LOGICAL_ERROR);

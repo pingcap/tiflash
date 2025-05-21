@@ -68,6 +68,10 @@ public:
     IColumn::Filter rowkey_filter;
     IColumn::Filter version_filter;
 
+    IColumn::Filter version_filter_by_delta;
+    IColumn::Filter version_filter_by_read_ts;
+    IColumn::Filter version_filter_by_stable;
+
 private:
     IColumn::Filter filter;
     bool all_match;
