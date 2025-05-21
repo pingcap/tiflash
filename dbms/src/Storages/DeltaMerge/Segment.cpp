@@ -3685,7 +3685,18 @@ void Segment::checkMVCCBitmap(
         expected_block_size,
         /*enable_version_chain*/ false);
     if (*new_bitmap_filter == bitmap_filter)
+    {
+        LOG_DEBUG(
+            segment_snap->log,
+            "{} success, snapshot={}, new_bitmap_filter={}/{}, bitmap_filter={}/{}",
+            __FUNCTION__,
+            segment_snap->detailInfo(),
+            new_bitmap_filter->count(),
+            new_bitmap_filter->size(),
+            bitmap_filter.count(),
+            bitmap_filter.size());
         return;
+    }
 
     static std::mutex check_mtx;
     static bool check_failed = false;
