@@ -1702,7 +1702,7 @@ try
 
     SCOPE_EXIT({
         if (!is_disagg_storage)
-            LocalAdmissionController::global_instance.reset();
+            LocalAdmissionController::global_instance->safeStop();
     });
     SCOPE_EXIT({
         if (!is_disagg_storage && is_prod)
