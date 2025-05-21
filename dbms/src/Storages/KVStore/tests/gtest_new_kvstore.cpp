@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/MemoryTracker.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Debug/MockKVStore/MockSSTGenerator.h>
 #include <Debug/MockTiDB.h>
 #include <RaftStoreProxyFFI/ColumnFamily.h>
@@ -455,6 +456,8 @@ try
                 validateSSTGeneration(kvs, proxy_instance, region_id, default_cf, ColumnFamilyType::Default, 5, 7);
             }
 
+#if ENABLE_NEXT_GEN == 0
+            // MultiSSTReader::approxSize is not supported under next-gen so far
             {
                 // Test of ingesting multiple files with MultiSSTReader.
                 MockSSTReader::getMockSSTData().clear();
@@ -489,6 +492,7 @@ try
                     EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
                 }
             }
+#endif
             {
                 // Test of ingesting single file with MultiSSTReader.
                 MockSSTReader::getMockSSTData().clear();
@@ -939,10 +943,10 @@ CATCH
 TEST(ProxyMode, Normal)
 try
 {
-#if SERVERLESS_PROXY == 0
-    ASSERT_EQ(SERVERLESS_PROXY, 0);
+#if ENABLE_NEXT_GEN == 0
+    ASSERT_EQ(ENABLE_NEXT_GEN, 0);
 #else
-    ASSERT_EQ(SERVERLESS_PROXY, 1);
+    ASSERT_EQ(ENABLE_NEXT_GEN, 1);
 #endif
 }
 CATCH
@@ -984,16 +988,6 @@ try
         MockSSTReader::getMockSSTData().clear();
         MockSSTGenerator default_cf{902, 800, ColumnFamilyType::Default};
         default_cf.insert(1, "v1");
-        default_cf.finish_file();
-        default_cf.insert(2, "v2");
-        default_cf.finish_file();
-        default_cf.insert(3, "v3");
-        default_cf.insert(4, "v4");
-        default_cf.finish_file();
-        default_cf.insert(5, "v5");
-        default_cf.insert(6, "v6");
-        default_cf.finish_file();
-        default_cf.insert(7, "v7");
         default_cf.finish_file();
         default_cf.freeze();
         kvs.mutProxyHelperUnsafe()->sst_reader_interfaces = make_mock_sst_reader_interface();

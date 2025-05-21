@@ -1000,7 +1000,7 @@ try
             segment = store->segments.begin()->second;
         }
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-        auto breakpoint = RowKeyValue::fromHandle(num_rows_write);
+        auto breakpoint = RowKeyValue::fromIntHandle(num_rows_write);
         const auto [left, right] = store->segmentSplit(
             *dm_context,
             segment,
@@ -1102,7 +1102,7 @@ try
             segment = store->segments.begin()->second;
         }
         auto dm_context = store->newDMContext(*db_context, db_context->getSettingsRef());
-        auto breakpoint = RowKeyValue::fromHandle(num_rows_write);
+        auto breakpoint = RowKeyValue::fromIntHandle(num_rows_write);
         return store->segmentSplit(
             *dm_context,
             segment,
@@ -1120,8 +1120,8 @@ try
         std::tie(left, right) = physical_split();
     }
 
-    ASSERT_TRUE(left->rowkey_range.end == RowKeyValue::fromHandle(num_rows_write));
-    ASSERT_TRUE(right->rowkey_range.start == RowKeyValue::fromHandle(num_rows_write));
+    ASSERT_TRUE(left->rowkey_range.end == RowKeyValue::fromIntHandle(num_rows_write));
+    ASSERT_TRUE(right->rowkey_range.start == RowKeyValue::fromIntHandle(num_rows_write));
     RowKeyRange left_segment_range = RowKeyRange(
         left->rowkey_range.start,
         left->rowkey_range.end,

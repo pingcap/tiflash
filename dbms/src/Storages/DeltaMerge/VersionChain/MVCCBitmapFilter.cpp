@@ -73,7 +73,7 @@ BitmapFilterPtr buildMVCCBitmapFilter(
 
     LOG_INFO(
         snapshot.log,
-        "filtered_out_rows: version={}, rowkey={}, delete={}"
+        "filtered_out_rows: version={}, rowkey={}, delete={} "
         "cost_ms: replay={}, version={}, rowkey={}, delete={}",
         rowkey_filtered_out_rows,
         version_filtered_out_rows,

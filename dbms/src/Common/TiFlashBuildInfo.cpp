@@ -141,6 +141,11 @@ String getEnabledFeatures()
 #if USE_LLVM_FDO
             "fdo",
 #endif
+
+// Next-Gen
+#if ENABLE_NEXT_GEN
+            "next-gen", 
+#endif
     };
     {
         auto f = DB::DM::VectorIndexHNSWSIMDFeatures::get();

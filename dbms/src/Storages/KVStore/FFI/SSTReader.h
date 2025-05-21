@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/nocopyable.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/MultiRaft/RegionState.h>
@@ -156,7 +157,7 @@ public:
         {
             // We don't drop if mono is the last instance for safety,
             // and it will be dropped as MultiSSTReader is dropped.
-#if SERVERLESS_PROXY != 1
+#if ENABLE_NEXT_GEN == 0
             LOG_INFO(
                 log,
                 "Open sst file {}, range={} sst_idx={} sst_tot={}",
@@ -192,7 +193,7 @@ public:
         , range(range_)
     {
         assert(args.size() > 0);
-#if SERVERLESS_PROXY != 1
+#if ENABLE_NEXT_GEN == 0
         LOG_INFO(
             log,
             "Open sst file first {}, range={} sst_tot={}",

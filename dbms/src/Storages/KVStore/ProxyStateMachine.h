@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/TiFlashBuildInfo.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/setThreadName.h>
 #include <Core/TiFlashDisaggregatedMode.h>
 #include <Interpreters/Settings.h>
@@ -160,7 +161,7 @@ private:
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
-#if SERVERLESS_PROXY == 0
+#if ENABLE_NEXT_GEN == 0
             String extra_label;
             if (disaggregated_mode == DisaggregatedMode::Storage)
             {
@@ -190,7 +191,7 @@ private:
                 args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
 #endif
 
-#if SERVERLESS_PROXY == 1
+#if ENABLE_NEXT_GEN
             if (config.has("blacklist_file"))
                 args_map["blacklist-file"] = config.getString("blacklist_file");
 #endif

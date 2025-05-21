@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/SyncPoint.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <IO/Buffer/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
@@ -425,7 +426,7 @@ RegionMap RegionPersister::restore(
             region->id(),
             page.page_id,
             page.data.size());
-#if SERVERLESS_PROXY == 1
+#if ENABLE_NEXT_GEN
         if (global_context.isKeyspaceInBlocklist(region->getKeyspaceID()))
         {
             LOG_WARNING(

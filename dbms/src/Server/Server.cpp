@@ -30,6 +30,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/UniThreadPool.h>
 #include <Common/assert_cast.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
@@ -418,7 +419,7 @@ void loadBlockList(
     Context & global_context,
     [[maybe_unused]] const LoggerPtr & log)
 {
-#if SERVERLESS_PROXY != 1
+#if ENABLE_NEXT_GEN
     // We do not support blocking store by id in OP mode currently.
     global_context.initializeStoreIdBlockList("");
 #else
@@ -1220,7 +1221,7 @@ try
         {
             auto size = settings.grpc_completion_queue_pool_size;
             if (size == 0)
-                size = std::thread::hardware_concurrency();
+                size = getNumberOfLogicalCPUCores();
             GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         }
 

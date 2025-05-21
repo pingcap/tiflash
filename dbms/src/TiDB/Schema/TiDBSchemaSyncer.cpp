@@ -14,6 +14,7 @@
 
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <TiDB/Schema/SchemaBuilder.h>
 #include <TiDB/Schema/SchemaGetter.h>
@@ -84,7 +85,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
     }
     else
     {
-#if SERVERLESS_PROXY == 0
+#if ENABLE_NEXT_GEN == 0
         if (version <= cur_version)
         {
             return false;
@@ -107,7 +108,7 @@ bool TiDBSchemaSyncer<mock_getter, mock_mapper>::syncSchemasByGetter(Context & c
             // first load all db and tables
             cur_version = syncAllSchemas(context, getter, version);
         }
-#if SERVERLESS_PROXY == 1
+#if ENABLE_NEXT_GEN
         // if the `version` is less than `cur_version`, it means that the schema version in TiKV has been rolled back by restore.
         // We should sync the schema again.
         else if (version < cur_version)

@@ -316,12 +316,11 @@ void DMFilePackFilter::tryLoadIndex(RSCheckParam & param, ColId col_id)
     loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
 }
 
-std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFilePackFilter::
-    getSkippedRangeAndFilterForBitmapStableOnly(
-        const DMContext & dm_context,
-        const DMFiles & dmfiles,
-        const DMFilePackFilterResults & pack_filter_results,
-        UInt64 start_ts)
+std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFilePackFilter::getSkippedRangeAndFilter(
+    const DMContext & dm_context,
+    const DMFiles & dmfiles,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts)
 {
     // Packs that all rows compliant with MVCC filter and RowKey filter requirements.
     // For building bitmap filter, we don't need to read these packs,
@@ -384,7 +383,7 @@ std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFileP
 }
 
 std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFilePackFilter::
-    getSkippedRangeAndFilterForBitmapNormal(
+    getSkippedRangeAndFilterWithMultiVersion(
         const DMContext & dm_context,
         const DMFiles & dmfiles,
         const DMFilePackFilterResults & pack_filter_results,

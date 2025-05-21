@@ -212,7 +212,7 @@ std::optional<PageIdU64> SegmentTestBasic::splitSegmentAt(
     }
     else
     {
-        split_at_key = RowKeyValue::fromHandle(split_at);
+        split_at_key = RowKeyValue::fromIntHandle(split_at);
     }
 
     RUNTIME_CHECK(segments.find(segment_id) != segments.end());
@@ -1213,14 +1213,14 @@ RowKeyRange SegmentTestBasic::buildRowKeyRange(
             DB::EncodeInt64(v, ss);
             return std::make_shared<String>(ss.releaseStr());
         };
-        auto left = RowKeyValue{is_common_handle, create_rowkey_value(begin)};
+        auto left = RowKeyValue::fromHandle(is_common_handle, create_rowkey_value(begin));
         auto right = including_right_boundary ? RowKeyValue::COMMON_HANDLE_MAX_KEY
-                                              : RowKeyValue{is_common_handle, create_rowkey_value(end)};
+                                              : RowKeyValue::fromHandle(is_common_handle, create_rowkey_value(end));
         return RowKeyRange{left, right, is_common_handle, 1};
     }
 
-    auto left = RowKeyValue::fromHandle(begin);
-    auto right = including_right_boundary ? RowKeyValue::INT_HANDLE_MAX_KEY : RowKeyValue::fromHandle(end);
+    auto left = RowKeyValue::fromIntHandle(begin);
+    auto right = including_right_boundary ? RowKeyValue::INT_HANDLE_MAX_KEY : RowKeyValue::fromIntHandle(end);
     return RowKeyRange{left, right, is_common_handle, 1};
 }
 

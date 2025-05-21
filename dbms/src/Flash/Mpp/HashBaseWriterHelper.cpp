@@ -94,18 +94,20 @@ void computeHash(
     if unlikely (rows == 0)
         return;
 
+    RUNTIME_CHECK(collators.size() == partition_col_ids.size());
+    RUNTIME_CHECK(partition_key_containers.size() == partition_col_ids.size());
     hash.reset(rows);
     /// compute hash values
     for (size_t i = 0; i < partition_col_ids.size(); ++i)
     {
-        const auto & column = block.getByPosition(partition_col_ids[i]).column;
+        const auto & column = block.safeGetByPosition(partition_col_ids[i]).column;
         column->updateWeakHash32(hash, collators[i], partition_key_containers[i]);
     }
 }
 
 void computeHashSelectiveBlock(
     const Block & block,
-    const std::vector<Int64> & partition_id_cols,
+    const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & collators,
     std::vector<String> & partition_key_containers,
     WeakHash32 & hash)
@@ -113,10 +115,12 @@ void computeHashSelectiveBlock(
     RUNTIME_CHECK(block.info.selective && !block.info.selective->empty());
     const auto selective_rows = block.info.selective->size();
 
+    RUNTIME_CHECK(collators.size() == partition_col_ids.size());
+    RUNTIME_CHECK(partition_key_containers.size() == partition_col_ids.size());
     hash.reset(selective_rows);
-    for (size_t i = 0; i < partition_id_cols.size(); ++i)
+    for (size_t i = 0; i < partition_col_ids.size(); ++i)
     {
-        const auto & column = block.getByPosition(partition_id_cols[i]).column;
+        const auto & column = block.safeGetByPosition(partition_col_ids[i]).column;
         column->updateWeakHash32(hash, collators[i], partition_key_containers[i], *block.info.selective);
     }
 }

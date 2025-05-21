@@ -43,7 +43,7 @@ void computeHash(
 
 void computeHashSelectiveBlock(
     const Block & block,
-    const std::vector<Int64> & partition_id_cols,
+    const std::vector<Int64> & partition_col_ids,
     const TiDB::TiDBCollators & collators,
     std::vector<String> & partition_key_containers,
     WeakHash32 & hash);
