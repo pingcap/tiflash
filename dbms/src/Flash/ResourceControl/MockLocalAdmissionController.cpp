@@ -33,7 +33,7 @@ void MockLocalAdmissionController::refillTokenBucket()
                     auto config = rg->bucket->getConfig();
                     // Use capacity as new token, because for static token bucket, its fill rate is zero.
                     config.tokens += config.capacity;
-                    rg->bucket->reConfig(config);
+                    rg->bucket->reConfig(config, SteadyClock::now());
                 }
             }
         }
