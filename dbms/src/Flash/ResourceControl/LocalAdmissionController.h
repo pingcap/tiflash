@@ -356,6 +356,9 @@ public:
 
     uint64_t estWaitDuraMS(const std::string & name) const
     {
+        if (unlikely(stopped))
+            return 0;
+
         if (name.empty())
             return 0;
 
@@ -370,7 +373,8 @@ public:
 
     std::optional<uint64_t> getPriority(const std::string & name)
     {
-        assert(!stopped);
+        if (unlikely(stopped))
+            return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
         if (name.empty())
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
@@ -393,13 +397,9 @@ public:
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
-<<<<<<< HEAD
-        assert(!stopped);
-=======
         if unlikely (stopped.load())
             return;
 
->>>>>>> 3e1aa830d0 (fix tiflash resource control low token signal miss (#10140))
         // NOTE: Better not use lock inside refill_token_callback,
         // because LAC needs to lock when calling refill_token_callback,
         // which may introduce dead lock.
@@ -410,7 +410,9 @@ public:
 
     void unregisterRefillTokenCallback()
     {
-        assert(!stopped);
+        if (unlikely(stopped))
+            return;
+
         std::lock_guard lock(mu);
         RUNTIME_CHECK_MSG(refill_token_callback != nullptr, "callback cannot be nullptr before unregistering");
         refill_token_callback = nullptr;
@@ -431,86 +433,6 @@ public:
     static constexpr auto DEFAULT_MAX_EST_WAIT_DURATION = std::chrono::milliseconds(1000);
 
 private:
-<<<<<<< HEAD
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
-    {
-        assert(!stopped);
-
-        // When tidb_enable_resource_control is disabled, resource group name is empty.
-        if (name.empty())
-            return;
-
-        ResourceGroupPtr group = findResourceGroup(name);
-        if unlikely (!group)
-        {
-            LOG_INFO(log, "cannot consume ru for {}, maybe it has been deleted", name);
-            return;
-        }
-
-        group->consumeResource(ru, cpu_time_in_ns);
-        if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
-        {
-            {
-                std::lock_guard lock(mu);
-                low_token_resource_groups.insert(name);
-            }
-            cv.notify_one();
-        }
-    }
-
-    void stop()
-    {
-        if (stopped)
-            return;
-        stopped.store(true);
-
-        // TryCancel() is thread safe(https://github.com/grpc/grpc/pull/30416).
-        // But we need to create a new grpc_context for each new grpc reader/writer(https://github.com/grpc/grpc/issues/18348#issuecomment-477402608). So need to lock.
-        {
-            std::lock_guard lock(mu);
-            watch_gac_grpc_context->TryCancel();
-        }
-        cv.notify_all();
-        for (auto & thread : background_threads)
-        {
-            if (thread.joinable())
-                thread.join();
-        }
-
-        // Report final RU consumption before stop:
-        // 1. to avoid RU consumption omission.
-        // 2. clear GAC's unique_client_id to avoid affecting burst limit calculation.
-        // This can happend when disagg CN is scaled-in/out frequently.
-        std::vector<AcquireTokenInfo> acquire_infos;
-        for (const auto & resource_group : resource_groups)
-        {
-            const auto consumption_update_info = resource_group.second->updateConsumptionSpeedInfoIfNecessary(
-                SteadyClock::time_point::max(),
-                std::chrono::seconds(0));
-            assert(consumption_update_info.updated);
-            acquire_infos.push_back(
-                {.resource_group_name = resource_group.first,
-                 .acquire_tokens = 0,
-                 .ru_consumption_delta = consumption_update_info.delta});
-        }
-        fetchTokensFromGAC(acquire_infos, "before stop", true);
-
-        if (need_reset_unique_client_id.load())
-        {
-            try
-            {
-                etcd_client->deleteServerIDFromGAC(unique_client_id);
-                LOG_DEBUG(log, "delete server id({}) from GAC succeed", unique_client_id);
-            }
-            catch (...)
-            {
-                LOG_ERROR(
-                    log,
-                    "delete server id({}) from GAC failed: {}",
-                    unique_client_id,
-                    getCurrentExceptionMessage(false));
-            }
-=======
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
     static const std::string WATCH_GAC_ERR_PREFIX;
     static constexpr auto NETWORK_EXCEPTION_RETRY_DURATION_SEC = 3;
@@ -544,7 +466,6 @@ private:
                 low_token_resource_groups.insert(name);
             }
             cv.notify_all();
->>>>>>> 3e1aa830d0 (fix tiflash resource control low token signal miss (#10140))
         }
     }
 
