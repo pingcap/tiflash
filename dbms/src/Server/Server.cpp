@@ -141,7 +141,8 @@
             mi_option_set(NAME, value);              \
         }                                            \
         catch (...)                                  \
-        {}                                           \
+        {                                            \
+        }                                            \
     }
 
 void loadMiConfig(Logger * log)
@@ -193,7 +194,8 @@ namespace
             target = result;
         }
         catch (...)
-        {}
+        {
+        }
     }
 }
 } // namespace
