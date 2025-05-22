@@ -182,8 +182,8 @@ template <ExtraHandleType HandleType>
                 max_versions[pack_id],
                 read_ts,
                 block.rows(),
-                handles.front(),
-                handles.back());
+                handles[0],
+                handles[handles.size() - 1]);
         // Filter invisible versions
         if (max_versions[pack_id] > read_ts)
         {
