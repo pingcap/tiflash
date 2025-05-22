@@ -3698,6 +3698,21 @@ void Segment::checkMVCCBitmap(
         return;
     }
 
+    auto print_minmax_ver = [&]() {
+        const auto & global_context = dm_context.global_context;
+        const auto & dmfile = segment_snap->stable->getDMFiles().front();
+        auto [type, minmax_index] = DMFilePackFilter::loadIndex(
+            *dmfile,
+            global_context.getFileProvider(),
+            global_context.getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ true,
+            MutSup::version_col_id,
+            global_context.getReadLimiter(),
+            dm_context.scan_context);
+        for (size_t i = 0; i < dmfile->getPacks(); ++i)
+            LOG_ERROR(segment_snap->log, "pack={} minmax={}", i, minmax_index->getUInt64MinMax(i));
+    };
+
     static std::mutex check_mtx;
     static bool check_failed = false;
     // To Avoid concurrent check that logs are mixed together.
@@ -3709,6 +3724,7 @@ void Segment::checkMVCCBitmap(
         LOG_ERROR(segment_snap->log, "{} failed, skip", __FUNCTION__);
         return;
     }
+    print_minmax_ver();
     check_failed = true;
 
     if (new_bitmap_filter->size() != bitmap_filter.size())
