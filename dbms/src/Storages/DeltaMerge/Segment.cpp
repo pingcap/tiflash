@@ -3784,15 +3784,36 @@ void Segment::checkMVCCBitmap(
     const auto delmarks = ColumnView<UInt8>(*delmark_col);
     for (UInt32 i = 0; i < bitmap_filter.size(); ++i)
     {
+        RowKeyValue rowkey;
+        if constexpr (std::is_same_v<HandleType, String>)
+            rowkey = RowKeyValue(dm_context.is_common_handle, std::make_shared<String>(String(handles[i])));
+        else
+            rowkey = RowKeyValue(dm_context.is_common_handle, nullptr, handles[i]);
+
         if (new_bitmap_filter->get(i) != bitmap_filter.get(i))
         {
-            RowKeyValue rowkey;
-            if constexpr (std::is_same_v<HandleType, String>)
-                rowkey = RowKeyValue(dm_context.is_common_handle, std::make_shared<String>(String(handles[i])));
-            else
-                rowkey = RowKeyValue(dm_context.is_common_handle, nullptr, handles[i]);
-
             LOG_ERROR(
+                segment_snap->log,
+                "{} {} dt={} vc={} handle={} version={} delmark={} version_filter={} "
+                "rowkey_filter={} ver_by_delta={} ver_by_stable={} ver_by_rs={}",
+                __FUNCTION__,
+                i,
+                new_bitmap_filter->get(i),
+                bitmap_filter.get(i),
+                rowkey.toDebugString(),
+                versions[i],
+                delmarks[i],
+                bitmap_filter.version_filter[i],
+                bitmap_filter.rowkey_filter[i],
+                bitmap_filter.version_filter_by_delta[i],
+                bitmap_filter.version_filter_by_stable[i],
+                bitmap_filter.version_filter_by_read_ts[i]);
+            continue;
+        }
+
+        if constexpr (std::is_same_v<HandleType, Int64>)
+        {
+            LOG_INFO(
                 segment_snap->log,
                 "{} {} dt={} vc={} handle={} version={} delmark={} version_filter={} "
                 "rowkey_filter={} ver_by_delta={} ver_by_stable={} ver_by_rs={}",

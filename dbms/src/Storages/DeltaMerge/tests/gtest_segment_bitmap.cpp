@@ -1695,4 +1695,50 @@ TEST_P(SegmentBitmapFilterTest, Big_NoIntersection_Tiny)
         .expected_bitmap = String(30, '1'),
     });
 }
+
+TEST_P(SegmentBitmapFilterTest, StableNotClean)
+{
+    writeSegmentGeneric("d_mem:[0, 10000):ts_10|d_mem:[0, 10000):ts_20|merge_delta:pack_size_1000");
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(snap->delta->getColumnFileCount(), 0);
+    const auto & dmfile = snap->stable->getDMFiles()[0];
+    ASSERT_EQ(dmfile->getPacks(), 20);
+    ASSERT_TRUE(std::all_of(dmfile->getPackStats().begin(), dmfile->getPackStats().end(), [](const auto & ps) {
+        return ps.not_clean;
+    }));
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 10,
+    });
+
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 15,
+    });
+
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 20,
+    });
+
+
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 25,
+    });
+}
 } // namespace DB::DM::tests
