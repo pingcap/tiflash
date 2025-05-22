@@ -141,7 +141,8 @@
             mi_option_set(NAME, value);              \
         }                                            \
         catch (...)                                  \
-        {}                                           \
+        {                                            \
+        }                                            \
     }
 
 void loadMiConfig(Logger * log)
@@ -193,7 +194,8 @@ namespace
             target = result;
         }
         catch (...)
-        {}
+        {
+        }
     }
 }
 } // namespace
@@ -1702,7 +1704,7 @@ try
 
     SCOPE_EXIT({
         if (!is_disagg_storage)
-            LocalAdmissionController::global_instance.reset();
+            LocalAdmissionController::global_instance->safeStop();
     });
     SCOPE_EXIT({
         if (!is_disagg_storage && is_prod)
