@@ -117,7 +117,8 @@ template <ExtraHandleType HandleType>
     const UInt32 start_pack_id,
     const RSResults & rs_results, // Use to skip packs that are not used.
     const ssize_t start_row_id,
-    BitmapFilter & filter)
+    BitmapFilter & filter,
+    const LoggerPtr & log)
 {
     const auto max_versions = loadPackMaxValue<UInt64>(dm_context, *dmfile, MutSup::version_col_id);
 
@@ -173,6 +174,16 @@ template <ExtraHandleType HandleType>
         RUNTIME_CHECK(itr != start_row_id_of_need_read_packs.end(), start_row_id_of_need_read_packs, pack_id);
         const UInt32 pack_start_row_id = itr->second;
 
+        if constexpr (std::is_same_v<HandleType, Int64>)
+            LOG_INFO(
+                log,
+                "pack_id={}, max_version={}, read_ts={}, rows={}, handles=[{}, {}]",
+                pack_id,
+                max_versions[pack_id],
+                read_ts,
+                block.rows(),
+                handles.front(),
+                handles.back());
         // Filter invisible versions
         if (max_versions[pack_id] > read_ts)
         {
@@ -268,7 +279,8 @@ template <ExtraHandleType HandleType>
         valid_start_pack_id,
         valid_handle_res,
         start_row_id,
-        filter);
+        filter,
+        Logger::get(dm_context.tracing_id));
 }
 
 template <ExtraHandleType HandleType>
@@ -277,7 +289,8 @@ template <ExtraHandleType HandleType>
     const StableValueSpace::Snapshot & stable,
     const UInt64 read_ts,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter)
+    BitmapFilter & filter,
+    const LoggerPtr & log)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
@@ -285,14 +298,8 @@ template <ExtraHandleType HandleType>
     const auto & pack_res = stable_filter_res->getPackRes();
     constexpr UInt32 start_pack_id = 0;
     constexpr UInt32 start_row_id = 0;
-    return buildVersionFilterDMFile<HandleType>(
-        dm_context,
-        dmfile,
-        read_ts,
-        start_pack_id,
-        pack_res,
-        start_row_id,
-        filter);
+    return buildVersionFilterDMFile<
+        HandleType>(dm_context, dmfile, read_ts, start_pack_id, pack_res, start_row_id, filter, log);
 }
 
 template <ExtraHandleType HandleType>
@@ -378,7 +385,8 @@ UInt32 buildVersionFilter(
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
     }
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
-    filtered_out_rows += buildVersionFilterStable<HandleType>(dm_context, stable, read_ts, stable_filter_res, filter);
+    filtered_out_rows
+        += buildVersionFilterStable<HandleType>(dm_context, stable, read_ts, stable_filter_res, filter, snapshot.log);
     return filtered_out_rows;
 }
 
