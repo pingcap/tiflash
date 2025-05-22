@@ -719,13 +719,13 @@ void MPPTask::reportStatus(const String & err_msg)
         }
         if (resp.has_error())
         {
-            LOG_WARNING(log, "ReportMPPTaskStatus resp error: {}", resp.error().msg());
+            LOG_INFO(log, "ReportMPPTaskStatus resp error: {}", resp.error().msg());
         }
     }
     catch (...)
     {
         std::string local_err_msg = getCurrentExceptionMessage(true);
-        LOG_ERROR(log, "Failed to ReportMPPTaskStatus to {}, due to {}", meta.coordinator_address(), local_err_msg);
+        LOG_INFO(log, "Failed to ReportMPPTaskStatus to {}, due to {}", meta.coordinator_address(), local_err_msg);
     }
 }
 
