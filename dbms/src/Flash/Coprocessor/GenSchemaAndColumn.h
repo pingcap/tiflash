@@ -30,7 +30,6 @@ String genNameForExchangeReceiver(Int32 col_index);
 
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix);
 NamesAndTypes genNamesAndTypes(const TiDB::ColumnInfos & column_infos, const StringRef & column_prefix);
-NamesAndTypes genNamesAndTypesForTiCI(const TiDB::ColumnInfos & column_infos, const StringRef & column_prefix);
 ColumnsWithTypeAndName getColumnWithTypeAndName(const NamesAndTypes & names_and_types);
 NamesAndTypes toNamesAndTypes(const DAGSchema & dag_schema);
 

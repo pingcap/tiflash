@@ -89,19 +89,6 @@ NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef
     return genNamesAndTypes(table_scan.getColumns(), column_prefix);
 }
 
-NamesAndTypes genNamesAndTypesForTiCI(const TiDB::ColumnInfos & column_infos, const StringRef & column_prefix)
-{
-    NamesAndTypes names_and_types;
-    names_and_types.reserve(column_infos.size());
-    for (const auto & column_info : column_infos)
-    {
-        names_and_types.emplace_back(
-            fmt::format("{}_{}", column_prefix, column_info.id),
-            getDataTypeByColumnInfoForComputingLayer(column_info));
-    }
-    return names_and_types;
-}
-
 std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const TiDBTableScan & table_scan)
 {
     auto column_defines = std::make_shared<DM::ColumnDefines>();

@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2025 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -33,9 +33,7 @@
 #include <common/defines.h>
 #include <common/logger_useful.h>
 
-#include <iostream>
 #include <memory>
-#include <utility>
 
 namespace DB
 {
@@ -67,8 +65,8 @@ void StorageTantivy::read(
     [[maybe_unused]] size_t max_block_size,
     [[maybe_unused]] unsigned num_streams)
 {
-    auto query_columns = genNamesAndTypesForTiCI(tici_scan.getQueryColumns(), "column");
-    auto return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
+    auto query_columns = genNamesAndTypes(tici_scan.getQueryColumns(), "column");
+    auto return_columns = genNamesAndTypes(tici_scan.getReturnColumns(), "column");
 
     group_builder.addConcurrency(std::make_unique<TantivyReaderSourceOp>(
         exec_status,

@@ -209,7 +209,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         GET_METRIC(tiflash_coprocessor_executor_count, type_partition_ts).Increment();
         buildTableScan(executor_id, executor);
         break;
-    case tipb::ExecType::TypeTiCIScan:
+    case tipb::ExecType::TypeIndexScan:
         buildTiCIScan(executor_id, executor);
         break;
     case tipb::ExecType::TypeJoin:

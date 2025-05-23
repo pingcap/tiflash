@@ -1,4 +1,4 @@
-// Copyright 2023 PingCAP, Inc.
+// Copyright 2025 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -75,7 +75,15 @@ OperatorStatus TantivyReaderSourceOp::readImpl(Block & block)
     }
 
     assert(block_queue.empty());
-    block = input->readImpl();
+    for (;;)
+    {
+        auto tmp = input->readImpl();
+        block_queue.push(tmp);
+        total_rows += tmp.rows();
+        if (!tmp)
+            break;
+    }
+    block = popFromBlockQueue();
     return OperatorStatus::HAS_OUTPUT;
 }
 OperatorStatus TantivyReaderSourceOp::awaitImpl()
