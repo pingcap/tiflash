@@ -3710,7 +3710,12 @@ void Segment::checkMVCCBitmap(
             global_context.getReadLimiter(),
             dm_context.scan_context);
         for (size_t i = 0; i < dmfile->getPacks(); ++i)
-            LOG_ERROR(segment_snap->log, "pack={} minmax={}", i, minmax_index->getUInt64MinMax(i));
+            LOG_ERROR(
+                segment_snap->log,
+                "pack={} minmax={} minmax2={}",
+                i,
+                minmax_index->getUInt64MinMax(i),
+                minmax_index->getUInt64MinMax2(i));
     };
 
     static std::mutex check_mtx;
@@ -3718,7 +3723,7 @@ void Segment::checkMVCCBitmap(
     // To Avoid concurrent check that logs are mixed together.
     // Since this function is only used for test, we don't need to consider performance.
     std::lock_guard lock(check_mtx);
-    if (check_failed)
+    if (check_failed && std::is_same_v<HandleType, String>)
     {
         // Aoid too many logs.
         LOG_ERROR(segment_snap->log, "{} failed, skip", __FUNCTION__);

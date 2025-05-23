@@ -226,6 +226,10 @@ std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax(size_t pack_index) const
 {
     return {minmaxes->get64(pack_index * 2), minmaxes->get64(pack_index * 2 + 1)};
 }
+std::pair<UInt64, UInt64> MinMaxIndex::getUInt64MinMax2(size_t pack_index) const
+{
+    return {minmaxes->getUInt(pack_index * 2), minmaxes->getUInt(pack_index * 2 + 1)};
+}
 
 template <typename T>
 RSResults MinMaxIndex::checkNullableInImpl(
