@@ -184,17 +184,15 @@ template <ExtraHandleType HandleType>
                 block.rows(),
                 handles[0],
                 handles[handles.size() - 1]);
+
         // Filter invisible versions
-        if (max_versions[pack_id] > read_ts)
+        for (UInt32 i = 0; i < block.rows(); ++i)
         {
-            for (UInt32 i = 0; i < block.rows(); ++i)
+            if (filter[pack_start_row_id + i] && versions[i] > read_ts)
             {
-                if (filter[pack_start_row_id + i] && versions[i] > read_ts)
-                {
-                    filter[pack_start_row_id + i] = 0;
-                    filter.version_filter_by_read_ts[pack_start_row_id + i] = 1;
-                    ++filtered_out_rows;
-                }
+                filter[pack_start_row_id + i] = 0;
+                filter.version_filter_by_read_ts[pack_start_row_id + i] = 1;
+                ++filtered_out_rows;
             }
         }
 
