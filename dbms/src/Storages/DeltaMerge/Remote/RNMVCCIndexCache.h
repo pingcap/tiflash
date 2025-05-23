@@ -81,7 +81,7 @@ private:
         {}
 
         DeltaIndexPtr delta_index;
-        size_t bytes;
+        const size_t bytes;
     };
 
     struct CacheVersionChain
@@ -92,7 +92,7 @@ private:
         {}
 
         GenericVersionChainPtr version_chain;
-        size_t bytes;
+        const size_t bytes;
     };
     struct CacheValue
     {

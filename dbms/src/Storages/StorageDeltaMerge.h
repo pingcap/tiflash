@@ -140,6 +140,8 @@ public:
         const CheckpointIngestInfoPtr & checkpoint_info,
         const Settings & settings);
 
+    UInt64 removeSegmentsFromCheckpointInfo(const CheckpointIngestInfo & checkpoint_info, const Settings & settings);
+
     UInt64 onSyncGc(Int64, const DM::GCOptions &) override;
 
     void rename(

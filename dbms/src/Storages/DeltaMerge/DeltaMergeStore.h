@@ -427,6 +427,19 @@ public:
         return ingestSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
     }
 
+    UInt64 removeSegmentsFromCheckpointInfo(
+        const DMContextPtr & dm_context,
+        const CheckpointIngestInfo & checkpoint_info);
+
+    UInt64 removeSegmentsFromCheckpointInfo(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const CheckpointIngestInfo & checkpoint_info)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return removeSegmentsFromCheckpointInfo(dm_context, checkpoint_info);
+    }
+
     /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(
         const Context & db_context,
