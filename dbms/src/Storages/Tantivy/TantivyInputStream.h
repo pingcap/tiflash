@@ -1,4 +1,4 @@
-// Copyright 2022 PingCAP, Ltd.
+// Copyright 2025 PingCAP, Ltd.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
 // you may not use this file except in compliance with the License.
@@ -67,19 +67,8 @@ public:
 protected:
     Block readFromS3()
     {
-        rust::Vec<rust::String> query_fields;
-        for (auto & name_and_type : query_columns)
-        {
-            LOG_INFO(log, name_and_type.name);
-            query_fields.push_back(name_and_type.name);
-        }
-
-        rust::Vec<rust::String> return_fields;
-        for (auto & name_and_type : return_columns)
-        {
-            LOG_INFO(log, name_and_type.name);
-            return_fields.push_back(name_and_type.name);
-        }
+        auto query_fields = getFields(query_columns);
+        auto return_fields = getFields(return_columns);
 
         auto search_param = SearchParam{static_cast<size_t>(limit)};
         rust::Vec<IdDocument> documents
@@ -89,15 +78,12 @@ protected:
         int i = 0;
         for (auto & name_and_type : return_columns)
         {
-            LOG_INFO(log, name_and_type.name);
-            LOG_INFO(log, name_and_type.type->getName());
             auto col = res.getByName(name_and_type.name).column->assumeMutable();
             if (removeNullable(name_and_type.type)->isStringOrFixedString())
             {
                 for (auto & doc : documents)
                 {
                     col->insert(Field(String(doc.fieldValues[i].string_value.c_str())));
-                    LOG_INFO(log, doc.fieldValues[i].string_value.c_str());
                 }
             }
             if (removeNullable(name_and_type.type)->isInteger())
@@ -105,7 +91,6 @@ protected:
                 for (auto & doc : documents)
                 {
                     col->insert(Field(doc.fieldValues[i].int_value));
-                    LOG_INFO(log, "{}", doc.fieldValues[i].int_value);
                 }
             }
             i++;
@@ -123,6 +108,17 @@ private:
     NamesAndTypes return_columns;
     String query_json_str;
     UInt64 limit;
+
+    rust::Vec<rust::String> getFields(NamesAndTypes & columns)
+    {
+        rust::Vec<rust::String> fields;
+        for (auto & name_and_type : columns)
+        {
+            LOG_INFO(log, "name: {}, type: {}", name_and_type.name, name_and_type.type->getName());
+            fields.push_back(name_and_type.name);
+        }
+        return fields;
+    }
 };
 
 } // namespace DB::TS

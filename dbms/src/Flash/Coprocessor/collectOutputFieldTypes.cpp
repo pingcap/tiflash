@@ -104,9 +104,9 @@ bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, cons
     return false;
 }
 
-bool collectForTiCIScan(std::vector<tipb::FieldType> & output_field_types, const tipb::TiCIScan & tici_scan)
+bool collectForTiCIScan(std::vector<tipb::FieldType> & output_field_types, const tipb::IndexScan & tici_scan)
 {
-    for (const auto & ci : tici_scan.return_columns())
+    for (const auto & ci : tici_scan.columns())
     {
         tipb::FieldType field_type;
         field_type.set_tp(ci.tp());
@@ -273,8 +273,8 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
         return collectForExpand(output_field_types, executor);
     case tipb::ExecType::TypeExpand2:
         return collectForExpand2(output_field_types, executor.expand2());
-    case tipb::ExecType::TypeTiCIScan:
-        return collectForTiCIScan(output_field_types, executor.tici_scan());
+    case tipb::ExecType::TypeIndexScan:
+        return collectForTiCIScan(output_field_types, executor.idx_scan());
     default:
         return true;
     }
