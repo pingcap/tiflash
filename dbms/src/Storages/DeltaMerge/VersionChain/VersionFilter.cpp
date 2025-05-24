@@ -174,15 +174,12 @@ template <ExtraHandleType HandleType>
         const UInt32 pack_start_row_id = itr->second;
 
         // Filter invisible versions
-        if (max_versions[pack_id] > read_ts)
+        for (UInt32 i = 0; i < block.rows(); ++i)
         {
-            for (UInt32 i = 0; i < block.rows(); ++i)
+            if (filter[pack_start_row_id + i] && versions[i] > read_ts)
             {
-                if (filter[pack_start_row_id + i] && versions[i] > read_ts)
-                {
-                    filter[pack_start_row_id + i] = 0;
-                    ++filtered_out_rows;
-                }
+                filter[pack_start_row_id + i] = 0;
+                ++filtered_out_rows;
             }
         }
 
