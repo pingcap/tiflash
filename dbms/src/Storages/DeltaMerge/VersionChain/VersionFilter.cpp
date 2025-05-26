@@ -207,7 +207,7 @@ template <ExtraHandleType HandleType>
                 const UInt32 base_row_id = itr - handles.begin() + pack_start_row_id;
                 // If the first version is filtered out, there are two possible reasons:
                 // 1. The newer version in delta has been chosen.
-                // 2. It is invisiable to `read_ts`.
+                // 2. It is invisible to `read_ts`.
                 // So we just filter out all versions of the same handle.
                 if (!filter[base_row_id])
                 {
@@ -217,7 +217,7 @@ template <ExtraHandleType HandleType>
                 else
                 {
                     // Find the newest but not filtered out version.
-                    // If it is invisiable to `read_ts`, it is already filtered out before.
+                    // If it is invisible to `read_ts`, it is already filtered out before.
                     // So we just get the last not filtered out version here.
                     for (UInt32 i = 1; i < count; ++i)
                     {
