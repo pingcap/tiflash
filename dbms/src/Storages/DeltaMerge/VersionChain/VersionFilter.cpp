@@ -119,6 +119,8 @@ template <ExtraHandleType HandleType>
     const ssize_t start_row_id,
     BitmapFilter & filter)
 {
+    // Load the max version of each pack.
+    // Note that it is the max version of the non-deleted rows.
     const auto max_versions = loadPackMaxValue<UInt64>(dm_context, *dmfile, MutSup::version_col_id);
 
     auto need_read_packs = std::make_shared<IdSet>();
