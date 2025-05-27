@@ -196,10 +196,7 @@ void MPPTask::finishWrite()
     {
         const String & query_id_and_cte_id = this->dag_context->getQueryIDAndCTEID();
         if (dag_context->collect_execution_summaries)
-        {
-            const tipb::SelectResponse & resp = mpp_task_statistics.genExecutionSummaryResponse();
-            this->context->getCTEManager()->setRespAndNotifyEOF(resp, query_id_and_cte_id);
-        }
+            this->context->getCTEManager()->setRespAndNotifyEOF(mpp_task_statistics.genExecutionSummaryResponse(), query_id_and_cte_id);
         else
             this->context->getCTEManager()->notifyEOF(query_id_and_cte_id);
     }

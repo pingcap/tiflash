@@ -34,6 +34,7 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
             this->io_profile_info->remote_execution_summary.add(this->resp);
     case FetchStatus::Ok:
         block = res.second;
+        this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
     case FetchStatus::Waiting:
         if likely (this->cte_reader->isBlockGenerated())
