@@ -134,19 +134,9 @@ OperatorStatus PipelineExec::executeImpl()
     assert(!io_op);
     assert(!waiting_for_notify);
 
-    bool do_log = false;
-    if (sink_op->getName() == "CTESinkOp")
-        do_log = true;
-
-    auto * log = &Poco::Logger::get("LRUCache");
-
     Block block;
-    if (do_log)
-        LOG_INFO(log, fmt::format("xzxdebug executeImpl: beginning {}", block.dumpStructure()));
     size_t start_transform_op_index = 0;
     auto op_status = fetchBlock(block, start_transform_op_index);
-    if (do_log)
-        LOG_INFO(log, fmt::format("xzxdebug executeImpl: after fetch {}", block.dumpStructure()));
     // If the status `fetchBlock` returns isn't `HAS_OUTPUT`, it means that `fetchBlock` did not return a block.
     if (op_status != OperatorStatus::HAS_OUTPUT)
         return op_status;
@@ -160,10 +150,6 @@ OperatorStatus PipelineExec::executeImpl()
     {
         const auto & transform_op = transform_ops[transform_op_index];
         op_status = transform_op->transform(block);
-        if (do_log)
-            LOG_INFO(
-                log,
-                fmt::format("xzxdebug executeImpl: after transform {} {}", transform_op_index, block.dumpStructure()));
         HANDLE_OP_STATUS(transform_op, op_status, OperatorStatus::HAS_OUTPUT);
         if (block && block.rows() == 0)
             return OperatorStatus::NEED_INPUT;
