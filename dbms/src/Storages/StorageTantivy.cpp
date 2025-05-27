@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Flash/Coprocessor/TiCIScan.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/Context.h>
@@ -61,7 +62,7 @@ void StorageTantivy::read(
     PipelineExecGroupBuilder & group_builder,
     [[maybe_unused]] const Names & column_names,
     [[maybe_unused]] const SelectQueryInfo & info,
-    const Context & context,
+    [[maybe_unused]] const Context & context,
     [[maybe_unused]] size_t max_block_size,
     [[maybe_unused]] unsigned num_streams)
 {
@@ -73,7 +74,7 @@ void StorageTantivy::read(
         log->identifier(),
         tici_scan.getTableId(),
         tici_scan.getIndexId(),
-        context.getDAGContext()->shard_infos,
+        QueryShardInfos::create(tici_scan.getShardInfos()),
         query_columns,
         return_columns,
         tici_scan.getQuery(),

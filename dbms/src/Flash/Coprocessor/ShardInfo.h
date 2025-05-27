@@ -63,7 +63,21 @@ class QueryShardInfos
 {
 public:
     QueryShardInfos() = default;
-    static QueryShardInfos create(const google::protobuf::RepeatedPtrField<coprocessor::ShardInfo> & shard_infos)
+
+    static std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> genCopKeyRange(
+        const ::google::protobuf::RepeatedPtrField<::tipb::KeyRange> & ranges)
+    {
+        std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
+        for (const auto & range : ranges)
+        {
+            DecodedTiKVKeyPtr start = std::make_shared<DecodedTiKVKey>(std::string(range.low()));
+            DecodedTiKVKeyPtr end = std::make_shared<DecodedTiKVKey>(std::string(range.high()));
+            key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+        }
+        return key_ranges;
+    }
+
+    static QueryShardInfos create(const google::protobuf::RepeatedPtrField<tipb::ShardInfo> & shard_infos)
     {
         QueryShardInfos query_shard_infos;
         for (const auto & shard_info : shard_infos)
