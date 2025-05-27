@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Common/TiFlashMetrics.h>
 #include <Debug/MockStorage.h>
 #include <Flash/Coprocessor/DAGContext.h>
@@ -95,6 +96,7 @@ void PhysicalPlan::buildTableScan(const String & executor_id, const tipb::Execut
 
 void PhysicalPlan::buildTiCIScan(const String & executor_id, const tipb::Executor * executor)
 {
+    RUNTIME_ASSERT(executor->idx_scan().has_fts_query_info());
     TiCIScan tici_scan(executor, executor_id, dagContext());
     pushBack(PhysicalTiCIScan::build(executor_id, log, tici_scan));
     dagContext().table_scan_executor_id = executor_id;

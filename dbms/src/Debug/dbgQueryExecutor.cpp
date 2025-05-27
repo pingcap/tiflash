@@ -18,6 +18,7 @@
 #include <Debug/dbgQueryExecutor.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Interpreters/Context.h>
 #include <Server/MockComputeClient.h>
@@ -400,8 +401,17 @@ tipb::SelectResponse executeDAGRequest(
         region_id,
         RegionInfo(region_id, region_version, region_conf_version, std::move(key_ranges), nullptr));
 
-    DAGContext
-        dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
+    DAGContext dag_context(
+        dag_request,
+        std::move(tables_regions_info),
+        QueryShardInfos(),
+        NullspaceID,
+        "",
+        DAGRequestKind::Cop,
+        "",
+        0,
+        "",
+        log);
     context.setDAGContext(&dag_context);
 
     DAGDriver<DAGRequestKind::Cop> driver(context, start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);
@@ -435,8 +445,17 @@ bool runAndCompareDagReq(
         region_id,
         RegionInfo(region_id, region->version(), region->confVer(), std::move(key_ranges), nullptr));
 
-    DAGContext
-        dag_context(dag_request, std::move(tables_regions_info), NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
+    DAGContext dag_context(
+        dag_request,
+        std::move(tables_regions_info),
+        QueryShardInfos(),
+        NullspaceID,
+        "",
+        DAGRequestKind::Cop,
+        "",
+        0,
+        "",
+        log);
     context.setDAGContext(&dag_context);
     DAGDriver<DAGRequestKind::Cop>
         driver(context, properties.start_ts, DEFAULT_UNSPECIFIED_SCHEMA_VERSION, &dag_response, true);

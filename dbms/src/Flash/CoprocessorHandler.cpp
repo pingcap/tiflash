@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Flash/CoprocessorHandler.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
@@ -163,6 +164,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
+                QueryShardInfos(),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 kind,

@@ -16,6 +16,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Statistics/transformProfiles.h>
@@ -49,6 +50,7 @@ bool strictSqlMode(UInt64 sql_mode)
 DAGContext::DAGContext(
     tipb::DAGRequest & dag_request_,
     TablesRegionsInfo && tables_regions_info_,
+    QueryShardInfos && shard_infos_,
     KeyspaceID keyspace_id_,
     const String & tidb_host_,
     DAGRequestKind kind_,
@@ -65,6 +67,7 @@ DAGContext::DAGContext(
     , kind(kind_)
     , is_root_mpp_task(false)
     , tables_regions_info(std::move(tables_regions_info_))
+    , shard_infos(std::move(shard_infos_))
     , log(std::move(log_))
     , operator_spill_contexts(std::make_shared<TaskOperatorSpillContexts>())
     , flags(dag_request->flags())

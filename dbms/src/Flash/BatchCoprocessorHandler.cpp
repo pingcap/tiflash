@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
 #include <Flash/Coprocessor/RequestUtils.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Flash/ServiceUtils.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -76,6 +77,8 @@ grpc::Status BatchCoprocessorHandler::execute()
                 tables_regions_info.tableCount(),
                 dag_request.DebugString());
 
+            auto shard_info = QueryShardInfos::create(cop_request->shards());
+
 #if SERVERLESS_PROXY != 0
             if (cop_context.db_context.isKeyspaceInBlocklist(cop_request->context().keyspace_id())
                 || cop_context.db_context.isRegionsContainsInBlocklist(tables_regions_info.getAllRegionID()))
@@ -87,10 +90,12 @@ grpc::Status BatchCoprocessorHandler::execute()
                 return recordError(grpc::StatusCode::INTERNAL, "cop request disabled");
             }
 #endif
+            LOG_INFO(log, "shard_info: {}", shard_info.toString());
 
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
+                std::move(shard_info),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 DAGRequestKind::BatchCop,

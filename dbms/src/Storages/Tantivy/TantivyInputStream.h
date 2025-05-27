@@ -20,6 +20,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
 #include <fcntl.h>
@@ -37,6 +38,7 @@ public:
         LoggerPtr log_,
         Int64 table_id_,
         Int64 index_id_,
+        QueryShardInfos query_shard_infos_,
         NamesAndTypes query_columns_,
         NamesAndTypes return_columns_,
         String query_json_str_,
@@ -44,6 +46,7 @@ public:
         : log(log_)
         , table_id(table_id_)
         , index_id(index_id_)
+        , query_shard_infos(query_shard_infos_)
         , query_columns(query_columns_)
         , return_columns(return_columns_)
         , query_json_str(query_json_str_)
@@ -60,19 +63,34 @@ public:
         {
             return {};
         }
-        done = true;
-        return readFromS3();
+
+        Block ret = readFromS3(processed_shard);
+        processed_shard++;
+        done = processed_shard >= query_shard_infos.shard_info_list.size();
+        return ret;
     }
 
 protected:
-    Block readFromS3()
+    Block readFromS3(size_t processing)
     {
         auto query_fields = getFields(query_columns);
         auto return_fields = getFields(return_columns);
+        auto & shard_info = query_shard_infos.shard_info_list[processing];
+        LOG_INFO(log, "Processing shard: {}, shard info: {}", processing, shard_info.toString());
+        auto shard_id = shard_info.shard_id;
+        auto key_ranges = getKeyRanges(shard_info.key_ranges);
 
         auto search_param = SearchParam{static_cast<size_t>(limit)};
-        rust::Vec<IdDocument> documents
-            = search(table_id, index_id, query_fields, return_fields, query_json_str, search_param);
+        rust::Vec<IdDocument> documents = search(
+            table_id,
+            index_id,
+            shard_id,
+            key_ranges.first,
+            key_ranges.second,
+            query_fields,
+            return_fields,
+            query_json_str,
+            search_param);
 
         Block res(return_columns);
         int i = 0;
@@ -104,10 +122,13 @@ private:
     LoggerPtr log;
     Int64 table_id;
     Int64 index_id;
+    QueryShardInfos query_shard_infos;
     NamesAndTypes query_columns;
     NamesAndTypes return_columns;
     String query_json_str;
     UInt64 limit;
+
+    size_t processed_shard = 0;
 
     rust::Vec<rust::String> getFields(NamesAndTypes & columns)
     {
@@ -118,6 +139,19 @@ private:
             fields.push_back(name_and_type.name);
         }
         return fields;
+    }
+
+    static std::pair<rust::Vec<rust::String>, rust::Vec<rust::String>> getKeyRanges(
+        const std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
+    {
+        rust::Vec<rust::String> start_key_ranges;
+        rust::Vec<rust::String> end_key_ranges;
+        for (const auto & range : key_ranges)
+        {
+            start_key_ranges.push_back(range.first->toString());
+            end_key_ranges.push_back(range.second->toString());
+        }
+        return std::make_pair(std::move(start_key_ranges), std::move(end_key_ranges));
     }
 };
 

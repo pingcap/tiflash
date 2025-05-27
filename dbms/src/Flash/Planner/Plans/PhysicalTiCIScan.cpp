@@ -90,7 +90,7 @@ PhysicalPlanNodePtr PhysicalTiCIScan::build(
     const LoggerPtr & log,
     const TiCIScan & tici_scan)
 {
-    auto schema = genNamesAndTypes(tici_scan.getReturnColumns(), "column");
+    auto schema = genNamesAndTypes(tici_scan.getReturnColumns(), "tici_scan");
     auto physical_tici_scan
         = std::make_shared<PhysicalTiCIScan>(executor_id, schema, log->identifier(), tici_scan, Block(schema));
     return physical_tici_scan;

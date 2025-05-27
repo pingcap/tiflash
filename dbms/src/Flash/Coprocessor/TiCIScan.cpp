@@ -12,13 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "Flash/Coprocessor/TiCIScan.h"
+#include <Common/Exception.h>
+#include <Flash/Coprocessor/TiCIScan.h>
+#include <TiDB/Schema/TiDB.h>
+#include <tipb/executor.pb.h>
+#include <tipb/expression.pb.h>
 
 #include <cassert>
-
-#include "TiDB/Schema/TiDB.h"
-#include "tipb/executor.pb.h"
-#include "tipb/expression.pb.h"
 namespace DB
 {
 TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id_, const DAGContext &)
@@ -32,6 +32,6 @@ TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id
     , query_json_str(tici_scan->idx_scan().fts_query_info().query_text())
     , limit(tici_scan->idx_scan().fts_query_info().top_k())
 {
-    assert(tici_scan->idx_scan().fts_query_info().query_func() == tipb::ScalarFuncSig::FTSMatchWord);
+    RUNTIME_ASSERT(tici_scan->idx_scan().fts_query_info().query_func() == tipb::ScalarFuncSig::FTSMatchWord);
 }
 } // namespace DB

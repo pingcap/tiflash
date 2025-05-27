@@ -14,6 +14,7 @@
 
 #include <Core/NamesAndTypes.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Operators/Operator.h>
 #include <Operators/TantivyReaderSourceOp.h>
 #include <Storages/Tantivy/TantivyInputStream.h>
@@ -26,6 +27,7 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
     const String & req_id,
     const Int64 & table_id,
     const Int64 & index_id,
+    const QueryShardInfos & query_shard_infos,
     const NamesAndTypes & query_columns,
     const NamesAndTypes & return_columns,
     const String & query_json_str,
@@ -33,10 +35,12 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
     : SourceOp(exec_context_, req_id)
 {
     setHeader(Block(return_columns));
+
     input = std::make_shared<TS::TantivyInputStream>(
         log,
         table_id,
         index_id,
+        query_shard_infos,
         query_columns,
         return_columns,
         query_json_str,
@@ -50,7 +54,7 @@ String TantivyReaderSourceOp::getName() const
 
 void TantivyReaderSourceOp::operatePrefixImpl()
 {
-    LOG_DEBUG(log, "start reading from TantivyReaderSourceOp", total_rows);
+    LOG_DEBUG(log, "start reading from TantivyReaderSourceOp");
 }
 
 void TantivyReaderSourceOp::operateSuffixImpl()
@@ -86,6 +90,7 @@ OperatorStatus TantivyReaderSourceOp::readImpl(Block & block)
     block = popFromBlockQueue();
     return OperatorStatus::HAS_OUTPUT;
 }
+
 OperatorStatus TantivyReaderSourceOp::awaitImpl()
 {
     if (!block_queue.empty())
