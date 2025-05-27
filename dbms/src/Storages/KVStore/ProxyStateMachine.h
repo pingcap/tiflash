@@ -161,7 +161,6 @@ private:
             else
                 args_map["advertise-engine-addr"] = args_map["engine-addr"];
             args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
-#if ENABLE_NEXT_GEN == 0
             String extra_label;
             if (disaggregated_mode == DisaggregatedMode::Storage)
             {
@@ -184,12 +183,6 @@ private:
             {
                 args_map["labels"] = extra_label;
             }
-#else
-            // Serverless proxy has not adapted with these changes yet.
-            // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
-            if (disaggregated_mode == DisaggregatedMode::Storage)
-                args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
-#endif
 
 #if ENABLE_NEXT_GEN
             if (config.has("blacklist_file"))
