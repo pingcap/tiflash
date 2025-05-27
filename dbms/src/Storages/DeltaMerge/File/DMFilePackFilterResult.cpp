@@ -44,6 +44,22 @@ std::tuple<UInt64, UInt64, UInt64, UInt64> DMFilePackFilterResult::countPackRes(
     return {none_count, some_count, all_count, all_null_count};
 }
 
+size_t DMFilePackFilterResult::modify(const DMFilePtr & dmfile, const BitmapFilterPtr & bitmap_filter, size_t offset)
+{
+    size_t skipped_pack = 0;
+    const auto & pack_stats = dmfile->getPackStats();
+    for (size_t pack_id = 0; pack_id < pack_stats.size(); ++pack_id)
+    {
+        if (pack_res[pack_id].isUse() && bitmap_filter->isAllNotMatch(offset, pack_stats[pack_id].rows))
+        {
+            pack_res[pack_id] = RSResult::None;
+            ++skipped_pack;
+        }
+        offset += pack_stats[pack_id].rows;
+    }
+    return skipped_pack;
+}
+
 void DMFilePackFilterResult::tryLoadIndex(
     const DMFilePtr & dmfile,
     ColId col_id,

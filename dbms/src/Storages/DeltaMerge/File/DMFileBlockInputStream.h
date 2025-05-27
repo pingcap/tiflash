@@ -14,16 +14,15 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
-#include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm_fwd.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
-#include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream_fwd.h>
-#include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
-#include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx_fwd.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
@@ -117,21 +116,24 @@ public:
         return *this;
     }
 
-    DMFileBlockInputStreamBuilder & setBitmapFilter(const BitmapFilterView & bitmap_filter_)
+    DMFileBlockInputStreamBuilder & setVecIndexQuery(const VectorIndexStreamCtxPtr & ctx)
     {
-        bitmap_filter.emplace(bitmap_filter_);
+        vec_index_ctx = ctx;
         return *this;
     }
 
-    DMFileBlockInputStreamBuilder & setAnnQureyInfo(const ANNQueryInfoPtr & ann_query_info_)
+    DMFileBlockInputStreamBuilder & setFtsIndexQuery(const FullTextIndexStreamCtxPtr & ctx)
     {
-        ann_query_info = ann_query_info_;
+        fts_index_ctx = ctx;
         return *this;
     }
 
     DMFileBlockInputStreamBuilder & setReadPacks(const IdSetPtr & read_packs_)
     {
         read_packs = read_packs_;
+        RUNTIME_CHECK_MSG(
+            read_packs == nullptr || pack_filter == nullptr,
+            "pack_filter is not nullptr when setting read_packs");
         return *this;
     }
 
@@ -169,6 +171,9 @@ public:
     DMFileBlockInputStreamBuilder & setDMFilePackFilterResult(const DMFilePackFilterResultPtr & pack_filter_)
     {
         pack_filter = pack_filter_;
+        RUNTIME_CHECK_MSG(
+            pack_filter == nullptr || read_packs == nullptr,
+            "read_packs is not nullptr when setting pack_filter");
         return *this;
     }
 
@@ -189,6 +194,19 @@ private:
         const RowKeyRanges & rowkey_ranges,
         const ScanContextPtr & scan_context);
 
+    /// The returned stream should be plugged into a VectorIndexInputStream. Plug to somewhere else may not work.
+    SkippableBlockInputStreamPtr buildForVectorIndex(
+        const DMFilePtr & dmfile,
+        const ColumnDefines & read_columns,
+        const RowKeyRanges & rowkey_ranges,
+        const ScanContextPtr & scan_context);
+
+    /// The returned stream should be plugged into a FullTextIndexInputStream. Plug to somewhere else will not work.
+    SkippableBlockInputStreamPtr buildForFullTextIndex(
+        const DMFilePtr & dmfile,
+        const ColumnDefines & read_columns,
+        const RowKeyRanges & rowkey_ranges,
+        const ScanContextPtr & scan_context);
 
 private:
     // These methods are called by the ctor
@@ -198,12 +216,10 @@ private:
     DMFileBlockInputStreamBuilder & setCaches(
         const MarkCachePtr & mark_cache_,
         const MinMaxIndexCachePtr & index_cache_,
-        const VectorIndexCachePtr & vector_index_cache_,
         const ColumnCacheLongTermPtr & column_cache_long_term_)
     {
         mark_cache = mark_cache_;
         index_cache = index_cache_;
-        vector_index_cache = vector_index_cache_;
         column_cache_long_term = column_cache_long_term_;
         return *this;
     }
@@ -234,11 +250,10 @@ private:
 
     DMFilePackFilterResultPtr pack_filter;
 
-    ANNQueryInfoPtr ann_query_info = nullptr;
-
-    VectorIndexCachePtr vector_index_cache;
-    // Note: Currently thie field is assigned only for Stable streams, not available for ColumnFileBig
-    std::optional<BitmapFilterView> bitmap_filter;
+    /// If set, will *try* to build a VectorIndexDMFileInputStream
+    /// instead of a normal DMFileBlockInputStream.
+    VectorIndexStreamCtxPtr vec_index_ctx = nullptr;
+    FullTextIndexStreamCtxPtr fts_index_ctx = nullptr;
 
     // Note: column_cache_long_term is currently only filled when performing Vector Search.
     ColumnCacheLongTermPtr column_cache_long_term = nullptr;

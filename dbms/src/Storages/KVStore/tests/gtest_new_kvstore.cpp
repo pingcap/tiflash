@@ -18,6 +18,7 @@
 #include <RaftStoreProxyFFI/ColumnFamily.h>
 #include <Storages/KVStore/Read/LearnerRead.h>
 #include <Storages/KVStore/Region.h>
+#include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/KVStore/tests/region_kvstore_test.h>
 #include <Storages/Page/V3/PageDefines.h>
@@ -32,9 +33,10 @@
 
 #include <limits>
 
-extern std::shared_ptr<MemoryTracker> root_of_kvstore_mem_trackers;
+
 namespace DB::tests
 {
+using namespace DB::RecordKVFormat;
 
 TEST_F(RegionKVStoreTest, RegionStruct)
 try
@@ -70,145 +72,17 @@ try
 CATCH
 
 
-TEST_F(RegionKVStoreTest, MemoryTracker)
-try
-{
-    auto & ctx = TiFlashTestEnv::getGlobalContext();
-    initStorages();
-    KVStore & kvs = getKVS();
-    auto table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
-    auto start = RecordKVFormat::genKey(table_id, 0);
-    auto end = RecordKVFormat::genKey(table_id, 100);
-    auto str_key = RecordKVFormat::genKey(table_id, 1, 111);
-    auto [str_val_write, str_val_default] = proxy_instance->generateTiKVKeyValue(111, 999);
-    auto str_lock_value
-        = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 111, 999).toString();
-    MockRaftStoreProxy::FailCond cond;
-    proxy_instance->debugAddRegions(
-        kvs,
-        ctx.getTMTContext(),
-        {1, 2},
-        {{RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 10)},
-         {RecordKVFormat::genKey(table_id, 11), RecordKVFormat::genKey(table_id, 20)}});
-
-    {
-        auto region_id = 1;
-        auto kvr1 = kvs.getRegion(region_id);
-        auto [index, term]
-            = proxy_instance
-                  ->rawWrite(region_id, {str_key}, {str_val_default}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-        UNUSED(term);
-        proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index);
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-    }
-
-    {
-        root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(700, start, end, proxy_helper.get());
-        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-        region->remove("default", TiKVKey::copyFrom(str_key));
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
-    }
-    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
-    {
-        root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(701, start, end, proxy_helper.get());
-        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-    }
-    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
-    {
-        root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(702, start, end, proxy_helper.get());
-        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-        // 702 is not registed, so we persist as 1.
-        tryPersistRegion(kvs, 1);
-        root_of_kvstore_mem_trackers->reset();
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
-        reloadKVSFromDisk(false);
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-    }
-    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
-    {
-        root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(800, start, end, proxy_helper.get());
-        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), str_key.dataSize() + str_val_default.size());
-        region->insert("write", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_write));
-        std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
-        ASSERT_TRUE(data_list_read);
-        ASSERT_EQ(1, data_list_read->size());
-        RemoveRegionCommitCache(region, *data_list_read);
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
-    }
-    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
-    {
-        root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(900, start, end, proxy_helper.get());
-        region->insert("default", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_val_default));
-        auto str_key2 = RecordKVFormat::genKey(table_id, 20, 111);
-        auto [str_val_write2, str_val_default2] = proxy_instance->generateTiKVKeyValue(111, 999);
-        region->insert("default", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_val_default2));
-        auto expected = str_key.dataSize() + str_val_default.size() + str_key2.dataSize() + str_val_default2.size();
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
-        auto new_region = splitRegion(
-            region,
-            RegionMeta(
-                createPeer(901, true),
-                createRegionInfo(902, RecordKVFormat::genKey(table_id, 50), end),
-                initialApplyState()));
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
-        region->mergeDataFrom(*new_region);
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
-    }
-    {
-        root_of_kvstore_mem_trackers->reset();
-        RegionPtr region = tests::makeRegion(1000, start, end, proxy_helper.get());
-        region->insert("lock", TiKVKey::copyFrom(str_key), TiKVValue::copyFrom(str_lock_value));
-        auto expected = str_key.dataSize() + str_lock_value.size();
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
-        auto str_key2 = RecordKVFormat::genKey(table_id, 20, 111);
-        std::string short_value(97, 'a');
-        auto str_lock_value2
-            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 20, 111, &short_value)
-                  .toString();
-        region->insert("lock", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_lock_value2));
-        expected += str_key2.dataSize() + str_lock_value2.size();
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
-        auto new_region = splitRegion(
-            region,
-            RegionMeta(
-                createPeer(1001, true),
-                createRegionInfo(1002, RecordKVFormat::genKey(table_id, 50), end),
-                initialApplyState()));
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
-        region->mergeDataFrom(*new_region);
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
-        region->insert("lock", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_lock_value2));
-        auto str_lock_value2_2
-            = RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 20, 111).toString();
-        region->insert("lock", TiKVKey::copyFrom(str_key2), TiKVValue::copyFrom(str_lock_value2_2));
-        expected -= short_value.size();
-        expected -= 2; // Short value prefix and length
-        ASSERT_EQ(root_of_kvstore_mem_trackers->get(), expected);
-    }
-    ASSERT_EQ(root_of_kvstore_mem_trackers->get(), 0);
-}
-CATCH
-
 TEST_F(RegionKVStoreTest, KVStoreFailRecovery)
 try
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
-    KVStore & kvs = getKVS();
     {
         auto applied_index = 0;
         auto region_id = 1;
         {
             MockRaftStoreProxy::FailCond cond;
 
+            KVStore & kvs = getKVS();
             proxy_instance->debugAddRegions(
                 kvs,
                 ctx.getTMTContext(),
@@ -244,6 +118,7 @@ try
         auto applied_index = 0;
         auto region_id = 2;
         {
+            KVStore & kvs = getKVS();
             proxy_instance->debugAddRegions(
                 kvs,
                 ctx.getTMTContext(),
@@ -284,7 +159,7 @@ try
             auto [indexc, termc]
                 = proxy_instance->adminCommand(region_id, std::move(req), std::move(res), std::nullopt);
             // Reject compact log.
-            kvs.setRegionCompactLogConfig(10000000, 10000000, 10000000, 0);
+            kvs.debugGetConfigMut().debugSetCompactLogConfig(10000000, 10000000, 10000000, 0);
             proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, indexc);
             ASSERT_EQ(kvr1->lastCompactLogApplied(), 5);
         }
@@ -294,6 +169,7 @@ try
         auto applied_index = 0;
         auto region_id = 3;
         {
+            KVStore & kvs = getKVS();
             proxy_instance->debugAddRegions(
                 kvs,
                 ctx.getTMTContext(),
@@ -335,6 +211,7 @@ try
         auto applied_index = 0;
         auto region_id = 4;
         {
+            KVStore & kvs = getKVS();
             proxy_instance->debugAddRegions(
                 kvs,
                 ctx.getTMTContext(),
@@ -383,37 +260,32 @@ TEST_F(RegionKVStoreTest, KVStoreInvalidWrites)
 try
 {
     auto & ctx = TiFlashTestEnv::getGlobalContext();
+    auto region_id = 1;
+    initStorages();
+    KVStore & kvs = getKVS();
+    proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+
+    MockRaftStoreProxy::FailCond cond;
+
+    auto kvr1 = kvs.getRegion(region_id);
+    auto r1 = proxy_instance->getRegion(region_id);
+    ASSERT_NE(r1, nullptr);
+    ASSERT_NE(kvr1, nullptr);
+    ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
     {
-        auto region_id = 1;
-        {
-            initStorages();
-            KVStore & kvs = getKVS();
-            proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
-            proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
+        r1->getLatestAppliedIndex();
+        // This key has empty PK which is actually truncated.
+        std::string k = "7480000000000001FFBD5F720000000000FAF9ECEFDC3207FFFC";
+        std::string v = "4486809092ACFEC38906";
+        auto str_key = Redact::hexStringToKey(k.data(), k.size());
+        auto str_val = Redact::hexStringToKey(v.data(), v.size());
 
-            MockRaftStoreProxy::FailCond cond;
-
-            auto kvr1 = kvs.getRegion(region_id);
-            auto r1 = proxy_instance->getRegion(region_id);
-            ASSERT_NE(r1, nullptr);
-            ASSERT_NE(kvr1, nullptr);
-            ASSERT_EQ(r1->getLatestAppliedIndex(), kvr1->appliedIndex());
-            {
-                r1->getLatestAppliedIndex();
-                // This key has empty PK which is actually truncated.
-                std::string k = "7480000000000001FFBD5F720000000000FAF9ECEFDC3207FFFC";
-                std::string v = "4486809092ACFEC38906";
-                auto str_key = Redact::hexStringToKey(k.data(), k.size());
-                auto str_val = Redact::hexStringToKey(v.data(), v.size());
-
-                auto [index, term]
-                    = proxy_instance
-                          ->rawWrite(region_id, {str_key}, {str_val}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
-                EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
-                UNUSED(term);
-                EXPECT_THROW(ReadRegionCommitCache(kvr1, true), Exception);
-            }
-        }
+        auto [index, term]
+            = proxy_instance->rawWrite(region_id, {str_key}, {str_val}, {WriteCmdType::Put}, {ColumnFamilyType::Write});
+        EXPECT_THROW(proxy_instance->doApply(kvs, ctx.getTMTContext(), cond, region_id, index), Exception);
+        UNUSED(term);
+        EXPECT_THROW(ReadRegionCommitCache(kvr1, true), Exception);
     }
 }
 CATCH
@@ -519,7 +391,7 @@ try
             EngineStoreApplyRes::None);
 
         {
-            kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+            kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
             request.set_cmd_type(::raft_cmdpb::AdminCmdType::CompactLog);
             ASSERT_EQ(
                 kvs.handleAdminRaftCmd(std::move(request), std::move(response2), region_id, 26, 6, ctx.getTMTContext()),
@@ -735,7 +607,7 @@ try
                     0,
                     0,
                     std::nullopt,
-                    /*cancel_after_prehandle=*/true);
+                    []() {});
             }
         }
     }
@@ -751,7 +623,7 @@ try
     ctx.getTMTContext().debugSetKVStore(kvstore);
     initStorages();
 
-    ctx.getTMTContext().debugSetWaitIndexTimeout(1);
+    kvs.debugGetConfigMut().debugSetWaitIndexTimeout(1);
 
     startReadIndexUtils(ctx);
     SCOPE_EXIT({ stopReadIndexUtils(); });
@@ -1064,88 +936,14 @@ try
 }
 CATCH
 
-#if USE_JEMALLOC // following tests depends on jemalloc
-TEST(FFIJemallocTest, JemallocThread)
-try
-{
-    std::thread t2([&]() {
-        char * a = new char[888888];
-        std::thread t1([&]() {
-            auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
-            ASSERT_TRUE(allocated != nullptr);
-            ASSERT_EQ(*allocated, 0);
-            ASSERT_TRUE(deallocated != nullptr);
-            ASSERT_EQ(*deallocated, 0);
-        });
-        t1.join();
-        auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
-        ASSERT_TRUE(allocated != nullptr);
-        ASSERT_GE(*allocated, 888888);
-        ASSERT_TRUE(deallocated != nullptr);
-        delete[] a;
-    });
-    t2.join();
-
-    std::thread t3([&]() {
-        // Will not cover mmap memory.
-        auto [allocated, deallocated] = JointThreadInfoJeallocMap::getPtrs();
-        char * a = new char[120];
-        void * buf = mmap(nullptr, 6000, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        ASSERT_LT(*allocated, 6000);
-        munmap(buf, 0);
-        delete[] a;
-    });
-    t3.join();
-}
-CATCH
-
-TEST_F(RegionKVStoreTest, StorageBgPool)
-try
-{
-    using namespace std::chrono_literals;
-    auto & ctx = TiFlashTestEnv::getGlobalContext();
-    auto & pool = ctx.getBackgroundPool();
-    const auto size = TiFlashTestEnv::DEFAULT_BG_POOL_SIZE;
-    std::atomic_bool b = false;
-    auto t = pool.addTask(
-        [&]() {
-            auto * x = new int[1000];
-            LOG_INFO(Logger::get(), "allocated");
-            while (!b.load())
-            {
-                std::this_thread::sleep_for(1500ms);
-            }
-            delete[] x;
-            LOG_INFO(Logger::get(), "released");
-            return false;
-        },
-        false,
-        5 * 60 * 1000);
-    std::this_thread::sleep_for(500ms);
-
-    JointThreadInfoJeallocMap & jm = *ctx.getJointThreadInfoJeallocMap();
-    jm.recordThreadAllocInfo();
-
-    LOG_INFO(DB::Logger::get(), "bg pool size={}", size);
-    UInt64 r = TiFlashMetrics::instance().getStorageThreadMemory(TiFlashMetrics::MemoryAllocType::Alloc, "bg");
-    ASSERT_GE(r, sizeof(int) * 1000);
-    jm.accessStorageMap([size](const JointThreadInfoJeallocMap::AllocMap & m) {
-        // There are some other bg thread pools
-        ASSERT_GE(m.size(), size) << m.size();
-    });
-    jm.accessProxyMap([](const JointThreadInfoJeallocMap::AllocMap & m) { ASSERT_EQ(m.size(), 0); });
-
-    b.store(true);
-
-    ctx.getBackgroundPool().removeTask(t);
-}
-CATCH
-#endif
-
 TEST(ProxyMode, Normal)
 try
 {
+#if SERVERLESS_PROXY == 0
     ASSERT_EQ(SERVERLESS_PROXY, 0);
+#else
+    ASSERT_EQ(SERVERLESS_PROXY, 1);
+#endif
 }
 CATCH
 
@@ -1218,8 +1016,17 @@ try
 
         // Overlap
         EXPECT_THROW(
-            proxy_instance
-                ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false),
+            proxy_instance->snapshot(
+                kvs,
+                ctx.getTMTContext(),
+                2,
+                {default_cf},
+                make_meta(),
+                peer_id,
+                0,
+                0,
+                std::nullopt,
+                std::nullopt),
             Exception);
 
         LOG_INFO(log, "Set to applying");
@@ -1227,8 +1034,17 @@ try
         r1->mutState().set_state(raft_serverpb::PeerState::Applying);
         ASSERT_EQ(proxy_helper->getRegionLocalState(1).state(), raft_serverpb::PeerState::Applying);
         EXPECT_THROW(
-            proxy_instance
-                ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false),
+            proxy_instance->snapshot(
+                kvs,
+                ctx.getTMTContext(),
+                2,
+                {default_cf},
+                make_meta(),
+                peer_id,
+                0,
+                0,
+                std::nullopt,
+                std::nullopt),
             Exception);
 
 
@@ -1237,8 +1053,17 @@ try
         r1->mutState().set_state(raft_serverpb::PeerState::Applying);
         r1->mutState().mutable_region()->set_start_key(RecordKVFormat::genKey(table_id, 0));
         r1->mutState().mutable_region()->set_end_key(RecordKVFormat::genKey(table_id, 1));
-        proxy_instance
-            ->snapshot(kvs, ctx.getTMTContext(), 2, {default_cf}, make_meta(), peer_id, 0, 0, std::nullopt, false);
+        proxy_instance->snapshot(
+            kvs,
+            ctx.getTMTContext(),
+            2,
+            {default_cf},
+            make_meta(),
+            peer_id,
+            0,
+            0,
+            std::nullopt,
+            std::nullopt);
     }
 }
 CATCH

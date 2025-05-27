@@ -16,7 +16,6 @@
 #include <Client/Connection.h>
 #include <Common/Config/ConfigProcessor.h>
 #include <Common/Exception.h>
-#include <Common/ExternalTable.h>
 #include <Common/NetException.h>
 #include <Common/ShellCommand.h>
 #include <Common/Stopwatch.h>
@@ -51,8 +50,8 @@
 #include <Poco/File.h>
 #include <Poco/Util/Application.h>
 #include <WindowFunctions/registerWindowFunctions.h>
+#include <boost_wrapper/program_options.h>
 #include <common/find_symbols.h>
-#include <common/readline_use.h>
 #include <fcntl.h>
 #include <port/unistd.h>
 #include <signal.h>
@@ -60,16 +59,15 @@
 
 #include <algorithm>
 #include <boost/algorithm/string/replace.hpp>
-#include <boost/program_options.hpp>
-#include <fstream>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <map>
 #include <optional>
+#include <string>
 #include <unordered_set>
 
 #include "InterruptListener.h"
-
 
 /// http://en.wikipedia.org/wiki/ANSI_escape_code
 
@@ -94,13 +92,21 @@ extern const int UNKNOWN_EXCEPTION;
 extern const int NETWORK_ERROR;
 extern const int NO_DATA_TO_INSERT;
 extern const int BAD_ARGUMENTS;
-extern const int CANNOT_READ_HISTORY;
-extern const int CANNOT_APPEND_HISTORY;
 extern const int UNKNOWN_PACKET_FROM_SERVER;
 extern const int UNEXPECTED_PACKET_FROM_SERVER;
 extern const int CLIENT_OUTPUT_FORMAT_SPECIFIED;
 } // namespace ErrorCodes
 
+inline char * readline(const char * prompt)
+{
+    std::string s;
+    std::cout << prompt;
+    std::getline(std::cin, s);
+
+    if (!std::cin.good())
+        return nullptr;
+    return strdup(s.data());
+}
 
 class Client : public Poco::Util::Application
 {
@@ -131,9 +137,7 @@ private:
     size_t max_client_network_bandwidth
         = 0; /// The maximum speed of data exchange over the network for the client in bytes per second.
 
-    bool has_vertical_output_suffix = false; /// Is \G present at the end of the query string?
-
-    std::unique_ptr<Context> context = Context::createGlobal();
+    std::unique_ptr<Context> context = Context::createGlobal(Context::ApplicationType::CLIENT);
 
     /// Buffer that reads from stdin in batch mode.
     ReadBufferFromFileDescriptor std_in{STDIN_FILENO};
@@ -150,9 +154,6 @@ private:
     String current_profile;
 
     String prompt_by_server_display_name;
-
-    /// Path to a file containing command history.
-    String history_file;
 
     /// How many rows have been read or written.
     size_t processed_rows = 0;
@@ -177,10 +178,6 @@ private:
     size_t written_progress_chars = 0;
     bool written_first_block = false;
 
-    /// External tables info.
-    std::list<ExternalTable> external_tables;
-
-
     struct ConnectionParameters
     {
         String host;
@@ -188,7 +185,6 @@ private:
         String default_database;
         String user;
         String password;
-        Protocol::Secure security = Protocol::Secure::Disable;
         Protocol::Compression compression = Protocol::Compression::Disable;
         ConnectionTimeouts timeouts;
 
@@ -196,15 +192,8 @@ private:
 
         explicit ConnectionParameters(const Poco::Util::AbstractConfiguration & config)
         {
-            bool is_secure = config.getBool("secure", false);
-            security = is_secure ? Protocol::Secure::Enable : Protocol::Secure::Disable;
-
             host = config.getString("host", "localhost");
-            port = config.getInt(
-                "port",
-                config.getInt(
-                    is_secure ? "tcp_port_secure" : "tcp_port",
-                    is_secure ? DBMS_DEFAULT_SECURE_PORT : DBMS_DEFAULT_PORT));
+            port = config.getInt("port", config.getInt("tcp_port", DBMS_DEFAULT_PORT));
 
             default_database = config.getString("database", "");
             user = config.getString("user", "");
@@ -241,8 +230,6 @@ private:
             auto loaded_config = config_processor.loadConfig();
             config().add(loaded_config.configuration);
         }
-
-        context->setApplicationType(Context::ApplicationType::CLIENT);
 
         /// settings and limits could be specified in config file, but passed settings has higher priority
 #define EXTRACT_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION)               \
@@ -303,20 +290,6 @@ private:
         }
     }
 
-    /// Should we celebrate a bit?
-    static bool isNewYearMode()
-    {
-        time_t current_time = time(nullptr);
-
-        /// It's bad to be intrusive.
-        if (current_time % 3 != 0)
-            return false;
-
-        LocalDate now(current_time);
-        return (now.month() == 12 && now.day() >= 20) || (now.month() == 1 && now.day() <= 5);
-    }
-
-
     int mainImpl()
     {
         registerFunctions();
@@ -338,11 +311,8 @@ private:
         if (is_interactive)
             showClientVersion();
 
-        is_default_format = !config().has("vertical") && !config().has("format");
-        if (config().has("vertical"))
-            format = config().getString("format", "Vertical");
-        else
-            format = config().getString("format", is_interactive ? "PrettyCompact" : "TabSeparated");
+        is_default_format = !config().has("format");
+        format = config().getString("format", is_interactive ? "PrettyCompactNoEscapes" : "TabSeparated");
 
         format_max_block_size = config().getInt("format_max_block_size", context->getSettingsRef().max_block_size);
 
@@ -386,21 +356,8 @@ private:
             }
         }
 
-        Strings keys;
-
         prompt_by_server_display_name
             = config().getRawString("prompt_by_server_display_name.default", "{display_name} :) ");
-
-        config().keys("prompt_by_server_display_name", keys);
-
-        for (const String & key : keys)
-        {
-            if (key != "default" && server_display_name.find(key) != std::string::npos)
-            {
-                prompt_by_server_display_name = config().getRawString("prompt_by_server_display_name." + key);
-                break;
-            }
-        }
 
         /// Prompt may contain escape sequences including \e[ or \x1b[ sequences to set terminal color.
         {
@@ -431,34 +388,9 @@ private:
                     "time option could be specified only in non-interactive mode",
                     ErrorCodes::BAD_ARGUMENTS);
 
-            /// Turn tab completion off.
-            rl_bind_key('\t', rl_insert);
-
-            /// Load command history if present.
-            if (config().has("history_file"))
-                history_file = config().getString("history_file");
-            else if (!home_path.empty())
-                history_file = home_path + "/.clickhouse-client-history";
-
-            if (!history_file.empty())
-            {
-                if (Poco::File(history_file).exists())
-                {
-#if USE_READLINE
-                    int res = read_history(history_file.c_str());
-                    if (res)
-                        throwFromErrno(
-                            "Cannot read history from file " + history_file,
-                            ErrorCodes::CANNOT_READ_HISTORY);
-#endif
-                }
-                else /// Create history file.
-                    Poco::File(history_file).createFile();
-            }
-
             loop();
 
-            std::cout << (isNewYearMode() ? "Happy new year." : "Bye.") << std::endl;
+            std::cout << "Bye." << std::endl;
 
             return 0;
         }
@@ -494,8 +426,7 @@ private:
             connection_parameters.password,
             connection_parameters.timeouts,
             "client",
-            connection_parameters.compression,
-            connection_parameters.security);
+            connection_parameters.compression);
 
         String server_name;
         UInt64 server_version_major = 0;
@@ -562,16 +493,12 @@ private:
             bool ends_with_semicolon = line[ws - 1] == ';';
             bool ends_with_backslash = line[ws - 1] == '\\';
 
-            has_vertical_output_suffix = (ws >= 2) && (line[ws - 2] == '\\') && (line[ws - 1] == 'G');
-
             if (ends_with_backslash)
                 line = line.substr(0, ws - 1);
 
             query += line;
 
-            if (!ends_with_backslash
-                && (ends_with_semicolon || has_vertical_output_suffix
-                    || (!config().has("multiline") && !hasDataInSTDIN())))
+            if (!ends_with_backslash && (ends_with_semicolon || (!config().has("multiline") && !hasDataInSTDIN())))
             {
                 if (query != prev_query)
                 {
@@ -581,20 +508,9 @@ private:
                     /// every line of the query will be displayed separately.
                     std::string logged_query = query;
                     std::replace(logged_query.begin(), logged_query.end(), '\n', ' ');
-                    add_history(logged_query.c_str());
-
-#if USE_READLINE && HAVE_READLINE_HISTORY
-                    if (!history_file.empty() && append_history(1, history_file.c_str()))
-                        throwFromErrno(
-                            "Cannot append history to file " + history_file,
-                            ErrorCodes::CANNOT_APPEND_HISTORY);
-#endif
 
                     prev_query = query;
                 }
-
-                if (has_vertical_output_suffix)
-                    query = query.substr(0, query.length() - 2);
 
                 try
                 {
@@ -813,28 +729,10 @@ private:
         return true;
     }
 
-
-    /// Convert external tables to ExternalTableData and send them using the connection.
-    void sendExternalTables()
-    {
-        const auto * select = typeid_cast<const ASTSelectWithUnionQuery *>(&*parsed_query);
-        if (!select && !external_tables.empty())
-            throw Exception("External tables could be sent only with select query", ErrorCodes::BAD_ARGUMENTS);
-
-        std::vector<ExternalTableData> data;
-        for (auto & table : external_tables)
-            data.emplace_back(table.getData(*context));
-
-        connection->sendExternalTablesData(data);
-    }
-
-
     /// Process the query that doesn't require transfering data blocks to the server.
     void processOrdinaryQuery()
     {
-        connection
-            ->sendQuery(query, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr, true);
-        sendExternalTables();
+        connection->sendQuery(query, query_id, QueryProcessingStage::Complete, &context->getSettingsRef(), nullptr);
         receiveResult();
     }
 
@@ -855,9 +753,7 @@ private:
             query_id,
             QueryProcessingStage::Complete,
             &context->getSettingsRef(),
-            nullptr,
-            true);
-        sendExternalTables();
+            nullptr);
 
         /// Receive description of table structure.
         Block sample;
@@ -1113,15 +1009,10 @@ private:
                 }
                 if (query_with_output->format != nullptr)
                 {
-                    if (has_vertical_output_suffix)
-                        throw Exception("Output format already specified", ErrorCodes::CLIENT_OUTPUT_FORMAT_SPECIFIED);
                     const auto & id = typeid_cast<const ASTIdentifier &>(*query_with_output->format);
                     current_format = id.name;
                 }
             }
-
-            if (has_vertical_output_suffix)
-                current_format = "Vertical";
 
             block_out_stream = context->getOutputFormat(current_format, *out_buf, block);
             block_out_stream->writePrefix();
@@ -1312,56 +1203,16 @@ public:
 
         /** We allow different groups of arguments:
           * - common arguments;
-          * - arguments for any number of external tables each in form "--external args...",
-          *   where possible args are file, name, format, structure, types.
           * Split these groups before processing.
           */
         using Arguments = std::vector<const char *>;
 
         Arguments common_arguments{""}; /// 0th argument is ignored.
-        std::vector<Arguments> external_tables_arguments;
 
-        bool in_external_group = false;
         for (int arg_num = 1; arg_num < argc; ++arg_num)
         {
             const char * arg = argv[arg_num];
-
-            if (0 == strcmp(arg, "--external"))
-            {
-                in_external_group = true;
-                external_tables_arguments.emplace_back(Arguments{""});
-            }
-            /// Options with value after equal sign.
-            else if (
-                in_external_group
-                && (0 == strncmp(arg, "--file=", strlen("--file=")) || 0 == strncmp(arg, "--name=", strlen("--name="))
-                    || 0 == strncmp(arg, "--format=", strlen("--format="))
-                    || 0 == strncmp(arg, "--structure=", strlen("--structure="))
-                    || 0 == strncmp(arg, "--types=", strlen("--types="))))
-            {
-                external_tables_arguments.back().emplace_back(arg);
-            }
-            /// Options with value after whitespace.
-            else if (
-                in_external_group
-                && (0 == strcmp(arg, "--file") || 0 == strcmp(arg, "--name") || 0 == strcmp(arg, "--format")
-                    || 0 == strcmp(arg, "--structure") || 0 == strcmp(arg, "--types")))
-            {
-                if (arg_num + 1 < argc)
-                {
-                    external_tables_arguments.back().emplace_back(arg);
-                    ++arg_num;
-                    arg = argv[arg_num];
-                    external_tables_arguments.back().emplace_back(arg);
-                }
-                else
-                    break;
-            }
-            else
-            {
-                in_external_group = false;
-                common_arguments.emplace_back(arg);
-            }
+            common_arguments.emplace_back(arg);
         }
 
 #define DECLARE_SETTING(TYPE, NAME, DEFAULT, DESCRIPTION) \
@@ -1375,7 +1226,6 @@ public:
             ("config-file,c", boost::program_options::value<std::string>(), "config-file path")
             ("host,h", boost::program_options::value<std::string>()->default_value("localhost"), "server host")
             ("port", boost::program_options::value<int>()->default_value(9000), "server port")
-            ("secure,s", "secure")
             ("user,u", boost::program_options::value<std::string>(), "user")
             ("password", boost::program_options::value<std::string>(), "password")
             ("query_id", boost::program_options::value<std::string>(), "query_id")
@@ -1386,7 +1236,6 @@ public:
             ("multiquery,n", "multiquery")
             ("ignore-error", "Do not stop processing in multiquery mode")
             ("format,f", boost::program_options::value<std::string>(), "default output format")
-            ("vertical,E", "vertical output format, same as --format=Vertical or FORMAT Vertical or \\G at end of command")
             ("time,t", "print query execution time to stderr in non-interactive mode (for benchmarks)")
             ("stacktrace", "print stack traces of exceptions")
             ("progress", "print progress even in non-interactive mode")
@@ -1398,18 +1247,6 @@ public:
         ;
         // clang-format on
 #undef DECLARE_SETTING
-
-        /// Commandline options related to external tables.
-        boost::program_options::options_description external_description("External tables options");
-        // clang-format off
-        external_description.add_options()
-            ("file", boost::program_options::value<std::string>(), "data file or - for stdin")
-            ("name", boost::program_options::value<std::string>()->default_value("_data"), "name of the table")
-            ("format", boost::program_options::value<std::string>()->default_value("TabSeparated"), "data format")
-            ("structure", boost::program_options::value<std::string>(), "structure")
-            ("types", boost::program_options::value<std::string>(), "types")
-        ;
-        // clang-format on
 
         /// Parse main commandline options.
         boost::program_options::parsed_options parsed
@@ -1431,39 +1268,7 @@ public:
                 && options["host"].as<std::string>() == "elp")) /// If user writes -help instead of --help.
         {
             std::cout << main_description << "\n";
-            std::cout << external_description << "\n";
             exit(0);
-        }
-
-        size_t number_of_external_tables_with_stdin_source = 0;
-        for (size_t i = 0; i < external_tables_arguments.size(); ++i)
-        {
-            /// Parse commandline options related to external tables.
-            boost::program_options::parsed_options parsed = boost::program_options::command_line_parser(
-                                                                external_tables_arguments[i].size(),
-                                                                external_tables_arguments[i].data())
-                                                                .options(external_description)
-                                                                .run();
-            boost::program_options::variables_map external_options;
-            boost::program_options::store(parsed, external_options);
-
-            try
-            {
-                external_tables.emplace_back(external_options);
-                if (external_tables.back().file == "-")
-                    ++number_of_external_tables_with_stdin_source;
-                if (number_of_external_tables_with_stdin_source > 1)
-                    throw Exception(
-                        "Two or more external tables has stdin (-) set as --file field",
-                        ErrorCodes::BAD_ARGUMENTS);
-            }
-            catch (const Exception & e)
-            {
-                std::string text = e.displayText();
-                std::cerr << "Code: " << e.code() << ". " << text << std::endl;
-                std::cerr << "Table №" << i << std::endl << std::endl;
-                exit(e.code());
-            }
         }
 
         /// Extract settings and limits from the options.
@@ -1489,8 +1294,6 @@ public:
 
         if (options.count("port") && !options["port"].defaulted())
             config().setInt("port", options["port"].as<int>());
-        if (options.count("secure"))
-            config().setBool("secure", true);
         if (options.count("user"))
             config().setString("user", options["user"].as<std::string>());
         if (options.count("password"))
@@ -1504,8 +1307,6 @@ public:
             config().setBool("ignore-error", true);
         if (options.count("format"))
             config().setString("format", options["format"].as<std::string>());
-        if (options.count("vertical"))
-            config().setBool("vertical", true);
         if (options.count("stacktrace"))
             config().setBool("stacktrace", true);
         if (options.count("progress"))

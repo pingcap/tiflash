@@ -176,6 +176,40 @@ FileSegmentPtr FileCache::downloadFileForLocalRead(
     return nullptr;
 }
 
+std::tuple<FileSegmentPtr, bool> FileCache::downloadFileForLocalReadWithRetry(
+    const S3::S3FilenameView & s3_fname,
+    const std::optional<UInt64> & filesize,
+    Int32 retry_count)
+{
+    auto perf_begin = PerfContext::file_cache;
+    bool has_s3_download = false;
+    for (Int32 i = retry_count; i > 0; --i)
+    {
+        try
+        {
+            if (auto seg = downloadFileForLocalRead(s3_fname, filesize); seg)
+            {
+                if (PerfContext::file_cache.fg_download_from_s3 > perf_begin.fg_download_from_s3 || //
+                    PerfContext::file_cache.fg_wait_download_from_s3 > perf_begin.fg_wait_download_from_s3)
+                    has_s3_download = true;
+
+                return {seg, has_s3_download};
+            }
+        }
+        catch (...)
+        {
+            if (i <= 1)
+                throw;
+        }
+    }
+
+    throw Exception(
+        ErrorCodes::S3_ERROR,
+        "Failed to download S3 file {} after {} retries",
+        s3_fname.toFullKey(),
+        retry_count);
+}
+
 FileSegmentPtr FileCache::get(const S3::S3FilenameView & s3_fname, const std::optional<UInt64> & filesize)
 {
     auto s3_key = s3_fname.toFullKey();
@@ -641,6 +675,14 @@ FileType FileCache::getFileType(const String & fname)
     else if (ext == ".vector")
     {
         return FileType::VectorIndex;
+    }
+    else if (ext == ".fulltext")
+    {
+        return FileType::FullTextIndex;
+    }
+    else if (ext == ".inverted")
+    {
+        return FileType::InvertedIndex;
     }
     else if (ext == ".meta")
     {

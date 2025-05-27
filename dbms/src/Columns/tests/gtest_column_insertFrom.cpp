@@ -71,22 +71,30 @@ public:
             }
         }
 
-        /// Test insertDisjunctFrom
+        /// Test insertSelectiveFrom
         {
             for (size_t i = 0; i < 2; ++i)
             {
                 cols[i] = column_ptr->cloneEmpty();
             }
-            std::vector<size_t> position_vec;
-            position_vec.push_back(0);
-            position_vec.push_back(2);
-            position_vec.push_back(4);
-            for (size_t position : position_vec)
+            IColumn::Offsets selective_offsets;
+            selective_offsets.push_back(0);
+            selective_offsets.push_back(2);
+            selective_offsets.push_back(4);
+            for (size_t position : selective_offsets)
                 cols[0]->insertFrom(*column_ptr, position);
-            for (size_t position : position_vec)
+            std::vector<std::pair<size_t, size_t>> range_test = {{0, 1}, {1, 2}, {0, 3}, {2, 1}, {1, 1}};
+            for (auto [start, length] : range_test)
+            {
+                for (size_t i = start; i < start + length; ++i)
+                    cols[0]->insertFrom(*column_ptr, selective_offsets[i]);
+            }
+            for (size_t position : selective_offsets)
                 cols[0]->insertFrom(*column_ptr, position);
-            cols[1]->insertDisjunctFrom(*column_ptr, position_vec);
-            cols[1]->insertDisjunctFrom(*column_ptr, position_vec);
+            cols[1]->insertSelectiveFrom(*column_ptr, selective_offsets);
+            for (auto [start, length] : range_test)
+                cols[1]->insertSelectiveRangeFrom(*column_ptr, selective_offsets, start, length);
+            cols[1]->insertSelectiveFrom(*column_ptr, selective_offsets);
             {
                 ColumnWithTypeAndName ref(std::move(cols[0]), col_with_type_and_name.type, "");
                 ColumnWithTypeAndName result(std::move(cols[1]), col_with_type_and_name.type, "");

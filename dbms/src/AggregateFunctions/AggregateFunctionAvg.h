@@ -29,6 +29,12 @@ struct AggregateFunctionAvgData
     T sum;
     UInt64 count;
 
+    void reset()
+    {
+        sum = T(0);
+        count = 0;
+    }
+
     AggregateFunctionAvgData()
         : sum(0)
         , count(0)
@@ -78,6 +84,19 @@ public:
         ++this->data(place).count;
     }
 
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
+    {
+        if constexpr (IsDecimal<T>)
+            this->data(place).sum -= static_cast<const ColumnDecimal<T> &>(*columns[0]).getData()[row_num];
+        else
+            this->data(place).sum -= static_cast<const ColumnVector<T> &>(*columns[0]).getData()[row_num];
+
+        --this->data(place).count;
+        assert(this->data(place).count >= 0);
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override { this->data(place).reset(); }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         this->data(place).sum += this->data(rhs).sum;
@@ -108,6 +127,25 @@ public:
         else
         {
             static_cast<ColumnFloat64 &>(to).getData().push_back(
+                static_cast<Float64>(this->data(place).sum) / this->data(place).count);
+        }
+    }
+
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        if constexpr (IsDecimal<TResult>)
+        {
+            ScaleType left_scale = result_scale - scale;
+            TResult result = this->data(place).sum.value * getScaleMultiplier<TResult>(left_scale)
+                / static_cast<typename TResult::NativeType>(this->data(place).count);
+            auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
+            container.resize_fill(container.size() + num, result);
+        }
+        else
+        {
+            auto & container = static_cast<ColumnFloat64 &>(to).getData();
+            container.resize_fill(
+                container.size() + num,
                 static_cast<Float64>(this->data(place).sum) / this->data(place).count);
         }
     }

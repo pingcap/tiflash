@@ -265,10 +265,18 @@ cmake --workflow --preset unit-tests-all
 Then, to run these unit tests:
 
 ```shell
-cd cmake-build-debug
-./dbms/gtests_dbms
-./libs/libdaemon/src/tests/gtests_libdaemon
-./libs/libcommon/src/tests/gtests_libcommon
+cmake-build-debug/dbms/gtests_dbms
+cmake-build-debug/libs/libdaemon/src/tests/gtests_libdaemon
+cmake-build-debug/libs/libcommon/src/tests/gtests_libcommon
+```
+
+Unit tests take time, because tests are run one by one. You can use our parallel test runner instead:
+
+```shell
+python3 tests/gtest_10x.py \
+  cmake-build-debug/dbms/gtests_dbms \
+  cmake-build-debug/libs/libdaemon/src/tests/gtests_libdaemon \
+  cmake-build-debug/libs/libcommon/src/tests/gtests_libcommon
 ```
 
 More usages are available via `./dbms/gtests_dbms --help`.
@@ -287,9 +295,9 @@ cmake --workflow --preset asan-tests-all # or tsan-tests-all
 There are known false positives reported from leak sanitizer (which is included in address sanitizer). To suppress these errors, set the following environment variables before running the executables:
 
 ```shell
-LSAN_OPTIONS="suppressions=tests/sanitize/asan.suppression" ./dbms/gtests_dbms ...
+LSAN_OPTIONS="suppressions=../tests/sanitize/asan.suppression" ./dbms/gtests_dbms ...
 # or
-TSAN_OPTIONS="suppressions=tests/sanitize/tsan.suppression" ./dbms/gtests_dbms ...
+TSAN_OPTIONS="suppressions=../tests/sanitize/tsan.suppression" ./dbms/gtests_dbms ...
 ```
 
 ## Run Integration Tests

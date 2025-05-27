@@ -199,7 +199,7 @@ RegionID RegionRaftCommandDelegate::execCommitMerge(
             : source_region_meta_delegate.regionState().getRegion().end_key();
 
         region_table.extendRegionRange(
-            id(),
+            *this,
             RegionRangeKeys(TiKVKey::copyFrom(new_start_key), TiKVKey::copyFrom(new_end_key)));
     }
 
@@ -348,6 +348,17 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
 
     auto is_v2 = this->getClusterRaftstoreVer() == RaftstoreVer::V2;
 
+    // After removing the logic of the read thread writing to the storage engine during learner reads,
+    // if we remove the locks before committed data written to storage,
+    // it would cause concurrency control problems that could result in missing some of the latest data.
+    // The concurrency logic is as follows:
+    // 1. **Raft thread**: Receives a write log and removes the lock.
+    // 2. **Read thread**: Detects no lock and begins reading (missing the data written in step 3).
+    // 3. **Raft thread**: Writes the data.
+    std::vector<TiKVKey> deleting_lock_keys;
+    const size_t lock_count
+        = std::count_if(cmds.cmd_cf, cmds.cmd_cf + cmds.len, [](auto cf) { return cf == ColumnFamilyType::Lock; });
+    deleting_lock_keys.reserve(lock_count);
     const auto handle_by_index_func = [&](auto i) {
         auto type = cmds.cmd_types[i];
         auto cf = cmds.cmd_cf[i];
@@ -374,11 +385,11 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
                 if unlikely (is_v2)
                 {
                     // There may be orphan default key in a snapshot.
-                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame);
+                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::AllowSame).payload;
                 }
                 else
                 {
-                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny);
+                    write_size += doInsert(cf, std::move(tikv_key), std::move(tikv_value), DupCheck::Deny).payload;
                 }
             }
             catch (Exception & e)
@@ -412,7 +423,10 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             }
             try
             {
-                doRemove(cf, tikv_key);
+                if (cf == ColumnFamilyType::Lock)
+                    deleting_lock_keys.push_back(std::move(tikv_key));
+                else
+                    doRemove(cf, tikv_key);
             }
             catch (Exception & e)
             {
@@ -473,6 +487,11 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
             handle_write_cmd_func();
         }
 
+        if (default_put_key_count + lock_put_key_count > 0)
+        {
+            maybeWarnMemoryLimitByTable(tmt, "put");
+        }
+
         // If transfer-leader happened during ingest-sst, there might be illegal data.
         if (0 != cmds.len)
         {
@@ -507,6 +526,35 @@ std::pair<EngineStoreApplyRes, DM::WriteResult> Region::handleWriteRaftCmd(
                     term,
                     index,
                     fmt::join(entry_infos.begin(), entry_infos.end(), ":"));
+                e.rethrow();
+            }
+            if (!data_list_to_remove.empty())
+            {
+                resetWarnMemoryLimitByTable();
+            }
+        }
+
+        if (!deleting_lock_keys.empty())
+        {
+            size_t i = 0;
+            try
+            {
+                std::unique_lock<std::shared_mutex> lock(mutex);
+                for (; i < deleting_lock_keys.size(); ++i)
+                    doRemove(ColumnFamilyType::Lock, deleting_lock_keys[i]);
+            }
+            catch (Exception & e)
+            {
+                LOG_ERROR(
+                    log,
+                    "{} catch exception: {}, while applying `CmdType::Delete` on [term {}, index {}], key in hex: {}, "
+                    "CF {}",
+                    toString(),
+                    e.message(),
+                    term,
+                    index,
+                    deleting_lock_keys[i].toDebugString(),
+                    CFToName(ColumnFamilyType::Lock));
                 e.rethrow();
             }
         }

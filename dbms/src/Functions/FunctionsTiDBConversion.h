@@ -295,7 +295,7 @@ struct TiDBConvertToInteger
         T rounded_value = std::round(value);
         if (rounded_value < 0)
         {
-            context.getDAGContext()->handleOverflowError("Cast real as integer", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("Cast real as integer");
             if (context.getDAGContext()->shouldClipToZero())
                 return static_cast<ToFieldType>(0);
             return static_cast<ToFieldType>(rounded_value);
@@ -303,12 +303,12 @@ struct TiDBConvertToInteger
         auto field_max = static_cast<T>(std::numeric_limits<ToFieldType>::max());
         if (rounded_value > field_max)
         {
-            context.getDAGContext()->handleOverflowError("Cast real as integer", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("Cast real as integer");
             return std::numeric_limits<ToFieldType>::max();
         }
         else if (rounded_value == field_max)
         {
-            context.getDAGContext()->handleOverflowError("cast real as int", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("cast real as int");
             return std::numeric_limits<ToFieldType>::max();
         }
         else
@@ -323,12 +323,12 @@ struct TiDBConvertToInteger
         auto field_max = static_cast<T>(std::numeric_limits<ToFieldType>::max());
         if (rounded_value < field_min)
         {
-            context.getDAGContext()->handleOverflowError("cast real as int", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("cast real as int");
             return std::numeric_limits<ToFieldType>::min();
         }
         if (rounded_value >= field_max)
         {
-            context.getDAGContext()->handleOverflowError("cast real as int", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("cast real as int");
             return std::numeric_limits<ToFieldType>::max();
         }
         return static_cast<ToFieldType>(rounded_value);
@@ -340,7 +340,7 @@ struct TiDBConvertToInteger
         auto v = value.getValue().value;
         if (v < 0)
         {
-            context.getDAGContext()->handleOverflowError("cast decimal as int", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("cast decimal as int");
             return static_cast<ToFieldType>(0);
         }
         ScaleType scale = value.getScale();
@@ -352,7 +352,7 @@ struct TiDBConvertToInteger
         Int128 max_value = std::numeric_limits<ToFieldType>::max();
         if (v > max_value)
         {
-            context.getDAGContext()->handleOverflowError("cast decimal as int", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("cast decimal as int");
             return max_value;
         }
         return static_cast<ToFieldType>(v);
@@ -369,7 +369,7 @@ struct TiDBConvertToInteger
         }
         if (v > std::numeric_limits<ToFieldType>::max() || v < std::numeric_limits<ToFieldType>::min())
         {
-            context.getDAGContext()->handleOverflowError("cast decimal as int", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("cast decimal as int");
             if (v > 0)
                 return std::numeric_limits<ToFieldType>::max();
             return std::numeric_limits<ToFieldType>::min();
@@ -476,7 +476,7 @@ struct TiDBConvertToInteger
         {
             auto [value, err] = toUInt<T>(int_string);
             if (err == OVERFLOW_ERR)
-                context.getDAGContext()->handleOverflowError("cast str as int", Errors::Types::Truncated);
+                context.getDAGContext()->handleOverflowError("cast str as int");
             return static_cast<T>(value);
         }
         else
@@ -484,7 +484,7 @@ struct TiDBConvertToInteger
             /// TODO: append warning CastAsSignedOverflow if try to cast negative value to unsigned
             auto [value, err] = toInt<T>(int_string);
             if (err == OVERFLOW_ERR)
-                context.getDAGContext()->handleOverflowError("cast str as int", Errors::Types::Truncated);
+                context.getDAGContext()->handleOverflowError("cast str as int");
             return static_cast<T>(value);
         }
     }
@@ -632,12 +632,12 @@ struct TiDBConvertToFloat
             value = std::round(value) / shift;
             if (value > max_f)
             {
-                context.getDAGContext()->handleOverflowError("cast as real", Errors::Types::Truncated);
+                context.getDAGContext()->handleOverflowError("cast as real");
                 value = max_f;
             }
             if (value < -max_f)
             {
-                context.getDAGContext()->handleOverflowError("cast as real", Errors::Types::Truncated);
+                context.getDAGContext()->handleOverflowError("cast as real");
                 value = -max_f;
             }
         }
@@ -645,7 +645,7 @@ struct TiDBConvertToFloat
         {
             if (value < 0)
             {
-                context.getDAGContext()->handleOverflowError("cast as real", Errors::Types::Truncated);
+                context.getDAGContext()->handleOverflowError("cast as real");
                 value = 0;
             }
         }
@@ -743,12 +743,12 @@ struct TiDBConvertToFloat
         Float64 f = strtod(float_string.data, nullptr);
         if (f == std::numeric_limits<Float64>::infinity())
         {
-            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value");
             return std::numeric_limits<Float64>::max();
         }
         if (f == -std::numeric_limits<double>::infinity())
         {
-            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("Truncated incorrect DOUBLE value");
             return -std::numeric_limits<Float64>::max();
         }
         return produceTargetFloat64(f, need_truncate, shift, max_f, context);
@@ -981,7 +981,7 @@ struct TiDBConvertToDecimal
         auto max_value = DecimalMaxValue::get(prec);
         if (value > static_cast<Float64>(max_value))
         {
-            context.getDAGContext()->handleOverflowError("cast real to decimal", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("cast real to decimal");
             if (!neg)
                 return static_cast<UType>(max_value);
             else
@@ -1116,7 +1116,7 @@ struct TiDBConvertToDecimal
             if (err == OVERFLOW_ERR || frac_offset_by_exponent > std::numeric_limits<Int32>::max() / 2
                 || frac_offset_by_exponent < std::numeric_limits<Int32>::min() / 2)
             {
-                context.getDAGContext()->handleOverflowError("cast string as decimal", Errors::Types::Truncated);
+                context.getDAGContext()->handleOverflowError("cast string as decimal");
                 if (decimal_parts.exp_part.data[0] == '-')
                     return static_cast<UType>(0);
                 else
@@ -1146,7 +1146,7 @@ struct TiDBConvertToDecimal
             v = v * 10 + decimal_parts.int_part.data[pos] - '0';
             if (v > max_value)
             {
-                context.getDAGContext()->handleOverflowError("cast string as decimal", Errors::Types::Truncated);
+                context.getDAGContext()->handleOverflowError("cast string as decimal");
                 return static_cast<UType>(is_negative ? -max_value : max_value);
             }
             current_scale++;
@@ -1178,7 +1178,7 @@ struct TiDBConvertToDecimal
                 v = v * 10 + decimal_parts.frac_part.data[pos] - '0';
                 if (v > max_value)
                 {
-                    context.getDAGContext()->handleOverflowError("cast string as decimal", Errors::Types::Truncated);
+                    context.getDAGContext()->handleOverflowError("cast string as decimal");
                     return static_cast<UType>(is_negative ? -max_value : max_value);
                 }
                 current_scale++;
@@ -1197,9 +1197,7 @@ struct TiDBConvertToDecimal
                     v *= 10;
                     if (v > max_value)
                     {
-                        context.getDAGContext()->handleOverflowError(
-                            "cast string as decimal",
-                            Errors::Types::Truncated);
+                        context.getDAGContext()->handleOverflowError("cast string as decimal");
                         return static_cast<UType>(is_negative ? -max_value : max_value);
                     }
                     current_scale++;
@@ -1209,7 +1207,7 @@ struct TiDBConvertToDecimal
 
         if (v > max_value)
         {
-            context.getDAGContext()->handleOverflowError("cast string as decimal", Errors::Types::Truncated);
+            context.getDAGContext()->handleOverflowError("cast string as decimal");
             return static_cast<UType>(is_negative ? -max_value : max_value);
         }
         return static_cast<UType>(is_negative ? -v : v);
@@ -1361,7 +1359,7 @@ struct TiDBConvertToDecimal
         {
             if (to_value > max_value || to_value < -max_value)
             {
-                context.getDAGContext()->handleOverflowError(msg, Errors::Types::Truncated);
+                context.getDAGContext()->handleOverflowError(msg);
                 if (to_value > 0)
                     return static_cast<ReturnType>(max_value);
                 else

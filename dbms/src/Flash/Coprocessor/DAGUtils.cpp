@@ -49,6 +49,14 @@ const std::unordered_map<tipb::ExprType, String> window_func_map({
     {tipb::ExprType::LastValue, "last_value"},
 });
 
+const std::unordered_map<tipb::ExprType, String> agg_func_map_for_window({
+    {tipb::ExprType::Count, "count"},
+    {tipb::ExprType::Sum, "sum"},
+    {tipb::ExprType::Avg, "avg"},
+    {tipb::ExprType::Min, "min_for_window"},
+    {tipb::ExprType::Max, "max_for_window"},
+});
+
 const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::Count, "count"},
     {tipb::ExprType::Sum, "sum"},
@@ -57,7 +65,7 @@ const std::unordered_map<tipb::ExprType, String> agg_func_map({
     {tipb::ExprType::First, "first_row"},
     {tipb::ExprType::ApproxCountDistinct, uniq_raw_res_name},
     {tipb::ExprType::GroupConcat, "groupArray"},
-    //{tipb::ExprType::Avg, ""},
+    {tipb::ExprType::Avg, "avg"}, // Only used in aggregation in window function
     //{tipb::ExprType::Agg_BitAnd, ""},
     //{tipb::ExprType::Agg_BitOr, ""},
     //{tipb::ExprType::Agg_BitXor, ""},
@@ -309,10 +317,10 @@ const std::unordered_map<tipb::ScalarFuncSig, String> scalar_func_map({
     {tipb::ScalarFuncSig::Radians, "radians"},
     {tipb::ScalarFuncSig::Sin, "sin"},
     {tipb::ScalarFuncSig::Tan, "tan"},
-    {tipb::ScalarFuncSig::TruncateInt, "trunc"},
-    {tipb::ScalarFuncSig::TruncateReal, "trunc"},
-    //{tipb::ScalarFuncSig::TruncateDecimal, "cast"},
-    {tipb::ScalarFuncSig::TruncateUint, "trunc"},
+    {tipb::ScalarFuncSig::TruncateInt, "tidbTruncateWithFrac"},
+    {tipb::ScalarFuncSig::TruncateReal, "tidbTruncateWithFrac"},
+    {tipb::ScalarFuncSig::TruncateDecimal, "tidbTruncateWithFrac"},
+    {tipb::ScalarFuncSig::TruncateUint, "tidbTruncateWithFrac"},
 
     {tipb::ScalarFuncSig::LogicalAnd, "and"},
     {tipb::ScalarFuncSig::LogicalOr, "or"},
@@ -776,6 +784,33 @@ const String & getAggFunctionName(const tipb::Expr & expr)
         auto it = agg_func_map.find(expr.tp());
         if (it != agg_func_map.end())
             return it->second;
+    }
+
+    throw TiFlashException(
+        Errors::Coprocessor::Unimplemented,
+        "{}(distinct={}) is not supported.",
+        tipb::ExprType_Name(expr.tp()),
+        expr.has_distinct());
+}
+
+const String & getAggFunctionNameForWindow(const tipb::Expr & expr, bool need_decrease)
+{
+    if (expr.has_distinct())
+        throw Exception("Aggregation function in window does not support distinct");
+    else
+    {
+        if (need_decrease)
+        {
+            auto it = agg_func_map_for_window.find(expr.tp());
+            if (it != agg_func_map_for_window.end())
+                return it->second;
+        }
+        else
+        {
+            auto it = agg_func_map.find(expr.tp());
+            if (it != agg_func_map.end())
+                return it->second;
+        }
     }
 
     throw TiFlashException(

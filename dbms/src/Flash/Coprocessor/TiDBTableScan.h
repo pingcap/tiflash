@@ -44,8 +44,11 @@ public:
     int getMaxWaitTimeMs() const { return max_wait_time_ms; }
 
     const google::protobuf::RepeatedPtrField<tipb::Expr> & getPushedDownFilters() const { return pushed_down_filters; }
+    const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & getUsedIndexes() const { return used_indexes; }
 
     const tipb::ANNQueryInfo & getANNQueryInfo() const { return ann_query_info; }
+
+    const tipb::FTSQueryInfo & getFTSQueryInfo() const { return fts_query_info; }
 
 private:
     const tipb::Executor * table_scan;
@@ -67,7 +70,10 @@ private:
     /// They will be executed on Storage layer.
     const google::protobuf::RepeatedPtrField<tipb::Expr> pushed_down_filters;
 
+    const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> used_indexes;
+
     const tipb::ANNQueryInfo ann_query_info;
+    const tipb::FTSQueryInfo fts_query_info;
 
     bool keep_order;
     bool is_fast_scan;

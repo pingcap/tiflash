@@ -185,19 +185,21 @@ void ExecutorTest::executeExecutor(
     const std::shared_ptr<tipb::DAGRequest> & request,
     std::function<::testing::AssertionResult(const ColumnsWithTypeAndName &)> assert_func)
 {
-    WRAP_FOR_TEST_BEGIN
-    std::vector<size_t> concurrencies{1, 2, 10};
+    std::vector<size_t> concurrencies{1, 10};
     for (auto concurrency : concurrencies)
     {
-        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
+        std::vector<size_t> block_sizes{1, 2, 10, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));
             auto res = executeStreams(request, concurrency);
-            ASSERT_TRUE(assert_func(res)) << testInfoMsg(request, enable_pipeline, concurrency, block_size);
+            ASSERT_TRUE(assert_func(res)) << testInfoMsg(
+                request,
+                context.context->getSettingsRef().enable_resource_control,
+                concurrency,
+                block_size);
         }
     }
-    WRAP_FOR_TEST_END
 }
 
 void ExecutorTest::checkBlockSorted(
@@ -211,7 +213,7 @@ void ExecutorTest::checkBlockSorted(
     for (auto concurrency : concurrencies)
     {
         auto expected_res = executeStreams(request, concurrency);
-        std::vector<size_t> block_sizes{1, 2, DEFAULT_BLOCK_SIZE};
+        std::vector<size_t> block_sizes{1, 2, 10, DEFAULT_BLOCK_SIZE};
         for (auto block_size : block_sizes)
         {
             context.context->setSetting("max_block_size", Field(static_cast<UInt64>(block_size)));

@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #include <Debug/dbgTools.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/MultiRaft/RegionsRangeIndex.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/tests/kvstore_helper.h>
 
 #include <regex>
@@ -21,6 +23,8 @@
 
 namespace DB::tests
 {
+
+using namespace RegionBench;
 
 class RegionKVStoreOldTest : public KVStoreTestBase
 {
@@ -50,7 +54,7 @@ try
     {
         // test CompactLog
         auto region = kvs.getRegion(1);
-        kvs.setRegionCompactLogConfig(1000, 1000, 0, 512);
+        kvs.debugGetConfigMut().debugSetCompactLogConfig(1000, 1000, 0, 512);
 
         raft_cmdpb::AdminRequest request;
         request.mutable_compact_log();
@@ -133,7 +137,7 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             const std::atomic_size_t terminate_signals_counter{};
             std::thread t([&]() {
                 notifier.wake();
-                WaitCheckRegionReadyImpl(ctx.getTMTContext(), kvs, terminate_signals_counter, 1 / 1000.0, 20, 20 * 60);
+                WaitCheckRegionReadyImpl(kvs, terminate_signals_counter, 10 * 1000, 1 / 1000.0, 20, 20 * 60);
             });
             SCOPE_EXIT({
                 t.join();
@@ -162,13 +166,7 @@ TEST_F(RegionKVStoreOldTest, ReadIndex)
             const std::atomic_size_t terminate_signals_counter{};
             std::thread t([&]() {
                 notifier.wake();
-                WaitCheckRegionReadyImpl(
-                    ctx.getTMTContext(),
-                    kvs,
-                    terminate_signals_counter,
-                    1 / 1000.0,
-                    2 / 1000.0,
-                    5 / 1000.0);
+                WaitCheckRegionReadyImpl(kvs, terminate_signals_counter, 10 * 1000, 1 / 1000.0, 2 / 1000.0, 5 / 1000.0);
             });
             SCOPE_EXIT({ t.join(); });
             ASSERT_EQ(notifier.blockedWaitFor(std::chrono::milliseconds(1000 * 3600)), AsyncNotifier::Status::Normal);
@@ -328,22 +326,26 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
     {
         auto region = kvs.getRegion(1);
         // row with handle_id == 3
-        region->insert(
+        region->insertFromSnap(
+            tmt,
             "lock",
             RecordKVFormat::genKey(table_id, 3),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-        region->insert("default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
-        region->insert(
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
+        region->insertFromSnap(
+            tmt,
             "write",
             RecordKVFormat::genKey(table_id, 3, 8),
             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
         // row with handle_id == 8
-        region->insert(
+        region->insertFromSnap(
+            tmt,
             "lock",
             RecordKVFormat::genKey(table_id, 8),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-        region->insert("default", RecordKVFormat::genKey(table_id, 8, 5), TiKVValue("value1"));
-        region->insert(
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 8, 5), TiKVValue("value1"));
+        region->insertFromSnap(
+            tmt,
             "write",
             RecordKVFormat::genKey(table_id, 8, 8),
             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
@@ -391,21 +393,25 @@ static void testRaftSplit(KVStore & kvs, TMTContext & tmt, std::unique_ptr<MockR
 
         auto table_id = 1;
         auto region = kvs.getRegion(1);
-        region->insert(
+        region->insertFromSnap(
+            tmt,
             "lock",
             RecordKVFormat::genKey(table_id, 3),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-        region->insert("default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
-        region->insert(
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
+        region->insertFromSnap(
+            tmt,
             "write",
             RecordKVFormat::genKey(table_id, 3, 8),
             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
-        region->insert(
+        region->insertFromSnap(
+            tmt,
             "lock",
             RecordKVFormat::genKey(table_id, 8),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-        region->insert("default", RecordKVFormat::genKey(table_id, 8, 5), TiKVValue("value1"));
-        region->insert(
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 8, 5), TiKVValue("value1"));
+        region->insertFromSnap(
+            tmt,
             "write",
             RecordKVFormat::genKey(table_id, 8, 8),
             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
@@ -456,12 +462,14 @@ void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContex
         {
             // Region 1 with handle_id == 6
             auto region = kvs.getRegion(target_region_id);
-            region->insert(
+            region->insertFromSnap(
+                tmt,
                 "lock",
                 RecordKVFormat::genKey(table_id, 6),
                 RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-            region->insert("default", RecordKVFormat::genKey(table_id, 6, 5), TiKVValue("value1"));
-            region->insert(
+            region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 6, 5), TiKVValue("value1"));
+            region->insertFromSnap(
+                tmt,
                 "write",
                 RecordKVFormat::genKey(table_id, 6, 8),
                 RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
@@ -470,12 +478,14 @@ void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContex
         {
             // Region 7 with handle_id == 2
             auto region = kvs.getRegion(source_region_id);
-            region->insert(
+            region->insertFromSnap(
+                tmt,
                 "lock",
                 RecordKVFormat::genKey(table_id, 2),
                 RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20));
-            region->insert("default", RecordKVFormat::genKey(table_id, 2, 5), TiKVValue("value1"));
-            region->insert(
+            region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 2, 5), TiKVValue("value1"));
+            region->insertFromSnap(
+                tmt,
                 "write",
                 RecordKVFormat::genKey(table_id, 2, 8),
                 RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
@@ -572,11 +582,7 @@ void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContex
             // add 7 back
             auto task_lock = kvs.genTaskLock();
             auto lock = kvs.genRegionMgrWriteLock(task_lock);
-            auto region = makeRegion(
-                source_region_id,
-                RecordKVFormat::genKey(table_id, 0),
-                RecordKVFormat::genKey(table_id, 5),
-                kvs.getProxyHelper());
+            auto region = makeRegionForTable(source_region_id, table_id, 0, 5, kvs.getProxyHelper());
             lock.regions.emplace(source_region_id, region);
             lock.index.add(region);
         }
@@ -608,8 +614,9 @@ void RegionKVStoreOldTest::testRaftMerge(Context & ctx, KVStore & kvs, TMTContex
 
 TEST_F(RegionKVStoreOldTest, RegionReadWrite)
 {
-    auto ctx = TiFlashTestEnv::getGlobalContext();
+    auto & ctx = TiFlashTestEnv::getGlobalContext();
     TableID table_id = 100;
+    auto & tmt = ctx.getTMTContext();
     KVStore & kvs = getKVS();
     UInt64 region_id = 1;
     proxy_instance->bootstrapWithRegion(
@@ -619,14 +626,6 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         std::make_optional(
             std::make_pair(RecordKVFormat::genKey(table_id, 0), RecordKVFormat::genKey(table_id, 1000))));
     auto region = kvs.getRegion(region_id);
-    {
-        // Test create RegionMeta.
-        auto meta = RegionMeta(
-            createPeer(2, true),
-            createRegionInfo(666, RecordKVFormat::genKey(0, 0), RecordKVFormat::genKey(0, 1000)),
-            initialApplyState());
-        ASSERT_EQ(meta.peerId(), 2);
-    }
     {
         // Test GenRegionReadIndexReq.
         ASSERT_TRUE(region->checkIndex(5));
@@ -640,12 +639,14 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
     }
     {
         // Test read committed and lock with CommittedScanner.
-        region->insert(
+        region->insertFromSnap(
+            tmt,
             "lock",
             RecordKVFormat::genKey(table_id, 3),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::CFModifyFlag::PutFlag, "PK", 3, 20, nullptr, 5));
-        region->insert("default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
-        region->insert(
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
+        region->insertFromSnap(
+            tmt,
             "write",
             RecordKVFormat::genKey(table_id, 3, 8),
             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
@@ -686,7 +687,7 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         }
         ASSERT_EQ(0, region->writeCFCount());
         {
-            region->remove("lock", RecordKVFormat::genKey(table_id, 3));
+            region->removeDebug("lock", RecordKVFormat::genKey(table_id, 3));
             auto iter = region->createCommittedScanner(true, true);
             auto lock = iter.getLockInfo({100, nullptr});
             ASSERT_EQ(lock, nullptr);
@@ -694,7 +695,8 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         region->clearAllData();
     }
     {
-        region->insert(
+        region->insertFromSnap(
+            tmt,
             "lock",
             RecordKVFormat::genKey(table_id, 3),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::LockType::Lock, "PK", 3, 20, nullptr, 5));
@@ -706,7 +708,8 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         region->clearAllData();
     }
     {
-        region->insert(
+        region->insertFromSnap(
+            tmt,
             "lock",
             RecordKVFormat::genKey(table_id, 3),
             RecordKVFormat::encodeLockCfValue(RecordKVFormat::LockType::Pessimistic, "PK", 3, 20, nullptr, 5));
@@ -719,7 +722,8 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
     }
     {
         // Test duplicate and tryCompactionFilter
-        region->insert(
+        region->insertFromSnap(
+            tmt,
             "write",
             RecordKVFormat::genKey(table_id, 3, 8),
             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
@@ -729,7 +733,8 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
         try
         {
             // insert duplicate records
-            region->insert(
+            region->insertFromSnap(
+                tmt,
                 "write",
                 RecordKVFormat::genKey(table_id, 3, 8),
                 RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::PutFlag, 5));
@@ -748,12 +753,13 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
     }
     {
         // Test read and delete committed Del record.
-        region->insert(
+        region->insertFromSnap(
+            tmt,
             "write",
             RecordKVFormat::genKey(table_id, 4, 8),
             RecordKVFormat::encodeWriteCfValue(RecordKVFormat::CFModifyFlag::DelFlag, 5));
         ASSERT_EQ(1, region->writeCFCount());
-        region->remove("write", RecordKVFormat::genKey(table_id, 4, 8));
+        region->removeDebug("write", RecordKVFormat::genKey(table_id, 4, 8));
         ASSERT_EQ(1, region->writeCFCount());
         {
             std::optional<RegionDataReadInfoList> data_list_read = ReadRegionCommitCache(region, true);
@@ -765,12 +771,12 @@ TEST_F(RegionKVStoreOldTest, RegionReadWrite)
     }
     {
         ASSERT_EQ(0, region->dataSize());
-        region->insert("default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
+        region->insertFromSnap(tmt, "default", RecordKVFormat::genKey(table_id, 3, 5), TiKVValue("value1"));
         ASSERT_LT(0, region->dataSize());
-        region->remove("default", RecordKVFormat::genKey(table_id, 3, 5));
+        region->removeDebug("default", RecordKVFormat::genKey(table_id, 3, 5));
         ASSERT_EQ(0, region->dataSize());
         // remove duplicate records
-        region->remove("default", RecordKVFormat::genKey(table_id, 3, 5));
+        region->removeDebug("default", RecordKVFormat::genKey(table_id, 3, 5));
         ASSERT_EQ(0, region->dataSize());
     }
 }
@@ -878,7 +884,7 @@ TEST_F(RegionKVStoreOldTest, Writes)
                     "7480000000000000FF015F728000000000FF00091D0000000000FAFFFFFFFFFFFFFFFE");
             }
             ASSERT_EQ(kvs.getRegion(1)->dataInfo(), "[lock 1 default 1 ]");
-            kvs.getRegion(1)->remove("default", RecordKVFormat::genKey(1, 2333, 1));
+            kvs.getRegion(1)->removeDebug("default", RecordKVFormat::genKey(1, 2333, 1));
             try
             {
                 raft_cmdpb::RaftCmdRequest request;
@@ -1094,11 +1100,7 @@ try
     });
     // Initially region_19 range is [0, 10000)
     {
-        auto region = makeRegion(
-            region_id,
-            RecordKVFormat::genKey(table_id, 0),
-            RecordKVFormat::genKey(table_id, 10000),
-            kvs.getProxyHelper());
+        auto region = makeRegionForTable(region_id, table_id, 0, 10000, kvs.getProxyHelper());
         // Fill data from 20 to 100.
         GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20, 100, 0);
         std::vector<SSTView> sst_views{
@@ -1136,11 +1138,7 @@ try
     }
     // Later, its range is changed to [20000, 50000)
     {
-        auto region = makeRegion(
-            region_id,
-            RecordKVFormat::genKey(table_id, 20000),
-            RecordKVFormat::genKey(table_id, 50000),
-            kvs.getProxyHelper());
+        auto region = makeRegionForTable(region_id, table_id, 20000, 50000, kvs.getProxyHelper());
         // Fill data from 20100 to 20200.
         GenMockSSTData(DMTestEnv::getMinimalTableInfo(table_id), table_id, region_id_str, 20100, 20200, 0);
         std::vector<SSTView> sst_views{
@@ -1225,11 +1223,7 @@ try
 
     TableID table_id = 1;
     auto region_id = 19;
-    auto region = makeRegion(
-        region_id,
-        RecordKVFormat::genKey(table_id, 50),
-        RecordKVFormat::genKey(table_id, 60),
-        kvs.getProxyHelper());
+    auto region = makeRegionForTable(region_id, table_id, 50, 60, kvs.getProxyHelper());
 
     {
         // Prepare a region with some kvs
@@ -1285,7 +1279,7 @@ try
                 e.message(),
                 fmt::format(
                     "try to apply with older index, region_id={} applied_index={} new_index={}: (while "
-                    "applyPreHandledSnapshot region_id={} keyspace_id=4294967295 table_id={})",
+                    "applyPreHandledSnapshot region_id={} keyspace=4294967295 table_id={})",
                     region_id,
                     8,
                     6,
@@ -1322,11 +1316,7 @@ try
         // Snapshot will be rejected if region overlaps with existing Region.
         {
             // create an empty region 22, range=[50,100)
-            auto region = makeRegion(
-                22,
-                RecordKVFormat::genKey(table_id, 50),
-                RecordKVFormat::genKey(table_id, 100),
-                kvs.getProxyHelper());
+            auto region = makeRegionForTable(22, table_id, 50, 100, kvs.getProxyHelper());
             auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 9, 5, std::nullopt, ctx.getTMTContext());
             kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
                 RegionPtrWithSnapshotFiles{region, std::move(prehandle_result.ingest_ids)},
@@ -1339,11 +1329,7 @@ try
         try
         {
             // try apply snapshot to region 20, range=[50, 100) that is overlapped with region 22, should be rejected
-            auto region = makeRegion(
-                20,
-                RecordKVFormat::genKey(table_id, 50),
-                RecordKVFormat::genKey(table_id, 100),
-                kvs.getProxyHelper());
+            auto region = makeRegionForTable(20, table_id, 50, 100, kvs.getProxyHelper());
             auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 9, 5, std::nullopt, ctx.getTMTContext());
             kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
                 RegionPtrWithSnapshotFiles{region, std::move(prehandle_result.ingest_ids)},
@@ -1363,11 +1349,7 @@ try
 
         try
         {
-            auto region = makeRegion(
-                20,
-                RecordKVFormat::genKey(table_id, 50),
-                RecordKVFormat::genKey(table_id, 100),
-                kvs.getProxyHelper());
+            auto region = makeRegionForTable(20, table_id, 50, 100, kvs.getProxyHelper());
             // preHandleSnapshotToFiles will assert proxy_ptr is not null.
             auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
             proxy_helper->proxy_ptr.inner = nullptr;
@@ -1389,11 +1371,7 @@ try
             s.set_state(::raft_serverpb::PeerState::Tombstone);
             s;
         }));
-        auto region = makeRegion(
-            20,
-            RecordKVFormat::genKey(table_id, 50),
-            RecordKVFormat::genKey(table_id, 100),
-            kvs.getProxyHelper());
+        auto region = makeRegionForTable(20, table_id, 50, 100, kvs.getProxyHelper());
         auto prehandle_result = kvs.preHandleSnapshotToFiles(region, {}, 10, 5, std::nullopt, ctx.getTMTContext());
         kvs.checkAndApplyPreHandledSnapshot<RegionPtrWithSnapshotFiles>(
             RegionPtrWithSnapshotFiles{region, std::move(prehandle_result.ingest_ids)},
@@ -1429,8 +1407,7 @@ try
     auto region_id_str = std::to_string(region_id);
     // Prepare a region with some kvs
     {
-        auto region
-            = makeRegion(region_id, RecordKVFormat::genKey(1, 50), RecordKVFormat::genKey(1, 60), kvs.getProxyHelper());
+        auto region = makeRegionForTable(region_id, 1, 50, 60, kvs.getProxyHelper());
         auto & mmp = MockSSTReader::getMockSSTData();
         MockSSTReader::getMockSSTData().clear();
         MockSSTReader::Data default_kv_list;
@@ -1528,19 +1505,19 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
         const auto & root_map = region_index.getRoot();
         ASSERT_EQ(root_map.size(), 2); // start and end all equals empty
 
-        region_index.add(makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 10)));
+        region_index.add(makeRegionForTable(1, 1, 0, 10));
 
         ASSERT_EQ(root_map.begin()->second.region_map.size(), 0);
 
-        region_index.add(makeRegion(2, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 3)));
-        region_index.add(makeRegion(3, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 1)));
+        region_index.add(makeRegionForTable(2, 1, 0, 3));
+        region_index.add(makeRegionForTable(3, 1, 0, 1));
 
         auto res = region_index.findByRangeOverlap(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
         ASSERT_EQ(res.size(), 3);
         auto res2 = region_index.findByRangeChecked(RegionRangeKeys::makeComparableKeys(TiKVKey(""), TiKVKey("")));
         ASSERT_TRUE(std::holds_alternative<RegionsRangeIndex::OverlapInfo>(res2));
 
-        region_index.add(makeRegion(4, RecordKVFormat::genKey(1, 1), RecordKVFormat::genKey(1, 4)));
+        region_index.add(makeRegionForTable(4, 1, 1, 4));
 
         // -inf,0,1,3,4,10,inf
         ASSERT_EQ(root_map.size(), 7);
@@ -1606,7 +1583,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
             ASSERT_TRUE(std::regex_match(res, msg_reg));
         }
 
-        region_index.add(makeRegion(2, RecordKVFormat::genKey(1, 3), RecordKVFormat::genKey(1, 5)));
+        region_index.add(makeRegionForTable(2, 1, 3, 5));
         try
         {
             region_index.remove(
@@ -1665,7 +1642,7 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
 
         try
         {
-            region_index.add(makeRegion(6, RecordKVFormat::genKey(6, 6), RecordKVFormat::genKey(6, 6)));
+            region_index.add(makeRegionForTable(6, 6, 6, 6));
             assert(false);
         }
         catch (Exception & e)
@@ -1678,9 +1655,9 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
 
         region_index.clear();
 
-        region_index.add(makeRegion(1, RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 1)));
-        region_index.add(makeRegion(2, RecordKVFormat::genKey(1, 1), RecordKVFormat::genKey(1, 2)));
-        region_index.add(makeRegion(3, RecordKVFormat::genKey(1, 2), RecordKVFormat::genKey(1, 3)));
+        region_index.add(makeRegionForTable(1, 1, 0, 1));
+        region_index.add(makeRegionForTable(2, 1, 1, 2));
+        region_index.add(makeRegionForTable(3, 1, 2, 3));
 
         ASSERT_EQ(root_map.size(), 6);
         region_index.remove(
@@ -1700,30 +1677,31 @@ TEST_F(RegionKVStoreOldTest, RegionRange)
     }
     // Test region range with merge.
     {
+        using RegionBench::createMetaRegionCommonHandle;
         {
             // Compute `source_at_left` by region range.
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createRegionInfo(1, "x", ""),
-                    createRegionInfo(1000, "", "x"))
+                    createMetaRegionCommonHandle(1, "x", ""),
+                    createMetaRegionCommonHandle(1000, "", "x"))
                     .source_at_left,
                 false);
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createRegionInfo(1, "", "x"),
-                    createRegionInfo(1000, "x", ""))
+                    createMetaRegionCommonHandle(1, "", "x"),
+                    createMetaRegionCommonHandle(1000, "x", ""))
                     .source_at_left,
                 true);
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createRegionInfo(1, "x", "y"),
-                    createRegionInfo(1000, "y", "z"))
+                    createMetaRegionCommonHandle(1, "x", "y"),
+                    createMetaRegionCommonHandle(1000, "y", "z"))
                     .source_at_left,
                 true);
             ASSERT_EQ(
                 MetaRaftCommandDelegate::computeRegionMergeResult(
-                    createRegionInfo(1, "y", "z"),
-                    createRegionInfo(1000, "x", "y"))
+                    createMetaRegionCommonHandle(1, "y", "z"),
+                    createMetaRegionCommonHandle(1000, "x", "y"))
                     .source_at_left,
                 false);
         }

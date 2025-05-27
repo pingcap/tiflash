@@ -60,6 +60,9 @@ public:
     static constexpr size_t NUM_BUCKETS = 1ULL << BITS_FOR_BUCKET;
     static constexpr size_t MAX_BUCKET = NUM_BUCKETS - 1;
 
+    static constexpr bool is_string_hash_map = false;
+    static constexpr bool is_two_level = true;
+
     size_t hash(const Key & x) const { return Hash::operator()(x); }
 
     /// NOTE Bad for hash tables with more than 2^32 cells.
@@ -285,6 +288,12 @@ public:
         impls[buck].emplace(key_holder, it, inserted, hash_value);
     }
 
+    void ALWAYS_INLINE prefetch(size_t hashval) const
+    {
+        size_t buck = getBucketFromHash(hashval);
+        impls[buck].prefetch(hashval);
+    }
+
     LookupResult ALWAYS_INLINE find(Key x, size_t hash_value)
     {
         size_t buck = getBucketFromHash(hash_value);
@@ -352,6 +361,13 @@ public:
         return true;
     }
 
+    size_t getBufferSizeInCells() const
+    {
+        size_t res = 0;
+        for (const auto & impl : impls)
+            res += impl.getBufferSizeInCells();
+        return res;
+    }
     size_t getBufferSizeInBytes() const
     {
         size_t res = 0;

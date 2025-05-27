@@ -12,16 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockKVStore/MockUtils.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/Context.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/LearnerReadWorker.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/Types.h>
-#include <Storages/KVStore/tests/region_helper.h>
 #include <Storages/PathPool.h>
 #include <Storages/RegionQueryInfo.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <kvproto/kvrpcpb.pb.h>
 
 namespace DB::tests
@@ -76,34 +76,23 @@ try
 
     const TableID table_id = 100;
 
+    using RegionBench::makeRegionForTable;
     LearnerReadSnapshot snapshot{
         {
             region_id_200,
-            RegionLearnerReadSnapshot(makeRegion(
-                region_id_200,
-                RecordKVFormat::genKey(table_id, 0),
-                RecordKVFormat::genKey(table_id, 10000))),
+            RegionLearnerReadSnapshot(makeRegionForTable(region_id_200, table_id, 0, 10000)),
         },
         {
             region_id_201,
-            RegionLearnerReadSnapshot(makeRegion(
-                region_id_201,
-                RecordKVFormat::genKey(table_id, 10000),
-                RecordKVFormat::genKey(table_id, 20000))),
+            RegionLearnerReadSnapshot(makeRegionForTable(region_id_201, table_id, 10000, 20000)),
         },
         {
             region_id_202,
-            RegionLearnerReadSnapshot(makeRegion(
-                region_id_202,
-                RecordKVFormat::genKey(table_id, 20000),
-                RecordKVFormat::genKey(table_id, 30000))),
+            RegionLearnerReadSnapshot(makeRegionForTable(region_id_202, table_id, 20000, 30000)),
         },
         {
             region_id_203,
-            RegionLearnerReadSnapshot(makeRegion(
-                region_id_203,
-                RecordKVFormat::genKey(table_id, 30000),
-                RecordKVFormat::genKey(table_id, 40000))),
+            RegionLearnerReadSnapshot(makeRegionForTable(region_id_203, table_id, 30000, 40000)),
         },
     };
 
@@ -125,8 +114,8 @@ try
     // region_202 has no safe ts info, can not stale read
     // region_203 read index cache exist in the `mvcc_query_info`
     RegionTable region_table(global_ctx);
-    region_table.updateSafeTS(region_id_200, /*leader_safe_ts*/ 10005, /*self_safe_ts*/ 10005);
-    region_table.updateSafeTS(region_id_201, /*leader_safe_ts*/ 9995, /*self_safe_ts*/ 9995);
+    region_table.safeTsMgr().updateSafeTS(region_id_200, /*leader_safe_ts*/ 10005, /*self_safe_ts*/ 10005);
+    region_table.safeTsMgr().updateSafeTS(region_id_201, /*leader_safe_ts*/ 9995, /*self_safe_ts*/ 9995);
 
     RegionsReadIndexResult read_index_result;
     auto requests = buildBatchReadIndex(worker, region_table, snapshot, read_index_result);

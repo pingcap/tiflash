@@ -22,6 +22,7 @@
 #include <Storages/KVStore/BackgroundService.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/MultiRaft/RegionExecutionResult.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3GCManager.h>
@@ -39,14 +40,6 @@
 
 namespace DB
 {
-// default batch-read-index timeout is 10_000ms.
-extern const uint64_t DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS = 10 * 1000;
-// default wait-index timeout is 5 * 60_000ms.
-extern const uint64_t DEFAULT_WAIT_INDEX_TIMEOUT_MS = 5 * 60 * 1000;
-
-const int64_t DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC = 20 * 60;
-
-const int64_t DEFAULT_READ_INDEX_WORKER_TICK_MS = 10;
 
 namespace
 {
@@ -158,10 +151,6 @@ TMTContext::TMTContext(
           context.getSettingsRef().task_scheduler_thread_soft_limit,
           context.getSettingsRef().task_scheduler_thread_hard_limit,
           context.getSettingsRef().task_scheduler_active_set_soft_limit)))
-    , batch_read_index_timeout_ms(DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS)
-    , wait_index_timeout_ms(DEFAULT_WAIT_INDEX_TIMEOUT_MS)
-    , read_index_worker_tick_ms(DEFAULT_READ_INDEX_WORKER_TICK_MS)
-    , wait_region_ready_timeout_sec(DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC)
     , raftproxy_config(raft_config)
 {
     startMonitorMPPTaskThread(mpp_task_manager);
@@ -414,43 +403,7 @@ void TMTContext::reloadConfig(const Poco::Util::AbstractConfiguration & config)
         && context.getSharedContextDisagg()->use_autoscaler)
         return;
 
-    // static constexpr const char * COMPACT_LOG_MIN_PERIOD = "flash.compact_log_min_period"; // disabled
-    static constexpr const char * COMPACT_LOG_MIN_ROWS = "flash.compact_log_min_rows";
-    static constexpr const char * COMPACT_LOG_MIN_BYTES = "flash.compact_log_min_bytes";
-    static constexpr const char * COMPACT_LOG_MIN_GAP = "flash.compact_log_min_gap";
-    static constexpr const char * EAGER_GC_LOG_GAP = "flash.eager_gc_log_gap";
-    static constexpr const char * BATCH_READ_INDEX_TIMEOUT_MS = "flash.batch_read_index_timeout_ms";
-    static constexpr const char * WAIT_INDEX_TIMEOUT_MS = "flash.wait_index_timeout_ms";
-    static constexpr const char * WAIT_REGION_READY_TIMEOUT_SEC = "flash.wait_region_ready_timeout_sec";
-    static constexpr const char * READ_INDEX_WORKER_TICK_MS = "flash.read_index_worker_tick_ms";
-
-    // default config about compact-log: period 120s, rows 40k, bytes 32MB.
-    getKVStore()->setRegionCompactLogConfig(
-        std::max(config.getUInt64(COMPACT_LOG_MIN_ROWS, 40 * 1024), 1),
-        std::max(config.getUInt64(COMPACT_LOG_MIN_BYTES, 32 * 1024 * 1024), 1),
-        std::max(config.getUInt64(COMPACT_LOG_MIN_GAP, 200), 1),
-        config.getUInt64(EAGER_GC_LOG_GAP, 512));
-    {
-        batch_read_index_timeout_ms
-            = config.getUInt64(BATCH_READ_INDEX_TIMEOUT_MS, DEFAULT_BATCH_READ_INDEX_TIMEOUT_MS);
-        wait_index_timeout_ms = config.getUInt64(WAIT_INDEX_TIMEOUT_MS, DEFAULT_WAIT_INDEX_TIMEOUT_MS);
-        wait_region_ready_timeout_sec = ({
-            int64_t t = config.getInt64(WAIT_REGION_READY_TIMEOUT_SEC, /*20min*/ DEFAULT_WAIT_REGION_READY_TIMEOUT_SEC);
-            t = t >= 0 ? t : std::numeric_limits<int64_t>::max(); // set -1 to wait infinitely
-            t;
-        });
-        read_index_worker_tick_ms = config.getUInt64(READ_INDEX_WORKER_TICK_MS, DEFAULT_READ_INDEX_WORKER_TICK_MS);
-    }
-    {
-        LOG_INFO(
-            Logger::get(),
-            "read-index timeout: {}ms; wait-index timeout: {}ms; wait-region-ready timeout: {}s; "
-            "read-index-worker-tick: {}ms",
-            batchReadIndexTimeout(),
-            waitIndexTimeout(),
-            waitRegionReadyTimeout(),
-            readIndexWorkerTick());
-    }
+    getKVStore()->reloadConfig(config);
 }
 
 bool TMTContext::checkShuttingDown(std::memory_order memory_order) const
@@ -476,27 +429,6 @@ void TMTContext::setStatusStopping()
 void TMTContext::setStatusTerminated()
 {
     store_status = StoreStatus::Terminated;
-}
-
-UInt64 TMTContext::batchReadIndexTimeout() const
-{
-    return batch_read_index_timeout_ms.load(std::memory_order_relaxed);
-}
-UInt64 TMTContext::waitIndexTimeout() const
-{
-    return wait_index_timeout_ms.load(std::memory_order_relaxed);
-}
-void TMTContext::debugSetWaitIndexTimeout(UInt64 timeout)
-{
-    return wait_index_timeout_ms.store(timeout, std::memory_order_relaxed);
-}
-Int64 TMTContext::waitRegionReadyTimeout() const
-{
-    return wait_region_ready_timeout_sec.load(std::memory_order_relaxed);
-}
-uint64_t TMTContext::readIndexWorkerTick() const
-{
-    return read_index_worker_tick_ms.load(std::memory_order_relaxed);
 }
 
 void TMTContext::debugSetKVStore(const KVStorePtr & new_kvstore)

@@ -1,0 +1,7 @@
+[workspace]
+members = ["clara", "clara_fts"]
+resolver = "2"
+
+[profile.release]
+debug = 1
+lto = "thin"

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Checksum.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <IO/Encryption/MockKeyManager.h>
 #include <IO/FileProvider/FileProvider.h>
 #include <Interpreters/Context.h>
@@ -28,12 +29,12 @@
 #include <Storages/Page/V3/Universal/UniversalPageId.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
+#include <Storages/Page/WriteBatchImpl.h>
 #include <Storages/PathPool.h>
 #include <TestUtils/MockDiskDelegator.h>
-#include <TestUtils/TiFlashTestEnv.h>
+#include <boost_wrapper/program_options.h>
 #include <common/types.h>
 
-#include <boost/program_options.hpp>
 #include <cstdint>
 #include <magic_enum.hpp>
 #include <unordered_set>
@@ -54,6 +55,7 @@ struct ControlOptions
         DISPLAY_WAL_ENTRIES = 5,
         DISPLAY_REGION_INFO = 6,
         DISPLAY_BLOB_DATA = 7,
+        DELETE_KVSTORE_REGION = 8,
     };
 
     std::vector<std::string> paths;
@@ -95,6 +97,7 @@ ControlOptions ControlOptions::parse(int argc, char ** argv)
  5 is dump entries in WAL log files
  6 is display all region info
  7 is display blob data (in hex)
+ 8 is delete regino in kvstore
 )") //
         ("show_entries",
          value<bool>()->default_value(true),
@@ -252,7 +255,7 @@ public:
         {
             if (options.is_imitative)
             {
-                auto context = Context::createGlobal();
+                auto context = Context::createGlobal(Context::ApplicationType::LOCAL);
                 getPageStorageV3Info(*context, options);
             }
             else
@@ -314,7 +317,10 @@ private:
         }
 
         // Other display mode need to restore ps instance
-        auto display = [](auto & mvcc_table_directory, auto & blob_store, const ControlOptions & opts) {
+        auto display = []([[maybe_unused]] auto & ps,
+                          auto & mvcc_table_directory,
+                          auto & blob_store,
+                          const ControlOptions & opts) {
             switch (opts.mode)
             {
             case ControlOptions::DisplayType::DISPLAY_SUMMARY_INFO:
@@ -378,6 +384,28 @@ private:
                 fmt::println("hex:{}", hex_data);
                 break;
             }
+            case ControlOptions::DisplayType::DELETE_KVSTORE_REGION:
+            {
+                if constexpr (std::is_same_v<Trait, u128::PageStorageControlV3Trait>)
+                {
+                    if (KVSTORE_NAMESPACE_ID != opts.namespace_id)
+                    {
+                        LOG_WARNING(
+                            DB::Logger::get(),
+                            "A valid KVStore namespace should with namespace id {}",
+                            KVSTORE_NAMESPACE_ID);
+                    }
+                    LOG_INFO(DB::Logger::get(), "Remove region, region_id={}", opts.page_id);
+                    WriteBatch wb(opts.namespace_id);
+                    wb.delPage(opts.page_id);
+                    ps.write(std::move(wb));
+                }
+                else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
+                {
+                    std::cout << "Do not support in Unips mode." << std::endl;
+                }
+                break;
+            }
             default:
                 std::cout << "Invalid display mode." << std::endl;
                 break;
@@ -390,7 +418,7 @@ private:
             ps.restore();
             auto & mvcc_table_directory = ps.page_directory->mvcc_table_directory;
             auto & blobstore = ps.blob_store;
-            display(mvcc_table_directory, blobstore, options);
+            display(ps, mvcc_table_directory, blobstore, options);
         }
         else if constexpr (std::is_same_v<Trait, universal::PageStorageControlV3Trait>)
         {
@@ -398,7 +426,7 @@ private:
             ps->restore();
             auto & mvcc_table_directory = ps->page_directory->mvcc_table_directory;
             auto & blobstore = ps->blob_store;
-            display(mvcc_table_directory, *blobstore, options);
+            display(ps, mvcc_table_directory, *blobstore, options);
         }
 
         return 0;
@@ -455,6 +483,7 @@ private:
         return stats_info.toString();
     }
 
+    // mode 2 DISPLAY_DIRECTORY_INFO
     static String getDirectoryInfo(
         typename Trait::PageDirectory::MVCCMapType & mvcc_table_directory,
         bool show_entries,

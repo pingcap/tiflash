@@ -442,6 +442,15 @@ const ColumnsWithTypeAndName & Block::getColumnsWithTypeAndName() const
     return data;
 }
 
+NamesAndTypes Block::getNamesAndTypes() const
+{
+    NamesAndTypes res;
+
+    for (const auto & elem : data)
+        res.emplace_back(elem.name, elem.type);
+
+    return res;
+}
 
 NamesAndTypesList Block::getNamesAndTypesList() const
 {
@@ -732,6 +741,8 @@ void Block::swap(Block & other) noexcept
     std::swap(info, other.info);
     data.swap(other.data);
     index_by_name.swap(other.index_by_name);
+    std::swap(start_offset, other.start_offset);
+    std::swap(segment_row_id_col, other.segment_row_id_col);
     std::swap(rs_result, other.rs_result);
 }
 

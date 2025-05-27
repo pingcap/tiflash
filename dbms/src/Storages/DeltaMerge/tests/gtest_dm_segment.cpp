@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -132,6 +133,18 @@ protected:
     const ColumnDefinesPtr & tableColumns() const { return table_columns; }
 
     DMContext & dmContext() { return *dm_context; }
+
+    auto loadPackFilterResults(const SegmentSnapshotPtr & snap, const RowKeyRanges & ranges)
+    {
+        DMFilePackFilterResults results;
+        results.reserve(snap->stable->getDMFiles().size());
+        for (const auto & file : snap->stable->getDMFiles())
+        {
+            auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
+            results.push_back(pack_filter);
+        }
+        return results;
+    }
 
 protected:
     /// all these var lives as ref in dm_context
@@ -1085,16 +1098,28 @@ try
         // test built bitmap filter
         auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
         auto real_ranges = segment->shrinkRowKeyRanges({read_range});
-        auto bitmap_filter = segment->buildBitmapFilter( //
+        auto bitmap_filter_delta_index = segment->buildMVCCBitmapFilter( //
             dmContext(),
             segment_snap,
             real_ranges,
-            {},
+            loadPackFilterResults(segment_snap, real_ranges),
             std::numeric_limits<UInt64>::max(),
-            DEFAULT_BLOCK_SIZE);
+            DEFAULT_BLOCK_SIZE,
+            /*enable_version_chain*/ false);
+        auto bitmap_filter_version_chain = segment->buildMVCCBitmapFilter( //
+            dmContext(),
+            segment_snap,
+            real_ranges,
+            loadPackFilterResults(segment_snap, real_ranges),
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            /*enable_version_chain*/ true);
         // the bitmap only contains the overlapped packs of ColumnFileBig. So only 60 here.
-        ASSERT_EQ(bitmap_filter->size(), 60);
-        ASSERT_EQ(bitmap_filter->toDebugString(), "000000000011111111111111111111111111111111111111110000000000");
+        ASSERT_EQ(bitmap_filter_version_chain->size(), 60);
+        ASSERT_EQ(
+            bitmap_filter_version_chain->toDebugString(),
+            "000000000011111111111111111111111111111111111111110000000000");
+        ASSERT_EQ(*bitmap_filter_version_chain, *bitmap_filter_delta_index);
     }
 
     ColumnDefines cols_to_read{
@@ -1140,6 +1165,30 @@ try
         // write range [80, 90)
         Block block2 = DMTestEnv::prepareSimpleWriteBlock(80, 90, false);
         segment->write(dmContext(), std::move(block2));
+
+        // test built bitmap filter
+        auto segment_snap = segment->createSnapshot(dmContext(), false, CurrentMetrics::DT_SnapshotOfRead);
+        auto read_ranges = {RowKeyRange::newAll(false, 1)};
+        auto real_ranges = segment->shrinkRowKeyRanges(read_ranges);
+
+        auto bitmap_filter_delta_index = segment->buildMVCCBitmapFilter( //
+            dmContext(),
+            segment_snap,
+            real_ranges,
+            loadPackFilterResults(segment_snap, real_ranges),
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            /*enable_version_chain*/ false);
+        auto bitmap_filter_version_chain = segment->buildMVCCBitmapFilter( //
+            dmContext(),
+            segment_snap,
+            real_ranges,
+            loadPackFilterResults(segment_snap, real_ranges),
+            std::numeric_limits<UInt64>::max(),
+            DEFAULT_BLOCK_SIZE,
+            /*enable_version_chain*/ false);
+
+        ASSERT_EQ(*bitmap_filter_delta_index, *bitmap_filter_version_chain);
     }
     {
         // test read data with delete-range and new writes
@@ -1912,8 +1961,8 @@ try
         ASSERT_EQ(stable->getRows(), num_rows_write_every_round * write_round);
         // calculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
-        auto start = RowKeyValue::fromHandle(0);
-        auto end = RowKeyValue::fromHandle(num_rows_write_every_round);
+        auto start = RowKeyValue::fromIntHandle(0);
+        auto end = RowKeyValue::fromIntHandle(num_rows_write_every_round);
         RowKeyRange range(start, end, false, 1);
         // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
         stable->calculateStableProperty(dmContext(), range, false);
@@ -1963,10 +2012,10 @@ try
         // clear PackProperties to force it to calculate from scratch
         dmfile->clearPackProperties();
         ASSERT_EQ(dmfile->getPackProperties().property_size(), 0);
-        // caculate StableProperty
+        // calculate StableProperty
         ASSERT_EQ(stable->isStablePropertyCached(), false);
-        auto start = RowKeyValue::fromHandle(0);
-        auto end = RowKeyValue::fromHandle(num_rows_write_every_round);
+        auto start = RowKeyValue::fromIntHandle(0);
+        auto end = RowKeyValue::fromIntHandle(num_rows_write_every_round);
         RowKeyRange range(start, end, false, 1);
         // calculate the StableProperty for packs in the key range [0, num_rows_write_every_round)
         stable->calculateStableProperty(dmContext(), range, false);

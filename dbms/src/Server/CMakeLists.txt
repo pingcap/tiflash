@@ -28,31 +28,29 @@ option(ENABLE_TIFLASH_CHECKPOINTTOOL "Enable checkpoint tool: tools to debug che
 
 configure_file (config_tools.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_tools.h)
 
-add_library(server_for_test
-    FlashGrpcServerHolder.cpp
-)
-
-target_link_libraries (server_for_test PUBLIC tiflash_common_io tiflash_storages_system)
-target_include_directories (server_for_test PRIVATE ${TiFlash_SOURCE_DIR}/contrib/grpc/)
+add_library(grpc_server_holder FlashGrpcServerHolder.cpp)
+target_link_libraries (grpc_server_holder PUBLIC tiflash_common_io tiflash_storages_system)
+target_include_directories (grpc_server_holder PRIVATE ${TiFlash_SOURCE_DIR}/contrib/grpc/)
 
 add_library (tiflash-server-lib
     CertificateReloader.cpp
-    MetricsTransmitter.cpp
     MetricsPrometheus.cpp
     ServerInfo.cpp
     Server.cpp
     StatusFile.cpp
     TCPHandler.cpp
+    TCPServersHolder.cpp
     BgStorageInit.cpp
     Bootstrap.cpp
+    Setup.cpp
     StorageConfigParser.cpp
     UserConfigParser.cpp
     RaftConfigParser.cpp)
 
 target_link_libraries(tiflash-server-lib PRIVATE ${TIFLASH_PROXY_LIBRARY})
 
-target_link_libraries (tiflash-server-lib PUBLIC server_for_test tiflash_common_io daemon tiflash_storages_system tiflash_functions tiflash_aggregate_functions tiflash_table_functions)
-target_include_directories (tiflash-server-lib PUBLIC ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
+target_link_libraries (tiflash-server-lib PRIVATE grpc_server_holder daemon tiflash_functions tiflash_aggregate_functions)
+target_include_directories (tiflash-server-lib PRIVATE ${TiFlash_SOURCE_DIR}/libs/libdaemon/include)
 target_include_directories (tiflash-server-lib PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
 
 add_library (tiflash-client-lib Client.cpp)
@@ -126,14 +124,26 @@ if (OS_LINUX)
                 DESTINATION ".")
     endif()
 
+    if (USE_INTERNAL_LIBCLARA)
+        install (TARGETS clara_shared
+                COMPONENT tiflash-release
+                DESTINATION ".")
+    endif()
+
     if (NOT (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR SAN_DEBUG))
         install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
     endif()
     install (SCRIPT ${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-cmake/tiflash_proxy_linux_post_install.cmake COMPONENT tiflash-release)
+    install (SCRIPT ${TiFlash_SOURCE_DIR}/libs/libclara-cmake/linux_post_install.cmake COMPONENT tiflash-release)
 elseif(APPLE)
     # set build rpaths, so that executables can be directly called in build tree (easy to debug)
     set_target_properties(tiflash PROPERTIES BUILD_RPATH "@executable_path/;@executable_path/${TIFLASH_PROXY_LIB_RPATH}/")
     set_target_properties(tiflash PROPERTIES INSTALL_RPATH "@executable_path/")
+    if (USE_INTERNAL_LIBCLARA)
+        install (TARGETS clara_shared
+                COMPONENT tiflash-release
+                DESTINATION ".")
+    endif()
     install (TARGETS tiflash
             COMPONENT tiflash-release
             DESTINATION "."
@@ -141,7 +151,7 @@ elseif(APPLE)
     install (RUNTIME_DEPENDENCY_SET tiflash-release-dependency
             COMPONENT tiflash-release
             DESTINATION "."
-            PRE_INCLUDE_REGEXES ".*proxy.*")
+            PRE_INCLUDE_REGEXES ".*proxy.*|.*clara.*")
 endif ()
 
 include(CMakePrintHelpers)

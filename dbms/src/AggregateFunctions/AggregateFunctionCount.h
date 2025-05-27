@@ -29,6 +29,8 @@ namespace DB
 struct AggregateFunctionCountData
 {
     UInt64 count = 0;
+
+    inline void reset() noexcept { count = 0; }
 };
 
 namespace ErrorCodes
@@ -51,6 +53,13 @@ public:
     {
         ++data(place).count;
     }
+
+    void decrease(AggregateDataPtr __restrict place, const IColumn **, size_t, Arena *) const override
+    {
+        --data(place).count;
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
 
     void addBatchSinglePlace(
         size_t start_offset,
@@ -109,6 +118,12 @@ public:
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
+    }
+
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        auto & container = static_cast<ColumnUInt64 &>(to).getData();
+        container.resize_fill(container.size() + num, data(place).count);
     }
 
     /// May be used for optimization.
@@ -173,6 +188,13 @@ public:
         data(place).count += !static_cast<const ColumnNullable &>(*columns[0]).isNullAt(row_num);
     }
 
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
+    {
+        data(place).count -= !static_cast<const ColumnNullable &>(*columns[0]).isNullAt(row_num);
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         data(place).count += data(rhs).count;
@@ -191,6 +213,12 @@ public:
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
+    }
+
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        auto & container = static_cast<ColumnUInt64 &>(to).getData();
+        container.resize_fill(container.size() + num, data(place).count);
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
@@ -234,6 +262,18 @@ public:
         ++data(place).count;
     }
 
+    void decrease(AggregateDataPtr __restrict place, const IColumn ** columns, size_t row_num, Arena *) const override
+    {
+        for (size_t i = 0; i < number_of_arguments; ++i)
+            if (is_nullable[i] && static_cast<const ColumnNullable &>(*columns[i]).isNullAt(row_num))
+                return;
+
+        --data(place).count;
+        assert(data(place).count >= 0);
+    }
+
+    void reset(AggregateDataPtr __restrict place) const override { data(place).reset(); }
+
     void merge(AggregateDataPtr __restrict place, ConstAggregateDataPtr rhs, Arena *) const override
     {
         data(place).count += data(rhs).count;
@@ -252,6 +292,12 @@ public:
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
+    }
+
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        auto & container = static_cast<ColumnUInt64 &>(to).getData();
+        container.resize_fill(container.size() + num, data(place).count);
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }

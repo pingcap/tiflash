@@ -12,83 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Debug/MockKVStore/MockUtils.h>
 #include <IO/VarInt.h>
 #include <Storages/KVStore/Decode/TiKVHelper.h>
 #include <Storages/KVStore/Decode/TiKVRange.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
-#include <Storages/KVStore/tests/region_helper.h>
+#include <Storages/KVStore/Types.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
-
-namespace DB
-{
-TiKVValue encode_lock_cf_value(
-    UInt8 lock_type,
-    const String & primary,
-    Timestamp ts,
-    UInt64 ttl,
-    const String * short_value,
-    Timestamp min_commit_ts,
-    Timestamp for_update_ts,
-    uint64_t txn_size,
-    const std::vector<std::string> & async_commit,
-    const std::vector<uint64_t> & rollback,
-    UInt64 generation = 0)
-{
-    auto lock_value = RecordKVFormat::encodeLockCfValue(lock_type, primary, ts, ttl, short_value, min_commit_ts);
-    WriteBufferFromOwnString res;
-    res.write(lock_value.getStr().data(), lock_value.getStr().size());
-    {
-        res.write(RecordKVFormat::MIN_COMMIT_TS_PREFIX);
-        RecordKVFormat::encodeUInt64(min_commit_ts, res);
-    }
-    {
-        res.write(RecordKVFormat::FOR_UPDATE_TS_PREFIX);
-        RecordKVFormat::encodeUInt64(for_update_ts, res);
-    }
-    {
-        res.write(RecordKVFormat::TXN_SIZE_PREFIX);
-        RecordKVFormat::encodeUInt64(txn_size, res);
-    }
-    {
-        res.write(RecordKVFormat::ROLLBACK_TS_PREFIX);
-        TiKV::writeVarUInt(rollback.size(), res);
-        for (auto ts : rollback)
-        {
-            RecordKVFormat::encodeUInt64(ts, res);
-        }
-    }
-    {
-        res.write(RecordKVFormat::ASYNC_COMMIT_PREFIX);
-        TiKV::writeVarUInt(async_commit.size(), res);
-        for (const auto & s : async_commit)
-        {
-            writeVarInt(s.size(), res);
-            res.write(s.data(), s.size());
-        }
-    }
-    {
-        res.write(RecordKVFormat::LAST_CHANGE_PREFIX);
-        RecordKVFormat::encodeUInt64(12345678, res);
-        TiKV::writeVarUInt(87654321, res);
-    }
-    {
-        res.write(RecordKVFormat::TXN_SOURCE_PREFIX_FOR_LOCK);
-        TiKV::writeVarUInt(876543, res);
-    }
-    {
-        res.write(RecordKVFormat::PESSIMISTIC_LOCK_WITH_CONFLICT_PREFIX);
-    }
-    if (generation > 0)
-    {
-        res.write(RecordKVFormat::GENERATION_PREFIX);
-        RecordKVFormat::encodeUInt64(generation, res);
-    }
-    return TiKVValue(res.releaseStr());
-}
-
-} // namespace DB
 
 using namespace DB;
 
@@ -98,7 +30,9 @@ inline bool checkTableInvolveRange(const TableID table_id, const RangeRef & rang
 {
     const TiKVKey start_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::min());
     const TiKVKey end_key = RecordKVFormat::genKey(table_id, std::numeric_limits<HandleID>::max());
-    return !(end_key < range.first || (!range.second.empty() && start_key >= range.second));
+    // clang-format off
+    return !(end_key < range.first|| (!range.second.empty() && start_key >= range.second)); // NOLINT(readability-simplify-boolean-expr)
+    // clang-format on
 }
 
 inline TiKVKey genIndex(const TableID tableId, const Int64 id)
@@ -111,6 +45,42 @@ inline TiKVKey genIndex(const TableID tableId, const Int64 id)
     auto big_endian_handle_id = RecordKVFormat::encodeInt64(id);
     memcpy(key.data() + 1 + 8 + 2, reinterpret_cast<const char *>(&big_endian_handle_id), 8);
     return RecordKVFormat::encodeAsTiKVKey(key);
+}
+
+TEST(TiKVKeyValueTest, KeyFormat)
+{
+    Timestamp prewrite_ts = 5;
+    {
+        std::string short_value(128, 'F');
+        auto v = RecordKVFormat::encodeWriteCfValue(
+            RecordKVFormat::CFModifyFlag::PutFlag,
+            prewrite_ts,
+            short_value,
+            false);
+        auto decoded = RecordKVFormat::decodeWriteCfValue(v);
+        ASSERT_TRUE(decoded.has_value());
+        ASSERT_EQ(decoded->write_type, RecordKVFormat::CFModifyFlag::PutFlag);
+        ASSERT_EQ(decoded->prewrite_ts, prewrite_ts);
+        ASSERT_NE(decoded->short_value, nullptr);
+        ASSERT_EQ(*decoded->short_value, short_value);
+    }
+#if SERVERLESS_PROXY != 0
+    {
+        // For serverless branch, the short_value length use varUInt
+        std::string short_value(1025, 'F');
+        auto v = RecordKVFormat::encodeWriteCfValue(
+            RecordKVFormat::CFModifyFlag::PutFlag,
+            prewrite_ts,
+            short_value,
+            false);
+        auto decoded = RecordKVFormat::decodeWriteCfValue(v);
+        ASSERT_TRUE(decoded.has_value());
+        ASSERT_EQ(decoded->write_type, RecordKVFormat::CFModifyFlag::PutFlag);
+        ASSERT_EQ(decoded->prewrite_ts, prewrite_ts);
+        ASSERT_NE(decoded->short_value, nullptr);
+        ASSERT_EQ(*decoded->short_value, short_value);
+    }
+#endif
 }
 
 TEST(TiKVKeyValueTest, PortedTests)
@@ -140,7 +110,7 @@ TEST(TiKVKeyValueTest, PortedTests)
         auto lock_for_update_ts = 7777, txn_size = 1;
         const std::vector<std::string> & async_commit = {"s1", "s2"};
         const std::vector<uint64_t> & rollback = {3, 4};
-        auto lock_value = encode_lock_cf_value(
+        auto lock_value = DB::RegionBench::encodeFullLockCfValue(
             Region::DelFlag,
             "primary key",
             421321,
@@ -242,15 +212,17 @@ TEST(TiKVKeyValueTest, PortedTests)
 
         ASSERT_TRUE(
             d.insert(
-                RecordKVFormat::genKey(1, 2, 3),
-                RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value", true))
+                 RecordKVFormat::genKey(1, 2, 3),
+                 RecordKVFormat::encodeWriteCfValue(Region::PutFlag, 4, "value", true))
+                .payload
             == 0);
         ASSERT_TRUE(d.getSize() == 1);
 
         ASSERT_TRUE(
             d.insert(
-                RecordKVFormat::genKey(1, 2, 3),
-                RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value"))
+                 RecordKVFormat::genKey(1, 2, 3),
+                 RecordKVFormat::encodeWriteCfValue(RecordKVFormat::UselessCFModifyFlag::LockFlag, 4, "value"))
+                .payload
             == 0);
         ASSERT_TRUE(d.getSize() == 1);
 
@@ -469,7 +441,7 @@ try
     auto lock_for_update_ts = 7777, txn_size = 1;
     const std::vector<std::string> & async_commit = {"s1", "s2"};
     const std::vector<uint64_t> & rollback = {3, 4};
-    auto lock_value = encode_lock_cf_value(
+    auto lock_value = DB::RegionBench::encodeFullLockCfValue(
         Region::DelFlag,
         "primary key",
         421321,
@@ -503,7 +475,7 @@ try
         });
     }
 
-    auto lock_value2 = encode_lock_cf_value(
+    auto lock_value2 = DB::RegionBench::encodeFullLockCfValue(
         Region::DelFlag,
         "primary key",
         421321,

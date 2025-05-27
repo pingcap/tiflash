@@ -18,9 +18,7 @@
 #include <TiDB/Decode/TypeMapping.h>
 #include <TiDB/Schema/TiDB.h>
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 
 TEST(TypeMappingTest, DataTypeToColumnInfo)
@@ -93,9 +91,18 @@ try
         ASSERT_EQ(data_type->getName(), DataTypeString::getDefaultName());
     }
 
+    {
+        auto str_type = typeFromString("Int8");
+        column_info = reverseGetColumnInfo(NameAndTypePair{name, str_type}, 1, default_field, true);
+        column_info.tp = TiDB::TP::TypeNull; // test for TypeNull
+        ASSERT_EQ(column_info.tp, TiDB::TP::TypeNull);
+        auto data_type = getDataTypeByColumnInfo(column_info);
+        // Use Int8 to compatible "storing" TypeNull in IStorage
+        ASSERT_EQ(data_type->getName(), "Int8");
+    }
+
     // TODO: test decimal, datetime, enum
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

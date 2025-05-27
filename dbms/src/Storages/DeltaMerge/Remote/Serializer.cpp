@@ -24,7 +24,6 @@
 #include <Storages/DeltaMerge/Remote/DataStore/DataStore.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/ObjectId.h>
-#include <Storages/DeltaMerge/Remote/RNDeltaIndexCache.h>
 #include <Storages/DeltaMerge/Remote/Serializer.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
@@ -122,12 +121,7 @@ RemotePb::RemoteSegment Serializer::serializeSegment(
     return remote;
 }
 
-SegmentSnapshotPtr Serializer::deserializeSegment(
-    const DMContext & dm_context,
-    StoreID remote_store_id,
-    KeyspaceID keyspace_id,
-    TableID table_id,
-    const RemotePb::RemoteSegment & proto)
+SegmentSnapshotPtr Serializer::deserializeSegment(const DMContext & dm_context, const RemotePb::RemoteSegment & proto)
 {
     RowKeyRange segment_range;
     {
@@ -140,21 +134,7 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
     auto mem_snap = deserializeColumnFileSet(dm_context, proto.column_files_memtable(), data_store, segment_range);
     auto persisted_snap
         = deserializeColumnFileSet(dm_context, proto.column_files_persisted(), data_store, segment_range);
-    auto delta_index = [&]() {
-        auto delta_index_cache = dm_context.global_context.getSharedContextDisagg()->rn_delta_index_cache;
-        if (!delta_index_cache)
-        {
-            return std::make_shared<DeltaIndex>();
-        }
-        return delta_index_cache->getDeltaIndex({
-            .store_id = remote_store_id,
-            .keyspace_id = keyspace_id,
-            .table_id = table_id,
-            .segment_id = proto.segment_id(),
-            .segment_epoch = proto.segment_epoch(),
-            .delta_index_epoch = proto.delta_index_epoch(),
-        });
-    }();
+
     // Note: At this moment, we still cannot read from `delta_snap->mem_table_snap` and `delta_snap->persisted_files_snap`,
     // because they are constructed using ColumnFileDataProviderNop.
     auto delta_snap = std::make_shared<DeltaValueSnapshot>(
@@ -164,7 +144,7 @@ SegmentSnapshotPtr Serializer::deserializeSegment(
         std::move(persisted_snap),
         // There is no DeltaValueSpace in the disagg arch read node
         /*delta_vs*/ nullptr,
-        std::move(delta_index),
+        std::make_shared<DeltaIndex>(),
         // Actually we will not access delta_snap->delta_index_epoch in read node. Just for completeness.
         proto.delta_index_epoch());
 
@@ -259,8 +239,7 @@ ColumnFileSetSnapshotPtr Serializer::deserializeColumnFileSet(
             RUNTIME_CHECK_MSG(false, "Unexpected proto ColumnFile");
         }
     }
-    auto empty_data_provider = std::make_shared<ColumnFileDataProviderNop>();
-    return ColumnFileSetSnapshot::buildFromColumnFiles(empty_data_provider, std::move(column_files));
+    return ColumnFileSetSnapshot::buildFromColumnFiles(ColumnFileDataProviderNop::instance(), std::move(column_files));
 }
 
 RemotePb::ColumnFileRemote Serializer::serializeCFInMemory(const ColumnFileInMemory & cf_in_mem, bool need_mem_data)
@@ -358,18 +337,8 @@ RemotePb::ColumnFileRemote Serializer::serializeCFTiny(
 
     for (const auto & index_info : *cf_tiny.index_infos)
     {
-        auto * index_pb = remote_tiny->add_indexes();
-        index_pb->set_index_page_id(index_info.index_page_id);
-        if (index_info.vector_index.has_value())
-        {
-            RemotePb::VectorIndexFileProps index_props;
-            index_props.set_index_kind(index_info.vector_index->index_kind());
-            index_props.set_distance_metric(index_info.vector_index->distance_metric());
-            index_props.set_dimensions(index_info.vector_index->dimensions());
-            index_props.set_index_id(index_info.vector_index->index_id());
-            index_props.set_index_bytes(index_info.vector_index->index_bytes());
-            index_pb->mutable_vector_index()->Swap(&index_props);
-        }
+        auto serialized = index_info.SerializeAsString();
+        remote_tiny->add_indexes(std::move(serialized));
     }
 
     // TODO: read the checkpoint info from data_provider and send it to the compute node
@@ -391,18 +360,10 @@ ColumnFileTinyPtr Serializer::deserializeCFTiny(const DMContext & dm_context, co
     index_infos->reserve(proto.indexes().size());
     for (const auto & index_pb : proto.indexes())
     {
-        if (index_pb.has_vector_index())
-        {
-            dtpb::VectorIndexFileProps index_props;
-            index_props.set_index_kind(index_pb.vector_index().index_kind());
-            index_props.set_distance_metric(index_pb.vector_index().distance_metric());
-            index_props.set_dimensions(index_pb.vector_index().dimensions());
-            index_props.set_index_id(index_pb.vector_index().index_id());
-            index_props.set_index_bytes(index_pb.vector_index().index_bytes());
-            index_infos->emplace_back(index_pb.index_page_id(), index_props);
-        }
-        else
-            index_infos->emplace_back(index_pb.index_page_id(), std::nullopt);
+        auto index_info = dtpb::ColumnFileIndexInfo{};
+        auto ok = index_info.ParseFromString(index_pb);
+        RUNTIME_CHECK_MSG(ok, "Failed to parse ColumnFileIndexInfo from proto");
+        index_infos->emplace_back(std::move(index_info));
     }
 
     auto cf = std::make_shared<ColumnFileTiny>(

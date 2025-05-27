@@ -28,6 +28,7 @@
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageDeltaMerge.h>
+#include <TiDB/Decode/TypeMapping.h>
 
 namespace DB
 {
@@ -185,6 +186,12 @@ std::tuple<StorageDeltaMergePtr, Names, SelectQueryInfo> MockStorage::prepareFor
     return {storage, column_names, query_info};
 }
 
+static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
+static const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{};
+static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
+static const auto empty_fts_query_info = tipb::FTSQueryInfo{};
+
+
 BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     Context & context,
     Int64 table_id,
@@ -193,9 +200,6 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
     std::vector<int> runtime_filter_ids,
     int rf_max_wait_time_ms)
 {
-    static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
-    static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
-
     QueryProcessingStage::Enum stage;
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
     if (filter_conditions && filter_conditions->hasValue())
@@ -205,13 +209,15 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             empty_ann_query_info,
+            empty_fts_query_info,
             empty_pushed_down_filters, // Not care now
+            empty_used_indexes, // Not care now
             scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
         auto [before_where, filter_column_name, project_after_where]
-            = analyzer->buildPushDownExecutor(filter_conditions->conditions);
+            = analyzer->buildPushDownFilter(filter_conditions->conditions, true);
         BlockInputStreams ins = storage->read(
             column_names,
             query_info,
@@ -234,7 +240,9 @@ BlockInputStreamPtr MockStorage::getStreamFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
             empty_ann_query_info,
+            empty_fts_query_info,
             empty_pushed_down_filters, // Not care now
+            empty_used_indexes, // Not care now
             scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
@@ -256,9 +264,6 @@ void MockStorage::buildExecFromDeltaMerge(
     std::vector<int> runtime_filter_ids,
     int rf_max_wait_time_ms)
 {
-    static const google::protobuf::RepeatedPtrField<tipb::Expr> empty_pushed_down_filters{};
-    static const auto empty_ann_query_info = tipb::ANNQueryInfo{};
-
     auto [storage, column_names, query_info] = prepareForRead(context, table_id, keep_order);
     if (filter_conditions && filter_conditions->hasValue())
     {
@@ -267,13 +272,15 @@ void MockStorage::buildExecFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             filter_conditions->conditions,
             empty_ann_query_info,
+            empty_fts_query_info,
             empty_pushed_down_filters, // Not care now
+            empty_used_indexes, // Not care now
             scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
             context.getTimezoneInfo());
         // Not using `auto [before_where, filter_column_name, project_after_where]` just to make the compiler happy.
-        auto build_ret = analyzer->buildPushDownExecutor(filter_conditions->conditions);
+        auto build_ret = analyzer->buildPushDownFilter(filter_conditions->conditions, true);
         storage->read(
             exec_context_,
             group_builder,
@@ -301,7 +308,9 @@ void MockStorage::buildExecFromDeltaMerge(
         query_info.dag_query = std::make_unique<DAGQueryInfo>(
             empty_filters,
             empty_ann_query_info,
+            empty_fts_query_info,
             empty_pushed_down_filters, // Not care now
+            empty_used_indexes, // Not care now
             scan_column_infos,
             runtime_filter_ids,
             rf_max_wait_time_ms,
@@ -588,9 +597,9 @@ TableInfo MockStorage::getTableInfoForDeltaMerge(const String & name)
     return table_infos_for_delta_merge[name];
 }
 
-DM::ColumnDefines MockStorage::getStoreColumnDefines(Int64 table_id)
+DM::ColumnDefinesPtr MockStorage::getStoreColumnDefines(Int64 table_id)
 {
-    return storage_delta_merge_map[table_id]->getStoreColumnDefines();
+    return storage_delta_merge_map[table_id]->getStore()->getStoreColumns();
 }
 
 TiDB::ColumnInfos mockColumnInfosToTiDBColumnInfos(const MockColumnInfoVec & mock_column_infos)

@@ -26,6 +26,7 @@ enum MppVersion : int64_t
     MppVersionV0 = 0,
     MppVersionV1,
     MppVersionV2,
+    MppVersionV3,
     //
     MppVersionMAX,
 };
@@ -39,6 +40,7 @@ enum MPPDataPacketVersion : int64_t
 {
     MPPDataPacketV0 = 0,
     MPPDataPacketV1,
+    MPPDataPacketV2,
     //
     MPPDataPacketMAX,
 };
@@ -52,6 +54,7 @@ bool ReportStatusToCoordinator(int64_t mpp_version, const std::string & coordina
 bool ReportExecutionSummaryToCoordinator(int64_t mpp_version, bool report_execution_summary);
 bool CheckMppVersion(int64_t mpp_version);
 std::string GenMppVersionErrorMessage(int64_t mpp_version);
-int64_t GetMppVersion();
+MppVersion GetMppVersion();
+MPPDataPacketVersion GetMPPDataPacketVersion(MppVersion mpp_version);
 
 } // namespace DB

@@ -46,6 +46,8 @@ public:
 
     void add(AggregateDataPtr, const IColumn **, size_t, Arena *) const override {}
 
+    void decrease(AggregateDataPtr, const IColumn **, size_t, Arena *) const override {}
+
     void merge(AggregateDataPtr, ConstAggregateDataPtr, Arena *) const override {}
 
     void serialize(ConstAggregateDataPtr, WriteBuffer &) const override {}
@@ -53,6 +55,11 @@ public:
     void deserialize(AggregateDataPtr, ReadBuffer &, Arena *) const override {}
 
     void insertResultInto(ConstAggregateDataPtr, IColumn & to, Arena *) const override { to.insertDefault(); }
+
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict, IColumn & to, size_t num) const override
+    {
+        to.insertManyDefaults(num);
+    }
 
     const char * getHeaderFilePath() const override { return __FILE__; }
 };

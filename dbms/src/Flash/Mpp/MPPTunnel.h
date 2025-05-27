@@ -28,6 +28,7 @@
 #include <Flash/Mpp/PacketWriter.h>
 #include <Flash/Mpp/TrackedMppDataPacket.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <common/StringRef.h>
 #include <common/defines.h>
@@ -35,8 +36,6 @@
 #include <common/types.h>
 
 #include <atomic>
-#include <type_traits>
-
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
@@ -197,7 +196,10 @@ public:
 
     bool isWritable() const override { return send_queue.isWritable(); }
 
-    void registerTask(TaskPtr && task) override { send_queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        send_queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
+    }
 
 private:
     friend class tests::TestMPPTunnel;
@@ -260,7 +262,10 @@ public:
 
     void subDataSizeMetric(size_t size) { ::DB::MPPTunnelMetric::subDataSizeMetric(*data_size_in_queue, size); }
 
-    void registerTask(TaskPtr && task) override { queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
+    }
 
 private:
     GRPCSendQueue<TrackedMppDataPacketPtr> queue;
@@ -322,11 +327,11 @@ public:
     void registerTask(TaskPtr && task) override
     {
         if constexpr (local_only)
-            local_request_handler.registerPipeWriteTask(std::move(task));
+            local_request_handler.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
         else
         {
             std::lock_guard lock(mu);
-            local_request_handler.registerPipeWriteTask(std::move(task));
+            local_request_handler.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
         }
     }
 
@@ -424,7 +429,10 @@ public:
 
     bool isWritable() const override { return send_queue.isWritable(); }
 
-    void registerTask(TaskPtr && task) override { send_queue.registerPipeWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        send_queue.registerPipeWriteTask(std::move(task), NotifyType::WAIT_ON_TUNNEL_SENDER_WRITE);
+    }
 
 private:
     bool cancel_reason_sent = false;
@@ -563,8 +571,14 @@ private:
     void updateConnProfileInfo(size_t pushed_data_size)
     {
         std::lock_guard lock(mu);
-        connection_profile_info.bytes += pushed_data_size;
-        connection_profile_info.packets += 1;
+        // TODO(hyb): Figure out which type of packets are equal or smaller than 2 bytes
+        // Currently doesn't record these packets, because in receiver side, it seems unnoticable,
+        // so to ensure the total_recorded_send_bytes == total_recorded_received_bytes, just ignore these packets now.
+        if likely (pushed_data_size > 2)
+        {
+            connection_profile_info.bytes += pushed_data_size;
+            connection_profile_info.packets += 1;
+        }
     }
 
 private:

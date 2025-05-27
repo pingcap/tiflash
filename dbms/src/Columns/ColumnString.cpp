@@ -16,6 +16,7 @@
 #include <Columns/filterColumn.h>
 #include <Common/HashTable/Hash.h>
 #include <DataStreams/ColumnGathererStream.h>
+#include <TiDB/Collation/Collator.h>
 #include <TiDB/Collation/CollatorUtils.h>
 #include <common/memcpy.h>
 #include <fmt/core.h>
@@ -483,6 +484,51 @@ void ColumnString::getPermutationWithCollationImpl(
 
 void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
+    countSerializeByteSizeImpl</*need_decode_collator=*/false, /*has_nullmap=*/false>(byte_size, nullptr, nullptr);
+}
+
+void ColumnString::countSerializeByteSizeForCmp(
+    PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr & collator) const
+{
+    // For now, sortKeyReservedSpaceMultipler() of bin collator(padding or non-padding) is 1.
+    // So bin collator will skip to decode collator.
+    // And other collators will first count code point then compute the needed memory.
+    if (collator != nullptr && collator->sortKeyReservedSpaceMultipler() > 1)
+    {
+        if (nullmap != nullptr)
+            countSerializeByteSizeImpl</*need_decode_collator=*/true, /*has_nullmap=*/true>(
+                byte_size,
+                nullmap,
+                collator);
+        else
+            countSerializeByteSizeImpl</*need_decode_collator=*/true, /*has_nullmap=*/false>(
+                byte_size,
+                nullptr,
+                collator);
+    }
+    else
+    {
+        if (nullmap != nullptr)
+            countSerializeByteSizeImpl</*need_decode_collator=*/false, /*has_nullmap=*/true>(
+                byte_size,
+                nullmap,
+                nullptr);
+        else
+            countSerializeByteSizeImpl</*need_decode_collator=*/false, /*has_nullmap=*/false>(
+                byte_size,
+                nullptr,
+                nullptr);
+    }
+}
+
+template <bool need_decode_collator, bool has_nullmap>
+void ColumnString::countSerializeByteSizeImpl(
+    PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr & collator) const
+{
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
     if unlikely (!offsets.empty() && offsets.back() > UINT32_MAX)
@@ -496,14 +542,85 @@ void ColumnString::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) co
                 sizeAt(i));
     }
 
-    size_t size = byte_size.size();
+    const size_t size = byte_size.size();
+    size_t max_bytes_one_char = 0;
+    if constexpr (need_decode_collator)
+    {
+        RUNTIME_CHECK(collator);
+        max_bytes_one_char = collator->sortKeyReservedSpaceMultipler();
+    }
+
     for (size_t i = 0; i < size; ++i)
-        byte_size[i] += sizeof(UInt32) + sizeAt(i);
+    {
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, i))
+            {
+                byte_size[i] += sizeof(UInt32) + 1;
+                continue;
+            }
+        }
+
+        if constexpr (need_decode_collator)
+        {
+            assert(sizeAt(i) > 0);
+            const auto num_char = UTF8::countCodePoints(&chars[offsetAt(i)], sizeAt(i) - 1);
+            // Add 1 for terminating zero.
+            byte_size[i] += sizeof(UInt32) + num_char * max_bytes_one_char + 1;
+        }
+        else
+        {
+            byte_size[i] += sizeof(UInt32) + sizeAt(i);
+        }
+    }
 }
 
 void ColumnString::countSerializeByteSizeForColumnArray(
     PaddedPODArray<size_t> & byte_size,
     const IColumn::Offsets & array_offsets) const
+{
+    countSerializeByteSizeForColumnArrayImpl<
+        /*need_decode_collator=*/false,
+        /*has_nullmap=*/false>(byte_size, array_offsets, nullptr, nullptr);
+}
+
+void ColumnString::countSerializeByteSizeForCmpColumnArray(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr & collator) const
+{
+    // For bin padding, skip consider collator so we can skip counting code points, which may be slow.
+    if (collator != nullptr && collator->sortKeyReservedSpaceMultipler() > 1)
+    {
+        if (nullmap != nullptr)
+            countSerializeByteSizeForColumnArrayImpl<
+                /*need_decode_collator=*/true,
+                /*has_nullmap=*/true>(byte_size, array_offsets, nullmap, collator);
+        else
+            countSerializeByteSizeForColumnArrayImpl<
+                /*need_decode_collator=*/true,
+                /*has_nullmap=*/false>(byte_size, array_offsets, nullptr, collator);
+    }
+    else
+    {
+        if (nullmap != nullptr)
+            countSerializeByteSizeForColumnArrayImpl<
+                /*need_decode_collator=*/false,
+                /*has_nullmap=*/true>(byte_size, array_offsets, nullmap, nullptr);
+        else
+            countSerializeByteSizeForColumnArrayImpl<
+                /*need_decode_collator=*/false,
+                /*has_nullmap=*/false>(byte_size, array_offsets, nullptr, nullptr);
+    }
+}
+
+template <bool need_decode_collator, bool has_nullmap>
+void ColumnString::countSerializeByteSizeForColumnArrayImpl(
+    PaddedPODArray<size_t> & byte_size,
+    const IColumn::Offsets & array_offsets,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     RUNTIME_CHECK_MSG(
         byte_size.size() == array_offsets.size(),
@@ -528,26 +645,158 @@ void ColumnString::countSerializeByteSizeForColumnArray(
     }
 
     size_t size = array_offsets.size();
+    auto max_bytes_one_char = 0;
+    if constexpr (need_decode_collator)
+    {
+        RUNTIME_CHECK(collator);
+        max_bytes_one_char = collator->sortKeyReservedSpaceMultipler();
+    }
+
     for (size_t i = 0; i < size; ++i)
-        byte_size[i] += sizeof(UInt32) * (array_offsets[i] - array_offsets[i - 1]) + offsetAt(array_offsets[i])
-            - offsetAt(array_offsets[i - 1]);
+    {
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, i))
+                continue;
+        }
+        const size_t ele_count = array_offsets[i] - array_offsets[i - 1];
+        assert(offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]) >= ele_count);
+        if constexpr (need_decode_collator)
+        {
+            size_t cur_row_bytes = 0;
+            for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+            {
+                assert(sizeAt(j) > 0);
+                const auto num_char = UTF8::countCodePoints(&chars[offsetAt(j)], sizeAt(j) - 1);
+                // Add 1 for terminating zero.
+                cur_row_bytes += num_char * max_bytes_one_char + 1;
+            }
+
+            byte_size[i] += sizeof(UInt32) * ele_count + cur_row_bytes;
+        }
+        else
+        {
+            byte_size[i] += sizeof(UInt32) * ele_count + offsetAt(array_offsets[i]) - offsetAt(array_offsets[i - 1]);
+        }
+    }
+}
+
+inline bool needDecodeCollatorForCmp(const TiDB::TiDBCollatorPtr & collator)
+{
+    // For now, only non-padding bin collator is trivial.
+    return collator != nullptr && !collator->isTrivialCollator();
 }
 
 void ColumnString::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true>(pos, start, length);
+        serializeToPosImpl<
+            /*has_null=*/true,
+            /*need_decode_collator=*/false,
+            TiDB::ITiDBCollator,
+            /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
     else
-        serializeToPosImpl<false>(pos, start, length);
+        serializeToPosImpl<
+            /*has_null=*/false,
+            /*need_decode_collator=*/false,
+            TiDB::ITiDBCollator,
+            /*has_nullmap=*/false>(pos, start, length, nullptr, nullptr, nullptr);
 }
 
-template <bool has_null>
-void ColumnString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start, size_t length) const
+void ColumnString::serializeToPosForCmp(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container) const
+{
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID, has_null, has_nullmap) \
+    case (COLLATOR_ID):                                                             \
+    {                                                                               \
+        serializeToPosImpl<has_null, true, IMPL_TYPE, has_nullmap>(                 \
+            pos,                                                                    \
+            start,                                                                  \
+            length,                                                                 \
+            collator,                                                               \
+            sort_key_container,                                                     \
+            nullmap);                                                               \
+        break;                                                                      \
+    }
+
+#define CALL3(has_null, has_nullmap)                                                            \
+    {                                                                                           \
+        RUNTIME_CHECK(collator && sort_key_container);                                          \
+        switch (collator->getCollatorId())                                                      \
+        {                                                                                       \
+            APPLY_FOR_COLLATOR_TYPES(M, has_null, has_nullmap)                                  \
+        default:                                                                                \
+        {                                                                                       \
+            throw Exception(fmt::format("unexpected collator: {}", collator->getCollatorId())); \
+        }                                                                                       \
+        }                                                                                       \
+    }
+
+#define CALL2(has_null, has_nullmap)                                               \
+    {                                                                              \
+        if (needDecodeCollatorForCmp(collator))                                    \
+            CALL3(has_null, has_nullmap)                                           \
+        else                                                                       \
+            serializeToPosImpl<has_null, false, TiDB::ITiDBCollator, has_nullmap>( \
+                pos,                                                               \
+                start,                                                             \
+                length,                                                            \
+                collator,                                                          \
+                sort_key_container,                                                \
+                nullmap);                                                          \
+    }
+
+#define CALL1(has_null)            \
+    {                              \
+        if (nullmap)               \
+            CALL2(has_null, true)  \
+        else                       \
+            CALL2(has_null, false) \
+    }
+
+    if (has_null)
+        CALL1(true)
+    else
+        CALL1(false)
+
+#undef CALL1
+#undef CALL2
+#undef CALL3
+#undef M
+}
+
+template <bool has_null, bool need_decode_collator, typename DerivedCollator, bool has_nullmap>
+void ColumnString::serializeToPosImpl(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
 
-    /// countSerializeByteSize has already checked that the size of one element is not greater than UINT32_MAX
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
+
+    /// To avoid virtual function call of sortKey().
+    const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
+
+    static const std::array<char, sizeof(UInt32) + 1> default_val = [] {
+        std::array<char, sizeof(UInt32) + 1> val{};
+        UInt32 sz = 1;
+        tiflash_compiler_builtin_memcpy(val.data(), &sz, sizeof(UInt32));
+        val[sizeof(UInt32)] = 0;
+        return val;
+    }();
+
+    /// countSerializeByteSizeImpl has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -555,11 +804,40 @@ void ColumnString::serializeToPosImpl(PaddedPODArray<char *> & pos, size_t start
             if (pos[i] == nullptr)
                 continue;
         }
+
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, start + i))
+            {
+                tiflash_compiler_builtin_memcpy(pos[i], default_val.data(), sizeof(default_val));
+                pos[i] += sizeof(default_val);
+                continue;
+            }
+        }
+
         UInt32 str_size = sizeAt(start + i);
-        tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
-        pos[i] += sizeof(UInt32);
-        inline_memcpy(pos[i], &chars[offsetAt(start + i)], str_size);
-        pos[i] += str_size;
+        const void * src = &chars[offsetAt(start + i)];
+        if constexpr (need_decode_collator)
+        {
+            auto sort_key
+                = derived_collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
+            // For terminating zero.
+            str_size = sort_key.size + 1;
+
+            tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
+            pos[i] += sizeof(UInt32);
+            inline_memcpy(pos[i], sort_key.data, sort_key.size);
+            pos[i] += sort_key.size;
+            *(pos[i]) = '\0';
+            pos[i] += 1;
+        }
+        else
+        {
+            tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
+            pos[i] += sizeof(UInt32);
+            inline_memcpy(pos[i], src, str_size);
+            pos[i] += str_size;
+        }
     }
 }
 
@@ -571,17 +849,99 @@ void ColumnString::serializeToPosForColumnArray(
     const IColumn::Offsets & array_offsets) const
 {
     if (has_null)
-        serializeToPosForColumnArrayImpl<true>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl<
+            /*has_null=*/true,
+            /*need_decode_collator=*/false,
+            TiDB::ITiDBCollator,
+            /*has_nullmap=*/false>(pos, start, length, array_offsets, nullptr, nullptr, nullptr);
     else
-        serializeToPosForColumnArrayImpl<false>(pos, start, length, array_offsets);
+        serializeToPosForColumnArrayImpl<
+            /*has_null=*/false,
+            /*need_decode_collator=*/false,
+            TiDB::ITiDBCollator,
+            /*has_nullmap=*/false>(pos, start, length, array_offsets, nullptr, nullptr, nullptr);
 }
 
-template <bool has_null>
+void ColumnString::serializeToPosForCmpColumnArray(
+    PaddedPODArray<char *> & pos,
+    size_t start,
+    size_t length,
+    bool has_null,
+    const NullMap * nullmap,
+    const IColumn::Offsets & array_offsets,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container) const
+{
+#define M(VAR_PREFIX, COLLATOR_NAME, IMPL_TYPE, COLLATOR_ID, has_null, has_nullmap) \
+    case (COLLATOR_ID):                                                             \
+    {                                                                               \
+        serializeToPosForColumnArrayImpl<has_null, true, IMPL_TYPE, has_nullmap>(   \
+            pos,                                                                    \
+            start,                                                                  \
+            length,                                                                 \
+            array_offsets,                                                          \
+            collator,                                                               \
+            sort_key_container,                                                     \
+            nullmap);                                                               \
+        break;                                                                      \
+    }
+
+#define CALL3(has_null, has_nullmap)                                                            \
+    {                                                                                           \
+        RUNTIME_CHECK(collator && sort_key_container);                                          \
+        switch (collator->getCollatorId())                                                      \
+        {                                                                                       \
+            APPLY_FOR_COLLATOR_TYPES(M, has_null, has_nullmap)                                  \
+        default:                                                                                \
+        {                                                                                       \
+            throw Exception(fmt::format("unexpected collator: {}", collator->getCollatorId())); \
+        }                                                                                       \
+        }                                                                                       \
+    }
+
+#define CALL2(has_null, has_nullmap)                                                             \
+    {                                                                                            \
+        if (needDecodeCollatorForCmp(collator))                                                  \
+            CALL3(has_null, has_nullmap)                                                         \
+        else                                                                                     \
+            serializeToPosForColumnArrayImpl<has_null, false, TiDB::ITiDBCollator, has_nullmap>( \
+                pos,                                                                             \
+                start,                                                                           \
+                length,                                                                          \
+                array_offsets,                                                                   \
+                collator,                                                                        \
+                sort_key_container,                                                              \
+                nullmap);                                                                        \
+    }
+
+#define CALL1(has_null)            \
+    {                              \
+        if (nullmap)               \
+            CALL2(has_null, true)  \
+        else                       \
+            CALL2(has_null, false) \
+    }
+
+    if (has_null)
+        CALL1(true)
+    else
+        CALL1(false)
+
+#undef CALL1
+#undef CALL2
+#undef CALL3
+#undef M
+}
+
+template <bool has_null, bool need_decode_collator, typename DerivedCollator, bool has_nullmap>
 void ColumnString::serializeToPosForColumnArrayImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
-    const IColumn::Offsets & array_offsets) const
+    const IColumn::Offsets & array_offsets,
+    const TiDB::TiDBCollatorPtr & collator,
+    String * sort_key_container,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(
@@ -596,7 +956,12 @@ void ColumnString::serializeToPosForColumnArrayImpl(
         array_offsets.back(),
         size());
 
-    /// countSerializeByteSizeForColumnArray has already checked that the size of one element is not greater than UINT32_MAX
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == array_offsets.size()));
+
+    /// To avoid virtual function call of sortKey().
+    const auto * derived_collator = static_cast<const DerivedCollator *>(collator);
+
+    /// countSerializeByteSizeForCmpColumnArray has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
     {
         if constexpr (has_null)
@@ -604,15 +969,48 @@ void ColumnString::serializeToPosForColumnArrayImpl(
             if (pos[i] == nullptr)
                 continue;
         }
-        for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
+        if constexpr (has_nullmap)
         {
-            UInt32 str_size = sizeAt(j);
-            tiflash_compiler_builtin_memcpy(pos[i], &str_size, sizeof(UInt32));
-            pos[i] += sizeof(UInt32);
+            if (DB::isNullAt(*nullmap, start + i))
+                continue;
         }
-        size_t strs_size = offsetAt(array_offsets[start + i]) - offsetAt(array_offsets[start + i - 1]);
-        inline_memcpy(pos[i], &chars[offsetAt(array_offsets[start + i - 1])], strs_size);
-        pos[i] += strs_size;
+        if constexpr (need_decode_collator)
+        {
+            auto * size_pos = pos[i];
+            auto * p = pos[i];
+            p += (array_offsets[start + i] - array_offsets[start + i - 1]) * sizeof(UInt32);
+            for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
+            {
+                UInt32 str_size = sizeAt(j);
+                const void * src = &chars[offsetAt(j)];
+                auto sort_key
+                    = derived_collator->sortKey(reinterpret_cast<const char *>(src), str_size - 1, *sort_key_container);
+                // For terminating zero.
+                str_size = sort_key.size + 1;
+
+                tiflash_compiler_builtin_memcpy(size_pos, &str_size, sizeof(UInt32));
+                size_pos += sizeof(UInt32);
+                inline_memcpy(p, sort_key.data, sort_key.size);
+                p += sort_key.size;
+                *p = '\0';
+                p += 1;
+            }
+            pos[i] = p;
+        }
+        else
+        {
+            auto * p = pos[i];
+            for (size_t j = array_offsets[start + i - 1]; j < array_offsets[start + i]; ++j)
+            {
+                UInt32 str_size = sizeAt(j);
+                tiflash_compiler_builtin_memcpy(p, &str_size, sizeof(UInt32));
+                p += sizeof(UInt32);
+            }
+            size_t strs_size = offsetAt(array_offsets[start + i]) - offsetAt(array_offsets[start + i - 1]);
+            inline_memcpy(p, &chars[offsetAt(array_offsets[start + i - 1])], strs_size);
+            p += strs_size;
+            pos[i] = p;
+        }
     }
 }
 
@@ -716,7 +1114,7 @@ void ColumnString::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, boo
         pos[i] += sizeof(UInt32);
 
         chars.resize(char_size + str_size);
-        memcpySmallAllowReadWriteOverflow15(&chars[char_size], pos[i], str_size);
+        inline_memcpy(&chars[char_size], pos[i], str_size);
         char_size += str_size;
         offsets[prev_size + i] = char_size;
         pos[i] += str_size;
@@ -759,7 +1157,7 @@ void ColumnString::deserializeAndInsertFromPosForColumnArray(
             offsets[j] = char_size;
         }
         chars.resize(char_size);
-        memcpySmallAllowReadWriteOverflow15(&chars[prev_char_size], pos[i], char_size - prev_char_size);
+        inline_memcpy(&chars[prev_char_size], pos[i], char_size - prev_char_size);
         pos[i] += char_size - prev_char_size;
     }
 }
@@ -788,6 +1186,41 @@ void ColumnString::flushNTAlignBuffer()
         align_buffer_ptrs.reset();
     }
 #endif
+}
+
+void ColumnString::deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const
+{
+    size_t size = pos.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt32 str_size;
+        tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+        pos[i] += sizeof(UInt32) + str_size;
+    }
+}
+
+void ColumnString::deserializeAndAdvancePosForColumnArray(
+    PaddedPODArray<char *> & pos,
+    const IColumn::Offsets & array_offsets) const
+{
+    RUNTIME_CHECK_MSG(
+        pos.size() == array_offsets.size(),
+        "size of pos({}) != size of array_offsets({})",
+        pos.size(),
+        array_offsets.size());
+    size_t size = pos.size();
+    for (size_t i = 0; i < size; ++i)
+    {
+        size_t char_size = 0;
+        for (size_t j = array_offsets[i - 1]; j < array_offsets[i]; ++j)
+        {
+            UInt32 str_size;
+            tiflash_compiler_builtin_memcpy(&str_size, pos[i], sizeof(UInt32));
+            pos[i] += sizeof(UInt32);
+            char_size += str_size;
+        }
+        pos[i] += char_size;
+    }
 }
 
 void updateWeakHash32BinPadding(const std::string_view & view, size_t idx, ColumnString::WeakHash32Info & info)

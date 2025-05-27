@@ -283,7 +283,8 @@ void ExecutorStatisticsCollector::fillRemoteExecutionSummaries(tipb::SelectRespo
             response.add_execution_summaries(),
             p.second,
             p.first,
-            force_fill_executor_id);
+            force_fill_executor_id,
+            false);
 }
 
 } // namespace DB

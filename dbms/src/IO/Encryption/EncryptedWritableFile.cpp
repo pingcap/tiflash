@@ -38,7 +38,7 @@ ssize_t EncryptedWritableFile::write(char * buf, size_t size)
     return file->write(buf, size);
 }
 
-ssize_t EncryptedWritableFile::pwrite(char * buf, size_t size, off_t offset) const
+ssize_t EncryptedWritableFile::pwrite(char * buf, size_t size, off_t offset)
 {
     stream->encrypt(offset, buf, size);
     return file->pwrite(buf, size, offset);

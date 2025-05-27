@@ -225,7 +225,7 @@ struct TypeId<Float64>
     static constexpr const TypeIndex value = TypeIndex::Float64;
 };
 
-/// Avoid to use `std::vector<bool`
+/// Avoid to use `std::vector<bool>`
 using BoolVec = std::vector<UInt8>;
 
 } // namespace DB

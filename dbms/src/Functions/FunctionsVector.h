@@ -25,9 +25,9 @@
 #include <DataTypes/DataTypesNumber.h>
 #include <Functions/FunctionFactory.h>
 #include <Functions/FunctionHelpers.h>
-#include <Functions/FunctionsVector.h>
 #include <Functions/IFunction.h>
 #include <TiDB/Decode/Vector.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
@@ -35,6 +35,9 @@ namespace ErrorCodes
 {
 extern const int ILLEGAL_TYPE_OF_ARGUMENT;
 }
+
+template <typename RetType>
+FunctionPtr getVecDistanceFnFromMetric(tipb::VectorDistanceMetric metric, const Context & ctx);
 
 class FunctionsCastVectorFloat32AsString : public IFunction
 {
@@ -197,11 +200,15 @@ public:
     }
 };
 
+// Usually returns Float64 type, but when enable_distance_proj=true, we will add a
+// Float32 type distance column to calculate the result, and this change needs to be supported here.
+// see https://github.com/tidbcloud/tiflash-cse/pull/395
+template <typename RetType>
 class FunctionsVecL1Distance : public IFunction
 {
 public:
     static constexpr auto name = "vecL1Distance";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsVecL1Distance>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsVecL1Distance<RetType>>(); }
 
     String getName() const override { return name; }
 
@@ -223,14 +230,14 @@ public:
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return makeNullable(std::make_shared<DataTypeFloat64>());
+        return makeNullable(std::make_shared<DataTypeNumber<RetType>>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto col_a = block.safeGetByPosition(arguments[0]).column;
         auto col_b = block.safeGetByPosition(arguments[1]).column;
-        auto col_result = ColumnNullable::create(ColumnFloat64::create(), ColumnUInt8::create());
+        auto col_result = ColumnNullable::create(ColumnVector<RetType>::create(), ColumnUInt8::create());
         col_result->reserve(block.rows());
 
         for (size_t i = 0; i < block.rows(); ++i)
@@ -254,11 +261,15 @@ public:
     }
 };
 
+// Usually returns Float64 type, but when enable_distance_proj=true, we will add a
+// Float32 type distance column to calculate the result, and this change needs to be supported here.
+// see https://github.com/tidbcloud/tiflash-cse/pull/395
+template <typename RetType>
 class FunctionsVecL2Distance : public IFunction
 {
 public:
     static constexpr auto name = "vecL2Distance";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsVecL2Distance>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsVecL2Distance<RetType>>(); }
 
     String getName() const override { return name; }
 
@@ -280,14 +291,14 @@ public:
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return makeNullable(std::make_shared<DataTypeFloat64>());
+        return makeNullable(std::make_shared<DataTypeNumber<RetType>>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto col_a = block.safeGetByPosition(arguments[0]).column;
         auto col_b = block.safeGetByPosition(arguments[1]).column;
-        auto col_result = ColumnNullable::create(ColumnFloat64::create(), ColumnUInt8::create());
+        auto col_result = ColumnNullable::create(ColumnVector<RetType>::create(), ColumnUInt8::create());
         col_result->reserve(block.rows());
 
         for (size_t i = 0; i < block.rows(); ++i)
@@ -312,11 +323,15 @@ public:
     }
 };
 
+// Usually returns Float64 type, but when enable_distance_proj=true, we will add a
+// Float32 type distance column to calculate the result, and this change needs to be supported here.
+// see https://github.com/tidbcloud/tiflash-cse/pull/395
+template <typename RetType>
 class FunctionsVecCosineDistance : public IFunction
 {
 public:
     static constexpr auto name = "vecCosineDistance";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsVecCosineDistance>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsVecCosineDistance<RetType>>(); }
 
     String getName() const override { return name; }
 
@@ -338,14 +353,14 @@ public:
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return makeNullable(std::make_shared<DataTypeFloat64>());
+        return makeNullable(std::make_shared<DataTypeNumber<RetType>>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto col_a = block.safeGetByPosition(arguments[0]).column;
         auto col_b = block.safeGetByPosition(arguments[1]).column;
-        auto col_result = ColumnNullable::create(ColumnFloat64::create(), ColumnUInt8::create());
+        auto col_result = ColumnNullable::create(ColumnVector<RetType>::create(), ColumnUInt8::create());
         col_result->reserve(block.rows());
 
         for (size_t i = 0; i < block.rows(); ++i)
@@ -369,11 +384,15 @@ public:
     }
 };
 
+// Usually returns Float64 type, but when enable_distance_proj=true, we will add a
+// Float32 type distance column to calculate the result, and this change needs to be supported here.
+// see https://github.com/tidbcloud/tiflash-cse/pull/395
+template <typename RetType>
 class FunctionsVecNegativeInnerProduct : public IFunction
 {
 public:
     static constexpr auto name = "vecNegativeInnerProduct";
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsVecNegativeInnerProduct>(); }
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionsVecNegativeInnerProduct<RetType>>(); }
 
     String getName() const override { return name; }
 
@@ -395,14 +414,14 @@ public:
                 "Illegal type " + arguments[1]->getName() + " of argument of function " + getName(),
                 ErrorCodes::ILLEGAL_TYPE_OF_ARGUMENT);
 
-        return makeNullable(std::make_shared<DataTypeFloat64>());
+        return makeNullable(std::make_shared<DataTypeNumber<RetType>>());
     }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
         auto col_a = block.safeGetByPosition(arguments[0]).column;
         auto col_b = block.safeGetByPosition(arguments[1]).column;
-        auto col_result = ColumnNullable::create(ColumnFloat64::create(), ColumnUInt8::create());
+        auto col_result = ColumnNullable::create(ColumnVector<RetType>::create(), ColumnUInt8::create());
         col_result->reserve(block.rows());
 
         for (size_t i = 0; i < block.rows(); ++i)

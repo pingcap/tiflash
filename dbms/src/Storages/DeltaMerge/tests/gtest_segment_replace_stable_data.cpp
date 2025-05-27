@@ -189,10 +189,9 @@ protected:
     inline void assertPK(PageIdU64 segment_id, std::string_view expected_sequence)
     {
         auto left_handle = getSegmentHandle(segment_id, {});
-        const auto * left_r = toColumnVectorDataPtr<Int64>(left_handle);
+        const auto & left_r = toColumnVectorData<Int64>(left_handle);
         auto expected_left_handle = genSequence<Int64>(expected_sequence);
-        ASSERT_EQ(expected_left_handle.size(), left_r->size());
-        ASSERT_TRUE(sequenceEqual(expected_left_handle.data(), left_r->data(), left_r->size()));
+        ASSERT_TRUE(sequenceEqual(expected_left_handle, left_r));
     }
 
 private:
@@ -451,7 +450,7 @@ public:
         }
 
         auto & global_context = TiFlashTestEnv::getGlobalContext();
-        // global_context.dropVectorIndexCache();
+        // global_context.dropLocalIndexCache();
         global_context.getSharedContextDisagg()->remote_data_store = nullptr;
         global_context.setPageStorageRunMode(orig_mode);
 
@@ -484,12 +483,7 @@ public:
             nullptr);
 
         auto read_dm_context = dmContext();
-        auto cn_segment_snap = Remote::Serializer::deserializeSegment(
-            *read_dm_context,
-            /* store_id */ 100,
-            0,
-            /* table_id */ 100,
-            snap_proto);
+        auto cn_segment_snap = Remote::Serializer::deserializeSegment(*read_dm_context, snap_proto);
 
         return cn_segment_snap;
     }

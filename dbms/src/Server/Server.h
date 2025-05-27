@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Server/FlashGrpcServerHolder.h>
 #include <Server/IServer.h>
 #include <Server/ServerInfo.h>
 #include <daemon/BaseDaemon.h>
@@ -62,8 +61,6 @@ private:
     std::unique_ptr<Context> global_context;
 
     ServerInfo server_info;
-
-    class TcpHttpServersHolder;
 };
 
 } // namespace DB

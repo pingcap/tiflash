@@ -88,7 +88,7 @@ void AsynchronousMetrics::run()
 
     std::unique_lock lock{wait_mutex};
 
-    /// Next minute + 30 seconds. To be distant with moment of transmission of metrics, see MetricsTransmitter.
+    /// Next minute + 30 seconds. To be distant with moment of transmission of metrics.
     const auto get_next_minute = [] {
         return std::chrono::time_point_cast<std::chrono::minutes, std::chrono::steady_clock>(
                    std::chrono::steady_clock::now() + std::chrono::minutes(1))
@@ -207,10 +207,10 @@ void AsynchronousMetrics::update()
     }
 
     {
-        if (auto rn_delta_index_cache = context.getSharedContextDisagg()->rn_delta_index_cache)
+        if (auto rn_mvcc_index_cache = context.getSharedContextDisagg()->rn_mvcc_index_cache)
         {
-            set("RNDeltaIndexCacheBytes", rn_delta_index_cache->getCacheWeight());
-            set("RNDeltaIndexFiles", rn_delta_index_cache->getCacheCount());
+            set("RNMVCCIndexCacheBytes", rn_mvcc_index_cache->getCacheWeight());
+            set("RNMVCCIndexFiles", rn_mvcc_index_cache->getCacheCount());
         }
     }
 

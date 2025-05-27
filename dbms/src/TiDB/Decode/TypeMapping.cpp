@@ -204,7 +204,22 @@ DataTypePtr TypeMapping::getDataType(const ColumnInfo & column_info)
 // This does not support the "duration" type.
 DataTypePtr getDataTypeByColumnInfo(const ColumnInfo & column_info)
 {
-    DataTypePtr base = TypeMapping::instance().getDataType(column_info);
+    DataTypePtr base;
+    if (likely(column_info.tp != TiDB::TP::TypeNull))
+    {
+        base = TypeMapping::instance().getDataType(column_info);
+    }
+    else
+    {
+        // Storing a column with `ColumnNothing` is not allowed in `StorageFactory::get/checkAllTypesAreAllowedInTable`
+        // Using `ColumnNothing` in IStorage may bring unexpected behavior when we
+        // try to write or read the column. So we change it to `ColumnInt8`.
+        LOG_WARNING(
+            Logger::get(),
+            "Column type is TiDB::TP::TypeNull, change it to Int8 for compatibility, column_id={}",
+            column_info.id);
+        base = DataTypeFactory::instance().getOrSet("Int8");
+    }
 
     if (!column_info.hasNotNullFlag())
     {
@@ -223,16 +238,6 @@ DataTypePtr getDataTypeByColumnInfoForComputingLayer(const ColumnInfo & column_i
     {
         base = std::make_shared<DataTypeMyDuration>(column_info.decimal);
     }
-    if (!column_info.hasNotNullFlag())
-    {
-        return std::make_shared<DataTypeNullable>(base);
-    }
-    return base;
-}
-
-DataTypePtr getDataTypeByColumnInfoForDisaggregatedStorageLayer(const ColumnInfo & column_info)
-{
-    DataTypePtr base = TypeMapping::instance().getDataType(column_info);
     if (!column_info.hasNotNullFlag())
     {
         return std::make_shared<DataTypeNullable>(base);

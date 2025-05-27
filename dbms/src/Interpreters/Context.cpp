@@ -16,7 +16,6 @@
 #include <Common/DNSCache.h>
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
-#include <Common/Macros.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Common/TiFlashSecurity.h>
@@ -52,10 +51,10 @@
 #include <Server/ServerInfo.h>
 #include <Storages/BackgroundProcessingPool.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSchema.h>
-#include <Storages/DeltaMerge/DeltaIndexManager.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndexManager.h>
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm.h>
+#include <Storages/DeltaMerge/Index/LocalIndexCache.h>
 #include <Storages/DeltaMerge/Index/MinMaxIndex.h>
-#include <Storages/DeltaMerge/Index/VectorIndexCache.h>
 #include <Storages/DeltaMerge/LocalIndexerScheduler.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalPageIdAllocator.h>
 #include <Storages/DeltaMerge/StoragePool/GlobalStoragePool.h>
@@ -70,7 +69,6 @@
 #include <Storages/Page/V3/Universal/UniversalPageStorageService.h>
 #include <Storages/PathCapacityMetrics.h>
 #include <Storages/PathPool.h>
-#include <TableFunctions/TableFunctionFactory.h>
 #include <TiDB/Schema/SchemaSyncService.h>
 #include <common/logger_useful.h>
 #include <fiu.h>
@@ -78,7 +76,6 @@
 
 #include <boost/functional/hash/hash.hpp>
 #include <pcg_random.hpp>
-#include <set>
 #include <unordered_map>
 
 
@@ -137,7 +134,6 @@ struct ContextShared
     String path; /// Path to the primary data directory, with a slash at the end.
     String tmp_path; /// The path to the temporary files that occur when processing the request.
     String flags_path; /// Path to the directory with some control flags for server maintenance.
-    String user_files_path; /// Path to the directory with user provided files, usable by 'file' table function.
     PathPool
         path_pool; /// The data directories. RegionPersister and some Storage Engine like DeltaMerge will use this to manage data placement on disks.
     ConfigurationPtr config; /// Global configuration settings.
@@ -145,17 +141,18 @@ struct ContextShared
     Databases databases; /// List of databases and tables in them.
     FormatFactory format_factory; /// Formats.
     String default_profile_name; /// Default profile name used for default values.
-    String system_profile_name; /// Profile used by system processes
     std::shared_ptr<ISecurityManager> security_manager; /// Known users.
     Quotas quotas; /// Known quotas for resource use.
     mutable DBGInvoker dbg_invoker; /// Execute inner functions, debug only.
     mutable MarkCachePtr mark_cache; /// Cache of marks in compressed files.
     mutable DM::MinMaxIndexCachePtr minmax_index_cache; /// Cache of minmax index in compressed files.
-    mutable DM::VectorIndexCachePtr vector_index_cache;
+    mutable DM::LocalIndexCachePtr
+        light_local_index_cache; // Cache of local index reader which memory usage is small < 1MB.
+    mutable DM::LocalIndexCachePtr
+        heavy_local_index_cache; // Cache of local index reader which memory usage is large > 1MB.
     mutable DM::ColumnCacheLongTermPtr column_cache_long_term;
     mutable DM::DeltaIndexManagerPtr delta_index_manager; /// Manage the Delta Indies of Segments.
     ProcessList process_list; /// Executing queries at the moment.
-    ViewDependencies view_dependencies; /// Current dependencies
     ConfigurationPtr users_config; /// Config with the users, profiles and quotas sections.
     BackgroundProcessingPoolPtr background_pool; /// The thread pool for the background work performed by the tables.
     BackgroundProcessingPoolPtr
@@ -163,8 +160,6 @@ struct ContextShared
     BackgroundProcessingPoolPtr
         ps_compact_background_pool; /// The thread pool for the background work performed by the ps v2.
     mutable TMTContextPtr tmt_context; /// Context of TiFlash. Note that this should be free before background_pool.
-    MultiVersion<Macros> macros; /// Substitutions extracted from config.
-    String format_schema_path; /// Path to a directory that contains schema files used by input formats.
 
     SharedQueriesPtr shared_queries; /// The cache of shared queries.
     SchemaSyncServicePtr schema_sync_service; /// Schema sync service instance.
@@ -188,6 +183,8 @@ struct ContextShared
 
     JointThreadInfoJeallocMapPtr joint_memory_allocation_map; /// Joint thread-wise alloc/dealloc map
 
+    std::unordered_set<KeyspaceID> keyspace_blocklist;
+    std::unordered_set<RegionID> region_blocklist;
     std::unordered_set<uint64_t> store_id_blocklist; /// Those store id are blocked from batch cop request.
 
     class SessionKeyHash
@@ -230,9 +227,12 @@ struct ContextShared
 
     std::shared_ptr<DB::DM::SharedBlockSchemas> shared_block_schemas;
 
-    explicit ContextShared(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_)
+    ContextShared(
+        std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory_,
+        Context::ApplicationType app_type)
         : runtime_components_factory(std::move(runtime_components_factory_))
         , storage_run_mode(PageStorageRunMode::ONLY_V3)
+        , application_type(app_type)
     {
         /// TODO: make it singleton (?)
 #ifndef MULTIPLE_CONTEXT_GTEST
@@ -335,21 +335,31 @@ private:
 Context::Context() = default;
 
 
-std::unique_ptr<Context> Context::createGlobal(std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory)
+std::unique_ptr<Context> Context::createGlobal(
+    std::shared_ptr<IRuntimeComponentsFactory> runtime_components_factory,
+    ApplicationType app_type,
+    const std::optional<DisaggOptions> & disagg_opt)
 {
     std::unique_ptr<Context> res(new Context());
     res->setGlobalContext(*res);
     res->runtime_components_factory = runtime_components_factory;
-    res->shared = std::make_shared<ContextShared>(runtime_components_factory);
+    res->shared = std::make_shared<ContextShared>(runtime_components_factory, app_type);
     res->shared->ctx_disagg = SharedContextDisagg::create(*res);
+    if (disagg_opt)
+    {
+        res->shared->ctx_disagg->disaggregated_mode = disagg_opt->mode;
+        res->shared->ctx_disagg->use_autoscaler = disagg_opt->use_autoscaler;
+    }
     res->quota = std::make_shared<QuotaForIntervals>();
     res->timezone_info.init();
     return res;
 }
 
-std::unique_ptr<Context> Context::createGlobal()
+std::unique_ptr<Context> Context::createGlobal(
+    ApplicationType app_type,
+    const std::optional<DisaggOptions> & disagg_opt)
 {
-    return createGlobal(std::make_unique<RuntimeComponentsFactory>());
+    return createGlobal(std::make_unique<RuntimeComponentsFactory>(), app_type, disagg_opt);
 }
 
 Context::~Context()
@@ -553,12 +563,6 @@ String Context::getFlagsPath() const
     return shared->flags_path;
 }
 
-String Context::getUserFilesPath() const
-{
-    auto lock = getLock();
-    return shared->user_files_path;
-}
-
 PathPool & Context::getPathPool() const
 {
     auto lock = getLock();
@@ -576,9 +580,6 @@ void Context::setPath(const String & path)
 
     if (shared->flags_path.empty())
         shared->flags_path = shared->path + "flags/";
-
-    if (shared->user_files_path.empty())
-        shared->user_files_path = shared->path + "user_files/";
 }
 
 void Context::setTemporaryPath(const String & path)
@@ -591,12 +592,6 @@ void Context::setFlagsPath(const String & path)
 {
     auto lock = getLock();
     shared->flags_path = path;
-}
-
-void Context::setUserFilesPath(const String & path)
-{
-    auto lock = getLock();
-    shared->user_files_path = path;
 }
 
 void Context::setPathPool(
@@ -653,8 +648,7 @@ TiFlashSecurityConfigPtr Context::getSecurityConfig()
 
 void Context::reloadDeltaTreeConfig(const Poco::Util::AbstractConfiguration & config)
 {
-    auto default_profile_name = config.getString("default_profile", "default");
-    String elem = "profiles." + default_profile_name;
+    String elem = "profiles.default";
     if (!config.has(elem))
     {
         return;
@@ -691,7 +685,7 @@ void Context::calculateUserSettings()
     settings = Settings();
 
     /// 2) Apply settings from default profile ("profiles.*" in `users_config`)
-    auto default_profile_name = getDefaultProfileName();
+    auto default_profile_name = shared->default_profile_name;
     if (profile_name != default_profile_name)
         settings.setProfile(default_profile_name, *shared->users_config);
 
@@ -758,54 +752,6 @@ void Context::checkDatabaseAccessRightsImpl(const std::string & database_name) c
         throw Exception(fmt::format("Access denied to database {}", database_name), ErrorCodes::DATABASE_ACCESS_DENIED);
 }
 
-void Context::addDependency(const DatabaseAndTableName & from, const DatabaseAndTableName & where)
-{
-    auto lock = getLock();
-    checkDatabaseAccessRightsImpl(from.first);
-    checkDatabaseAccessRightsImpl(where.first);
-    shared->view_dependencies[from].insert(where);
-
-    // Notify table of dependencies change
-    auto table = tryGetTable(from.first, from.second);
-    if (table != nullptr)
-        table->updateDependencies();
-}
-
-void Context::removeDependency(const DatabaseAndTableName & from, const DatabaseAndTableName & where)
-{
-    auto lock = getLock();
-    checkDatabaseAccessRightsImpl(from.first);
-    checkDatabaseAccessRightsImpl(where.first);
-    shared->view_dependencies[from].erase(where);
-
-    // Notify table of dependencies change
-    auto table = tryGetTable(from.first, from.second);
-    if (table != nullptr)
-        table->updateDependencies();
-}
-
-Dependencies Context::getDependencies(const String & database_name, const String & table_name) const
-{
-    auto lock = getLock();
-
-    String db = resolveDatabase(database_name, current_database);
-
-    if (database_name.empty() && tryGetExternalTable(table_name))
-    {
-        /// Table is temporary. Access granted.
-    }
-    else
-    {
-        checkDatabaseAccessRightsImpl(db);
-    }
-
-    auto iter = shared->view_dependencies.find(DatabaseAndTableName(db, table_name));
-    if (iter == shared->view_dependencies.end())
-        return {};
-
-    return Dependencies(iter->second.begin(), iter->second.end());
-}
-
 bool Context::isTableExist(const String & database_name, const String & table_name) const
 {
     auto lock = getLock();
@@ -824,12 +770,6 @@ bool Context::isDatabaseExist(const String & database_name) const
     checkDatabaseAccessRightsImpl(db);
     return shared->databases.end() != shared->databases.find(db);
 }
-
-bool Context::isExternalTableExist(const String & table_name) const
-{
-    return external_tables.end() != external_tables.find(table_name);
-}
-
 
 void Context::assertTableExists(const String & database_name, const String & table_name) const
 {
@@ -894,39 +834,6 @@ void Context::assertDatabaseDoesntExist(const String & database_name) const
             ErrorCodes::DATABASE_ALREADY_EXISTS);
 }
 
-
-Tables Context::getExternalTables() const
-{
-    auto lock = getLock();
-
-    Tables res;
-    for (const auto & table : external_tables)
-        res[table.first] = table.second.first;
-
-    if (session_context && session_context != this)
-    {
-        Tables buf = session_context->getExternalTables();
-        res.insert(buf.begin(), buf.end());
-    }
-    else if (global_context && global_context != this)
-    {
-        Tables buf = global_context->getExternalTables();
-        res.insert(buf.begin(), buf.end());
-    }
-    return res;
-}
-
-
-StoragePtr Context::tryGetExternalTable(const String & table_name) const
-{
-    auto jt = external_tables.find(table_name);
-    if (external_tables.end() == jt)
-        return StoragePtr();
-
-    return jt->second.first;
-}
-
-
 StoragePtr Context::getTable(const String & database_name, const String & table_name) const
 {
     Exception exc;
@@ -946,13 +853,6 @@ StoragePtr Context::tryGetTable(const String & database_name, const String & tab
 StoragePtr Context::getTableImpl(const String & database_name, const String & table_name, Exception * exception) const
 {
     auto lock = getLock();
-
-    if (database_name.empty())
-    {
-        StoragePtr res = tryGetExternalTable(table_name);
-        if (res)
-            return res;
-    }
 
     String db = resolveDatabase(database_name, current_database);
     checkDatabaseAccessRightsImpl(db);
@@ -979,52 +879,6 @@ StoragePtr Context::getTableImpl(const String & database_name, const String & ta
 
     return table;
 }
-
-
-void Context::addExternalTable(const String & table_name, const StoragePtr & storage, const ASTPtr & ast)
-{
-    if (external_tables.end() != external_tables.find(table_name))
-        throw Exception(
-            fmt::format("Temporary table {} already exists.", backQuoteIfNeed(table_name)),
-            ErrorCodes::TABLE_ALREADY_EXISTS);
-
-    external_tables[table_name] = std::pair(storage, ast);
-}
-
-StoragePtr Context::tryRemoveExternalTable(const String & table_name)
-{
-    auto it = external_tables.find(table_name);
-
-    if (external_tables.end() == it)
-        return StoragePtr();
-
-    auto storage = it->second.first;
-    external_tables.erase(it);
-    return storage;
-}
-
-
-StoragePtr Context::executeTableFunction(const ASTPtr & table_expression)
-{
-    /// Slightly suboptimal.
-    auto hash = table_expression->getTreeHash();
-    String key = toString(hash.first) + '_' + toString(hash.second);
-
-    StoragePtr & res = table_function_results[key];
-
-    if (!res)
-    {
-        TableFunctionPtr table_function_ptr = TableFunctionFactory::instance().get(
-            typeid_cast<const ASTFunction *>(table_expression.get())->name,
-            *this);
-
-        /// Run it and remember the result
-        res = table_function_ptr->execute(table_expression, *this);
-    }
-
-    return res;
-}
-
 
 DDLGuard::DDLGuard(
     Map & map_,
@@ -1103,17 +957,6 @@ ASTPtr Context::getCreateTableQuery(const String & database_name, const String &
     return shared->databases[db]->getCreateTableQuery(*this, table_name);
 }
 
-ASTPtr Context::getCreateExternalTableQuery(const String & table_name) const
-{
-    auto jt = external_tables.find(table_name);
-    if (external_tables.end() == jt)
-        throw Exception(
-            fmt::format("Temporary table {} doesn't exist", backQuoteIfNeed(table_name)),
-            ErrorCodes::UNKNOWN_TABLE);
-
-    return jt->second.second;
-}
-
 ASTPtr Context::getCreateDatabaseQuery(const String & database_name) const
 {
     auto lock = getLock();
@@ -1150,25 +993,15 @@ void Context::setSettings(const Settings & settings_)
 
 void Context::setSetting(const String & name, const Field & value)
 {
-    if (name == "profile")
-    {
-        auto lock = getLock();
-        settings.setProfile(value.safeGet<String>(), *shared->users_config);
-    }
-    else
-        settings.set(name, value);
+    assert(name != "profile");
+    settings.set(name, value);
 }
 
 
 void Context::setSetting(const String & name, const std::string & value)
 {
-    if (name == "profile")
-    {
-        auto lock = getLock();
-        settings.setProfile(value, *shared->users_config);
-    }
-    else
-        settings.set(name, value);
+    assert(name != "profile");
+    settings.set(name, value);
 }
 
 
@@ -1247,16 +1080,6 @@ String Context::getDefaultFormat() const
 void Context::setDefaultFormat(const String & name)
 {
     default_format = name;
-}
-
-MultiVersion<Macros>::Version Context::getMacros() const
-{
-    return shared->macros.get();
-}
-
-void Context::setMacros(std::unique_ptr<Macros> && macros)
-{
-    shared->macros.set(std::move(macros));
 }
 
 const Context & Context::getQueryContext() const
@@ -1401,26 +1224,35 @@ void Context::dropMinMaxIndexCache() const
         shared->minmax_index_cache->reset();
 }
 
-void Context::setVectorIndexCache(size_t cache_entities)
+void Context::setLocalIndexCache(size_t light_local_index_cache, size_t heavy_cache_entities)
 {
     auto lock = getLock();
 
-    RUNTIME_CHECK(!shared->vector_index_cache);
-
-    shared->vector_index_cache = std::make_shared<DM::VectorIndexCache>(cache_entities);
+    RUNTIME_CHECK(!shared->light_local_index_cache);
+    shared->light_local_index_cache = std::make_shared<DM::LocalIndexCache>(light_local_index_cache);
+    RUNTIME_CHECK(!shared->heavy_local_index_cache);
+    shared->heavy_local_index_cache = std::make_shared<DM::LocalIndexCache>(heavy_cache_entities);
 }
 
-DM::VectorIndexCachePtr Context::getVectorIndexCache() const
+DM::LocalIndexCachePtr Context::getLightLocalIndexCache() const
 {
     auto lock = getLock();
-    return shared->vector_index_cache;
+    return shared->light_local_index_cache;
 }
 
-void Context::dropVectorIndexCache() const
+DM::LocalIndexCachePtr Context::getHeavyLocalIndexCache() const
 {
     auto lock = getLock();
-    if (shared->vector_index_cache)
-        shared->vector_index_cache.reset();
+    return shared->heavy_local_index_cache;
+}
+
+void Context::dropLocalIndexCache() const
+{
+    auto lock = getLock();
+    if (shared->light_local_index_cache)
+        shared->light_local_index_cache.reset();
+    if (shared->heavy_local_index_cache)
+        shared->heavy_local_index_cache.reset();
 }
 
 void Context::setColumnCacheLongTerm(size_t cache_size_in_bytes)
@@ -1975,15 +1807,6 @@ SharedContextDisaggPtr Context::getSharedContextDisagg() const
     return shared->ctx_disagg;
 }
 
-UInt16 Context::getTCPPort() const
-{
-    auto lock = getLock();
-
-    auto & config = getConfigRef();
-    return config.getInt("tcp_port");
-}
-
-
 void Context::initializeSystemLogs()
 {
     auto lock = getLock();
@@ -2059,7 +1882,7 @@ void Context::reloadConfig() const
 {
     /// Use mutex if callback may be changed after startup.
     if (!shared->config_reload_callback)
-        throw Exception("Can't reload config beacuse config_reload_callback is not set.", ErrorCodes::LOGICAL_ERROR);
+        throw Exception("Can't reload config because config_reload_callback is not set.", ErrorCodes::LOGICAL_ERROR);
 
     shared->config_reload_callback();
 }
@@ -2071,44 +1894,12 @@ void Context::shutdown()
     shared->shutdown();
 }
 
-
-Context::ApplicationType Context::getApplicationType() const
+void Context::setDefaultProfiles()
 {
-    return shared->application_type;
-}
-
-void Context::setApplicationType(ApplicationType type)
-{
-    /// Lock isn't required, you should set it at start
-    shared->application_type = type;
-}
-
-void Context::setDefaultProfiles(const Poco::Util::AbstractConfiguration & config)
-{
-    shared->default_profile_name = config.getString("default_profile", "default");
-    shared->system_profile_name = config.getString("system_profile", shared->default_profile_name);
-    setSetting("profile", shared->system_profile_name);
+    shared->default_profile_name = "default";
+    auto lock = getLock();
+    settings.setProfile(shared->default_profile_name, *shared->users_config);
     is_config_loaded = true;
-}
-
-String Context::getDefaultProfileName() const
-{
-    return shared->default_profile_name;
-}
-
-String Context::getSystemProfileName() const
-{
-    return shared->system_profile_name;
-}
-
-String Context::getFormatSchemaPath() const
-{
-    return shared->format_schema_path;
-}
-
-void Context::setFormatSchemaPath(const String & path)
-{
-    shared->format_schema_path = path;
 }
 
 SharedQueriesPtr Context::getSharedQueries()
@@ -2225,6 +2016,37 @@ MockMPPServerInfo Context::mockMPPServerInfo() const
 void Context::setMockMPPServerInfo(MockMPPServerInfo & info)
 {
     mpp_server_info = info;
+}
+
+void Context::initKeyspaceBlocklist(const std::unordered_set<KeyspaceID> & keyspace_ids)
+{
+    auto lock = getLock();
+    shared->keyspace_blocklist = keyspace_ids;
+}
+bool Context::isKeyspaceInBlocklist(const KeyspaceID keyspace_id)
+{
+    auto lock = getLock();
+    return shared->keyspace_blocklist.count(keyspace_id) > 0;
+}
+void Context::initRegionBlocklist(const std::unordered_set<RegionID> & region_ids)
+{
+    auto lock = getLock();
+    shared->region_blocklist = region_ids;
+}
+bool Context::isRegionInBlocklist(const RegionID region_id) const
+{
+    auto lock = getLock();
+    return shared->region_blocklist.count(region_id) > 0;
+}
+bool Context::isRegionsContainsInBlocklist(const std::vector<RegionID> & regions) const
+{
+    auto lock = getLock();
+    for (const auto region : regions)
+    {
+        if (isRegionInBlocklist(region))
+            return true;
+    }
+    return false;
 }
 
 const std::unordered_set<uint64_t> * Context::getStoreIdBlockList() const

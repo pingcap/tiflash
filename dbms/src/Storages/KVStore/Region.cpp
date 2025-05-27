@@ -28,6 +28,9 @@
 #include <ext/scope_guard.h>
 #include <memory>
 
+extern std::atomic<Int64> real_rss;
+std::atomic<UInt64> tranquil_time_rss;
+
 namespace DB
 {
 RegionData::WriteCFIter Region::removeDataByWriteIt(const RegionData::WriteCFIter & write_it)
@@ -56,18 +59,25 @@ LockInfoPtr Region::getLockInfo(const RegionLockReadQuery & query) const
     return data.getLockInfo(query);
 }
 
-void Region::insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+void Region::insertDebug(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
-    insert(NameToCF(cf), std::move(key), std::move(value), mode);
+    std::unique_lock<std::shared_mutex> lock(mutex);
+    doInsert(NameToCF(cf), std::move(key), std::move(value), mode);
 }
 
-void Region::insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
+void Region::insertFromSnap(TMTContext & tmt, const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode)
+{
+    insertFromSnap(tmt, NameToCF(cf), std::move(key), std::move(value), mode);
+}
+
+void Region::insertFromSnap(TMTContext & tmt, ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     doInsert(type, std::move(key), std::move(value), mode);
+    maybeWarnMemoryLimitByTable(tmt, "snapshot");
 }
 
-RegionDataRes Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
+RegionDataMemDiff Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode)
 {
     if unlikely (getClusterRaftstoreVer() == RaftstoreVer::V2)
     {
@@ -77,15 +87,14 @@ RegionDataRes Region::doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue 
             {
                 // We can't assert the key exists in write_cf here,
                 // since it may be already written into DeltaTree.
-                return 0;
+                return RegionDataMemDiff{};
             }
         }
     }
-    auto ans = data.insert(type, std::move(key), std::move(value), mode);
-    return ans;
+    return data.insert(type, std::move(key), std::move(value), mode);
 }
 
-void Region::remove(const std::string & cf, const TiKVKey & key)
+void Region::removeDebug(const std::string & cf, const TiKVKey & key)
 {
     std::unique_lock<std::shared_mutex> lock(mutex);
     doRemove(NameToCF(cf), key);
@@ -99,7 +108,7 @@ void Region::doRemove(ColumnFamilyType type, const TiKVKey & key)
 void Region::clearAllData()
 {
     std::unique_lock lock(mutex);
-    data = RegionData();
+    data.assignRegionData(RegionData());
 }
 
 UInt64 Region::appliedIndex() const
@@ -183,6 +192,11 @@ raft_serverpb::PeerState Region::peerState() const
 size_t Region::dataSize() const
 {
     return data.dataSize();
+}
+
+size_t Region::totalSize() const
+{
+    return data.totalSize() + sizeof(RegionMeta);
 }
 
 size_t Region::writeCFCount() const
@@ -294,35 +308,7 @@ void Region::assignRegion(Region && new_region)
 /// try to clean illegal data because of feature `compaction filter`
 void Region::tryCompactionFilter(const Timestamp safe_point)
 {
-    size_t del_write = 0;
-    auto & write_map = data.writeCF().getDataMut();
-    auto & default_map = data.defaultCF().getDataMut();
-    for (auto write_map_it = write_map.begin(); write_map_it != write_map.end();)
-    {
-        const auto & decoded_val = std::get<2>(write_map_it->second);
-        const auto & [pk, ts] = write_map_it->first;
-
-        if (decoded_val.write_type == RecordKVFormat::CFModifyFlag::PutFlag)
-        {
-            if (!decoded_val.short_value)
-            {
-                if (auto data_it = default_map.find({pk, decoded_val.prewrite_ts}); data_it == default_map.end())
-                {
-                    // if key-val in write cf can not find matched data in default cf and its commit-ts < gc-safe-point, we can clean it safely.
-                    if (ts < safe_point)
-                    {
-                        del_write += 1;
-                        data.cf_data_size -= RegionWriteCFData::calcTiKVKeyValueSize(write_map_it->second);
-                        write_map_it = write_map.erase(write_map_it);
-                        continue;
-                    }
-                }
-            }
-        }
-        ++write_map_it;
-    }
-    // No need to check default cf. Because tikv will gc default cf before write cf.
-    if (del_write)
+    if (size_t del_write = data.tryCompactionFilter(safe_point); del_write)
     {
         LOG_INFO(log, "delete {} records in write cf for region_id={}", del_write, meta.regionId());
     }
@@ -347,16 +333,6 @@ Region::Region(DB::RegionMeta && meta_, const TiFlashRaftProxyHelper * proxy_hel
 Region::~Region()
 {
     GET_METRIC(tiflash_raft_classes_count, type_region).Decrement();
-}
-
-TableID Region::getMappedTableID() const
-{
-    return mapped_table_id;
-}
-
-KeyspaceID Region::getKeyspaceID() const
-{
-    return keyspace_id;
 }
 
 void Region::setPeerState(raft_serverpb::PeerState state)
@@ -386,7 +362,8 @@ std::pair<size_t, size_t> Region::getApproxMemCacheInfo() const
 {
     return {
         approx_mem_cache_rows.load(std::memory_order_relaxed),
-        approx_mem_cache_bytes.load(std::memory_order_relaxed)};
+        approx_mem_cache_bytes.load(std::memory_order_relaxed),
+    };
 }
 
 void Region::cleanApproxMemCacheInfo() const
@@ -414,6 +391,59 @@ void Region::observeLearnerReadEvent(Timestamp read_tso) const
 Timestamp Region::getLastObservedReadTso() const
 {
     return last_observed_read_tso.load();
+}
+
+void Region::setRegionTableCtx(RegionTableCtxPtr ctx) const
+{
+    data.setRegionTableCtx(ctx);
+}
+
+void Region::maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from)
+{
+    // If there are data flow in, we will check if the memory is exhausted.
+    auto limit = tmt.getKVStore()->getKVStoreMemoryLimit();
+    size_t current = real_rss.load() > 0 ? real_rss.load() : 0;
+    if unlikely (limit == 0 || current == 0)
+        return;
+    /// Region management such as split/merge doesn't change the memory consumed by a table in KVStore.
+    /// The only cases memory is reduced in a table is removing regions, applying snaps and commiting txns.
+    /// The only cases memory is increased in a table is inserting kv pairs and applying snaps.
+    /// So, we only print once for a table, until one memory reduce event will happen.
+    if unlikely (current >= limit * 0.9)
+    {
+        auto table_size = getRegionTableSize();
+        auto grown_memory = current > tranquil_time_rss ? current - tranquil_time_rss : 0;
+        // 15% of the total non-tranquil-time memory, but not exceed 10GB.
+        auto table_memory_limit = std::min(grown_memory * 0.15, 10 * 1024ULL * 1024 * 1024);
+        if (grown_memory && table_size > table_memory_limit)
+        {
+            if (!setRegionTableWarned(true))
+            {
+                // If it is the first time.
+#ifdef DBMS_PUBLIC_GTEST
+                tmt.getKVStore()->debug_memory_limit_warning_count++;
+#endif
+                LOG_INFO(
+                    log,
+                    "Memory limit exceeded, current={} limit={} table_limit={} table_in_mem_size={} table_id={} "
+                    "keyspace={} "
+                    "region_id={} from={}",
+                    current,
+                    limit,
+                    table_memory_limit,
+                    table_size,
+                    mapped_table_id,
+                    keyspace_id,
+                    id(),
+                    from);
+            }
+        }
+    }
+}
+
+void Region::resetWarnMemoryLimitByTable() const
+{
+    setRegionTableWarned(false);
 }
 
 } // namespace DB

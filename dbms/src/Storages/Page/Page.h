@@ -47,7 +47,7 @@ struct FieldOffsetInsidePage
     bool operator<(const FieldOffsetInsidePage & rhs) const { return index < rhs.index; }
 };
 
-struct Page
+class Page
 {
 public:
     static Page invalidPage()
@@ -69,7 +69,7 @@ public:
     std::set<FieldOffsetInsidePage> field_offsets;
 
 private:
-    bool is_valid;
+    bool is_valid = false;
 
 public:
     inline bool isValid() const { return is_valid; }
@@ -111,6 +111,10 @@ public:
 
 using Pages = std::vector<Page>;
 using PageMapU64 = std::map<PageIdU64, Page>;
+
+// Callback for traversing all pages
+// the callback will accept page along with the number of total pages in the storage
+using TraversePageCallback = std::function<void(const DB::Page & page, size_t total_pages)>;
 
 // Indicate the page size && offset in PageFile.
 struct PageEntry

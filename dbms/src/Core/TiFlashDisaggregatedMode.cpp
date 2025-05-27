@@ -18,9 +18,11 @@
 
 namespace DB
 {
-DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & config)
+DisaggOptions DisaggOptions::parseFromConfig(const Poco::Util::LayeredConfiguration & config)
 {
     static const std::string config_key = "flash.disaggregated_mode";
+    static const std::string autoscaler_config_key = "flash.use_autoscaler";
+
     DisaggregatedMode mode = DisaggregatedMode::None;
     if (config.has(config_key))
     {
@@ -41,16 +43,13 @@ DisaggregatedMode getDisaggregatedMode(const Poco::Util::LayeredConfiguration & 
             mode = DisaggregatedMode::Storage;
         }
     }
-    return mode;
-}
 
-bool useAutoScaler(const Poco::Util::LayeredConfiguration & config)
-{
-    static const std::string autoscaler_config_key = "flash.use_autoscaler";
+
     bool use_autoscaler = false;
     if (config.has(autoscaler_config_key))
         use_autoscaler = config.getBool(autoscaler_config_key);
-    return use_autoscaler;
+
+    return DisaggOptions{mode, use_autoscaler};
 }
 
 std::string getProxyLabelByDisaggregatedMode(DisaggregatedMode mode)

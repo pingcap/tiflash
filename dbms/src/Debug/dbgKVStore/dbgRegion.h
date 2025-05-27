@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Storages/KVStore/MultiRaft/RegionData.h>
+#include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/Region.h>
 
 namespace DB::RegionBench

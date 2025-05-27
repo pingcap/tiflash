@@ -43,6 +43,15 @@ public:
         }
         return res;
     }
+
+    ColumnRangePtr buildSets(const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> & index_infos) override
+    {
+        ColumnRanges children_sets;
+        children_sets.reserve(children.size());
+        for (const auto & child : children)
+            children_sets.push_back(child->buildSets(index_infos));
+        return AndColumnRange::create(children_sets);
+    }
 };
 
 } // namespace DB::DM

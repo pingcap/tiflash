@@ -28,6 +28,48 @@
 namespace DB::DM
 {
 
+namespace details
+{
+
+inline dtpb::ColumnFileIndexInfo migrateFromIndexInfoV1(const dtpb::ColumnFileIndexInfo & index_pb)
+{
+    RUNTIME_CHECK(index_pb.has_deprecated_vector_index());
+
+    auto idx_info = dtpb::ColumnFileIndexInfo{};
+    idx_info.set_index_page_id(index_pb.index_page_id());
+    auto * idx_props = idx_info.mutable_index_props();
+    idx_props->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
+    idx_props->set_index_id(index_pb.deprecated_vector_index().index_id());
+    idx_props->set_file_size(index_pb.deprecated_vector_index().index_bytes());
+    auto * vec_idx = idx_props->mutable_vector_index();
+    vec_idx->set_format_version(0);
+    vec_idx->set_dimensions(index_pb.deprecated_vector_index().dimensions());
+    vec_idx->set_distance_metric(index_pb.deprecated_vector_index().distance_metric());
+    return idx_info;
+}
+
+inline void integrityCheckIndexInfoV2(const dtpb::ColumnFileIndexInfo & index_info)
+{
+    RUNTIME_CHECK(index_info.has_index_page_id());
+    RUNTIME_CHECK(index_info.index_props().has_file_size());
+    RUNTIME_CHECK(index_info.index_props().has_index_id());
+    RUNTIME_CHECK(index_info.index_props().has_kind());
+    switch (index_info.index_props().kind())
+    {
+    case dtpb::IndexFileKind::VECTOR_INDEX:
+        RUNTIME_CHECK(index_info.index_props().has_vector_index());
+        break;
+    case dtpb::IndexFileKind::INVERTED_INDEX:
+        RUNTIME_CHECK(index_info.index_props().has_inverted_index());
+        break;
+    default:
+        RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index_info.index_props().kind()));
+    }
+}
+
+} // namespace details
+
+
 ColumnFileReaderPtr ColumnFileTiny::getReader(
     const DMContext &,
     const IColumnFileDataProviderPtr & data_provider,
@@ -61,20 +103,22 @@ void ColumnFileTiny::serializeMetadata(dtpb::ColumnFilePersisted * cf_pb, bool s
 
     for (const auto & index_info : *index_infos)
     {
+        // Just some integrity checks to ensure we are writing correct data.
+        // These data may come from deserialization, or generated in runtime.
+        details::integrityCheckIndexInfoV2(index_info);
+
         auto * index_pb = tiny_pb->add_indexes();
-        index_pb->set_index_page_id(index_info.index_page_id);
-        if (index_info.vector_index.has_value())
-            index_pb->mutable_vector_index()->CopyFrom(*index_info.vector_index);
+        index_pb->CopyFrom(index_info);
     }
 }
 
 ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
-    const DMContext & context,
+    const DMContext & dm_context,
     ReadBuffer & buf,
     ColumnFileSchemaPtr & last_schema)
 {
     auto schema_block = deserializeSchema(buf);
-    auto schema = getSchema(context, schema_block, last_schema);
+    auto schema = getSchema(dm_context, schema_block, last_schema);
 
     PageIdU64 data_page_id;
     size_t rows, bytes;
@@ -83,11 +127,11 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
     readIntBinary(rows, buf);
     readIntBinary(bytes, buf);
 
-    return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, context);
+    return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, dm_context);
 }
 
 std::shared_ptr<ColumnFileSchema> ColumnFileTiny::getSchema(
-    const DMContext & context,
+    const DMContext & dm_context,
     BlockPtr schema_block,
     ColumnFileSchemaPtr & last_schema)
 {
@@ -97,7 +141,7 @@ std::shared_ptr<ColumnFileSchema> ColumnFileTiny::getSchema(
         schema = last_schema;
     else
     {
-        schema = getSharedBlockSchemas(context)->getOrCreate(*schema_block);
+        schema = getSharedBlockSchemas(dm_context)->getOrCreate(*schema_block);
         last_schema = schema;
     }
 
@@ -107,12 +151,12 @@ std::shared_ptr<ColumnFileSchema> ColumnFileTiny::getSchema(
 }
 
 ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
-    const DMContext & context,
+    const DMContext & dm_context,
     const dtpb::ColumnFileTiny & cf_pb,
     ColumnFileSchemaPtr & last_schema)
 {
     auto schema_block = deserializeSchema(cf_pb.columns());
-    auto schema = getSchema(context, schema_block, last_schema);
+    auto schema = getSchema(dm_context, schema_block, last_schema);
 
     PageIdU64 data_page_id = cf_pb.id();
     size_t rows = cf_pb.rows();
@@ -121,18 +165,24 @@ ColumnFilePersistedPtr ColumnFileTiny::deserializeMetadata(
     index_infos->reserve(cf_pb.indexes().size());
     for (const auto & index_pb : cf_pb.indexes())
     {
-        if (index_pb.has_vector_index())
-            index_infos->emplace_back(index_pb.index_page_id(), index_pb.vector_index());
-        else
-            index_infos->emplace_back(index_pb.index_page_id(), std::nullopt);
+        // Old format compatibility
+        if unlikely (index_pb.has_deprecated_vector_index())
+        {
+            auto idx_info = details::migrateFromIndexInfoV1(index_pb);
+            index_infos->emplace_back(std::move(idx_info));
+            continue;
+        }
+
+        details::integrityCheckIndexInfoV2(index_pb);
+        index_infos->emplace_back(index_pb);
     }
 
-    return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, context, index_infos);
+    return std::make_shared<ColumnFileTiny>(schema, rows, bytes, data_page_id, dm_context, index_infos);
 }
 
 ColumnFilePersistedPtr ColumnFileTiny::restoreFromCheckpoint(
     const LoggerPtr & parent_log,
-    const DMContext & context,
+    const DMContext & dm_context,
     UniversalPageStoragePtr temp_ps,
     WriteBatches & wbs,
     BlockPtr schema,
@@ -142,10 +192,10 @@ ColumnFilePersistedPtr ColumnFileTiny::restoreFromCheckpoint(
     IndexInfosPtr index_infos)
 {
     auto put_remote_page = [&](PageIdU64 page_id) {
-        auto new_cf_id = context.storage_pool->newLogPageId();
+        auto new_cf_id = dm_context.storage_pool->newLogPageId();
         /// Generate a new RemotePage with an entry with data location on S3
         auto remote_page_id = UniversalPageIdFormat::toFullPageId(
-            UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Log, context.physical_table_id),
+            UniversalPageIdFormat::toFullPrefix(dm_context.keyspace_id, StorageType::Log, dm_context.physical_table_id),
             page_id);
         // The `data_file_id` in temp_ps is lock key, we need convert it to data key before write to local ps
         auto remote_data_location = temp_ps->getCheckpointLocation(remote_page_id);
@@ -174,24 +224,24 @@ ColumnFilePersistedPtr ColumnFileTiny::restoreFromCheckpoint(
     auto new_cf_id = put_remote_page(data_page_id);
     auto column_file_schema = std::make_shared<ColumnFileSchema>(*schema);
     if (!index_infos)
-        return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context);
+        return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, dm_context);
 
     // Write index data page to local ps
     auto new_index_infos = std::make_shared<IndexInfos>();
-    for (const auto & index : *index_infos)
+    for (const auto & index_info : *index_infos)
     {
-        auto new_index_page_id = put_remote_page(index.index_page_id);
-        if (index.vector_index)
-            new_index_infos->emplace_back(new_index_page_id, index.vector_index);
-        else
-            new_index_infos->emplace_back(new_index_page_id, std::nullopt);
+        details::integrityCheckIndexInfoV2(index_info);
+        auto new_index_page_id = put_remote_page(index_info.index_page_id());
+        auto new_index_info = index_info;
+        new_index_info.set_index_page_id(new_index_page_id);
+        new_index_infos->emplace_back(std::move(new_index_info));
     }
-    return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, context, new_index_infos);
+    return std::make_shared<ColumnFileTiny>(column_file_schema, rows, bytes, new_cf_id, dm_context, new_index_infos);
 }
 
 std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
     const LoggerPtr & parent_log,
-    const DMContext & context,
+    const DMContext & dm_context,
     ReadBuffer & buf,
     UniversalPageStoragePtr temp_ps,
     const BlockPtr & last_schema,
@@ -210,14 +260,14 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     readIntBinary(bytes, buf);
 
     return {
-        restoreFromCheckpoint(parent_log, context, temp_ps, wbs, schema, data_page_id, rows, bytes, nullptr),
+        restoreFromCheckpoint(parent_log, dm_context, temp_ps, wbs, schema, data_page_id, rows, bytes, nullptr),
         schema,
     };
 }
 
 std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoint(
     const LoggerPtr & parent_log,
-    const DMContext & context,
+    const DMContext & dm_context,
     const dtpb::ColumnFileTiny & cf_pb,
     UniversalPageStoragePtr temp_ps,
     const BlockPtr & last_schema,
@@ -235,14 +285,19 @@ std::tuple<ColumnFilePersistedPtr, BlockPtr> ColumnFileTiny::createFromCheckpoin
     index_infos->reserve(cf_pb.indexes().size());
     for (const auto & index_pb : cf_pb.indexes())
     {
-        if (index_pb.has_vector_index())
-            index_infos->emplace_back(index_pb.index_page_id(), index_pb.vector_index());
-        else
-            index_infos->emplace_back(index_pb.index_page_id(), std::nullopt);
+        // Old format compatibility
+        if unlikely (index_pb.has_deprecated_vector_index())
+        {
+            auto idx_info = details::migrateFromIndexInfoV1(index_pb);
+            index_infos->emplace_back(std::move(idx_info));
+            continue;
+        }
+
+        index_infos->emplace_back(index_pb);
     }
 
     return {
-        restoreFromCheckpoint(parent_log, context, temp_ps, wbs, schema, data_page_id, rows, bytes, index_infos),
+        restoreFromCheckpoint(parent_log, dm_context, temp_ps, wbs, schema, data_page_id, rows, bytes, index_infos),
         schema,
     };
 }
@@ -268,18 +323,18 @@ Block ColumnFileTiny::readBlockForMinorCompaction(const PageReader & page_reader
 }
 
 ColumnFileTinyPtr ColumnFileTiny::writeColumnFile(
-    const DMContext & context,
+    const DMContext & dm_context,
     const Block & block,
     size_t offset,
     size_t limit,
     WriteBatches & wbs)
 {
-    auto page_id = writeColumnFileData(context, block, offset, limit, wbs);
+    auto page_id = writeColumnFileData(dm_context, block, offset, limit, wbs);
 
-    auto schema = getSharedBlockSchemas(context)->getOrCreate(block);
+    auto schema = getSharedBlockSchemas(dm_context)->getOrCreate(block);
 
     auto bytes = block.bytes(offset, limit);
-    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, context);
+    return std::make_shared<ColumnFileTiny>(schema, limit, bytes, page_id, dm_context);
 }
 
 PageIdU64 ColumnFileTiny::writeColumnFileData(
@@ -343,7 +398,7 @@ void ColumnFileTiny::removeData(WriteBatches & wbs) const
     if (index_infos)
     {
         for (const auto & index_info : *index_infos)
-            wbs.removed_log.delPage(index_info.index_page_id);
+            wbs.removed_log.delPage(index_info.index_page_id());
     }
 }
 
@@ -361,6 +416,23 @@ ColumnFileTiny::ColumnFileTiny(
     , index_infos(index_infos_)
     , keyspace_id(dm_context.keyspace_id)
     , file_provider(dm_context.global_context.getFileProvider())
+{}
+
+ColumnFileTiny::ColumnFileTiny(
+    const ColumnFileSchemaPtr & schema_,
+    UInt64 rows_,
+    UInt64 bytes_,
+    PageIdU64 data_page_id_,
+    KeyspaceID keyspace_id_,
+    const FileProviderPtr & file_provider_,
+    const IndexInfosPtr & index_infos_)
+    : schema(schema_)
+    , rows(rows_)
+    , bytes(bytes_)
+    , data_page_id(data_page_id_)
+    , index_infos(index_infos_)
+    , keyspace_id(keyspace_id_)
+    , file_provider(file_provider_)
 {}
 
 } // namespace DB::DM

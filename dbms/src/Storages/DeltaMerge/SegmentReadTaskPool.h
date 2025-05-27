@@ -15,6 +15,7 @@
 #pragma once
 #include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
@@ -111,7 +112,7 @@ public:
     SegmentReadTaskPool(
         int extra_table_id_index_,
         const ColumnDefines & columns_to_read_,
-        const PushDownExecutorPtr & filter_,
+        const PushDownExecutorPtr & executor_,
         uint64_t start_ts_,
         size_t expected_block_size_,
         ReadMode read_mode_,
@@ -175,7 +176,10 @@ public:
 
     std::once_flag & addToSchedulerFlag() { return add_to_scheduler; }
 
-    void registerTask(TaskPtr && task) override { q.registerPipeTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ);
+    }
 
 public:
     const uint64_t pool_id;
@@ -187,16 +191,16 @@ public:
 
     void appendRSOperator(RSOperatorPtr & new_filter) const
     {
-        if (filter->rs_operator == DM::EMPTY_RS_OPERATOR)
+        if (executor->rs_operator == DM::EMPTY_RS_OPERATOR)
         {
-            filter->rs_operator = new_filter;
+            executor->rs_operator = new_filter;
         }
         else
         {
             RSOperators children;
-            children.push_back(filter->rs_operator);
+            children.push_back(executor->rs_operator);
             children.push_back(new_filter);
-            filter->rs_operator = createAnd(children);
+            executor->rs_operator = createAnd(children);
         }
     }
 
@@ -214,7 +218,7 @@ private:
 
     const int extra_table_id_index;
     ColumnDefines columns_to_read;
-    PushDownExecutorPtr filter;
+    PushDownExecutorPtr executor;
     const uint64_t start_ts;
     const size_t expected_block_size;
     const ReadMode read_mode;

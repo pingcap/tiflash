@@ -15,6 +15,7 @@
 #pragma once
 
 #include <AggregateFunctions/registerAggregateFunctions.h>
+#include <Common/SpillLimiter.h>
 #include <Flash/Statistics/traverseExecutors.h>
 #include <Functions/registerFunctions.h>
 #include <TestUtils/ExecutorSerializer.h>
@@ -32,13 +33,31 @@ TiDB::TP dataTypeToTP(const DataTypePtr & type);
 ColumnsWithTypeAndName readBlock(BlockInputStreamPtr stream);
 ColumnsWithTypeAndName readBlocks(std::vector<BlockInputStreamPtr> streams);
 
-#define WRAP_FOR_TEST_BEGIN                        \
-    std::vector<bool> pipeline_bools{false, true}; \
-    for (auto enable_pipeline : pipeline_bools)    \
-    {                                              \
+#define WRAP_FOR_TEST_BEGIN                    \
+    for (auto enable_pipeline : {false, true}) \
+    {                                          \
         enablePipeline(enable_pipeline);
 
 #define WRAP_FOR_TEST_END }
+
+#define SPILL_LIMITER_TEST_BEGIN                                \
+    for (const auto & pair : max_spilled_bytes)                 \
+    {                                                           \
+        bool got_error_var_in_marco = false;                    \
+        SpillLimiter::instance->setMaxSpilledBytes(pair.first); \
+        try                                                     \
+        {
+#define SPILL_LIMITER_TEST_END                                                  \
+    }                                                                           \
+    catch (const ::DB::Exception & e)                                           \
+    {                                                                           \
+        ASSERT_TRUE(e.message().contains("because exceeds max_spilled_bytes")); \
+        got_error_var_in_marco = true;                                          \
+    }                                                                           \
+    ASSERT_EQ(pair.second, got_error_var_in_marco);                             \
+    }                                                                           \
+    ASSERT_EQ(SpillLimiter::instance->getCurrentSpilledBytes(), 0);             \
+    SpillLimiter::instance->setMaxSpilledBytes(0);
 
 class ExecutorTest : public ::testing::Test
 {

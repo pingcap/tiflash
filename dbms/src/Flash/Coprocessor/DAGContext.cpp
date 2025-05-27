@@ -358,22 +358,24 @@ std::unordered_map<String, BlockInputStreams> & DAGContext::getInBoundIOInputStr
     return inbound_io_input_streams_map;
 }
 
-void DAGContext::handleTruncateError(const String & msg)
+void DAGContext::handleTruncateErrorInternal(const String & msg)
 {
     if (!(flags & TiDBSQLFlags::IGNORE_TRUNCATE || flags & TiDBSQLFlags::TRUNCATE_AS_WARNING))
     {
-        throw TiFlashException("Truncate error " + msg, Errors::Types::Truncated);
+        throw TiFlashException(msg, Errors::Types::Truncated);
     }
     appendWarning(msg);
 }
 
-void DAGContext::handleOverflowError(const String & msg, const TiFlashError & error)
+void DAGContext::handleTruncateError(const String & msg)
 {
-    if (!(flags & TiDBSQLFlags::OVERFLOW_AS_WARNING))
-    {
-        throw TiFlashException("Overflow error: " + msg, error);
-    }
-    appendWarning("Overflow error: " + msg);
+    handleTruncateErrorInternal("Truncate error " + msg);
+}
+
+void DAGContext::handleOverflowError(const String & msg)
+{
+    // TiDB removed OverflowAsWarning flag in tidb/pull/49122.
+    handleTruncateErrorInternal("Overflow error " + msg);
 }
 
 void DAGContext::handleDivisionByZero()

@@ -362,7 +362,8 @@ FastAddPeerRes FastAddPeerImplWrite(
         region->getRange(),
         table_id,
         storage->isCommonHandle(),
-        storage->getRowKeyColumnSize());
+        storage->getRowKeyColumnSize(),
+        fmt::format("region_id={} new_peer_id={} FastAddPeerImplWrite", region_id, new_peer_id));
 
     if (cancel_handle->isCanceled())
     {
@@ -397,30 +398,6 @@ FastAddPeerRes FastAddPeerImplWrite(
         return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
     }
 
-    fap_ctx->insertCheckpointIngestInfo(
-        tmt,
-        region_id,
-        new_peer_id,
-        checkpoint_info->remote_store_id,
-        region,
-        std::move(segments),
-        start_time);
-    GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_insert).Observe(watch.elapsedSecondsFromLastTime());
-
-    SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
-    if (cancel_handle->isCanceled())
-    {
-        LOG_INFO(log, "FAP is canceled after write segments");
-        fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
-        GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
-        return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
-    }
-
-    // Now, the FAP snapshot is persisted. And we will later send it to ourselves to have is acked by the raftstore.
-    // Later, we directly write the raft log into formal unips. We do this here because we store raft log seperately.
-
-    // TODO(fap) Currently, FAP only handle when the peer is newly created in this store,
-    // Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
     UniversalWriteBatch wb;
     RUNTIME_CHECK(checkpoint_info->temp_ps != nullptr);
     RaftDataReader raft_data_reader(*(checkpoint_info->temp_ps));
@@ -456,18 +433,47 @@ FastAddPeerRes FastAddPeerImplWrite(
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
     }
-    GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_raft).Observe(watch.elapsedSecondsFromLastTime());
-    auto wn_ps = tmt.getContext().getWriteNodePageStorage();
-    RUNTIME_CHECK(wn_ps != nullptr);
-    wn_ps->write(std::move(wb));
-    SYNC_FOR("in_FastAddPeerImplWrite::after_write_raft_log");
+
+    SYNC_FOR("in_FastAddPeerImplWrite::after_build_raft_log");
     if (cancel_handle->isCanceled())
     {
-        LOG_INFO(log, "FAP is canceled after write raft log");
+        LOG_INFO(log, "FAP is canceled after build raft log");
         fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
         GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
         return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
     }
+
+    // Write the fap snapshot.
+    fap_ctx->insertCheckpointIngestInfo(
+        tmt,
+        region_id,
+        new_peer_id,
+        checkpoint_info->remote_store_id,
+        region,
+        std::move(segments),
+        start_time);
+    GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_insert).Observe(watch.elapsedSecondsFromLastTime());
+
+    SYNC_FOR("in_FastAddPeerImplWrite::after_write_segments");
+    if (cancel_handle->isCanceled())
+    {
+        LOG_INFO(log, "FAP is canceled after write segments");
+        fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::TiFlashCancel);
+        GET_METRIC(tiflash_fap_task_result, type_failed_cancel).Increment();
+        return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
+    }
+
+    // Now, the FAP snapshot is persisted. And we will later send it to ourselves to have it acked by the raftstore.
+    // Later, we directly write the raft log into formal unips.
+    // Since a raft snapshot doestn't hold raft logs, whether these logs is written doesn't affect the applying stage.
+    // That's the reason why we write those logs after FAP snapshot is written.
+    // However, we still write them in order to provide some later logs, so that the new peer is less likely to lag.
+    // TODO(fap) Currently, FAP only handle when the peer is newly created in this store,
+    // Move this to `ApplyFapSnapshot` and clean stale data, if FAP can later handle all snapshots.
+    GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_raft).Observe(watch.elapsedSecondsFromLastTime());
+    auto wn_ps = tmt.getContext().getWriteNodePageStorage();
+    RUNTIME_CHECK(wn_ps != nullptr);
+    wn_ps->write(std::move(wb));
     LOG_DEBUG(log, "Finish write FAP snapshot, log_count={}", log_count);
     auto tmp_ps = checkpoint_info->checkpoint_data_holder->getUniversalPageStorage();
     return genFastAddPeerRes(
@@ -588,14 +594,36 @@ uint8_t ApplyFapSnapshotImpl(
         return false;
     }
     auto begin = checkpoint_ingest_info->beginTime();
-    if (kvstore->getRegion(region_id))
+    bool is_repeated = false;
+    if (auto kvr = kvstore->getRegion(region_id); kvr != nullptr)
     {
-        throw Exception(
-            ErrorCodes::LOGICAL_ERROR,
-            "Don't support FAP for an existing region, region_id={} peer_id={} begin_time={}",
-            region_id,
-            peer_id,
-            begin);
+        if (kvr->appliedIndex() == index && kvr->appliedIndexTerm() == term)
+        {
+            LOG_INFO(
+                log,
+                "Duplicate FAP snapshot ingest, maybe replayed after restart, region_id={} peer_id={} begin_time={} "
+                "index={} term={}",
+                region_id,
+                peer_id,
+                begin,
+                index,
+                term);
+            is_repeated = true;
+        }
+        else
+        {
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Don't support FAP for an existing region, region_id={} peer_id={} begin_time={} kvstore=({},{}) "
+                "snapshot=({},{})",
+                region_id,
+                peer_id,
+                begin,
+                kvr->appliedIndex(),
+                kvr->appliedIndexTerm(),
+                index,
+                term);
+        }
     }
     // `region_to_ingest` is not the region in kvstore.
     auto region_to_ingest = checkpoint_ingest_info->getRegion();
@@ -606,14 +634,16 @@ uint8_t ApplyFapSnapshotImpl(
         {
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "Mismatched region and term, expected=({},{}) actual=({},{}) region_id={} peer_id={} begin_time={}",
+                "Mismatched region and term, expected=({},{}) actual=({},{}) region_id={} peer_id={} begin_time={} "
+                "is_repeated={}",
                 index,
                 term,
                 region_to_ingest->appliedIndex(),
                 region_to_ingest->appliedIndexTerm(),
                 region_id,
                 peer_id,
-                begin);
+                begin,
+                is_repeated);
         }
         else
         {
@@ -621,7 +651,13 @@ uint8_t ApplyFapSnapshotImpl(
             return false;
         }
     }
-    LOG_INFO(log, "Begin apply fap snapshot, region_id={} peer_id={} begin_time={}", region_id, peer_id, begin);
+    LOG_INFO(
+        log,
+        "Begin apply fap snapshot, region_id={} peer_id={} begin_time={} is_repeated={}",
+        region_id,
+        peer_id,
+        begin,
+        is_repeated);
     // If there is `checkpoint_ingest_info`, it is exactly the data we want to ingest. Consider two scene:
     // 1. If there was a failed FAP which failed to clean, its data will be overwritten by current FAP which has finished phase 1.
     // 2. It is not possible that a restart happens at FAP phase 2, and a regular snapshot is sent, because snapshots can only be accepted once the previous snapshot it handled.
@@ -629,7 +665,7 @@ uint8_t ApplyFapSnapshotImpl(
         GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Increment();
         SCOPE_EXIT({ GET_METRIC(tiflash_fap_task_state, type_ingesting_stage).Decrement(); });
         kvstore->handleIngestCheckpoint(checkpoint_ingest_info->getRegion(), checkpoint_ingest_info, tmt);
-        fap_ctx->cleanTask(tmt, proxy_helper, region_id, CheckpointIngestInfo::CleanReason::Success);
+        // Delayed the clean stage until the proxy has persisted the ingestion after apply the fap snapshot
         GET_METRIC(tiflash_fap_task_duration_seconds, type_ingest_stage).Observe(watch_ingest.elapsedSeconds());
         auto current = FAPAsyncTasks::getCurrentMillis();
         auto elapsed = (current - begin) / 1000.0;
@@ -637,7 +673,13 @@ uint8_t ApplyFapSnapshotImpl(
         {
             GET_METRIC(tiflash_fap_task_duration_seconds, type_total).Observe(elapsed);
         }
-        LOG_INFO(log, "Finish apply fap snapshot, region_id={} peer_id={} elapsed={}", region_id, peer_id, elapsed);
+        LOG_INFO(
+            log,
+            "Finish apply fap snapshot, region_id={} peer_id={} elapsed={} is_repeated={}",
+            region_id,
+            peer_id,
+            elapsed,
+            is_repeated);
         GET_METRIC(tiflash_fap_task_result, type_succeed).Increment();
         return true;
     }
@@ -650,6 +692,9 @@ FapSnapshotState QueryFapSnapshotState(
     uint64_t index,
     uint64_t term)
 {
+    // It's called before pre_apply_snapshot, if we have an good fap snapshot, we use it.
+    // It's also called before post_apply_snapshot, if we have an good fap snapshot, we use it.
+    // If we don't, we will check if the arriving snapshot is a fap snapshot, and if so, we panic.
     try
     {
         RUNTIME_CHECK_MSG(server->tmt, "TMTContext is null");
@@ -671,10 +716,14 @@ FapSnapshotState QueryFapSnapshotState(
     }
     catch (...)
     {
-        DB::tryLogCurrentFatalException(
-            "QueryFapSnapshotState",
-            fmt::format("Failed query fap snapshot state region_id={} peer_id={}", region_id, peer_id));
-        exit(-1);
+        // If any exception happened, we consider the FAP snapshot is not found.
+        LOG_ERROR(
+            DB::Logger::get("QueryFapSnapshotState"),
+            "Failed query fap snapshot state region_id={} peer_id={}",
+            region_id,
+            peer_id);
+        GET_METRIC(tiflash_fap_task_result, type_failed_query_state).Increment();
+        return FapSnapshotState::NotFound;
     }
 }
 
@@ -796,12 +845,16 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                 auto prev_state = fap_ctx->tasks_trace->queryState(region_id);
                 LOG_INFO(
                     log,
-                    "Cancel FAP due to timeout region_id={} new_peer_id={} prev_state={}",
+                    "Cancel FAP due to timeout region_id={} new_peer_id={} prev_state={} elapsedMillis={} threshold={}",
                     region_id,
                     new_peer_id,
-                    magic_enum::enum_name(prev_state));
+                    magic_enum::enum_name(prev_state),
+                    elapsed,
+                    settings.fap_task_timeout_seconds);
                 GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Increment();
                 {
+                    // TODO We can use `asyncCancelTask` here, and return WaitForData if the task is cancelling.
+                    // Otherwise, we will let the next polling do the check again.
                     [[maybe_unused]] auto s = fap_ctx->tasks_trace->blockedCancelRunningTask(region_id);
                 }
                 GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Decrement();
@@ -835,7 +888,7 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
     }
 }
 
-void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id)
+void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t state)
 {
     try
     {
@@ -843,12 +896,27 @@ void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id)
         RUNTIME_CHECK_MSG(server->proxy_helper, "proxy_helper is null");
         if (!server->tmt->getContext().getSharedContextDisagg()->isDisaggregatedStorageMode())
             return;
-        CheckpointIngestInfo::forciblyClean(
-            *(server->tmt),
-            server->proxy_helper,
-            region_id,
-            false,
-            CheckpointIngestInfo::CleanReason::ProxyFallback);
+        if (state == 0)
+        {
+            // Failed
+            CheckpointIngestInfo::forciblyClean(
+                *(server->tmt),
+                server->proxy_helper,
+                region_id,
+                false,
+                CheckpointIngestInfo::CleanReason::ProxyFallback);
+        }
+        else
+        {
+            // Succeed
+            auto fap_ctx = server->tmt->getContext().getSharedContextDisagg()->fap_context;
+            if (fap_ctx)
+                fap_ctx->cleanTask(
+                    *(server->tmt),
+                    server->proxy_helper,
+                    region_id,
+                    CheckpointIngestInfo::CleanReason::Success);
+        }
     }
     catch (...)
     {

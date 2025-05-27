@@ -20,7 +20,6 @@
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
 #include <Storages/DeltaMerge/dtpb/column_file.pb.h>
-#include <Storages/DeltaMerge/dtpb/vector_index.pb.h>
 #include <Storages/Page/PageStorage_fwd.h>
 
 namespace DB::DM
@@ -37,22 +36,12 @@ class ColumnFileTiny : public ColumnFilePersisted
 {
 public:
     friend class ColumnFileTinyReader;
-    friend class ColumnFileTinyVectorIndexWriter;
-    friend class ColumnFileTinyVectorIndexReader;
+    friend class ColumnFileTinyLocalIndexWriter;
+    friend class InvertedIndexReaderFromColumnFileTiny;
     friend struct Remote::Serializer;
 
-    struct IndexInfo
-    {
-        IndexInfo(PageIdU64 page_id, std::optional<dtpb::VectorIndexFileProps> vec_index)
-            : index_page_id(page_id)
-            , vector_index(vec_index)
-        {}
-
-        PageIdU64 index_page_id{};
-        std::optional<dtpb::VectorIndexFileProps> vector_index = std::nullopt;
-    };
-    using IndexInfos = std::vector<IndexInfo>;
-    using IndexInfosPtr = std::shared_ptr<IndexInfos>;
+    using IndexInfos = std::vector<dtpb::ColumnFileIndexInfo>;
+    using IndexInfosPtr = std::shared_ptr<const IndexInfos>;
 
 private:
     ColumnFileSchemaPtr schema;
@@ -61,7 +50,7 @@ private:
     UInt64 bytes = 0;
 
     /// The id of data page which stores the data of this pack.
-    PageIdU64 data_page_id;
+    const PageIdU64 data_page_id;
 
     /// HACK: Currently this field is only available when ColumnFileTiny is restored from remote proto.
     /// It is not available when ColumnFileTiny is constructed or restored locally.
@@ -69,10 +58,10 @@ private:
     UInt64 data_page_size = 0;
 
     /// The index information of this file.
-    IndexInfosPtr index_infos;
+    const IndexInfosPtr index_infos;
 
     /// The id of the keyspace which this ColumnFileTiny belongs to.
-    KeyspaceID keyspace_id;
+    const KeyspaceID keyspace_id;
     /// The global file_provider
     const FileProviderPtr file_provider;
 
@@ -88,38 +77,61 @@ public:
         const DMContext & dm_context,
         const IndexInfosPtr & index_infos_ = nullptr);
 
+    ColumnFileTiny(
+        const ColumnFileSchemaPtr & schema_,
+        UInt64 rows_,
+        UInt64 bytes_,
+        PageIdU64 data_page_id_,
+        KeyspaceID keyspace_id_,
+        const FileProviderPtr & file_provider_,
+        const IndexInfosPtr & index_infos_);
+
     Type getType() const override { return Type::TINY_FILE; }
 
     size_t getRows() const override { return rows; }
     size_t getBytes() const override { return bytes; }
 
     IndexInfosPtr getIndexInfos() const { return index_infos; }
-    bool hasIndex(Int64 index_id) const
+
+    bool hasIndex(Int64 index_id) const { return findIndexInfo(index_id) != nullptr; }
+
+    const dtpb::ColumnFileIndexInfo * findIndexInfo(Int64 index_id) const
     {
         if (!index_infos)
-            return false;
-        return std::any_of(index_infos->cbegin(), index_infos->cend(), [index_id](const auto & info) {
-            if (!info.vector_index)
-                return false;
-            return info.vector_index->index_id() == index_id;
-        });
+            return nullptr;
+        const auto it = std::find_if( //
+            index_infos->cbegin(),
+            index_infos->cend(),
+            [index_id](const auto & info) { return info.index_props().index_id() == index_id; });
+        if (it == index_infos->cend())
+            return nullptr;
+        return &*it;
     }
 
     ColumnFileSchemaPtr getSchema() const { return schema; }
 
     ColumnFileTinyPtr cloneWith(PageIdU64 new_data_page_id)
     {
-        auto new_tiny_file = std::make_shared<ColumnFileTiny>(*this);
-        new_tiny_file->data_page_id = new_data_page_id;
-        return new_tiny_file;
+        return std::make_shared<ColumnFileTiny>(
+            schema,
+            rows,
+            bytes,
+            new_data_page_id,
+            keyspace_id,
+            file_provider,
+            index_infos);
     }
 
-    ColumnFileTinyPtr cloneWith(PageIdU64 new_data_page_id, const IndexInfosPtr & index_infos_) const
+    ColumnFileTinyPtr cloneWith(PageIdU64 new_data_page_id, const IndexInfosPtr & new_index_infos) const
     {
-        auto new_tiny_file = std::make_shared<ColumnFileTiny>(*this);
-        new_tiny_file->data_page_id = new_data_page_id;
-        new_tiny_file->index_infos = index_infos_;
-        return new_tiny_file;
+        return std::make_shared<ColumnFileTiny>(
+            schema,
+            rows,
+            bytes,
+            new_data_page_id,
+            keyspace_id,
+            file_provider,
+            new_index_infos);
     }
 
     ColumnFileReaderPtr getReader(
@@ -143,37 +155,37 @@ public:
     Block readBlockForMinorCompaction(const PageReader & page_reader) const;
 
     static std::shared_ptr<ColumnFileSchema> getSchema(
-        const DMContext & context,
+        const DMContext & dm_context,
         BlockPtr schema_block,
         ColumnFileSchemaPtr & last_schema);
 
     static ColumnFileTinyPtr writeColumnFile(
-        const DMContext & context,
+        const DMContext & dm_context,
         const Block & block,
         size_t offset,
         size_t limit,
         WriteBatches & wbs);
 
     static PageIdU64 writeColumnFileData(
-        const DMContext & context,
+        const DMContext & dm_context,
         const Block & block,
         size_t offset,
         size_t limit,
         WriteBatches & wbs);
 
     static ColumnFilePersistedPtr deserializeMetadata(
-        const DMContext & context,
+        const DMContext & dm_context,
         ReadBuffer & buf,
         ColumnFileSchemaPtr & last_schema);
 
     static ColumnFilePersistedPtr deserializeMetadata(
-        const DMContext & context,
+        const DMContext & dm_context,
         const dtpb::ColumnFileTiny & cf_pb,
         ColumnFileSchemaPtr & last_schema);
 
     static ColumnFilePersistedPtr restoreFromCheckpoint(
         const LoggerPtr & parent_log,
-        const DMContext & context,
+        const DMContext & dm_context,
         UniversalPageStoragePtr temp_ps,
         WriteBatches & wbs,
         BlockPtr schema,
@@ -183,14 +195,14 @@ public:
         IndexInfosPtr index_infos);
     static std::tuple<ColumnFilePersistedPtr, BlockPtr> createFromCheckpoint(
         const LoggerPtr & parent_log,
-        const DMContext & context,
+        const DMContext & dm_context,
         ReadBuffer & buf,
         UniversalPageStoragePtr temp_ps,
         const BlockPtr & last_schema,
         WriteBatches & wbs);
     static std::tuple<ColumnFilePersistedPtr, BlockPtr> createFromCheckpoint(
         const LoggerPtr & parent_log,
-        const DMContext & context,
+        const DMContext & dm_context,
         const dtpb::ColumnFileTiny & cf_pb,
         UniversalPageStoragePtr temp_ps,
         const BlockPtr & last_schema,

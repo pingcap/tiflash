@@ -20,7 +20,6 @@
 #include <TestUtils/ColumnGenerator.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <TiDB/Schema/TiDB.h>
 #include <gtest/gtest.h>
 
@@ -34,7 +33,7 @@ protected:
     void SetUp() override {}
 
 public:
-    TestChunkDecodeAndSquash() {}
+    TestChunkDecodeAndSquash() = default;
 
     static Block squashBlocks(std::vector<Block> & blocks)
     {
@@ -85,7 +84,7 @@ public:
         return block;
     }
 
-    void doTestWork(bool flush_something)
+    static void doTestWork(bool flush_something)
     {
         const size_t block_rows = 256;
         const size_t block_num = 64;
@@ -102,8 +101,7 @@ public:
         }
 
         // 2. encode all blocks
-        std::unique_ptr<ChunkCodecStream> codec_stream
-            = std::make_unique<CHBlockChunkCodec>()->newCodecStream(makeFields());
+        auto codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(makeFields());
         std::vector<String> encode_str_vec(block_num);
         std::vector<int> encode_str_use_compression(block_num, true);
         size_t round_index = 0;
@@ -118,7 +116,7 @@ public:
             }
             else
             {
-                auto codec = CHBlockChunkCodecV1{block};
+                auto codec = CHBlockChunkCodecV1{block, GetMPPDataPacketVersion(GetMppVersion())};
                 auto && str = codec.encode(block, CompressionMethod::LZ4);
                 if (!str.empty())
                     assert(static_cast<CompressionMethodByte>(str[0]) == CompressionMethodByte::LZ4);
