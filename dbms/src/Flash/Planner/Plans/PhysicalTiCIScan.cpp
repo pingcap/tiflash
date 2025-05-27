@@ -27,6 +27,8 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/ExpressionTransformOp.h>
 
+#include "Storages/KVStore/Types.h"
+
 
 namespace DB
 {
@@ -132,7 +134,7 @@ void PhysicalTiCIScan::buildPipelineExecGroupImpl(
 void PhysicalTiCIScan::buildProjection(PipelineExecutorContext & exec_context, PipelineExecGroupBuilder & group_builder)
 {
     auto header = group_builder.getCurrentHeader();
-    const auto & schema_project_cols = buildTableScanProjectionCols(0, schema, header);
+    const auto & schema_project_cols = buildTableScanProjectionCols(tici_scan.getTableId(), schema, header);
 
     /// In order to keep TransformOp's schema consistent with PhysicalPlan's schema.
     /// It is worth noting that the column uses the name as the unique identifier in the Block, so the column name must also be consistent.

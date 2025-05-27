@@ -46,7 +46,6 @@ protected:
     void operateSuffixImpl() override;
 
     OperatorStatus readImpl(Block & block) override;
-    OperatorStatus awaitImpl() override;
 
     IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 

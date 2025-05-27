@@ -91,10 +91,4 @@ OperatorStatus TantivyReaderSourceOp::readImpl(Block & block)
     return OperatorStatus::HAS_OUTPUT;
 }
 
-OperatorStatus TantivyReaderSourceOp::awaitImpl()
-{
-    if (!block_queue.empty())
-        return OperatorStatus::HAS_OUTPUT;
-    return OperatorStatus::FINISHED;
-}
 } // namespace DB

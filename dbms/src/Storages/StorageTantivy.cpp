@@ -65,8 +65,8 @@ void StorageTantivy::read(
     [[maybe_unused]] size_t max_block_size,
     [[maybe_unused]] unsigned num_streams)
 {
-    auto query_columns = genNamesAndTypes(tici_scan.getQueryColumns(), "column");
-    auto return_columns = genNamesAndTypes(tici_scan.getReturnColumns(), "column");
+    auto query_columns = genNamesAndTypesForTiCI(tici_scan.getQueryColumns(), "column");
+    auto return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
 
     group_builder.addConcurrency(std::make_unique<TantivyReaderSourceOp>(
         exec_status,
