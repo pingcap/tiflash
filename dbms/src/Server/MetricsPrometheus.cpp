@@ -165,11 +165,11 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
         key_path,
         cert_path,
         ca_path,
-#if ENABLE_NEXT_GEN == 0
-        Poco::Net::Context::VerificationMode::VERIFY_STRICT
-#else
+#if ENABLE_NEXT_GEN
         // mtls: metrics server allows anonymous pullers @iosmanthus
         Poco::Net::Context::VerificationMode::VERIFY_RELAXED
+#else
+        Poco::Net::Context::VerificationMode::VERIFY_STRICT
 #endif
     );
 

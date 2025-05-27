@@ -419,7 +419,7 @@ void loadBlockList(
     Context & global_context,
     [[maybe_unused]] const LoggerPtr & log)
 {
-#if ENABLE_NEXT_GEN
+#if ENABLE_NEXT_GEN == 0
     // We do not support blocking store by id in OP mode currently.
     global_context.initializeStoreIdBlockList("");
 #else

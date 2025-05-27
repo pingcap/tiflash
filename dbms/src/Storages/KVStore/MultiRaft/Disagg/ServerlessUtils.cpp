@@ -93,7 +93,7 @@ String getTxnFileRef(UniversalPageStoragePtr, uint64_t)
 {
     return "";
 }
-#else
+#else // ENABLE_NEXT_GEN
 // pub const KEYSPACE_INNER_KEY_OFF_SUFFIX: u8 = 0x01;
 String getKeyspaceInnerKey(UniversalPageStoragePtr uni_ps, uint32_t keyspace_id)
 {
