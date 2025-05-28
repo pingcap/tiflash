@@ -27,8 +27,6 @@
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Operators/ExpressionTransformOp.h>
 
-#include "Storages/KVStore/Types.h"
-
 
 namespace DB
 {
