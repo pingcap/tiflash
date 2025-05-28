@@ -1027,7 +1027,6 @@ try
     ASSERT_EQ(result2.get().status, FastAddPeerStatus::Ok);
 }
 CATCH
-#endif
 
 // Test cancel when building segments
 TEST_F(RegionKVStoreTestFAP, Cancel5_2)
@@ -1087,6 +1086,7 @@ try
     ASSERT_EQ(result2.get().status, FastAddPeerStatus::Ok);
 }
 CATCH
+#endif
 
 TEST_F(RegionKVStoreTestFAP, EmptySegment)
 try
