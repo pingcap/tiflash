@@ -190,15 +190,38 @@ void MPPTask::abortQueryExecutor()
     }
 }
 
+void MPPTask::abortCTE()
+{   
+    if (this->has_cte_source)
+    {
+        auto ctes = this->dag_context->getCTEs();
+
+        // CTESource may be waiting for the eof from cte sink
+        // We'd better to manually do eof notification in case of missing eof from cte sink
+        // or the CTESource will hang
+        for (auto & cte : ctes)
+            cte->notifyEOF();
+    }
+
+    // TODO always delete cte when we receive cancel
+}
+
 void MPPTask::finishWrite()
 {
     if (this->has_cte_sink)
     {
         const String & query_id_and_cte_id = this->dag_context->getQueryIDAndCTEID();
+        LOG_INFO(log, "xzxdebug enter finishWrite, query_id_and_cte_id: {}, mpptask id: {}", query_id_and_cte_id, id.toString());
+        CTEManager * cte_manager = this->context->getCTEManager();
+        tipb::SelectResponse resp;
         if (dag_context->collect_execution_summaries)
-            this->context->getCTEManager()->setRespAndNotifyEOF(mpp_task_statistics.genExecutionSummaryResponse(), query_id_and_cte_id);
-        else
-            this->context->getCTEManager()->notifyEOF(query_id_and_cte_id);
+            resp = mpp_task_statistics.genExecutionSummaryResponse();
+
+        // The finish of pushing all blocks not means that cte sink job has been done.
+        // Execution summary statistic also need to be sent. So we can release cte
+        // only when execution sumary statistic has been sent.
+        cte_manager->releaseCTEBySink(resp, query_id_and_cte_id);
+        this->notify_cte_eof = true;
     }
     else
     {
@@ -221,6 +244,8 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
     {
         if unlikely (!dag_context->dag_request.rootExecutor().has_cte_sink())
             throw Exception("Task has either exchange sender or cte sink");
+
+        LOG_INFO(log, "xzxdebug register cte sink");
 
         // There is no need to register tunnel for cte sink
         this->has_cte_sink = true;
@@ -561,7 +586,9 @@ void MPPTask::runImpl()
             dag_context->tunnel_set->getExternalThreadCnt(),
             new_thread_count_of_mpp_receiver);
 
+        LOG_INFO(log, "xzxdebug wait for schedule");
         scheduleOrWait();
+        LOG_INFO(log, "xzxdebug start to run");
 
         auto time_cost_in_schedule_ns = stopwatch.elapsed() - time_cost_in_preprocess_ns;
         dag_context->minTSO_wait_time_ns = time_cost_in_schedule_ns;
@@ -593,6 +620,7 @@ void MPPTask::runImpl()
 #endif
 
         auto result = query_executor_holder->execute();
+        LOG_INFO(log, "xzxdebug execution is finished");
         auto log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
             log_level = Poco::Message::PRIO_INFORMATION;
@@ -645,6 +673,11 @@ void MPPTask::runImpl()
     {
         auto catch_err_msg = getCurrentExceptionMessage(true, true);
         err_msg = err_msg.empty() ? catch_err_msg : fmt::format("{}, {}", err_msg, catch_err_msg);
+    }
+
+    if (this->has_cte_sink && !this->notify_cte_eof)
+    {
+        // TODO
     }
 
     if (err_msg.empty())

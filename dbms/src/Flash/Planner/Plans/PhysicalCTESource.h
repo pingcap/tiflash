@@ -37,10 +37,14 @@ public:
         const FineGrainedShuffle & fine_grained_shuffle,
         const String & req_id,
         const Block & sample_block_,
-        UInt64 cte_id_)
+        UInt64 cte_id_,
+        Int32 expected_sink_num_,
+        Int32 expected_source_num_)
         : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, fine_grained_shuffle, req_id)
         , sample_block(sample_block_)
         , cte_id(cte_id_)
+        , expected_sink_num(expected_sink_num_)
+        , expected_source_num(expected_source_num_)
     {}
 
     void finalizeImpl(const Names & parent_require) override;
@@ -60,5 +64,7 @@ private:
     UInt64 cte_id;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators partition_col_collators;
+    Int32 expected_sink_num;
+    Int32 expected_source_num;
 };
 } // namespace DB

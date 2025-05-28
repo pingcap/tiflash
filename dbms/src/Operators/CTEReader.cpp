@@ -26,10 +26,17 @@ std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
     {
         Block block = std::move(this->blocks.front());
         this->blocks.pop_front();
+        this->output_block_num++;
+        this->output_row_num += block.rows();
         return {FetchStatus::Ok, block};
     }
 
     auto ret = this->cte->tryGetBunchBlocks(this->block_fetch_idx, this->blocks);
+    // if (ret != FetchStatus::Ok)
+    // {
+    //     auto * log = &Poco::Logger::get("LRUCache");
+    //     LOG_INFO(log, "xzxdebug block_fetch_idx: {}, block num in cte: {}", this->block_fetch_idx, this->cte->blockNumForTest());
+    // }
     switch (ret)
     {
     case FetchStatus::Eof:
@@ -39,9 +46,12 @@ std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
     case FetchStatus::Cancelled:
         return {ret, Block()};
     case FetchStatus::Ok:
+        this->save_block_num += this->blocks.size();
         this->block_fetch_idx += this->blocks.size();
         Block block = std::move(this->blocks.front());
         this->blocks.pop_front();
+        this->output_block_num++;
+        this->output_row_num += block.rows();
         return {ret, block};
     }
     throw Exception("Should not reach here");
@@ -54,6 +64,11 @@ FetchStatus CTEReader::checkAvailableBlock()
         return FetchStatus::Ok;
 
     auto ret = this->cte->tryGetBunchBlocks(this->block_fetch_idx, this->blocks);
+    // if (ret != FetchStatus::Ok)
+    // {
+    //     auto * log = &Poco::Logger::get("LRUCache");
+    //     LOG_INFO(log, "xzxdebug block_fetch_idx: {}, block num in cte: {}", this->block_fetch_idx, this->cte->blockNumForTest());
+    // }
     switch (ret)
     {
     case FetchStatus::Waiting:
@@ -61,6 +76,7 @@ FetchStatus CTEReader::checkAvailableBlock()
     case FetchStatus::Eof:
         return ret;
     case FetchStatus::Ok:
+        this->save_block_num += this->blocks.size();
         this->block_fetch_idx += this->blocks.size();
         return FetchStatus::Ok;
     }

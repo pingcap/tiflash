@@ -20,24 +20,40 @@
 #include <tipb/select.pb.h>
 
 #include <deque>
+#include <memory>
 #include <mutex>
+
+// TODO remove them
+#include <Common/Logger.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
 class CTEReader
 {
 public:
-    CTEReader(const String & query_id_and_cte_id_, const String & partition_id_, CTEManager * cte_manager_)
+    CTEReader(const String & query_id_and_cte_id_, const String & partition_id_, CTEManager * cte_manager_, Int32 expected_sink_num_, Int32 expected_source_num_)
         : query_id_and_cte_id(query_id_and_cte_id_)
         , partition_id(partition_id_)
         , cte_manager(cte_manager_)
-        , cte(cte_manager_->getCTE(query_id_and_cte_id_, partition_id))
+        , cte(cte_manager_->getCTEBySource(query_id_and_cte_id_, partition_id, expected_sink_num_, expected_source_num_))
     {}
 
     ~CTEReader()
     {
         this->cte.reset();
-        this->cte_manager->releaseCTE(this->query_id_and_cte_id, this->partition_id);
+        this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id, this->partition_id);
+
+        auto * log = &Poco::Logger::get("LRUCache");
+        LOG_INFO(
+            log,
+            fmt::format(
+                "xzxdebug query_id: {}, pid: {}, output block num: {}, output row num: {}, save block num:{}",
+                this->query_id_and_cte_id,
+                this->partition_id,
+                this->output_block_num,
+                this->output_row_num,
+                this->save_block_num));
     }
 
     std::pair<FetchStatus, Block> fetchNextBlock();
@@ -57,13 +73,20 @@ public:
         std::lock_guard<std::mutex> lock(this->mu);
 
         // `block_fetch_idx == 0` means that CTE hasn't received block yet, maybe it is waiting
-        // for the finish of join executor
+        // for the finish of join executor and etc.
         return this->block_fetch_idx != 0;
     }
 
     void setNotifyFuture() { ::DB::setNotifyFuture(cte.get()); }
 
+    std::shared_ptr<CTE> getCTE() const { return this->cte; }
+
 private:
+    Int64 output_block_num = 0;
+    Int64 output_row_num = 0;
+
+    Int64 save_block_num = 0;
+
     String query_id_and_cte_id;
     String partition_id;
     CTEManager * cte_manager;

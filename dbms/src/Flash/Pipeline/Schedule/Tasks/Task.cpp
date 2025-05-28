@@ -120,6 +120,11 @@ Task::~Task()
         return task_status;                                                                 \
     }
 
+void Task::onErrorOccurred(const String & err_msg)
+{
+    exec_context.onErrorOccurred(err_msg);
+}
+
 ExecTaskStatus Task::execute()
 {
     assert(current_notify_future == nullptr);

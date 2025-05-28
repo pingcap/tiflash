@@ -20,6 +20,7 @@
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <tipb/select.pb.h>
 
+#include <mutex>
 #include <shared_mutex>
 
 namespace DB
@@ -35,31 +36,22 @@ enum class FetchStatus
 class CTE : public NotifyFuture
 {
 public:
-    ~CTE() override = default;
+    ~CTE() override
+    {
+        auto * log = &Poco::Logger::get("LRUCache");
+        LOG_INFO(log, fmt::format("xzxdebug block num: {}, row num: {}", this->block_num, this->row_num));
+    }
 
     FetchStatus tryGetBunchBlocks(size_t idx, std::deque<Block> & queue);
     void pushBlock(const Block & block);
     void notifyEOF() { this->notifyEOFImpl<true>(); }
-    void notifyEOFNoLock() { this->notifyEOFImpl<false>(); }
-
-    template <bool has_lock>
-    void notifyEOFImpl()
-    {
-        std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
-        // if constexpr (has_lock)
-        //     lock.lock();
-        this->is_eof = true;
-
-        // Just in case someone is in WAITING_FOR_NOTIFY status
-        this->pipe_cv.notifyAll();
-    }
 
     void registerTask(TaskPtr && task) override;
 
-    void setRespAndNotifyEOF(const tipb::SelectResponse & resp)
+    void addRespAndNotifyEOF(const tipb::SelectResponse & resp)
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
-        this->resp = resp;
+        this->resp.MergeFrom(resp);
         this->notifyEOFNoLock();
     }
 
@@ -72,7 +64,26 @@ public:
         }
     }
 
+    Int64 blockNumForTest() {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        return this->blocks.size();
+    }
+
 private:
+    void notifyEOFNoLock() { this->notifyEOFImpl<false>(); }
+
+    template <bool has_lock>
+    void notifyEOFImpl()
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
+        if constexpr (has_lock)
+            lock.lock();
+        this->is_eof = true;
+
+        // Just in case someone is in WAITING_FOR_NOTIFY status
+        this->pipe_cv.notifyAll();
+    }
+
     // Return true if CTE has data
     inline bool hasDataNoLock() const { return !this->blocks.empty(); }
 
@@ -89,5 +100,8 @@ private:
 
     bool get_resp = false;
     tipb::SelectResponse resp;
+
+    Int64 block_num = 0;
+    Int64 row_num = 0;
 };
 } // namespace DB

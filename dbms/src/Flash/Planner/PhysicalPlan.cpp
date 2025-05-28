@@ -254,7 +254,7 @@ void PhysicalPlan::build(const tipb::Executor * executor)
         auto fine_grained_shuffle = FineGrainedShuffle(executor);
         GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
         pushBack(
-            PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack(), executor->cte_sink().cte_id()));
+            PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack(), executor->cte_sink()));
         break;
     }
     default:

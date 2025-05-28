@@ -48,6 +48,8 @@ void CTE::pushBlock(const Block & block)
     if unlikely (this->blocks.empty())
         this->pipe_cv.notifyAll();
     this->blocks.push_back(block);
+    this->block_num++;
+    this->row_num += block.rows();
 }
 
 void CTE::registerTask(TaskPtr && task)

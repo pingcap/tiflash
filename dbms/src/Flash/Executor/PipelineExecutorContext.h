@@ -149,6 +149,11 @@ public:
         this->dag_context->setQueryIDAndCTEID(query_id_and_cte_id);
     }
 
+    void addCTE(std::shared_ptr<CTE> cte) { this->dag_context->addCTE(cte); }
+    void addCTE(std::shared_ptr<CTE> & cte) { this->dag_context->addCTE(cte); }
+
+    void sinkNeedRelease() { this->dag_context->sinkNeedRelease(); }
+    
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 

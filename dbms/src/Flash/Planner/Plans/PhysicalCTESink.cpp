@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalCTESink.h>
 #include <Interpreters/Context.h>
@@ -28,7 +29,7 @@ PhysicalPlanNodePtr PhysicalCTESink::build(
     const LoggerPtr & log,
     const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child,
-    UInt32 cte_id)
+    const ::tipb::CTESink & cte_sink)
 {
     RUNTIME_CHECK(child);
 
@@ -38,7 +39,9 @@ PhysicalPlanNodePtr PhysicalCTESink::build(
         fine_grained_shuffle,
         log->identifier(),
         child,
-        cte_id);
+        cte_sink.cte_id(),
+        cte_sink.cte_sink_num(),
+        cte_sink.cte_source_num());
     physical_cte_sink->disableRestoreConcurrency();
     return physical_cte_sink;
 }
@@ -52,15 +55,26 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     size_t partition_id = 0;
     String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
     exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
+    
+    std::shared_ptr<CTE> cte;
+    if (!fine_grained_shuffle.enabled())
+    {
+        cte = context.getCTEManager()->getCTEBySink(query_id_and_cte_id, "", this->expected_sink_num, this->expected_source_num);
+        exec_context.sinkNeedRelease();
+    }
+
 
     group_builder.transform([&](auto & builder) {
+        if (fine_grained_shuffle.enabled())
+        {
+            cte = context.getCTEManager()->getCTEBySink(query_id_and_cte_id, std::to_string(partition_id), this->expected_sink_num, this->expected_source_num);
+            partition_id++;
+        }
+
         builder.setSinkOp(std::make_unique<CTESinkOp>(
             exec_context,
             log->identifier(),
-            query_id_and_cte_id,
-            fine_grained_shuffle.enabled() ? std::to_string(partition_id) : "",
-            context.getCTEManager()));
-        partition_id++;
+            cte));
     });
 }
 
