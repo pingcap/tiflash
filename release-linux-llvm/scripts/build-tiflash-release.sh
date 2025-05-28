@@ -26,7 +26,7 @@ else
   ENABLE_TESTS=OFF
 fi
 
-if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" ]]; then
+if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
   CMAKE_ENABLE_NEXT_GEN="ON"
   echo "Building TiFlash with next-gen features enabled"
 else
