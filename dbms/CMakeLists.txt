@@ -374,6 +374,10 @@ if (ENABLE_TESTS)
                 DESTINATION ".")
     endif ()
 
+    install (TARGETS tici_search_lib
+            COMPONENT tiflash-gtest
+            DESTINATION ".")
+
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 
