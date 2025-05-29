@@ -1,3 +1,6 @@
+# ignore build artifacts
+.build
+
 delta-merge-test/data
 delta-merge-test/log
 
@@ -9,3 +12,6 @@ fullstack-test2/log
 
 tidb-ci/data
 tidb-ci/log
+
+fullstack-test-next-gen/data
+fullstack-test-next-gen/log
