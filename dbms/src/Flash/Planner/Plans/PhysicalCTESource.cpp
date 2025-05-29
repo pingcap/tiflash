@@ -48,7 +48,9 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
         fine_grained_shuffle,
         log->identifier(),
         Block(schema),
-        cte_source.cte_id());
+        cte_source.cte_id(),
+        cte_source.cte_sink_num(),
+        cte_source.cte_source_num());
 }
 
 void PhysicalCTESource::buildPipelineExecGroupImpl(
