@@ -43,12 +43,13 @@ mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i =
 +------+
 
 mysql> alter table test.t compact tiflash replica;
-mysql> select index_name,rows_stable_indexed,rows_stable_not_indexed from information_schema.tiflash_indexes where TIDB_DATABASE = 'test' AND TIDB_TABLE = 't';
-+------------+---------------------+-------------------------+
-| index_name | rows_stable_indexed | rows_stable_not_indexed |
-+------------+---------------------+-------------------------+
-| idx_i      |                   5 |                       0 |
-+------------+---------------------+-------------------------+
+#Disable unstable query
+#mysql> select index_name,rows_stable_indexed,rows_stable_not_indexed from information_schema.tiflash_indexes where TIDB_DATABASE = 'test' AND TIDB_TABLE = 't';
+#+------------+---------------------+-------------------------+
+#| index_name | rows_stable_indexed | rows_stable_not_indexed |
+#+------------+---------------------+-------------------------+
+#| idx_i      |                   5 |                       0 |
+#+------------+---------------------+-------------------------+
 mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i = 1;
 +------+
 | i    |

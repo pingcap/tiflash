@@ -143,19 +143,28 @@ function check_env() {
 }
 
 function check_docker_compose() {
-  # Try to use `docker-compose` first, if not found, fallback to `docker compose`
-  if ! command -v docker-compose &>/dev/null; then
-    echo "docker-compose could not be found."
-    if ! command -v docker &>/dev/null; then
-      echo "Neither docker-compose nor docker could be found, please install one of them first."
-      exit 1
-    else
-      echo "docker compose is installed."
-      export COMPOSE="docker compose"
-    fi
-  else
+  # Try to use these compose tools:
+  # - `docker-compose`, the original compose tool on CI
+  # - `podman compose`, the podman compose tool, which is compatible with docker compose,
+  #   and supports rootless mode
+  # - `docker compose`, the new docker provide compose command, which is compatible
+  #   with `docker-compose`
+  if command -v docker-compose &>/dev/null; then
     echo "docker-compose is installed."
     export COMPOSE="docker-compose"
+  else
+    if command -v podman &>/dev/null; then
+      echo "podman is installed, using it as docker-compose."
+      export COMPOSE="podman compose"
+    else
+      if command -v docker &>/dev/null; then
+        echo "docker compose is installed."
+        export COMPOSE="docker compose"
+      else
+        echo "Neither docker-compose nor docker noo podman could be found, please install one of them first."
+        exit 1
+      fi
+    fi
   fi
 }
 

@@ -24,18 +24,11 @@ check_docker_compose
 
 
 if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
-echo "Running fullstack test on next-gen TiFlash"
+    echo "Skip fullstack test on next-gen TiFlash"
+    exit 0
+fi
 
-# clean up previous docker instances, data and log
-${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml down
-clean_data_log
-# create bucket "tiflash-test" on minio
-mkdir -pv data/minio/tiflash-test
-
-echo "Skip fullstack test on next-gen TiFlash"
-
-else # classic TiFlash
-
+# classic TiFlash
 echo "Running fullstack test on classic TiFlash"
 
 # run fullstack-tests (for engine DeltaTree)
@@ -44,16 +37,16 @@ clean_data_log
 
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml up -d
 wait_env
-${COMPOSE}cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fail-point-tests && ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fail-point-tests && ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
 
-${COMPOSE}tiflash-dt.yaml down
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
 # run new_collation_fullstack tests
-${COMPOSE}h-dt.yaml down
+${COMPOSE} -f cluster_new_collation.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-${COMPOSE}ter_new_collation.yaml -f tiflash-dt.yaml up -d
+${COMPOSE} -f cluster_new_collation.yaml -f tiflash-dt.yaml up -d
 wait_env
 ${COMPOSE} -f cluster_new_collation.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/new_collation_fullstack'
 
@@ -86,4 +79,3 @@ ${COMPOSE} -f cluster.yaml -f tiflash-dt-lightweight-compression.yaml exec -T ti
 
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-lightweight-compression.yaml down
 clean_data_log
-fi
