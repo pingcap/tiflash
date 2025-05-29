@@ -78,8 +78,11 @@ DM::RSOperatorPtr FilterParserTest::generateRsOperator(
     const TiDB::TableInfo table_info(table_info_json, NullspaceID);
 
     QueryTasks query_tasks;
-    std::tie(query_tasks, std::ignore)
-        = compileQuery(*ctx, query, [&](const String &, const String &) { return table_info; }, getDAGProperties(""));
+    std::tie(query_tasks, std::ignore) = compileQuery(
+        *ctx,
+        query,
+        [&](const String &, const String &) { return table_info; },
+        getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
     DAGContext dag_context(dag_request, {}, QueryShardInfos(), NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
     ctx->setDAGContext(&dag_context);
