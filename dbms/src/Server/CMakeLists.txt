@@ -124,6 +124,10 @@ if (OS_LINUX)
                 DESTINATION ".")
     endif()
 
+    install (TARGETS tici_search_lib
+            COMPONENT tiflash-release
+            DESTINATION ".")
+
     if (NOT (CMAKE_BUILD_TYPE_UC STREQUAL "DEBUG" OR SAN_DEBUG))
         install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
     endif()
