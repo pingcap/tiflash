@@ -1,0 +1,11 @@
+log-file = "/log/tiflash_tikv.log"
+
+[storage]
+api-version = 2
+enable-ttl = true
+# No space is reserved at all for testing
+reserve-space = "0"
+
+[raftstore]
+capacity = "100GB"
+

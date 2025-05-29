@@ -1,0 +1,40 @@
+tcp_port = 9000
+
+[flash]
+disaggregated_mode = "tiflash_write"
+service_addr = "0.0.0.0:3930"
+[flash.proxy]
+addr = "0.0.0.0:20170"
+advertise-addr = "tiflash-wn0:20170"
+engine-addr = "tiflash-wn0:3930"
+status-addr = "0.0.0.0:20181"
+advertise-status-addr = "tiflash-wn0:20181"
+data-dir = "/data/tiflash/flash"
+config = "/tiflash_tikv.toml"
+
+[storage]
+api_version = 2
+[storage.main]
+dir = ["/data/tiflash"]
+capacity = [5368709120]
+[storage.s3]
+endpoint = "http://minio0:9000"
+access_key_id = "minioadmin"
+secret_access_key = "minioadmin"
+bucket = "tiflash-test"
+root = "/tiflash"
+
+[raft]
+pd_addr = "pd0:2379"
+
+[logger]
+level = "debug"
+size = "1000M"
+log = "/log/tiflash.log"
+errorlog = "/log/tiflash_error.log"
+count = 10
+
+[profiles]
+[profiles.default]
+remote_gc_interval_seconds = 60
+remote_gc_method = 2
