@@ -74,7 +74,7 @@ void StorageTantivy::read(
         log->identifier(),
         tici_scan.getTableId(),
         tici_scan.getIndexId(),
-        QueryShardInfos::create(tici_scan.getShardInfos()),
+        tici_scan.getShardInfos(),
         query_columns,
         return_columns,
         tici_scan.getQuery(),

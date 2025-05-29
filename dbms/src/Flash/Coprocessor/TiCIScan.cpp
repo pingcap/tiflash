@@ -21,7 +21,7 @@
 #include <cassert>
 namespace DB
 {
-TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id_, const DAGContext &)
+TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id_, const DAGContext & dag_context)
     : tici_scan(tici_scan_)
     , executor_id(executor_id_)
     , table_id(tici_scan->idx_scan().table_id())
@@ -29,7 +29,7 @@ TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id
     , return_columns(TiDB::toTiDBColumnInfos(tici_scan->idx_scan().columns()))
     , query_columns(TiDB::toTiDBColumnInfos(tici_scan->idx_scan().fts_query_info().columns()))
     , query_type(tici_scan->idx_scan().fts_query_info().query_type())
-    , shard_infos(tici_scan->idx_scan().fts_query_info().shard_infos())
+    , shard_infos(dag_context.query_shard_infos.getTableShardInfosByExecutorID(tici_scan_->executor_id()))
     , query_json_str(tici_scan->idx_scan().fts_query_info().query_text())
     , limit(tici_scan->idx_scan().fts_query_info().top_k())
 {

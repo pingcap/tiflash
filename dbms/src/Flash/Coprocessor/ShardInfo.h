@@ -38,10 +38,10 @@ struct ShardInfo
     using KeyRanges = std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>>;
     KeyRanges key_ranges;
 
-    ShardInfo(UInt64 id, UInt64 epoch, KeyRanges && key_ranges_)
-        : shard_id(id)
-        , shard_epoch(epoch)
-        , key_ranges(std::move(key_ranges_))
+    explicit ShardInfo(const coprocessor::ShardInfo & info)
+        : shard_id(info.shard_id())
+        , shard_epoch(info.shard_epoch())
+        , key_ranges(genCopKeyRange(info.ranges()))
     {}
 
     String toString() const
@@ -59,40 +59,27 @@ struct ShardInfo
 using ShardInfoMap = std::unordered_map<UInt64, ShardInfo>;
 using ShardInfoList = std::vector<ShardInfo>;
 
-class QueryShardInfos
+class TableShardInfos
 {
 public:
-    QueryShardInfos() = default;
+    TableShardInfos() = default;
 
-    static std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> genCopKeyRange(
-        const ::google::protobuf::RepeatedPtrField<::tipb::KeyRange> & ranges)
+    static TableShardInfos create(const coprocessor::TableShardInfos & table_shard_infos)
     {
-        std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> key_ranges;
-        for (const auto & range : ranges)
+        TableShardInfos infos;
+        infos.executor_id = table_shard_infos.executor_id();
+        for (const auto & info : table_shard_infos.shard_infos())
         {
-            DecodedTiKVKeyPtr start = std::make_shared<DecodedTiKVKey>(std::string(range.low()));
-            DecodedTiKVKeyPtr end = std::make_shared<DecodedTiKVKey>(std::string(range.high()));
-            key_ranges.emplace_back(std::make_pair(std::move(start), std::move(end)));
+            ShardInfo shard_info(info);
+            infos.shard_info_list.push_back(shard_info);
         }
-        return key_ranges;
-    }
-
-    static QueryShardInfos create(const google::protobuf::RepeatedPtrField<tipb::ShardInfo> & shard_infos)
-    {
-        QueryShardInfos query_shard_infos;
-        for (const auto & shard_info : shard_infos)
-        {
-            auto key_ranges = genCopKeyRange(shard_info.ranges());
-            ShardInfo info(shard_info.shard_id(), shard_info.shard_epoch(), std::move(key_ranges));
-            query_shard_infos.shard_info_list.push_back(info);
-        }
-        return query_shard_infos;
+        return infos;
     }
 
     String toString() const
     {
         std::ostringstream sb;
-        sb << "QueryShardInfos: [";
+        sb << "TableShardInfos: ExecutorID: " << executor_id << ", ShardInfos: [";
         for (const auto & shard_info : shard_info_list)
         {
             sb << shard_info.toString() << ", ";
@@ -101,9 +88,55 @@ public:
         return sb.str();
     }
 
-    size_t size() const { return shard_info_list.size(); }
-
+    String executor_id;
     ShardInfoList shard_info_list;
+};
+
+using TableShardInfoMap = std::unordered_map<UInt64, TableShardInfos>;
+using TableShardInfoList = std::vector<TableShardInfos>;
+
+class QueryShardInfos
+{
+public:
+    QueryShardInfos() = default;
+
+    static QueryShardInfos create(const google::protobuf::RepeatedPtrField<coprocessor::TableShardInfos> & shard_infos)
+    {
+        QueryShardInfos query_shard_infos;
+        for (const auto & shard_info : shard_infos)
+        {
+            auto table_shard_info = TableShardInfos::create(shard_info);
+            query_shard_infos.table_shard_info_list.push_back(table_shard_info);
+        }
+        return query_shard_infos;
+    }
+
+    TableShardInfos getTableShardInfosByExecutorID(String executor_id) const
+    {
+        for (const auto & table_shard_info : table_shard_info_list)
+        {
+            if (table_shard_info.executor_id == executor_id)
+                return table_shard_info;
+        }
+        throw Exception("No TableShardInfo found for executor ID: " + executor_id, ErrorCodes::LOGICAL_ERROR);
+    }
+
+
+    String toString() const
+    {
+        std::ostringstream sb;
+        sb << "QueryShardInfos: [";
+        for (const auto & shard_info : table_shard_info_list)
+        {
+            sb << shard_info.toString() << ", ";
+        }
+        sb << "]";
+        return sb.str();
+    }
+
+    size_t size() const { return table_shard_info_list.size(); }
+
+    TableShardInfoList table_shard_info_list;
 };
 
 } // namespace DB

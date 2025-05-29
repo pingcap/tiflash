@@ -31,6 +31,7 @@
 #include <Flash/Coprocessor/DAGRequest.h>
 #include <Flash/Coprocessor/FineGrainedShuffle.h>
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Flash/Coprocessor/TablesRegionsInfo.h>
 #include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskId.h>
@@ -161,6 +162,7 @@ public:
     DAGContext(
         tipb::DAGRequest & dag_request_,
         TablesRegionsInfo && tables_regions_info_,
+        QueryShardInfos && query_shard_infos_,
         KeyspaceID keyspace_id_,
         const String & tidb_host_,
         DAGRequestKind cop_kind_,
@@ -386,6 +388,7 @@ public:
     TablesRegionsInfo tables_regions_info;
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
+    QueryShardInfos query_shard_infos;
 
     LoggerPtr log;
 

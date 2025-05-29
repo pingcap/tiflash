@@ -163,6 +163,7 @@ grpc::Status CoprocessorHandler<is_stream>::execute()
             DAGContext dag_context(
                 dag_request,
                 std::move(tables_regions_info),
+                QueryShardInfos::create(cop_request->table_shard_infos()),
                 RequestUtils::deriveKeyspaceID(cop_request->context()),
                 cop_context.db_context.getClientInfo().current_address.toString(),
                 kind,

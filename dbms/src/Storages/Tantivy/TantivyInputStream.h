@@ -38,7 +38,7 @@ public:
         LoggerPtr log_,
         Int64 table_id_,
         Int64 index_id_,
-        QueryShardInfos query_shard_infos_,
+        TableShardInfos query_shard_infos_,
         NamesAndTypes query_columns_,
         NamesAndTypes return_columns_,
         String query_json_str_,
@@ -122,7 +122,7 @@ private:
     LoggerPtr log;
     Int64 table_id;
     Int64 index_id;
-    QueryShardInfos query_shard_infos;
+    TableShardInfos query_shard_infos;
     NamesAndTypes query_columns;
     NamesAndTypes return_columns;
     String query_json_str;

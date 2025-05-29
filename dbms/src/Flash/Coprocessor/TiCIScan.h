@@ -29,7 +29,7 @@ public:
 
     const TiDB::ColumnInfos & getQueryColumns() const { return query_columns; }
     const TiDB::ColumnInfos & getReturnColumns() const { return return_columns; }
-    const google::protobuf::RepeatedPtrField<tipb::ShardInfo> & getShardInfos() const { return shard_infos; }
+    const TableShardInfos & getShardInfos() const { return shard_infos; }
     const int & getTableId() const { return table_id; }
     const int & getIndexId() const { return index_id; }
     const std::string & getQuery() const { return query_json_str; }
@@ -43,7 +43,7 @@ private:
     TiDB::ColumnInfos return_columns;
     TiDB::ColumnInfos query_columns;
     [[maybe_unused]] tipb::FTSQueryType query_type;
-    const google::protobuf::RepeatedPtrField<tipb::ShardInfo> & shard_infos;
+    const TableShardInfos shard_infos;
     std::string query_json_str;
     const int limit;
 };
