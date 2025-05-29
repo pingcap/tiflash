@@ -31,7 +31,7 @@ void CTEManager::releaseCTEBySource(const String & query_id_and_cte_id, const St
     auto iter_for_cte = iter->second.find(partition_id);
     if unlikely (iter_for_cte == iter->second.end())
         throw Exception(fmt::format("Can't find cte: {}, partition: {}", query_id_and_cte_id, partition_id));
-    
+
     iter_for_cte->second.sourceExit();
     if (iter_for_cte->second.getTotalExitNum() == iter_for_cte->second.getExpectedTotalNum())
         iter->second.erase(iter_for_cte);
@@ -50,7 +50,8 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
     std::unique_lock<std::mutex> lock(this->mu);
     auto iter = this->ctes.find(query_id_and_cte_id);
     if unlikely (iter == this->ctes.end())
-        throw Exception(fmt::format("Can't find cte: {}", query_id_and_cte_id));
+        // Maybe the task is cancelled and all ctes have been released
+        return;
 
     auto * log = &Poco::Logger::get("LRUCache");
     LOG_INFO(log, "xzxdebug releaseCTEBySink, counter");
@@ -71,7 +72,10 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
     }
 
     if (ctes_need_erase.size() == iter->second.size())
+    {
         this->ctes.erase(iter);
+        return;
+    }
 
     for (const auto & key : ctes_need_erase)
     {
@@ -80,7 +84,19 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
     }
 }
 
-std::shared_ptr<CTE> CTEManager::getCTEimpl(const String & query_id_and_cte_id, const String & partition_id, Int32 expected_sink_num, Int32 expected_source_num)
+void CTEManager::releaseCTEs(const String & query_id_and_cte_id)
+{
+    std::lock_guard<std::mutex> lock(this->mu);
+    auto iter = this->ctes.find(query_id_and_cte_id);
+    if (iter != this->ctes.end())
+        this->ctes.erase(iter);
+}
+
+std::shared_ptr<CTE> CTEManager::getCTEimpl(
+    const String & query_id_and_cte_id,
+    const String & partition_id,
+    Int32 expected_sink_num,
+    Int32 expected_source_num)
 {
     std::lock_guard<std::mutex> lock(this->mu);
     auto iter = this->ctes.find(query_id_and_cte_id);

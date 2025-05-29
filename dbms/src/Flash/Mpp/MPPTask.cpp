@@ -191,28 +191,29 @@ void MPPTask::abortQueryExecutor()
 }
 
 void MPPTask::abortCTE()
-{   
-    if (this->has_cte_source)
+{
+    if (this->dag_context->hasCTESource())
     {
         auto ctes = this->dag_context->getCTEs();
 
-        // CTESource may be waiting for the eof from cte sink
-        // We'd better to manually do eof notification in case of missing eof from cte sink
+        // CTESource may be waiting for the finish signal from cte sink
+        // We'd better to manually do notification in case of missing signal from cte sink
         // or the CTESource will hang
         for (auto & cte : ctes)
-            cte->notifyEOF();
+            cte->notifyCancel();
+        this->context->getCTEManager()->releaseCTEs(this->dag_context->getQueryIDAndCTEID());
     }
-
-    // TODO always delete cte when we receive cancel
 }
 
 void MPPTask::finishWrite()
 {
     if (this->has_cte_sink)
     {
-        const String & query_id_and_cte_id = this->dag_context->getQueryIDAndCTEID();
-        LOG_INFO(log, "xzxdebug enter finishWrite, query_id_and_cte_id: {}, mpptask id: {}", query_id_and_cte_id, id.toString());
-        CTEManager * cte_manager = this->context->getCTEManager();
+        LOG_INFO(
+            log,
+            "xzxdebug enter finishWrite, query_id_and_cte_id: {}, mpptask id: {}",
+            this->dag_context->getQueryIDAndCTEID(),
+            id.toString());
         tipb::SelectResponse resp;
         if (dag_context->collect_execution_summaries)
             resp = mpp_task_statistics.genExecutionSummaryResponse();
@@ -220,8 +221,8 @@ void MPPTask::finishWrite()
         // The finish of pushing all blocks not means that cte sink job has been done.
         // Execution summary statistic also need to be sent. So we can release cte
         // only when execution sumary statistic has been sent.
-        cte_manager->releaseCTEBySink(resp, query_id_and_cte_id);
-        this->notify_cte_eof = true;
+        this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEID());
+        this->notify_cte_finish = true;
     }
     else
     {
@@ -675,9 +676,11 @@ void MPPTask::runImpl()
         err_msg = err_msg.empty() ? catch_err_msg : fmt::format("{}, {}", err_msg, catch_err_msg);
     }
 
-    if (this->has_cte_sink && !this->notify_cte_eof)
+    if (this->has_cte_sink && !this->notify_cte_finish)
     {
-        // TODO
+        tipb::SelectResponse resp;
+        this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEID());
+        this->notify_cte_finish = true;
     }
 
     if (err_msg.empty())
@@ -832,6 +835,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             abortTunnels(message, false);
             abortReceivers();
             abortQueryExecutor();
+            abortCTE();
             scheduleThisTask(ScheduleState::FAILED);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish abort task from running");

@@ -153,7 +153,8 @@ public:
     void addCTE(std::shared_ptr<CTE> & cte) { this->dag_context->addCTE(cte); }
 
     void sinkNeedRelease() { this->dag_context->sinkNeedRelease(); }
-    
+    void setHasCTESource() { this->dag_context->setHasCTESource(); }
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 

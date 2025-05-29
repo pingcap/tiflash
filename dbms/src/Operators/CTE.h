@@ -43,8 +43,9 @@ public:
     }
 
     FetchStatus tryGetBunchBlocks(size_t idx, std::deque<Block> & queue);
-    void pushBlock(const Block & block);
-    void notifyEOF() { this->notifyEOFImpl<true>(); }
+    bool pushBlock(const Block & block);
+    void notifyEOF() { this->notifyImpl<true>(true); }
+    void notifyCancel() { this->notifyImpl<true>(false); }
 
     void registerTask(TaskPtr && task) override;
 
@@ -64,21 +65,26 @@ public:
         }
     }
 
-    Int64 blockNumForTest() {
+    Int64 blockNumForTest()
+    {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
         return this->blocks.size();
     }
 
 private:
-    void notifyEOFNoLock() { this->notifyEOFImpl<false>(); }
+    void notifyEOFNoLock() { this->notifyImpl<false>(true); }
 
     template <bool has_lock>
-    void notifyEOFImpl()
+    void notifyImpl(bool is_eof)
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
         if constexpr (has_lock)
             lock.lock();
-        this->is_eof = true;
+
+        if likely (is_eof)
+            this->is_eof = true;
+        else
+            this->is_cancelled = true;
 
         // Just in case someone is in WAITING_FOR_NOTIFY status
         this->pipe_cv.notifyAll();
@@ -97,6 +103,7 @@ private:
     PipeConditionVariable pipe_cv;
 
     bool is_eof = false;
+    bool is_cancelled = false;
 
     bool get_resp = false;
     tipb::SelectResponse resp;

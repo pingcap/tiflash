@@ -27,7 +27,9 @@ class CTEWithCounter
 {
 public:
     explicit CTEWithCounter(std::shared_ptr<CTE> cte_, Int32 expected_total_sink_num_, Int32 expected_total_source_num_)
-        : cte(cte_), expected_total_sink_num(expected_total_sink_num_), expected_total_source_num(expected_total_source_num_)
+        : cte(cte_)
+        , expected_total_sink_num(expected_total_sink_num_)
+        , expected_total_source_num(expected_total_source_num_)
     {}
 
     void sinkExit() { this->sink_exit_num++; }
@@ -55,19 +57,32 @@ private:
 class CTEManager
 {
 public:
-    std::shared_ptr<CTE> getCTEBySink(const String & query_id_and_cte_id, const String & partition_id, Int32 expected_sink_num, Int32 expected_source_num)
+    std::shared_ptr<CTE> getCTEBySink(
+        const String & query_id_and_cte_id,
+        const String & partition_id,
+        Int32 expected_sink_num,
+        Int32 expected_source_num)
     {
         return this->getCTEimpl(query_id_and_cte_id, partition_id, expected_sink_num, expected_source_num);
     }
-    std::shared_ptr<CTE> getCTEBySource(const String & query_id_and_cte_id, const String & partition_id, Int32 expected_sink_num, Int32 expected_source_num)
+    std::shared_ptr<CTE> getCTEBySource(
+        const String & query_id_and_cte_id,
+        const String & partition_id,
+        Int32 expected_sink_num,
+        Int32 expected_source_num)
     {
         return this->getCTEimpl(query_id_and_cte_id, partition_id, expected_sink_num, expected_source_num);
     }
     void releaseCTEBySource(const String & query_id_and_cte_id, const String & partition_id);
     void releaseCTEBySink(const tipb::SelectResponse & resp, const String & query_id_and_cte_id);
+    void releaseCTEs(const String & query_id_and_cte_id);
 
 private:
-    std::shared_ptr<CTE> getCTEimpl(const String & query_id_and_cte_id, const String & partition_id, Int32 expected_sink_num, Int32 expected_source_num);
+    std::shared_ptr<CTE> getCTEimpl(
+        const String & query_id_and_cte_id,
+        const String & partition_id,
+        Int32 expected_sink_num,
+        Int32 expected_source_num);
 
     std::mutex mu;
     std::map<String, std::map<String, CTEWithCounter>> ctes;

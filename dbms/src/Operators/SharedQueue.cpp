@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Common/Exception.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/SharedQueue.h>
 
 #include <magic_enum.hpp>

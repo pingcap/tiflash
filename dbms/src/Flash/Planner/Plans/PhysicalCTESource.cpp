@@ -61,23 +61,32 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
 
     String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
+    exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
+    exec_context.setHasCTESource();
 
     if (fine_grained_shuffle.enabled())
     {
         for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
         {
-            auto cte_reader = std::make_shared<CTEReader>(query_id_and_cte_id, std::to_string(partition_id), context.getCTEManager(), this->expected_sink_num, this->expected_source_num);
+            auto cte_reader = std::make_shared<CTEReader>(
+                query_id_and_cte_id,
+                std::to_string(partition_id),
+                context.getCTEManager(),
+                this->expected_sink_num,
+                this->expected_source_num);
             exec_context.addCTE(cte_reader->getCTE());
-            group_builder.addConcurrency(std::make_unique<CTESourceOp>(
-                exec_context,
-                log->identifier(),
-                cte_reader,
-                schema));
+            group_builder.addConcurrency(
+                std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, schema));
         }
     }
     else
     {
-        auto cte_reader = std::make_shared<CTEReader>(query_id_and_cte_id, "", context.getCTEManager(), this->expected_sink_num, this->expected_source_num);
+        auto cte_reader = std::make_shared<CTEReader>(
+            query_id_and_cte_id,
+            "",
+            context.getCTEManager(),
+            this->expected_sink_num,
+            this->expected_source_num);
         exec_context.addCTE(cte_reader->getCTE());
         for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
         {

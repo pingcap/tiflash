@@ -26,6 +26,9 @@ FetchStatus CTE::tryGetBunchBlocks(size_t idx, std::deque<Block> & queue)
     assert(queue.empty());
 
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+    if unlikely (this->is_cancelled)
+        return FetchStatus::Cancelled;
+
     auto block_num = this->blocks.size();
     if (block_num <= idx)
     {
@@ -40,9 +43,11 @@ FetchStatus CTE::tryGetBunchBlocks(size_t idx, std::deque<Block> & queue)
     return FetchStatus::Ok;
 }
 
-void CTE::pushBlock(const Block & block)
+bool CTE::pushBlock(const Block & block)
 {
     std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+    if unlikely (this->is_cancelled)
+        return false;
 
     this->memory_usage += block.bytes();
     if unlikely (this->blocks.empty())
@@ -50,6 +55,7 @@ void CTE::pushBlock(const Block & block)
     this->blocks.push_back(block);
     this->block_num++;
     this->row_num += block.rows();
+    return true;
 }
 
 void CTE::registerTask(TaskPtr && task)
