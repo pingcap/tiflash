@@ -38,7 +38,7 @@ build_tiflash_tsan:
 build_tiflash_asan:
 	$(DOCKER) run --rm -v $(realpath ..):/build/tics hub.pingcap.net/tiflash/tiflash-llvm-base:rocky8$(SUFFIX) /build/tics/release-linux-llvm/scripts/build-asan.sh
 
-# Base docker with prerequisites running CI
+# Base docker with prerequisites running integration tests
 image_tiflash_ci_base:
 	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-ci-base -t hub.pingcap.net/tiflash/tiflash-ci-base .
 
