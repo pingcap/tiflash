@@ -40,7 +40,7 @@ build_tiflash_asan:
 
 # Base docker with prerequisites running integration tests
 image_tiflash_ci_base:
-	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-ci-base -t hub.pingcap.net/tiflash/tiflash-ci-base .
+	$(DOCKER) build -f dockerfiles/Dockerfile-tiflash-ci-base -t hub.pingcap.net/tiflash/tiflash-ci-base:rocky9-20250529 .
 
 # Package tiflash CI docker image using the binaries under directory "tiflash"
 image_tiflash_ci:
