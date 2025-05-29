@@ -24,14 +24,14 @@ check_docker_compose
 
 
 if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
-    echo "Skip fullstack test on next-gen TiFlash"
+    echo "Skip this fullstack test on next-gen TiFlash"
     exit 0
 fi
 
 # classic TiFlash
 echo "Running fullstack test on classic TiFlash"
 
-# run fullstack-tests (for engine DeltaTree)
+# run fullstack-tests
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
