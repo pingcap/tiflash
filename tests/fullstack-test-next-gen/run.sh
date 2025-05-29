@@ -1,5 +1,5 @@
 #!/bin/bash
-# Copyright 2023 PingCAP, Inc.
+# Copyright 2025 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -29,8 +29,6 @@ if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GE
     # clean up previous docker instances, data and log
     ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml down
     clean_data_log
-    # create bucket "tiflash-test" on minio
-    mkdir -pv data/minio/tiflash-test
 
     # run fullstack-tests
     ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml up -d

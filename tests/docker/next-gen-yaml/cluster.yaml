@@ -22,7 +22,10 @@ services:
     volumes:
       - ./data/minio:/data
       - ./log/minio:/log
-    command: server /data --console-address ':9001' > /log/minio.log 2>&1
+    # Using command can not set the init bucket and logging to file.
+    #command: server /data --console-address ':9001' > /log/minio.log 2>&1
+    # Use entrypoint instead, create bucket "tiflash-test" on minio at startup
+    entrypoint: sh -c 'mkdir -p /data/tiflash-test && minio server /data --console-address ":9001" > /log/minio.log 2>&1'
   pd0:
     image: ${PD_IMAGE:-hub.pingcap.net/tikv/pd/image:master-next-gen}
     security_opt:
