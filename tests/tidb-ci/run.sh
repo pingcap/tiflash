@@ -20,8 +20,7 @@ set_branch
 set -xe
 
 check_env
-
-COMPOSE="docker-compose"
+check_docker_compose
 
 
 if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then

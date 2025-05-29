@@ -142,6 +142,23 @@ function check_env() {
   fi
 }
 
+function check_docker_compose() {
+  # Try to use `docker-compose` first, if not found, fallback to `docker compose`
+  if ! command -v docker-compose &>/dev/null; then
+    echo "docker-compose could not be found."
+    if ! command -v docker &>/dev/null; then
+      echo "Neither docker-compose nor docker could be found, please install one of them first."
+      exit 1
+    else
+      echo "docker compose is installed."
+      export COMPOSE="docker compose"
+    fi
+  else
+    echo "docker-compose is installed."
+    export COMPOSE="docker-compose"
+  fi
+}
+
 export -f show_env
 export -f wait_env
 export -f wait_tiflash_env
@@ -149,3 +166,4 @@ export -f wait_next_gen_env
 export -f set_branch
 export -f clean_data_log
 export -f check_env
+export -f check_docker_compose

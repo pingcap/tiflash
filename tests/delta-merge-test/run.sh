@@ -20,8 +20,7 @@ set_branch
 set -xe
 
 check_env
-
-COMPOSE="docker-compose"
+check_docker_compose
 
 # (only tics0 up)
 ${COMPOSE} -f mock-test-dt.yaml down
@@ -30,6 +29,5 @@ clean_data_log
 ${COMPOSE} -f mock-test-dt.yaml up -d
 wait_tiflash_env
 ${COMPOSE} -f mock-test-dt.yaml exec -T tics0 bash -c 'cd /tests ; ./run-test.sh delta-merge-test'
-
 ${COMPOSE} -f mock-test-dt.yaml down
 clean_data_log

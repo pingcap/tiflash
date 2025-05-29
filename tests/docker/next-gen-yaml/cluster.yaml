@@ -12,6 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+version: '2.3'
+
 services:
   minio0:
     image: ${MINIO_IMAGE:-hub.pingcap.net/test-infra/minio:latest}
@@ -46,15 +48,12 @@ services:
     restart: on-failure
   tidb0:
     image: ${TIDB_IMAGE:-hub.pingcap.net/pingcap/tidb/images/tidb-server:master-next-gen}
-    # image: ${TIDB_IMAGE:-hub.pingcap.net/devbuild/pingcap/tidb/images/tidb-server:v9.0.0-nextgen-7736}
     security_opt:
       - seccomp:unconfined
     volumes:
       - ./next-gen-config/tidb.toml:/tidb.toml:ro
       - ./log/tidb0:/log
     command: --store=tikv --path=pd0:2379 --config=/tidb.toml --log-file=/log/tidb.log --advertise-address=tidb0
-    ports: 
-      - "8090:4000"
     depends_on:
       - "tikv0"
     restart: on-failure
