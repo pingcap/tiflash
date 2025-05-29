@@ -22,28 +22,32 @@ set -xe
 
 check_env
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+COMPOSE="docker-compose"
+
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
 # FIXME: now vector does not support run with encryption-at-rest enabled
-docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml up -d
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml up -d
 wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test-index'
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test-index'
 
-docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml down
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml down
 clean_data_log
 
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
-wait_env
-docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test2 true && ./run-test.sh fullstack-test-dt'
+exit
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml up -d
+wait_env
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test2 true && ./run-test.sh fullstack-test-dt'
+
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml up -d
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml up -d
 wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
 
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
 clean_data_log
