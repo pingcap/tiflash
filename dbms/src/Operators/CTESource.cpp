@@ -33,6 +33,8 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         if (this->resp.execution_summaries_size() != 0)
             this->io_profile_info->remote_execution_summary.add(this->resp);
     case FetchStatus::Ok:
+        if (!res.second)
+            LOG_INFO(log, "xzxdebug get empty block");
         block = res.second;
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;

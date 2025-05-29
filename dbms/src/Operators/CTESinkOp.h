@@ -38,6 +38,5 @@ protected:
 private:
     std::shared_ptr<CTE> cte;
     size_t total_rows = 0;
-    bool input_done = false;
 };
 } // namespace DB

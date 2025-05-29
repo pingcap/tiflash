@@ -39,7 +39,7 @@ public:
     ~CTE() override
     {
         auto * log = &Poco::Logger::get("LRUCache");
-        LOG_INFO(log, fmt::format("xzxdebug block num: {}, row num: {}", this->block_num, this->row_num));
+        LOG_INFO(log, fmt::format("xzxdebug CTE is destructured block num: {}, row num: {}", this->block_num, this->row_num));
     }
 
     FetchStatus tryGetBunchBlocks(size_t idx, std::deque<Block> & queue);
@@ -49,11 +49,10 @@ public:
 
     void registerTask(TaskPtr && task) override;
 
-    void addRespAndNotifyEOF(const tipb::SelectResponse & resp)
+    void addResp(const tipb::SelectResponse & resp)
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
         this->resp.MergeFrom(resp);
-        this->notifyEOFNoLock();
     }
 
     void tryToGetResp(tipb::SelectResponse & resp)
@@ -72,8 +71,6 @@ public:
     }
 
 private:
-    void notifyEOFNoLock() { this->notifyImpl<false>(true); }
-
     template <bool has_lock>
     void notifyImpl(bool is_eof)
     {
@@ -81,8 +78,13 @@ private:
         if constexpr (has_lock)
             lock.lock();
 
+        auto * log = &Poco::Logger::get("LRUCache");
+        
         if likely (is_eof)
+        {
+            LOG_INFO(log, "xzxdebug set eof true");
             this->is_eof = true;
+        }
         else
             this->is_cancelled = true;
 
@@ -95,7 +97,7 @@ private:
 
     std::shared_mutex rw_lock;
     Blocks blocks;
-
+    bool first_print = false; // TODO remove
     size_t memory_usage = 0;
 
     // Tasks in WAITING_FOR_NOTIFY are saved in this deque

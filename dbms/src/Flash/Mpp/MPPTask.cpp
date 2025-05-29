@@ -246,8 +246,6 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         if unlikely (!dag_context->dag_request.rootExecutor().has_cte_sink())
             throw Exception("Task has either exchange sender or cte sink");
 
-        LOG_INFO(log, "xzxdebug register cte sink");
-
         // There is no need to register tunnel for cte sink
         this->has_cte_sink = true;
         return;
@@ -587,9 +585,7 @@ void MPPTask::runImpl()
             dag_context->tunnel_set->getExternalThreadCnt(),
             new_thread_count_of_mpp_receiver);
 
-        LOG_INFO(log, "xzxdebug wait for schedule");
         scheduleOrWait();
-        LOG_INFO(log, "xzxdebug start to run");
 
         auto time_cost_in_schedule_ns = stopwatch.elapsed() - time_cost_in_preprocess_ns;
         dag_context->minTSO_wait_time_ns = time_cost_in_schedule_ns;
@@ -621,7 +617,6 @@ void MPPTask::runImpl()
 #endif
 
         auto result = query_executor_holder->execute();
-        LOG_INFO(log, "xzxdebug execution is finished");
         auto log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
             log_level = Poco::Message::PRIO_INFORMATION;

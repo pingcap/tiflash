@@ -22,24 +22,27 @@ namespace DB
 std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
 {
     std::lock_guard<std::mutex> lock(this->mu);
+    auto * log = &Poco::Logger::get("LRUCache");
     if (!this->blocks.empty())
     {
         Block block = std::move(this->blocks.front());
         this->blocks.pop_front();
         this->output_block_num++;
         this->output_row_num += block.rows();
+        if (!block)
+            LOG_INFO(log, "xzxdebug output empty block");
         return {FetchStatus::Ok, block};
     }
 
     auto ret = this->cte->tryGetBunchBlocks(this->block_fetch_idx, this->blocks);
-    // if (ret != FetchStatus::Ok)
-    // {
-    //     auto * log = &Poco::Logger::get("LRUCache");
-    //     LOG_INFO(log, "xzxdebug block_fetch_idx: {}, block num in cte: {}", this->block_fetch_idx, this->cte->blockNumForTest());
-    // }
     switch (ret)
     {
     case FetchStatus::Eof:
+        if (!this->print_eof)
+        {
+            LOG_INFO(log, "xzxdebug block_fetch_idx: {}, block num in cte: {}", this->block_fetch_idx, this->cte->blockNumForTest());
+            this->print_eof = true;
+        }
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
     case FetchStatus::Waiting:
@@ -52,6 +55,8 @@ std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
         this->blocks.pop_front();
         this->output_block_num++;
         this->output_row_num += block.rows();
+        if (!block)
+            LOG_INFO(log, "xzxdebug output empty block");
         return {ret, block};
     }
     throw Exception("Should not reach here");
@@ -63,17 +68,18 @@ FetchStatus CTEReader::checkAvailableBlock()
     if (!this->blocks.empty())
         return FetchStatus::Ok;
 
+    auto * log = &Poco::Logger::get("LRUCache");
     auto ret = this->cte->tryGetBunchBlocks(this->block_fetch_idx, this->blocks);
-    // if (ret != FetchStatus::Ok)
-    // {
-    //     auto * log = &Poco::Logger::get("LRUCache");
-    //     LOG_INFO(log, "xzxdebug block_fetch_idx: {}, block num in cte: {}", this->block_fetch_idx, this->cte->blockNumForTest());
-    // }
     switch (ret)
     {
+    case FetchStatus::Eof:
+        if (!this->print_eof)
+        {
+            LOG_INFO(log, "xzxdebug block_fetch_idx: {}, block num in cte: {}", this->block_fetch_idx, this->cte->blockNumForTest());
+            this->print_eof = true;
+        }
     case FetchStatus::Waiting:
     case FetchStatus::Cancelled:
-    case FetchStatus::Eof:
         return ret;
     case FetchStatus::Ok:
         this->save_block_num += this->blocks.size();

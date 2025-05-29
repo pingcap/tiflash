@@ -19,6 +19,7 @@
 #include <Operators/CTE.h>
 #include <tipb/select.pb.h>
 
+#include <atomic>
 #include <deque>
 #include <memory>
 #include <mutex>
@@ -54,12 +55,12 @@ public:
         LOG_INFO(
             log,
             fmt::format(
-                "xzxdebug query_id: {}, pid: {}, output block num: {}, output row num: {}, save block num:{}",
-                this->query_id_and_cte_id,
-                this->partition_id,
+                "xzxdebug output block num: {}, output row num: {}, save block num:{}, query_id: {}, pid: {}",
                 this->output_block_num,
                 this->output_row_num,
-                this->save_block_num));
+                this->save_block_num,
+                this->query_id_and_cte_id,
+                this->partition_id));
     }
 
     std::pair<FetchStatus, Block> fetchNextBlock();
@@ -97,6 +98,8 @@ private:
     String partition_id;
     CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
+
+    bool print_eof = false;
 
     std::mutex mu;
     std::deque<Block> blocks;

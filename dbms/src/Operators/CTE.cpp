@@ -25,7 +25,7 @@ FetchStatus CTE::tryGetBunchBlocks(size_t idx, std::deque<Block> & queue)
 {
     assert(queue.empty());
 
-    std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+    std::unique_lock<std::shared_mutex> lock(this->rw_lock); // TODO back to shared_lock
     if unlikely (this->is_cancelled)
         return FetchStatus::Cancelled;
 
@@ -33,7 +33,15 @@ FetchStatus CTE::tryGetBunchBlocks(size_t idx, std::deque<Block> & queue)
     if (block_num <= idx)
     {
         if (this->is_eof)
+        {
+            if (!this->first_print)
+            {
+                auto * log = &Poco::Logger::get("LRUCache");
+                LOG_INFO(log, fmt::format("xzxdebug CTE returns eof, block num: {}, row num: {}", this->block_num, this->row_num));
+                this->first_print = true;
+            }
             return FetchStatus::Eof;
+        }
         else
             return FetchStatus::Waiting;
     }
@@ -48,6 +56,9 @@ bool CTE::pushBlock(const Block & block)
     std::unique_lock<std::shared_mutex> lock(this->rw_lock);
     if unlikely (this->is_cancelled)
         return false;
+
+    if unlikely (block.rows() == 0)
+        return true;
 
     this->memory_usage += block.bytes();
     if unlikely (this->blocks.empty())
