@@ -89,6 +89,35 @@ function wait_tiflash_env() {
   fi
 }
 
+function wait_next_gen_env() {
+  local timeout='200'
+  local failed='true'
+
+  echo "=> wait for env available"
+
+  for (( i = 0; i < "${timeout}"; i++ )); do
+    if [[ -n $(cat ./log/tidb0/tidb.log | grep "server is running MySQL protocol") && \
+          -n $(cat ./log/tiflash-wn0/tiflash.log | grep "Start to wait for terminal signal") && \
+          -n $(cat ./log/tiflash-cn0/tiflash.log | grep "Start to wait for terminal signal") ]]; then
+        local failed='false'
+        break
+    fi
+
+    if [ $((${i} % 10)) = 0 ] && [ ${i} -ge 10 ]; then
+      echo "   #${i} waiting for env available"
+    fi
+
+    sleep 1
+  done
+
+  if [ "${failed}" == 'true' ]; then
+    echo "   can not set up env" >&2
+    exit 1
+  else
+    echo "   available"
+  fi
+}
+
 function set_branch() {
   # XYZ_BRANCH: pd/tikv/tidb hash, default to `master`
   # BRANCH:     hash short cut, default to `master`
@@ -116,6 +145,7 @@ function check_env() {
 export -f show_env
 export -f wait_env
 export -f wait_tiflash_env
+export -f wait_next_gen_env
 export -f set_branch
 export -f clean_data_log
 export -f check_env

@@ -23,6 +23,22 @@ check_env
 
 COMPOSE="docker-compose"
 
+
+if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
+echo "Running fullstack test on next-gen TiFlash"
+
+# clean up previous docker instances, data and log
+${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml down
+clean_data_log
+# create bucket "tiflash-test" on minio
+mkdir -pv data/minio/tiflash-test
+
+echo "Skip fullstack test on next-gen TiFlash"
+
+else # classic TiFlash
+
+echo "Running fullstack test on classic TiFlash"
+
 # run fullstack-tests (for engine DeltaTree)
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
@@ -64,10 +80,11 @@ ${COMPOSE} -f cluster.yaml -f tiflash-dt-force-enable-lm.yaml exec -T tiflash0 b
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-force-enable-lm.yaml down
 clean_data_log
 
-# run lighweight compression tests
+# run lightweight compression tests
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-lightweight-compression.yaml up -d
 wait_env
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-lightweight-compression.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/lightweight_compression'
 
 ${COMPOSE} -f cluster.yaml -f tiflash-dt-lightweight-compression.yaml down
 clean_data_log
+fi
