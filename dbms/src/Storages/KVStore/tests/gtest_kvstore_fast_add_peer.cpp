@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -56,6 +57,7 @@ struct FAPTestOpt
     bool mock_add_new_peer = false;
     bool persist_empty_segment = false;
     bool second_region = false;
+    bool fap_use_segment_to_end_map_cache = false;
 };
 
 class RegionKVStoreTestFAP : public KVStoreTestBase
@@ -362,10 +364,22 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     global_context.getTMTContext().debugSetKVStore(kvstore);
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+#if ENABLE_NEXT_GEN
+    if (opt.fap_use_segment_to_end_map_cache)
+    {
+        global_context.getSettingsRef().fap_use_segment_to_end_map_cache = true;
+        global_context.getTMTContext().getContext().getSettingsRef().fap_use_segment_to_end_map_cache = true;
+    }
+    else
+    {
+        global_context.getSettingsRef().fap_use_segment_to_end_map_cache = false;
+        global_context.getTMTContext().getContext().getSettingsRef().fap_use_segment_to_end_map_cache = false;
+    }
+#endif
     auto page_storage = global_context.getWriteNodePageStorage();
 
     table_id = proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
-    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
 
     auto store_id = kvs.getStore().store_id.load();
 
@@ -908,6 +922,27 @@ try
     server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds = 0;
     // Use another call to cancel
     FastAddPeer(&server, region_id, 2333);
+    eventuallyPredicate([&]() {
+        auto ptr = fap_context->getOrRestoreCheckpointIngestInfo(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333);
+        return ptr == nullptr
+            && !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
+
+    {
+        CheckpointIngestInfo::forciblyClean(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            false,
+            CheckpointIngestInfo::CleanReason::ProxyFallback);
+    }
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
     LOG_INFO(log, "Try another snapshot");
     proxy_instance->snapshot(
         kvs,
@@ -929,11 +964,12 @@ try
 }
 CATCH
 
+#if ENABLE_NEXT_GEN
 // Test cancel when building segments
-TEST_F(RegionKVStoreTestFAP, Cancel5)
+TEST_F(RegionKVStoreTestFAP, Cancel5_1)
 try
 {
-    auto mock_data = prepareForRestart(FAPTestOpt{.second_region = true});
+    auto mock_data = prepareForRestart(FAPTestOpt{.second_region = true, .fap_use_segment_to_end_map_cache = true});
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -992,6 +1028,65 @@ try
 }
 CATCH
 
+// Test cancel when building segments
+TEST_F(RegionKVStoreTestFAP, Cancel5_2)
+try
+{
+    auto mock_data = prepareForRestart(FAPTestOpt{.second_region = true});
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    std::mutex exe_mut;
+    std::unique_lock exe_lock(exe_mut);
+    fap_context->tasks_trace->addTask(1, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut);
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
+    });
+    std::mutex exe_mut2;
+    std::unique_lock exe_lock2(exe_mut2);
+    fap_context->tasks_trace->addTask(2, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut2);
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
+    });
+    FailPointHelper::enableFailPoint(FailPoints::pause_when_building_fap_segments);
+    std::packaged_task<FastAddPeerRes()> task([&]() {
+        return FastAddPeerImplWrite(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            1,
+            2333,
+            std::move(mock_data[0]),
+            0);
+    });
+    std::packaged_task<FastAddPeerRes()> task2([&]() {
+        return FastAddPeerImplWrite(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            2,
+            2334,
+            std::move(mock_data[1]),
+            0);
+    });
+    auto result = task.get_future();
+    auto result2 = task2.get_future();
+    std::thread t([&]() { task(); });
+    std::thread t2([&]() { task2(); });
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(1s);
+    fap_context->tasks_trace->asyncCancelTask(1);
+    FailPointHelper::disableFailPoint(FailPoints::pause_when_building_fap_segments);
+    // Can see log "FAP is canceled when building segments" and "FAP is canceled after build segments".
+    t.join();
+    t2.join();
+    exe_lock.unlock();
+    exe_lock2.unlock();
+    ASSERT_EQ(result.get().status, FastAddPeerStatus::Ok);
+    ASSERT_EQ(result2.get().status, FastAddPeerStatus::Ok);
+}
+CATCH
+#endif
 
 TEST_F(RegionKVStoreTestFAP, EmptySegment)
 try

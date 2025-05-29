@@ -1281,8 +1281,8 @@ UInt64 DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
 
     auto restored_segments = checkpoint_info->getRestoredSegments();
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
-    size_t estimated_bytes = 0;
 
+    size_t estimated_bytes = 0;
     for (const auto & segment : restored_segments)
     {
         estimated_bytes += segment->getEstimatedBytes();

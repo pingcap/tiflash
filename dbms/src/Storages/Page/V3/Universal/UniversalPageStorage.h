@@ -111,6 +111,14 @@ public:
 
     Page read(
         const UniversalPageId & page_id,
+        const ReadLimiterPtr & read_limiter,
+        SnapshotPtr snapshot,
+        bool throw_on_not_exist,
+        ReadBufferFromRandomAccessFilePtr & reusable_buf,
+        PS::V3::S3PageReader::ReuseStat & unused_reason) const;
+
+    Page read(
+        const UniversalPageId & page_id,
         const ReadLimiterPtr & read_limiter = nullptr,
         SnapshotPtr snapshot = {},
         bool throw_on_not_exist = true) const;

@@ -66,6 +66,7 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Utils/AsyncTasks.h>
 #include <Storages/Page/V3/PageEntryCheckpointInfo.h>
+#include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/PathPool.h>
@@ -477,7 +478,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
 
     auto end_to_segment_id_cache = checkpoint_info->checkpoint_data_holder->getEndToSegmentIdCache(
         KeyspaceTableID{context.keyspace_id, context.physical_table_id});
-
+    bool use_cache = context.fap_use_segment_to_end_map_cache;
     // Protected by whatever lock.
     auto build_segments = [&](bool is_cache_ready, PageIdU64 current_segment_id)
         -> std::optional<std::pair<std::vector<std::pair<DM::RowKeyValue, UInt64>>, SegmentMetaInfos>> {
@@ -490,11 +491,24 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
         // The map is used to build cache.
         std::vector<std::pair<DM::RowKeyValue, UInt64>> end_key_and_segment_ids;
         SegmentMetaInfos segment_infos;
+        ReadBufferFromRandomAccessFilePtr reusable_buf = nullptr;
+        size_t total_processed_segments = 0;
+        size_t total_skipped_segments = 0;
+        PS::V3::S3PageReader::ReuseStatAgg reused_agg;
+        // TODO If the regions are added in a slower rate, the cache may not be reused even if the TiFlash region replicas are always added in one table as a whole.
+        // This is because later added regions could use later checkpoints. So, there could be another optimization to avoid generating the cache.
         while (current_segment_id != 0)
         {
             if (cancel_handle->isCanceled())
             {
-                LOG_INFO(log, "FAP is canceled when building segments, built={}", end_key_and_segment_ids.size());
+                LOG_INFO(
+                    log,
+                    "FAP is canceled when building segments, built={}, total_processed_segments={} "
+                    "total_skipped_segments={} reused_agg={}",
+                    end_key_and_segment_ids.size(),
+                    total_processed_segments,
+                    total_skipped_segments,
+                    reused_agg.toString());
                 // FAP task would be cleaned in FastAddPeerImplWrite. So returning empty result is OK.
                 return std::nullopt;
             }
@@ -502,7 +516,9 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             auto target_id = UniversalPageIdFormat::toFullPageId(
                 UniversalPageIdFormat::toFullPrefix(context.keyspace_id, StorageType::Meta, context.physical_table_id),
                 current_segment_id);
-            auto page = checkpoint_info->temp_ps->read(target_id, nullptr, {}, false);
+            PS::V3::S3PageReader::ReuseStat reason = PS::V3::S3PageReader::ReuseStat::Reused;
+            auto page = checkpoint_info->temp_ps->read(target_id, nullptr, {}, false, reusable_buf, reason);
+            reused_agg.observe(reason);
             if unlikely (!page.isValid())
             {
                 // After #7642, DELTA_MERGE_FIRST_SEGMENT_ID may not exist, however, such checkpoint won't be selected.
@@ -519,6 +535,7 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             readSegmentMetaInfo(buf, segment_info);
             if (!is_cache_ready)
             {
+                FAIL_POINT_PAUSE(FailPoints::pause_when_building_fap_segments);
                 end_key_and_segment_ids.emplace_back(
                     segment_info.range.getEnd().toRowKeyValue(),
                     segment_info.segment_id);
@@ -528,61 +545,95 @@ Segment::SegmentMetaInfos Segment::readAllSegmentsMetaInfoInRange( //
             {
                 segment_infos.emplace_back(segment_info);
             }
-            // if not build cache, stop as early as possible.
-            if (is_cache_ready && segment_info.range.end.value->compare(*target_range.end.value) >= 0)
+            else
             {
-                break;
+                total_skipped_segments++;
             }
+            if (segment_info.range.end.value->compare(*target_range.end.value) >= 0)
+            {
+                // if not build cache, stop as early as possible.
+                if (is_cache_ready)
+                    break;
+            }
+            total_processed_segments++;
         }
+        LOG_INFO(
+            log,
+            "Finish building segments, target_range={} infos_size={} total_processed_segments={} "
+            "total_skipped_segments={} reused_agg={} use_cache={}",
+            target_range.toDebugString(),
+            segment_infos.size(),
+            total_processed_segments,
+            total_skipped_segments,
+            reused_agg.toString(),
+            use_cache);
         return std::make_pair(end_key_and_segment_ids, segment_infos);
     };
 
+    if (use_cache)
     {
-        // If there is a table building cache, then other table may block to read the built cache.
-        // If the remote reader causes much time to retrieve data, then these tasks could block here.
-        // However, when the execlusive holder is canceled due to timeout, the readers could eventually get the lock.
-        auto lock = end_to_segment_id_cache->writeLock();
-        // - Set to `true`: The building task is done.
-        // - Set to `false`: It is not build yet, or it is building.
-        bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
-        GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_wait_build)
-            .Observe(sw.elapsedSecondsFromLastTime());
-
-        if (!is_cache_ready)
+        LOG_DEBUG(log, "Start read all segments meta info by cache");
         {
-            // We are the cache builder.
-            FAIL_POINT_PAUSE(FailPoints::pause_when_building_fap_segments);
+            // If there is a table building cache, then other table may block to read the built cache.
+            // If the remote reader causes much time to retrieve data, then these tasks could block here.
+            // However, when the exclusive holder is canceled due to timeout, the readers could eventually get the lock.
+            auto lock = end_to_segment_id_cache->writeLock();
+            // - Set to `true`: The building task is done.
+            // - Set to `false`: It is not build yet, or it is building.
+            bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
+            GET_METRIC(tiflash_fap_task_duration_seconds, type_write_stage_wait_build)
+                .Observe(sw.elapsedSecondsFromLastTime());
 
-            auto res = build_segments(is_cache_ready, DELTA_MERGE_FIRST_SEGMENT_ID);
-            // After all segments are scanned, we try to build a cache,
-            // so other FAP tasks that share the same checkpoint could reuse the cache.
+            if (!is_cache_ready)
+            {
+                // We are the cache builder.
+
+                auto res = build_segments(is_cache_ready, DELTA_MERGE_FIRST_SEGMENT_ID);
+                // After all segments are scanned, we try to build a cache,
+                // so other FAP tasks that share the same checkpoint could reuse the cache.
+                if (!res)
+                    return {};
+                auto & [end_key_and_segment_ids, segment_infos] = *res;
+                LOG_DEBUG(
+                    log,
+                    "Segment meta info cache has been built, num_segments={}",
+                    end_key_and_segment_ids.size());
+                end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
+                return std::move(segment_infos);
+            }
+        }
+        {
+            // If we found the cache is built, which could be normal cases when the checkpoint is reused.
+            auto lock = end_to_segment_id_cache->readLock();
+            bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
+            RUNTIME_CHECK(is_cache_ready, checkpoint_info->region_id, context.keyspace_id, context.physical_table_id);
+            GET_METRIC(tiflash_fap_task_result, type_reuse_chkpt_cache).Increment();
+            // ... then we could seek to `current_segment_id` in cache to avoid some read.
+            auto current_segment_id
+                = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
+            auto res = build_segments(is_cache_ready, current_segment_id);
             if (!res)
                 return {};
-            auto & [end_key_and_segment_ids, segment_infos] = *res;
-            LOG_DEBUG(log, "Segment meta info cache has been built, num_segments={}", end_key_and_segment_ids.size());
-            end_to_segment_id_cache->build(lock, std::move(end_key_and_segment_ids));
-            return std::move(segment_infos);
+            return std::move(res->second);
         }
     }
+    else
     {
-        // If we found the cache is built, which could be normal cases when the checkpoint is reused.
-        auto lock = end_to_segment_id_cache->readLock();
-        bool is_cache_ready = end_to_segment_id_cache->isReady(lock);
-        RUNTIME_CHECK(is_cache_ready, checkpoint_info->region_id, context.keyspace_id, context.physical_table_id);
-        GET_METRIC(tiflash_fap_task_result, type_reuse_chkpt_cache).Increment();
-        // ... then we could seek to `current_segment_id` in cache to avoid some read.
-        auto current_segment_id
-            = end_to_segment_id_cache->getSegmentIdContainingKey(lock, target_range.getStart().toRowKeyValue());
-        auto res = build_segments(is_cache_ready, current_segment_id);
+        LOG_DEBUG(log, "Start read all segments meta info by direct");
+        // Set `is_cache_ready == true` to let `build_segments` return once it finds all
+        // overlapped segments
+        auto res = build_segments(true, DELTA_MERGE_FIRST_SEGMENT_ID);
         if (!res)
             return {};
-        return std::move(res->second);
+        auto & [_end_key_and_segment_ids, segment_infos] = *res;
+        UNUSED(_end_key_and_segment_ids);
+        return std::move(segment_infos);
     }
 
     if (cancel_handle->isCanceled())
     {
         LOG_INFO(log, "FAP is canceled when building segments");
-        // FAP task would be cleaned in FastAddPeerImplWrite. So returning incompelete result could be OK.
+        // FAP task would be cleaned in FastAddPeerImplWrite. So returning incomplete result could be OK.
         return {};
     }
 }

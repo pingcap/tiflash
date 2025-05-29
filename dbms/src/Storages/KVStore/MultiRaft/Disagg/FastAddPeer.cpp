@@ -275,12 +275,14 @@ std::variant<CheckpointRegionInfoAndData, FastAddPeerRes> FastAddPeerImplSelect(
                 LOG_INFO(
                     log,
                     "Select checkpoint with data_seq={}, remote_store_id={} elapsed={} size(candidate_store_id)={} "
-                    "region_id={}",
+                    "region_id={} region={} range={}",
                     data_seq,
                     checkpoint_info->remote_store_id,
                     watch.elapsedSeconds(),
                     candidate_store_ids.size(),
-                    region_id);
+                    region_id,
+                    region->getDebugString(),
+                    region->getRange()->toDebugString());
                 GET_METRIC(tiflash_fap_task_duration_seconds, type_select_stage).Observe(watch.elapsedSeconds());
                 return maybe_region_info.value();
             }
@@ -376,6 +378,7 @@ FastAddPeerRes FastAddPeerImplWrite(
     DM::Segments segments;
     try
     {
+        LOG_INFO(log, "FAP begins to build segments, range={}", new_key_range.toDebugString());
         segments = dm_storage->buildSegmentsFromCheckpointInfo(cancel_handle, new_key_range, checkpoint_info, settings);
     }
     catch (...)
@@ -857,6 +860,17 @@ FastAddPeerRes FastAddPeer(EngineStoreServerWrap * server, uint64_t region_id, u
                     // Otherwise, we will let the next polling do the check again.
                     [[maybe_unused]] auto s = fap_ctx->tasks_trace->blockedCancelRunningTask(region_id);
                 }
+                // Previously, `fap_fallback_to_slow` could do the cleaning job,
+                // however, it will not clean what's in memory.
+                // So, if a msgSnapshot is sent, then a regular raft snapshot handling may be started,
+                // and if the we failed to clean the fap snapshot by `fap_fallback_to_slow` before prehandling,
+                // the process could panic.
+                fap_ctx->cleanTask(
+                    *(server->tmt),
+                    server->proxy_helper,
+                    region_id,
+                    CheckpointIngestInfo::CleanReason::ProxyFallback);
+                LOG_INFO(log, "Finished clean task from proxy region_id={} new_peer_id={}", region_id, new_peer_id);
                 GET_METRIC(tiflash_fap_task_state, type_blocking_cancel_stage).Decrement();
                 // Return Canceled because it is cancel from outside FAP worker.
                 return genFastAddPeerResFail(FastAddPeerStatus::Canceled);
