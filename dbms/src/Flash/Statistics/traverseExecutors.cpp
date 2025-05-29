@@ -14,6 +14,7 @@
 
 #include <Common/TiFlashException.h>
 #include <Flash/Statistics/traverseExecutors.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
@@ -23,6 +24,7 @@ Children getChildren(const tipb::Executor & executor)
     {
     case tipb::ExecType::TypeTableScan:
     case tipb::ExecType::TypePartitionTableScan:
+    case tipb::ExecType::TypeTiCIScan:
         return {};
     case tipb::ExecType::TypeJoin:
         return {&executor.join().children(0), &executor.join().children(1)};
