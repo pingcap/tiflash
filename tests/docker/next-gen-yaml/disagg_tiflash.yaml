@@ -1,0 +1,53 @@
+# Copyright 2025 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: '2.3'
+
+services:
+  tiflash-wn0:
+    image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
+    #image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky9-20250529}
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ./next-gen-config/tiflash_wn.toml:/tiflash.toml:ro
+      - ./next-gen-config/tiflash_wn_proxy.toml:/tiflash_tikv.toml:ro
+      - ./data/tiflash-wn0:/data
+      - ./log/tiflash-wn0:/log
+      - ..:/tests
+      - ../docker/_env.sh:/tests/_env.sh
+      - ../.build/tiflash:/tiflash
+    entrypoint: /tiflash/tiflash server --config-file /tiflash.toml
+    depends_on:
+      - "minio0"
+      - "tikv0"
+    restart: on-failure
+  tiflash-cn0:
+    image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
+    #image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky9-20250529}
+    security_opt:
+      - seccomp:unconfined
+    volumes:
+      - ./next-gen-config/tiflash_cn.toml:/tiflash.toml:ro
+      - ./next-gen-config/tiflash_cn_proxy.toml:/tiflash_tikv.toml:ro
+      - ./data/tiflash-cn0:/data
+      - ./log/tiflash-cn0:/log
+      - ..:/tests
+      - ../docker/_env.sh:/tests/_env.sh
+      - ../.build/tiflash:/tiflash
+    entrypoint: /tiflash/tiflash server --config-file /tiflash.toml
+    depends_on:
+      - "minio0"
+      - "tikv0"
+    restart: on-failure
