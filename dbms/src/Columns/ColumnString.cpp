@@ -1359,6 +1359,19 @@ void ColumnString::updateHashWithValues(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
+    updateHashWithValues(0, size(), hash_values, collator, sort_key_container);
+}
+
+void ColumnString::updateHashWithValues(
+    size_t start,
+    size_t length,
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
+{
+    RUNTIME_CHECK(size() >= start + length);
+    RUNTIME_CHECK(hash_values.size() >= length);
+
     if (collator != nullptr)
     {
         switch (collator->getCollatorType())
@@ -1369,7 +1382,7 @@ void ColumnString::updateHashWithValues(
         case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
         {
             // Skip last zero byte.
-            LoopOneColumn(chars, offsets, offsets.size(), [&hash_values](const std::string_view & view, size_t i) {
+            LoopOneColumn(start, length, chars, offsets, [&hash_values](const std::string_view & view, size_t i) {
                 auto sort_key = BinCollatorSortKey<true>(view.data(), view.size());
                 size_t string_size = sort_key.size;
                 hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
@@ -1380,7 +1393,7 @@ void ColumnString::updateHashWithValues(
         case TiDB::ITiDBCollator::CollatorType::BINARY:
         {
             // Skip last zero byte.
-            LoopOneColumn(chars, offsets, offsets.size(), [&hash_values](const std::string_view & view, size_t i) {
+            LoopOneColumn(start, length, chars, offsets, [&hash_values](const std::string_view & view, size_t i) {
                 auto sort_key = BinCollatorSortKey<false>(view.data(), view.size());
                 size_t string_size = sort_key.size;
                 hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
@@ -1391,7 +1404,7 @@ void ColumnString::updateHashWithValues(
         default:
         {
             // Skip last zero byte.
-            LoopOneColumn(chars, offsets, offsets.size(), [&](const std::string_view & view, size_t i) {
+            LoopOneColumn(start, length, chars, offsets, [&](const std::string_view & view, size_t i) {
                 auto sort_key = collator->sortKey(view.data(), view.size(), sort_key_container);
                 size_t string_size = sort_key.size;
                 hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
@@ -1403,10 +1416,11 @@ void ColumnString::updateHashWithValues(
     }
     else
     {
-        for (size_t i = 0; i < offsets.size(); ++i)
+        for (size_t i = 0; i < length; ++i)
         {
-            size_t string_size = sizeAt(i);
-            size_t offset = offsetAt(i);
+            const size_t row = i + start;
+            size_t string_size = sizeAt(row);
+            size_t offset = offsetAt(row);
 
             hash_values[i].update(reinterpret_cast<const char *>(&string_size), sizeof(string_size));
             hash_values[i].update(reinterpret_cast<const char *>(&chars[offset]), string_size);
