@@ -152,7 +152,7 @@ MPPTask::~MPPTask()
     if (query_memory_tracker != nullptr && current_memory_tracker != query_memory_tracker)
         current_memory_tracker = query_memory_tracker;
     abortTunnels("", true);
-    LOG_INFO(log, "finish MPPTask: {}", id.toString());
+    LOG_INFO(log, "finish MPPTask: {}, total run time is {} ms", id.toString(), total_run_time_ms);
 }
 
 bool MPPTask::isRootMPPTask() const
@@ -666,7 +666,8 @@ void MPPTask::runImpl()
     mpp_task_statistics.end(status.load(), getErrString());
     mpp_task_statistics.logTracingJson();
 
-    LOG_DEBUG(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
+    total_run_time_ms = stopwatch.elapsedMilliseconds();
+    LOG_DEBUG(log, "task ends, time cost is {} ms.", total_run_time_ms);
     unregisterTask();
 }
 
