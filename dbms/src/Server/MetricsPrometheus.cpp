@@ -63,15 +63,17 @@ std::string getInstanceValue(const Poco::Util::AbstractConfiguration & conf)
         if (service_addr.empty())
             return getHostName();
         // "0.0.0.0", "127.x.x.x", "localhost", "0:0:0:0:0:0:0:0", "0:0:0:0:0:0:0:1", "::", "::1", ":${port}"
-        static const std::vector<std::string> blocklist{// ivp4
-                                                        "0.0.0.0",
-                                                        "127.",
-                                                        "localhost",
-                                                        // ipv6
-                                                        "0:0:0:0:0:0:0",
-                                                        "[0:0:0:0:0:0:0",
-                                                        ":",
-                                                        "[:"};
+        static const std::vector<std::string> blocklist{
+            // ipv4
+            "0.0.0.0",
+            "127.",
+            "localhost",
+            // ipv6
+            "0:0:0:0:0:0:0",
+            "[0:0:0:0:0:0:0",
+            ":",
+            "[:",
+        };
         for (const auto & prefix : blocklist)
         {
             if (startsWith(service_addr, prefix))

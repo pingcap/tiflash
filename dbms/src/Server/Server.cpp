@@ -427,21 +427,21 @@ void loadBlockList(
 
     /// Load keyspace blocklist json file
     LOG_INFO(log, "Loading blocklist file.");
-    auto blcklist_file_path = config.getString("blacklist_file", "");
-    if (blcklist_file_path.length() == 0)
+    auto blocklist_file_path = config.getString("blacklist_file", "");
+    if (blocklist_file_path.length() == 0)
     {
         LOG_INFO(log, "blocklist file not enabled, ignore it.");
         return;
     }
-    auto blacklist_file = Poco::File(blcklist_file_path);
+    auto blacklist_file = Poco::File(blocklist_file_path);
     if (!(blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead()))
     {
-        LOG_INFO(log, "blocklist file not exists or non-readble, ignore it, path={}", blcklist_file_path);
+        LOG_INFO(log, "blocklist file not exists or non-readble, ignore it, path={}", blocklist_file_path);
         return;
     }
 
     // Read the json file
-    std::ifstream ifs(blcklist_file_path);
+    std::ifstream ifs(blocklist_file_path);
     std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     Poco::JSON::Parser parser;
     Poco::Dynamic::Var json_var = parser.parse(json_content);
