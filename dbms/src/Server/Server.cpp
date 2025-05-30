@@ -425,23 +425,23 @@ void loadBlockList(
 #else
     global_context.initializeStoreIdBlockList(global_context.getSettingsRef().disagg_blocklist_wn_store_id);
 
-    /// Load keyspace blacklist json file
-    LOG_INFO(log, "Loading blacklist file.");
-    auto blacklist_file_path = config.getString("blacklist_file", "");
-    if (blacklist_file_path.length() == 0)
+    /// Load keyspace blocklist json file
+    LOG_INFO(log, "Loading blocklist file.");
+    auto blcklist_file_path = config.getString("blacklist_file", "");
+    if (blcklist_file_path.length() == 0)
     {
         LOG_INFO(log, "blocklist file not enabled, ignore it.");
         return;
     }
-    auto blacklist_file = Poco::File(blacklist_file_path);
+    auto blacklist_file = Poco::File(blcklist_file_path);
     if (!(blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead()))
     {
-        LOG_INFO(log, "blocklist file not exists or non-readble, ignore it, path={}", blacklist_file_path);
+        LOG_INFO(log, "blocklist file not exists or non-readble, ignore it, path={}", blcklist_file_path);
         return;
     }
 
     // Read the json file
-    std::ifstream ifs(blacklist_file_path);
+    std::ifstream ifs(blcklist_file_path);
     std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
     Poco::JSON::Parser parser;
     Poco::Dynamic::Var json_var = parser.parse(json_content);
