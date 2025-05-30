@@ -21,6 +21,7 @@
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/JoinV2/HashJoin.h>
 #include <Interpreters/JoinV2/HashJoinProbe.h>
+#include <Interpreters/JoinV2/SemiJoinProbe.h>
 #include <Interpreters/NullableUtils.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 
@@ -39,7 +40,9 @@ bool JoinProbeContext::isProbeFinished() const
 {
     return current_row_idx >= rows
         // For prefetching
-        && prefetch_active_states == 0;
+        && prefetch_active_states == 0
+        // For (left outer) (anti) semi join with other conditions
+        && (semi_join_probe_list == nullptr || semi_join_probe_list->activeSlots() == 0);
 }
 
 bool JoinProbeContext::isAllFinished() const
@@ -71,6 +74,7 @@ void JoinProbeContext::prepareForHashProbe(
     HashJoinKeyMethod method,
     ASTTableJoin::Kind kind,
     bool has_other_condition,
+    bool has_other_eq_cond_from_in,
     const Names & key_names,
     const String & filter_column,
     const NameSet & probe_output_name_set,
@@ -123,6 +127,23 @@ void JoinProbeContext::prepareForHashProbe(
     {
         left_semi_match_res.clear();
         left_semi_match_res.resize_fill_zero(rows);
+        if (has_other_eq_cond_from_in)
+        {
+            left_semi_match_null_res.clear();
+            left_semi_match_null_res.resize_fill_zero(rows);
+        }
+    }
+    if ((kind == Semi || kind == Anti) && has_other_condition)
+    {
+        semi_selective_offsets.clear();
+        semi_selective_offsets.reserve(rows);
+    }
+
+    if (SemiJoinProbeHelper::isSupported(kind, has_other_condition))
+    {
+        if unlikely (!semi_join_probe_list)
+            semi_join_probe_list = createSemiJoinProbeList(method);
+        semi_join_probe_list->reset(rows);
     }
 
     is_prepared = true;
@@ -634,16 +655,17 @@ void JoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDa
     using Adder = JoinProbeAdder<kind, has_other_condition, late_materialization>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(ctx.key_getter.get());
+    // Some columns in wd.result_block may remain empty due to late materialization for join with other conditions.
+    // But since all columns are cleared after handling other conditions, wd.result_block.rows() is always 0.
     size_t current_offset = wd.result_block.rows();
+    if constexpr (has_other_condition)
+        RUNTIME_CHECK(current_offset == 0);
     size_t idx = ctx.current_row_idx;
     RowPtr ptr = ctx.current_build_row_ptr;
     bool is_matched = ctx.current_row_is_matched;
     size_t collision = 0;
-    size_t key_offset = sizeof(RowPtr);
-    if constexpr (KeyGetterType::joinKeyCompareHashFirst())
-    {
-        key_offset += sizeof(HashValueType);
-    }
+    constexpr size_t key_offset
+        = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
 
 #define NOT_MATCHED(not_matched)                                                     \
     if constexpr (Adder::need_not_matched)                                           \
@@ -782,8 +804,10 @@ struct ProbePrefetchState
     KeyType key{};
     union
     {
-        RowPtr ptr = nullptr;
-        std::atomic<RowPtr> * pointer_ptr;
+        /// Used when stage is FindHeader
+        std::atomic<RowPtr> * pointer_ptr = nullptr;
+        /// Used when stage is FindNext
+        RowPtr ptr;
     };
 };
 
@@ -801,10 +825,11 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     using Adder = JoinProbeAdder<kind, has_other_condition, late_materialization>;
 
     auto & key_getter = *static_cast<KeyGetterType *>(ctx.key_getter.get());
-    if (!ctx.prefetch_states)
+    const size_t probe_prefetch_step = settings.probe_prefetch_step;
+    if unlikely (!ctx.prefetch_states)
     {
         ctx.prefetch_states = decltype(ctx.prefetch_states)(
-            static_cast<void *>(new ProbePrefetchState<KeyGetter>[settings.probe_prefetch_step]),
+            static_cast<void *>(new ProbePrefetchState<KeyGetter>[probe_prefetch_step]),
             [](void * ptr) { delete[] static_cast<ProbePrefetchState<KeyGetter> *>(ptr); });
     }
     auto * states = static_cast<ProbePrefetchState<KeyGetter> *>(ctx.prefetch_states.get());
@@ -812,13 +837,14 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
     size_t idx = ctx.current_row_idx;
     size_t active_states = ctx.prefetch_active_states;
     size_t k = ctx.prefetch_iter;
+    // Some columns in wd.result_block may remain empty due to late materialization for join with other conditions.
+    // But since all columns are cleared after handling other conditions, wd.result_block.rows() is always 0.
     size_t current_offset = wd.result_block.rows();
+    if constexpr (has_other_condition)
+        RUNTIME_CHECK(current_offset == 0);
     size_t collision = 0;
-    size_t key_offset = sizeof(RowPtr);
-    if constexpr (KeyGetterType::joinKeyCompareHashFirst())
-    {
-        key_offset += sizeof(HashValueType);
-    }
+    constexpr size_t key_offset
+        = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
 
 #define NOT_MATCHED(not_matched, idx)                                                \
     if constexpr (Adder::need_not_matched)                                           \
@@ -831,7 +857,6 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
         }                                                                            \
     }
 
-    const size_t probe_prefetch_step = settings.probe_prefetch_step;
     while (idx < ctx.rows || active_states > 0)
     {
         k = k == probe_prefetch_step ? 0 : k;
@@ -845,11 +870,10 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
             const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
             bool key_is_equal = joinKeyIsEqual(key_getter, state->key, key2, state->hash, ptr);
             collision += !key_is_equal;
+            if constexpr (Adder::need_not_matched)
+                state->is_matched |= key_is_equal;
             if (key_is_equal)
             {
-                if constexpr (Adder::need_not_matched)
-                    state->is_matched = true;
-
                 if constexpr (Adder::need_matched)
                 {
                     bool is_end = Adder::addMatched(
@@ -1025,6 +1049,17 @@ Block JoinProbeHelper::handleOtherConditions(
     }
 
     non_equal_conditions.other_cond_expr->execute(exec_block);
+
+    SCOPE_EXIT({
+        RUNTIME_CHECK(wd.result_block.columns() == left_columns + right_columns);
+        /// Clear the data in result_block.
+        for (size_t i = 0; i < left_columns + right_columns; ++i)
+        {
+            auto column = wd.result_block.getByPosition(i).column->assumeMutable();
+            column->popBack(column->size());
+            wd.result_block.getByPosition(i).column = std::move(column);
+        }
+    });
 
     size_t rows = exec_block.rows();
     // Ensure BASE_OFFSETS is accessed within bound.
@@ -1211,17 +1246,6 @@ Block JoinProbeHelper::handleOtherConditions(
                 ->insertSelectiveRangeFrom(*src_column.column.get(), wd.result_block_filter_offsets, start, length);
         }
     };
-
-    SCOPE_EXIT({
-        RUNTIME_CHECK(wd.result_block.columns() == left_columns + right_columns);
-        /// Clear the data in result_block.
-        for (size_t i = 0; i < left_columns + right_columns; ++i)
-        {
-            auto column = wd.result_block.getByPosition(i).column->assumeMutable();
-            column->popBack(column->size());
-            wd.result_block.getByPosition(i).column = std::move(column);
-        }
-    });
 
     size_t length = std::min(result_size, remaining_insert_size);
     fill_matched(0, length);
