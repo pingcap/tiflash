@@ -224,6 +224,7 @@ target_link_libraries (dbms
     absl::synchronization
     tiflash_contrib::aws_s3
     tiflash_vector_search
+    tici_search_lib
 
     etcdpb
     tiflash_parsers
@@ -372,6 +373,10 @@ if (ENABLE_TESTS)
                 COMPONENT tiflash-gtest
                 DESTINATION ".")
     endif ()
+
+    install (TARGETS tici_search_lib
+            COMPONENT tiflash-gtest
+            DESTINATION ".")
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)

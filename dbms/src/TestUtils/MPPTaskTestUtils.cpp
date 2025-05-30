@@ -165,7 +165,7 @@ ColumnsWithTypeAndName MPPTaskTestUtils::executeCoprocessorTask(std::shared_ptr<
     auto * data = req->mutable_data();
     dag_request->AppendToString(data);
 
-    DAGContext dag_context(*dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", Logger::get());
+    DAGContext dag_context(*dag_request, {}, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", Logger::get());
 
     TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setDAGContext(&dag_context);
     TiFlashTestEnv::getGlobalContext(test_meta.context_idx).setCopTest();

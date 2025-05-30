@@ -17,6 +17,7 @@
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/types.h>
+#include <tipb/executor.pb.h>
 
 namespace DB
 {
@@ -90,6 +91,22 @@ template <typename TableScanType>
 bool collectForTableScan(std::vector<tipb::FieldType> & output_field_types, const TableScanType & tbl_scan)
 {
     for (const auto & ci : tbl_scan.columns())
+    {
+        tipb::FieldType field_type;
+        field_type.set_tp(ci.tp());
+        field_type.set_flag(ci.flag());
+        field_type.set_flen(ci.columnlen());
+        field_type.set_decimal(ci.decimal());
+        for (const auto & elem : ci.elems())
+            field_type.add_elems(elem);
+        output_field_types.push_back(field_type);
+    }
+    return false;
+}
+
+bool collectForIndexScan(std::vector<tipb::FieldType> & output_field_types, const tipb::IndexScan & tici_scan)
+{
+    for (const auto & ci : tici_scan.columns())
     {
         tipb::FieldType field_type;
         field_type.set_tp(ci.tp());
@@ -256,6 +273,8 @@ bool collectForExecutor(std::vector<tipb::FieldType> & output_field_types, const
         return collectForExpand(output_field_types, executor);
     case tipb::ExecType::TypeExpand2:
         return collectForExpand2(output_field_types, executor.expand2());
+    case tipb::ExecType::TypeIndexScan:
+        return collectForIndexScan(output_field_types, executor.idx_scan());
     default:
         return true;
     }

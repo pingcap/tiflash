@@ -77,7 +77,7 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
         getDAGProperties(""));
     auto & dag_request = *query_tasks[0].dag_request;
     auto log = Logger::get();
-    DAGContext dag_context(dag_request, {}, NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
+    DAGContext dag_context(dag_request, {}, QueryShardInfos(), NullspaceID, "", DAGRequestKind::Cop, "", 0, "", log);
     ctx.setDAGContext(&dag_context);
     // Don't care about regions information in this test
     google::protobuf::RepeatedPtrField<tipb::Expr> empty_condition;
