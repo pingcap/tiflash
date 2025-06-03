@@ -17,7 +17,6 @@ version: '2.3'
 services:
   tiflash-wn0:
     image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
-    #image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky9-20250529}
     security_opt:
       - seccomp:unconfined
     volumes:
@@ -35,7 +34,6 @@ services:
     restart: on-failure
   tiflash-cn0:
     image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
-    #image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky9-20250529}
     security_opt:
       - seccomp:unconfined
     volumes:

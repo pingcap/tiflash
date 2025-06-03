@@ -25,21 +25,30 @@ export verbose=${verbose:-"false"}
 check_env
 check_docker_compose
 
+DISAGG_TIFLASH_YAML="disagg_tiflash.yaml"
+if grep -q "Rocky Linux release 9" /etc/redhat-release; then
+    # replace the base image for running under Rocky Linux 9
+    sed 's/tiflash-ci-base:rocky8-20241028/tiflash-ci-base:rocky9-20250529/g' \
+        "${DISAGG_TIFLASH_YAML}" > "disagg_tiflash.rocky9.yaml"
+    DISAGG_TIFLASH_YAML="disagg_tiflash.rocky9.yaml"
+    echo "Using ${DISAGG_TIFLASH_YAML} for Rocky Linux 9"
+fi
+
 if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
     echo "Running fullstack test on next-gen TiFlash"
 
     # clean up previous docker instances, data and log
-    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml down
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" down
     clean_data_log
 
     # run fullstack-tests
-    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml up -d
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" up -d
     wait_next_gen_env
     # TODO: now only run a part of the test, add more tests later
-    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml exec -T tiflash-wn0 bash -c "cd /tests ; verbose=${verbose} ./run-test.sh fullstack-test/sample.test"
-    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml exec -T tiflash-wn0 bash -c "cd /tests ; verbose=${verbose} ./run-test.sh fullstack-test-index/vector"
-    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml exec -T tiflash-wn0 bash -c "cd /tests ; verbose=${verbose} ./run-test.sh fullstack-test-next-gen/placement"
-    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml down
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-wn0 bash -c "cd /tests ; verbose=${verbose} ./run-test.sh fullstack-test/sample.test"
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-wn0 bash -c "cd /tests ; verbose=${verbose} ./run-test.sh fullstack-test-index/vector"
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tiflash-wn0 bash -c "cd /tests ; verbose=${verbose} ./run-test.sh fullstack-test-next-gen/placement"
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" down
     clean_data_log
 
     exit 0
