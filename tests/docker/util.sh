@@ -139,6 +139,9 @@ function check_env() {
   if [[ ! -d ${prebuilt_bin_dir} ]]; then
     echo "No pre-build tiflash binary directory: ${prebuilt_bin_dir}"
     exit -1
+  else
+    echo "Running tests with pre-built tiflash binary: ${prebuilt_bin_dir}/tiflash"
+    ${prebuilt_bin_dir}/tiflash --version
   fi
 }
 
