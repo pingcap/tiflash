@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
+#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
 #include <memory.h>
@@ -114,6 +115,8 @@ public:
     const String & getQueryId() const;
 
     const String & getResourceGroupName() const;
+
+    const pingcap::pd::KeyspaceID & getKeyspaceID() const;
 
     const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
 

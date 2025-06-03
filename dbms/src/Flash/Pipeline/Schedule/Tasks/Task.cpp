@@ -17,7 +17,6 @@
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <Flash/Pipeline/Schedule/Tasks/TaskHelper.h>
 #include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
@@ -206,5 +205,10 @@ const String & Task::getQueryId() const
 const String & Task::getResourceGroupName() const
 {
     return exec_context.getResourceGroupName();
+}
+
+const pingcap::pd::KeyspaceID & Task::getKeyspaceID() const
+{
+    return exec_context.getKeyspaceID();
 }
 } // namespace DB

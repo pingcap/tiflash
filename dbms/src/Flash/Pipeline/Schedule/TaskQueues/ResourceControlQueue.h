@@ -51,24 +51,41 @@ public:
 
     void finish() override;
 
-    void cancel(const String & query_id, const String & resource_group_name) override;
+    void cancel(const TaskCancelInfo & cancel_info) override;
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
+    // todo dup code
+    struct PairHash
+    {
+        size_t operator()(const std::pair<KeyspaceID, std::string> & p) const
+        {
+            uint64_t seed = 0;
+            hash_combine(seed, p.first);
+            hash_combine(seed, p.second);
+            return static_cast<size_t>(seed);
+        }
+    };
     using NestedTaskQueuePtr = std::shared_ptr<NestedTaskQueueType>;
-    using ResourceGroupTaskQueue = std::unordered_map<String, NestedTaskQueuePtr>;
+    using ResourceGroupTaskQueue = std::unordered_map<std::pair<KeyspaceID, String>, NestedTaskQueuePtr, PairHash>;
 
     void submitWithoutLock(TaskPtr && task);
 
     struct ResourceGroupInfo
     {
-        ResourceGroupInfo(const String & name_, UInt64 priority_, const NestedTaskQueuePtr & task_queue_)
-            : name(name_)
+        ResourceGroupInfo(
+            const KeyspaceID & keyspace_id_,
+            const String & name_,
+            UInt64 priority_,
+            const NestedTaskQueuePtr & task_queue_)
+            : keyspace_id(keyspace_id_)
+            , name(name_)
             , priority(priority_)
             , task_queue(task_queue_)
         {}
 
+        KeyspaceID keyspace_id;
         String name;
         UInt64 priority;
         NestedTaskQueuePtr task_queue;
@@ -87,7 +104,7 @@ private:
     bool updateResourceGroupInfosWithoutLock();
 
     // Erase resource group info and task_queue.
-    void mustEraseResourceGroupInfoWithoutLock(const String & name);
+    void mustEraseResourceGroupInfoWithoutLock(const KeyspaceID & keyspace_id, const String & name);
     static void mustTakeTask(const NestedTaskQueuePtr & task_queue, TaskPtr & task);
 
     mutable std::mutex mu;

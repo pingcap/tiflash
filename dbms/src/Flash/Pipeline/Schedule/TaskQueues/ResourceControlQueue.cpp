@@ -64,7 +64,9 @@ void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && tas
     }
 
     const String & name = task->getResourceGroupName();
-    auto iter = resource_group_task_queues.find(name);
+    const auto & keyspace_id = task->getKeyspaceID();
+    auto name_with_keyspace_id = std::make_pair(keyspace_id, name);
+    auto iter = resource_group_task_queues.find(name_with_keyspace_id);
     if (iter == resource_group_task_queues.end())
     {
         auto task_queue = std::make_shared<NestedTaskQueueType>();
@@ -75,9 +77,9 @@ void ResourceControlQueue<NestedTaskQueueType>::submitWithoutLock(TaskPtr && tas
             return;
         }
 
-        resource_group_infos.push({name, priority.value(), task_queue});
+        resource_group_infos.push({keyspace_id, name, priority.value(), task_queue});
         bool inserted = false;
-        std::tie(iter, inserted) = resource_group_task_queues.insert({name, task_queue});
+        std::tie(iter, inserted) = resource_group_task_queues.insert({name_with_keyspace_id, task_queue});
         assert(inserted);
     }
     assert(task);
@@ -149,12 +151,13 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
     assert(task);
     auto ru = cpuTimeToRU(inc_value);
     const String & resource_group_name = task->getResourceGroupName();
-    LocalAdmissionController::global_instance->consumeCPUResource(resource_group_name, ru, inc_value);
+    const auto keyspace_id = task->getKeyspaceID();
+    LocalAdmissionController::global_instance->consumeCPUResource(keyspace_id, resource_group_name, ru, inc_value);
 
     NestedTaskQueuePtr group_queue = nullptr;
     {
         std::lock_guard lock(mu);
-        auto iter = resource_group_task_queues.find(resource_group_name);
+        auto iter = resource_group_task_queues.find({keyspace_id, resource_group_name});
         if (likely(iter != resource_group_task_queues.end()))
             group_queue = iter->second;
         else
@@ -184,18 +187,19 @@ bool ResourceControlQueue<NestedTaskQueueType>::updateResourceGroupInfosWithoutL
                     RUNTIME_CHECK(group_info.task_queue->take(task));
                     error_task_queue.push_back(std::move(task));
                 }
-                mustEraseResourceGroupInfoWithoutLock(group_info.name);
+                mustEraseResourceGroupInfoWithoutLock(group_info.keyspace_id, group_info.name);
             }
             else
             {
                 // resource group ok, reorder group info by priority.
-                new_resource_group_infos.push({group_info.name, new_priority.value(), group_info.task_queue});
+                new_resource_group_infos.push(
+                    {group_info.keyspace_id, group_info.name, new_priority.value(), group_info.task_queue});
                 resource_group_infos.pop();
             }
         }
         else
         {
-            mustEraseResourceGroupInfoWithoutLock(group_info.name);
+            mustEraseResourceGroupInfoWithoutLock(group_info.keyspace_id, group_info.name);
         }
     }
     resource_group_infos = new_resource_group_infos;
@@ -238,27 +242,29 @@ void ResourceControlQueue<NestedTaskQueueType>::finish()
 }
 
 template <typename NestedTaskQueueType>
-void ResourceControlQueue<NestedTaskQueueType>::cancel(const String & query_id, const String & resource_group_name)
+void ResourceControlQueue<NestedTaskQueueType>::cancel(const TaskCancelInfo & cancel_info)
 {
-    if unlikely (query_id.empty())
+    if unlikely (cancel_info.query_id.empty())
         return;
 
     std::lock_guard lock(mu);
-    if (cancel_query_id_cache.add(query_id))
+    if (cancel_query_id_cache.add(cancel_info.query_id))
     {
-        auto iter = resource_group_task_queues.find(resource_group_name);
+        auto iter = resource_group_task_queues.find({cancel_info.keyspace_id, cancel_info.resource_group_name});
         if (iter != resource_group_task_queues.end())
         {
-            iter->second->collectCancelledTasks(cancel_task_queue, query_id);
+            iter->second->collectCancelledTasks(cancel_task_queue, cancel_info.query_id);
         }
     }
     cv.notify_all();
 }
 
 template <typename NestedTaskQueueType>
-void ResourceControlQueue<NestedTaskQueueType>::mustEraseResourceGroupInfoWithoutLock(const String & name)
+void ResourceControlQueue<NestedTaskQueueType>::mustEraseResourceGroupInfoWithoutLock(
+    const KeyspaceID & keyspace_id,
+    const String & name)
 {
-    size_t erase_num = resource_group_task_queues.erase(name);
+    size_t erase_num = resource_group_task_queues.erase({keyspace_id, name});
     RUNTIME_CHECK_MSG(
         erase_num == 1,
         "cannot erase corresponding TaskQueue for task of resource group {}, erase_num: {}",

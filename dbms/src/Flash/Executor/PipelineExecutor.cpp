@@ -38,6 +38,7 @@ PipelineExecutor::PipelineExecutor(
           context.getDAGContext(),
           auto_spill_trigger,
           register_operator_spill_context,
+          context.getDAGContext()->getKeyspaceID(),
           context.getDAGContext()->getResourceGroupName())
 {
     PhysicalPlan physical_plan{context, log->identifier()};

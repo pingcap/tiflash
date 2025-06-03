@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <common/types.h>
 #include <fmt/format.h>
+#include <pingcap/pd/Types.h>
 #include <sys/types.h>
 #include <tipb/executor.pb.h>
 
@@ -132,10 +133,15 @@ public:
     std::atomic<uint64_t> fts_brute_total_read_ms{0};
     std::atomic<uint64_t> fts_brute_total_search_ms{0};
 
+    // todo make sure all init.
+    const pingcap::pd::KeyspaceID keyspace_id;
     const String resource_group_name;
 
-    explicit ScanContext(const String & name = "")
-        : resource_group_name(name)
+    explicit ScanContext(
+        const pingcap::pd::KeyspaceID & keyspace_id_ = pingcap::pd::NullspaceID,
+        const String & name = "")
+        : keyspace_id(keyspace_id_)
+        , resource_group_name(name)
     {}
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
