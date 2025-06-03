@@ -209,11 +209,6 @@ void MPPTask::finishWrite()
 {
     if (this->has_cte_sink)
     {
-        LOG_INFO(
-            log,
-            "xzxdebug enter finishWrite, query_id_and_cte_id: {}, mpptask id: {}",
-            this->dag_context->getQueryIDAndCTEID(),
-            id.toString());
         tipb::SelectResponse resp;
         if (dag_context->collect_execution_summaries)
             resp = mpp_task_statistics.genExecutionSummaryResponse();

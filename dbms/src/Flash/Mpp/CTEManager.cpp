@@ -16,7 +16,6 @@
 #include <fmt/core.h>
 #include <tipb/select.pb.h>
 
-#include <chrono>
 #include <mutex>
 #include <utility>
 
@@ -27,24 +26,17 @@ void CTEManager::releaseCTEBySource(const String & query_id_and_cte_id, const St
     std::lock_guard<std::mutex> lock(this->mu);
     auto iter = this->ctes.find(query_id_and_cte_id);
     if unlikely (iter == this->ctes.end())
-        throw Exception(fmt::format("Can't find cte: {}", query_id_and_cte_id));
+        // Maybe the task is cancelled and all ctes have been released
+        return;
     auto iter_for_cte = iter->second.find(partition_id);
     if unlikely (iter_for_cte == iter->second.end())
         throw Exception(fmt::format("Can't find cte: {}, partition: {}", query_id_and_cte_id, partition_id));
 
-    auto * log = &Poco::Logger::get("LRUCache");
-
-    iter_for_cte->second.sourceExit();
-    LOG_INFO(log, "xzxdebug exit source num: {}, total exit: {}, total expect: {}", iter_for_cte->second.getSourceExitNum(), iter_for_cte->second.getTotalExitNum(), iter_for_cte->second.getExpectedTotalNum());
     if (iter_for_cte->second.getTotalExitNum() == iter_for_cte->second.getExpectedTotalNum())
         iter->second.erase(iter_for_cte);
 
     if (iter->second.size() == 0)
-    {
-        auto * log = &Poco::Logger::get("LRUCache");
-        LOG_INFO(log, "xzxdebug releaseCTEBySource, erase {}", query_id_and_cte_id);
         this->ctes.erase(iter);
-    }
 }
 
 // TODO refine codes here, do not directly use map
@@ -56,9 +48,6 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
         // Maybe the task is cancelled and all ctes have been released
         return;
 
-    auto * log = &Poco::Logger::get("LRUCache");
-    LOG_INFO(log, "xzxdebug releaseCTEBySink, counter");
-
     auto iter_for_cte = iter->second.begin();
     auto iter_for_cte_end = iter->second.end();
     std::vector<String> ctes_need_erase;
@@ -67,7 +56,6 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
         CTEWithCounter & cte_with_counter = iter_for_cte->second;
         cte_with_counter.getCTE()->addResp(resp);
         cte_with_counter.sinkExit();
-        LOG_INFO(log, "xzxdebug exit sink num: {}, expect: {}, total exit: {}, total expect: {}", cte_with_counter.getSinkExitNum(), cte_with_counter.getExpectedSinkNum(), cte_with_counter.getTotalExitNum(), cte_with_counter.getExpectedTotalNum());
         if (cte_with_counter.getSinkExitNum() == cte_with_counter.getExpectedSinkNum())
             cte_with_counter.getCTE()->notifyEOF();
         if (cte_with_counter.getTotalExitNum() == cte_with_counter.getExpectedTotalNum())
@@ -113,8 +101,6 @@ std::shared_ptr<CTE> CTEManager::getCTEimpl(
         // It's the first time we request for the specific cte
         // Create it because no one created it before.
         auto cte = std::make_shared<CTE>();
-        auto * log = &Poco::Logger::get("LRUCache");
-        LOG_INFO(log, "xzxdebug cte is ctreated expected_sink_num: {}, expected_source_num: {}, query_id_and_cte_id: {}", expected_sink_num, expected_source_num, query_id_and_cte_id);
         CTEWithCounter cte_with_counter(cte, expected_sink_num, expected_source_num);
         this->ctes[query_id_and_cte_id].insert(std::make_pair(partition_id, cte_with_counter));
         return cte;

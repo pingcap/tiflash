@@ -19,14 +19,9 @@
 #include <Operators/CTE.h>
 #include <tipb/select.pb.h>
 
-#include <atomic>
 #include <deque>
 #include <memory>
 #include <mutex>
-
-// TODO remove them
-#include <Common/Logger.h>
-#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -50,17 +45,6 @@ public:
     {
         this->cte.reset();
         this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id, this->partition_id);
-
-        auto * log = &Poco::Logger::get("LRUCache");
-        LOG_INFO(
-            log,
-            fmt::format(
-                "xzxdebug output block num: {}, output row num: {}, save block num:{}, query_id: {}, pid: {}",
-                this->output_block_num,
-                this->output_row_num,
-                this->save_block_num,
-                this->query_id_and_cte_id,
-                this->partition_id));
     }
 
     std::pair<FetchStatus, Block> fetchNextBlock();
@@ -89,17 +73,10 @@ public:
     std::shared_ptr<CTE> getCTE() const { return this->cte; }
 
 private:
-    Int64 output_block_num = 0;
-    Int64 output_row_num = 0;
-
-    Int64 save_block_num = 0;
-
     String query_id_and_cte_id;
     String partition_id;
     CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
-
-    bool print_eof = false;
 
     std::mutex mu;
     std::deque<Block> blocks;
