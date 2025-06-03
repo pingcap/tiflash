@@ -72,7 +72,7 @@ Notice: The pd, next-gen TiKV, tidb now is only available from pingcap internal 
     ninja tiflash -j32
 
     # Copy the TiFlash binary to test directory
-    cmake --install . --component=tiflash-release --prefix "/DATA/disk1/jaysonhuang/tiflash/tests/.build/tiflash"
+    cmake --install . --component=tiflash-release --prefix "/path/to/your/tiflash/tests/.build/tiflash"
     ```
 
 2. Run the tests using `docker compose`
