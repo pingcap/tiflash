@@ -112,8 +112,8 @@ protected:
             {
                 for (size_t j = 0; j < documents.size(); j++)
                 {
-                    // Insert Null for missing fields
-                    res.getByName(name_and_type.name).column->assumeMutable()->insert(Field());
+                    // Insert default value for missing fields
+                    res.getByName(name_and_type.name).column->assumeMutable()->insertDefault();
                 }
                 continue;
             }
