@@ -99,6 +99,7 @@
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
+#include <tici-search-lib/src/lib.rs.h>
 
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
@@ -1018,6 +1019,7 @@ try
     auto schema_cache_size = config().getInt("schema_cache_size", 10000);
     global_context->initializeSharedBlockSchemas(schema_cache_size);
 
+    start_reader_server("reader.toml");
     // Load remaining databases
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
@@ -1091,6 +1093,7 @@ try
         auto wn_ps = global_context->getWriteNodePageStorage();
         wn_ps->waitUntilInitedFromRemoteStore();
     }
+
 
     {
         TCPServersHolder tcp_http_servers_holder(
