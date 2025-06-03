@@ -20,6 +20,8 @@ set_branch
 
 set -xe
 
+export verbose=${verbose:-"false"}
+
 check_env
 check_docker_compose
 
@@ -34,8 +36,9 @@ if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GE
     ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml up -d
     wait_next_gen_env
     # TODO: now only run a part of the test, add more tests later
-    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml exec -T tiflash-wn0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/sample.test'
-    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml exec -T tiflash-wn0 bash -c 'cd /tests ; ./run-test.sh fullstack-test-index/vector'
+    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml exec -T tiflash-wn0 bash -c "cd /tests ; verbose=${verbose} ./run-test.sh fullstack-test/sample.test"
+    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml exec -T tiflash-wn0 bash -c "cd /tests ; verbose=${verbose} ./run-test.sh fullstack-test-index/vector"
+    ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml exec -T tiflash-wn0 bash -c "cd /tests ; verbose=${verbose} ./run-test.sh fullstack-test-next-gen/placement"
     ${COMPOSE} -f next-gen-cluster.yaml -f disagg_tiflash.yaml down
     clean_data_log
 
