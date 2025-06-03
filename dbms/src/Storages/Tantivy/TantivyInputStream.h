@@ -93,25 +93,46 @@ protected:
             search_param);
 
         Block res(return_columns);
-        int i = 0;
+        if (documents.empty())
+        {
+            return res;
+        }
         for (auto & name_and_type : return_columns)
         {
+            int idx = -1;
+            for (size_t j = 0; j < documents[0].fieldValues.size(); j++)
+            {
+                if (documents[0].fieldValues[j].field_name == name_and_type.name)
+                {
+                    idx = j;
+                    break;
+                }
+            }
+            if (idx == -1)
+            {
+                for (size_t j = 0; j < documents.size(); j++)
+                {
+                    // Insert Null for missing fields
+                    res.getByName(name_and_type.name).column->assumeMutable()->insert(Field());
+                }
+                continue;
+            }
+
             auto col = res.getByName(name_and_type.name).column->assumeMutable();
             if (removeNullable(name_and_type.type)->isStringOrFixedString())
             {
                 for (auto & doc : documents)
                 {
-                    col->insert(Field(String(doc.fieldValues[i].string_value.c_str())));
+                    col->insert(Field(String(doc.fieldValues[idx].string_value.c_str())));
                 }
             }
             if (removeNullable(name_and_type.type)->isInteger())
             {
                 for (auto & doc : documents)
                 {
-                    col->insert(Field(doc.fieldValues[i].int_value));
+                    col->insert(Field(doc.fieldValues[idx].int_value));
                 }
             }
-            i++;
         }
         return res;
     }
