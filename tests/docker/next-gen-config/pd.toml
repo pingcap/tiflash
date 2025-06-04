@@ -17,5 +17,7 @@ enable-experimental = true
 enable-telemetry = false
 internal-proxy = false
 max-replicas = 1
+
+# pre-allocated keyspace for next-gen
 [keyspace]
 pre-alloc = ["a"]
