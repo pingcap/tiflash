@@ -16,18 +16,15 @@ version: '2.3'
 
 services:
   # tics0 container is for tests under delta-merge-test directory
+  # without connecting to TiDB cluster.
   tics0:
     image: hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028
     # image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky9-20250529}
     volumes:
-      - ./config/tics_dt.toml:/config.toml:ro
-      - ./data/tiflash:/tmp/tiflash/data
-      - ./log/tiflash:/tmp/tiflash/log
+      - ./tiflash.toml:/config.toml:ro
+      - ./data/tiflash:/data
+      - ./log/tiflash:/log
       - ..:/tests
       - ../docker/_env.sh:/tests/_env.sh
       - ../.build/tiflash:/tiflash
-    entrypoint:
-      - /tiflash/tiflash
-      - server
-      - --config-file
-      - /config.toml
+    entrypoint: /tiflash/tiflash server --config-file /config.toml

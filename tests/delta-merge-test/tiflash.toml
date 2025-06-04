@@ -12,16 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-path = "/tmp/tiflash/data"
-capacity = "107374182400" # 100GB
 tcp_port = 9000
+
+# Note: Do NOT set `raft.pd_addr` for running mock tests
+#[raft]
+#pd_addr = "pd0:2379"
+
+[storage.main]
+dir = ["/data"]
+capacity = [107374182400] # 100GB
 
 [logger]
 count = 10
-log = "/tmp/tiflash/log/tiflash.log"
-errorlog = "/tmp/tiflash/log/tiflash_error.log"
+log = "/log/tiflash.log"
+errorlog = "/log/tiflash_error.log"
 size = "1000M"
-level = "trace"
+level = "debug"
 
 [profiles]
 [profiles.default]
