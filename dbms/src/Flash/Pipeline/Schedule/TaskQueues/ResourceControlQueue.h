@@ -19,7 +19,6 @@
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 
 #include <mutex>
-#include <unordered_map>
 
 namespace DB
 {
@@ -56,19 +55,8 @@ public:
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #endif
-    // todo dup code
-    struct PairHash
-    {
-        size_t operator()(const std::pair<KeyspaceID, std::string> & p) const
-        {
-            uint64_t seed = 0;
-            hash_combine(seed, p.first);
-            hash_combine(seed, p.second);
-            return static_cast<size_t>(seed);
-        }
-    };
     using NestedTaskQueuePtr = std::shared_ptr<NestedTaskQueueType>;
-    using ResourceGroupTaskQueue = std::unordered_map<std::pair<KeyspaceID, String>, NestedTaskQueuePtr, PairHash>;
+    using ResourceGroupTaskQueue = std::unordered_map<std::pair<KeyspaceID, String>, NestedTaskQueuePtr, LACPairHash>;
 
     void submitWithoutLock(TaskPtr && task);
 

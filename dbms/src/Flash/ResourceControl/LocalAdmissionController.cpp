@@ -410,12 +410,8 @@ void LocalAdmissionController::mainLoop()
 void LocalAdmissionController::updateRUConsumptionSpeed()
 {
     std::lock_guard lock(mu);
-    for (auto & rg_map_ele : keyspace_resource_groups)
-    {
-        auto & rg_map = *(rg_map_ele.second);
-        for (auto & rg_ele : rg_map)
-            rg_ele.second->updateRUConsumptionSpeedIfNecessary(current_tick);
-    }
+    for (auto & ele : keyspace_resource_groups)
+        ele.second->updateRUConsumptionSpeedIfNecessary(current_tick);
 }
 
 std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::buildGACRequest(bool is_final_report)
@@ -424,46 +420,36 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
     if unlikely (is_final_report)
     {
         // Doesn't need to lock for resource_groups because all threads should already been joined!
-        for (const auto & rg_map_ele : keyspace_resource_groups)
+        for (const auto & ele : keyspace_resource_groups)
         {
-            auto & rg_map = *(rg_map_ele.second);
-            for (auto & rg_ele : rg_map)
-            {
-                const auto consumption_delta_info = rg_ele.second->updateRUConsumptionDeltaInfoWithoutLock();
-                request_infos.push_back({
-                    .keyspace_id = rg_map_ele.first,
-                    .resource_group_name = rg_ele.first,
-                    .acquire_tokens = 0,
-                    .ru_consumption_delta = consumption_delta_info.delta,
-                });
-            }
+            const auto consumption_delta_info = ele.second->updateRUConsumptionDeltaInfoWithoutLock();
+            request_infos.push_back({
+                .keyspace_id = ele.first.first,
+                .resource_group_name = ele.first.second,
+                .acquire_tokens = 0,
+                .ru_consumption_delta = consumption_delta_info.delta,
+            });
         }
     }
     else
     {
-        std::unordered_set<std::pair<KeyspaceID, std::string>, PairHash> local_keyspace_low_token_resource_groups;
+        std::unordered_set<std::pair<KeyspaceID, std::string>, LACPairHash> local_keyspace_low_token_resource_groups;
         {
             std::lock_guard lock(mu);
             local_keyspace_low_token_resource_groups = keyspace_low_token_resource_groups;
             keyspace_low_token_resource_groups.clear();
         }
 
-        for (const auto & rg_map_ele : keyspace_resource_groups)
+        for (const auto & ele : keyspace_resource_groups)
         {
-            auto & rg_map = *(rg_map_ele.second);
-            for (auto & rg_ele : rg_map)
-            {
-                const auto rg_name = rg_ele.first;
-                const bool need_fetch_token
-                    = local_keyspace_low_token_resource_groups.contains({rg_map_ele.first, rg_name});
-                const bool need_report = rg_ele.second->shouldReportRUConsumption(current_tick);
+            const bool need_fetch_token = local_keyspace_low_token_resource_groups.contains(ele.first);
+            const bool need_report = ele.second->shouldReportRUConsumption(current_tick);
 
-                if (need_fetch_token || need_report)
-                {
-                    auto req_info_opt = rg_ele.second->buildRequestInfoIfNecessary(current_tick);
-                    if (req_info_opt.has_value())
-                        request_infos.push_back(req_info_opt.value());
-                }
+            if (need_fetch_token || need_report)
+            {
+                auto req_info_opt = ele.second->buildRequestInfoIfNecessary(current_tick);
+                if (req_info_opt.has_value())
+                    request_infos.push_back(req_info_opt.value());
             }
         }
     }
@@ -611,15 +597,8 @@ void LocalAdmissionController::doRequestGAC()
 void LocalAdmissionController::checkDegradeMode()
 {
     std::lock_guard lock(mu);
-    for (auto & rg_map_ele : keyspace_resource_groups)
-    {
-        auto & rg_map = *(rg_map_ele.second);
-        for (auto & rg_ele : rg_map)
-        {
-            auto & group = rg_ele.second;
-            group->updateDegradeMode(current_tick);
-        }
-    }
+    for (auto & ele : keyspace_resource_groups)
+        ele.second->updateDegradeMode(current_tick);
 }
 
 std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handleTokenBucketsResp(
@@ -980,14 +959,10 @@ void LocalAdmissionController::updateMaxRUPerSecAfterDeleteWithoutLock(uint64_t 
     if (max_ru_per_sec == deleted_user_ru_per_sec)
     {
         max_ru_per_sec = 0;
-        for (auto & rg_map_ele : keyspace_resource_groups)
+        for (auto & ele : keyspace_resource_groups)
         {
-            auto & rg_map = *(rg_map_ele.second);
-            for (auto & rg_ele : rg_map)
-            {
-                if (max_ru_per_sec < rg_ele.second->user_ru_per_sec)
-                    max_ru_per_sec = rg_ele.second->user_ru_per_sec;
-            }
+            if (max_ru_per_sec < ele.second->user_ru_per_sec)
+                max_ru_per_sec = ele.second->user_ru_per_sec;
         }
     }
 }

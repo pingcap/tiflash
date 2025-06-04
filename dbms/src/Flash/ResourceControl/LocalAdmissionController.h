@@ -343,6 +343,17 @@ private:
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 
+struct LACPairHash
+{
+    size_t operator()(const std::pair<KeyspaceID, std::string> & p) const
+    {
+        uint64_t seed = 0;
+        hash_combine(seed, p.first);
+        hash_combine(seed, p.second);
+        return static_cast<size_t>(seed);
+    }
+};
+
 // LocalAdmissionController is the local(tiflash) part of the distributed token bucket algorithm.
 // It manages all resource groups:
 // 1. Creation, deletion and config updates of resource group.
@@ -531,60 +542,40 @@ private:
     }
     ResourceGroupPtr findResourceGroupWithoutLock(const KeyspaceID & keyspace_id, const std::string & name) const
     {
-        auto iter = keyspace_resource_groups.find(keyspace_id);
+        auto iter = keyspace_resource_groups.find({keyspace_id, name});
         if unlikely (iter == keyspace_resource_groups.end())
             return nullptr;
-        auto rg_map_iter = iter->second->find(name);
-        return rg_map_iter == iter->second->end() ? nullptr : rg_map_iter->second;
+        return iter->second;
     }
 
     void addResourceGroup(const KeyspaceID & keyspace_id, const resource_manager::ResourceGroup & new_group_pb)
     {
         uint64_t user_ru_per_sec = new_group_pb.r_u_settings().r_u().settings().fill_rate();
-        ResourceGroupMapPtr rg_map;
         std::lock_guard lock(mu);
 
         if (max_ru_per_sec < user_ru_per_sec)
             max_ru_per_sec = user_ru_per_sec;
 
-        auto iter = keyspace_resource_groups.find(keyspace_id);
+        auto iter = keyspace_resource_groups.find({keyspace_id, new_group_pb.name()});
         if (iter != keyspace_resource_groups.end())
-        {
-            auto iter2 = iter->second->find(new_group_pb.name());
-            if (iter2 != iter->second->end())
-                return;
-            rg_map = iter->second;
-        }
-        else
-        {
-            rg_map = std::make_shared<ResourceGroupMap>();
-            keyspace_resource_groups.emplace(keyspace_id, rg_map);
-        }
+            return;
 
         LOG_INFO(log, "add new resource group, info: {}", new_group_pb.ShortDebugString());
         auto new_group = std::make_shared<ResourceGroup>(keyspace_id, new_group_pb, current_tick);
-        rg_map->emplace(new_group_pb.name(), new_group);
+        keyspace_resource_groups.insert({{keyspace_id, new_group_pb.name()}, new_group});
 
         if (refill_token_callback)
             refill_token_callback();
     }
     size_t deleteResourceGroupWithoutLock(const KeyspaceID & keyspace_id, const std::string & name)
     {
-        auto iter = keyspace_resource_groups.find(keyspace_id);
+        auto iter = keyspace_resource_groups.find({keyspace_id, name});
         if (iter == keyspace_resource_groups.end())
             return 0;
 
-        size_t erase_num = 0;
-        auto iter2 = iter->second->find(name);
-        if (iter2 != iter->second->end())
-        {
-            updateMaxRUPerSecAfterDeleteWithoutLock(iter2->second->user_ru_per_sec);
-            iter->second->erase(iter2);
-            if (iter->second->empty())
-                keyspace_resource_groups.erase(iter);
-            erase_num = 1;
-        }
-        return erase_num;
+        updateMaxRUPerSecAfterDeleteWithoutLock(iter->second->user_ru_per_sec);
+        keyspace_resource_groups.erase(iter);
+        return 1;
     }
 
     std::vector<std::pair<KeyspaceID, std::string>> handleTokenBucketsResp(
@@ -627,12 +618,8 @@ private:
         static_assert(CLEAR_CPU_TIME_DURATION > ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL);
         if (now - last_clear_cpu_time >= CLEAR_CPU_TIME_DURATION)
         {
-            for (auto & keyspace_resource_group_ele : keyspace_resource_groups)
-            {
-                auto & keyspace_resource_group = *(keyspace_resource_group_ele.second);
-                for (auto & resource_group : keyspace_resource_group)
-                    resource_group.second->clearCPUTime();
-            }
+            for (auto & ele : keyspace_resource_groups)
+                ele.second->clearCPUTime();
             last_clear_cpu_time = now;
         }
     }
@@ -649,21 +636,8 @@ private:
 
     std::atomic<bool> stopped = false;
 
-    using ResourceGroupMap = std::unordered_map<std::string, ResourceGroupPtr>;
-    using ResourceGroupMapPtr = std::shared_ptr<ResourceGroupMap>;
-    std::unordered_map<KeyspaceID, ResourceGroupMapPtr> keyspace_resource_groups{};
-
-    struct PairHash
-    {
-        size_t operator()(const std::pair<KeyspaceID, std::string> & p) const
-        {
-            uint64_t seed = 0;
-            hash_combine(seed, p.first);
-            hash_combine(seed, p.second);
-            return static_cast<size_t>(seed);
-        }
-    };
-    std::unordered_set<std::pair<KeyspaceID, std::string>, PairHash> keyspace_low_token_resource_groups{};
+    std::unordered_map<std::pair<KeyspaceID, std::string>, ResourceGroupPtr, LACPairHash> keyspace_resource_groups{};
+    std::unordered_set<std::pair<KeyspaceID, std::string>, LACPairHash> keyspace_low_token_resource_groups{};
 
     uint64_t max_ru_per_sec = 0;
 
