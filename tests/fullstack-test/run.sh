@@ -20,21 +20,29 @@ set_branch
 set -xe
 
 check_env
+check_docker_compose
 
-# run fullstack-tests (for engine DeltaTree)
-docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
+    echo "Skip this fullstack test on next-gen TiFlash"
+    exit 0
+fi
+
+# classic TiFlash
+echo "Running fullstack test on classic TiFlash"
+
+# clean up previous docker instances, data and log
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
+# run fullstack-tests
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml up -d
 wait_env
-docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test'
-
-docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test'
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt-sync-grpc.yaml up -d
+${COMPOSE} -f cluster.yaml -f tiflash-dt-sync-grpc.yaml up -d
 wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-sync-grpc.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
-
-docker-compose -f cluster.yaml -f tiflash-dt-sync-grpc.yaml down
+${COMPOSE} -f cluster.yaml -f tiflash-dt-sync-grpc.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
+${COMPOSE} -f cluster.yaml -f tiflash-dt-sync-grpc.yaml down
 clean_data_log

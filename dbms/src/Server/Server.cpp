@@ -425,60 +425,57 @@ void loadBlockList(
 #else
     global_context.initializeStoreIdBlockList(global_context.getSettingsRef().disagg_blocklist_wn_store_id);
 
-    /// Load keyspace blacklist json file
-    LOG_INFO(log, "Loading blacklist file.");
-    auto blacklist_file_path = config.getString("blacklist_file", "");
-    if (blacklist_file_path.length() == 0)
+    /// Load keyspace blocklist json file
+    LOG_INFO(log, "Loading blocklist file.");
+    auto blocklist_file_path = config.getString("blacklist_file", "");
+    if (blocklist_file_path.length() == 0)
     {
         LOG_INFO(log, "blocklist file not enabled, ignore it.");
+        return;
     }
-    else
+    auto blacklist_file = Poco::File(blocklist_file_path);
+    if (!(blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead()))
     {
-        auto blacklist_file = Poco::File(blacklist_file_path);
-        if (blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead())
-        {
-            // Read the json file
-            std::ifstream ifs(blacklist_file_path);
-            std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-            Poco::JSON::Parser parser;
-            Poco::Dynamic::Var json_var = parser.parse(json_content);
-            const auto & json_obj = json_var.extract<Poco::JSON::Object::Ptr>();
-
-            // load keyspace list
-            auto keyspace_arr = json_obj->getArray("keyspace_ids");
-            if (!keyspace_arr.isNull())
-            {
-                std::unordered_set<KeyspaceID> keyspace_blocklist;
-                for (size_t i = 0; i < keyspace_arr->size(); i++)
-                {
-                    keyspace_blocklist.emplace(keyspace_arr->getElement<KeyspaceID>(i));
-                }
-                global_context.initKeyspaceBlocklist(keyspace_blocklist);
-            }
-
-            // load region list
-            auto region_arr = json_obj->getArray("region_ids");
-            if (!region_arr.isNull())
-            {
-                std::unordered_set<RegionID> region_blocklist;
-                for (size_t i = 0; i < region_arr->size(); i++)
-                {
-                    region_blocklist.emplace(region_arr->getElement<RegionID>(i));
-                }
-                global_context.initRegionBlocklist(region_blocklist);
-            }
-
-            LOG_INFO(
-                log,
-                "Load blocklist file done, total {} keyspaces and {} regions in blacklist.",
-                keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
-                region_arr.isNull() ? 0 : region_arr->size());
-        }
-        else
-        {
-            LOG_INFO(log, "blocklist file not exists or non-readble, ignore it.");
-        }
+        LOG_INFO(log, "blocklist file not exists or non-readble, ignore it, path={}", blocklist_file_path);
+        return;
     }
+
+    // Read the json file
+    std::ifstream ifs(blocklist_file_path);
+    std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    Poco::JSON::Parser parser;
+    Poco::Dynamic::Var json_var = parser.parse(json_content);
+    const auto & json_obj = json_var.extract<Poco::JSON::Object::Ptr>();
+
+    // load keyspace list
+    auto keyspace_arr = json_obj->getArray("keyspace_ids");
+    if (!keyspace_arr.isNull())
+    {
+        std::unordered_set<KeyspaceID> keyspace_blocklist;
+        for (size_t i = 0; i < keyspace_arr->size(); i++)
+        {
+            keyspace_blocklist.emplace(keyspace_arr->getElement<KeyspaceID>(i));
+        }
+        global_context.initKeyspaceBlocklist(keyspace_blocklist);
+    }
+
+    // load region list
+    auto region_arr = json_obj->getArray("region_ids");
+    if (!region_arr.isNull())
+    {
+        std::unordered_set<RegionID> region_blocklist;
+        for (size_t i = 0; i < region_arr->size(); i++)
+        {
+            region_blocklist.emplace(region_arr->getElement<RegionID>(i));
+        }
+        global_context.initRegionBlocklist(region_blocklist);
+    }
+
+    LOG_INFO(
+        log,
+        "Load blocklist file done, total {} keyspaces and {} regions in blocklist.",
+        keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
+        region_arr.isNull() ? 0 : region_arr->size());
 #endif
 }
 

@@ -74,7 +74,8 @@ fi
 
 
 # Stop all docker instances if exist.
-docker-compose      \
+COMPOSE="docker-compose"
+${COMPOSE}      \
   -f cluster.yaml   \
   -f tiflash-tagged-image.yaml     \
   down
@@ -83,10 +84,10 @@ rm -rf ./data ./log
 
 #################################### TIDB-CI ONLY ####################################
 # run fullstack-tests (for engine DeltaTree)
-docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml up -d
+${COMPOSE} -f cluster.yaml -f tiflash-tagged-image.yaml up -d
 wait_env dt
-docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
-docker-compose -f cluster.yaml -f tiflash-tagged-image.yaml down
+${COMPOSE} -f cluster.yaml -f tiflash-tagged-image.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
+${COMPOSE} -f cluster.yaml -f tiflash-tagged-image.yaml down
 rm -rf ./data ./log
 
 [[ "$TIDB_CI_ONLY" -eq 1 ]] && exit
