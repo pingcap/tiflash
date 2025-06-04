@@ -28,7 +28,7 @@ struct TaskCancelInfo
 {
     String query_id;
     pingcap::pd::KeyspaceID keyspace_id;
-    std::string resource_group_name;
+    String resource_group_name;
 };
 
 #define FINISH_STATUS                                      \

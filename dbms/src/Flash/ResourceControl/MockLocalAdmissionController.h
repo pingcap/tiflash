@@ -75,7 +75,7 @@ public:
 
         return {get_priority_func(name)};
     }
-    void warmupResourceGroupInfoCache(const std::string &) {}
+    void warmupResourceGroupInfoCache(const KeyspaceID &, const std::string &) {}
     static uint64_t estWaitDuraMS(const std::string &) { return 100; }
 
     void registerRefillTokenCallback(const std::function<void()> & cb)

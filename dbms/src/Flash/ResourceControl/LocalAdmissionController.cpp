@@ -900,29 +900,29 @@ bool LocalAdmissionController::handlePutEvent(
 }
 
 bool LocalAdmissionController::parseResourceGroupNameFromWatchKey(
-    const std::string & key_prefix,
+    const std::string & etcd_key_prefix,
     const std::string & etcd_key,
     KeyspaceID & keyspace_id,
     std::string & parsed_rg_name,
     std::string & err_msg)
 {
     // Expect etcd_key: resource_group/settings/rg_name OR resource_group/settings/keyspace_id/rg_name
-    // key_prefix is resource_group/settings
-    if (etcd_key.length() <= key_prefix.length() + 1)
+    // etcd_key_prefix is resource_group/settings
+    if (etcd_key.length() <= etcd_key_prefix.length() + 1)
     {
-        err_msg = fmt::format("expect etcd key: {}/resource_group_name, but got {}", key_prefix, etcd_key);
+        err_msg = fmt::format("expect etcd key: {}/resource_group_name, but got {}", etcd_key_prefix, etcd_key);
         return false;
     }
 
-    if (key_prefix == GAC_RESOURCE_GROUP_ETCD_PATH)
+    if (etcd_key_prefix == GAC_RESOURCE_GROUP_ETCD_PATH)
     {
         keyspace_id = NullspaceID;
-        parsed_rg_name = std::string(etcd_key.begin() + key_prefix.length() + 1, etcd_key.end());
+        parsed_rg_name = std::string(etcd_key.begin() + etcd_key_prefix.length() + 1, etcd_key.end());
     }
-    else if (key_prefix == GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH)
+    else if (etcd_key_prefix == GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH)
     {
         // resource_group/settings/keyspace_id/rg_name -> keyspace_id/rg_name
-        auto tmp_str = std::string(etcd_key.begin() + key_prefix.length() + 1, etcd_key.end());
+        auto tmp_str = std::string(etcd_key.begin() + etcd_key_prefix.length() + 1, etcd_key.end());
         size_t slash_pos = tmp_str.find('/');
         if (slash_pos == std::string::npos)
         {
@@ -943,7 +943,7 @@ bool LocalAdmissionController::parseResourceGroupNameFromWatchKey(
     }
     else
     {
-        err_msg = "unexpected key_prefix: " + key_prefix;
+        err_msg = "unexpected etcd_key_prefix: " + etcd_key_prefix;
     }
     return true;
 }

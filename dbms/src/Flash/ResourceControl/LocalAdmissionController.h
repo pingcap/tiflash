@@ -362,16 +362,17 @@ struct LACPairHash
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
-    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
+    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_, bool with_keyspace)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
         , watch_gac_grpc_context(std::make_unique<grpc::ClientContext>())
     {
         background_threads.emplace_back([this] { this->mainLoop(); });
-        // todo check api-version to start only one thr.
-        background_threads.emplace_back([this] { this->watchGACLoop(GAC_RESOURCE_GROUP_ETCD_PATH); });
-        background_threads.emplace_back([this] { this->watchGACLoop(GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH); });
         background_threads.emplace_back([this] { this->requestGACLoop(); });
+        if (with_keyspace)
+            background_threads.emplace_back([this] { this->watchGACLoop(GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH); });
+        else
+            background_threads.emplace_back([this] { this->watchGACLoop(GAC_RESOURCE_GROUP_ETCD_PATH); });
 
         current_tick = SteadyClock::now();
         last_clear_cpu_time = current_tick;
@@ -511,9 +512,14 @@ private:
         }
 
         if constexpr (is_consume_cpu)
+        {
             group->consumeCPUResource(ru, cpu_time_in_ns);
+        }
         else
-            group->consumeBytesResource(ru, cpu_time_in_ns);
+        {
+            assert(cpu_time_in_ns == 0);
+            group->consumeBytesResource(ru, 0);
+        }
         if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
         {
             {
@@ -606,7 +612,7 @@ private:
     bool handleDeleteEvent(const std::string & etcd_path, const mvccpb::KeyValue & kv, std::string & err_msg);
     bool handlePutEvent(const std::string & etcd_path, const mvccpb::KeyValue & kv, std::string & err_msg);
     static bool parseResourceGroupNameFromWatchKey(
-        const std::string & key_prefix,
+        const std::string & etcd_key_prefix,
         const std::string & etcd_key,
         KeyspaceID & keyspace_id,
         std::string & parsed_rg_name,
