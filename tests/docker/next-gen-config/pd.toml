@@ -1,4 +1,4 @@
-# Copyright 2022 PingCAP, Inc.
+# Copyright 2025 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,17 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-FROM ghcr.io/pingcap-qe/ci/jenkins/tiflash:v2024.10.8-24-gfd2cff2
-#FROM rockylinux:9.3
-
-USER root
-WORKDIR /root/
-
-ENV HOME=/root/
-ENV TZ=Asia/Shanghai
-ENV LD_LIBRARY_PATH=/tiflash
-
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-#RUN dnf install -y https://dev.mysql.com/get/mysql80-community-release-el8-1.noarch.rpm && \
-#    dnf install -y mysql-community-client --nogpgcheck
+[dashboard]
+enable-experimental = true
+enable-telemetry = false
+internal-proxy = false
+max-replicas = 1
+[keyspace]
+pre-alloc = ["a"]

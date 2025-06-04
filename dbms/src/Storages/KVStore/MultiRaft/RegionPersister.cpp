@@ -438,7 +438,7 @@ RegionMap RegionPersister::restore(
         }
         if (global_context.isRegionInBlocklist(region->id()))
         {
-            LOG_WARNING(log, "Region skip restore because region_id in blacklist, region_id={}", region->id());
+            LOG_WARNING(log, "Region skip restore because region_id in blocklist, region_id={}", region->id());
             return;
         }
 #endif

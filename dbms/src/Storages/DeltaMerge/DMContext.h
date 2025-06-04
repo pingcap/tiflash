@@ -99,7 +99,6 @@ struct DMContext : private boost::noncopyable
     const bool read_stable_only;
     const bool enable_relevant_place;
     const bool enable_skippable_place;
-    const bool fap_use_segment_to_end_map_cache;
 
     String tracing_id;
 
