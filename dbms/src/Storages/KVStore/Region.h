@@ -17,9 +17,11 @@
 #include <RaftStoreProxyFFI/ProxyFFI.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/KVStore/Decode/DecodedTiKVKeyValue.h>
+#include <Storages/KVStore/Decode/RegionTable_fwd.h>
 #include <Storages/KVStore/MultiRaft/RegionData.h>
 #include <Storages/KVStore/MultiRaft/RegionMeta.h>
 #include <Storages/KVStore/MultiRaft/RegionSerde.h>
+#include <Storages/KVStore/Region_fwd.h>
 #include <common/logger_useful.h>
 
 #include <shared_mutex>
@@ -44,9 +46,6 @@ class RegionKVStoreOldTest;
 class RegionKVStoreTest;
 } // namespace tests
 
-class Region;
-using RegionPtr = std::shared_ptr<Region>;
-using Regions = std::vector<RegionPtr>;
 
 struct RaftCommandResult;
 class KVStore;
@@ -133,9 +132,20 @@ public: // Simple Read and Write
     Region() = delete;
     ~Region();
 
-    void insert(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
-    void insert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
-    void remove(const std::string & cf, const TiKVKey & key);
+    void insertDebug(const std::string & cf, TiKVKey && key, TiKVValue && value, DupCheck mode = DupCheck::Deny);
+    void insertFromSnap(
+        TMTContext & tmt,
+        ColumnFamilyType type,
+        TiKVKey && key,
+        TiKVValue && value,
+        DupCheck mode = DupCheck::Deny);
+    void insertFromSnap(
+        TMTContext & tmt,
+        const std::string & cf,
+        TiKVKey && key,
+        TiKVValue && value,
+        DupCheck mode = DupCheck::Deny);
+    void removeDebug(const std::string & cf, const TiKVKey & key);
 
     // Directly drop all data in this Region object.
     void clearAllData();
@@ -163,7 +173,10 @@ public: // Stats
     bool isMerging() const;
     void setStateApplying();
 
+    // Payload size in RegionData, show how much data flows in/out of the Region.
     size_t dataSize() const;
+    // How much memory the Region consumes.
+    size_t totalSize() const;
     size_t writeCFCount() const;
     std::string dataInfo() const;
 
@@ -214,8 +227,9 @@ public: // Stats
     RegionVersion version() const;
     RegionVersion confVer() const;
 
-    TableID getMappedTableID() const;
-    KeyspaceID getKeyspaceID() const;
+    TableID getMappedTableID() const { return mapped_table_id; }
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
+    KeyspaceTableID getKeyspaceTableID() const { return KeyspaceTableID{keyspace_id, mapped_table_id}; }
 
     /// get approx rows, bytes info about mem cache.
     std::pair<size_t, size_t> getApproxMemCacheInfo() const;
@@ -226,6 +240,17 @@ public: // Stats
     RaftstoreVer getClusterRaftstoreVer();
     RegionData::OrphanKeysInfo & orphanKeysInfo() { return data.orphan_keys_info; }
     const RegionData::OrphanKeysInfo & orphanKeysInfo() const { return data.orphan_keys_info; }
+
+    // Bind a region to a RegionTable. It could not be bound to another table any more.
+    // All memory changes to this region would reflect to the binded table.
+    void setRegionTableCtx(RegionTableCtxPtr ctx) const;
+    RegionTableCtxPtr getRegionTableCtx() const { return data.getRegionTableCtx(); }
+    RegionTableCtxPtr resetRegionTableCtx() const { return data.resetRegionTableCtx(); }
+    size_t getRegionTableSize() const { return data.getRegionTableSize(); }
+    bool getRegionTableWarned() const { return data.getRegionTableWarned(); }
+    bool setRegionTableWarned(bool desired) const { return data.setRegionTableWarned(desired); }
+    void resetWarnMemoryLimitByTable() const;
+    void maybeWarnMemoryLimitByTable(TMTContext & tmt, const char * from);
 
 public: // Raft Read and Write
     CommittedScanner createCommittedScanner(bool use_lock, bool need_value);
@@ -277,10 +302,11 @@ private:
     friend class tests::RegionKVStoreTest;
     friend struct RegionBench::DebugRegion;
 
+private:
     // Private methods no need to lock mutex, normally
 
     // Returns the size of data change(inc or dec)
-    RegionDataRes doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
+    RegionDataMemDiff doInsert(ColumnFamilyType type, TiKVKey && key, TiKVValue && value, DupCheck mode);
     void doRemove(ColumnFamilyType type, const TiKVKey & key);
 
     std::optional<RegionDataReadInfo> readDataByWriteIt(

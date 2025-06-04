@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
@@ -205,7 +206,7 @@ std::optional<LocalIndexesStats> DeltaMergeStore::genLocalIndexStatsByTableInfo(
         DM::LocalIndexStats index_stats;
         index_stats.column_id = index_info.column_id;
         index_stats.index_id = index_info.index_id;
-        index_stats.index_kind = "HNSW";
+        index_stats.index_kind = magic_enum::enum_name(index_info.kind); // like Vector
         stats.emplace_back(std::move(index_stats));
     }
     return stats;

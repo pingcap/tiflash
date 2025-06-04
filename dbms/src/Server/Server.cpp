@@ -16,10 +16,13 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/DiskSize.h>
 #include <Common/DynamicThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
+#include <Common/MemoryAllocTrace.h>
 #include <Common/RedactHelpers.h>
+#include <Common/SpillLimiter.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashBuildInfo.h>
@@ -27,6 +30,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/UniThreadPool.h>
 #include <Common/assert_cast.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
@@ -64,6 +68,7 @@
 #include <Server/BgStorageInit.h>
 #include <Server/Bootstrap.h>
 #include <Server/CertificateReloader.h>
+#include <Server/FlashGrpcServerHolder.h>
 #include <Server/MetricsPrometheus.h>
 #include <Server/RaftConfigParser.h>
 #include <Server/Server.h>
@@ -81,8 +86,7 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/IManageableStorage.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
-#include <Storages/KVStore/FFI/ProxyFFI.h>
-#include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/ProxyStateMachine.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/PDTiKVClient.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -91,7 +95,6 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/System/attachSystemTables.h>
 #include <Storages/registerStorages.h>
-#include <TableFunctions/registerTableFunctions.h>
 #include <TiDB/Schema/SchemaSyncer.h>
 #include <TiDB/Schema/TiDBSchemaManager.h>
 #include <WindowFunctions/registerWindowFunctions.h>
@@ -99,18 +102,16 @@
 #include <common/ErrorHandlers.h>
 #include <common/config_common.h>
 #include <common/logger_useful.h>
-#include <sys/resource.h>
 
-#include <boost/algorithm/string/classification.hpp>
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 #include <memory>
-#include <thread>
 
 #ifdef FIU_ENABLE
 #include <fiu.h>
 #endif
 
+extern std::atomic<UInt64> tranquil_time_rss;
 
 namespace CurrentMetrics
 {
@@ -183,124 +184,6 @@ std::string Server::getDefaultCorePath() const
     return getCanonicalPath(config().getString("path")) + "cores";
 }
 
-struct TiFlashProxyConfig
-{
-    std::vector<const char *> args;
-    std::unordered_map<std::string, std::string> val_map;
-    bool is_proxy_runnable = false;
-
-    // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
-
-    void addExtraArgs(const std::string & k, const std::string & v)
-    {
-        std::string key = "--" + k;
-        val_map[key] = v;
-        auto iter = val_map.find(key);
-        args.push_back(iter->first.data());
-        args.push_back(iter->second.data());
-    }
-
-    // Try to parse start args from `config`.
-    // Return true if proxy need to be started, and `val_map` will be filled with the
-    // proxy start params.
-    // Return false if proxy is not need.
-    bool tryParseFromConfig(
-        const Poco::Util::LayeredConfiguration & config,
-        const DisaggregatedMode disaggregated_mode,
-        const bool use_autoscaler,
-        const LoggerPtr & log)
-    {
-        // tiflash_compute doesn't need proxy.
-        if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
-        {
-            LOG_INFO(log, "TiFlash Proxy will not start because AutoScale Disaggregated Compute Mode is specified.");
-            return false;
-        }
-
-        Poco::Util::AbstractConfiguration::Keys keys;
-        config.keys("flash.proxy", keys);
-        if (!config.has("raft.pd_addr"))
-        {
-            LOG_WARNING(log, "TiFlash Proxy will not start because `raft.pd_addr` is not configured.");
-            if (!keys.empty())
-                LOG_WARNING(log, "`flash.proxy.*` is ignored because TiFlash Proxy will not start.");
-
-            return false;
-        }
-
-        {
-            // config items start from `flash.proxy.`
-            std::unordered_map<std::string, std::string> args_map;
-            for (const auto & key : keys)
-                args_map[key] = config.getString("flash.proxy." + key);
-
-            args_map["pd-endpoints"] = config.getString("raft.pd_addr");
-            args_map["engine-version"] = TiFlashBuildInfo::getReleaseVersion();
-            args_map["engine-git-hash"] = TiFlashBuildInfo::getGitHash();
-            if (!args_map.contains("engine-addr"))
-                args_map["engine-addr"] = config.getString("flash.service_addr", "0.0.0.0:3930");
-            else
-                args_map["advertise-engine-addr"] = args_map["engine-addr"];
-            args_map["engine-label"] = getProxyLabelByDisaggregatedMode(disaggregated_mode);
-            // For tiflash write node, it should report a extra label with "key" == "engine-role-label"
-            if (disaggregated_mode == DisaggregatedMode::Storage)
-                args_map["engine-role-label"] = DISAGGREGATED_MODE_WRITE_ENGINE_ROLE;
-
-            for (auto && [k, v] : args_map)
-                val_map.emplace("--" + k, std::move(v));
-        }
-        return true;
-    }
-
-    TiFlashProxyConfig(
-        Poco::Util::LayeredConfiguration & config,
-        const DisaggregatedMode disaggregated_mode,
-        const bool use_autoscaler,
-        const StorageFormatVersion & format_version,
-        const Settings & settings,
-        const LoggerPtr & log)
-    {
-        is_proxy_runnable = tryParseFromConfig(config, disaggregated_mode, use_autoscaler, log);
-
-        args.push_back("TiFlash Proxy");
-        for (const auto & v : val_map)
-        {
-            args.push_back(v.first.data());
-            args.push_back(v.second.data());
-        }
-
-        // Enable unips according to `format_version`
-        if (format_version.page == PageFormat::V4)
-        {
-            LOG_INFO(log, "Using UniPS for proxy");
-            addExtraArgs("unips-enabled", "1");
-        }
-
-        // Set the proxy's memory by size or ratio
-        std::visit(
-            [&](auto && arg) {
-                using T = std::decay_t<decltype(arg)>;
-                if constexpr (std::is_same_v<T, UInt64>)
-                {
-                    if (arg != 0)
-                    {
-                        LOG_INFO(log, "Limit proxy's memory, size={}", arg);
-                        addExtraArgs("memory-limit-size", std::to_string(arg));
-                    }
-                }
-                else if constexpr (std::is_same_v<T, double>)
-                {
-                    if (arg > 0 && arg <= 1.0)
-                    {
-                        LOG_INFO(log, "Limit proxy's memory, ratio={}", arg);
-                        addExtraArgs("memory-limit-ratio", std::to_string(arg));
-                    }
-                }
-            },
-            settings.max_memory_usage_for_all_queries.get());
-    }
-};
-
 pingcap::ClusterConfig getClusterConfig(
     TiFlashSecurityConfigPtr security_config,
     const int api_version,
@@ -353,58 +236,6 @@ void printGRPCLog(gpr_log_func_args * args)
     }
 }
 
-extern "C" {
-void run_raftstore_proxy_ffi(int argc, const char * const * argv, const EngineStoreServerHelper *);
-}
-
-struct RaftStoreProxyRunner : boost::noncopyable
-{
-    struct RunRaftStoreProxyParms
-    {
-        const EngineStoreServerHelper * helper;
-        const TiFlashProxyConfig & conf;
-
-        /// set big enough stack size to avoid runtime error like stack-overflow.
-        size_t stack_size = 1024 * 1024 * 20;
-    };
-
-    RaftStoreProxyRunner(RunRaftStoreProxyParms && parms_, const LoggerPtr & log_)
-        : parms(std::move(parms_))
-        , log(log_)
-    {}
-
-    void join() const
-    {
-        if (!parms.conf.is_proxy_runnable)
-            return;
-        pthread_join(thread, nullptr);
-    }
-
-    void run()
-    {
-        if (!parms.conf.is_proxy_runnable)
-            return;
-        pthread_attr_t attribute;
-        pthread_attr_init(&attribute);
-        pthread_attr_setstacksize(&attribute, parms.stack_size);
-        LOG_INFO(log, "Start raft store proxy. Args: {}", parms.conf.args);
-        pthread_create(&thread, &attribute, runRaftStoreProxyFFI, &parms);
-        pthread_attr_destroy(&attribute);
-    }
-
-private:
-    static void * runRaftStoreProxyFFI(void * pv)
-    {
-        setThreadName("RaftStoreProxy");
-        const auto & parms = *static_cast<const RunRaftStoreProxyParms *>(pv);
-        run_raftstore_proxy_ffi(static_cast<int>(parms.conf.args.size()), parms.conf.args.data(), parms.helper);
-        return nullptr;
-    }
-
-    RunRaftStoreProxyParms parms;
-    pthread_t thread{};
-    const LoggerPtr & log;
-};
 
 // By default init global thread pool by hardware_concurrency
 // Later we will adjust it by `adjustThreadPoolSize`
@@ -521,6 +352,7 @@ void adjustThreadPoolSize(const Settings & settings, size_t logical_cores)
 void syncSchemaWithTiDB(
     const TiFlashStorageConfig & storage_config,
     BgStorageInitHolder & bg_init_stores,
+    const std::atomic_size_t & terminate_signals_counter,
     const std::unique_ptr<Context> & global_context,
     const LoggerPtr & log)
 {
@@ -529,39 +361,129 @@ void syncSchemaWithTiDB(
     if (storage_config.api_version == 1)
     {
         Stopwatch watch;
-        while (watch.elapsedSeconds() < global_context->getSettingsRef().ddl_restart_wait_seconds) // retry for 3 mins
+        const UInt64 total_wait_seconds = global_context->getSettingsRef().ddl_restart_wait_seconds;
+        static constexpr int retry_wait_seconds = 3;
+        while (true)
         {
+            if (watch.elapsedSeconds() > total_wait_seconds)
+            {
+                LOG_WARNING(log, "Sync schemas during init timeout, cost={:.3f}s", watch.elapsedSeconds());
+                break;
+            }
+
             try
             {
                 global_context->getTMTContext().getSchemaSyncerManager()->syncSchemas(*global_context, NullspaceID);
+                LOG_INFO(log, "Sync schemas during init done, cost={:.3f}s", watch.elapsedSeconds());
                 break;
             }
-            catch (Poco::Exception & e)
+            catch (DB::Exception & e)
             {
-                const int wait_seconds = 3;
                 LOG_ERROR(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
                     e.displayText(),
-                    wait_seconds);
-                ::sleep(wait_seconds);
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
+            }
+            catch (Poco::Exception & e)
+            {
+                LOG_ERROR(
+                    log,
+                    "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
+                    " seconds and try again.",
+                    e.displayText(),
+                    retry_wait_seconds);
+                ::sleep(retry_wait_seconds);
             }
         }
-        LOG_DEBUG(log, "Sync schemas done.");
     }
 
     // Init the DeltaMergeStore instances if data exist.
     // Make the disk usage correct and prepare for serving
     // queries.
-    bg_init_stores
-        .start(*global_context, log, storage_config.lazily_init_store, storage_config.s3_config.isS3Enabled());
+    bg_init_stores.start(
+        *global_context,
+        terminate_signals_counter,
+        log,
+        storage_config.lazily_init_store,
+        storage_config.s3_config.isS3Enabled());
 
     // init schema sync service with tidb
     global_context->initializeSchemaSyncService();
 }
 
+void loadBlockList(
+    [[maybe_unused]] const Poco::Util::LayeredConfiguration & config,
+    Context & global_context,
+    [[maybe_unused]] const LoggerPtr & log)
+{
+#if ENABLE_NEXT_GEN == 0
+    // We do not support blocking store by id in OP mode currently.
+    global_context.initializeStoreIdBlockList("");
+#else
+    global_context.initializeStoreIdBlockList(global_context.getSettingsRef().disagg_blocklist_wn_store_id);
+
+    /// Load keyspace blacklist json file
+    LOG_INFO(log, "Loading blacklist file.");
+    auto blacklist_file_path = config.getString("blacklist_file", "");
+    if (blacklist_file_path.length() == 0)
+    {
+        LOG_INFO(log, "blocklist file not enabled, ignore it.");
+    }
+    else
+    {
+        auto blacklist_file = Poco::File(blacklist_file_path);
+        if (blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead())
+        {
+            // Read the json file
+            std::ifstream ifs(blacklist_file_path);
+            std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+            Poco::JSON::Parser parser;
+            Poco::Dynamic::Var json_var = parser.parse(json_content);
+            const auto & json_obj = json_var.extract<Poco::JSON::Object::Ptr>();
+
+            // load keyspace list
+            auto keyspace_arr = json_obj->getArray("keyspace_ids");
+            if (!keyspace_arr.isNull())
+            {
+                std::unordered_set<KeyspaceID> keyspace_blocklist;
+                for (size_t i = 0; i < keyspace_arr->size(); i++)
+                {
+                    keyspace_blocklist.emplace(keyspace_arr->getElement<KeyspaceID>(i));
+                }
+                global_context.initKeyspaceBlocklist(keyspace_blocklist);
+            }
+
+            // load region list
+            auto region_arr = json_obj->getArray("region_ids");
+            if (!region_arr.isNull())
+            {
+                std::unordered_set<RegionID> region_blocklist;
+                for (size_t i = 0; i < region_arr->size(); i++)
+                {
+                    region_blocklist.emplace(region_arr->getElement<RegionID>(i));
+                }
+                global_context.initRegionBlocklist(region_blocklist);
+            }
+
+            LOG_INFO(
+                log,
+                "Load blocklist file done, total {} keyspaces and {} regions in blacklist.",
+                keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
+                region_arr.isNull() ? 0 : region_arr->size());
+        }
+        else
+        {
+            LOG_INFO(log, "blocklist file not exists or non-readble, ignore it.");
+        }
+    }
+#endif
+}
+
 int Server::main(const std::vector<std::string> & /*args*/)
+try
 {
     setThreadName("TiFlashMain");
 
@@ -582,15 +504,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
     registerFunctions();
     registerAggregateFunctions();
     registerWindowFunctions();
-    registerTableFunctions();
     registerStorages();
 
-    const auto disaggregated_mode = getDisaggregatedMode(config());
-    const auto use_autoscaler = useAutoScaler(config());
+    const auto disagg_opt = DisaggOptions::parseFromConfig(config());
 
     // Later we may create thread pool from GlobalThreadPool
     // init it before other components
-    initThreadPool(disaggregated_mode);
+    initThreadPool(disagg_opt.mode);
 
     TiFlashErrorRegistry::instance(); // This invocation is for initializing
 
@@ -607,7 +527,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     {
         storage_config.s3_config.enable(/*check_requirements*/ true, log);
     }
-    else if (disaggregated_mode == DisaggregatedMode::Compute && use_autoscaler)
+    else if (disagg_opt.mode == DisaggregatedMode::Compute && disagg_opt.use_autoscaler)
     {
         // compute node with auto scaler, the requirements will be initted later.
         storage_config.s3_config.enable(/*check_requirements*/ false, log);
@@ -645,7 +565,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // sanitize check for disagg mode
     if (storage_config.s3_config.isS3Enabled())
     {
-        if (disaggregated_mode == DisaggregatedMode::None)
+        if (disagg_opt.mode == DisaggregatedMode::None)
         {
             const String message = "'flash.disaggregated_mode' must be set when S3 is enabled!";
             LOG_ERROR(log, message);
@@ -659,11 +579,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     /** Context contains all that query execution is dependent:
       *  settings, available functions, data types, aggregate functions, databases...
       */
-    global_context = Context::createGlobal();
+    global_context = Context::createGlobal(Context::ApplicationType::SERVER, disagg_opt);
+
     /// Initialize users config reloader.
     auto users_config_reloader = UserConfig::parseSettings(config(), config_path, global_context, log);
 
-    /// Load global settings from default_profile and system_profile.
+    /// Load global settings from default_profile
     /// It internally depends on UserConfig::parseSettings.
     // TODO: Parse the settings from config file at the program beginning
     global_context->setDefaultProfiles();
@@ -676,102 +597,51 @@ int Server::main(const std::vector<std::string> & /*args*/)
     // Init Proxy's config
     TiFlashProxyConfig proxy_conf( //
         config(),
-        disaggregated_mode,
-        use_autoscaler,
+        disagg_opt.mode,
+        disagg_opt.use_autoscaler,
         STORAGE_FORMAT_CURRENT,
         settings,
         log);
-    EngineStoreServerWrap tiflash_instance_wrap{};
-    auto helper = GetEngineStoreServerHelper(&tiflash_instance_wrap);
 
-#ifdef USE_JEMALLOC
-    LOG_INFO(log, "Using Jemalloc for TiFlash");
-#else
-    LOG_INFO(log, "Not using Jemalloc for TiFlash");
-#endif
+    ProxyStateMachine proxy_machine{log, std::move(proxy_conf)};
 
+    proxy_machine.runProxy();
 
-    RaftStoreProxyRunner proxy_runner(RaftStoreProxyRunner::RunRaftStoreProxyParms{&helper, proxy_conf}, log);
-
-    if (proxy_conf.is_proxy_runnable)
-    {
-        proxy_runner.run();
-
-        LOG_INFO(log, "wait for tiflash proxy initializing");
-        while (!tiflash_instance_wrap.proxy_helper)
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        LOG_INFO(log, "tiflash proxy is initialized");
-    }
-    else
-    {
-        LOG_WARNING(log, "Skipped initialize TiFlash Proxy");
-    }
-
-    SCOPE_EXIT({
-        if (!proxy_conf.is_proxy_runnable)
-            return;
-
-        LOG_INFO(log, "Let tiflash proxy shutdown");
-        tiflash_instance_wrap.status = EngineStoreServerStatus::Terminated;
-        tiflash_instance_wrap.tmt = nullptr;
-        LOG_INFO(log, "Wait for tiflash proxy thread to join");
-        proxy_runner.join();
-        LOG_INFO(log, "tiflash proxy thread is joined");
-    });
+    SCOPE_EXIT({ proxy_machine.waitProxyStopped(); });
 
     /// get CPU/memory/disk info of this server
-    diagnosticspb::ServerInfoRequest request;
-    diagnosticspb::ServerInfoResponse response;
-    request.set_tp(static_cast<diagnosticspb::ServerInfoType>(1));
-    std::string req = request.SerializeAsString();
-    ffi_get_server_info_from_proxy(reinterpret_cast<intptr_t>(&helper), strIntoView(&req), &response);
-    server_info.parseSysInfo(response);
-    setNumberOfLogicalCPUCores(server_info.cpu_info.logical_cores);
-    computeAndSetNumberOfPhysicalCPUCores(server_info.cpu_info.logical_cores, server_info.cpu_info.physical_cores);
-    LOG_INFO(log, "ServerInfo: {}", server_info.debugString());
+    proxy_machine.getServerInfo(server_info, settings);
 
     grpc_log = Logger::get("grpc");
     gpr_set_log_verbosity(GPR_LOG_SEVERITY_DEBUG);
     gpr_set_log_function(&printGRPCLog);
 
-    SCOPE_EXIT({
-        if (!proxy_conf.is_proxy_runnable)
-            return;
-
-        LOG_INFO(log, "Unlink tiflash_instance_wrap.tmt");
-        // Reset the `tiflash_instance_wrap.tmt` before `global_context` get released, or it will be a dangling pointer
-        tiflash_instance_wrap.tmt = nullptr;
-    });
-    global_context->setApplicationType(Context::ApplicationType::SERVER);
-    global_context->getSharedContextDisagg()->disaggregated_mode = disaggregated_mode;
-    global_context->getSharedContextDisagg()->use_autoscaler = use_autoscaler;
-
     // Must init this before KVStore.
     global_context->initializeJointThreadInfoJeallocMap();
 
     /// Init File Provider
-    if (proxy_conf.is_proxy_runnable)
+    if (proxy_machine.isProxyRunnable())
     {
-        const bool enable_encryption = tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled();
+        const bool enable_encryption = proxy_machine.getProxyHelper()->checkEncryptionEnabled();
         if (enable_encryption && storage_config.s3_config.isS3Enabled())
         {
             LOG_INFO(log, "encryption can be enabled, method is Aes256Ctr");
             // The UniversalPageStorage has not been init yet, the UniversalPageStoragePtr in KeyspacesKeyManager is nullptr.
             KeyManagerPtr key_manager
-                = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(tiflash_instance_wrap.proxy_helper);
+                = std::make_shared<KeyspacesKeyManager<TiFlashRaftProxyHelper>>(proxy_machine.getProxyHelper());
             global_context->initializeFileProvider(key_manager, true);
         }
         else if (enable_encryption)
         {
-            const auto method = tiflash_instance_wrap.proxy_helper->getEncryptionMethod();
+            const auto method = proxy_machine.getProxyHelper()->getEncryptionMethod();
             LOG_INFO(log, "encryption is enabled, method is {}", magic_enum::enum_name(method));
-            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
             global_context->initializeFileProvider(key_manager, method != EncryptionMethod::Plaintext);
         }
         else
         {
             LOG_INFO(log, "encryption is disabled");
-            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(&tiflash_instance_wrap);
+            KeyManagerPtr key_manager = std::make_shared<DataKeyManager>(proxy_machine.getEngineStoreServerWrap());
             global_context->initializeFileProvider(key_manager, false);
         }
     }
@@ -791,7 +661,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         log,
         "disaggregated_mode={} use_autoscaler={} enable_s3={}",
         magic_enum::enum_name(global_context->getSharedContextDisagg()->disaggregated_mode),
-        global_context->getSharedContextDisagg()->use_autoscaler,
+        disagg_opt.use_autoscaler,
         storage_config.s3_config.isS3Enabled());
 
     if (storage_config.s3_config.isS3Enabled())
@@ -801,9 +671,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->getFileProvider(),
         storage_config.s3_config.isS3Enabled());
 
-    const auto is_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();
+    const auto is_disagg_compute_mode = global_context->getSharedContextDisagg()->isDisaggregatedComputeMode();
+    const auto is_disagg_storage_mode = global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+    const auto not_disagg_mode = global_context->getSharedContextDisagg()->notDisaggregatedMode();
     const auto [remote_cache_paths, remote_cache_capacity_quota]
-        = storage_config.remote_cache_config.getCacheDirInfos(is_compute_mode);
+        = storage_config.remote_cache_config.getCacheDirInfos(is_disagg_compute_mode);
     global_context->initializePathCapacityMetric( //
         global_capacity_quota, //
         storage_config.main_data_paths,
@@ -819,7 +691,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         storage_config.kvstore_data_path, //
         global_context->getPathCapacity(),
         global_context->getFileProvider());
-    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_compute_mode)
+    if (const auto & config = storage_config.remote_cache_config; config.isCacheEnabled() && is_disagg_compute_mode)
     {
         config.initCacheDir();
         FileCache::initialize(global_context->getPathCapacity(), config);
@@ -849,40 +721,18 @@ int Server::main(const std::vector<std::string> & /*args*/)
     StatusFile status{path + "status"};
 
     SCOPE_EXIT({
+        // Set the TMTContext reference in `proxy_machine` to nullptr.
+        proxy_machine.destroyProxyContext();
         /** Explicitly destroy Context. It is more convenient than in destructor of Server, because logger is still available.
           * At this moment, no one could own shared part of Context.
           */
         global_context.reset();
 
-        LOG_DEBUG(log, "Destroyed global context.");
+        LOG_INFO(log, "Destroyed global context.");
     });
 
     /// Try to increase limit on number of open files.
-    {
-        rlimit rlim{};
-        if (getrlimit(RLIMIT_NOFILE, &rlim))
-            throw Poco::Exception("Cannot getrlimit");
-
-        if (rlim.rlim_cur == rlim.rlim_max)
-        {
-            LOG_DEBUG(log, "rlimit on number of file descriptors is {}", rlim.rlim_cur);
-        }
-        else
-        {
-            rlim_t old = rlim.rlim_cur;
-            rlim.rlim_cur = config().getUInt("max_open_files", rlim.rlim_max);
-            int rc = setrlimit(RLIMIT_NOFILE, &rlim);
-            if (rc != 0)
-                LOG_WARNING(
-                    log,
-                    "Cannot set max number of file descriptors to {}"
-                    ". Try to specify max_open_files according to your system limits. error: {}",
-                    rlim.rlim_cur,
-                    strerror(errno));
-            else
-                LOG_DEBUG(log, "Set max number of file descriptors to {} (was {}).", rlim.rlim_cur, old);
-        }
-    }
+    setOpenFileLimit(config().getUInt("max_open_files", 0), log);
 
     static ServerErrorHandler error_handler;
     Poco::ErrorHandler::set(&error_handler);
@@ -894,20 +744,21 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// Directory with temporary data for processing of heavy queries.
     {
-        std::string tmp_path = config().getString("tmp_path", path + "tmp/");
-        global_context->setTemporaryPath(tmp_path);
-        Poco::File(tmp_path).createDirectories();
+        const std::string & temp_path = storage_config.temp_path;
+        RUNTIME_CHECK(!temp_path.empty());
+        Poco::File(temp_path).createDirectories();
 
-        /// Clearing old temporary files.
         Poco::DirectoryIterator dir_end;
-        for (Poco::DirectoryIterator it(tmp_path); it != dir_end; ++it)
+        for (Poco::DirectoryIterator it(temp_path); it != dir_end; ++it)
         {
             if (it->isFile() && startsWith(it.name(), "tmp"))
-            {
-                LOG_DEBUG(log, "Removing old temporary file {}", it->path());
                 global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
-            }
         }
+        LOG_INFO(log, "temp files in temp directory({}) removed", temp_path);
+
+        storage_config.checkTempCapacity(global_capacity_quota, log);
+        global_context->setTemporaryPath(temp_path);
+        SpillLimiter::instance->setMaxSpilledBytes(storage_config.temp_capacity);
     }
 
     /** Directory with 'flags': files indicating temporary settings for the server set by system administrator.
@@ -936,11 +787,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity),
         settings.bytes_that_rss_larger_than_limit);
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (is_disagg_compute_mode)
     {
         // No need to have local index scheduler.
     }
-    else if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+    else if (is_disagg_storage_mode)
     {
         // There is no compute task in write node.
         // Set the pool size to 80% of logical cores and 60% of memory
@@ -959,7 +810,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
     /// PageStorage run mode has been determined above
     global_context->initializeGlobalPageIdAllocator();
-    if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (!is_disagg_compute_mode)
     {
         global_context->initializeGlobalStoragePoolIfNeed(global_context->getPathPool());
         LOG_INFO(
@@ -973,13 +824,12 @@ int Server::main(const std::vector<std::string> & /*args*/)
     std::optional<raft_serverpb::StoreIdent> store_ident;
     // Only when this node is disagg compute node and autoscaler is enabled, we don't need the WriteNodePageStorage instance
     // Disagg compute node without autoscaler still need this instance for proxy's data
-    if (!(global_context->getSharedContextDisagg()->isDisaggregatedComputeMode()
-          && global_context->getSharedContextDisagg()->use_autoscaler))
+    if (!(is_disagg_compute_mode && disagg_opt.use_autoscaler))
     {
         global_context->initializeWriteNodePageStorageIfNeed(global_context->getPathPool());
         if (auto wn_ps = global_context->tryGetWriteNodePageStorage(); wn_ps != nullptr)
         {
-            if (tiflash_instance_wrap.proxy_helper->checkEncryptionEnabled() && storage_config.s3_config.isS3Enabled())
+            if (proxy_machine.getProxyHelper()->checkEncryptionEnabled() && storage_config.s3_config.isS3Enabled())
             {
                 global_context->getFileProvider()->setPageStoragePtrForKeyManager(wn_ps);
             }
@@ -995,13 +845,13 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode())
+    if (is_disagg_storage_mode)
     {
         global_context->getSharedContextDisagg()->initWriteNodeSnapManager();
         global_context->getSharedContextDisagg()->initFastAddPeerContext(settings.fap_handle_concurrency);
     }
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (is_disagg_compute_mode)
     {
         global_context->getSharedContextDisagg()->initReadNodePageCache(
             global_context->getPathPool(),
@@ -1081,9 +931,10 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setMinMaxIndexCache(minmax_index_cache_size);
 
     /// The vector index cache by number instead of bytes. Because it use `mmap` and let the operator system decide the memory usage.
-    size_t vec_index_cache_entities = config().getUInt64("vec_index_cache_entities", 1000);
-    if (vec_index_cache_entities)
-        global_context->setVectorIndexCache(vec_index_cache_entities);
+    size_t light_local_index_cache_entities = config().getUInt64("light_local_index_cache_entities", 10000);
+    size_t heavy_local_index_cache_entities = config().getUInt64("heavy_local_index_cache_entities", 500);
+    if (light_local_index_cache_entities && heavy_local_index_cache_entities)
+        global_context->setLocalIndexCache(light_local_index_cache_entities, heavy_local_index_cache_entities);
 
     size_t column_cache_long_term_size
         = config().getUInt64("column_cache_long_term_size", 512 * 1024 * 1024 /* 512MB */);
@@ -1097,7 +948,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     ///   0 means cache is disabled.
     ///   We cannot support unlimited delta index cache in disaggregated mode for now,
     ///   because cache items will be never explicitly removed.
-    if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (is_disagg_compute_mode)
     {
         constexpr auto delta_index_cache_ratio = 0.02;
         constexpr auto backup_delta_index_cache_size = 1024 * 1024 * 1024; // 1GiB
@@ -1107,8 +958,8 @@ int Server::main(const std::vector<std::string> & /*args*/)
         size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
         LOG_INFO(log, "delta_index_cache_size={}", n);
         // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
-        // Instead, we use RNDeltaIndexCache.
-        global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(n);
+        // Instead, we use RNMVCCIndexCache.
+        global_context->getSharedContextDisagg()->initReadNodeMVCCIndexCache(n);
     }
     else
     {
@@ -1116,8 +967,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         global_context->setDeltaIndexManager(n);
     }
 
-    // We do not support blocking store by id in OP mode currently.
-    global_context->initializeStoreIdBlockList("");
+    loadBlockList(config(), *global_context, log);
 
     LOG_INFO(log, "Loading metadata.");
     loadMetadataSystem(*global_context); // Load "system" database. Its engine keeps as Ordinary.
@@ -1127,22 +977,30 @@ int Server::main(const std::vector<std::string> & /*args*/)
     attachSystemTablesServer(*global_context->getDatabase("system"));
 
     {
-        /// create TMTContext
+        /// Create TMTContext
         auto cluster_config = getClusterConfig(global_context->getSecurityConfig(), storage_config.api_version, log);
         global_context->createTMTContext(raft_config, std::move(cluster_config));
-        if (store_ident)
-        {
-            // Many service would depends on `store_id` when disagg is enabled.
-            // setup the store_id restored from store_ident ASAP
-            // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-            auto kvstore = global_context->getTMTContext().getKVStore();
-            metapb::Store store_meta;
-            store_meta.set_id(store_ident->store_id());
-            store_meta.set_node_state(metapb::NodeState::Preparing);
-            kvstore->setStore(store_meta);
-        }
-        global_context->getTMTContext().reloadConfig(config());
 
+        // Must be executed before restore data.
+        // Get the memory usage of tranquil time.
+        auto [resident_set, cur_proc_num_threads, cur_virt_size] = process_mem_usage();
+        UNUSED(cur_proc_num_threads);
+        tranquil_time_rss = static_cast<Int64>(resident_set);
+
+        auto kvs_watermark = settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity);
+        if (kvs_watermark == 0)
+            kvs_watermark = server_info.memory_info.capacity * 0.8;
+        LOG_INFO(
+            log,
+            "Global memory status: kvstore_high_watermark={} tranquil_time_rss={} cur_virt_size={} capacity={}",
+            kvs_watermark,
+            tranquil_time_rss,
+            cur_virt_size,
+            server_info.memory_info.capacity);
+
+        proxy_machine.initKVStore(global_context->getTMTContext(), store_ident, kvs_watermark);
+
+        global_context->getTMTContext().reloadConfig(config());
         // setup the kv cluster for disagg compute node fetching config
         if (S3::ClientFactory::instance().isEnabled())
         {
@@ -1151,7 +1009,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         }
     }
     LOG_INFO(log, "Init S3 GC Manager");
-    global_context->getTMTContext().initS3GCManager(tiflash_instance_wrap.proxy_helper);
+    global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());
     // Initialize the thread pool of storage before the storage engine is initialized.
     LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
@@ -1168,15 +1026,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
     BgStorageInitHolder bg_init_stores;
-    if (!global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+    if (!is_disagg_compute_mode)
     {
-        if (global_context->getSharedContextDisagg()->notDisaggregatedMode() || store_ident.has_value())
+        if (not_disagg_mode || store_ident.has_value())
         {
             // This node has been bootstrapped, the `store_id` is set. Or non-disagg mode,
             // do not depend on `store_id`. Start sync schema before serving any requests.
             // For the node has not been bootstrapped, this stage will be postpone.
             // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-            syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+            syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
         }
     }
     // set default database for ch-client
@@ -1204,13 +1062,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         LOG_DEBUG(log, "Shutted down storages.");
     });
 
-    {
-        if (proxy_conf.is_proxy_runnable && !tiflash_instance_wrap.proxy_helper)
-            throw Exception("Raft Proxy Helper is not set, should not happen");
-        auto & path_pool = global_context->getPathPool();
-        /// initialize TMTContext
-        global_context->getTMTContext().restore(path_pool, tiflash_instance_wrap.proxy_helper);
-    }
+    proxy_machine.restoreKVStore(global_context->getTMTContext(), global_context->getPathPool());
 
     /// setting up elastic thread pool
     bool enable_elastic_threadpool = settings.enable_elastic_threadpool;
@@ -1227,8 +1079,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
     });
 
     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-    if (global_context->getSharedContextDisagg()->notDisaggregatedMode()
-        || /*has_been_bootstrap*/ store_ident.has_value())
+    if (not_disagg_mode || /*has_been_bootstrap*/ store_ident.has_value())
     {
         // If S3 enabled, wait for all DeltaMergeStores' initialization
         // before this instance can accept requests.
@@ -1236,8 +1087,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         bg_init_stores.waitUntilFinish();
     }
 
-    if (global_context->getSharedContextDisagg()->isDisaggregatedStorageMode()
-        && /*has_been_bootstrap*/ store_ident.has_value())
+    if (is_disagg_storage_mode && /*has_been_bootstrap*/ store_ident.has_value())
     {
         // Only disagg write node that has been bootstrap need wait. For the write node does not bootstrap, its
         // store id is allocated later.
@@ -1292,41 +1142,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
         SessionCleaner session_cleaner(*global_context);
         auto & tmt_context = global_context->getTMTContext();
 
-        if (proxy_conf.is_proxy_runnable)
+        proxy_machine.startProxyService(tmt_context, store_ident);
+        if (proxy_machine.isProxyRunnable())
         {
-            // If a TiFlash starts before any TiKV starts, then the very first Region will be created in TiFlash's proxy and it must be the peer as a leader role.
-            // This conflicts with the assumption that tiflash does not contain any Region leader peer and leads to unexpected errors
-            LOG_INFO(log, "Waiting for TiKV cluster to be bootstrapped");
-            while (!tmt_context.getPDClient()->isClusterBootstrapped())
-            {
-                const int wait_seconds = 3;
-                LOG_ERROR(
-                    log,
-                    "Waiting for cluster to be bootstrapped, we will sleep for {} seconds and try again.",
-                    wait_seconds);
-                ::sleep(wait_seconds);
-            }
-
-            tiflash_instance_wrap.tmt = &tmt_context;
-            LOG_INFO(log, "Let tiflash proxy start all services");
-            // Set tiflash instance status to running, then wait for proxy enter running status
-            tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
-            while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
-                std::this_thread::sleep_for(std::chrono::milliseconds(200));
-
-            // proxy update store-id before status set `RaftProxyStatus::Running`
-            assert(tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Running);
             const auto store_id = tmt_context.getKVStore()->getStoreID(std::memory_order_seq_cst);
-            if (store_ident)
-            {
-                RUNTIME_ASSERT(
-                    store_id == store_ident->store_id(),
-                    log,
-                    "store id mismatch store_id={} store_ident.store_id={}",
-                    store_id,
-                    store_ident->store_id());
-            }
-            if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode())
+            if (is_disagg_compute_mode)
             {
                 // compute node do not need to handle read index
                 LOG_INFO(log, "store_id={}, tiflash proxy is ready to serve", store_id);
@@ -1343,61 +1163,14 @@ int Server::main(const std::vector<std::string> & /*args*/)
                     // Not disagg node done it before
                     // For the disagg node has not been bootstrap, begin the very first schema sync with TiDB.
                     // FIXME: (bootstrap) we should bootstrap the tiflash node more early!
-                    syncSchemaWithTiDB(storage_config, bg_init_stores, global_context, log);
+                    syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
-
-                // if set 0, DO NOT enable read-index worker
-                size_t runner_cnt = config().getUInt("flash.read_index_runner_count", 1);
-                if (runner_cnt > 0)
-                {
-                    auto & kvstore_ptr = tmt_context.getKVStore();
-                    kvstore_ptr->initReadIndexWorkers(
-                        [&]() {
-                            // get from tmt context
-                            return std::chrono::milliseconds(tmt_context.readIndexWorkerTick());
-                        },
-                        /*running thread count*/ runner_cnt);
-                    tmt_context.getKVStore()->asyncRunReadIndexWorkers();
-                    WaitCheckRegionReady(tmt_context, *kvstore_ptr, terminate_signals_counter);
-                }
+                proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
             }
         }
-        SCOPE_EXIT({
-            if (!proxy_conf.is_proxy_runnable)
-            {
-                tmt_context.setStatusTerminated();
-                return;
-            }
-            if (proxy_conf.is_proxy_runnable && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
-            {
-                LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
-                exit(-1);
-            }
-            LOG_INFO(log, "Set store context status Stopping");
-            tmt_context.setStatusStopping();
-            {
-                // Wait until there is no read-index task.
-                while (tmt_context.getKVStore()->getReadIndexEvent())
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-            }
-            tmt_context.setStatusTerminated();
-            tmt_context.getKVStore()->stopReadIndexWorkers();
-            LOG_INFO(log, "Set store context status Terminated");
-            {
-                // update status and let proxy stop all services except encryption.
-                tiflash_instance_wrap.status = EngineStoreServerStatus::Stopping;
-                LOG_INFO(log, "Set engine store server status Stopping");
-            }
-            // wait proxy to stop services
-            if (proxy_conf.is_proxy_runnable)
-            {
-                LOG_INFO(log, "Let tiflash proxy to stop all services");
-                while (tiflash_instance_wrap.proxy_helper->getProxyStatus() != RaftProxyStatus::Stopped)
-                    std::this_thread::sleep_for(std::chrono::milliseconds(200));
-                LOG_INFO(log, "All services in tiflash proxy are stopped");
-            }
-        });
+
+        SCOPE_EXIT({ proxy_machine.stopProxy(tmt_context); });
 
         {
             // Report the unix timestamp, git hash, release version
@@ -1407,8 +1180,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
 
         // For test mode, TaskScheduler and LAC is controlled by test case.
         // TODO: resource control is not supported for WN. So disable pipeline model and LAC.
-        const bool init_pipeline_and_lac
-            = !global_context->isTest() && !global_context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+        const bool init_pipeline_and_lac = !global_context->isTest() && !is_disagg_storage_mode;
         if (init_pipeline_and_lac)
         {
 #ifdef DBMS_PUBLIC_GTEST
@@ -1449,7 +1221,7 @@ int Server::main(const std::vector<std::string> & /*args*/)
         {
             auto size = settings.grpc_completion_queue_pool_size;
             if (size == 0)
-                size = std::thread::hardware_concurrency();
+                size = getNumberOfLogicalCPUCores();
             GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         }
 
@@ -1462,12 +1234,11 @@ int Server::main(const std::vector<std::string> & /*args*/)
             // And we want to make sure LAC is cleanedup.
             // The effects are there will be no resource control during [lac.safeStop(), FlashGrpcServer destruct done],
             // but it's basically ok, that duration is small(normally 100-200ms).
-            if (global_context->getSharedContextDisagg()->isDisaggregatedComputeMode() && use_autoscaler
-                && LocalAdmissionController::global_instance)
+            if (is_disagg_compute_mode && disagg_opt.use_autoscaler && LocalAdmissionController::global_instance)
                 LocalAdmissionController::global_instance->safeStop();
         });
 
-        tmt_context.setStatusRunning();
+        proxy_machine.runKVStore(tmt_context);
 
         try
         {
@@ -1489,6 +1260,15 @@ int Server::main(const std::vector<std::string> & /*args*/)
     }
 
     return Application::EXIT_OK;
+}
+catch (...)
+{
+    // The default exception handler of Poco::Util::Application will catch the
+    // `DB::Exception` as `Poco::Exception` and do not print the stacktrace.
+    // So we catch all exceptions here and print the stacktrace.
+    tryLogCurrentException("Server::main");
+    auto code = getCurrentExceptionCode();
+    return code > 0 ? code : 1;
 }
 } // namespace DB
 

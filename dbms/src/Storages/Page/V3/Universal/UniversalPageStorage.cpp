@@ -26,6 +26,7 @@
 #include <Storages/Page/V3/CheckpointFile/CheckpointFiles.h>
 #include <Storages/Page/V3/PageDirectoryFactory.h>
 #include <Storages/Page/V3/Universal/S3LockLocalManager.h>
+#include <Storages/Page/V3/Universal/S3PageReader.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
 #include <Storages/Page/V3/Universal/UniversalWriteBatchImpl.h>
 #include <Storages/Page/V3/WAL/WALConfig.h>
@@ -132,7 +133,9 @@ Page UniversalPageStorage::read(
     const UniversalPageId & page_id,
     const ReadLimiterPtr & read_limiter,
     SnapshotPtr snapshot,
-    bool throw_on_not_exist) const
+    bool throw_on_not_exist,
+    ReadBufferFromRandomAccessFilePtr & reusable_buf,
+    PS::V3::S3PageReader::ReuseStat & unused_reason) const
 {
     GET_METRIC(tiflash_storage_page_command_count, type_read).Increment();
     if (!snapshot)
@@ -145,7 +148,10 @@ Page UniversalPageStorage::read(
     auto & checkpoint_info = page_entry.second.checkpoint_info;
     if (checkpoint_info.has_value() && checkpoint_info.is_local_data_reclaimed)
     {
-        auto page = remote_reader->read(page_entry);
+        auto [page, s3_file_buf, unused_rea]
+            = remote_reader->readFromS3File(page_entry, reusable_buf, DBMS_DEFAULT_BUFFER_SIZE);
+        unused_reason = unused_rea;
+        reusable_buf = s3_file_buf;
         UniversalWriteBatch wb;
         auto buf = std::make_shared<ReadBufferFromMemory>(page.data.begin(), page.data.size());
         {
@@ -170,6 +176,17 @@ Page UniversalPageStorage::read(
     {
         return blob_store->read(page_entry, read_limiter);
     }
+}
+
+Page UniversalPageStorage::read(
+    const UniversalPageId & page_id,
+    const ReadLimiterPtr & read_limiter,
+    SnapshotPtr snapshot,
+    bool throw_on_not_exist) const
+{
+    ReadBufferFromRandomAccessFilePtr reusable_buf;
+    PS::V3::S3PageReader::ReuseStat reused = PS::V3::S3PageReader::ReuseStat::Reused;
+    return read(page_id, read_limiter, snapshot, throw_on_not_exist, reusable_buf, reused);
 }
 
 UniversalPageMap UniversalPageStorage::read(

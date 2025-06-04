@@ -16,8 +16,6 @@ if (USE_INCLUDE_WHAT_YOU_USE)
     set (CMAKE_CXX_INCLUDE_WHAT_YOU_USE ${IWYU_PATH})
 endif ()
 
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/find_vectorclass.cmake)
-
 set (CONFIG_VERSION ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config_version.h)
 set (CONFIG_COMMON ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config.h)
 set (CONFIG_BUILD ${CMAKE_CURRENT_BINARY_DIR}/src/Common/config_build.cpp)
@@ -143,9 +141,6 @@ list (APPEND dbms_headers
     src/AggregateFunctions/FactoryHelpers.h
     src/AggregateFunctions/parseAggregateFunctionParameters.h)
 
-list (APPEND dbms_sources src/TableFunctions/ITableFunction.cpp src/TableFunctions/TableFunctionFactory.cpp)
-list (APPEND dbms_headers src/TableFunctions/ITableFunction.h src/TableFunctions/TableFunctionFactory.h)
-
 add_library(tiflash_common_io ${SPLIT_SHARED} ${tiflash_common_io_headers} ${tiflash_common_io_sources})
 target_link_libraries(tiflash_common_io PUBLIC process_metrics)
 target_include_directories(tiflash_common_io BEFORE PUBLIC ${XXHASH_INCLUDE_DIR} ${TiFlash_SOURCE_DIR}/libs/libprocess_metrics/include)
@@ -172,10 +167,6 @@ if (CMAKE_BUILD_TYPE_UC STREQUAL "RELEASE" OR CMAKE_BUILD_TYPE_UC STREQUAL "RELW
     set_source_files_properties(
         src/Dictionaries/CacheDictionary.cpp
         src/Dictionaries/TrieDictionary.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary_generate1.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary_generate2.cpp
-        src/Dictionaries/ComplexKeyCacheDictionary_generate3.cpp
         src/Dictionaries/HTTPDictionarySource.cpp
         src/Dictionaries/LibraryDictionarySource.cpp
         src/Dictionaries/ExecutableDictionarySource.cpp
@@ -233,6 +224,7 @@ target_link_libraries (dbms
     absl::synchronization
     tiflash_contrib::aws_s3
     tiflash_vector_search
+    clara_shared
 
     etcdpb
     tiflash_parsers
@@ -382,6 +374,17 @@ if (ENABLE_TESTS)
                 DESTINATION ".")
     endif ()
 
+    if (USE_INTERNAL_LIBCLARA)
+        install (TARGETS clara_shared
+                COMPONENT tiflash-gtest
+                DESTINATION ".")
+    endif()
+
+    set_target_properties(gtests_dbms PROPERTIES BUILD_RPATH "$ORIGIN/")
+    set_target_properties(gtests_dbms PROPERTIES INSTALL_RPATH "$ORIGIN/")
+
+    install (SCRIPT ${TiFlash_SOURCE_DIR}/libs/libclara-cmake/linux_post_install.cmake COMPONENT tiflash-gtest)
+
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 
@@ -394,16 +397,17 @@ if (ENABLE_TESTS)
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
         )
+    set_target_properties(bench_dbms PROPERTIES BUILD_RPATH "$ORIGIN/")
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
     target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_link_libraries(bench_dbms
         gtest
         benchmark
-    
+
         dbms
         test_util_bench_main
         tiflash_functions
-        server_for_test
+        grpc_server_holder
         delta_merge
         tiflash_aggregate_functions
         kvstore)

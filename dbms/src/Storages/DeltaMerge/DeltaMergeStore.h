@@ -30,7 +30,7 @@
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
-#include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/DeltaMerge/Index/LocalIndexInfo_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -427,6 +427,19 @@ public:
         return ingestSegmentsFromCheckpointInfo(dm_context, range, checkpoint_info);
     }
 
+    UInt64 removeSegmentsFromCheckpointInfo(
+        const DMContextPtr & dm_context,
+        const CheckpointIngestInfo & checkpoint_info);
+
+    UInt64 removeSegmentsFromCheckpointInfo(
+        const Context & db_context,
+        const DB::Settings & db_settings,
+        const CheckpointIngestInfo & checkpoint_info)
+    {
+        auto dm_context = newDMContext(db_context, db_settings);
+        return removeSegmentsFromCheckpointInfo(dm_context, checkpoint_info);
+    }
+
     /// Read all rows without MVCC filtering
     BlockInputStreams readRaw(
         const Context & db_context,
@@ -460,7 +473,7 @@ public:
         const RowKeyRanges & sorted_ranges,
         size_t num_streams,
         UInt64 start_ts,
-        const PushDownExecutorPtr & filter,
+        const PushDownExecutorPtr & executor,
         const RuntimeFilteList & runtime_filter_list,
         int rf_max_wait_time_ms,
         const String & tracing_id,
@@ -485,7 +498,7 @@ public:
         const RowKeyRanges & sorted_ranges,
         size_t num_streams,
         UInt64 start_ts,
-        const PushDownExecutorPtr & filter,
+        const PushDownExecutorPtr & executor,
         const RuntimeFilteList & runtime_filter_list,
         int rf_max_wait_time_ms,
         const String & tracing_id,
@@ -588,7 +601,7 @@ public:
         const Context & db_context,
         bool is_fast_scan,
         bool keep_order,
-        const PushDownExecutorPtr & filter);
+        const PushDownExecutorPtr & executor);
 
     // Get a snap of local_index_infos for checking.
     // Note that this is just a shallow copy of `local_index_infos`, do not
@@ -948,6 +961,8 @@ public:
         bool create_if_empty,
         bool throw_if_notfound);
     void createFirstSegment(DM::DMContext & dm_context);
+
+    void updateColumnDefines(ColumnDefines && tmp_columns);
 
     Context & global_context;
     std::shared_ptr<StoragePathPool> path_pool;

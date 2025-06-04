@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Flash/BatchCoprocessorHandler.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
@@ -75,6 +76,18 @@ grpc::Status BatchCoprocessorHandler::execute()
                 tables_regions_info.regionCount(),
                 tables_regions_info.tableCount(),
                 dag_request.DebugString());
+
+#if ENABLE_NEXT_GEN
+            if (cop_context.db_context.isKeyspaceInBlocklist(cop_request->context().keyspace_id())
+                || cop_context.db_context.isRegionsContainsInBlocklist(tables_regions_info.getAllRegionID()))
+            {
+                LOG_DEBUG(
+                    log,
+                    "cop request disabled for keyspace or regions, keyspace={}",
+                    cop_request->context().keyspace_id());
+                return recordError(grpc::StatusCode::INTERNAL, "cop request disabled");
+            }
+#endif
 
             DAGContext dag_context(
                 dag_request,

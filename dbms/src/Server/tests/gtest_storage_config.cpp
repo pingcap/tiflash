@@ -953,5 +953,390 @@ delta_rate = 1.1
 }
 CATCH
 
+TEST_F(StorageConfigTest, TempPath)
+try
+{
+    auto log = Logger::get("StorageConfigTest.TempPath");
+
+    {
+        LOG_INFO(log, "test suite 0");
+        struct TestCase
+        {
+            String config_str;
+            String expected_temp_path;
+            UInt64 expected_temp_capacity;
+            String remove_dir_str;
+        };
+
+        std::vector<TestCase> tests = {
+            {
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+)",
+                "main_dir/tmp/",
+                0,
+                "main_dir",
+            },
+            {
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.temp]
+capacity = 1000
+)",
+                "main_dir/tmp/",
+                1000,
+                "main_dir",
+            },
+            {
+                R"(
+path = "./main_dir"
+)",
+                "main_dir/tmp/",
+                0,
+                "main_dir",
+            },
+            {
+                R"(
+path = "./main_dir"
+[storage]
+[storage.temp]
+capacity = 2000)",
+                "main_dir/tmp/",
+                2000,
+                "main_dir",
+            },
+            // no storage.temp, use tmp_path instead.
+            {
+                R"(
+path = "./main_dir"
+capacity = 1000
+tmp_path = "./tmp_dir"
+)",
+                "tmp_dir/",
+                0,
+                "tmp_dir",
+            },
+            // ignore tmp_path when storage.temp exists.
+            {
+                R"(
+tmp_path = "./old_tmp_dir"
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [2000]
+[storage.temp]
+capacity = 2000
+            )",
+                "main_dir/tmp/",
+                2000,
+                "main_dir",
+            },
+            // use tmp_path when storage.temp doesnt' exist.
+            {
+                R"(
+tmp_path = "./old_tmp_dir"
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+            )",
+                "old_tmp_dir/",
+                0,
+                "old_tmp_dir/",
+            },
+            // use main_dir/tmp when tmp_path and storage.temp doesn't exist.
+            {
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+            )",
+                "main_dir/tmp/",
+                0,
+                "main_dir",
+            },
+            // use latest dir if storage.latest exist.
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir"]
+capacity = [1000]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [8000]
+[storage.temp]
+capacity = 1000
+            )",
+                "latest_dir/tmp/",
+                1000,
+                "latest_dir",
+            },
+            // use storage.temp.dir if storage.temp.dir exist.
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir"]
+capacity = [8000]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.temp]
+dir = "./main_dir/subdir"
+capacity = 1000
+            )",
+                "main_dir/subdir/",
+                1000,
+                "main_dir",
+            },
+            // storage.temp.capacity is 1000, storage.latest.capacity is zero, it's ok.
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir"]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [8000]
+[storage.temp]
+capacity = 1000
+            )",
+                "latest_dir/tmp/",
+                1000,
+                "latest_dir",
+            },
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir"]
+capacity = [8000]
+[storage.main]
+dir = ["./main_dir"]
+[storage.temp]
+dir = "./main_dir/subdir"
+capacity = 1000
+            )",
+                "main_dir/subdir/",
+                1000,
+                "main_dir",
+            },
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir", "./latest_dir_1"]
+capacity = [8000, 0]
+[storage.main]
+dir = ["./main_dir"]
+[storage.temp]
+dir = "./latest_dir/subdir"
+capacity = 1000
+            )",
+                "latest_dir/subdir/",
+                1000,
+                "latest_dir/",
+            },
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir", "./latest_dir_1"]
+capacity = [8000, 0]
+[storage.main]
+dir = ["./main_dir"]
+[storage.temp]
+dir = "./latest_dir_1/subdir"
+capacity = 9000
+            )",
+                "latest_dir_1/subdir/",
+                9000,
+                "latest_dir_1",
+            },
+        };
+
+        for (size_t i = 0; i < tests.size(); ++i)
+        {
+            const auto & test = tests[i];
+            LOG_INFO(log, "case i: {}", i);
+            auto config = loadConfigFromString(test.config_str);
+            auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+            ASSERT_TRUE(!storage.temp_path.empty());
+            Poco::File(storage.temp_path).createDirectories();
+            storage.checkTempCapacity(global_capacity_quota, log);
+            ASSERT_EQ(storage.temp_path, test.expected_temp_path);
+            ASSERT_EQ(storage.temp_capacity, test.expected_temp_capacity);
+            Poco::File(test.remove_dir_str).remove(true);
+        }
+    }
+
+    {
+        struct TestCase
+        {
+            String config_str;
+            String expected_exception_msg;
+            String remove_dir_str;
+        };
+
+        const String exceed_parent_quota_msg = "exceeds parent storage quota";
+        const String exceed_disk_capacity_msg = "exceeds disk capacity";
+
+        LOG_INFO(log, "test suite 1");
+        std::vector<TestCase> tests = {
+            {
+                // test negative capacity.
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+[storage.temp]
+capacity = -1
+            )",
+                "underflow_error",
+                "", // no need to remove, because parse will fail.
+            },
+            {
+                // storage.temp.capacity cannot exceeds storage.main.capacity when share main dir.
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.temp]
+capacity = 5000
+            )",
+                exceed_parent_quota_msg,
+                "main_dir",
+            },
+            {
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.temp]
+dir = "./main_dir/subdir"
+capacity = 5000
+            )",
+                exceed_parent_quota_msg,
+                "main_dir",
+            },
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir"]
+capacity = [1000]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [8000]
+[storage.temp]
+capacity = 5000
+            )",
+                exceed_parent_quota_msg,
+                "latest_dir",
+            },
+            {
+                R"(
+[storage]
+[storage.latest]
+dir = ["./latest_dir"]
+capacity = [8000]
+[storage.main]
+dir = ["./main_dir"]
+capacity = [1000]
+[storage.temp]
+dir = "./main_dir/subdir"
+capacity = 5000
+            )",
+                exceed_parent_quota_msg,
+                "main_dir",
+            },
+            // test with global quota
+            {
+                R"(
+path = "./main_dir"
+capacity = 1000
+tmp_path = "./main_dir/subdir"
+[storage]
+[storage.temp]
+capacity = 2000)",
+                exceed_parent_quota_msg,
+                "main_dir",
+            },
+            // test very large storage.temp.capacity
+            {
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+[storage.temp]
+capacity = 9223372036854775807
+            )",
+                exceed_disk_capacity_msg,
+                "main_dir",
+            },
+            // test very large storage.temp.capacity
+            {
+                R"(
+[storage]
+[storage.main]
+dir = ["./main_dir"]
+[storage.temp]
+capacity = 9223372036854775808
+            )",
+                "cpptoml::parse_exception, e.what() = Malformed number",
+                "",
+            },
+        };
+
+        for (size_t i = 0; i < tests.size(); ++i)
+        {
+            LOG_INFO(log, "case i: {}", i);
+            const auto & test = tests[i];
+            bool got_err = false;
+            try
+            {
+                auto config = loadConfigFromString(test.config_str);
+                auto [global_capacity_quota, storage] = TiFlashStorageConfig::parseSettings(*config, log);
+                ASSERT_TRUE(!storage.temp_path.empty());
+                Poco::File(storage.temp_path).createDirectories();
+                storage.checkTempCapacity(global_capacity_quota, log);
+            }
+            catch (Poco::Exception & e)
+            {
+                got_err = true;
+                LOG_INFO(log, "parse err msg: {}", e.message());
+                ASSERT_TRUE(e.message().contains(test.expected_exception_msg));
+            }
+            catch (std::underflow_error & e)
+            {
+                got_err = true;
+            }
+            catch (std::exception & e)
+            {
+                got_err = true;
+                ASSERT_TRUE(std::string(e.what()).contains("Malformed number"));
+            }
+            catch (...)
+            {
+                LOG_INFO(log, "got unexpected error");
+            }
+            if (!test.remove_dir_str.empty())
+                Poco::File(test.remove_dir_str).remove(true);
+            ASSERT_TRUE(got_err);
+        }
+    }
+}
+CATCH
+
 } // namespace tests
 } // namespace DB

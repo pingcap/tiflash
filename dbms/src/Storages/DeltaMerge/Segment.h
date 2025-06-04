@@ -18,18 +18,20 @@
 #include <Core/Block.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
-#include <Storages/DeltaMerge/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
-#include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Reader_fwd.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/StableValueSpace.h>
+#include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
-
 namespace DB
 {
 struct GeneralCancelHandle;
@@ -264,14 +266,6 @@ public:
         const RowKeyRange & data_range,
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         bool reorganize_block = true) const;
-
-    BlockInputStreamPtr getInputStreamModeFast(
-        const DMContext & dm_context,
-        const ColumnDefines & columns_to_read,
-        const SegmentSnapshotPtr & segment_snap,
-        const RowKeyRanges & read_ranges,
-        const DMFilePackFilterResults & pack_filter_results,
-        size_t expected_block_size = DEFAULT_BLOCK_SIZE);
 
     BlockInputStreamPtr getInputStreamModeRaw(
         const DMContext & dm_context,
@@ -547,8 +541,12 @@ public:
 
     /// Flush delta's cache packs.
     bool flushCache(DMContext & dm_context);
-    void placeDeltaIndex(DMContext & dm_context) const;
-    void placeDeltaIndex(DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
+
+    /// Use to place delta index in background.
+    void placeDeltaIndex(const DMContext & dm_context) const;
+    void placeDeltaIndex(const DMContext & dm_context, const SegmentSnapshotPtr & segment_snap) const;
+    /// Use to replay version chain in background.
+    void replayVersionChain(const DMContext & dm_context) const;
 
     /// Compact the delta layer, merging fragment column files into bigger column files.
     /// It does not merge the delta into stable layer.
@@ -663,6 +661,9 @@ public:
         }
     }
 
+    void setVersionChain(const GenericVersionChainPtr & version_chain_) { version_chain = version_chain_; }
+    const GenericVersionChainPtr & getVersionChain() const { return version_chain; }
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -730,35 +731,58 @@ public:
 
     static bool useCleanRead(const SegmentSnapshotPtr & segment_snap, const ColumnDefines & columns_to_read);
     RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const;
+    template <bool is_fast_scan>
     BitmapFilterPtr buildBitmapFilter(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
+        const PushDownExecutorPtr & executor,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
-        size_t expected_block_size);
-    BitmapFilterPtr buildBitmapFilterNormal(
+        size_t build_bitmap_filter_block_rows);
+    template <bool is_fast_scan = false>
+    BitmapFilterPtr buildMVCCBitmapFilter(
+        const DMContext & dm_context,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & read_ranges,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts,
+        size_t expected_block_size,
+        bool enable_version_chain);
+    template <bool is_fast_scan = false>
+    BitmapFilterPtr buildMVCCBitmapFilterNormal(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size);
-    BitmapFilterPtr buildBitmapFilterStableOnly(
+    template <bool is_fast_scan = false>
+    BitmapFilterPtr buildMVCCBitmapFilterStableOnly(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size);
-    // Returns <InputStream, is_vector_stream>
-    std::tuple<SkippableBlockInputStreamPtr, bool> getConcatVectorIndexBlockInputStream(
+    static BlockInputStreamPtr getConcatVectorIndexBlockInputStream(
         BitmapFilterPtr bitmap_filter,
         const SegmentSnapshotPtr & segment_snap,
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & read_ranges,
         const ANNQueryInfoPtr & ann_query_info,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts,
+        size_t expected_block_size,
+        ReadTag read_tag);
+    static BlockInputStreamPtr getConcatFullTextIndexBlockInputStream(
+        BitmapFilterPtr bitmap_filter,
+        const SegmentSnapshotPtr & segment_snap,
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read,
+        const RowKeyRanges & read_ranges,
+        const FTSQueryInfoPtr & fts_query_info,
         const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size,
@@ -772,6 +796,7 @@ public:
         UInt64 start_ts,
         size_t expected_block_size,
         ReadTag read_tag);
+    template <bool is_fast_scan = false>
     BlockInputStreamPtr getBitmapFilterInputStream(
         const DMContext & dm_context,
         const ColumnDefines & columns_to_read,
@@ -838,6 +863,8 @@ public:
 
     const LoggerPtr parent_log; // Used when constructing new segments in split
     const LoggerPtr log;
+
+    GenericVersionChainPtr version_chain;
 };
 
 void readSegmentMetaInfo(ReadBuffer & buf, Segment::SegmentMetaInfo & segment_info);

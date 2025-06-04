@@ -31,27 +31,35 @@ public:
     static void testCountSerializeByteSize(
         const ColumnPtr & column_ptr,
         const PaddedPODArray<size_t> & result_byte_size,
-        bool for_compare = false,
+        bool compare_semantics = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr)
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
         for (size_t i = 0; i < column_ptr->size(); ++i)
             byte_size[i] = i;
-        if (!for_compare)
+        if (!compare_semantics)
             column_ptr->countSerializeByteSize(byte_size);
         else
-            column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
+            column_ptr->countSerializeByteSizeForCmp(byte_size, nullptr, collator);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
+        {
+            LOG_DEBUG(
+                Logger::get(),
+                "case index: i: {}, byte_size: {}, res byte_size: {}",
+                i,
+                byte_size[i] - i,
+                result_byte_size[i]);
             ASSERT_EQ(byte_size[i], i + result_byte_size[i]);
+        }
     }
 
     static void testCountSerializeByteSizeForColumnArray(
         const ColumnPtr & column_ptr,
         const ColumnPtr & offsets,
         const PaddedPODArray<size_t> & result_byte_size,
-        bool for_compare = false,
+        bool compare_semantics = false,
         const TiDB::TiDBCollatorPtr & collator = nullptr)
     {
         auto column_array = ColumnArray::create(column_ptr->cloneFullColumn(), offsets->cloneFullColumn());
@@ -59,10 +67,10 @@ public:
         byte_size.resize_fill_zero(column_array->size());
         for (size_t i = 0; i < column_array->size(); ++i)
             byte_size[i] = i;
-        if (!for_compare)
+        if (!compare_semantics)
             column_array->countSerializeByteSize(byte_size);
         else
-            column_array->countSerializeByteSizeForCmp(byte_size, collator);
+            column_array->countSerializeByteSizeForCmp(byte_size, nullptr, collator);
         ASSERT_EQ(byte_size.size(), result_byte_size.size());
         for (size_t i = 0; i < byte_size.size(); ++i)
             ASSERT_EQ(byte_size[i], sizeof(UInt32) + i + result_byte_size[i]);
@@ -76,9 +84,48 @@ public:
         ASSERT_TRUE(collator);
         String sort_key_container;
         ASSERT_EQ(result_col_ptr->size(), new_col_ptr->size());
-        // Special handling for ColumnTuple and ColumnArray.
+        if (result_col_ptr->getFamilyName() == String("Nullable"))
+        {
+            // check ColumnNullable(ColumnArray(XXX)).
+            const auto & expected_nullable_inner_col
+                = checkAndGetColumn<ColumnNullable>(result_col_ptr.get())->getNestedColumnPtr();
+            const auto & actual_nullable_inner_col
+                = checkAndGetColumn<ColumnNullable>(new_col_ptr.get())->getNestedColumnPtr();
+
+            for (size_t i = 0; i < result_col_ptr->size(); ++i)
+                ASSERT_EQ(result_col_ptr->isNullAt(i), new_col_ptr->isNullAt(i));
+
+            if (expected_nullable_inner_col->getFamilyName() == String("Array"))
+            {
+                // get nested non-null rows from inner ColumnArray and compare.
+                auto new_expected_nullable_inner_col = expected_nullable_inner_col->cloneEmpty();
+                IColumn::Offsets selective;
+                for (size_t i = 0; i < result_col_ptr->size(); ++i)
+                {
+                    if (result_col_ptr->isNullAt(i))
+                        continue;
+                    selective.push_back(i);
+                }
+                new_expected_nullable_inner_col->insertSelectiveFrom(
+                    checkAndGetColumn<ColumnNullable>(result_col_ptr.get())->getNestedColumn(),
+                    selective);
+
+                auto new_actual_nullable_inner_col = actual_nullable_inner_col->cloneEmpty();
+                new_actual_nullable_inner_col->insertSelectiveFrom(
+                    checkAndGetColumn<ColumnNullable>(new_col_ptr.get())->getNestedColumn(),
+                    selective);
+
+                checkForColumnWithCollator(
+                    std::move(new_expected_nullable_inner_col),
+                    std::move(new_actual_nullable_inner_col),
+                    collator);
+                return;
+            }
+        }
+
         if (result_col_ptr->getFamilyName() == String("Array"))
         {
+            // check ColumnArray(xxx) or ColumnArray(ColumnNullable(xxx)).
             size_t null_row_idx = 0;
             for (size_t i = 0; i < result_col_ptr->size(); ++i)
             {
@@ -111,6 +158,7 @@ public:
         }
         else if (result_col_ptr->getFamilyName() == String("Tuple"))
         {
+            // check ColumnTuple(xxx) or ColumnTuple(ColumnNullable(xxx)).
             // getDataAt() not impl for ColumnTuple
             ASSERT_EQ(result_col_ptr->size(), new_col_ptr->size());
             for (size_t i = 0; i < result_col_ptr->size(); ++i)
@@ -156,37 +204,26 @@ public:
                 if (result_col_ptr->isNullAt(i))
                     continue;
                 auto res = result_col_ptr->getDataAt(i);
-                auto sort_key = collator->sortKey(res.data, res.size, sort_key_container);
-                ASSERT_TRUE(sort_key == new_col_ptr->getDataAt(i));
+                auto res_sort_key = collator->sortKey(res.data, res.size, sort_key_container);
+                auto act = new_col_ptr->getDataAt(i);
+                ASSERT_TRUE(res_sort_key == act);
             }
         }
     }
 
-    static void testSerializeAndDeserialize(
-        const ColumnPtr & column_ptr,
-        bool for_compare = false,
-        const TiDB::TiDBCollatorPtr & collator = nullptr,
-        String * sort_key_container = nullptr)
+    static void testSerializeAndDeserialize(const ColumnPtr & column_ptr)
     {
-        doTestSerializeAndDeserialize(column_ptr, false, for_compare, collator, sort_key_container);
-        doTestSerializeAndDeserialize2(column_ptr, false, for_compare, collator, sort_key_container);
-        doTestSerializeAndDeserialize(column_ptr, true, for_compare, collator, sort_key_container);
-        doTestSerializeAndDeserialize2(column_ptr, true, for_compare, collator, sort_key_container);
+        doTestSerializeAndDeserialize(column_ptr, false);
+        doTestSerializeAndDeserialize2(column_ptr, false);
+        doTestSerializeAndDeserialize(column_ptr, true);
+        doTestSerializeAndDeserialize2(column_ptr, true);
     }
 
-    static void doTestSerializeAndDeserialize(
-        const ColumnPtr & column_ptr,
-        bool use_nt_align_buffer,
-        bool for_compare = false,
-        const TiDB::TiDBCollatorPtr & collator = nullptr,
-        String * sort_key_container = nullptr)
+    static void doTestSerializeAndDeserialize(const ColumnPtr & column_ptr, bool use_nt_align_buffer)
     {
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
-        if (!for_compare)
-            column_ptr->countSerializeByteSize(byte_size);
-        else
-            column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
+        column_ptr->countSerializeByteSize(byte_size);
         size_t total_size = 0;
         for (const auto size : byte_size)
             total_size += size;
@@ -201,18 +238,16 @@ public:
         PaddedPODArray<char *> ori_pos;
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
-            column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, false);
-        else
-            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size() / 2, false, collator, sort_key_container);
+        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, false);
 
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-        if (!for_compare)
-            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
-        else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
+
+        pos.assign(ori_pos);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndAdvancePos(pos);
+        ASSERT_EQ(pos, ori_pos);
 
         current_size = 0;
         pos.clear();
@@ -225,23 +260,14 @@ public:
         pos.push_back(nullptr);
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
-            column_ptr->serializeToPos(pos, byte_size.size() / 2, byte_size.size() - byte_size.size() / 2, true);
-        else
-            column_ptr->serializeToPosForCmp(
-                pos,
-                byte_size.size() / 2,
-                byte_size.size() - byte_size.size() / 2,
-                true,
-                collator,
-                sort_key_container);
+        column_ptr->serializeToPos(pos, byte_size.size() / 2, byte_size.size() - byte_size.size() / 2, true);
         pos.resize(pos.size() - 1);
         ori_pos.resize(ori_pos.size() - 1);
 
-        if (!for_compare)
-            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
-        else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        pos.assign(ori_pos);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndAdvancePos(pos);
+        ASSERT_EQ(pos, ori_pos);
 
         current_size = 0;
         pos.clear();
@@ -253,15 +279,13 @@ public:
         }
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
-            column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
-        else
-            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size(), true, collator, sort_key_container);
+        column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
 
-        if (!for_compare)
-            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
-        else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        pos.assign(ori_pos);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndAdvancePos(pos);
+        ASSERT_EQ(pos, ori_pos);
+
         if (use_nt_align_buffer)
             new_col_ptr->flushNTAlignBuffer();
 
@@ -270,27 +294,16 @@ public:
         for (size_t i = 0; i < column_ptr->size(); ++i)
             result_col_ptr->insertFrom(*column_ptr, i);
 
-        if (collator != nullptr)
-            checkForColumnWithCollator(std::move(result_col_ptr), std::move(new_col_ptr), collator);
-        else
-            ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
+        ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
     }
 
-    static void doTestSerializeAndDeserialize2(
-        const ColumnPtr & column_ptr,
-        bool use_nt_align_buffer,
-        bool for_compare = false,
-        const TiDB::TiDBCollatorPtr & collator = nullptr,
-        String * sort_key_container = nullptr)
+    static void doTestSerializeAndDeserialize2(const ColumnPtr & column_ptr, bool use_nt_align_buffer)
     {
         if (column_ptr->size() < 2)
             return;
         PaddedPODArray<size_t> byte_size;
         byte_size.resize_fill_zero(column_ptr->size());
-        if (!for_compare)
-            column_ptr->countSerializeByteSize(byte_size);
-        else
-            column_ptr->countSerializeByteSizeForCmp(byte_size, collator);
+        column_ptr->countSerializeByteSize(byte_size);
         size_t total_size = 0;
         for (const auto size : byte_size)
             total_size += size;
@@ -306,20 +319,18 @@ public:
         pos.push_back(nullptr);
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
-            column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, true);
-        else
-            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size() / 2, true, collator, sort_key_container);
+        column_ptr->serializeToPos(pos, 0, byte_size.size() / 2, true);
         pos.resize(pos.size() - 1);
         ori_pos.resize(ori_pos.size() - 1);
 
         auto new_col_ptr = column_ptr->cloneEmpty();
         if (use_nt_align_buffer)
             new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
-        if (!for_compare)
-            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
-        else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
+
+        pos.assign(ori_pos);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndAdvancePos(pos);
+        ASSERT_EQ(pos, ori_pos);
 
         current_size = 0;
         pos.clear();
@@ -331,21 +342,12 @@ public:
         }
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
-            column_ptr
-                ->serializeToPos(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
-        else
-            column_ptr->serializeToPosForCmp(
-                pos,
-                byte_size.size() / 2 - 1,
-                byte_size.size() - byte_size.size() / 2 + 1,
-                false,
-                collator,
-                sort_key_container);
-        if (!for_compare)
-            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
-        else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        column_ptr->serializeToPos(pos, byte_size.size() / 2 - 1, byte_size.size() - byte_size.size() / 2 + 1, false);
+
+        pos.assign(ori_pos);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndAdvancePos(pos);
+        ASSERT_EQ(pos, ori_pos);
 
         current_size = 0;
         pos.clear();
@@ -357,15 +359,108 @@ public:
         }
         for (auto * ptr : pos)
             ori_pos.push_back(ptr);
-        if (!for_compare)
-            column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
-        else
-            column_ptr->serializeToPosForCmp(pos, 0, byte_size.size(), true, collator, sort_key_container);
+        column_ptr->serializeToPos(pos, 0, byte_size.size(), true);
 
-        if (!for_compare)
-            new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
-        else
-            new_col_ptr->deserializeForCmpAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        pos.assign(ori_pos);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndAdvancePos(pos);
+        ASSERT_EQ(pos, ori_pos);
+
+        if (use_nt_align_buffer)
+            new_col_ptr->flushNTAlignBuffer();
+
+        auto result_col_ptr = column_ptr->cloneFullColumn();
+        for (size_t i = 0; i < column_ptr->size(); ++i)
+            result_col_ptr->insertFrom(*column_ptr, i);
+
+        ASSERT_COLUMN_EQ(std::move(result_col_ptr), std::move(new_col_ptr));
+    }
+
+    static void testSerializeAndDeserializeForCmp(
+        const ColumnPtr & column_ptr,
+        const TiDB::TiDBCollatorPtr & collator = nullptr,
+        String * sort_key_container = nullptr)
+    {
+        doTestSerializeAndDeserializeForCmp(column_ptr, true, collator, sort_key_container);
+        doTestSerializeAndDeserializeForCmp(column_ptr, false, collator, sort_key_container);
+    }
+
+    static void doTestSerializeAndDeserializeForCmp(
+        const ColumnPtr & column_ptr,
+        bool use_nt_align_buffer,
+        const TiDB::TiDBCollatorPtr & collator = nullptr,
+        String * sort_key_container = nullptr)
+    {
+        PaddedPODArray<size_t> byte_size;
+        byte_size.resize_fill_zero(column_ptr->size());
+        column_ptr->countSerializeByteSizeForCmp(byte_size, nullptr, collator);
+        size_t total_size = 0;
+        for (const auto size : byte_size)
+            total_size += size;
+        PaddedPODArray<char> memory(total_size);
+        PaddedPODArray<char *> pos;
+        size_t current_size = 0;
+        for (size_t i = 0; i < byte_size.size() / 2; ++i)
+        {
+            pos.push_back(memory.data() + current_size);
+            current_size += byte_size[i];
+        }
+        PaddedPODArray<char *> ori_pos;
+        for (auto * ptr : pos)
+            ori_pos.push_back(ptr);
+        column_ptr->serializeToPosForCmp(pos, 0, byte_size.size() / 2, false, nullptr, collator, sort_key_container);
+
+        auto new_col_ptr = column_ptr->cloneEmpty();
+        if (use_nt_align_buffer)
+            new_col_ptr->reserveAlign(byte_size.size(), FULL_VECTOR_SIZE_AVX2);
+
+        pos.assign(ori_pos);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndAdvancePos(pos);
+        ASSERT_EQ(pos, ori_pos);
+
+        current_size = 0;
+        pos.clear();
+        ori_pos.clear();
+        for (size_t i = byte_size.size() / 2; i < byte_size.size(); ++i)
+        {
+            pos.push_back(memory.data() + current_size);
+            current_size += byte_size[i];
+        }
+        for (auto * ptr : pos)
+            ori_pos.push_back(ptr);
+        column_ptr->serializeToPosForCmp(
+            pos,
+            byte_size.size() / 2,
+            byte_size.size() - byte_size.size() / 2,
+            false,
+            nullptr,
+            collator,
+            sort_key_container);
+
+        pos.assign(ori_pos);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndAdvancePos(pos);
+        ASSERT_EQ(pos, ori_pos);
+
+        current_size = 0;
+        pos.clear();
+        ori_pos.clear();
+        for (const auto size : byte_size)
+        {
+            pos.push_back(memory.data() + current_size);
+            current_size += size;
+        }
+        for (auto * ptr : pos)
+            ori_pos.push_back(ptr);
+
+        column_ptr->serializeToPosForCmp(pos, 0, byte_size.size(), false, nullptr, collator, sort_key_container);
+
+        pos.assign(ori_pos);
+        new_col_ptr->deserializeAndInsertFromPos(ori_pos, use_nt_align_buffer);
+        new_col_ptr->deserializeAndAdvancePos(pos);
+        ASSERT_EQ(pos, ori_pos);
+
         if (use_nt_align_buffer)
             new_col_ptr->flushNTAlignBuffer();
 
@@ -386,7 +481,7 @@ try
     auto col_vector_1 = createColumn<UInt32>({1}).column;
     testCountSerializeByteSize(col_vector_1, {4});
     testSerializeAndDeserialize(col_vector_1);
-    testSerializeAndDeserialize(col_vector_1, true, nullptr, nullptr);
+    testSerializeAndDeserializeForCmp(col_vector_1, nullptr, nullptr);
 
     auto col_vector = createColumn<UInt64>({1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18}).column;
     testCountSerializeByteSize(col_vector, {8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8});
@@ -394,7 +489,7 @@ try
     testCountSerializeByteSizeForColumnArray(col_vector, col_offsets, {8, 16, 24, 32, 48, 16});
 
     testSerializeAndDeserialize(col_vector);
-    testSerializeAndDeserialize(col_vector, true, nullptr, nullptr);
+    testSerializeAndDeserializeForCmp(col_vector, nullptr, nullptr);
 }
 CATCH
 
@@ -404,7 +499,7 @@ try
     auto col_decimal_1 = createColumn<Decimal128>(std::make_tuple(10, 3), {"1234567.333"}).column;
     testCountSerializeByteSize(col_decimal_1, {16});
     testSerializeAndDeserialize(col_decimal_1);
-    testSerializeAndDeserialize(col_decimal_1, true, nullptr, nullptr);
+    testSerializeAndDeserializeForCmp(col_decimal_1, nullptr, nullptr);
 
     auto col_decimal = createColumn<Decimal32>(
                            std::make_tuple(8, 2),
@@ -418,7 +513,7 @@ try
     testCountSerializeByteSizeForColumnArray(col_decimal, col_offsets, {4, 8, 12, 6 * 4, 21 * 4});
 
     testSerializeAndDeserialize(col_decimal);
-    testSerializeAndDeserialize(col_decimal, true, nullptr, nullptr);
+    testSerializeAndDeserializeForCmp(col_decimal, nullptr, nullptr);
 
     auto col_decimal_256 = createColumn<Decimal256>(
                                std::make_tuple(61, 4),
@@ -461,7 +556,18 @@ try
     testCountSerializeByteSizeForColumnArray(col_decimal_256, col_offsets, {48, 2 * 48, 3 * 48, 6 * 48, 21 * 48});
 
     testSerializeAndDeserialize(col_decimal_256);
-    testSerializeAndDeserialize(col_decimal_256, true, nullptr, nullptr);
+    testSerializeAndDeserializeForCmp(col_decimal_256, nullptr, nullptr);
+
+    // Also test row-base interface for ColumnDecimal.
+    Arena arena;
+    const char * begin = nullptr;
+    String sort;
+    auto new_col_ptr = col_decimal_256->cloneEmpty();
+    for (size_t i = 0; i < col_decimal_256->size(); ++i)
+        col_decimal_256->serializeValueIntoArena(i, arena, begin, nullptr, sort);
+    for (size_t i = 0; i < col_decimal_256->size(); ++i)
+        begin = new_col_ptr->deserializeAndInsertFromArena(begin, nullptr);
+    ASSERT_COLUMN_EQ(std::move(col_decimal_256), std::move(new_col_ptr));
 }
 CATCH
 
@@ -478,9 +584,9 @@ try
     auto col_string_1 = createColumn<String>({"sdafyuwer123"}).column;
     testCountSerializeByteSize(col_string_1, {4 + 13});
     testSerializeAndDeserialize(col_string_1);
-    testSerializeAndDeserialize(col_string_1, true, collator_utf8_bin, &sort_key_container);
-    testSerializeAndDeserialize(col_string_1, true, collator_utf8_general_ci, &sort_key_container);
-    testSerializeAndDeserialize(col_string_1, true, collator_utf8_unicode_ci, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_string_1, collator_utf8_bin, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_string_1, collator_utf8_general_ci, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_string_1, collator_utf8_unicode_ci, &sort_key_container);
 
     auto col_string = createColumn<String>({"123",
                                             "1234567890",
@@ -522,9 +628,9 @@ try
 
     testSerializeAndDeserialize(col_string);
 
-    testSerializeAndDeserialize(col_string, true, collator_utf8_bin, &sort_key_container);
-    testSerializeAndDeserialize(col_string, true, collator_utf8_general_ci, &sort_key_container);
-    testSerializeAndDeserialize(col_string, true, collator_utf8_unicode_ci, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_string, collator_utf8_bin, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_string, collator_utf8_general_ci, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_string, collator_utf8_unicode_ci, &sort_key_container);
 }
 CATCH
 
@@ -545,51 +651,210 @@ try
 
     testSerializeAndDeserialize(col_fixed_string);
     // ColumnFixedString doesn't support serialize/deserialize with collator for now.
-    testSerializeAndDeserialize(col_fixed_string, true, nullptr, nullptr);
+    testSerializeAndDeserializeForCmp(col_fixed_string, nullptr, nullptr);
 }
 CATCH
 
 TEST_F(TestColumnSerializeDeserialize, TestColumnNullable)
 try
 {
-    // ColumnNullable(ColumnDecimal)
-    auto col_nullable_vec1
-        = createNullableColumn<Decimal256>(std::make_tuple(65, 0), {"123456789012345678901234567890"}, {1}).column;
-    testCountSerializeByteSize(col_nullable_vec1, {49});
-    testSerializeAndDeserialize(col_nullable_vec1);
-    testSerializeAndDeserialize(col_nullable_vec1, true, nullptr, nullptr);
+    // ColumnNullable(ColumnDecimal256)
+    {
+        auto col_nullable_decimal_0 = createNullableColumn<Decimal256>(
+                                          std::make_tuple(65, 30),
+                                          {
+                                              "123456789012345678901234567890",
+                                              "100.1111111111",
+                                              "-11111111111111111111",
+                                              "0.1111111111111",
+                                              "0.1111111111111",
+                                          },
+                                          {1, 0, 1, 1, 0})
+                                          .column;
+        testCountSerializeByteSize(col_nullable_decimal_0, {49, 49, 49, 49, 49});
+        testSerializeAndDeserialize(col_nullable_decimal_0);
+        testCountSerializeByteSize(col_nullable_decimal_0, {49, 49, 49, 49, 49}, true, nullptr);
+        testSerializeAndDeserializeForCmp(col_nullable_decimal_0, nullptr, nullptr);
+    }
+
+    // ColumnNullable(ColumnDecimal32)
+    {
+        auto col_nullable_decimal_1 = createNullableColumn<Decimal32>(
+                                          std::make_tuple(9, 5),
+                                          {
+                                              "1234.333",
+                                              "-0.9999",
+                                              "1000.100",
+                                              "999.9999",
+                                          },
+                                          {0, 1, 0, 1})
+                                          .column;
+        testCountSerializeByteSize(col_nullable_decimal_1, {1 + 4, 1 + 4, 1 + 4, 1 + 4});
+        testSerializeAndDeserialize(col_nullable_decimal_1);
+        testCountSerializeByteSize(col_nullable_decimal_1, {1 + 4, 1 + 4, 1 + 4, 1 + 4}, true, nullptr);
+        testSerializeAndDeserializeForCmp(col_nullable_decimal_1, nullptr, nullptr);
+    }
 
     // ColumnNullable(ColumnVector)
-    auto col_nullable_vec = createNullableColumn<UInt64>({1, 2, 3, 4, 5, 6}, {0, 1, 0, 1, 0, 1}).column;
-    testCountSerializeByteSize(col_nullable_vec, {9, 9, 9, 9, 9, 9});
-    auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6}).column;
-    testCountSerializeByteSizeForColumnArray(col_nullable_vec, col_offsets, {9, 18, 27});
-    testSerializeAndDeserialize(col_nullable_vec);
-    testSerializeAndDeserialize(col_nullable_vec, true, nullptr, nullptr);
+    {
+        auto col_nullable_vec = createNullableColumn<UInt64>({1, 2, 3, 4, 5, 6}, {0, 1, 0, 1, 0, 1}).column;
+        testCountSerializeByteSize(col_nullable_vec, {9, 9, 9, 9, 9, 9});
+        testSerializeAndDeserialize(col_nullable_vec);
+        testCountSerializeByteSize(col_nullable_vec, {9, 9, 9, 9, 9, 9}, true, nullptr);
+        testSerializeAndDeserializeForCmp(col_nullable_vec, nullptr, nullptr);
+    }
 
-    // ColumnNullable(ColumnString)
     String sort_key_container;
     TiDB::TiDBCollatorPtr collator_utf8_bin = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_BIN);
     TiDB::TiDBCollatorPtr collator_utf8_general_ci
         = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     TiDB::TiDBCollatorPtr collator_utf8_unicode_ci
         = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
-    auto col_nullable_string
-        = createNullableColumn<String>({"123", "2", "34", "456", "5678", "6"}, {0, 1, 0, 1, 0, 1}).column;
-    testCountSerializeByteSize(col_nullable_string, {5 + 4, 5 + 1, 5 + 3, 5 + 1, 5 + 5, 5 + 1});
-    testCountSerializeByteSizeForColumnArray(col_nullable_string, col_offsets, {5 + 4, 10 + 4, 15 + 7});
-    testSerializeAndDeserialize(col_nullable_string);
-    testSerializeAndDeserialize(col_nullable_string, true, collator_utf8_bin, &sort_key_container);
-    testSerializeAndDeserialize(col_nullable_string, true, collator_utf8_general_ci, &sort_key_container);
-    testSerializeAndDeserialize(col_nullable_string, true, collator_utf8_unicode_ci, &sort_key_container);
+    // ColumnNullable(ColumnString)
+    {
+        auto col_nullable_string
+            = createNullableColumn<String>({"123", "2", "34", "456", "5678", "6"}, {0, 1, 0, 1, 0, 1}).column;
+        testCountSerializeByteSize(col_nullable_string, {5 + 4, 5 + 1, 5 + 3, 5 + 1, 5 + 5, 5 + 1});
+        testSerializeAndDeserialize(col_nullable_string);
+        // 5: 1(null) + 4(sizeof(UInt32))
+        testCountSerializeByteSize(col_nullable_string, {5 + 4, 5 + 1, 5 + 3, 5 + 1, 5 + 5, 5 + 1}, true, nullptr);
+        testSerializeAndDeserializeForCmp(col_nullable_string, collator_utf8_bin, &sort_key_container);
+        testSerializeAndDeserializeForCmp(col_nullable_string, collator_utf8_general_ci, &sort_key_container);
+        testSerializeAndDeserializeForCmp(col_nullable_string, collator_utf8_unicode_ci, &sort_key_container);
+    }
+
+    // ColumnNullable(ColumnFixedString)
+    {
+        auto col_fixed_string_mut = ColumnFixedString::create(2);
+        col_fixed_string_mut->insertData("aa", 2);
+        col_fixed_string_mut->insertData("bc", 2);
+        col_fixed_string_mut->insertData("c", 1);
+        col_fixed_string_mut->insertData("d", 1);
+        col_fixed_string_mut->insertData("e1", 2);
+        col_fixed_string_mut->insertData("ff", 2);
+        auto col_nullable_fixed_string
+            = ColumnNullable::create(std::move(col_fixed_string_mut), createColumn<UInt8>({1, 0, 1, 1, 0, 0}).column);
+        testCountSerializeByteSize(col_nullable_fixed_string, {1 + 2, 1 + 2, 1 + 2, 1 + 2, 1 + 2, 1 + 2});
+        testSerializeAndDeserialize(col_nullable_fixed_string);
+        testCountSerializeByteSize(
+            col_nullable_fixed_string,
+            {1 + 2, 1 + 2, 1 + 2, 1 + 2, 1 + 2, 1 + 2},
+            true,
+            nullptr);
+        testSerializeAndDeserializeForCmp(col_nullable_fixed_string, nullptr, nullptr);
+    }
+
+    auto col_offsets = createColumn<IColumn::Offset>({1, 3, 6}).column;
+    // ColumnNullable(ColumnArray(ColumnDecimal256))
+    {
+        auto col_decimal_0 = createColumn<Decimal256>(
+                                 std::make_tuple(65, 30),
+                                 {
+                                     "123456789012345678901234567890",
+                                     "100.1111111111",
+                                     "-11111111111111111111",
+                                     "99999999.999",
+                                     "0.1111111111111",
+                                     "100.100",
+                                 })
+                                 .column;
+        auto col_array_dec = ColumnArray::create(col_decimal_0, col_offsets);
+        auto col_nullable_array_dec = ColumnNullable::create(col_array_dec, createColumn<UInt8>({1, 0, 1}).column);
+        testCountSerializeByteSize(col_nullable_array_dec, {1 + 4 + 48, 1 + 4 + 48 * 2, 1 + 4 + 48 * 3});
+        testSerializeAndDeserialize(col_nullable_array_dec);
+        testCountSerializeByteSize(col_nullable_array_dec, {1 + 4, 1 + 4 + 48 * 2, 1 + 4}, true, nullptr);
+        testSerializeAndDeserializeForCmp(col_nullable_array_dec, nullptr, nullptr);
+    }
+
+    // ColumnNullable(ColumnArray(ColumnDecimal128)
+    {
+        auto col_decimal_1 = createColumn<Decimal128>(
+                                 std::make_tuple(15, 5),
+                                 {
+                                     "1234567.333",
+                                     "-0.9999",
+                                     "1000.100",
+                                     "9999999999.99999",
+                                     "-9999999999.99999",
+                                     "-1111.99999",
+                                 })
+                                 .column;
+        auto col_array_dec = ColumnArray::create(col_decimal_1, col_offsets);
+        auto col_nullable_array_dec_1 = ColumnNullable::create(col_array_dec, createColumn<UInt8>({1, 0, 1}).column);
+        testCountSerializeByteSize(col_nullable_array_dec_1, {1 + 4 + 16, 1 + 4 + 2 * 16, 1 + 4 + 3 * 16});
+        testSerializeAndDeserialize(col_nullable_array_dec_1);
+        testCountSerializeByteSize(col_nullable_array_dec_1, {1 + 4, 1 + 4 + 2 * 16, 1 + 4}, true, nullptr);
+        testSerializeAndDeserializeForCmp(col_nullable_array_dec_1, nullptr, nullptr);
+    }
 
     // ColumnNullable(ColumnArray(ColumnVector))
-    auto col_vector = createColumn<Float32>({1.0, 2.2, 3.3, 4.4, 5.5, 6.1}).column;
-    auto col_array_vec = ColumnArray::create(col_vector, col_offsets);
-    auto col_nullable_array_vec = ColumnNullable::create(col_array_vec, createColumn<UInt8>({1, 1, 1}).column);
-    testCountSerializeByteSize(col_nullable_array_vec, {1 + 4 + 4, 1 + 4 + 8, 1 + 4 + 12});
-    testSerializeAndDeserialize(col_nullable_array_vec);
-    testSerializeAndDeserialize(col_nullable_array_vec, true, nullptr, nullptr);
+    {
+        auto col_vector = createColumn<Float32>({1.0, 2.2, 3.3, 4.4, 5.5, 6.1}).column;
+        auto col_array_vec = ColumnArray::create(col_vector, col_offsets);
+        auto col_nullable_array_vec = ColumnNullable::create(col_array_vec, createColumn<UInt8>({1, 0, 1}).column);
+        testCountSerializeByteSize(col_nullable_array_vec, {1 + 4 + 4, 1 + 4 + 8, 1 + 4 + 12});
+        testSerializeAndDeserialize(col_nullable_array_vec);
+        testCountSerializeByteSize(col_nullable_array_vec, {1 + 4, 1 + 4 + 8, 1 + 4}, true, nullptr);
+        testSerializeAndDeserializeForCmp(col_nullable_array_vec, nullptr, nullptr);
+    }
+
+    // ColumnNullable(ColumnArray(ColumnString))
+    {
+        auto col_string = createColumn<String>({"123", "2", "34", "456", "5678", "6"}).column;
+        auto col_array_string = ColumnArray::create(col_string, col_offsets);
+        auto col_nullable_array_string
+            = ColumnNullable::create(col_array_string, createColumn<UInt8>({1, 0, 1}).column);
+        testCountSerializeByteSize(col_nullable_array_string, {1 + 4 + 4 + 4, 1 + 4 + 4 * 2 + 5, 1 + 4 + 4 * 3 + 11});
+        testSerializeAndDeserialize(col_nullable_array_string);
+        testCountSerializeByteSize(col_nullable_array_string, {1 + 4, 1 + 4 + 4 * 2 + 5, 1 + 4}, true, nullptr);
+        testSerializeAndDeserializeForCmp(col_nullable_array_string, nullptr, nullptr);
+    }
+    // ColumnNullable(ColumnArray(ColumnString)) with utf8 char.
+    {
+        auto col_string
+            = createColumn<String>({"你hello好世界！", "北京上海杭州 hangzhou", "欧元€", "abc里拉₤", "12法郎₣", "6"})
+                  .column;
+        auto col_array_string = ColumnArray::create(col_string, col_offsets);
+        auto col_nullable_array_string
+            = ColumnNullable::create(col_array_string, createColumn<UInt8>({1, 0, 1}).column);
+        testSerializeAndDeserializeForCmp(col_nullable_array_string, collator_utf8_bin, &sort_key_container);
+        testSerializeAndDeserializeForCmp(col_nullable_array_string, collator_utf8_general_ci, &sort_key_container);
+        testSerializeAndDeserializeForCmp(col_nullable_array_string, collator_utf8_unicode_ci, &sort_key_container);
+    }
+
+    // ColumnNullable(ColumnArray(ColumnFixedString))
+    {
+        auto col_fixed_string_mut = ColumnFixedString::create(2);
+        col_fixed_string_mut->insertData("aa", 2);
+        col_fixed_string_mut->insertData("bc", 2);
+        col_fixed_string_mut->insertData("c", 1);
+        col_fixed_string_mut->insertData("d", 1);
+        col_fixed_string_mut->insertData("e1", 2);
+        col_fixed_string_mut->insertData("ff", 2);
+        ColumnPtr col_fixed_string = std::move(col_fixed_string_mut);
+        auto col_array_fixed_string = ColumnArray::create(col_fixed_string, col_offsets);
+        auto col_nullable_array_fixed_string
+            = ColumnNullable::create(col_array_fixed_string, createColumn<UInt8>({1, 0, 1}).column);
+        testCountSerializeByteSize(col_nullable_array_fixed_string, {1 + 4 + 2, 1 + 4 + 4, 1 + 4 + 6});
+        testSerializeAndDeserialize(col_nullable_array_fixed_string);
+        testCountSerializeByteSize(col_nullable_array_fixed_string, {1 + 4, 1 + 4 + 4, 1 + 4}, true, nullptr);
+        testSerializeAndDeserializeForCmp(col_nullable_array_fixed_string, nullptr, nullptr);
+    }
+
+    // ColumnNullable(ColumnNullable(xxx)) not support.
+
+    // ColumnNullable(ColumnArray(ColumnNullable(ColumnString))) not support.
+    // auto col_offsets_1 = createColumn<IColumn::Offset>({1, 3, 6}).column;
+    // auto col_array_string = ColumnArray::create(col_nullable_string, col_offsets_1);
+    // auto col_nullable_array_string = ColumnNullable::create(col_array_string, createColumn<UInt8>({0, 1, 0}).column);
+    // testCountSerializeByteSize(col_nullable_array_string,
+    //         {1 + 4 + 1 + 4 + 4,
+    //          1 + 4 + 2 + 8 + 4,
+    //          1 + 4 + 3 + 12 + 7}, true, nullptr);
+    // testSerializeAndDeserialize(col_nullable_array_string);
+    // testSerializeAndDeserializeForCmp(col_nullable_array_string, collator_utf8_bin, &sort_key_container);
+    // testSerializeAndDeserializeForCmp(col_nullable_array_string, collator_utf8_general_ci, &sort_key_container);
+    // testSerializeAndDeserializeForCmp(col_nullable_array_string, collator_utf8_unicode_ci, &sort_key_container);
 }
 CATCH
 
@@ -602,7 +867,7 @@ try
     auto col_array_vec = ColumnArray::create(col_vector, col_offsets);
     testCountSerializeByteSize(col_array_vec, {4 + 4, 4 + 8, 4 + 12});
     testSerializeAndDeserialize(col_array_vec);
-    testSerializeAndDeserialize(col_array_vec, true, nullptr, nullptr);
+    testSerializeAndDeserializeForCmp(col_array_vec, nullptr, nullptr);
 
     // ColumnArray(ColumnString)
     String sort_key_container;
@@ -615,9 +880,9 @@ try
     auto col_array_string = ColumnArray::create(col_string, col_offsets);
     testCountSerializeByteSize(col_array_string, {4 + 4 + 4, 4 + 8 + 5, 4 + 12 + 11});
     testSerializeAndDeserialize(col_array_string);
-    testSerializeAndDeserialize(col_array_string, true, collator_utf8_bin, &sort_key_container);
-    testSerializeAndDeserialize(col_array_string, true, collator_utf8_general_ci, &sort_key_container);
-    testSerializeAndDeserialize(col_array_string, true, collator_utf8_unicode_ci, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_array_string, collator_utf8_bin, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_array_string, collator_utf8_general_ci, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_array_string, collator_utf8_unicode_ci, &sort_key_container);
 
     // ColumnArray(ColumnNullable(ColumnString))
     auto col_nullable_string
@@ -625,9 +890,10 @@ try
     auto col_array_nullable_string = ColumnArray::create(col_nullable_string, col_offsets);
     testCountSerializeByteSize(col_array_nullable_string, {4 + 5 + 4, 4 + 10 + 4, 4 + 15 + 7});
     testSerializeAndDeserialize(col_array_nullable_string);
-    testSerializeAndDeserialize(col_array_nullable_string, true, collator_utf8_bin, &sort_key_container);
-    testSerializeAndDeserialize(col_array_nullable_string, true, collator_utf8_general_ci, &sort_key_container);
-    testSerializeAndDeserialize(col_array_nullable_string, true, collator_utf8_unicode_ci, &sort_key_container);
+    // compare semantics not support ColumnArray(ColumnNullable(ColumnString)).
+    // testSerializeAndDeserialize(col_array_nullable_string, true, collator_utf8_bin, &sort_key_container);
+    // testSerializeAndDeserialize(col_array_nullable_string, true, collator_utf8_general_ci, &sort_key_container);
+    // testSerializeAndDeserialize(col_array_nullable_string, true, collator_utf8_unicode_ci, &sort_key_container);
 
     // ColumnArray(ColumnDecimal)
     auto col_decimal_256 = createColumn<Decimal256>(
@@ -672,7 +938,7 @@ try
         col_array_decimal_256,
         {4 + 3 * 48, 4 + 5 * 48, 4 + 7 * 48, 4 + 5 * 48, 4 + 10 * 48, 4 + 48, 4 + 48, 4 + 48});
     testSerializeAndDeserialize(col_array_decimal_256);
-    testSerializeAndDeserialize(col_array_decimal_256, true, nullptr, nullptr);
+    testSerializeAndDeserializeForCmp(col_array_decimal_256, nullptr, nullptr);
 
     // ColumnArray(ColumnFixedString)
     auto col_fixed_string_mut = ColumnFixedString::create(2);
@@ -686,7 +952,7 @@ try
     auto col_array_fixed_string = ColumnArray::create(col_fixed_string, col_offsets);
     testCountSerializeByteSize(col_array_fixed_string, {4 + 2, 4 + 4, 4 + 6});
     testSerializeAndDeserialize(col_array_fixed_string);
-    testSerializeAndDeserialize(col_array_fixed_string, true, nullptr, nullptr);
+    testSerializeAndDeserializeForCmp(col_array_fixed_string, nullptr, nullptr);
 }
 CATCH
 
@@ -708,9 +974,9 @@ try
         = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI);
     TiDB::TiDBCollatorPtr collator_utf8_unicode_ci
         = TiDB::ITiDBCollator::getCollator(TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI);
-    testSerializeAndDeserialize(col_tuple, true, collator_utf8_bin, &sort_key_container);
-    testSerializeAndDeserialize(col_tuple, true, collator_utf8_general_ci, &sort_key_container);
-    testSerializeAndDeserialize(col_tuple, true, collator_utf8_unicode_ci, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_tuple, collator_utf8_bin, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_tuple, collator_utf8_general_ci, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_tuple, collator_utf8_unicode_ci, &sort_key_container);
 }
 CATCH
 
@@ -731,23 +997,23 @@ try
         collator_utf8_bin);
     testCountSerializeByteSize(
         col_string,
-        {4 + 8 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 + 2 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 + 4 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 + 3 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 + 6 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 + 5 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
+        {4 + 8 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 2 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 4 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 3 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 6 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 5 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
          4 + 0 + 1},
         true,
         collator_utf8_general_ci);
     testCountSerializeByteSize(
         col_string,
-        {4 + 8 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 + 2 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 + 4 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 + 3 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 + 6 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 + 5 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
+        {4 + 8 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 2 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 4 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 3 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 6 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 + 5 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
          4 + 0 + 1},
         true,
         collator_utf8_unicode_ci);
@@ -756,32 +1022,33 @@ try
     testCountSerializeByteSizeForColumnArray(
         col_string,
         col_offset,
-        {4 + 8 * collator_utf8_bin->maxBytesForOneChar() + 1,
-         4 * 3 + (6 + 12 + 9) * collator_utf8_bin->maxBytesForOneChar() + 1 * 3,
-         4 * 3 + (12 + 11) * collator_utf8_bin->maxBytesForOneChar() + 1 * 3},
+        {4 + 8 * collator_utf8_bin->sortKeyReservedSpaceMultipler() + 1,
+         4 * 3 + (6 + 12 + 9) * collator_utf8_bin->sortKeyReservedSpaceMultipler() + 1 * 3,
+         4 * 3 + (12 + 11) * collator_utf8_bin->sortKeyReservedSpaceMultipler() + 1 * 3},
         true,
         collator_utf8_bin);
     testCountSerializeByteSizeForColumnArray(
         col_string,
         col_offset,
-        {4 + 8 * collator_utf8_general_ci->maxBytesForOneChar() + 1,
-         4 * 3 + (2 + 4 + 3) * collator_utf8_general_ci->maxBytesForOneChar() + 1 * 3,
-         4 * 3 + (6 + 5) * collator_utf8_general_ci->maxBytesForOneChar() + 1 * 3},
+        {4 + 8 * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 * 3 + (2 + 4 + 3) * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1 * 3,
+         4 * 3 + (6 + 5) * collator_utf8_general_ci->sortKeyReservedSpaceMultipler() + 1 * 3},
         true,
         collator_utf8_general_ci);
     testCountSerializeByteSizeForColumnArray(
         col_string,
         col_offset,
-        {4 + 8 * collator_utf8_unicode_ci->maxBytesForOneChar() + 1,
-         4 * 3 + (2 + 4 + 3) * collator_utf8_unicode_ci->maxBytesForOneChar() + 1 * 3,
-         4 * 3 + (6 + 5) * collator_utf8_unicode_ci->maxBytesForOneChar() + 1 * 3},
+        {4 + 8 * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1,
+         4 * 3 + (2 + 4 + 3) * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1 * 3,
+         4 * 3 + (6 + 5) * collator_utf8_unicode_ci->sortKeyReservedSpaceMultipler() + 1 * 3},
         true,
         collator_utf8_unicode_ci);
 
+    // ColumnString
     String sort_key_container;
-    testSerializeAndDeserialize(col_string, true, collator_utf8_bin, &sort_key_container);
-    testSerializeAndDeserialize(col_string, true, collator_utf8_general_ci, &sort_key_container);
-    testSerializeAndDeserialize(col_string, true, collator_utf8_unicode_ci, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_string, collator_utf8_bin, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_string, collator_utf8_general_ci, &sort_key_container);
+    testSerializeAndDeserializeForCmp(col_string, collator_utf8_unicode_ci, &sort_key_container);
 }
 CATCH
 
@@ -797,7 +1064,7 @@ try
     };
     auto col_dec256 = createColumn<Decimal256>(std::make_tuple(40, 6), decimal_vals).column;
     testSerializeAndDeserialize(col_dec256);
-    testSerializeAndDeserialize(col_dec256, true, nullptr, nullptr);
+    testSerializeAndDeserializeForCmp(col_dec256, nullptr, nullptr);
 }
 CATCH
 

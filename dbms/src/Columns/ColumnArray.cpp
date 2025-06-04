@@ -24,6 +24,7 @@
 #include <Common/HashTable/Hash.h>
 #include <Common/SipHash.h>
 #include <Common/typeid_cast.h>
+#include <Core/Defines.h>
 #include <DataStreams/ColumnGathererStream.h>
 #include <Functions/FunctionHelpers.h>
 #include <IO/Endian.h>
@@ -218,21 +219,29 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
     return pos;
 }
 
-void ColumnArray::countSerializeByteSizeForCmp(
-    PaddedPODArray<size_t> & byte_size,
-    const TiDB::TiDBCollatorPtr & collator) const
+size_t ColumnArray::serializeByteSize() const
 {
-    countSerializeByteSizeImpl<true>(byte_size, collator);
+    return getData().serializeByteSize() + getOffsets().size() * sizeof(UInt32);
 }
 
 void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
-    countSerializeByteSizeImpl<false>(byte_size, nullptr);
+    countSerializeByteSizeImpl<false>(byte_size, nullptr, nullptr);
 }
 
-template <bool for_compare>
-void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size, const TiDB::TiDBCollatorPtr & collator)
-    const
+void ColumnArray::countSerializeByteSizeForCmp(
+    PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr & collator) const
+{
+    countSerializeByteSizeImpl<true>(byte_size, nullmap, collator);
+}
+
+template <bool compare_semantics>
+void ColumnArray::countSerializeByteSizeImpl(
+    PaddedPODArray<size_t> & byte_size,
+    const NullMap * nullmap,
+    const TiDB::TiDBCollatorPtr & collator) const
 {
     RUNTIME_CHECK_MSG(byte_size.size() == size(), "size of byte_size({}) != column size({})", byte_size.size(), size());
 
@@ -251,8 +260,8 @@ void ColumnArray::countSerializeByteSizeImpl(PaddedPODArray<size_t> & byte_size,
     for (size_t i = 0; i < size; ++i)
         byte_size[i] += sizeof(UInt32);
 
-    if constexpr (for_compare)
-        getData().countSerializeByteSizeForCmpColumnArray(byte_size, getOffsets(), collator);
+    if constexpr (compare_semantics)
+        getData().countSerializeByteSizeForCmpColumnArray(byte_size, getOffsets(), nullmap, collator);
     else
         getData().countSerializeByteSizeForColumnArray(byte_size, getOffsets());
 }
@@ -262,33 +271,83 @@ void ColumnArray::serializeToPosForCmp(
     size_t start,
     size_t length,
     bool has_null,
+    const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator,
     String * sort_key_container) const
 {
     if (has_null)
-        serializeToPosImpl<true, true>(pos, start, length, collator, sort_key_container);
+    {
+        if (nullmap != nullptr)
+            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                pos,
+                start,
+                length,
+                collator,
+                sort_key_container,
+                nullmap);
+        else
+            serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                collator,
+                sort_key_container,
+                nullptr);
+    }
     else
-        serializeToPosImpl<false, true>(pos, start, length, collator, sort_key_container);
+    {
+        if (nullmap != nullptr)
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/true>(
+                pos,
+                start,
+                length,
+                collator,
+                sort_key_container,
+                nullmap);
+        else
+            serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/true, /*has_nullmap=*/false>(
+                pos,
+                start,
+                length,
+                collator,
+                sort_key_container,
+                nullptr);
+    }
 }
 
 void ColumnArray::serializeToPos(PaddedPODArray<char *> & pos, size_t start, size_t length, bool has_null) const
 {
     if (has_null)
-        serializeToPosImpl<true, false>(pos, start, length, nullptr, nullptr);
+        serializeToPosImpl</*has_null=*/true, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            nullptr,
+            nullptr,
+            nullptr);
     else
-        serializeToPosImpl<false, false>(pos, start, length, nullptr, nullptr);
+        serializeToPosImpl</*has_null=*/false, /*compare_semantics=*/false, /*has_nullmap=*/false>(
+            pos,
+            start,
+            length,
+            nullptr,
+            nullptr,
+            nullptr);
 }
 
-template <bool has_null, bool for_compare>
+template <bool has_null, bool compare_semantics, bool has_nullmap>
 void ColumnArray::serializeToPosImpl(
     PaddedPODArray<char *> & pos,
     size_t start,
     size_t length,
     const TiDB::TiDBCollatorPtr & collator,
-    String * sort_key_container) const
+    String * sort_key_container,
+    const NullMap * nullmap) const
 {
     RUNTIME_CHECK_MSG(length <= pos.size(), "length({}) > size of pos({})", length, pos.size());
     RUNTIME_CHECK_MSG(start + length <= size(), "start({}) + length({}) > size of column({})", start, length, size());
+
+    RUNTIME_CHECK(!has_nullmap || (nullmap && nullmap->size() == size()));
 
     /// countSerializeByteSize has already checked that the size of one element is not greater than UINT32_MAX
     for (size_t i = 0; i < length; ++i)
@@ -298,30 +357,32 @@ void ColumnArray::serializeToPosImpl(
             if (pos[i] == nullptr)
                 continue;
         }
+
         UInt32 len = sizeAt(start + i);
+        if constexpr (has_nullmap)
+        {
+            if (DB::isNullAt(*nullmap, start + i))
+                len = 0;
+        }
         tiflash_compiler_builtin_memcpy(pos[i], &len, sizeof(UInt32));
         pos[i] += sizeof(UInt32);
     }
 
-    if constexpr (for_compare)
-        getData()
-            .serializeToPosForCmpColumnArray(pos, start, length, has_null, getOffsets(), collator, sort_key_container);
+    if constexpr (compare_semantics)
+        getData().serializeToPosForCmpColumnArray(
+            pos,
+            start,
+            length,
+            has_null,
+            nullmap,
+            getOffsets(),
+            collator,
+            sort_key_container);
     else
         getData().serializeToPosForColumnArray(pos, start, length, has_null, getOffsets());
 }
 
-void ColumnArray::deserializeForCmpAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
-{
-    deserializeAndInsertFromPosImpl<true>(pos, use_nt_align_buffer);
-}
-
 void ColumnArray::deserializeAndInsertFromPos(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
-{
-    deserializeAndInsertFromPosImpl<false>(pos, use_nt_align_buffer);
-}
-
-template <bool for_compare>
-void ColumnArray::deserializeAndInsertFromPosImpl(PaddedPODArray<char *> & pos, bool use_nt_align_buffer)
 {
     auto & offsets = getOffsets();
     size_t prev_size = offsets.size();
@@ -336,15 +397,36 @@ void ColumnArray::deserializeAndInsertFromPosImpl(PaddedPODArray<char *> & pos, 
         pos[i] += sizeof(UInt32);
     }
 
-    if constexpr (for_compare)
-        getData().deserializeForCmpAndInsertFromPosColumnArray(pos, offsets, use_nt_align_buffer);
-    else
-        getData().deserializeAndInsertFromPosForColumnArray(pos, offsets, use_nt_align_buffer);
+    getData().deserializeAndInsertFromPosForColumnArray(pos, offsets, use_nt_align_buffer);
 }
 
 void ColumnArray::flushNTAlignBuffer()
 {
     getData().flushNTAlignBuffer();
+}
+
+void ColumnArray::deserializeAndAdvancePos(PaddedPODArray<char *> & pos) const
+{
+    static thread_local IColumn::Offsets offsets;
+
+    size_t size = pos.size();
+    offsets.resize(size);
+    for (size_t i = 0; i < size; ++i)
+    {
+        UInt32 len;
+        tiflash_compiler_builtin_memcpy(&len, pos[i], sizeof(UInt32));
+        pos[i] += sizeof(UInt32);
+        offsets[i] = offsets[i - 1] + len;
+    }
+
+    getData().deserializeAndAdvancePosForColumnArray(pos, offsets);
+
+    // Free the memory of offsets if the size of pos is too large.
+    if unlikely (offsets.size() > DEFAULT_BLOCK_SIZE)
+    {
+        IColumn::Offsets tmp_offsets;
+        offsets.swap(tmp_offsets);
+    }
 }
 
 void ColumnArray::updateHashWithValue(

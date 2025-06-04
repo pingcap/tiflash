@@ -15,7 +15,9 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Storages/KVStore/Read/RegionLockInfo.h>
+#include <Storages/KVStore/TiKVHelpers/TiKVKeyValue.h>
 #include <pingcap/kv/RegionCache.h>
 
 namespace DB
@@ -34,10 +36,29 @@ public:
         , locks(std::move(locks_))
     {
         std::set<RegionID> locked_regions;
+#if ENABLE_NEXT_GEN == 0
         for (const auto & lock : locks)
             locked_regions.insert(lock.first);
 
         this->message(fmt::format("Key is locked ({} locks in regions {})", locks.size(), locked_regions));
+#else
+        std::set<std::string> keys;
+        std::set<std::string> primary_keys;
+        for (const auto & lock : locks)
+        {
+            locked_regions.insert(lock.first);
+            std::string key(lock.second->key());
+            std::string primary_key(lock.second->primary_lock());
+            keys.insert(TiKVKey(key.data(), key.size()).toDebugString());
+            primary_keys.insert(TiKVKey(primary_key.data(), primary_key.size()).toDebugString());
+        }
+        this->message(fmt::format(
+            "Key is locked ({} locks in regions {} key {} primary {})",
+            locks.size(),
+            locked_regions,
+            keys,
+            primary_keys));
+#endif
     }
 
     std::vector<std::pair<RegionID, LockInfoPtr>> locks;

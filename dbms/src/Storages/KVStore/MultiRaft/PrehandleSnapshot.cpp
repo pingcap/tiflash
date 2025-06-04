@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/setThreadName.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -24,6 +25,7 @@
 #include <Storages/KVStore/FFI/ProxyFFI.h>
 #include <Storages/KVStore/FFI/SSTReader.h>
 #include <Storages/KVStore/KVStore.h>
+#include <Storages/KVStore/MultiRaft/ApplySnapshot.h>
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/MultiRaft/PreHandlingTrace.h>
 #include <Storages/KVStore/Region.h>
@@ -281,6 +283,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
             auto ongoing = ongoing_prehandle_task_count.fetch_sub(1) - 1;
             new_region->afterPrehandleSnapshot(ongoing);
         });
+        new_region->resetWarnMemoryLimitByTable();
         PrehandleResult result = preHandleSSTsToDTFiles( //
             new_region,
             snaps,
@@ -289,6 +292,7 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
             DM::FileConvertJobType::ApplySnapshot,
             tmt);
         result.stats.start_time = start_time;
+        new_region->resetWarnMemoryLimitByTable();
         return result;
     }
     catch (DB::Exception & e)
@@ -302,6 +306,18 @@ PrehandleResult KVStore::preHandleSnapshotToFiles(
 }
 
 size_t KVStore::getMaxParallelPrehandleSize() const
+{
+#if ENABLE_NEXT_GEN == 0
+    return getMaxPrehandleSubtaskSize();
+#else
+    auto max_subtask_size = getMaxPrehandleSubtaskSize();
+    // In serverless mode, IO takes more part in decoding stage, so we can increase parallel limit.
+    // In real test, the prehandling speed decreases if we use higher concurrency.
+    return std::min(4, max_subtask_size);
+#endif
+}
+
+size_t KVStore::getMaxPrehandleSubtaskSize() const
 {
     const auto & proxy_config = getProxyConfigSummay();
     size_t total_concurrency = 0;
@@ -335,7 +351,7 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
 
     // Don't change the order of following checks, `getApproxBytes` involves some overhead,
     // although it is optimized to bring about the minimum overhead.
-#if SERVERLESS_PROXY == 0
+#if ENABLE_NEXT_GEN == 0
     if (new_region->getClusterRaftstoreVer() != RaftstoreVer::V2)
         return std::make_pair(std::vector<std::string>{}, 0);
 #endif
@@ -356,6 +372,11 @@ static inline std::pair<std::vector<std::string>, size_t> getSplitKey(
     // so we must add 1 here.
     auto ongoing_count = kvstore->getOngoingPrehandleSubtaskCount() + 1;
     uint64_t want_split_parts = 0;
+    // If total_concurrency is 4, and prehandle-pool is sized 8,
+    // and if there are 4 ongoing snapshots, then we will not parallel prehandling any new snapshot.
+    // This is because in serverless, too much parallelism causes performance reduction.
+    // So, if there is already enough parallelism that is used to prehandle,
+    // it is not necessary to manually split a snapshot.
     auto total_concurrency = kvstore->getMaxParallelPrehandleSize();
     if (total_concurrency + 1 > ongoing_count)
     {
@@ -440,6 +461,7 @@ static void runInParallel(
     const size_t split_id = part_limit.split_id;
 
     auto part_new_region = std::make_shared<Region>(new_region->getMeta().clone(), proxy_helper);
+    part_new_region->setRegionTableCtx(new_region->getRegionTableCtx());
     auto part_sst_stream = std::make_shared<DM::SSTFilesToBlockInputStream>(
         part_new_region,
         prehandle_ctx.snapshot_index,
@@ -718,7 +740,7 @@ PrehandleResult KVStore::preHandleSSTsToDTFiles(
 
             // `split_keys` do not begin with 'z'.
             auto [split_keys, approx_bytes] = getSplitKey(log, this, new_region, sst_stream);
-            prehandling_trace.waitForSubtaskResources(region_id, split_keys.size() + 1, getMaxParallelPrehandleSize());
+            prehandling_trace.waitForSubtaskResources(region_id, split_keys.size() + 1, getMaxPrehandleSubtaskSize());
             ReadFromStreamResult result;
             if (split_keys.empty())
             {

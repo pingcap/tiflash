@@ -16,6 +16,7 @@
 
 #include <Common/LooseBoundedMPMCQueue.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Operators/Operator.h>
 
 #include <atomic>
@@ -61,8 +62,8 @@ public:
 
     void cancel();
 
-    void registerReadTask(TaskPtr && task) { queue.registerPipeReadTask(std::move(task)); }
-    void registerWriteTask(TaskPtr && task) { queue.registerPipeWriteTask(std::move(task)); }
+    void registerReadTask(TaskPtr && task, NotifyType type) { queue.registerPipeReadTask(std::move(task), type); }
+    void registerWriteTask(TaskPtr && task, NotifyType type) { queue.registerPipeWriteTask(std::move(task), type); }
 
 private:
     LooseBoundedMPMCQueue<Block> queue;
@@ -78,7 +79,10 @@ public:
     MPMCQueueResult tryPush(Block && block) { return queue->tryPush(std::move(block)); }
     void finish() { queue->producerFinish(); }
 
-    void registerTask(TaskPtr && task) override { queue->registerWriteTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        queue->registerWriteTask(std::move(task), NotifyType::WAIT_ON_SHARED_QUEUE_WRITE);
+    }
 
 private:
     SharedQueuePtr queue;
@@ -119,7 +123,10 @@ public:
     {}
     MPMCQueueResult tryPop(Block & block) { return queue->tryPop(block); }
 
-    void registerTask(TaskPtr && task) override { queue->registerReadTask(std::move(task)); }
+    void registerTask(TaskPtr && task) override
+    {
+        queue->registerReadTask(std::move(task), NotifyType::WAIT_ON_SHARED_QUEUE_READ);
+    }
 
 private:
     SharedQueuePtr queue;

@@ -17,6 +17,7 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/Read/LearnerReadWorker.h>
 #include <Storages/KVStore/Read/LockException.h>
+#include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/RegionQueryInfo.h>
@@ -125,7 +126,7 @@ std::vector<kvrpcpb::ReadIndexRequest> LearnerReadWorker::buildBatchReadIndexReq
         const RegionID region_id = region_to_query.region_id;
         // don't stale read in test scenarios.
         bool can_stale_read = mvcc_query_info.start_ts != std::numeric_limits<uint64_t>::max()
-            && start_ts <= region_table.getSelfSafeTS(region_id);
+            && start_ts <= region_table.safeTsMgr().getSelfSafeTS(region_id);
         if (can_stale_read)
         {
             batch_read_index_result.emplace(region_id, kvrpcpb::ReadIndexResponse());
@@ -406,17 +407,14 @@ void LearnerReadWorker::waitIndex(
             continue;
         }
 
-        // Try to resolve locks and flush data into storage layer
         const auto & physical_table_id = region_to_query.physical_table_id;
-        auto res = RegionTable::resolveLocksAndWriteRegion(
-            tmt,
+        auto res = RegionTable::checkRegionAndGetLocks(
             physical_table_id,
             region,
             mvcc_query_info.start_ts,
             region_to_query.bypass_lock_ts,
             region_to_query.version,
-            region_to_query.conf_version,
-            log);
+            region_to_query.conf_version);
 
         std::visit(
             variant_op::overloaded{

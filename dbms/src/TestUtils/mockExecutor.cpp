@@ -88,8 +88,7 @@ void DAGRequestBuilder::initDAGRequest(tipb::DAGRequest & dag_request)
 {
     dag_request.set_time_zone_name(properties.tz_name);
     dag_request.set_time_zone_offset(properties.tz_offset);
-    dag_request.set_flags(
-        dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */) | (1u << 6u /* OVERFLOW_AS_WARNING */));
+    dag_request.set_flags(dag_request.flags() | (1u << 1u /* TRUNCATE_AS_WARNING */));
 
     if (properties.encode_type == "chunk")
         dag_request.set_encode_type(tipb::EncodeType::TypeChunk);
@@ -852,7 +851,10 @@ void MockDAGRequestContext::assertMockInput(
 {
     assert(columnInfos.size() == columns.size());
     for (size_t i = 0; i < columns.size(); ++i)
+    {
         assert(columnInfos[i].name == columns[i].name);
+        assert(columnInfos[i].nullable == columns[i].type->isNullable());
+    }
 }
 
 } // namespace DB::tests

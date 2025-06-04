@@ -26,20 +26,26 @@ public:
         context.addMockTable(
             {"test_db", "test_table"},
             {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
-            {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
+            {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+             toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
         DB::MockColumnInfoVec partition_column_infos{{"partition", TiDB::TP::TypeLongLong}};
         context.addExchangeReceiver(
             "test_recv",
             {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
-            {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})},
+            {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+             toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})},
             1,
             partition_column_infos);
 
         context.addMockTable(
             {"test_db", "test_table_string"},
             {{"partition", TiDB::TP::TypeString}, {"order", TiDB::TP::TypeString}},
-            {toVec<String>("partition", {"banana", "banana", "banana", "banana", "apple", "apple", "apple", "apple"}),
-             toVec<String>("order", {"apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"})});
+            {toNullableVec<String>(
+                 "partition",
+                 {"banana", "banana", "banana", "banana", "apple", "apple", "apple", "apple"}),
+             toNullableVec<String>(
+                 "order",
+                 {"apple", "apple", "banana", "banana", "apple", "apple", "banana", "banana"})});
 
         context.addMockTable(
             {"test_db", "test_table_more_cols"},
@@ -47,16 +53,16 @@ public:
              {"partition2", TiDB::TP::TypeLongLong},
              {"order1", TiDB::TP::TypeLongLong},
              {"order2", TiDB::TP::TypeLongLong}},
-            {toVec<Int64>("partition1", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}),
-             toVec<Int64>("partition2", {1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2}),
-             toVec<Int64>("order1", {2, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1}),
-             toVec<Int64>("order2", {2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1})});
+            {toNullableVec<Int64>("partition1", {1, 1, 1, 1, 1, 1, 2, 2, 2, 2, 2, 2}),
+             toNullableVec<Int64>("partition2", {1, 1, 1, 2, 2, 2, 1, 1, 1, 2, 2, 2}),
+             toNullableVec<Int64>("order1", {2, 1, 1, 2, 1, 1, 2, 1, 1, 2, 1, 1}),
+             toNullableVec<Int64>("order2", {2, 2, 1, 2, 2, 1, 2, 2, 1, 2, 2, 1})});
 
         context.addMockTable(
             {"test_db", "test_table_float64"},
             {{"partition", TiDB::TP::TypeDouble}, {"order", TiDB::TP::TypeDouble}},
-            {toVec<Float64>("partition", {1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}),
-             toVec<Float64>("order", {1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00})});
+            {toNullableVec<Float64>("partition", {1.00, 1.00, 1.00, 1.00, 2.00, 2.00, 2.00, 2.00}),
+             toNullableVec<Float64>("order", {1.00, 1.00, 2.00, 2.00, 1.00, 1.00, 2.00, 2.00})});
 
         context.addMockTable(
             {"test_db", "test_table_datetime"},
@@ -65,14 +71,15 @@ public:
         context.addMockTable(
             {"test_db", "test_table_for_rank"},
             {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}},
-            {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}), toVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
+            {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+             toNullableVec<Int64>("order", {1, 1, 2, 2, 1, 1, 2, 2})});
 
         context.addMockTable(
             {"test_db", "test_table_for_lead_lag"},
             {{"partition", TiDB::TP::TypeLongLong}, {"order", TiDB::TP::TypeLongLong}, {"value", TiDB::TP::TypeString}},
-            {toVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
-             toVec<Int64>("order", {1, 2, 3, 4, 5, 6, 7, 8}),
-             toVec<String>("value", {"a", "b", "c", "d", "e", "f", "g", "h"})});
+            {toNullableVec<Int64>("partition", {1, 1, 1, 1, 2, 2, 2, 2}),
+             toNullableVec<Int64>("order", {1, 2, 3, 4, 5, 6, 7, 8}),
+             toNullableVec<String>("value", {"a", "b", "c", "d", "e", "f", "g", "h"})});
     }
 
     void executeWithTableScanAndConcurrency(

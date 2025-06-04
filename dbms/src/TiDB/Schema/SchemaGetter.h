@@ -28,7 +28,7 @@
 namespace DB
 {
 // The enum results are completely the same as the DDL Action listed in the "parser/model/ddl.go" of TiDB codebase, which must be keeping in sync.
-// https://github.com/pingcap/tidb/blob/9dfbccb01b76e6a5f2fc6f6562b8645dd5a151b1/pkg/parser/model/ddl.go#L29-L30
+// https://github.com/pingcap/tidb/blob/84492a9a1e5bff0b4a4256955ab8231975c2dde1/pkg/meta/model/job.go#L35-L36
 enum class SchemaActionType : Int8
 {
     None = 0,
@@ -103,13 +103,13 @@ enum class SchemaActionType : Int8
     ActionDropResourceGroup = 70,
     ActionAlterTablePartitioning = 71,
     ActionRemovePartitioning = 72,
-    ActionAddVectorIndex = 73,
-
+    ActionAddColumnarIndex = 73,
+    ActionModifyEngineAttribute = 74,
 
     // If we support new type from TiDB.
     // MaxRecognizedType also needs to be changed.
     // It should always be equal to the maximum supported type + 1
-    MaxRecognizedType = 74,
+    MaxRecognizedType = 75,
 };
 
 struct AffectedOption

@@ -67,11 +67,11 @@ std::optional<DM::LocalIndexesStats> getLocalIndexesStatsFromStorage(const Stora
         return std::nullopt;
 
     const auto & table_info = dm_storage->getTableInfo();
-    auto store = dm_storage->getStoreIfInited();
-    if (!store)
-        return DM::DeltaMergeStore::genLocalIndexStatsByTableInfo(table_info);
+    if (auto store = dm_storage->getStoreIfInited(); store)
+        return store->getLocalIndexStats();
 
-    return store->getLocalIndexStats();
+    // Check whether there exist any local index without initiating the store
+    return DM::DeltaMergeStore::genLocalIndexStatsByTableInfo(table_info);
 }
 
 BlockInputStreams StorageSystemDTLocalIndexes::read(

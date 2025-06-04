@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Storages/KVStore/MultiRaft/RegionCFDataBase.h>
 #include <Storages/KVStore/MultiRaft/RegionCFDataTrait.h>
 #include <Storages/KVStore/TiKVHelpers/DecodedLockCFValue.h>
@@ -62,7 +63,11 @@ namespace RecordKVFormat
             {
             case SHORT_VALUE_PREFIX:
             {
+#if ENABLE_NEXT_GEN
+                size_t str_len = readVarUInt(data, len);
+#else
                 size_t str_len = readUInt8(data, len);
+#endif
                 if (len < str_len)
                     throw Exception("content len shorter than short value len", ErrorCodes::LOGICAL_ERROR);
                 // no need short value
@@ -84,7 +89,7 @@ namespace RecordKVFormat
                 res.txn_size = readUInt64(data, len);
                 break;
             }
-#if SERVERLESS_PROXY != 0
+#if ENABLE_NEXT_GEN
             case IS_TXN_FILE_PREFIX:
             {
                 res.is_txn_file = true;
@@ -202,6 +207,11 @@ bool DecodedLockCFValue::isLargeTxn() const
 {
     // Because we do not cache the parsed result for large txn.
     return inner == nullptr;
+}
+
+size_t DecodedLockCFValue::getSize() const
+{
+    return sizeof(DecodedLockCFValue) + (isLargeTxn() ? 0 : sizeof(DecodedLockCFValue::Inner));
 }
 
 void DecodedLockCFValue::Inner::intoLockInfo(const std::shared_ptr<const TiKVKey> & key, kvrpcpb::LockInfo & res) const

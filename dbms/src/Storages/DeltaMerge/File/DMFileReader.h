@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/File/ColumnStream.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/File/ReadBlockInfo.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/DMFileReaderPool.h>
@@ -31,12 +32,11 @@
 namespace DB::DM
 {
 
-class DMFileWithVectorIndexBlockInputStream;
-
 
 class DMFileReader
 {
-    friend class DMFileWithVectorIndexBlockInputStream;
+    friend class DMFileInputStreamProvideVectorIndex;
+    friend class DMFileInputStreamProvideFullTextIndex;
     friend class DMFileReaderPoolSharding;
 
 public:
@@ -101,17 +101,8 @@ public:
 
 private:
     // Initialize, called by constructor
-    // Initialize pack_offset before initializing read_block_infos
     void initPackOffset();
-    void initReadBlockInfos();
 
-    struct ReadBlockInfo
-    {
-        size_t start_pack_id = 0;
-        size_t pack_count = 0;
-        RSResult rs_result = RSResult::All;
-        size_t read_rows = 0;
-    };
     // Split the first read block info to multiple read block infos accroding to `filter`
     // Used by readWithFilter, return new read block infos.
     std::vector<ReadBlockInfo> splitReadBlockInfos(const ReadBlockInfo & read_info, const IColumn::Filter & filter)

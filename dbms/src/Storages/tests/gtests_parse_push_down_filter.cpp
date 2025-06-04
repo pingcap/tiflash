@@ -50,15 +50,17 @@ public:
             // Maybe another test has already registed, ignore exception here.
         }
     }
+    void SetUp() override
+    {
+        ctx = DB::tests::TiFlashTestEnv::getContext();
+        ctx->getTimezoneInfo().resetByTimezoneName("Asia/Shanghai");
+        default_timezone_info = DB::tests::TiFlashTestEnv::getContext()->getTimezoneInfo();
+    }
 
 protected:
     LoggerPtr log = Logger::get();
-    ContextPtr ctx = DB::tests::TiFlashTestEnv::getContext();
-    TimezoneInfo default_timezone_info = DB::tests::TiFlashTestEnv::getContext()->getTimezoneInfo();
-    DM::PushDownExecutorPtr generatePushDownExecutor(
-        const String & table_info_json,
-        const String & query,
-        TimezoneInfo & timezone_info);
+    ContextPtr ctx;
+    TimezoneInfo default_timezone_info;
 };
 
 DM::PushDownExecutorPtr generatePushDownExecutor(
@@ -95,6 +97,7 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
 
     // these variables need to live long enough as it is kept as reference in `dag_query`
     const auto ann_query_info = tipb::ANNQueryInfo{};
+    const auto fts_query_info = tipb::FTSQueryInfo{};
     const auto runtime_filter_ids = std::vector<int>();
 
     DM::ColumnDefines columns_to_read;
@@ -103,45 +106,36 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
     {
         columns_to_read.push_back(DM::ColumnDefine(column.id, column.name, getDataTypeByColumnInfo(column)));
     }
+    const google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo> empty_used_indexes{}; // don't care used indexes
     std::unique_ptr<DAGQueryInfo> dag_query = std::make_unique<DAGQueryInfo>(
         conditions,
         ann_query_info,
+        fts_query_info,
         pushed_down_filters,
+        empty_used_indexes,
         table_info.columns,
         runtime_filter_ids, // don't care runtime filter
         0,
         timezone_info);
 
-    auto create_attr_by_column_id = [&columns_to_read](ColumnID column_id) -> DM::Attr {
-        auto iter = std::find_if(
-            columns_to_read.begin(),
-            columns_to_read.end(),
-            [column_id](const DM::ColumnDefine & d) -> bool { return d.id == column_id; });
-        if (iter != columns_to_read.end())
-            return DM::Attr{.col_name = iter->name, .col_id = iter->id, .type = iter->type};
-        // Maybe throw an exception? Or check if `type` is nullptr before creating filter?
-        return DM::Attr{.col_name = "", .col_id = column_id, .type = DataTypePtr{}};
-    };
+    DM::FilterParser::ColumnIDToAttrMap column_id_to_attr;
+    for (const auto & cd : columns_to_read)
+    {
+        column_id_to_attr[cd.id] = DM::Attr{.col_name = cd.name, .col_id = cd.id, .type = cd.type};
+    }
 
-    auto rs_operator
-        = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, std::move(create_attr_by_column_id), log);
+    auto rs_operator = DM::FilterParser::parseDAGQuery(*dag_query, table_info.columns, column_id_to_attr, log);
     auto push_down_executor = DM::PushDownExecutor::build(
         rs_operator,
         std::make_shared<tipb::ANNQueryInfo>(dag_query->ann_query_info),
+        std::make_shared<tipb::FTSQueryInfo>(dag_query->fts_query_info),
         table_info.columns,
         pushed_down_filters,
         columns_to_read,
+        nullptr,
         ctx,
         log);
     return push_down_executor;
-}
-
-DM::PushDownExecutorPtr ParsePushDownExecutorTest::generatePushDownExecutor(
-    const String & table_info_json,
-    const String & query,
-    TimezoneInfo & timezone_info)
-{
-    return ::DB::tests::generatePushDownExecutor(*ctx, table_info_json, query, timezone_info);
 }
 
 // Test cases for col and literal
@@ -160,6 +154,7 @@ try
     {
         // Equal between col and literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 = 666",
             default_timezone_info);
@@ -170,7 +165,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"666\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -182,6 +177,7 @@ try
     {
         // Greater between col and literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 > 666",
             default_timezone_info);
@@ -192,7 +188,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"666\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -204,6 +200,7 @@ try
     {
         // GreaterEqual between col and literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 >= 667",
             default_timezone_info);
@@ -214,7 +211,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -226,6 +223,7 @@ try
     {
         // Less between col and literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 < 777",
             default_timezone_info);
@@ -236,7 +234,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -248,6 +246,7 @@ try
     {
         // LessEqual between col and literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 <= 776",
             default_timezone_info);
@@ -258,7 +257,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"776\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -284,6 +283,7 @@ try
     {
         // Equal between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 667 = col_2",
             default_timezone_info);
@@ -294,7 +294,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -306,6 +306,7 @@ try
     {
         // NotEqual between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 667 != col_2",
             default_timezone_info);
@@ -316,7 +317,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"not_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -328,6 +329,7 @@ try
     {
         // Greater between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 667 < col_2",
             default_timezone_info);
@@ -338,7 +340,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater\",\"col\":\"col_2\",\"value\":\"667\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -350,6 +352,7 @@ try
     {
         // GreaterEqual between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 667 <= col_2",
             default_timezone_info);
@@ -360,7 +363,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"greater_equal\",\"col\":\"col_2\",\"value\":\"667\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -372,6 +375,7 @@ try
     {
         // Less between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 777 > col_2",
             default_timezone_info);
@@ -382,7 +386,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less\",\"col\":\"col_2\",\"value\":\"777\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -394,6 +398,7 @@ try
     {
         // LessEqual between literal and col (take care of direction)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where 777 >= col_2",
             default_timezone_info);
@@ -404,7 +409,7 @@ try
         EXPECT_EQ(rs_operator->toDebugString(), "{\"op\":\"less_equal\",\"col\":\"col_2\",\"value\":\"777\"}");
 
         Block before_where_block = Block{toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439})};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -432,6 +437,7 @@ try
     {
         // Not
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select col_1, col_2 from default.t_111 where NOT col_2=666",
             default_timezone_info);
@@ -447,7 +453,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -459,6 +465,7 @@ try
     {
         // And
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_1 = 'test1' and col_2 = 666",
             default_timezone_info);
@@ -474,7 +481,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -486,6 +493,7 @@ try
     {
         // OR
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 = 789 or col_2 = 777",
             default_timezone_info);
@@ -503,7 +511,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -516,6 +524,7 @@ try
     {
         // And with "not supported"
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_1 = 'test1' and not col_2 = 666",
             default_timezone_info);
@@ -531,7 +540,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -543,6 +552,7 @@ try
     {
         // And with not
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 = 789 and not col_3 = 666",
             default_timezone_info);
@@ -560,7 +570,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -572,6 +582,7 @@ try
     {
         // And with or
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 = 789 and (col_3 = 666 or col_3 = 678)",
             default_timezone_info);
@@ -591,7 +602,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 789, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -603,6 +614,7 @@ try
     {
         // Or with "not supported"
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_1 = 'test1' or col_2 = 666",
             default_timezone_info);
@@ -618,7 +630,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 1, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -630,6 +642,7 @@ try
     {
         // Or with not
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_1 = 'test1' or not col_2 = 666",
             default_timezone_info);
@@ -645,7 +658,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -657,6 +670,7 @@ try
     {
         // And between col and literal (not supported since And only support when child is ColumnExpr)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 and 1",
             default_timezone_info);
@@ -670,7 +684,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -682,6 +696,7 @@ try
     {
         // Or between col and literal (not supported since Or only support when child is ColumnExpr)
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             "select * from default.t_111 where col_2 or 1",
             default_timezone_info);
@@ -695,7 +710,7 @@ try
             {toVec<String>("col_1", {"a", "b", "c", "test1", "d", "test1", "pingcap", "tiflash"}),
              toVec<Int64>("col_2", {0, 666, 0, 1, 121, 666, 667, 888439}),
              toVec<Int64>("col_3", {3, 121, 0, 121, 121, 666, 667, 888439})}};
-        EXPECT_EQ(filter->extra_cast, nullptr);
+        EXPECT_FALSE(filter->extra_cast);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
         auto & col = before_where_block.getByName(filter->filter_column_name).column;
@@ -733,13 +748,15 @@ try
     // origin_time_stamp: 1802216106174185472
 
     {
-        // Greater between TimeStamp col and Datetime literal, use local timezone
         auto ctx = TiFlashTestEnv::getContext();
+        // Greater between TimeStamp col and Datetime literal, use Asia/Shanghai timezone
         auto & timezone_info = ctx->getTimezoneInfo();
+        timezone_info.resetByTimezoneName("Asia/Shanghai");
         convertTimeZone(origin_time_stamp, converted_time, *timezone_info.timezone, time_zone_utc);
         // converted_time: 0
 
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
                 + String("')"),
@@ -770,7 +787,7 @@ try
              toVec<Int64>(
                  "col_date",
                  {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
-        EXPECT_TRUE(filter->extra_cast);
+        ASSERT_TRUE(filter->extra_cast);
         filter->extra_cast->execute(before_where_block);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -789,6 +806,7 @@ try
         // converted_time: 1802216518491045888
 
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
                 + String("')"),
@@ -826,7 +844,7 @@ try
              toVec<Int64>(
                  "col_date",
                  {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
-        EXPECT_TRUE(filter->extra_cast);
+        ASSERT_TRUE(filter->extra_cast);
         filter->extra_cast->execute(before_where_block);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -845,6 +863,7 @@ try
         // converted_time: 0
 
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             String("select * from default.t_111 where col_timestamp > cast_string_datetime('") + datetime
                 + String("')"),
@@ -882,7 +901,7 @@ try
              toVec<Int64>(
                  "col_date",
                  {-1849559496301477888, 1849259496301477888, 0, 121, 121, 1849259496301477888, 667, 888439})}};
-        EXPECT_TRUE(filter->extra_cast);
+        ASSERT_TRUE(filter->extra_cast);
         filter->extra_cast->execute(before_where_block);
         filter->before_where->execute(before_where_block);
         EXPECT_EQ(before_where_block.rows(), 8);
@@ -895,6 +914,7 @@ try
     {
         // Greater between Datetime col and Datetime literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             String("select * from default.t_111 where col_datetime > cast_string_datetime('") + datetime + String("')"),
             default_timezone_info);
@@ -943,6 +963,7 @@ try
     {
         // Greater between Date col and Datetime literal
         auto filter = generatePushDownExecutor(
+            *ctx,
             table_info_json,
             String("select * from default.t_111 where col_date > cast_string_datetime('") + datetime + String("')"),
             default_timezone_info);

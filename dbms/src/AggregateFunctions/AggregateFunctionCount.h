@@ -120,6 +120,12 @@ public:
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
 
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        auto & container = static_cast<ColumnUInt64 &>(to).getData();
+        container.resize_fill(container.size() + num, data(place).count);
+    }
+
     /// May be used for optimization.
     static void addDelta(AggregateDataPtr __restrict place, UInt64 x) { data(place).count += x; }
 
@@ -209,6 +215,12 @@ public:
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
     }
 
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        auto & container = static_cast<ColumnUInt64 &>(to).getData();
+        container.resize_fill(container.size() + num, data(place).count);
+    }
+
     const char * getHeaderFilePath() const override { return __FILE__; }
 };
 
@@ -280,6 +292,12 @@ public:
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
         static_cast<ColumnUInt64 &>(to).getData().push_back(data(place).count);
+    }
+
+    void batchInsertSameResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, size_t num) const override
+    {
+        auto & container = static_cast<ColumnUInt64 &>(to).getData();
+        container.resize_fill(container.size() + num, data(place).count);
     }
 
     const char * getHeaderFilePath() const override { return __FILE__; }

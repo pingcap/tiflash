@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/SyncPoint/SyncPoint.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <IO/Buffer/MemoryReadWriteBuffer.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
@@ -31,7 +32,6 @@
 #include <common/logger_useful.h>
 #include <fiu.h>
 
-#include <chrono>
 #include <magic_enum.hpp>
 #include <memory>
 #include <thread>
@@ -159,7 +159,7 @@ void RegionPersister::forceTransformKVStoreV2toV3()
     assert(page_writer != nullptr);
 
     WriteBatch write_batch_del_v2{KVSTORE_NAMESPACE_ID};
-    auto meta_transform_acceptor = [&](const DB::Page & page) {
+    auto meta_transform_acceptor = [&](const DB::Page & page, size_t) {
         WriteBatch write_batch_transform{KVSTORE_NAMESPACE_ID};
         // Check pages have not contain field offset
         // Also get the tag of page_id
@@ -381,27 +381,73 @@ RegionMap RegionPersister::restore(
         LOG_INFO(log, "RegionPersister running. Current Run Mode is {}", magic_enum::enum_name(run_mode));
     }
 
+    static constexpr size_t PROGRESS_EACH_N_REGIONS = 2048;
+    static constexpr size_t PROGRESS_EACH_N_SECONDS = 5;
+
+    std::atomic<size_t> num_restored = 0;
+    AtomicStopwatch watch;
+
     RegionMap regions;
-    auto acceptor = [&](const DB::Page & page) {
+    auto acceptor = [&](const DB::Page & page, size_t num_total) {
+        if (++num_restored % PROGRESS_EACH_N_REGIONS == 0 || watch.compareAndRestart(PROGRESS_EACH_N_SECONDS))
+        {
+            LOG_INFO(
+                log,
+                "Restore regions in progress, processed={} total={} pct={:.2f}%",
+                num_restored,
+                num_total,
+                0 != num_total ? num_restored * 100.0 / num_total : 100.0);
+            watch.restart();
+        }
+
         // We will traverse the pages in V3 before traverse the pages in V2 When we used MIX MODE
         // If we found the page_id has been restored, just skip it.
         if (const auto it = regions.find(page.page_id); it != regions.end())
         {
-            LOG_INFO(log, "Already exist [page_id={}], skip it.", page.page_id);
+            LOG_INFO(log, "Region already exist, skip it, region_id={}", page.page_id);
             return;
         }
+        RUNTIME_CHECK_MSG(!page.data.empty(), "meet unexpected empty page data, region_id={}", page.page_id);
 
         ReadBufferFromMemory buf(page.data.begin(), page.data.size());
-        auto region = Region::deserialize(buf, proxy_helper);
+        RegionPtr region;
+        try
+        {
+            region = Region::deserialize(buf, proxy_helper);
+        }
+        catch (DB::Exception & ex)
+        {
+            ex.addMessage(fmt::format("restoring region_id={} page_size={}", page.page_id, page.data.size()));
+            ex.rethrow();
+        }
         RUNTIME_CHECK_MSG(
             page.page_id == region->id(),
-            "region_id and page_id not match! region_id={} page_id={}",
+            "region_id and page_id not match! region_id={} page_id={} page_size={}",
             region->id(),
-            page.page_id);
+            page.page_id,
+            page.data.size());
+#if ENABLE_NEXT_GEN
+        if (global_context.isKeyspaceInBlocklist(region->getKeyspaceID()))
+        {
+            LOG_WARNING(
+                log,
+                "Region skip restore because keyspace in blocklist, region_id={} keyspace={}",
+                region->id(),
+                region->getKeyspaceID());
+            return;
+        }
+        if (global_context.isRegionInBlocklist(region->id()))
+        {
+            LOG_WARNING(log, "Region skip restore because region_id in blacklist, region_id={}", region->id());
+            return;
+        }
+#endif
 
         regions.emplace(page.page_id, region);
     };
     page_reader->traverse(acceptor);
+
+    LOG_INFO(log, "Restore regions done, total={}", regions.size());
 
     return regions;
 }

@@ -21,9 +21,9 @@
 #include <Storages/DeltaMerge/File/DMFile.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/KVStore/Types.h>
+#include <boost_wrapper/program_options.h>
 #include <common/logger_useful.h>
 
-#include <boost/program_options.hpp>
 #include <boost/program_options/value_semantic.hpp>
 #include <iostream>
 

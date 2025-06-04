@@ -12,7 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
@@ -28,7 +30,6 @@
 #include <Storages/S3/CheckpointManifestS3Set.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/InputStreamTestUtils.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <aws/s3/model/CreateBucketRequest.h>
 #include <common/logger_useful.h>
 
@@ -56,6 +57,7 @@ struct FAPTestOpt
     bool mock_add_new_peer = false;
     bool persist_empty_segment = false;
     bool second_region = false;
+    bool fap_use_segment_to_end_map_cache = false;
 };
 
 class RegionKVStoreTestFAP : public KVStoreTestBase
@@ -229,17 +231,23 @@ void eventuallyThrow(F f)
     ASSERT_TRUE(thrown);
 }
 
-template <typename F>
-void eventuallyPredicate(F f)
+template <typename F, typename FP>
+void eventuallyPredicateEx(F f, FP fp)
 {
     using namespace std::chrono_literals;
-    for (int i = 0; i < 5; i++)
+    for (int i = 0; i < 10; i++)
     {
         if (f())
             return;
         std::this_thread::sleep_for(500ms);
     }
-    ASSERT_TRUE(false);
+    fp();
+}
+
+template <typename F>
+void eventuallyPredicate(F f)
+{
+    eventuallyPredicateEx(f, []() { throw Exception("not meet"); });
 }
 
 void assertNoSegment(
@@ -283,7 +291,7 @@ try
     // Write some data, and persist meta.
     auto [index, term]
         = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+    kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -356,10 +364,22 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     KVStore & kvs = getKVS();
     global_context.getTMTContext().debugSetKVStore(kvstore);
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+#if ENABLE_NEXT_GEN
+    if (opt.fap_use_segment_to_end_map_cache)
+    {
+        global_context.getSettingsRef().fap_use_segment_to_end_map_cache = true;
+        global_context.getTMTContext().getContext().getSettingsRef().fap_use_segment_to_end_map_cache = true;
+    }
+    else
+    {
+        global_context.getSettingsRef().fap_use_segment_to_end_map_cache = false;
+        global_context.getTMTContext().getContext().getSettingsRef().fap_use_segment_to_end_map_cache = false;
+    }
+#endif
     auto page_storage = global_context.getWriteNodePageStorage();
 
     table_id = proxy_instance->bootstrapTable(global_context, kvs, global_context.getTMTContext());
-    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
 
     auto store_id = kvs.getStore().store_id.load();
 
@@ -406,10 +426,11 @@ std::vector<CheckpointRegionInfoAndData> RegionKVStoreTestFAP::prepareForRestart
                 {WriteCmdType::Put, WriteCmdType::Put},
                 {ColumnFamilyType::Default, ColumnFamilyType::Write});
         }
-        kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+        kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
         if (opt.mock_add_new_peer)
         {
-            *kvs.getRegion(id)->mutMeta().debugMutRegionState().getMutRegion().add_peers() = createPeer(peer_id, true);
+            *kvs.getRegion(id)->mutMeta().debugMutRegionState().getMutRegion().add_peers()
+                = RegionBench::createPeer(peer_id, true);
             proxy_instance->getRegion(id)->addPeer(store_id, peer_id, metapb::PeerRole::Learner);
         }
         persistAfterWrite(global_context, kvs, proxy_instance, page_storage, id, index);
@@ -538,11 +559,68 @@ try
             DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
             1);
     }
+    // CheckpointIngestInfo is not removed.
+    eventuallyPredicate([&]() {
+        return CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
+    ASSERT_TRUE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+
+    const auto checkpoint_info = fap_context->tryGetCheckpointIngestInfo(region_id).value();
+    const auto checkpoint_info_meta = checkpoint_info->serializeMeta();
+
+    EngineStoreServerWrap w{
+        .tmt = &global_context.getTMTContext(),
+        .proxy_helper = proxy_helper.get(),
+    };
+
+    // Re-ingest, will success.
+    ApplyFapSnapshotImpl(
+        global_context.getTMTContext(),
+        proxy_helper.get(),
+        region_id,
+        2333,
+        true,
+        region_to_ingest->appliedIndex(),
+        region_to_ingest->appliedIndexTerm());
+    {
+        auto keyspace_id = kv_region->getKeyspaceID();
+        auto table_id = kv_region->getMappedTableID();
+        auto storage = global_context.getTMTContext().getStorages().get(keyspace_id, table_id);
+        ASSERT_TRUE(storage && storage->engineType() == TiDB::StorageEngine::DT);
+        auto dm_storage = std::dynamic_pointer_cast<StorageDeltaMerge>(storage);
+        auto store = dm_storage->getStore();
+        ASSERT_EQ(store->getRowKeyColumnSize(), 1);
+        verifyRows(
+            global_context,
+            store,
+            DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
+            1);
+    }
+
+    ClearFapSnapshot(&w, region_id, 1);
+
+    // Do it again. no throw.
+    ClearFapSnapshot(&w, region_id, 1);
+
+    // Re-ingest, throw.
+    EXPECT_THROW(
+        ApplyFapSnapshotImpl(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333,
+            true,
+            region_to_ingest->appliedIndex(),
+            region_to_ingest->appliedIndexTerm()),
+        DB::Exception);
+
     // CheckpointIngestInfo is removed.
     eventuallyPredicate([&]() {
         return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
     ASSERT_FALSE(fap_context->tryGetCheckpointIngestInfo(region_id).has_value());
+
+    assertNoSegment(global_context.getTMTContext(), kv_region, checkpoint_info_meta);
 }
 CATCH
 
@@ -647,7 +725,7 @@ try
     // Write some data, and persist meta.
     auto [index, term]
         = proxy_instance->normalWrite(region_id, {34}, {"v2"}, {WriteCmdType::Put}, {ColumnFamilyType::Default});
-    kvs.setRegionCompactLogConfig(0, 0, 0, 0);
+    kvs.debugGetConfigMut().debugSetCompactLogConfig(0, 0, 0, 0);
     persistAfterWrite(global_context, kvs, proxy_instance, page_storage, region_id, index);
 
     auto s3_client = S3::ClientFactory::instance().sharedTiFlashClient();
@@ -839,9 +917,32 @@ try
     sp.disable();
     t.join();
 
+    auto prev_fap_task_timeout_seconds = server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds;
+    SCOPE_EXIT({ server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds = prev_fap_task_timeout_seconds; });
     server.tmt->getContext().getSettingsRef().fap_task_timeout_seconds = 0;
     // Use another call to cancel
     FastAddPeer(&server, region_id, 2333);
+    eventuallyPredicate([&]() {
+        auto ptr = fap_context->getOrRestoreCheckpointIngestInfo(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            2333);
+        return ptr == nullptr
+            && !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
+
+    {
+        CheckpointIngestInfo::forciblyClean(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            region_id,
+            false,
+            CheckpointIngestInfo::CleanReason::ProxyFallback);
+    }
+    eventuallyPredicate([&]() {
+        return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
+    });
     LOG_INFO(log, "Try another snapshot");
     proxy_instance->snapshot(
         kvs,
@@ -853,7 +954,7 @@ try
         11,
         11,
         std::nullopt,
-        false);
+        std::nullopt);
     eventuallyPredicate([&]() {
         return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
@@ -863,11 +964,12 @@ try
 }
 CATCH
 
+#if ENABLE_NEXT_GEN
 // Test cancel when building segments
-TEST_F(RegionKVStoreTestFAP, Cancel5)
+TEST_F(RegionKVStoreTestFAP, Cancel5_1)
 try
 {
-    auto mock_data = prepareForRestart(FAPTestOpt{.second_region = true});
+    auto mock_data = prepareForRestart(FAPTestOpt{.second_region = true, .fap_use_segment_to_end_map_cache = true});
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -926,6 +1028,65 @@ try
 }
 CATCH
 
+// Test cancel when building segments
+TEST_F(RegionKVStoreTestFAP, Cancel5_2)
+try
+{
+    auto mock_data = prepareForRestart(FAPTestOpt{.second_region = true});
+
+    auto & global_context = TiFlashTestEnv::getGlobalContext();
+    auto fap_context = global_context.getSharedContextDisagg()->fap_context;
+    std::mutex exe_mut;
+    std::unique_lock exe_lock(exe_mut);
+    fap_context->tasks_trace->addTask(1, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut);
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
+    });
+    std::mutex exe_mut2;
+    std::unique_lock exe_lock2(exe_mut2);
+    fap_context->tasks_trace->addTask(2, [&]() {
+        // Keep the task in `tasks_trace` to prevent from canceling.
+        std::scoped_lock wait_exe_lock(exe_mut2);
+        return genFastAddPeerResFail(FastAddPeerStatus::NoSuitable);
+    });
+    FailPointHelper::enableFailPoint(FailPoints::pause_when_building_fap_segments);
+    std::packaged_task<FastAddPeerRes()> task([&]() {
+        return FastAddPeerImplWrite(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            1,
+            2333,
+            std::move(mock_data[0]),
+            0);
+    });
+    std::packaged_task<FastAddPeerRes()> task2([&]() {
+        return FastAddPeerImplWrite(
+            global_context.getTMTContext(),
+            proxy_helper.get(),
+            2,
+            2334,
+            std::move(mock_data[1]),
+            0);
+    });
+    auto result = task.get_future();
+    auto result2 = task2.get_future();
+    std::thread t([&]() { task(); });
+    std::thread t2([&]() { task2(); });
+    using namespace std::chrono_literals;
+    std::this_thread::sleep_for(1s);
+    fap_context->tasks_trace->asyncCancelTask(1);
+    FailPointHelper::disableFailPoint(FailPoints::pause_when_building_fap_segments);
+    // Can see log "FAP is canceled when building segments" and "FAP is canceled after build segments".
+    t.join();
+    t2.join();
+    exe_lock.unlock();
+    exe_lock2.unlock();
+    ASSERT_EQ(result.get().status, FastAddPeerStatus::Ok);
+    ASSERT_EQ(result2.get().status, FastAddPeerStatus::Ok);
+}
+CATCH
+#endif
 
 TEST_F(RegionKVStoreTestFAP, EmptySegment)
 try
@@ -975,7 +1136,7 @@ try
         10,
         10,
         std::nullopt,
-        false);
+        std::nullopt);
 
     std::mutex exe_mut;
     std::unique_lock exe_lock(exe_mut);
@@ -1016,6 +1177,7 @@ try
     auto mock_data = prepareForRestart(FAPTestOpt{})[0];
     KVStore & kvs = getKVS();
     RegionPtr kv_region = std::get<1>(mock_data);
+    auto apply_state = std::get<2>(mock_data);
 
     auto & global_context = TiFlashTestEnv::getGlobalContext();
     auto fap_context = global_context.getSharedContextDisagg()->fap_context;
@@ -1026,6 +1188,15 @@ try
         .proxy_helper = proxy_helper.get(),
     };
 
+    auto st = QueryFapSnapshotState(
+        &server,
+        region_id,
+        2333,
+        kv_region->getMeta().appliedIndex(),
+        kv_region->getMeta().appliedIndexTerm());
+    ASSERT_EQ(st, FapSnapshotState::NotFound);
+    ASSERT_EQ(fap_context->tasks_trace->queryState(region_id), FAPAsyncTasks::TaskState::NotScheduled);
+
     kvstore->getStore().store_id.store(1, std::memory_order_release);
     kvstore->debugMutStoreMeta().set_id(1);
     ASSERT_EQ(1, kvstore->getStoreID());
@@ -1034,8 +1205,12 @@ try
     FailPointHelper::enableFailPoint(FailPoints::force_set_fap_candidate_store_id);
     // The FAP will fail because it doesn't contain the new peer in region meta.
     FastAddPeer(&server, region_id, 2333);
-    eventuallyPredicate(
-        [&]() { return fap_context->tasks_trace->queryState(region_id) == FAPAsyncTasks::TaskState::Finished; });
+    eventuallyPredicateEx(
+        [&]() { return fap_context->tasks_trace->queryState(region_id) == FAPAsyncTasks::TaskState::Finished; },
+        [&]() {
+            LOG_ERROR(log, "Final state is {}", magic_enum::enum_name(fap_context->tasks_trace->queryState(region_id)));
+            throw Exception("not meet");
+        });
     eventuallyPredicate([&]() {
         return !CheckpointIngestInfo::restore(global_context.getTMTContext(), proxy_helper.get(), region_id, 2333);
     });
@@ -1059,7 +1234,7 @@ try
             0,
             0,
             std::nullopt,
-            false);
+            std::nullopt);
     }
     ASSERT_EQ(fap_context->tasks_trace->queryState(region_id), FAPAsyncTasks::TaskState::NotScheduled);
 

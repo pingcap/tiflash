@@ -28,11 +28,12 @@
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
-#include <Storages/DeltaMerge/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/DeltaMerge/SegmentRowID.h>
 #include <Storages/Page/PageDefinesBase.h>
 
 
@@ -357,7 +358,7 @@ private:
     const bool is_update{false};
 
     // The delta index of cached.
-    const DeltaIndexPtr shared_delta_index;
+    DeltaIndexPtr shared_delta_index;
     const UInt64 delta_index_epoch;
 
     // mem-table may not be ready when the snapshot is creating under disagg arch, so it is not "const"
@@ -414,6 +415,18 @@ public:
     ColumnFileSetSnapshotPtr getMemTableSetSnapshot() const { return mem_table_snap; }
     ColumnFileSetSnapshotPtr getPersistedFileSetSnapshot() const { return persisted_files_snap; }
 
+    ColumnFiles getColumnFiles() const
+    {
+        auto cfs = persisted_files_snap->getColumnFiles();
+        const auto & memory_cfs = mem_table_snap->getColumnFiles();
+        cfs.insert(cfs.end(), memory_cfs.begin(), memory_cfs.end());
+        return cfs;
+    }
+    const auto & getDataProvider() const
+    {
+        RUNTIME_CHECK(persisted_files_snap->getDataProvider() == mem_table_snap->getDataProvider());
+        return persisted_files_snap->getDataProvider();
+    }
     size_t getColumnFileCount() const
     {
         return mem_table_snap->getColumnFileCount() + persisted_files_snap->getColumnFileCount();
@@ -443,6 +456,9 @@ public:
     // But we need this because under disagg arch, we fetch the mem-table by streaming way.
     // After all mem-table fetched, we set the mem-table-set snapshot to the DeltaValueSnapshot.
     void setMemTableSetSnapshot(const ColumnFileSetSnapshotPtr & mem_table_snap_) { mem_table_snap = mem_table_snap_; }
+    // Under disagg arch, the DeltaIndex will be lazily fetched from the cache only before reading.
+    // Because we will decide whether to use DeltaIndex or VersionChain ​​before reading​​.
+    void setSharedDeltaIndex(const DeltaIndexPtr & delta_index) { shared_delta_index = delta_index; }
 };
 
 class DeltaValueReader
@@ -555,6 +571,39 @@ public:
             persisted_files_done = true;
             return mem_table_input_stream.read();
         }
+    }
+};
+
+class DeltaValueInputStreamWithRowID : public IBlockInputStream
+{
+private:
+    DeltaValueInputStream stream;
+    const size_t delta_offset;
+
+public:
+    DeltaValueInputStreamWithRowID(
+        const DMContext & context_,
+        const DeltaSnapshotPtr & delta_snap_,
+        const ColumnDefinesPtr & col_defs_,
+        const RowKeyRange & segment_range_,
+        ReadTag read_tag_,
+        size_t delta_offset_)
+        : stream(context_, delta_snap_, col_defs_, segment_range_, read_tag_)
+        , delta_offset(delta_offset_)
+    {}
+
+    String getName() const override { return "DeltaValueWithRowID"; }
+    Block getHeader() const override { return stream.getHeader(); }
+
+    Block read() override
+    {
+        auto block = stream.read();
+        if (!block)
+            return block;
+
+        block.setStartOffset(block.startOffset() + delta_offset);
+        block.setSegmentRowIdCol(createSegmentRowIdCol(block.startOffset(), block.rows()));
+        return block;
     }
 };
 

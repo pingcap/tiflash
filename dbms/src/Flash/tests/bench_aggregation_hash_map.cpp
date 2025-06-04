@@ -19,6 +19,7 @@
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Debug/TiFlashTestEnv.h>
 #include <Flash/Coprocessor/AggregationInterpreterHelper.h>
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
@@ -26,7 +27,6 @@
 #include <Interpreters/Aggregator.h>
 #include <Interpreters/Context.h>
 #include <TestUtils/TiFlashTestBasic.h>
-#include <TestUtils/TiFlashTestEnv.h>
 #include <benchmark/benchmark.h>
 #include <google/protobuf/util/json_util.h>
 #include <tipb/executor.pb.h>
@@ -294,7 +294,9 @@ try
             *params,
             "BenchProbeAggHashMap",
             /*concurrency=*/1,
-            register_operator_spill_context);
+            register_operator_spill_context,
+            /*is_auto_pass_through=*/false,
+            params->use_magic_hash);
         data_variants->aggregator = aggregator.get();
 
         Aggregator::AggProcessInfo agg_process_info(aggregator.get());

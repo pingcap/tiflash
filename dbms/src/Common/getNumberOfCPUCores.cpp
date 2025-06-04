@@ -20,7 +20,8 @@
 namespace CPUCores
 {
 UInt16 number_of_logical_cpu_cores = std::thread::hardware_concurrency();
-UInt16 number_of_physical_cpu_cores = std::thread::hardware_concurrency() / 2;
+// physical cpu cores should not be 0
+UInt16 number_of_physical_cpu_cores = std::max<UInt16>(1, std::thread::hardware_concurrency() / 2);
 } // namespace CPUCores
 
 
@@ -34,9 +35,6 @@ UInt16 getNumberOfPhysicalCPUCores()
     return CPUCores::number_of_physical_cpu_cores;
 }
 
-// We should call this function before Context has been created,
-// which will call `getNumberOfLogicalCPUCores`, or we can not
-// set cpu cores any more.
 void setNumberOfLogicalCPUCores(UInt16 number_of_logical_cpu_cores_)
 {
     CPUCores::number_of_logical_cpu_cores = number_of_logical_cpu_cores_;

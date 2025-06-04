@@ -38,9 +38,6 @@
 [submodule "contrib/prometheus-cpp"]
 	path = contrib/prometheus-cpp
 	url = https://github.com/jupp0r/prometheus-cpp.git
-[submodule "contrib/junction"]
-	path = contrib/junction
-	url = https://github.com/preshing/junction.git
 [submodule "contrib/jemalloc"]
 	path = contrib/jemalloc
 	url = https://github.com/jemalloc/jemalloc.git
@@ -155,3 +152,6 @@
 [submodule "contrib/highfive"]
 	path = contrib/highfive
 	url = https://github.com/BlueBrain/HighFive
+[submodule "contrib/tiflash-proxy-next-gen"]
+	path = contrib/tiflash-proxy-next-gen
+	url = git@github.com:tidbcloud/cloud-storage-engine.git

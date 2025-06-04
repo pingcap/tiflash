@@ -27,10 +27,10 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/Delta/ColumnFileFlushTask.h>
 #include <Storages/DeltaMerge/Delta/MinorCompaction.h>
-#include <Storages/DeltaMerge/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaIndex.h>
+#include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
-#include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <fmt/format.h>
@@ -49,7 +49,7 @@ class ColumnFilePersistedSet
     , private boost::noncopyable
 {
 private:
-    PageIdU64 metadata_id;
+    const PageIdU64 metadata_id;
     ColumnFilePersisteds persisted_files;
     // TODO: check the proper memory_order when use this atomic variable
     std::atomic<size_t> persisted_files_count = 0;
@@ -157,7 +157,9 @@ public:
         WriteBatches & wbs);
 
     /// Choose all small column files that can be compacted to larger column files
-    MinorCompactionPtr pickUpMinorCompaction(DMContext & context);
+    // Try to compact the CFTiny with rows less than `small_column_file_rows` into larger
+    // CFTiny
+    MinorCompactionPtr pickUpMinorCompaction(size_t delta_small_column_file_rows);
 
     /// Update the metadata to commit the compaction results
     bool installCompactionResults(const MinorCompactionPtr & compaction, WriteBatches & wbs);

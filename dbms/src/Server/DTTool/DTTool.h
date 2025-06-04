@@ -89,8 +89,7 @@ class ImitativeEnv
     DB::ContextPtr createImitativeContext(const std::string & workdir, bool encryption = false)
     {
         // set itself as global context
-        global_context = DB::Context::createGlobal();
-        global_context->setApplicationType(DB::Context::ApplicationType::LOCAL);
+        global_context = DB::Context::createGlobal(DB::Context::ApplicationType::LOCAL);
 
         global_context->initializeTiFlashMetrics();
         KeyManagerPtr key_manager = std::make_shared<MockKeyManager>(encryption);

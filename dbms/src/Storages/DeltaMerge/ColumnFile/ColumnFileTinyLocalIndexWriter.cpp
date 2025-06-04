@@ -16,8 +16,8 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyLocalIndexWriter.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTinyReader.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
-#include <Storages/DeltaMerge/dtpb/dmfile.pb.h>
+#include <Storages/DeltaMerge/Index/LocalIndexWriter.h>
+#include <Storages/DeltaMerge/dtpb/column_file.pb.h>
 
 
 namespace DB::ErrorCodes
@@ -94,7 +94,7 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
     struct IndexToBuild
     {
         LocalIndexInfo info;
-        VectorIndexBuilderPtr builder_vector;
+        LocalIndexWriterInMemoryPtr index_writer;
     };
 
     std::unordered_map<ColId, std::vector<IndexToBuild>> index_builders;
@@ -104,10 +104,9 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
         // Just skip if the index is already built
         if (file->hasIndex(index_info.index_id))
             continue;
-        RUNTIME_CHECK(index_info.def_vector_index != nullptr);
         index_builders[index_info.column_id].emplace_back(IndexToBuild{
             .info = index_info,
-            .builder_vector = {},
+            .index_writer = {},
         });
     }
 
@@ -125,17 +124,8 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
             file->getDataPageId());
 
         for (auto & index : indexes)
-        {
-            switch (index.info.kind)
-            {
-            case TiDB::ColumnarIndexKind::Vector:
-                index.builder_vector = VectorIndexBuilder::create(index.info.def_vector_index);
-                break;
-            default:
-                RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                break;
-            }
-        }
+            index.index_writer = LocalIndexWriter::createInMemory(index.info);
+
         read_columns->push_back(*cd_iter);
     }
 
@@ -171,16 +161,8 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
             const auto & col = col_with_type_and_name.column;
             for (const auto & index : index_builders[read_columns->at(col_idx).id])
             {
-                switch (index.info.kind)
-                {
-                case TiDB::ColumnarIndexKind::Vector:
-                    RUNTIME_CHECK(index.builder_vector);
-                    index.builder_vector->addBlock(*col, del_mark, should_proceed);
-                    break;
-                default:
-                    RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                    break;
-                }
+                RUNTIME_CHECK(index.index_writer);
+                index.index_writer->addBlock(*col, del_mark, should_proceed);
             }
         }
     }
@@ -192,45 +174,24 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
         const auto & cd = read_columns->at(col_idx);
         for (const auto & index : index_builders[cd.id])
         {
-            switch (index.info.kind)
-            {
-            case TiDB::ColumnarIndexKind::Vector:
-            {
-                RUNTIME_CHECK(index.builder_vector);
-                auto index_page_id = options.storage_pool->newLogPageId();
-                MemoryWriteBuffer write_buf;
-                CompressedWriteBuffer compressed(write_buf);
-                index.builder_vector->saveToBuffer(compressed);
-                compressed.next();
-                auto data_size = write_buf.count();
-                auto buf = write_buf.tryGetReadBuffer();
-                // ColumnFileDataProviderRNLocalPageCache currently does not support read data with fields
-                options.wbs.log.putPage(index_page_id, 0, buf, data_size, {data_size});
-
-                auto idx_info = dtpb::ColumnFileIndexInfo{};
-                idx_info.set_index_page_id(index_page_id);
-                auto * idx_props = idx_info.mutable_index_props();
-                idx_props->set_kind(dtpb::IndexFileKind::VECTOR_INDEX);
-                idx_props->set_index_id(index.info.index_id);
-                idx_props->set_file_size(data_size);
-                auto * vector_index = idx_props->mutable_vector_index();
-                vector_index->set_format_version(0);
-                vector_index->set_dimensions(index.info.def_vector_index->dimension);
-                vector_index->set_distance_metric(
-                    tipb::VectorDistanceMetric_Name(index.info.def_vector_index->distance_metric));
-                index_infos->emplace_back(std::move(idx_info));
-
-                break;
-            }
-            default:
-                RUNTIME_CHECK_MSG(false, "Unsupported index kind: {}", magic_enum::enum_name(index.info.kind));
-                break;
-            }
+            RUNTIME_CHECK(index.index_writer);
+            auto index_page_id = options.storage_pool->newLogPageId();
+            MemoryWriteBuffer write_buf;
+            CompressedWriteBuffer compressed(write_buf);
+            dtpb::ColumnFileIndexInfo pb_cf_idx;
+            pb_cf_idx.set_index_page_id(index_page_id);
+            auto idx_info = index.index_writer->finalize(compressed, [&write_buf] { return write_buf.count(); });
+            pb_cf_idx.mutable_index_props()->Swap(&idx_info);
+            auto data_size = write_buf.count();
+            auto buf = write_buf.tryGetReadBuffer();
+            // ColumnFileDataProviderRNLocalPageCache currently does not support read data withiout fields
+            options.wbs.log.putPage(index_page_id, 0, buf, data_size, {data_size});
+            index_infos->emplace_back(std::move(pb_cf_idx));
         }
     }
 
-    if (file->index_infos)
-        file->index_infos->insert(file->index_infos->end(), index_infos->begin(), index_infos->end());
+    if (const auto & file_index_info = file->getIndexInfos(); file_index_info)
+        index_infos->insert(index_infos->end(), file_index_info->begin(), file_index_info->end());
 
     options.wbs.writeLogAndData();
     // Note: The id of the file cannot be changed, otherwise minor compaction will fail.

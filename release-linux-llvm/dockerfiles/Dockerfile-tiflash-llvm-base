@@ -1,4 +1,5 @@
-# Copyright 2022 PingCAP, Inc.
+# syntax=docker/dockerfile:1
+# Copyright 2025 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,22 +13,44 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# Multiple platform support
+# ===========================
+# Base
+FROM quay.io/rockylinux/rockylinux:8.10.20240528-ubi AS base
 
-FROM quay.io/rockylinux/rockylinux:8.10.20240528-ubi
+ARG arch
+RUN mkdir /misc
+# Do not copy misc/* here, otherwise modifying unnecessary files will cause cache invalidation
+COPY misc/_bake_include.sh /misc/
+COPY misc/bake_base.sh /misc/
+RUN sh /misc/bake_base.sh
 
-COPY misc /misc
+# ===========================
+# Base + LLVM
+FROM base AS llvm
 
-RUN sh /misc/bake_llvm_base.sh
+ARG arch
+# Do not copy misc/* here, otherwise modifying unnecessary files will cause cache invalidation
+COPY misc/bake_llvm.sh /misc/
+RUN sh /misc/bake_llvm.sh
 
 ENV PATH="/opt/cmake/bin:/usr/local/bin/:${PATH}:/usr/local/go/bin:/root/.cargo/bin" \
-    LIBRARY_PATH="/usr/local/lib/$(uname -m)-unknown-linux-gnu/:${LIBRARY_PATH}" \
-    LD_LIBRARY_PATH="/usr/local/lib/$(uname -m)-unknown-linux-gnu/:${LD_LIBRARY_PATH}" \
-    CPLUS_INCLUDE_PATH="/usr/local/include/$(uname -m)-unknown-linux-gnu/c++/v1/:${CPLUS_INCLUDE_PATH}" \
-    OPENSSL_ROOT_DIR="/usr/local/opt/openssl" \
+    LIBRARY_PATH="/usr/local/lib/${arch}-unknown-linux-gnu/:${LIBRARY_PATH}" \
+    LD_LIBRARY_PATH="/usr/local/lib/${arch}-unknown-linux-gnu/:${LD_LIBRARY_PATH}" \
+    CPLUS_INCLUDE_PATH="/usr/local/include/${arch}-unknown-linux-gnu/c++/v1/:${CPLUS_INCLUDE_PATH}" \
     CC=clang \
     CXX=clang++ \
     LD=ld.lld
+
+# ===========================
+# Base + LLVM + Rest (OpenSSL, Rust, etc)
+FROM llvm
+
+ARG arch
+
+COPY misc/* /misc/
+RUN sh /misc/bake_rest.sh
+
+ENV OPENSSL_ROOT_DIR="/usr/local/opt/openssl"
 
 USER root
 WORKDIR /root/

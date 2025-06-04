@@ -44,8 +44,9 @@
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
-#include <Storages/DeltaMerge/Index/VectorIndex.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -119,7 +120,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
 {
     const ColumnsDescription & columns = getColumns();
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "updateTableColumnInfo, table_name={} ordinary=\"{}\" materialized=\"{}\"",
         table_column_info->table_name,
@@ -224,6 +225,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         }
         table_column_defines.push_back(col_def);
     }
+    table_column_defines.shrink_to_fit();
 
     if (!new_columns.materialized.contains(MutSup::version_column_name))
     {
@@ -319,7 +321,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         // TODO: Handle with PK change: drop old PK column cache rather than let LRU evict it.
     }
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "updateTableColumnInfo finished, table_name={} table_column_defines={}",
         table_column_info->table_name,
@@ -678,6 +680,16 @@ void setColumnsToRead(
             extra_table_id_index = i;
             continue;
         }
+        else if (column_names[i] == DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.name)
+        {
+            col_define.name = column_names[i];
+            col_define.id = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id;
+            col_define.type = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.type;
+        }
+        else if (column_names[i] == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name)
+        {
+            col_define = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD;
+        }
         else
         {
             auto & column = header->getByName(column_names[i]);
@@ -846,8 +858,14 @@ BlockInputStreams StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter
-        = PushDownExecutor::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
+    auto filter = PushDownExecutor::build(
+        query_info,
+        columns_to_read,
+        store->getTableColumns(),
+        query_info.dag_query ? query_info.dag_query->used_indexes
+                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
+        context,
+        tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -862,7 +880,7 @@ BlockInputStreams StorageDeltaMerge::read(
         /*start_ts=*/mvcc_query_info.start_ts,
         filter,
         runtime_filter_list,
-        query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
+        query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
@@ -930,8 +948,14 @@ void StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter
-        = PushDownExecutor::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
+    auto filter = PushDownExecutor::build(
+        query_info,
+        columns_to_read,
+        store->getTableColumns(),
+        query_info.dag_query ? query_info.dag_query->used_indexes
+                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
+        context,
+        tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
@@ -948,7 +972,7 @@ void StorageDeltaMerge::read(
         /*start_ts=*/mvcc_query_info.start_ts,
         filter,
         runtime_filter_list,
-        query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
+        query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
         query_info.keep_order,
         /* is_fast_scan */ query_info.is_fast_scan,
@@ -1078,6 +1102,13 @@ UInt64 StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
 {
     GET_METRIC(tiflash_storage_command_count, type_ingest_checkpoint).Increment();
     return getAndMaybeInitStore()->ingestSegmentsFromCheckpointInfo(global_context, settings, range, checkpoint_info);
+}
+
+UInt64 StorageDeltaMerge::removeSegmentsFromCheckpointInfo(
+    const CheckpointIngestInfo & checkpoint_info,
+    const Settings & settings)
+{
+    return getAndMaybeInitStore()->removeSegmentsFromCheckpointInfo(global_context, settings, checkpoint_info);
 }
 
 UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)

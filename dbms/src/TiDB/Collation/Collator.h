@@ -101,7 +101,10 @@ public:
         = 0;
     virtual StringRef sortKeyNoTrim(const char * s, size_t length, std::string & container) const = 0;
     virtual StringRef sortKey(const char * s, size_t length, std::string & container) const = 0;
-    virtual size_t maxBytesForOneChar() const = 0;
+    // For sort key, a n * length mem will be reserved to decode collator.
+    // This method returns n.
+    virtual size_t sortKeyReservedSpaceMultipler() const = 0;
+    virtual bool isTrivialCollator() const = 0;
     virtual std::unique_ptr<IPattern> pattern() const = 0;
     int32_t getCollatorId() const { return collator_id; }
     CollatorType getCollatorType() const { return collator_type; }
@@ -223,13 +226,14 @@ public:
 
     std::unique_ptr<IPattern> pattern() const override;
 
-    size_t maxBytesForOneChar() const override
+    size_t sortKeyReservedSpaceMultipler() const override
     {
         // BinCollator only trims trailing spaces,
         // so it does not increase the space required after decoding.
         // Hence, it returns 1 here.
         return 1;
     }
+    bool isTrivialCollator() const override { return !padding; }
 
 private:
     const std::string name = padding ? "BinaryPadding" : "Binary";
@@ -304,11 +308,12 @@ public:
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<UCACICollator>>(); }
 
-    size_t maxBytesForOneChar() const override
+    size_t sortKeyReservedSpaceMultipler() const override
     {
         // Every char have 8 uint16 at most.
         return 8 * sizeof(uint16_t);
     }
+    bool isTrivialCollator() const override { return false; }
 
 private:
     const std::string name = "UnicodeCI";
@@ -371,7 +376,9 @@ public:
 
     std::unique_ptr<IPattern> pattern() const override { return std::make_unique<Pattern<GeneralCICollator>>(); }
 
-    size_t maxBytesForOneChar() const override { return sizeof(WeightType); }
+    size_t sortKeyReservedSpaceMultipler() const override { return sizeof(WeightType); }
+
+    bool isTrivialCollator() const override { return false; }
 
 private:
     const std::string name = "GeneralCI";
@@ -406,17 +413,25 @@ using BIN_COLLATOR_PADDING = BinCollator<char, true>;
 using BIN_COLLATOR_NON_PADDING = BinCollator<char, false>;
 } // namespace TiDB
 
-#define APPLY_FOR_COLLATOR_TYPES_WITH_VARS(VAR_PREFIX, M)                                                    \
-    M(VAR_PREFIX, utf8_general_ci, TiDB::GeneralCICollator, TiDB::ITiDBCollator::UTF8_GENERAL_CI)            \
-    M(VAR_PREFIX, utf8mb4_general_ci, TiDB::GeneralCICollator, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI)      \
-    M(VAR_PREFIX, utf8_unicode_ci, TiDB::UCACI_0400_PADDING, TiDB::ITiDBCollator::UTF8_UNICODE_CI)           \
-    M(VAR_PREFIX, utf8mb4_unicode_ci, TiDB::UCACI_0400_PADDING, TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI)     \
-    M(VAR_PREFIX, utf8mb4_0900_ai_ci, TiDB::UCACI_0900_NON_PADDING, TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI) \
-    M(VAR_PREFIX, utf8mb4_0900_bin, TiDB::UTF8MB4_0900_BIN_TYPE, TiDB::ITiDBCollator::UTF8MB4_0900_BIN)      \
-    M(VAR_PREFIX, utf8mb4_bin, TiDB::UTF8MB4_BIN_TYPE, TiDB::ITiDBCollator::UTF8MB4_BIN)                     \
-    M(VAR_PREFIX, latin1_bin, TiDB::BIN_COLLATOR_PADDING, TiDB::ITiDBCollator::LATIN1_BIN)                   \
-    M(VAR_PREFIX, binary, TiDB::BIN_COLLATOR_NON_PADDING, TiDB::ITiDBCollator::BINARY)                       \
-    M(VAR_PREFIX, ascii_bin, TiDB::BIN_COLLATOR_PADDING, TiDB::ITiDBCollator::ASCII_BIN)                     \
-    M(VAR_PREFIX, utf8_bin, TiDB::UTF8MB4_BIN_TYPE, TiDB::ITiDBCollator::UTF8_BIN)
+#define APPLY_FOR_COLLATOR_TYPES_WITH_VARS(VAR_PREFIX, M, ...)                                                         \
+    M(VAR_PREFIX, utf8_general_ci, TiDB::GeneralCICollator, TiDB::ITiDBCollator::UTF8_GENERAL_CI, ##__VA_ARGS__)       \
+    M(VAR_PREFIX, utf8mb4_general_ci, TiDB::GeneralCICollator, TiDB::ITiDBCollator::UTF8MB4_GENERAL_CI, ##__VA_ARGS__) \
+    M(VAR_PREFIX, utf8_unicode_ci, TiDB::UCACI_0400_PADDING, TiDB::ITiDBCollator::UTF8_UNICODE_CI, ##__VA_ARGS__)      \
+    M(VAR_PREFIX,                                                                                                      \
+      utf8mb4_unicode_ci,                                                                                              \
+      TiDB::UCACI_0400_PADDING,                                                                                        \
+      TiDB::ITiDBCollator::UTF8MB4_UNICODE_CI,                                                                         \
+      ##__VA_ARGS__)                                                                                                   \
+    M(VAR_PREFIX,                                                                                                      \
+      utf8mb4_0900_ai_ci,                                                                                              \
+      TiDB::UCACI_0900_NON_PADDING,                                                                                    \
+      TiDB::ITiDBCollator::UTF8MB4_0900_AI_CI,                                                                         \
+      ##__VA_ARGS__)                                                                                                   \
+    M(VAR_PREFIX, utf8mb4_0900_bin, TiDB::UTF8MB4_0900_BIN_TYPE, TiDB::ITiDBCollator::UTF8MB4_0900_BIN, ##__VA_ARGS__) \
+    M(VAR_PREFIX, utf8mb4_bin, TiDB::UTF8MB4_BIN_TYPE, TiDB::ITiDBCollator::UTF8MB4_BIN, ##__VA_ARGS__)                \
+    M(VAR_PREFIX, latin1_bin, TiDB::BIN_COLLATOR_PADDING, TiDB::ITiDBCollator::LATIN1_BIN, ##__VA_ARGS__)              \
+    M(VAR_PREFIX, binary, TiDB::BIN_COLLATOR_NON_PADDING, TiDB::ITiDBCollator::BINARY, ##__VA_ARGS__)                  \
+    M(VAR_PREFIX, ascii_bin, TiDB::BIN_COLLATOR_PADDING, TiDB::ITiDBCollator::ASCII_BIN, ##__VA_ARGS__)                \
+    M(VAR_PREFIX, utf8_bin, TiDB::UTF8MB4_BIN_TYPE, TiDB::ITiDBCollator::UTF8_BIN, ##__VA_ARGS__)
 
-#define APPLY_FOR_COLLATOR_TYPES(M) APPLY_FOR_COLLATOR_TYPES_WITH_VARS(tmp_, M)
+#define APPLY_FOR_COLLATOR_TYPES(M, ...) APPLY_FOR_COLLATOR_TYPES_WITH_VARS(tmp_, M, ##__VA_ARGS__)

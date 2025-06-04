@@ -31,6 +31,12 @@ public:
         const WindowDescription & window_description_,
         const String & req_id);
 
+    ~WindowTransformAction()
+    {
+        for (auto & ws : aggregation_workspaces)
+            ws.aggregate_function->destroy(ws.aggregate_function_state.data());
+    }
+
     void cleanUp();
 
     void advancePartitionEnd();
@@ -39,16 +45,16 @@ public:
     bool arePeers(const RowNumber & peer_group_last_row, const RowNumber & current_row) const;
 
     void advanceFrameStart();
-    void advanceFrameEndCurrentRow();
     void advanceFrameEnd();
+    void advanceFrameStartCurrentRow();
+    void advanceFrameEndCurrentRow();
+    void advanceRangeFrameEndCurrentRowShortcut();
 
     void writeOutCurrentRow();
+    RowNumber writeBatchResult();
 
     Block tryGetOutputBlock();
     void releaseAlreadyOutputWindowBlock();
-
-    void initialWorkspaces();
-    void initialPartitionAndOrderColumnIndices();
 
     Columns & inputAt(const RowNumber & x)
     {
@@ -96,8 +102,6 @@ public:
 
     void appendBlock(Block & current_block);
 
-    bool onlyHaveRowNumber();
-
     Int64 getPartitionEndRow(size_t block_rows);
 
     void appendInfo(FmtBuffer & buffer) const;
@@ -143,6 +147,7 @@ private:
     template <typename AuxColType, typename OrderByColType, bool is_begin, bool is_desc>
     RowNumber moveCursorAndFindRangeFrame(RowNumber cursor, AuxColType current_row_aux_value);
 
+    template <bool need_decrease, bool support_batch_calculate>
     void tryCalculate();
 
     template <
@@ -160,6 +165,74 @@ private:
     // distance is left - right.
     UInt64 distance(RowNumber left, RowNumber right);
 
+    void initialWorkspaces();
+    void initialPartitionAndOrderColumnIndices();
+    void initialAggregateFunction(
+        WindowFunctionWorkspace & workspace,
+        const WindowFunctionDescription & window_function_description);
+
+    void addAggregationState(WindowFunctionWorkspace & ws, const RowNumber & start, const RowNumber & end)
+    {
+        addOrDecreaseAggregationState<true>(ws, start, end);
+    }
+
+    void decreaseAggregationState(WindowFunctionWorkspace & ws, const RowNumber & start, const RowNumber & end)
+    {
+        addOrDecreaseAggregationState<false>(ws, start, end);
+    }
+
+    template <bool is_add>
+    void addOrDecreaseAggregationState(WindowFunctionWorkspace & ws, const RowNumber & start, const RowNumber & end)
+    {
+        if unlikely (start == end)
+            return;
+
+        const auto * agg_func = ws.aggregate_function.get();
+        auto * buf = ws.aggregate_function_state.data();
+
+        // Used for aggregate function.
+        // To achieve better performance, we will have to loop over blocks and
+        // rows manually, instead of using advanceRowNumber().
+        // For this purpose, the end block can be different than the
+        // block of the end row (it's usually the next block).
+        const auto past_the_end_block = end.row == 0 ? end.block : end.block + 1;
+
+        for (auto block_number = start.block; block_number < past_the_end_block; ++block_number)
+        {
+            auto & block = blockAt(block_number);
+
+            if (ws.cached_block_number != block_number)
+            {
+                for (size_t i = 0; i < ws.arguments.size(); ++i)
+                    ws.argument_columns[i] = block.input_columns[ws.arguments[i]].get();
+                ws.cached_block_number = block_number;
+            }
+
+            // First and last blocks may be processed partially, and other blocks are processed in full.
+            const auto start_row = block_number == start.block ? start.row : 0;
+            const auto end_row = block_number == end.block ? end.row : block.rows;
+            auto * columns = ws.argument_columns.data();
+
+            if constexpr (is_add)
+            {
+                agg_func->addBatchSinglePlace(start_row, end_row - start_row, buf, columns, arena.get());
+            }
+            else
+            {
+                for (auto row = start_row; row < end_row; ++row)
+                    agg_func->decrease(buf, columns, row, arena.get());
+            }
+        }
+    }
+
+    // Use decrease interface only when add row number is larger than decrease row number
+    bool checkIfNeedDecrease();
+
+    template <bool need_decrease>
+    void updateAggregationState();
+
+    void reinitializeAggFuncBeforeNextPartition();
+
 public:
     LoggerPtr log;
 
@@ -175,7 +248,14 @@ public:
     std::vector<size_t> order_column_indices;
 
     // Per-window-function scratch spaces.
-    std::vector<WindowFunctionWorkspace> workspaces;
+    std::vector<WindowFunctionWorkspace> window_workspaces;
+    std::vector<WindowFunctionWorkspace> aggregation_workspaces;
+    std::vector<DataTypePtr> return_types;
+
+    bool has_agg = false;
+
+    // We are processing the first row in the current partition if it's true
+    bool first_processed;
 
     // A sliding window of blocks we currently need. We add the input blocks as
     // they arrive, and discard the blocks we don't need anymore. The blocks
@@ -239,7 +319,11 @@ public:
     // Auxiliary variable for range frame type when calculating frame_end
     RowNumber prev_frame_end;
 
-    //TODO: used as template parameters
-    bool only_have_row_number = false;
+    bool has_rank_or_dense_rank = false;
+
+    // When all rows in same partition share one result, we set this var to true
+    bool support_batch_calculate = false;
+
+    std::unique_ptr<Arena> arena;
 };
 } // namespace DB

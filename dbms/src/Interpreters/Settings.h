@@ -182,6 +182,9 @@ struct Settings
     M(SettingUInt64, dt_merged_file_max_size, 16 * 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                \
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingDouble, dt_page_gc_threshold_raft_data, 0.05, "Max valid rate of deciding to do a GC for BlobFile storing PageData in PageStorage")                                                                                        \
+    M(SettingInt64, enable_version_chain, 1, "Enable version chain or not: 0 - disable, 1 - enabled. "                                                                                                                                  \
+                                             "More details are in the comments of `enum class VersionChainMode`."                                                                                                                       \
+                                             "Modifying this configuration requires a restart to reset the in-memory state.")                                                                                                           \
     /* DeltaTree engine testing settings */\
     M(SettingUInt64, dt_insert_max_rows, 0, "[testing] Max rows of insert blocks when write into DeltaTree Engine. By default 0 means no limit.")                                                                                       \
     M(SettingBool, dt_raw_filter_range, true, "[unused] Do range filter or not when read data in raw mode in DeltaTree Engine.")                                                                                                        \
@@ -336,7 +339,8 @@ struct Settings
     M(SettingUInt64, join_v2_probe_enable_prefetch_threshold, 1024 * 1024, "hash join v2 minimum row number of join build table to use prefetch during join probe phase")                                                               \
     M(SettingUInt64, join_v2_probe_prefetch_step, 16, "hash join v2 probe prefetch length")                                                                                                                                             \
     M(SettingUInt64, join_v2_probe_insert_batch_size, 128, "hash join v2 probe insert batch size")                                                                                                                                      \
-    M(SettingBool, join_v2_enable_tagged_pointer, true, "hash join v2 enable tagged pointer")
+    M(SettingBool, join_v2_enable_tagged_pointer, true, "hash join v2 enable tagged pointer") \
+    M(SettingBool, hashagg_use_magic_hash, false, "whether to use magic hash for hashagg")
 
 
 // clang-format on

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Stopwatch.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabaseTiFlash.h>
@@ -121,6 +122,16 @@ void loadMetadata(Context & context)
         if (db_name == SYSTEM_DATABASE)
             continue;
 
+#if ENABLE_NEXT_GEN
+        // Ignore database owned by keyspace in blocklist
+        auto keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(db_name);
+        if (context.isKeyspaceInBlocklist(keyspace_id))
+        {
+            LOG_WARNING(log, "database {} ignored because keyspace in blocklist, keyspace={}", db_name, keyspace_id);
+            continue;
+        }
+#endif
+
         databases.emplace(db_name, path + file);
     }
 
@@ -177,30 +188,50 @@ void loadMetadata(Context & context)
             force_restore_data);
     };
 
-    size_t default_num_threads
-        = std::max(4UL, std::thread::hardware_concurrency()) * context.getSettingsRef().init_thread_count_scale;
-    auto load_database_thread_num = std::min(default_num_threads, databases.size());
-
-    auto load_databases_thread_pool
-        = ThreadPool(load_database_thread_num, load_database_thread_num / 2, load_database_thread_num * 2);
-    auto load_databases_wait_group = load_databases_thread_pool.waitGroup();
-
-    auto load_tables_thread_pool = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
-
-    for (const auto & database : databases)
+    if (context.getSettingsRef().init_thread_count_scale > 0)
     {
-        const auto & db_name = database.first;
-        const auto & meta_file = database.second;
+        size_t default_num_threads = std::max(4UL, std::thread::hardware_concurrency()) //
+            * context.getSettingsRef().init_thread_count_scale;
+        auto load_database_thread_num = std::min(default_num_threads, databases.size());
+        LOG_INFO(log, "Loading metadata with thread pool, thread_count={}", load_database_thread_num);
 
-        auto task
-            = [&load_database, &context, &db_name, &meta_file, has_force_restore_data_flag, &load_tables_thread_pool] {
-                  load_database(context, db_name, meta_file, &load_tables_thread_pool, has_force_restore_data_flag);
-              };
+        auto load_databases_thread_pool
+            = ThreadPool(load_database_thread_num, load_database_thread_num / 2, load_database_thread_num * 2);
+        auto load_databases_wait_group = load_databases_thread_pool.waitGroup();
 
-        load_databases_wait_group->schedule(task);
+        auto load_tables_thread_pool
+            = ThreadPool(default_num_threads, default_num_threads / 2, default_num_threads * 2);
+
+        for (const auto & database : databases)
+        {
+            const auto & db_name = database.first;
+            const auto & meta_file = database.second;
+
+            auto task = [&load_database,
+                         &context,
+                         &db_name,
+                         &meta_file,
+                         has_force_restore_data_flag,
+                         &load_tables_thread_pool] {
+                load_database(context, db_name, meta_file, &load_tables_thread_pool, has_force_restore_data_flag);
+            };
+
+            load_databases_wait_group->schedule(task);
+        }
+
+        load_databases_wait_group->wait();
     }
-
-    load_databases_wait_group->wait();
+    else
+    {
+        // init_thread_count_scale == 0, run in serial order
+        LOG_INFO(log, "Loading metadata without thread pool");
+        for (const auto & database : databases)
+        {
+            const auto & db_name = database.first;
+            const auto & meta_file = database.second;
+            load_database(context, db_name, meta_file, nullptr, has_force_restore_data_flag);
+        }
+    }
 
     if (has_force_restore_data_flag)
         force_restore_data_flag_file.remove();

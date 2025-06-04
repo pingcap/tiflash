@@ -60,6 +60,14 @@ inline size_t writeBinary2(const std::string & s, WriteBuffer & buf)
     return 4 + s.size();
 }
 
+inline std::string readStringWithLength(ReadBuffer & buf, size_t length)
+{
+    std::string s;
+    s.resize(length);
+    buf.readStrict(&s[0], length);
+    return s;
+}
+
 template <>
 inline std::string readBinary2<std::string>(ReadBuffer & buf)
 {
@@ -67,19 +75,28 @@ inline std::string readBinary2<std::string>(ReadBuffer & buf)
     readIntBinary(size, buf);
 
     if (size > DEFAULT_MAX_STRING_SIZE)
-        throw Exception("Too large string size.", ErrorCodes::LOGICAL_ERROR);
-    std::string s;
-    s.resize(size);
-    buf.readStrict(&s[0], size);
-    return s;
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Too large string size, size={} max_size={}",
+            size,
+            DEFAULT_MAX_STRING_SIZE);
+
+    return readStringWithLength(buf, size);
 }
 
-inline std::string readStringWithLength(ReadBuffer & buf, size_t length)
+inline std::string readTiKVStringBinary(ReadBuffer & buf)
 {
-    std::string s;
-    s.resize(length);
-    buf.readStrict(&s[0], length);
-    return s;
+    UInt32 size = 0;
+    readIntBinary(size, buf);
+
+    if (size > TIKV_MAX_VALUE_SIZE)
+        throw Exception(
+            ErrorCodes::LOGICAL_ERROR,
+            "Too large tikv key/value size, size={} max_size={}",
+            size,
+            TIKV_MAX_VALUE_SIZE);
+
+    return readStringWithLength(buf, size);
 }
 
 size_t writeBinary2(const metapb::Peer & peer, WriteBuffer & buf);

@@ -30,6 +30,7 @@
 #include <Storages/KVStore/MultiRaft/Disagg/FastAddPeerContext.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
+#include <common/logger_useful.h>
 
 #include <magic_enum.hpp>
 
@@ -132,7 +133,7 @@ void DeltaMergeStore::cleanPreIngestFiles(
         {
             // For disagg mode
             // - if the job has been finished, it means the local files is likely all uploaded to S3
-            // - if the job is intrrupted, it means the `SSTFilesToDTFilesOutputStream::cancel` is called
+            // - if the job is interrupted, it means the `SSTFilesToDTFilesOutputStream::cancel` is called
             //   and local files are also removed.
             // So we ignore the files on disk.
             removePreIngestFile(f.id, false);
@@ -270,9 +271,9 @@ Segments DeltaMergeStore::ingestDTFilesUsingSplit(
                 /*throw_if_notfound*/ true);
 
             const auto delete_range = remaining_delete_range.shrink(segment->getRowKeyRange());
+            // as remaining_delete_range is not none, we expect the shrunk range to be not none.
             RUNTIME_CHECK(
-                !delete_range
-                     .none(), // as remaining_delete_range is not none, we expect the shrinked range to be not none.
+                !delete_range.none(),
                 delete_range.toDebugString(),
                 segment->simpleInfo(),
                 remaining_delete_range.toDebugString());
@@ -617,13 +618,13 @@ UInt64 DeltaMergeStore::ingestFiles(
         }
 
         // Check whether all external files are contained by the range.
-        if (dm_context->global_context.getSettingsRef().dt_enable_ingest_check)
+        for (const auto & ext_file : external_files)
         {
-            for (const auto & ext_file : external_files)
+            if (dm_context->global_context.getSettingsRef().dt_enable_ingest_check)
             {
                 RUNTIME_CHECK_MSG(
                     range.getStart() <= ext_file.range.getStart() && range.getEnd() >= ext_file.range.getEnd(),
-                    "Detected illegal region boundary: range={} file_range={} keyspace={} table_id={}. "
+                    "Detected illegal region boundary: keyspace={} table_id={} range={} file_range={}. "
                     "TiFlash will exit to prevent data inconsistency. "
                     "If you accept data inconsistency and want to continue the service, "
                     "set profiles.default.dt_enable_ingest_check=false .",
@@ -631,6 +632,21 @@ UInt64 DeltaMergeStore::ingestFiles(
                     physical_table_id,
                     range.toDebugString(),
                     ext_file.range.toDebugString());
+            }
+            else
+            {
+                // If the check is disabled, we just log a warning for better diagnosing.
+                if (unlikely(
+                        !(range.getStart() <= ext_file.range.getStart() && range.getEnd() >= ext_file.range.getEnd())))
+                {
+                    LOG_WARNING(
+                        log,
+                        "Detected illegal region boundary: keyspace={} table_id={} range={} file_range={}",
+                        keyspace_id,
+                        physical_table_id,
+                        range.toDebugString(),
+                        ext_file.range.toDebugString());
+                }
             }
         }
     }
@@ -863,9 +879,9 @@ std::vector<SegmentPtr> DeltaMergeStore::ingestSegmentsUsingSplit(
                 /*throw_if_notfound*/ true);
 
             const auto delete_range = remaining_delete_range.shrink(segment->getRowKeyRange());
+            // as remaining_delete_range is not none, we expect the shrunk range to be not none.
             RUNTIME_CHECK(
-                !delete_range
-                     .none(), // as remaining_delete_range is not none, we expect the shrinked range to be not none.
+                !delete_range.none(),
                 delete_range.toDebugString(),
                 segment->simpleInfo(),
                 remaining_delete_range.toDebugString());
@@ -1202,6 +1218,45 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     return {};
 }
 
+UInt64 DeltaMergeStore::removeSegmentsFromCheckpointInfo(
+    const DMContextPtr & dm_context,
+    const CheckpointIngestInfo & checkpoint_info)
+{
+    if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
+    {
+        const auto msg
+            = fmt::format("Try to remove checkpoint files from a shutdown table, ident={}", log->identifier());
+        LOG_WARNING(log, "{}", msg);
+        throw Exception(msg);
+    }
+
+    auto restored_segments = checkpoint_info.getRestoredSegments();
+
+    DM::WriteBatches wbs{*dm_context->storage_pool};
+    LOG_DEBUG(
+        log,
+        "Start remove segment by checkpoint ingest info, segment={}, region_id={}, peer_id={}",
+        restored_segments.size(),
+        checkpoint_info.regionId(),
+        checkpoint_info.peerId());
+    for (auto & segment : restored_segments)
+    {
+        auto delta = segment->getDelta();
+        auto stable = segment->getStable();
+        delta->recordRemoveColumnFilesPages(wbs);
+        stable->recordRemovePacksPages(wbs);
+        wbs.writeRemoves();
+        LOG_DEBUG(
+            log,
+            "Remove segment by checkpoint ingest info, segment={}, region_id={}, peer_id={}",
+            segment->simpleInfo(),
+            checkpoint_info.regionId(),
+            checkpoint_info.peerId());
+    }
+
+    return restored_segments.size();
+}
+
 UInt64 DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
@@ -1226,8 +1281,8 @@ UInt64 DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
 
     auto restored_segments = checkpoint_info->getRestoredSegments();
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
-    auto estimated_bytes = 0;
 
+    size_t estimated_bytes = 0;
     for (const auto & segment : restored_segments)
     {
         estimated_bytes += segment->getEstimatedBytes();
@@ -1240,16 +1295,6 @@ UInt64 DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
         checkpoint_info->regionId(),
         restored_segments.size(),
         estimated_bytes);
-
-    WriteBatches wbs{*dm_context->storage_pool};
-    for (auto & segment : restored_segments)
-    {
-        auto delta = segment->getDelta();
-        auto stable = segment->getStable();
-        delta->recordRemoveColumnFilesPages(wbs);
-        stable->recordRemovePacksPages(wbs);
-        wbs.writeRemoves();
-    }
 
     // TODO(fap) This could be executed in a dedicated thread if it consumes too much time.
     for (auto & segment : updated_segments)
