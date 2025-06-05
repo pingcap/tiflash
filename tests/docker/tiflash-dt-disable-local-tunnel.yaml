@@ -15,8 +15,6 @@
 version: '2.3'
 
 services:
-  # for tests under fullstack-test directory
-  # (engine DeltaTree)
   tiflash0:
     image: hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028
     security_opt:

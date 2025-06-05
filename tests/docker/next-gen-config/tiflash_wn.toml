@@ -27,10 +27,14 @@ data-dir = "/data/tiflash/flash"
 config = "/tiflash_tikv.toml"
 
 [storage]
+# Enable keyspace for next-gen
 api_version = 2
+
 [storage.main]
 dir = ["/data/tiflash"]
 capacity = [5368709120]
+
+# object storage for next-gen
 [storage.s3]
 endpoint = "http://minio0:9000"
 access_key_id = "minioadmin"

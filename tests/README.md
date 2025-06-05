@@ -1,6 +1,6 @@
 ## How to run test cases in local
 
-For running integration test cases (defined in `./fullstack-test`, `./fullstack-test-dt`, `./new_collation_fullstack`), you should define a TiDB cluster with TiFlash node (1 PD, 1 TiKV, 1 TiDB, 1 TiFlash at least).
+For running integration test cases (defined in `./fullstack-test`, `./fullstack-test2` etc), you should define a TiDB cluster with TiFlash node (1 PD, 1 TiKV, 1 TiDB, 1 TiFlash at least).
 
 1. Build your own TiFlash binary using debug profile:
 

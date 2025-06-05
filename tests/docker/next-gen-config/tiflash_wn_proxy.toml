@@ -15,6 +15,7 @@
 log-file = "/log/tiflash_tikv.log"
 
 [storage]
+# Enable keyspace and ttl for next-gen
 api-version = 2
 enable-ttl = true
 # No space is reserved at all for testing
