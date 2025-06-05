@@ -345,7 +345,7 @@ def parse_exe_match(path, executor, executor_tidb, executor_func, executor_curl_
                 break
             # Some tests are designed to be skipped in next-gen TiFlash.
             if line.startswith(SKIP_NEXT_GEN_PREFIX) and os.getenv('ENABLE_NEXT_GEN', 'false') != 'false':
-                print(f'Skipping test for next-gen.')
+                print(f'Skipping test for next-gen from line {line_number}.')
                 break
             if line.startswith(TODO_PREFIX):
                 todos.append(line[len(TODO_PREFIX):].strip())
