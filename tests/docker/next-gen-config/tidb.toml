@@ -12,9 +12,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# Enable disagg tiflash for next-gen
 disaggregated-tiflash = true
-enable-telemetry = false
+
+# setup keyspace for tidb
 keyspace-name = "a"
+
+enable-telemetry = false
 temp-dir = "/data/tmp"
 [performance]
 tcp-keep-alive = true

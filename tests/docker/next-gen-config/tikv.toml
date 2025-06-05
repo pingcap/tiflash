@@ -15,12 +15,14 @@
 [storage]
 # No space is reserved at all for testing
 reserve-space = "0"
+# Enable keyspace and ttl for next-gen
 api-version = 2
 enable-ttl = true
 
 [raftstore]
 capacity = "100GB"
 
+# object storage for next-gen
 [dfs]
 prefix = "tikv"
 s3-endpoint = "http://minio0:9000"

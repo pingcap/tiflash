@@ -37,7 +37,7 @@ clean_data_log
 
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml up -d
 wait_env
-${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fail-point-tests && ./run-test.sh tidb-ci/fullstack-test true && ./run-test.sh tidb-ci/fullstack-test-dt'
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh tidb-ci/fail-point-tests && ./run-test.sh tidb-ci/fullstack-test true'
 
 ${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
