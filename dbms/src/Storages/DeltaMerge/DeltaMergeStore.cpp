@@ -1250,7 +1250,7 @@ ReadMode DeltaMergeStore::getReadMode(
 {
     auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
     RUNTIME_CHECK_MSG(
-        !executor || !executor->before_where || read_mode == ReadMode::Bitmap,
+        !executor || !executor->before_where || (read_mode == ReadMode::Bitmap || read_mode == ReadMode::Fast),
         "Push down executor needs bitmap, push down executor is empty: {}, read mode: {}",
         executor == nullptr || executor->before_where == nullptr,
         magic_enum::enum_name(read_mode));
