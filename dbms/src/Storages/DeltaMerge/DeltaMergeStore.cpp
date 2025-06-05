@@ -1238,7 +1238,7 @@ static ReadMode getReadModeImpl(const Context & db_context, bool is_fast_scan, b
             db_context.getSettingsRef().dt_enable_bitmap_filter,
             "Running fast scan but bitmap filter is disabled, please set the config "
             "`profiles.default.dt_enable_bitmap_filter` of TiFlash to true,"
-            "or disable fast scan by set tidb variable `tiflash_fastscan` to OFF.");
+            "or disable fast scan by setting tidb variable `tiflash_fastscan` to OFF.");
         return ReadMode::Fast;
     }
     if (db_context.getSettingsRef().dt_enable_bitmap_filter && !keep_order)
