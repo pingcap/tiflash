@@ -171,7 +171,6 @@ Block JoinProbeBuildScanner::scanImpl(JoinProbeWorkerData & wd)
                         {
                             wd.current_scan_table_index = scan_build_index;
                             scan_build_index = (scan_build_index + 1) % JOIN_BUILD_PARTITION_COUNT;
-                            index = 0;
                             break;
                         }
                     }
@@ -237,7 +236,10 @@ Block JoinProbeBuildScanner::scanImpl(JoinProbeWorkerData & wd)
         }
 
         if (index >= rows)
+        {
             container = nullptr;
+            index = 0;
+        }
 
         if unlikely (scan_block_rows >= max_block_size)
             break;
