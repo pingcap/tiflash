@@ -170,7 +170,7 @@ void ResourceGroup::updateNormalMode(double add_tokens, double new_capacity, con
     LOG_DEBUG(
         log,
         "token bucket of rg {} reconfig to normal mode. from: {}, to: {}",
-        name,
+        name_with_keyspace_id,
         ori_bucket_info,
         bucket->toString());
 
@@ -214,7 +214,7 @@ void ResourceGroup::updateTrickleMode(
     LOG_DEBUG(
         log,
         "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}, trickle_dura: {}ms",
-        name,
+        name_with_keyspace_id,
         ori_bucket_info,
         bucket->toString(),
         trickle_dura.count());
@@ -297,7 +297,6 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
     if (group != nullptr)
         return;
 
-    // todo check all api with pd add keyspaceid.
     resource_manager::GetResourceGroupRequest req;
     req.mutable_keyspace_id()->set_value(keyspace_id);
     req.set_resource_group_name(name);
@@ -529,9 +528,7 @@ static std::vector<std::pair<KeyspaceID, std::string>> extractGACReqNames(
     std::vector<std::pair<KeyspaceID, std::string>> res;
     res.reserve(gac_req.requests_size());
     for (const auto & req : gac_req.requests())
-    {
         res.push_back({req.keyspace_id().value(), req.resource_group_name()});
-    }
     return res;
 }
 
@@ -583,7 +580,8 @@ void LocalAdmissionController::doRequestGAC()
                     auto erase_num = deleteResourceGroupWithoutLock(not_found_ele.first, not_found_ele.second);
                     LOG_INFO(
                         log,
-                        "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already "
+                        "delete resource group {}-{} because acquireTokenBuckets didn't handle it, GAC may have "
+                        "already "
                         "delete it. erase_num: {}",
                         not_found_ele.first,
                         not_found_ele.second,
@@ -628,7 +626,6 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
         }
 
         const auto & name = one_resp.resource_group_name();
-        // todo check PD code
         KeyspaceID keyspace_id = NullspaceID;
         if (one_resp.has_keyspace_id())
             keyspace_id = one_resp.keyspace_id().value();
@@ -857,7 +854,7 @@ bool LocalAdmissionController::handleDeleteEvent(
         std::lock_guard lock(mu);
         erase_num = deleteResourceGroupWithoutLock(keyspace_id, name);
     }
-    LOG_DEBUG(log, "delete resource group {}, erase_num: {}", name, erase_num);
+    LOG_DEBUG(log, "delete resource group {}-{}, erase_num: {}", keyspace_id, name, erase_num);
     return true;
 }
 
@@ -895,7 +892,7 @@ bool LocalAdmissionController::handlePutEvent(
             updateMaxRUPerSecAfterDeleteWithoutLock(rg->user_ru_per_sec);
         }
     }
-    LOG_DEBUG(log, "modify resource group to: {}", group_pb.ShortDebugString());
+    LOG_DEBUG(log, "modify resource group({}-{}) to: {}", keyspace_id, name, group_pb.ShortDebugString());
     return true;
 }
 
@@ -918,34 +915,17 @@ bool LocalAdmissionController::parseResourceGroupNameFromWatchKey(
     {
         keyspace_id = NullspaceID;
         parsed_rg_name = std::string(etcd_key.begin() + etcd_key_prefix.length() + 1, etcd_key.end());
+        return true;
     }
     else if (etcd_key_prefix == GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH)
     {
-        // resource_group/settings/keyspace_id/rg_name -> keyspace_id/rg_name
-        auto tmp_str = std::string(etcd_key.begin() + etcd_key_prefix.length() + 1, etcd_key.end());
-        size_t slash_pos = tmp_str.find('/');
-        if (slash_pos == std::string::npos)
-        {
-            err_msg = fmt::format("invalid etcd_key: {}, parse keyspace fail", etcd_key);
-            return false;
-        }
-        auto keyspace_str = tmp_str.substr(0, slash_pos);
-        parsed_rg_name = tmp_str.substr(slash_pos + 1);
-        try
-        {
-            keyspace_id = static_cast<KeyspaceID>(std::stoul(keyspace_str));
-        }
-        catch (const std::exception & e)
-        {
-            err_msg = fmt::format("invalid etcd_key: {}, parse keyspace failed: {}", etcd_key, e.what());
-            return false;
-        }
+        return parseKeyspaceEtcdKey(etcd_key_prefix, etcd_key, keyspace_id, parsed_rg_name, err_msg);
     }
     else
     {
         err_msg = "unexpected etcd_key_prefix: " + etcd_key_prefix;
+        return false;
     }
-    return true;
 }
 
 void LocalAdmissionController::checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb)
@@ -1032,8 +1012,36 @@ std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_insta
 #endif
 
 // Defined in PD resource_manager_client.go.
-// todo test rg remove/create
 const std::string LocalAdmissionController::GAC_RESOURCE_GROUP_ETCD_PATH = "resource_group/settings";
 const std::string LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH = "resource_group/keyspace/settings";
+
+bool LocalAdmissionController::parseKeyspaceEtcdKey(
+    const std::string & etcd_key_prefix,
+    const std::string & etcd_key,
+    KeyspaceID & parsed_keyspace_id,
+    std::string & parsed_rg_name,
+    std::string & err_msg)
+{
+    // resource_group/settings/keyspace_id/rg_name -> keyspace_id/rg_name
+    auto tmp_str = std::string(etcd_key.begin() + etcd_key_prefix.length() + 1, etcd_key.end());
+    size_t slash_pos = tmp_str.find('/');
+    if (slash_pos == std::string::npos)
+    {
+        err_msg = fmt::format("invalid etcd_key: {}, parse keyspace fail", etcd_key);
+        return false;
+    }
+    auto keyspace_str = tmp_str.substr(0, slash_pos);
+    parsed_rg_name = tmp_str.substr(slash_pos + 1);
+    try
+    {
+        parsed_keyspace_id = static_cast<KeyspaceID>(std::stoul(keyspace_str));
+    }
+    catch (const std::exception & e)
+    {
+        err_msg = fmt::format("invalid etcd_key: {}, parse keyspace failed: {}", etcd_key, e.what());
+        return false;
+    }
+    return true;
+}
 
 } // namespace DB

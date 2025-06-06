@@ -133,7 +133,6 @@ public:
     std::atomic<uint64_t> fts_brute_total_read_ms{0};
     std::atomic<uint64_t> fts_brute_total_search_ms{0};
 
-    // todo make sure all init.
     const pingcap::pd::KeyspaceID keyspace_id;
     const String resource_group_name;
 

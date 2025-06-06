@@ -677,4 +677,72 @@ TEST_F(TestResourceControlQueue, tokenBucket)
     }
 }
 
+TEST_F(TestResourceControlQueue, parseEtcdKey)
+{
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings/1234/rg1";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, 1234);
+        ASSERT_EQ(name, "rg1");
+        ASSERT_TRUE(err_msg.empty());
+    }
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings//123";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, NullspaceID);
+        ASSERT_EQ(name, "");
+        ASSERT_TRUE(err_msg.contains("parse keyspace fail"));
+    }
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings//";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, NullspaceID);
+        ASSERT_EQ(name, "");
+        ASSERT_TRUE(err_msg.contains("parse keyspace fail"));
+    }
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings/rg1";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, NullspaceID);
+        ASSERT_EQ(name, "");
+        ASSERT_TRUE(err_msg.contains("parse keyspace fail"));
+    }
+}
+
 } // namespace DB::tests

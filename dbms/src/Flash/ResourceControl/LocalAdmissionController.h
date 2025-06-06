@@ -484,7 +484,9 @@ public:
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
     static constexpr auto DEFAULT_MAX_EST_WAIT_DURATION = std::chrono::milliseconds(1000);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
     static const std::string GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH;
     static constexpr auto NETWORK_EXCEPTION_RETRY_DURATION_SEC = 3;
@@ -631,6 +633,13 @@ private:
     }
 
     void stop();
+
+    static bool parseKeyspaceEtcdKey(
+        const std::string & etcd_key_prefix,
+        const std::string & etcd_key,
+        KeyspaceID & keyspace_id,
+        std::string & parsed_rg_name,
+        std::string & err_msg);
 
 private:
     mutable std::mutex mu;

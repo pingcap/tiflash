@@ -151,7 +151,7 @@ void ResourceControlQueue<NestedTaskQueueType>::updateStatistics(
     assert(task);
     auto ru = cpuTimeToRU(inc_value);
     const String & resource_group_name = task->getResourceGroupName();
-    const auto keyspace_id = task->getKeyspaceID();
+    const auto & keyspace_id = task->getKeyspaceID();
     LocalAdmissionController::global_instance->consumeCPUResource(keyspace_id, resource_group_name, ru, inc_value);
 
     NestedTaskQueuePtr group_queue = nullptr;
