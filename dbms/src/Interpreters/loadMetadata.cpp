@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Stopwatch.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/escapeForFileName.h>
 #include <Databases/DatabaseOrdinary.h>
 #include <Databases/DatabaseTiFlash.h>
@@ -121,7 +122,7 @@ void loadMetadata(Context & context)
         if (db_name == SYSTEM_DATABASE)
             continue;
 
-#if SERVERLESS_PROXY == 1
+#if ENABLE_NEXT_GEN
         // Ignore database owned by keyspace in blocklist
         auto keyspace_id = SchemaNameMapper::getMappedNameKeyspaceID(db_name);
         if (context.isKeyspaceInBlocklist(keyspace_id))

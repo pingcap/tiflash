@@ -1,0 +1,35 @@
+# Copyright 2025 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+mysql> drop table if exists test.t1
+mysql> create table test.t1 (a int, b int, c int, d int);
+mysql> insert into test.t1 values(1,2,3,4);
+
+# creating placement policy should NOT lead to TiFlash compute node or TiFlash write node panic
+mysql> CREATE PLACEMENT POLICY evict_sata_dw CONSTRAINTS='[-disk=sata, -disk=dw-ssd]' SURVIVAL_PREFERENCES='[host]';
+mysql> ALTER TABLE test.t1 PLACEMENT POLICY=evict_sata_dw;
+mysql> alter table test.t1 set tiflash replica 1;
+
+func> wait_table test t1
+
+mysql> set tidb_isolation_read_engines='tiflash'; select * from test.t1;
++------+------+------+------+
+| a    | b    | c    | d    |
++------+------+------+------+
+|    1 |    2 |    3 |    4 |
++------+------+------+------+
+
+# Clean up.
+mysql> drop table if exists test.t1

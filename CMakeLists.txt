@@ -23,6 +23,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/
 set(CMAKE_MACOSX_RPATH 1)
 
 option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
+option(ENABLE_NEXT_GEN "enable TiDB next-gen features" OFF)
 
 if(NOT CMAKE_PREFIX_PATH AND DEFINED ENV{CMAKE_PREFIX_PATH})
     message(STATUS "Reading CMAKE_PREFIX_PATH from env... $ENV{CMAKE_PREFIX_PATH}")

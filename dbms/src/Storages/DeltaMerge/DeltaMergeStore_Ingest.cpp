@@ -1218,6 +1218,45 @@ Segments DeltaMergeStore::buildSegmentsFromCheckpointInfo(
     return {};
 }
 
+UInt64 DeltaMergeStore::removeSegmentsFromCheckpointInfo(
+    const DMContextPtr & dm_context,
+    const CheckpointIngestInfo & checkpoint_info)
+{
+    if (unlikely(shutdown_called.load(std::memory_order_relaxed)))
+    {
+        const auto msg
+            = fmt::format("Try to remove checkpoint files from a shutdown table, ident={}", log->identifier());
+        LOG_WARNING(log, "{}", msg);
+        throw Exception(msg);
+    }
+
+    auto restored_segments = checkpoint_info.getRestoredSegments();
+
+    DM::WriteBatches wbs{*dm_context->storage_pool};
+    LOG_DEBUG(
+        log,
+        "Start remove segment by checkpoint ingest info, segment={}, region_id={}, peer_id={}",
+        restored_segments.size(),
+        checkpoint_info.regionId(),
+        checkpoint_info.peerId());
+    for (auto & segment : restored_segments)
+    {
+        auto delta = segment->getDelta();
+        auto stable = segment->getStable();
+        delta->recordRemoveColumnFilesPages(wbs);
+        stable->recordRemovePacksPages(wbs);
+        wbs.writeRemoves();
+        LOG_DEBUG(
+            log,
+            "Remove segment by checkpoint ingest info, segment={}, region_id={}, peer_id={}",
+            segment->simpleInfo(),
+            checkpoint_info.regionId(),
+            checkpoint_info.peerId());
+    }
+
+    return restored_segments.size();
+}
+
 UInt64 DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
     const DMContextPtr & dm_context,
     const DM::RowKeyRange & range,
@@ -1242,8 +1281,8 @@ UInt64 DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
 
     auto restored_segments = checkpoint_info->getRestoredSegments();
     auto updated_segments = ingestSegmentsUsingSplit(dm_context, range, restored_segments);
-    size_t estimated_bytes = 0;
 
+    size_t estimated_bytes = 0;
     for (const auto & segment : restored_segments)
     {
         estimated_bytes += segment->getEstimatedBytes();
@@ -1256,16 +1295,6 @@ UInt64 DeltaMergeStore::ingestSegmentsFromCheckpointInfo(
         checkpoint_info->regionId(),
         restored_segments.size(),
         estimated_bytes);
-
-    WriteBatches wbs{*dm_context->storage_pool};
-    for (auto & segment : restored_segments)
-    {
-        auto delta = segment->getDelta();
-        auto stable = segment->getStable();
-        delta->recordRemoveColumnFilesPages(wbs);
-        stable->recordRemovePacksPages(wbs);
-        wbs.writeRemoves();
-    }
 
     // TODO(fap) This could be executed in a dedicated thread if it consumes too much time.
     for (auto & segment : updated_segments)

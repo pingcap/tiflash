@@ -204,7 +204,7 @@ FapSnapshotState QueryFapSnapshotState(
     uint64_t peer_id,
     uint64_t index,
     uint64_t term);
-void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id);
+void ClearFapSnapshot(EngineStoreServerWrap * server, uint64_t region_id, uint64_t state);
 bool KvstoreRegionExists(EngineStoreServerWrap * server, uint64_t region_id);
 void ReportThreadAllocateInfo(
     EngineStoreServerWrap *,

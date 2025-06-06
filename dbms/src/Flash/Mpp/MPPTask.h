@@ -205,6 +205,8 @@ private:
 
     MPPTaskStatistics mpp_task_statistics;
 
+    UInt64 total_run_time_ms = 0;
+
     friend class MPPTaskManager;
     friend class MPPHandler;
 };
