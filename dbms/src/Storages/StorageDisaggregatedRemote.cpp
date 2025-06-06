@@ -573,6 +573,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
             executor_id,
             /*enable_read_thread*/ true,
             num_streams,
+            context.getDAGContext()->getKeyspaceID(),
             context.getDAGContext()->getResourceGroupName());
     }
     else
