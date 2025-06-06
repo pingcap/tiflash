@@ -107,7 +107,7 @@ public:
 
 #ifdef DBMS_PUBLIC_GTEST
     ResourceGroup(const std::string & group_name_, uint32_t user_priority_, uint64_t user_ru_per_sec_, bool burstable_)
-        : keyspace_id(pingcap::pd::NullspaceID)
+        : keyspace_id(NullspaceID)
         , name(group_name_)
         , user_priority_val(getUserPriorityVal(user_priority_))
         , user_ru_per_sec(user_ru_per_sec_)

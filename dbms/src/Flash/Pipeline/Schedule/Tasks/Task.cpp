@@ -207,7 +207,7 @@ const String & Task::getResourceGroupName() const
     return exec_context.getResourceGroupName();
 }
 
-const pingcap::pd::KeyspaceID & Task::getKeyspaceID() const
+const KeyspaceID & Task::getKeyspaceID() const
 {
     return exec_context.getKeyspaceID();
 }

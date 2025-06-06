@@ -116,7 +116,7 @@ public:
 
     const String & getResourceGroupName() const;
 
-    const pingcap::pd::KeyspaceID & getKeyspaceID() const;
+    const KeyspaceID & getKeyspaceID() const;
 
     const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
 

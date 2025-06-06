@@ -21,7 +21,7 @@
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue_fwd.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
-#include <pingcap/pd/Types.h>
+#include <Storages/KVStore/Types.h>
 
 #include <atomic>
 #include <exception>
@@ -50,7 +50,7 @@ public:
         , mem_tracker(nullptr)
         , auto_spill_trigger(nullptr)
         , register_operator_spill_context(nullptr)
-        , keyspace_id(pingcap::pd::NullspaceID)
+        , keyspace_id(NullspaceID)
     {}
 
     PipelineExecutorContext(
@@ -60,7 +60,7 @@ public:
         DAGContext * dag_context_ = nullptr,
         AutoSpillTrigger * auto_spill_trigger_ = nullptr,
         const RegisterOperatorSpillContext & register_operator_spill_context_ = nullptr,
-        const pingcap::pd::KeyspaceID & keyspace_id_ = pingcap::pd::NullspaceID,
+        const KeyspaceID & keyspace_id_ = NullspaceID,
         const String & resource_group_name_ = "")
         : query_id(query_id_)
         , log(Logger::get(req_id))
@@ -139,7 +139,7 @@ public:
 
     const String & getResourceGroupName() const { return resource_group_name; }
 
-    const pingcap::pd::KeyspaceID & getKeyspaceID() const { return keyspace_id; }
+    const KeyspaceID & getKeyspaceID() const { return keyspace_id; }
 
     void addSharedQueue(const SharedQueuePtr & shared_queue);
 
@@ -188,7 +188,7 @@ private:
 
     RegisterOperatorSpillContext register_operator_spill_context;
 
-    const pingcap::pd::KeyspaceID keyspace_id;
+    const KeyspaceID keyspace_id;
 
     const String resource_group_name;
 
