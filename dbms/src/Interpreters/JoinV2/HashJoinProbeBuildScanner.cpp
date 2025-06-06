@@ -26,10 +26,8 @@ JoinProbeBuildScanner::JoinProbeBuildScanner(const HashJoin * join)
     : join(join)
 {
     join_key_getter = createHashJoinKeyGetter(join->method, join->collators);
-    ColumnRawPtrs key_columns = extractAndMaterializeKeyColumns(
-        join->right_sample_block_pruned,
-        materialized_key_columns,
-        join->key_names_right);
+    ColumnRawPtrs key_columns
+        = extractAndMaterializeKeyColumns(join->right_sample_block, materialized_key_columns, join->key_names_right);
     ColumnPtr null_map_holder;
     ConstNullMapPtr null_map{};
     extractNestedColumnsAndNullMap(key_columns, null_map_holder, null_map);

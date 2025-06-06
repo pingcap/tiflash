@@ -157,7 +157,7 @@ protected:
     {
         wd.insert_batch.push_back(row_ptr);
         if unlikely (wd.insert_batch.size() >= settings.probe_insert_batch_size)
-            flushInsertBatch<late_materialization, false, is_right_semi_join>(wd, added_columns);
+            flushInsertBatch<late_materialization, is_right_semi_join, false>(wd, added_columns);
     }
 
     template <bool late_materialization, bool is_right_semi_join, bool last_flush>
