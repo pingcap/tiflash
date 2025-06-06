@@ -84,6 +84,8 @@ public:
 
     const JoinProfileInfoPtr & getProfileInfo() const { return profile_info; }
 
+    const OneTimeNotifyFuturePtr & getWaitProbeFinishFuture() { return wait_probe_finished_future; }
+
 private:
     void initRowLayoutAndHashJoinMethod();
 

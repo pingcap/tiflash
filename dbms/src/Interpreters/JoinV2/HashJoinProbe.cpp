@@ -149,7 +149,7 @@ void JoinProbeContext::prepareForHashProbe(
     is_prepared = true;
 }
 
-template <bool late_materialization, bool last_flush>
+template <bool late_materialization, bool is_right_semi_join, bool last_flush>
 void JoinProbeHelperUtil::flushInsertBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns) const
 {
     for (auto [column_index, is_nullable] : row_layout.raw_key_column_indexes)
@@ -163,7 +163,7 @@ void JoinProbeHelperUtil::flushInsertBatch(JoinProbeWorkerData & wd, MutableColu
     }
 
     size_t add_size;
-    if constexpr (late_materialization)
+    if constexpr (late_materialization || is_right_semi_join)
         add_size = row_layout.other_column_count_for_other_condition;
     else
         add_size = row_layout.other_column_indexes.size();
@@ -174,7 +174,7 @@ void JoinProbeHelperUtil::flushInsertBatch(JoinProbeWorkerData & wd, MutableColu
         if constexpr (last_flush)
             added_columns[column_index]->flushNTAlignBuffer();
     }
-    if constexpr (late_materialization)
+    if constexpr (late_materialization && !is_right_semi_join)
         wd.row_ptrs_for_lm.insert(wd.insert_batch.begin(), wd.insert_batch.end());
 
     wd.insert_batch.clear();
@@ -215,7 +215,7 @@ struct JoinProbeAdder<Inner, has_other_condition, late_materialization>
     {
         ++current_offset;
         wd.selective_offsets.push_back(idx);
-        helper.insertRowToBatch<late_materialization>(wd, added_columns, row_ptr + ptr_offset);
+        helper.insertRowToBatch<late_materialization, false>(wd, added_columns, row_ptr + ptr_offset);
         return current_offset >= helper.settings.max_block_size;
     }
 
@@ -227,7 +227,7 @@ struct JoinProbeAdder<Inner, has_other_condition, late_materialization>
 
     static void flush(JoinProbeHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
-        helper.flushInsertBatch<late_materialization, true>(wd, added_columns);
+        helper.flushInsertBatch<late_materialization, false, true>(wd, added_columns);
         helper.fillNullMapWithZero(added_columns);
     }
 };
@@ -251,7 +251,7 @@ struct JoinProbeAdder<LeftOuter, has_other_condition, late_materialization>
     {
         ++current_offset;
         wd.selective_offsets.push_back(idx);
-        helper.insertRowToBatch<late_materialization>(wd, added_columns, row_ptr + ptr_offset);
+        helper.insertRowToBatch<late_materialization, false>(wd, added_columns, row_ptr + ptr_offset);
         return current_offset >= helper.settings.max_block_size;
     }
 
@@ -273,7 +273,7 @@ struct JoinProbeAdder<LeftOuter, has_other_condition, late_materialization>
 
     static void flush(JoinProbeHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
-        helper.flushInsertBatch<late_materialization, true>(wd, added_columns);
+        helper.flushInsertBatch<late_materialization, false, true>(wd, added_columns);
         helper.fillNullMapWithZero(added_columns);
 
         if constexpr (!has_other_condition)
@@ -438,7 +438,7 @@ struct JoinProbeAdder<RightOuter, has_other_condition, late_materialization>
         wd.right_join_row_ptrs.push_back(hasRowPtrMatchedFlag(row_ptr) ? nullptr : row_ptr);
         ++current_offset;
         wd.selective_offsets.push_back(idx);
-        helper.insertRowToBatch<late_materialization>(wd, added_columns, row_ptr + ptr_offset);
+        helper.insertRowToBatch<late_materialization, false>(wd, added_columns, row_ptr + ptr_offset);
         return current_offset >= helper.settings.max_block_size;
     }
 
@@ -450,7 +450,7 @@ struct JoinProbeAdder<RightOuter, has_other_condition, late_materialization>
 
     static void flush(JoinProbeHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
-        helper.flushInsertBatch<late_materialization, true>(wd, added_columns);
+        helper.flushInsertBatch<late_materialization, false, true>(wd, added_columns);
         helper.fillNullMapWithZero(added_columns);
     }
 };
@@ -509,7 +509,7 @@ struct JoinProbeAdder<kind, true, false>
         ++current_offset;
         wd.selective_offsets.push_back(idx);
         wd.right_join_row_ptrs.push_back(row_ptr);
-        helper.insertRowToBatch<false>(wd, added_columns, row_ptr + ptr_offset);
+        helper.insertRowToBatch<false, true>(wd, added_columns, row_ptr + ptr_offset);
         return current_offset >= helper.settings.max_block_size;
     }
 
@@ -521,7 +521,7 @@ struct JoinProbeAdder<kind, true, false>
 
     static void flush(JoinProbeHelper & helper, JoinProbeWorkerData & wd, MutableColumns & added_columns)
     {
-        helper.flushInsertBatch<false, true>(wd, added_columns);
+        helper.flushInsertBatch<false, true, true>(wd, added_columns);
         helper.fillNullMapWithZero(added_columns);
     }
 };

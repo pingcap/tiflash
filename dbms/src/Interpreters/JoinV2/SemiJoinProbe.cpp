@@ -261,14 +261,11 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
     RUNTIME_CHECK(probe_list->slotCapacity() == ctx.rows);
     size_t current_offset = 0;
     size_t collision = 0;
-    size_t key_offset = sizeof(RowPtr);
-    if constexpr (KeyGetterType::joinKeyCompareHashFirst())
-    {
-        key_offset += sizeof(HashValueType);
-    }
+    constexpr size_t key_offset
+        = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
 
     SCOPE_EXIT({
-        flushInsertBatch<false, true>(wd, added_columns);
+        flushInsertBatch<false, false, true>(wd, added_columns);
         fillNullMapWithZero(added_columns);
 
         wd.collision += collision;
@@ -291,7 +288,10 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
             if (key_is_equal)
             {
                 wd.selective_offsets.push_back(idx);
-                insertRowToBatch<false>(wd, added_columns, ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
+                insertRowToBatch<false, false>(
+                    wd,
+                    added_columns,
+                    ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
                 if unlikely (current_offset >= end_offset)
                 {
                     ptr = getNextRowPtr<kind>(ptr);
@@ -362,7 +362,10 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
             if (key_is_equal)
             {
                 wd.selective_offsets.push_back(idx);
-                insertRowToBatch<false>(wd, added_columns, ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
+                insertRowToBatch<false, false>(
+                    wd,
+                    added_columns,
+                    ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
                 if unlikely (current_offset >= end_offset)
                 {
                     ptr = getNextRowPtr<kind>(ptr);
@@ -487,7 +490,10 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
             if (key_is_equal)
             {
                 wd.selective_offsets.push_back(state->index);
-                insertRowToBatch<false>(wd, added_columns, ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
+                insertRowToBatch<false, false>(
+                    wd,
+                    added_columns,
+                    ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
                 if unlikely (current_offset >= settings.max_block_size)
                 {
                     probe_list->at(state->index).build_row_ptr = next_ptr;
@@ -649,7 +655,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
         }
     }
 
-    flushInsertBatch<false, true>(wd, added_columns);
+    flushInsertBatch<false, false, true>(wd, added_columns);
     fillNullMapWithZero(added_columns);
 
     ctx.current_row_idx = idx;

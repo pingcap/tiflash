@@ -152,15 +152,15 @@ protected:
         return key_getter.joinKeyIsEqual(key1, key2);
     }
 
-    template <bool late_materialization>
+    template <bool late_materialization, bool is_right_semi_join>
     void ALWAYS_INLINE insertRowToBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns, RowPtr row_ptr) const
     {
         wd.insert_batch.push_back(row_ptr);
         if unlikely (wd.insert_batch.size() >= settings.probe_insert_batch_size)
-            flushInsertBatch<late_materialization, false>(wd, added_columns);
+            flushInsertBatch<late_materialization, false, is_right_semi_join>(wd, added_columns);
     }
 
-    template <bool late_materialization, bool last_flush>
+    template <bool late_materialization, bool is_right_semi_join, bool last_flush>
     void flushInsertBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns) const;
 
     void fillNullMapWithZero(MutableColumns & added_columns) const;
