@@ -25,6 +25,14 @@ target_include_directories(tici_search_lib_static  INTERFACE
 
 add_library(tici_search_lib SHARED "${TiFlash_SOURCE_DIR}/libs/libclara-cmake/dummy.cpp")
 target_link_libraries(tici_search_lib PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,tici_search_lib_static>")
+if(APPLE)
+  target_link_libraries(tici_search_lib PRIVATE
+      "-framework Security"
+      "-framework CoreFoundation"
+      "-framework IOKit"
+      )
+endif()
+
 target_include_directories(tici_search_lib  INTERFACE
     ${CMAKE_CURRENT_BINARY_DIR}/cxxbridge)
 
