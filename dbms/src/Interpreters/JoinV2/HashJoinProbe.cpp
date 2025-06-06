@@ -1516,4 +1516,9 @@ Block JoinProbeHelper::genResultBlockForLeftOuterSemi(JoinProbeContext & ctx)
     return res_block;
 }
 
+// SemiJoinProbe.cpp calls this function
+template void DB::JoinProbeHelperUtil::flushInsertBatch<false, false, true>(
+    DB::JoinProbeWorkerData & wd,
+    DB::MutableColumns & added_columns) const;
+
 } // namespace DB
