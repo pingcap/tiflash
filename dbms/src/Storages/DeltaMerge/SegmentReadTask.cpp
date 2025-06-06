@@ -867,9 +867,23 @@ void SegmentReadTask::updateMVCCIndexSize(ReadMode read_mode, size_t initial_ind
     auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_mvcc_index_cache;
     assert(cache != nullptr);
     if (cache_key->is_version_chain && getVersionChainBytes(*(segment->getVersionChain())) != initial_index_bytes)
+    {
+        LOG_INFO(
+            read_snapshot->log,
+            "Update version chain for {} => {}",
+            initial_index_bytes,
+            getVersionChainBytes(*(segment->getVersionChain())));
         cache->setVersionChain(*cache_key, segment->getVersionChain());
+    }
     else if (
         !cache_key->is_version_chain && read_snapshot->delta->getSharedDeltaIndex()->getBytes() != initial_index_bytes)
+    {
+        LOG_INFO(
+            read_snapshot->log,
+            "Update delta index for {} => {}",
+            initial_index_bytes,
+            read_snapshot->delta->getSharedDeltaIndex()->getBytes());
         cache->setDeltaIndex(*cache_key, read_snapshot->delta->getSharedDeltaIndex());
+    }
 }
 } // namespace DB::DM
