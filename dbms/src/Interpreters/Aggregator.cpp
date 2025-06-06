@@ -48,9 +48,6 @@ extern const char disable_agg_batch_get_key_holder[];
 extern const char force_magic_hash[];
 } // namespace FailPoints
 
-static constexpr size_t agg_prefetch_step = 16;
-static constexpr size_t agg_mini_batch = 256;
-
 #define AggregationMethodName(NAME) AggregatedDataVariants::AggregationMethod_##NAME
 #define AggregationMethodNameTwoLevel(NAME) AggregatedDataVariants::AggregationMethod_##NAME##_two_level
 #define AggregationMethodType(NAME) AggregatedDataVariants::Type::NAME
@@ -568,11 +565,9 @@ void NO_INLINE Aggregator::executeImpl(
     AggProcessInfo & agg_process_info,
     TiDB::TiDBCollators & collators) const
 {
-    // 2MB as prefetch threshold, because normally server L2 cache is 1MB.
-    static constexpr size_t prefetch_threshold = (2 << 20);
 #ifndef NDEBUG
     // In debug mode, failpoint disable_agg_batch_get_key_holder can be used.
-    bool disable_prefetch = (method.data.getBufferSizeInBytes() < prefetch_threshold);
+    bool disable_prefetch = (method.data.getBufferSizeInBytes() < agg_prefetch_threshold);
     fiu_do_on(FailPoints::force_agg_prefetch, { disable_prefetch = false; });
 
     bool disable_batch_get_key_holder = false;
@@ -609,7 +604,7 @@ void NO_INLINE Aggregator::executeImpl(
                 /*enable_agg_batch_get_key_holder=*/true>(method, result, agg_process_info, collators);
     }
 #else
-    const bool disable_prefetch = (method.data.getBufferSizeInBytes() < prefetch_threshold);
+    const bool disable_prefetch = (method.data.getBufferSizeInBytes() < agg_prefetch_threshold);
     if (disable_prefetch)
         executeImplInner<
             collect_hit_rate,

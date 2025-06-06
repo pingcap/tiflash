@@ -52,9 +52,10 @@ FLATTEN_INLINE static inline void LoopTwoColumns(
 // Loop one column and invoke callback for each pair.
 // Remove last zero byte.
 template <typename Chars, typename Offsets, typename F>
-FLATTEN_INLINE static inline void LoopOneColumn(const Chars & a_data, const Offsets & a_offsets, size_t size, F && func)
+FLATTEN_INLINE static inline void LoopOneColumn(const Chars & a_data, const Offsets & a_offsets, F && func)
 {
     uint64_t a_prev_offset = 0;
+    const size_t size = a_offsets.size();
 
     for (size_t i = 0; i < size; ++i)
     {
@@ -63,6 +64,27 @@ FLATTEN_INLINE static inline void LoopOneColumn(const Chars & a_data, const Offs
         // Remove last zero byte.
         func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i);
         a_prev_offset = a_offsets[i];
+    }
+}
+template <typename Chars, typename Offsets, typename F>
+FLATTEN_INLINE static inline void LoopOneColumn(
+    size_t start,
+    size_t length,
+    const Chars & a_data,
+    const Offsets & a_offsets,
+    F && func)
+{
+    uint64_t a_prev_offset = 0;
+    if likely (start > 0)
+        a_prev_offset = a_offsets[start - 1];
+
+    for (size_t i = 0, row = start; i < length; ++i, ++row)
+    {
+        auto a_size = a_offsets[row] - a_prev_offset;
+
+        // Remove last zero byte.
+        func({reinterpret_cast<const char *>(&a_data[a_prev_offset]), a_size - 1}, i);
+        a_prev_offset = a_offsets[row];
     }
 }
 } // namespace DB

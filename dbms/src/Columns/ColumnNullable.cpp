@@ -77,32 +77,45 @@ void ColumnNullable::updateHashWithValues(
     const TiDB::TiDBCollatorPtr & collator,
     String & sort_key_container) const
 {
+    updateHashWithValues(0, size(), hash_values, collator, sort_key_container);
+}
+
+void ColumnNullable::updateHashWithValues(
+    size_t start,
+    size_t length,
+    IColumn::HashValues & hash_values,
+    const TiDB::TiDBCollatorPtr & collator,
+    String & sort_key_container) const
+{
+    RUNTIME_CHECK(size() >= start + length);
+    RUNTIME_CHECK(hash_values.size() >= length);
+
     const auto & arr = getNullMapData();
     size_t null_count = 0;
 
     /// TODO: use an more efficient way to calc the sum.
-    for (const auto i : arr)
+    for (size_t row = start; row < start + length; ++row)
     {
-        null_count += i;
+        null_count += arr[row];
     }
 
     if (null_count == 0)
     {
-        getNestedColumn().updateHashWithValues(hash_values, collator, sort_key_container);
+        getNestedColumn().updateHashWithValues(start, length, hash_values, collator, sort_key_container);
     }
     else
     {
         IColumn::HashValues original_values;
         original_values.reserve(null_count);
-        for (size_t i = 0, n = arr.size(); i < n; ++i)
+        for (size_t i = 0, row = start; i < length; ++i, ++row)
         {
-            if (arr[i])
+            if (arr[row])
                 original_values.push_back(hash_values[i]);
         }
-        getNestedColumn().updateHashWithValues(hash_values, collator, sort_key_container);
-        for (size_t i = 0, j = 0, n = arr.size(); i < n; ++i)
+        getNestedColumn().updateHashWithValues(start, length, hash_values, collator, sort_key_container);
+        for (size_t i = 0, j = 0, row = start; i < length; ++i, ++row)
         {
-            if (arr[i])
+            if (arr[row])
                 hash_values[i] = original_values[j++];
         }
     }

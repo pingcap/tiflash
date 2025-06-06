@@ -54,7 +54,7 @@ FLATTEN_INLINE static inline void LoopOneColumnCmpEqStr(
     Result & c,
     F && fn_is_eq)
 {
-    LoopOneColumn(a_data, a_offsets, a_offsets.size(), [&](std::string_view view, size_t i) {
+    LoopOneColumn(a_data, a_offsets, [&](std::string_view view, size_t i) {
         if constexpr (trim)
             view = RightTrim(view);
         auto res = fn_is_eq(view) ? 0 : 1;
@@ -225,20 +225,16 @@ ALWAYS_INLINE static inline bool CompareStringVectorConstantImpl(
         if (BinCollatorCompareStringVectorConstant<true, Op>(a_data, a_offsets, tar_str_view, c))
             return true;
 
-        LoopOneColumn(
-            a_data,
-            a_offsets,
-            a_offsets.size(),
-            [&c, &tar_str_view](const std::string_view & view, size_t i) {
-                if constexpr (IsEqualRelated<Op>::value)
-                {
-                    c[i] = Op::apply(RawStrEqualCompare(RightTrim(view), tar_str_view), 0);
-                }
-                else
-                {
-                    c[i] = Op::apply(RawStrCompare(RightTrim(view), tar_str_view), 0);
-                }
-            });
+        LoopOneColumn(a_data, a_offsets, [&c, &tar_str_view](const std::string_view & view, size_t i) {
+            if constexpr (IsEqualRelated<Op>::value)
+            {
+                c[i] = Op::apply(RawStrEqualCompare(RightTrim(view), tar_str_view), 0);
+            }
+            else
+            {
+                c[i] = Op::apply(RawStrCompare(RightTrim(view), tar_str_view), 0);
+            }
+        });
 
         return true;
     }
@@ -249,20 +245,16 @@ ALWAYS_INLINE static inline bool CompareStringVectorConstantImpl(
         if (BinCollatorCompareStringVectorConstant<false, Op>(a_data, a_offsets, tar_str_view, c))
             return true;
 
-        LoopOneColumn(
-            a_data,
-            a_offsets,
-            a_offsets.size(),
-            [&c, &tar_str_view](const std::string_view & view, size_t i) {
-                if constexpr (IsEqualRelated<Op>::value)
-                {
-                    c[i] = Op::apply(RawStrEqualCompare(view, tar_str_view), 0);
-                }
-                else
-                {
-                    c[i] = Op::apply(RawStrCompare(view, tar_str_view), 0);
-                }
-            });
+        LoopOneColumn(a_data, a_offsets, [&c, &tar_str_view](const std::string_view & view, size_t i) {
+            if constexpr (IsEqualRelated<Op>::value)
+            {
+                c[i] = Op::apply(RawStrEqualCompare(view, tar_str_view), 0);
+            }
+            else
+            {
+                c[i] = Op::apply(RawStrCompare(view, tar_str_view), 0);
+            }
+        });
 
         return true;
     }

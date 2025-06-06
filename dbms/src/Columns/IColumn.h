@@ -396,6 +396,13 @@ public:
         const TiDB::TiDBCollatorPtr & collator,
         String & sort_key_container) const
         = 0;
+    virtual void updateHashWithValues(
+        size_t /* start */,
+        size_t /* length */,
+        HashValues & /* hash_values */,
+        const TiDB::TiDBCollatorPtr & /* collator */,
+        String & /* sort_key_container */) const
+        = 0;
     void updateHashWithValues(HashValues & hash_values) const
     {
         updateHashWithValues(hash_values, nullptr, TiDB::dummy_sort_key_contaner);

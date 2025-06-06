@@ -369,6 +369,12 @@ public:
         IColumn::HashValues & hash_values,
         const TiDB::TiDBCollatorPtr & collator,
         String & sort_key_container) const override;
+    void updateHashWithValues(
+        size_t start,
+        size_t length,
+        IColumn::HashValues & hash_values,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container) const override;
 
     template <typename LoopFunc>
     void updateWeakHash32Impl(WeakHash32Info & info, const LoopFunc & loop_func) const;

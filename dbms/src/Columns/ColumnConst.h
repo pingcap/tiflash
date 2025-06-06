@@ -245,7 +245,20 @@ public:
         const TiDB::TiDBCollatorPtr & collator,
         String & sort_key_container) const override
     {
-        for (size_t i = 0; i < s; ++i)
+        updateHashWithValues(0, size(), hash_values, collator, sort_key_container);
+    }
+
+    void updateHashWithValues(
+        size_t start,
+        size_t length,
+        IColumn::HashValues & hash_values,
+        const TiDB::TiDBCollatorPtr & collator,
+        String & sort_key_container) const override
+    {
+        RUNTIME_CHECK(size() >= start + length);
+        RUNTIME_CHECK(hash_values.size() >= length);
+
+        for (size_t i = 0; i < length; ++i)
         {
             data->updateHashWithValue(0, hash_values[i], collator, sort_key_container);
         }
