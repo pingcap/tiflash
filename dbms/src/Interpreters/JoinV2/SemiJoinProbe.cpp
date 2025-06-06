@@ -269,7 +269,7 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
 
     SCOPE_EXIT({
         flushInsertBatch<false, true>(wd, added_columns);
-        fillNullMapWithZero<false>(added_columns);
+        fillNullMapWithZero(added_columns);
 
         wd.collision += collision;
     });
@@ -294,12 +294,12 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
                 insertRowToBatch<false>(wd, added_columns, ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
                 if unlikely (current_offset >= end_offset)
                 {
-                    ptr = getNextRowPtr(ptr);
+                    ptr = getNextRowPtr<kind>(ptr);
                     break;
                 }
             }
 
-            ptr = getNextRowPtr(ptr);
+            ptr = getNextRowPtr<kind>(ptr);
         }
         if (prev_offset == current_offset)
         {
@@ -365,12 +365,12 @@ SemiJoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDat
                 insertRowToBatch<false>(wd, added_columns, ptr + key_offset + key_getter.getRequiredKeyOffset(key2));
                 if unlikely (current_offset >= end_offset)
                 {
-                    ptr = getNextRowPtr(ptr);
+                    ptr = getNextRowPtr<kind>(ptr);
                     break;
                 }
             }
 
-            ptr = getNextRowPtr(ptr);
+            ptr = getNextRowPtr<kind>(ptr);
             if (ptr == nullptr)
                 break;
         }
@@ -474,7 +474,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
         if (state->stage == ProbePrefetchStage::FindNext)
         {
             RowPtr ptr = state->ptr;
-            RowPtr next_ptr = getNextRowPtr(ptr);
+            RowPtr next_ptr = getNextRowPtr<kind>(ptr);
             state->ptr = next_ptr;
 
             const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
@@ -650,7 +650,7 @@ void NO_INLINE SemiJoinProbeHelper::probeFillColumnsPrefetch(
     }
 
     flushInsertBatch<false, true>(wd, added_columns);
-    fillNullMapWithZero<false>(added_columns);
+    fillNullMapWithZero(added_columns);
 
     ctx.current_row_idx = idx;
     ctx.prefetch_active_states = active_states;

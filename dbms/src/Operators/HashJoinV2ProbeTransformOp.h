@@ -51,5 +51,14 @@ private:
 
     size_t joined_rows = 0;
     size_t scan_hash_map_rows = 0;
+
+    enum class ProbeStatus
+    {
+        PROBE,
+        WAIT_PROBE_FINISH,
+        SCAN_BUILD_SIDE,
+        FINISHED,
+    };
+    ProbeStatus status = ProbeStatus::PROBE;
 };
 } // namespace DB

@@ -19,6 +19,8 @@
 #include <Interpreters/JoinV2/HashJoinKey.h>
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 
+#include "Parsers/ASTTablesInSelectQuery.h"
+
 
 namespace DB
 {
@@ -43,7 +45,7 @@ inline size_t getJoinBuildPartitionNum(HashValueType hash)
 struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
 {
     std::unique_ptr<void, std::function<void(void *)>> key_getter;
-    /// Count of not-null rows
+    /// Count of non-null-key rows
     size_t row_count = 0;
 
     RowPtr null_rows_list_head = nullptr;
@@ -51,6 +53,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
     PaddedPODArray<size_t> row_sizes;
     PaddedPODArray<size_t> hashes;
     RowPtrs row_ptrs;
+    IColumn::Selector right_semi_selector;
 
     PaddedPODArray<size_t> partition_row_sizes;
     PaddedPODArray<size_t> partition_row_count;
@@ -61,7 +64,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
     size_t build_pointer_table_time = 0;
     size_t build_pointer_table_size = 0;
 
-    ssize_t build_pointer_table_iter = -1;
+    ssize_t current_build_table_index = -1;
 
     size_t padding_size = 0;
     size_t all_size = 0;
@@ -75,7 +78,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinBuildWorkerData
 
 void insertBlockToRowContainers(
     HashJoinKeyMethod method,
-    bool need_record_null_rows,
+    ASTTableJoin::Kind kind,
     Block & block,
     size_t rows,
     const ColumnRawPtrs & key_columns,

@@ -133,6 +133,7 @@ HashJoin::HashJoin(
     , log(Logger::get(join_req_id))
     , has_other_condition(non_equal_conditions.other_cond_expr != nullptr)
     , output_columns(output_columns_)
+    , wait_probe_finished_future(std::make_shared<OneTimeNotifyFuture>(NotifyType::WAIT_ON_JOIN_PROBE_FINISH))
 {
     RUNTIME_ASSERT(key_names_left.size() == key_names_right.size());
     output_block = Block(output_columns);
@@ -261,6 +262,7 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
             if (c.column->valuesHaveFixedSize())
             {
                 row_layout.other_column_fixed_size += c.column->sizeOfValueIfFixed();
+                row_layout.other_column_for_other_condition_fixed_size += c.column->sizeOfValueIfFixed();
                 row_layout.other_column_indexes.push_back({i, true});
             }
             else
@@ -455,9 +457,22 @@ bool HashJoin::finishOneProbe(size_t stream_index)
     if (active_probe_worker.fetch_sub(1) == 1)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
+        if (isRightOuterJoin(kind) || isRightSemiFamily(kind))
+            join_probe_build_scanner = std::make_unique<JoinProbeBuildScanner>(this);
+        wait_probe_finished_future->finish();
         return true;
     }
     return false;
+}
+
+bool HashJoin::isAllProbeFinished()
+{
+    if (active_probe_worker > 0)
+    {
+        setNotifyFuture(wait_probe_finished_future.get());
+        return false;
+    }
+    return true;
 }
 
 void HashJoin::workAfterBuildRowFinish()
@@ -478,13 +493,15 @@ void HashJoin::workAfterBuildRowFinish()
         enable_tagged_pointer,
         false);
 
-    /// Conservative threshold: trigger late materialization when lm_row_size average >= 16 bytes.
-    constexpr size_t trigger_lm_row_size_threshold = 16;
     bool late_materialization = false;
     size_t avg_lm_row_size = 0;
-    if (has_other_condition
-        && row_layout.other_column_count_for_other_condition < row_layout.other_column_indexes.size())
+    if (shouldCheckLateMaterialization())
     {
+        // Calculate the average row size of late materialization rows.
+        // If the average row size is greater than or equal to the threshold, enable late materialization.
+        // Otherwise, disable it.
+        // Note: this is a conservative threshold, enable late materialization when lm_row_size average >= 16 bytes.
+        constexpr size_t trigger_lm_row_size_threshold = 16;
         size_t total_lm_row_size = 0;
         size_t total_lm_row_count = 0;
         for (size_t i = 0; i < build_concurrency; ++i)
@@ -556,11 +573,9 @@ void HashJoin::buildRowFromBlock(const Block & b, size_t stream_index)
 
     assertBlocksHaveEqualStructure(block, right_sample_block_pruned, "Join Build");
 
-    bool check_lm_row_size = has_other_condition
-        && row_layout.other_column_count_for_other_condition < row_layout.other_column_indexes.size();
     insertBlockToRowContainers(
         method,
-        needRecordNotInsertRows(kind),
+        kind,
         block,
         rows,
         key_columns,
@@ -568,7 +583,7 @@ void HashJoin::buildRowFromBlock(const Block & b, size_t stream_index)
         row_layout,
         multi_row_containers,
         build_workers_data[stream_index],
-        check_lm_row_size);
+        shouldCheckLateMaterialization());
 
     build_workers_data[stream_index].build_time += watch.elapsedMilliseconds();
 }
@@ -576,21 +591,20 @@ void HashJoin::buildRowFromBlock(const Block & b, size_t stream_index)
 bool HashJoin::buildPointerTable(size_t stream_index)
 {
     bool is_end;
+    size_t max_build_size = 2 * settings.max_block_size;
     switch (method)
     {
-#define M(METHOD)                                                                          \
-    case HashJoinKeyMethod::METHOD:                                                        \
-        using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>; \
-        if constexpr (KeyGetterType##METHOD::Type::joinKeyCompareHashFirst())              \
-            is_end = pointer_table.build<KeyGetterType##METHOD::HashValueType>(            \
-                build_workers_data[stream_index],                                          \
-                multi_row_containers,                                                      \
-                settings.max_block_size);                                                  \
-        else                                                                               \
-            is_end = pointer_table.build<void>(                                            \
-                build_workers_data[stream_index],                                          \
-                multi_row_containers,                                                      \
-                settings.max_block_size);                                                  \
+#define M(METHOD)                                                                                                    \
+    case HashJoinKeyMethod::METHOD:                                                                                  \
+        using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>;                           \
+        if constexpr (KeyGetterType##METHOD::Type::joinKeyCompareHashFirst())                                        \
+            is_end = pointer_table.build<KeyGetterType##METHOD::HashValueType>(                                      \
+                build_workers_data[stream_index],                                                                    \
+                multi_row_containers,                                                                                \
+                max_build_size);                                                                                     \
+        else                                                                                                         \
+            is_end                                                                                                   \
+                = pointer_table.build<void>(build_workers_data[stream_index], multi_row_containers, max_build_size); \
         break;
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M
@@ -663,6 +677,19 @@ Block HashJoin::probeLastResultBlock(size_t stream_index)
         return res_block;
     }
     return {};
+}
+
+bool HashJoin::needProbeScanBuildSide() const
+{
+    return join_probe_build_scanner != nullptr;
+}
+
+Block HashJoin::probeScanBuildSide(size_t stream_index)
+{
+    auto & wd = probe_workers_data[stream_index];
+    Stopwatch all_watch;
+    SCOPE_EXIT({ probe_workers_data[stream_index].scan_build_side_time += all_watch.elapsedFromLastTime(); });
+    return join_probe_build_scanner->scan(wd);
 }
 
 void HashJoin::removeUselessColumn(Block & block) const

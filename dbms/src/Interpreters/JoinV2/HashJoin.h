@@ -19,11 +19,14 @@
 #include <Core/Block.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/JoinInterpreterHelper.h>
+#include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
 #include <Interpreters/ExpressionActions.h>
+#include <Interpreters/JoinUtils.h>
 #include <Interpreters/JoinV2/HashJoinBuild.h>
 #include <Interpreters/JoinV2/HashJoinKey.h>
 #include <Interpreters/JoinV2/HashJoinPointerTable.h>
 #include <Interpreters/JoinV2/HashJoinProbe.h>
+#include <Interpreters/JoinV2/HashJoinProbeBuildScanner.h>
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
 #include <Interpreters/JoinV2/SemiJoinProbe.h>
@@ -54,12 +57,17 @@ public:
     bool finishOneBuildRow(size_t stream_index);
     /// Return true if it is the last probe worker.
     bool finishOneProbe(size_t stream_index);
+    /// Return true if all probe work has finished.
+    bool isAllProbeFinished();
 
     void buildRowFromBlock(const Block & block, size_t stream_index);
     bool buildPointerTable(size_t stream_index);
 
     Block probeBlock(JoinProbeContext & ctx, size_t stream_index);
     Block probeLastResultBlock(size_t stream_index);
+
+    bool needProbeScanBuildSide() const;
+    Block probeScanBuildSide(size_t stream_index);
 
     void removeUselessColumn(Block & block) const;
     /// Block's schema must be all_sample_block_pruned.
@@ -81,9 +89,17 @@ private:
 
     void workAfterBuildRowFinish();
 
+    bool shouldCheckLateMaterialization() const
+    {
+        bool is_any_semi_join = isSemiFamily(kind) || isLeftOuterSemiFamily(kind) || isRightSemiFamily(kind);
+        return has_other_condition && !is_any_semi_join
+            && row_layout.other_column_count_for_other_condition < row_layout.other_column_indexes.size();
+    }
+
 private:
     friend JoinProbeHelper;
     friend SemiJoinProbeHelper;
+    friend JoinProbeBuildScanner;
 
     static const DataTypePtr match_helper_type;
 
@@ -152,8 +168,11 @@ private:
     size_t probe_concurrency = 0;
     std::vector<JoinProbeWorkerData> probe_workers_data;
     std::atomic<size_t> active_probe_worker = 0;
+    OneTimeNotifyFuturePtr wait_probe_finished_future;
     std::unique_ptr<JoinProbeHelper> join_probe_helper;
     std::unique_ptr<SemiJoinProbeHelper> semi_join_probe_helper;
+    /// Probe scan build side
+    std::unique_ptr<JoinProbeBuildScanner> join_probe_build_scanner;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 

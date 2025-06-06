@@ -100,11 +100,22 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     /// For late materialization
     RowPtrs row_ptrs_for_lm;
     RowPtrs filter_row_ptrs_for_lm;
+    /// For right outer/semi/anti join with other conditions
+    RowPtrs right_join_row_ptrs;
 
     /// Schema: HashJoin::all_sample_block_pruned
     Block result_block;
     /// Schema: HashJoin::output_block_after_finalize
     Block result_block_for_other_condition;
+
+    /// Scan build side
+    ssize_t current_scan_table_index = -1;
+    RowContainer * current_container = nullptr;
+    size_t current_container_index = 0;
+    /// Schema: HashJoin::output_block_after_finalize
+    Block scan_result_block;
+    size_t current_scan_block_rows = 0;
+    bool is_scan_end = false;
 
     /// Metrics
     size_t probe_handle_rows = 0;
@@ -113,6 +124,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     size_t replicate_time = 0;
     size_t other_condition_time = 0;
     size_t collision = 0;
+    size_t scan_build_side_time = 0;
 };
 
 class JoinProbeHelperUtil
@@ -151,7 +163,6 @@ protected:
     template <bool late_materialization, bool last_flush>
     void flushInsertBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns) const;
 
-    template <bool late_materialization>
     void fillNullMapWithZero(MutableColumns & added_columns) const;
 
 protected:
