@@ -28,7 +28,9 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     : rows(std::move(rows_))
     , precede_stream_rows(0)
     , scan_context(scan_context_)
-    , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
+    , lac_bytes_collector(
+          scan_context_ ? scan_context_->keyspace_id : pingcap::pd::NullspaceID,
+          scan_context_ ? scan_context_->resource_group_name : "")
 {
     assert(rows.size() == inputs_.size());
     children.insert(children.end(), inputs_.begin(), inputs_.end());

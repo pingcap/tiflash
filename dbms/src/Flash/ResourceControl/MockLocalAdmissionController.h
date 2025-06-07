@@ -17,6 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/toRU.h>
+#include <pingcap/pd/Types.h>
 
 #include <mutex>
 #include <thread>
@@ -50,9 +51,18 @@ public:
     using GetPriorityFuncType = uint64_t (*)(const std::string &);
     using IsResourceGroupThrottledFuncType = bool (*)(const std::string &);
 
+    void consumeCPUResource(const pingcap::pd::KeyspaceID &, const std::string & name, double ru, uint64_t cpu_time_ns)
+        const
+    {
+        consumeResource(name, ru, cpu_time_ns);
+    }
     void consumeCPUResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
     {
         consumeResource(name, ru, cpu_time_ns);
+    }
+    void consumeBytesResource(const pingcap::pd::KeyspaceID &, const std::string & name, double ru) const
+    {
+        consumeResource(name, ru, 0);
     }
     void consumeBytesResource(const std::string & name, double ru) const { consumeResource(name, ru, 0); }
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
@@ -69,7 +79,7 @@ public:
 
         return {get_priority_func(name)};
     }
-    void warmupResourceGroupInfoCache(const std::string &) {}
+    void warmupResourceGroupInfoCache(const pingcap::pd::KeyspaceID &, const std::string &) {}
     static uint64_t estWaitDuraMS(const std::string &) { return 100; }
 
     void registerRefillTokenCallback(const std::function<void()> & cb)

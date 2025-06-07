@@ -18,11 +18,19 @@
 #include <Common/MemoryTracker.h>
 #include <Common/MemoryTrackerSetter.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Storages/KVStore/Types.h>
 
 #include <magic_enum.hpp>
 
 namespace DB
 {
+struct TaskCancelInfo
+{
+    String query_id;
+    KeyspaceID keyspace_id;
+    String resource_group_name;
+};
+
 #define FINISH_STATUS                                      \
     ExecTaskStatus::FINISHED : case ExecTaskStatus::ERROR: \
     case ExecTaskStatus::CANCELLED
