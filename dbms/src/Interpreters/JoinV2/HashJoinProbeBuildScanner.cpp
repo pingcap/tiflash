@@ -233,6 +233,8 @@ Block JoinProbeBuildScanner::scanImpl(JoinProbeWorkerData & wd)
             wd.selective_offsets.clear();
         }
 
+        scan_size += rows - index;
+
         if (index >= rows)
         {
             container = nullptr;
