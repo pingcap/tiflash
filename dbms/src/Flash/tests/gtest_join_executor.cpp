@@ -4795,6 +4795,7 @@ try
         auto request = context.scan("right_semi_family", "t")
                            .join(context.scan("right_semi_family", "s"), type, {col("a")}, {}, {}, {}, {}, 0, false, 0)
                            .build(context);
+        WRAP_FOR_JOIN_TEST_BEGIN
         executeAndAssertColumnsEqual(request, res);
         auto request_column_prune
             = context.scan("right_semi_family", "t")
@@ -4802,6 +4803,7 @@ try
                   .aggregation({Count(lit(static_cast<UInt64>(1)))}, {})
                   .build(context);
         ASSERT_COLUMNS_EQ_UR(genScalarCountResults(res), executeStreams(request_column_prune, 2));
+        WRAP_FOR_JOIN_TEST_END
     }
 
     /// One join key(t.a = s.a) + other condition(t.c < s.c).

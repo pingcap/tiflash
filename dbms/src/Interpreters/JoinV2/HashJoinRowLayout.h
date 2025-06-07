@@ -15,9 +15,13 @@
 #pragma once
 
 #include <Common/PODArray.h>
+#include <Core/Block.h>
+#include <Parsers/ASTTablesInSelectQuery.h>
 #include <Storages/KVStore/Utils.h>
 #include <common/unaligned.h>
 
+#include <atomic>
+#include <cstdint>
 #include <vector>
 
 namespace DB
@@ -41,12 +45,16 @@ struct HashJoinRowLayout
 
     size_t key_column_fixed_size = 0;
     size_t other_column_fixed_size = 0;
+    size_t other_column_for_other_condition_fixed_size = 0;
 };
 
 using RowPtr = char *;
 using RowPtrs = PaddedPODArray<RowPtr>;
 
-constexpr size_t ROW_ALIGN = 4;
+static_assert(alignof(std::atomic<uintptr_t>) == alignof(uintptr_t));
+constexpr UInt8 ROW_ALIGN = alignof(uintptr_t);
+static_assert((ROW_ALIGN & (ROW_ALIGN - 1)) == 0);
+static_assert(ROW_ALIGN >= 4 && ROW_ALIGN < UINT8_MAX);
 
 constexpr size_t ROW_PTR_TAG_BITS = 16;
 constexpr size_t ROW_PTR_TAG_MASK = (1 << ROW_PTR_TAG_BITS) - 1;
@@ -54,9 +62,46 @@ constexpr size_t ROW_PTR_TAG_SHIFT = 8 * sizeof(RowPtr) - ROW_PTR_TAG_BITS;
 static_assert(sizeof(RowPtr) == sizeof(uintptr_t));
 static_assert(sizeof(RowPtr) == 8);
 
+template <ASTTableJoin::Kind kind>
 inline RowPtr getNextRowPtr(RowPtr ptr)
 {
-    return unalignedLoad<RowPtr>(ptr);
+    using enum ASTTableJoin::Kind;
+    if constexpr (kind == RightOuter || kind == RightSemi || kind == RightAnti)
+    {
+        auto next = reinterpret_cast<std::atomic<uintptr_t> *>(ptr)->load(std::memory_order_relaxed);
+        return reinterpret_cast<RowPtr>(next & (~static_cast<uintptr_t>(ROW_ALIGN - 1)));
+    }
+    return *reinterpret_cast<RowPtr *>(ptr);
+}
+
+inline UInt8 getRowPtrFlag(RowPtr ptr)
+{
+    return reinterpret_cast<std::atomic<uintptr_t> *>(ptr)->load(std::memory_order_relaxed)
+        & static_cast<uintptr_t>(ROW_ALIGN - 1);
+}
+
+inline bool hasRowPtrMatchedFlag(RowPtr ptr)
+{
+    return getRowPtrFlag(ptr) & 0x01;
+}
+
+inline void setRowPtrMatchedFlag(RowPtr ptr)
+{
+    if (hasRowPtrMatchedFlag(ptr))
+        return;
+    reinterpret_cast<std::atomic<uintptr_t> *>(ptr)->fetch_or(0x01, std::memory_order_relaxed);
+}
+
+inline bool hasRowPtrNullFlag(RowPtr ptr)
+{
+    return getRowPtrFlag(ptr) & 0x10;
+}
+
+inline void setRowPtrNullFlag(RowPtr ptr)
+{
+    if (hasRowPtrNullFlag(ptr))
+        return;
+    reinterpret_cast<std::atomic<uintptr_t> *>(ptr)->fetch_or(0x10, std::memory_order_relaxed);
 }
 
 inline UInt16 getRowPtrTag(RowPtr ptr)
@@ -88,6 +133,8 @@ struct RowContainer
     PaddedPODArray<char> data;
     PaddedPODArray<size_t> offsets;
     PaddedPODArray<UInt64> hashes;
+    /// Used for right semi/anti join
+    Block other_column_block;
 
     size_t size() const { return offsets.size(); }
 
