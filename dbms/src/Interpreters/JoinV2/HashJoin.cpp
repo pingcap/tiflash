@@ -681,7 +681,7 @@ Block HashJoin::probeLastResultBlock(size_t stream_index)
 
 bool HashJoin::needProbeScanBuildSide() const
 {
-    return join_probe_build_scanner != nullptr;
+    return isRightOuterJoin(kind) || isRightSemiFamily(kind);
 }
 
 Block HashJoin::probeScanBuildSide(size_t stream_index)
