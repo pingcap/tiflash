@@ -46,8 +46,6 @@ mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_2
 mysql> alter table test.t_1 change column a b int;
 mysql> alter table test.t_2 change column a aa varchar(10);
 
->> DBGInvoke __refresh_schemas()
-
 mysql> set session tidb_isolation_read_engines='tiflash'; select * from test.t_1;
 +---+------+
 | b | col  |
