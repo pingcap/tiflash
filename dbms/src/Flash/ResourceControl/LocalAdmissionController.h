@@ -91,7 +91,10 @@ public:
         , group_pb(group_pb_)
         , log(Logger::get("resource group:" + group_pb_.name()))
     {
-        RUNTIME_CHECK(keyspace_id_ == group_pb_.keyspace_id().value(), keyspace_id_, group_pb_.keyspace_id().value());
+        RUNTIME_CHECK(
+            !group_pb_.has_keyspace_id() || keyspace_id_ == group_pb_.keyspace_id().value(),
+            keyspace_id_,
+            group_pb_.keyspace_id().value());
 
         resetResourceGroup(group_pb_);
         const auto & setting = group_pb.r_u_settings().r_u().settings();
