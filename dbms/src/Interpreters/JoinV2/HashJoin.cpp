@@ -199,19 +199,27 @@ void HashJoin::initRowLayoutAndHashJoinMethod()
         /// Move all raw required join key column to the end of the join key.
         Names new_key_names_left, new_key_names_right;
         BoolVec raw_required_key_flag(keys_size);
+        bool is_right_semi_join = isRightSemiFamily(kind);
+        auto check_key_required = [&](const String & name) -> bool {
+            // If it's right semi/anti join, the key is required if and only if it's needed for other condition
+            if (is_right_semi_join)
+                return required_columns_names_set_for_other_condition.contains(name);
+            else
+                return right_sample_block_pruned.has(name);
+        };
         for (size_t i = 0; i < keys_size; ++i)
         {
             bool is_raw_required = false;
             if (key_columns[i].column_ptr->valuesHaveFixedSize())
             {
-                if (right_sample_block_pruned.has(key_names_right[i]))
+                if (check_key_required(key_names_right[i]))
                     is_raw_required = true;
             }
             else
             {
                 if (canAsColumnString(key_columns[i].column_ptr)
                     && getStringCollatorKind(collators) == StringCollatorKind::StringBinary
-                    && right_sample_block_pruned.has(key_names_right[i]))
+                    && check_key_required(key_names_right[i]))
                 {
                     is_raw_required = true;
                 }
@@ -417,6 +425,9 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
     active_probe_worker = probe_concurrency;
     probe_workers_data.resize(probe_concurrency);
 
+    if (needProbeScanBuildSide())
+        join_probe_build_scanner = std::make_unique<JoinProbeBuildScanner>(this);
+
     probe_initialized = true;
 }
 
@@ -457,8 +468,6 @@ bool HashJoin::finishOneProbe(size_t stream_index)
     if (active_probe_worker.fetch_sub(1) == 1)
     {
         FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::exception_mpp_hash_probe);
-        if (isRightOuterJoin(kind) || isRightSemiFamily(kind))
-            join_probe_build_scanner = std::make_unique<JoinProbeBuildScanner>(this);
         wait_probe_finished_future->finish();
         return true;
     }
