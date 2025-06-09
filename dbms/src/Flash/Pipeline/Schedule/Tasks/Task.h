@@ -58,6 +58,7 @@ enum class NotifyType
     WAIT_ON_JOIN_BUILD_FINISH,
     WAIT_ON_JOIN_PROBE_FINISH,
     WAIT_ON_RESULT_QUEUE_WRITE,
+    WAIT_ON_NOTHING,
 };
 
 class PipelineExecutorContext;
@@ -157,7 +158,7 @@ private:
     MemoryTracker * mem_tracker_ptr;
 
     ExecTaskStatus task_status;
-    NotifyType notify_type;
+    NotifyType notify_type{NotifyType::WAIT_ON_NOTHING};
 
     bool is_finalized = false;
 };
