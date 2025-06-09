@@ -215,6 +215,7 @@ pingcap::ClusterConfig getClusterConfig(
     return config;
 }
 
+
 LoggerPtr grpc_log;
 
 void printGRPCLog(gpr_log_func_args * args)
