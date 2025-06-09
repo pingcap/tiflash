@@ -27,4 +27,8 @@ add_library(tici_search_lib SHARED "${TiFlash_SOURCE_DIR}/libs/libclara-cmake/du
 target_link_libraries(tici_search_lib PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,tici_search_lib_static>")
 target_include_directories(tici_search_lib  INTERFACE
     ${CMAKE_CURRENT_BINARY_DIR}/cxxbridge)
-
+# On Ubuntu/Debian:
+# sudo apt-get install liblzma-dev libbz2-dev
+# On CentOS/RHEL:
+# sudo yum install xz-devel bzip2-devel
+target_link_libraries(tici_search_lib PRIVATE lzma bz2)
