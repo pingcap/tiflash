@@ -345,9 +345,9 @@ static Int64 currentMS()
         .count();
 }
 
-static bool checkIsRUExhausted(const String & res_group_name)
+static bool checkIsRUExhausted(const KeyspaceID & keyspace_id, const String & res_group_name)
 {
-    auto priority = LocalAdmissionController::global_instance->getPriority(res_group_name);
+    auto priority = LocalAdmissionController::global_instance->getPriority(keyspace_id, res_group_name);
     if (unlikely(!priority.has_value()))
     {
         return false;
@@ -393,7 +393,7 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
 
     // Check and reset everything.
     read_bytes_after_last_check = 0;
-    ru_is_exhausted = checkIsRUExhausted(res_group_name);
+    ru_is_exhausted = checkIsRUExhausted(keyspace_id, res_group_name);
     last_time_check_ru = ms;
     return ru_is_exhausted;
 }

@@ -72,7 +72,7 @@ public:
 
         consume_resource_func(name, ru, cpu_time_ns);
     }
-    std::optional<uint64_t> getPriority(const std::string & name) const
+    std::optional<uint64_t> getPriority(const pingcap::pd::KeyspaceID &, const std::string & name) const
     {
         if (name.empty())
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
@@ -80,7 +80,7 @@ public:
         return {get_priority_func(name)};
     }
     void warmupResourceGroupInfoCache(const pingcap::pd::KeyspaceID &, const std::string &) {}
-    static uint64_t estWaitDuraMS(const std::string &) { return 100; }
+    static uint64_t estWaitDuraMS(const pingcap::pd::KeyspaceID &, const std::string &) { return 100; }
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {
