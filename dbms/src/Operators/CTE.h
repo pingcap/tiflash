@@ -97,7 +97,7 @@ private:
     std::shared_mutex rw_lock;
     Blocks blocks;
     size_t memory_usage = 0;
-    size_t memory_threshold = 0; // TODO initialize it
+    size_t memory_threshold = 0;
 
     CTEStatus cte_status = CTEStatus::Normal;
 
@@ -111,15 +111,12 @@ private:
     PipeConditionVariable pipe_cv;
 
     CTESpill cte_spill;
+    bool is_spill_triggered = false;
 
     bool is_eof = false;
-<<<<<<< HEAD
-    bool is_spill_triggered = false;
-=======
     bool is_cancelled = false;
 
     bool get_resp = false;
     tipb::SelectResponse resp;
->>>>>>> cte
 };
 } // namespace DB
