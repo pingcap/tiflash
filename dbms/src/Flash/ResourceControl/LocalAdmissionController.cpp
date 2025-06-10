@@ -236,7 +236,7 @@ void ResourceGroup::updateDegradeMode(const SteadyClock::time_point & now)
         LOG_INFO(
             log,
             "resource group({}) cannot receive gac response(bucket: {}, mode: {}) for {} seconds",
-            name,
+            name_with_keyspace_id,
             bucket->toString(),
             magic_enum::enum_name(bucket_mode),
             std::chrono::duration_cast<std::chrono::seconds>(LocalAdmissionController::DEGRADE_MODE_DURATION).count());
@@ -310,7 +310,8 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
     {
         throw ::DB::Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "warmupResourceGroupInfoCache({}) failed: {}",
+            "warmupResourceGroupInfoCache({}-{}) failed: {}",
+            keyspace_id,
             name,
             getCurrentExceptionMessage(false));
     }
