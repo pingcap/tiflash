@@ -717,11 +717,7 @@ TEST_P(SegmentBitmapFilterTest, testSkipPackStableOnly)
             ASSERT_EQ(version, 3);
             const auto & dmfiles = snap->stable->getDMFiles();
             auto [skipped_ranges, new_pack_filter_results]
-                = DMFilePackFilter::getSkippedRangeAndFilterForBitmapStableOnly(
-                    *dm_context,
-                    dmfiles,
-                    pack_filter_results,
-                    2);
+                = DMFilePackFilter::getSkippedRangeAndFilter(*dm_context, dmfiles, pack_filter_results, 2);
             // [200, 500), [1500, 2000)
             ASSERT_EQ(skipped_ranges.size(), 2);
             ASSERT_EQ(skipped_ranges[0], DMFilePackFilter::Range(200, 300));
@@ -800,7 +796,7 @@ TEST_P(SegmentBitmapFilterTest, testSkipPackNormal)
                 getExtraHandleColumnDefine(seg->is_common_handle),
             };
             auto read_info = seg->getReadInfo(*dm_context, columns_to_read, snap, ranges, ReadTag::MVCC, start_ts);
-            auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
+            auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVersion(
                 *dm_context,
                 dmfiles,
                 pack_filter_results,
@@ -1193,7 +1189,7 @@ try
             RUNTIME_CHECK(cfs[0]->isInMemoryFile(), cfs[0]->toString());
 
         auto vc = createVersionChain(is_common_handle);
-        return std::visit([&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); }, vc);
+        return std::visit([&](auto & version_chain) { return version_chain.replaySnapshot(*dm_context, *snap); }, *vc);
     };
     auto base_ver1 = get_base_versions(false);
     writeSegmentGeneric("flush_cache"); // Flush never sort data when version chain enabled.
@@ -1693,6 +1689,28 @@ TEST_P(SegmentBitmapFilterTest, Big_NoIntersection_Tiny)
         .seg_id = SEG_ID,
         .caller_line = __LINE__,
         .expected_bitmap = String(30, '1'),
+    });
+}
+
+TEST_P(SegmentBitmapFilterTest, MultiVersionWithDeleteMark)
+{
+    writeSegmentGeneric("d_mem:[0, 100):ts_1|d_mem_del:[0, 100):ts_10|merge_delta:pack_size_10");
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(snap->delta->getColumnFileCount(), 0);
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 5,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 10,
     });
 }
 } // namespace DB::DM::tests

@@ -44,7 +44,9 @@
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
@@ -678,6 +680,16 @@ void setColumnsToRead(
             extra_table_id_index = i;
             continue;
         }
+        else if (column_names[i] == DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.name)
+        {
+            col_define.name = column_names[i];
+            col_define.id = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id;
+            col_define.type = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.type;
+        }
+        else if (column_names[i] == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name)
+        {
+            col_define = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD;
+        }
         else
         {
             auto & column = header->getByName(column_names[i]);
@@ -1090,6 +1102,13 @@ UInt64 StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
 {
     GET_METRIC(tiflash_storage_command_count, type_ingest_checkpoint).Increment();
     return getAndMaybeInitStore()->ingestSegmentsFromCheckpointInfo(global_context, settings, range, checkpoint_info);
+}
+
+UInt64 StorageDeltaMerge::removeSegmentsFromCheckpointInfo(
+    const CheckpointIngestInfo & checkpoint_info,
+    const Settings & settings)
+{
+    return getAndMaybeInitStore()->removeSegmentsFromCheckpointInfo(global_context, settings, checkpoint_info);
 }
 
 UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)

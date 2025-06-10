@@ -167,6 +167,11 @@ public:
 
     const char * deserializeAndInsertFromArena(const char * src_arena, const TiDB::TiDBCollatorPtr &) override;
 
+    size_t serializeByteSize() const override
+    {
+        throw Exception("Method serializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
+    }
+
     void countSerializeByteSize(PaddedPODArray<size_t> & /* byte_size */) const override
     {
         throw Exception("Method countSerializeByteSize is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);

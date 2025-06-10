@@ -68,7 +68,7 @@ public:
 
     bool isClosed() const override { return is_close; }
 
-    ssize_t pwrite(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
+    ssize_t pwrite(char * /*buf*/, size_t /*size*/, off_t /*offset*/) override
     {
         throw Exception("S3WritableFile not support pwrite", ErrorCodes::NOT_IMPLEMENTED);
     }

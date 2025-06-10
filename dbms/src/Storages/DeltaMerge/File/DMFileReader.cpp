@@ -79,6 +79,11 @@ DMFileReader::DMFileReader(
     , max_sharing_column_bytes(max_sharing_column_bytes_)
     , file_provider(file_provider_)
     , log(Logger::get(tracing_id_))
+    , read_block_infos(ReadBlockInfo::create(
+          pack_filter->getPackRes(),
+          dmfile->getPackStats(),
+          read_one_pack_every_time_ ? 1 : std::numeric_limits<size_t>::max(),
+          rows_threshold_per_read_))
 {
     // Initialize column_streams
     for (const auto & cd : read_columns)
@@ -110,8 +115,6 @@ DMFileReader::DMFileReader(
     }
 
     initPackOffset();
-
-    initReadBlockInfos();
 }
 
 void DMFileReader::initPackOffset()
@@ -712,53 +715,7 @@ void DMFileReader::addSkippedRows(UInt64 rows)
     }
 }
 
-void DMFileReader::initReadBlockInfos()
-{
-    const auto & pack_res = pack_filter->getPackRes();
-    const auto & pack_stats = dmfile->getPackStats();
-
-    const size_t read_pack_limit = read_one_pack_every_time ? 1 : std::numeric_limits<size_t>::max();
-    size_t start_pack_id = 0;
-    size_t read_rows = 0;
-    auto prev_block_pack_res = RSResult::All;
-    for (size_t pack_id = 0; pack_id < pack_res.size(); ++pack_id)
-    {
-        bool is_use = pack_res[pack_id].isUse();
-        bool reach_limit = pack_id - start_pack_id >= read_pack_limit || read_rows >= rows_threshold_per_read;
-        // Get continuous packs with RSResult::All but don't split the read if it is too small.
-        // Too small block may hurts performance.
-        bool break_all_match = prev_block_pack_res.allMatch() && !pack_res[pack_id].allMatch()
-            && read_rows >= rows_threshold_per_read / 2;
-
-        if (!is_use)
-        {
-            if (read_rows > 0)
-                read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, prev_block_pack_res, read_rows);
-            // Current pack is not included in the next read_block_info
-            start_pack_id = pack_id + 1;
-            read_rows = 0;
-            prev_block_pack_res = RSResult::All;
-        }
-        else if (reach_limit || break_all_match)
-        {
-            if (read_rows > 0)
-                read_block_infos.emplace_back(start_pack_id, pack_id - start_pack_id, prev_block_pack_res, read_rows);
-            // Current pack must be included in the next read_block_info
-            start_pack_id = pack_id;
-            read_rows = pack_stats[pack_id].rows;
-            prev_block_pack_res = pack_res[pack_id];
-        }
-        else
-        {
-            prev_block_pack_res = prev_block_pack_res && pack_res[pack_id];
-            read_rows += pack_stats[pack_id].rows;
-        }
-    }
-    if (read_rows > 0)
-        read_block_infos.emplace_back(start_pack_id, pack_res.size() - start_pack_id, prev_block_pack_res, read_rows);
-}
-
-std::vector<DMFileReader::ReadBlockInfo> DMFileReader::splitReadBlockInfos(
+std::vector<ReadBlockInfo> DMFileReader::splitReadBlockInfos(
     const ReadBlockInfo & read_info,
     const IColumn::Filter & filter) const
 {

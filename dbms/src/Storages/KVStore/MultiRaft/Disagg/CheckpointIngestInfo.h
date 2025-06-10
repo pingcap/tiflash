@@ -82,7 +82,7 @@ struct CheckpointIngestInfo
         UInt64 region_id,
         bool in_memory,
         CleanReason reason);
-    static bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id);
+    bool cleanOnSuccess(TMTContext & tmt, UInt64 region_id);
 
     FastAddPeerProto::CheckpointIngestInfoPersisted serializeMeta() const;
 

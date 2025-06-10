@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Storages/KVStore/MultiRaft/Disagg/ServerlessUtils.h>
 #include <Storages/Page/V3/Universal/UniversalPageIdFormatImpl.h>
 #include <Storages/Page/V3/Universal/UniversalPageStorage.h>
@@ -46,7 +47,7 @@ String makeRegionPrefix(uint64_t region_id, uint8_t suffix)
     return buff.releaseStr();
 }
 
-#if SERVERLESS_PROXY == 0
+#if ENABLE_NEXT_GEN == 0
 // pub const KEYSPACE_INNER_KEY_OFF_SUFFIX: u8 = 0x01;
 String getKeyspaceInnerKey(UniversalPageStoragePtr, uint32_t)
 {
@@ -92,7 +93,7 @@ String getTxnFileRef(UniversalPageStoragePtr, uint64_t)
 {
     return "";
 }
-#else
+#else // ENABLE_NEXT_GEN
 // pub const KEYSPACE_INNER_KEY_OFF_SUFFIX: u8 = 0x01;
 String getKeyspaceInnerKey(UniversalPageStoragePtr uni_ps, uint32_t keyspace_id)
 {
@@ -147,7 +148,7 @@ String getCompactibleInnerKey(UniversalPageStoragePtr uni_ps, uint32_t keyspace_
         {
             LOG_INFO(
                 DB::Logger::get(),
-                "Failed to find compactible inner key, region_id={}, keyspace={}",
+                "Failed to find compactible inner key, region_id={} keyspace={}",
                 region_id,
                 keyspace_id);
         }
@@ -213,7 +214,7 @@ String getCompactibleEncKey(UniversalPageStoragePtr uni_ps, uint32_t keyspace_id
         {
             LOG_INFO(
                 DB::Logger::get(),
-                "Failed to find compactible enc key, region_id={}, keyspace={}",
+                "Failed to find compactible enc key, region_id={} keyspace={}",
                 region_id,
                 keyspace_id);
         }

@@ -119,6 +119,8 @@ template <ExtraHandleType HandleType>
     const ssize_t start_row_id,
     BitmapFilter & filter)
 {
+    // Load the max version of each pack.
+    // Note that it is the max version of the non-deleted rows.
     const auto max_versions = loadPackMaxValue<UInt64>(dm_context, *dmfile, MutSup::version_col_id);
 
     auto need_read_packs = std::make_shared<IdSet>();
@@ -174,15 +176,12 @@ template <ExtraHandleType HandleType>
         const UInt32 pack_start_row_id = itr->second;
 
         // Filter invisible versions
-        if (max_versions[pack_id] > read_ts)
+        for (UInt32 i = 0; i < block.rows(); ++i)
         {
-            for (UInt32 i = 0; i < block.rows(); ++i)
+            if (filter[pack_start_row_id + i] && versions[i] > read_ts)
             {
-                if (filter[pack_start_row_id + i] && versions[i] > read_ts)
-                {
-                    filter[pack_start_row_id + i] = 0;
-                    ++filtered_out_rows;
-                }
+                filter[pack_start_row_id + i] = 0;
+                ++filtered_out_rows;
             }
         }
 
@@ -208,7 +207,7 @@ template <ExtraHandleType HandleType>
                 const UInt32 base_row_id = itr - handles.begin() + pack_start_row_id;
                 // If the first version is filtered out, there are two possible reasons:
                 // 1. The newer version in delta has been chosen.
-                // 2. It is invisiable to `read_ts`.
+                // 2. It is invisible to `read_ts`.
                 // So we just filter out all versions of the same handle.
                 if (!filter[base_row_id])
                 {
@@ -218,7 +217,7 @@ template <ExtraHandleType HandleType>
                 else
                 {
                     // Find the newest but not filtered out version.
-                    // If it is invisiable to `read_ts`, it is already filtered out before.
+                    // If it is invisible to `read_ts`, it is already filtered out before.
                     // So we just get the last not filtered out version here.
                     for (UInt32 i = 1; i < count; ++i)
                     {

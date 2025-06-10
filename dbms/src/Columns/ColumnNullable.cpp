@@ -282,6 +282,11 @@ const char * ColumnNullable::deserializeAndInsertFromArena(const char * pos, con
     return pos;
 }
 
+size_t ColumnNullable::serializeByteSize() const
+{
+    return getNestedColumn().serializeByteSize() + getNullMapColumn().serializeByteSize();
+}
+
 void ColumnNullable::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
 {
     getNullMapColumn().countSerializeByteSize(byte_size);
