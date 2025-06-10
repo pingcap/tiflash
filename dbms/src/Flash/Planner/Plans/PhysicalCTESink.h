@@ -29,7 +29,7 @@ public:
         const LoggerPtr & log,
         const FineGrainedShuffle & fine_grained_shuffle,
         const PhysicalPlanNodePtr & child,
-        UInt32 cte_id);
+        const ::tipb::CTESink & cte_sink);
 
     PhysicalCTESink(
         const String & executor_id_,
@@ -37,9 +37,13 @@ public:
         const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_,
-        UInt32 cte_id_)
+        UInt32 cte_id_,
+        Int32 expected_sink_num_,
+        Int32 expected_source_num_)
         : PhysicalUnary(executor_id_, PlanType::CTESink, schema_, fine_grained_shuffle_, req_id, child_)
         , cte_id(cte_id_)
+        , expected_sink_num(expected_sink_num_)
+        , expected_source_num(expected_source_num_)
     {}
 
     void finalizeImpl(const Names & parent_require) override;
@@ -54,5 +58,7 @@ private:
         size_t /*concurrency*/) override;
 
     UInt32 cte_id;
+    Int32 expected_sink_num;
+    Int32 expected_source_num;
 };
 } // namespace DB

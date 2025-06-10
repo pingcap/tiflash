@@ -19,9 +19,10 @@
 #include <Core/CTESpill.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
+#include <tipb/select.pb.h>
 
+#include <mutex>
 #include <shared_mutex>
-#include <utility>
 
 namespace DB
 {
@@ -47,21 +48,54 @@ public:
         InSpilling,
     };
 
-    std::pair<Status, Block> tryGetBlockAt(size_t idx);
-    Block getBlockFromDisk(size_t idx);
     CTEStatus getStatus();
-    Status pushBlock(const Block & block);
-    void notifyEOF();
+    Status tryGetBunchBlocks(size_t idx, std::deque<Block> & queue);
+    bool pushBlock(const Block & block);
+    void notifyEOF() { this->notifyImpl<true>(true); }
+    void notifyCancel() { this->notifyImpl<true>(false); }
 
     // TODO should have return value to indicate if spill successes
     void spillBlocks();
 
     void registerTask(TaskPtr && task) override;
 
+    void addResp(const tipb::SelectResponse & resp)
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        this->resp.MergeFrom(resp);
+    }
+
+    void tryToGetResp(tipb::SelectResponse & resp)
+    {
+        if (!this->get_resp)
+        {
+            this->get_resp = true;
+            resp.CopyFrom(this->resp);
+        }
+    }
+
 private:
+    template <bool has_lock>
+    void notifyImpl(bool is_eof)
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
+        if constexpr (has_lock)
+            lock.lock();
+
+        if likely (is_eof)
+            this->is_eof = true;
+        else
+            this->is_cancelled = true;
+
+        // Just in case someone is in WAITING_FOR_NOTIFY status
+        this->pipe_cv.notifyAll();
+    }
+
+    // Return true if CTE has data
+    inline bool hasDataNoLock() const { return !this->blocks.empty(); }
+
     std::shared_mutex rw_lock;
     Blocks blocks;
-
     size_t memory_usage = 0;
     size_t memory_threshold = 0; // TODO initialize it
 
@@ -79,6 +113,13 @@ private:
     CTESpill cte_spill;
 
     bool is_eof = false;
+<<<<<<< HEAD
     bool is_spill_triggered = false;
+=======
+    bool is_cancelled = false;
+
+    bool get_resp = false;
+    tipb::SelectResponse resp;
+>>>>>>> cte
 };
 } // namespace DB

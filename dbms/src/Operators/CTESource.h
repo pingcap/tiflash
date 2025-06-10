@@ -19,7 +19,10 @@
 #include <Flash/Mpp/CTEManager.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Operators/CTE.h>
+#include <Operators/CTEReader.h>
 #include <Operators/Operator.h>
+
+#include <memory>
 
 namespace DB
 {
@@ -29,18 +32,19 @@ public:
     CTESourceOp(
         PipelineExecutorContext & exec_context_,
         const String & req_id,
-        const String & query_id_and_cte_id_,
-        CTEManager * cte_manager_)
+        std::shared_ptr<CTEReader> cte_reader_,
+        const NamesAndTypes & schema)
         : SourceOp(exec_context_, req_id)
-        , query_id_and_cte_id(query_id_and_cte_id_)
-        , cte_manager(cte_manager_)
-        , cte(cte_manager_->getCTE(query_id_and_cte_id_))
+        , cte_reader(cte_reader_)
+        , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, 1))
         , wait_type(NeedMoreBlock)
-    {}
-
-    ~CTESourceOp() override { assert(!this->cte); }
+    {
+        setHeader(Block(getColumnWithTypeAndName(schema)));
+    }
 
     String getName() const override { return "CTESourceOp"; }
+
+    IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 
 protected:
     void operateSuffixImpl() override;
@@ -59,11 +63,14 @@ private:
     String query_id_and_cte_id;
     CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
-    size_t block_fetch_idx = 0;
 
     Block block_from_disk;
 
     uint64_t total_rows{};
     WaitType wait_type;
+    std::shared_ptr<CTEReader> cte_reader;
+
+    IOProfileInfoPtr io_profile_info;
+    tipb::SelectResponse resp;
 };
 } // namespace DB

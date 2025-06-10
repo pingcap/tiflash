@@ -23,6 +23,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${TiFlash_SOURCE_DIR}/cmake/Modules/
 set(CMAKE_MACOSX_RPATH 1)
 
 option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
+option(ENABLE_NEXT_GEN "enable TiDB next-gen features" OFF)
 
 if(NOT CMAKE_PREFIX_PATH AND DEFINED ENV{CMAKE_PREFIX_PATH})
     message(STATUS "Reading CMAKE_PREFIX_PATH from env... $ENV{CMAKE_PREFIX_PATH}")
@@ -311,6 +312,7 @@ include (cmake/find_tipb.cmake)
 include (cmake/find_curl.cmake)
 include (cmake/find_prometheus.cmake)
 include (cmake/find_tiflash_proxy.cmake)
+include (cmake/find_libclara.cmake)
 include (cmake/find_xxhash.cmake)
 
 if (OS_LINUX AND ARCH_AMD64 AND TIFLASH_ENABLE_AVX512_SUPPORT)

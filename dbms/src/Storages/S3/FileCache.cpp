@@ -676,6 +676,10 @@ FileType FileCache::getFileType(const String & fname)
     {
         return FileType::VectorIndex;
     }
+    else if (ext == ".fulltext")
+    {
+        return FileType::FullTextIndex;
+    }
     else if (ext == ".inverted")
     {
         return FileType::InvertedIndex;

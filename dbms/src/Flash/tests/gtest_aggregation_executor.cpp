@@ -1349,6 +1349,59 @@ try
 }
 CATCH
 
+TEST_F(AggExecutorTestRunner, TestZeroBlock)
+try
+{
+    auto c1 = toNullableVec<Int64>("c1", {1, 2});
+    auto c2 = toNullableVec<Int64>("c2", {1, 2});
+    auto c3 = toNullableVec<Int64>("c3", {2, 3});
+    auto col_str = toNullableVec<String>("col_str", {"a", "b"});
+    auto col_str_1 = toNullableVec<String>("col_str_1", {"a", "b"});
+
+    context.addMockTable(
+        "zeroblock",
+        "t1",
+        {{"c1", TiDB::TP::TypeLong},
+         {"c2", TiDB::TP::TypeLong},
+         {"col_str", TiDB::TP::TypeString},
+         {"col_str_1", TiDB::TP::TypeString}},
+        {c1, c2, col_str, col_str_1});
+    context.addMockTable(
+        "zeroblock",
+        "t2",
+        {{"c1", TiDB::TP::TypeLong},
+         {"c3", TiDB::TP::TypeLong},
+         {"col_str", TiDB::TP::TypeString},
+         {"col_str_1", TiDB::TP::TypeString}},
+        {c1, c3, col_str, col_str_1});
+
+    context.context->setSetting("max_block_size", Field(static_cast<UInt64>(1)));
+    auto req = context.scan("zeroblock", "t1")
+                   .join(
+                       context.scan("zeroblock", "t2"),
+                       tipb::JoinType::TypeSemiJoin,
+                       /*join_col_exprs=*/{col("c1")},
+                       /*left_conds=*/{},
+                       /*right_conds=*/{},
+                       /*other_conds=*/{},
+                       /*other_eq_conds_from_in=*/{},
+                       /*fine_grained_shuffle_stream_count=*/0,
+                       /*is_null_aware_semi_join=*/false,
+                       /*inner_index=*/0) // Set inner index as zero to make it right semi join.
+                   .aggregation({Count(col("c1"))}, {col("c1"), col("col_str"), col("col_str_1")})
+                   .build(context);
+
+    const auto expected
+        = {toVec<UInt64>({1, 1}),
+           toNullableVec<Int32>({1, 2}),
+           toNullableVec<String>({"a", "b"}),
+           toNullableVec<String>({"a", "b"})};
+    WRAP_FOR_TEST_BEGIN
+    ASSERT_COLUMNS_EQ_R(executeStreams(req), expected);
+    WRAP_FOR_TEST_END
+}
+CATCH
+
 #undef WRAP_FOR_AGG_FAILPOINTS_START
 #undef WRAP_FOR_AGG_FAILPOINTS_END
 

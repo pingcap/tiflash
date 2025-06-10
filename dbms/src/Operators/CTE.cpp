@@ -16,32 +16,20 @@
 #include <Common/Exception.h>
 #include <Core/Block.h>
 
+#include <cassert>
+#include <deque>
 #include <mutex>
 #include <shared_mutex>
-#include <utility>
 
 namespace DB
 {
-std::pair<Status, Block> CTE::tryGetBlockAt(size_t idx)
+Status CTE::tryGetBunchBlocks(size_t idx, std::deque<Block> & queue)
 {
-    std::shared_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
-    {
-        std::shared_lock<std::shared_mutex> status_lock(this->aux_rw_lock);
-        if (this->cte_status != CTE::Normal)
-            return {Status::IOOut, Block()};
+    assert(queue.empty());
 
-        // This function is called in cpu pool, we don't want to wait for this lock too long.
-        // This lock may be held when spill is in execution. So we need ensure that cte status is not changed
-        lock.lock();
-    }
-    if (this->is_spill_triggered)
-    {
-        auto spilled_block_num = static_cast<size_t>(this->cte_spill.blockNum());
-        if (idx < spilled_block_num)
-            return {Status::IOIn, Block()};
-
-        idx -= spilled_block_num;
-    }
+    std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+    if unlikely (this->is_cancelled)
+        return Status::Cancelled;
 
     auto block_num = this->blocks.size();
     if (block_num <= idx)
@@ -51,61 +39,25 @@ std::pair<Status, Block> CTE::tryGetBlockAt(size_t idx)
         else
             return {Status::BlockUnavailable, Block()};
     }
-    return {Status::Ok, this->blocks[idx]};
+
+    for (size_t i = idx; i < block_num; i++)
+        queue.push_back(this->blocks[i]);
+    return Status::Ok;
 }
 
-Block CTE::getBlockFromDisk(size_t idx)
+bool CTE::pushBlock(const Block & block)
 {
-    std::shared_lock<std::shared_mutex> lock(this->rw_lock);
-    if unlikely (!this->is_spill_triggered)
-        // We can call this function only when spill is triggered
-        throw Exception("Spill should be triggered");
+    std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+    if unlikely (this->is_cancelled)
+        return false;
 
-    if unlikely (static_cast<size_t>(this->cte_spill.blockNum()) <= idx)
-        throw Exception("Requested block is not in disk");
-
-    return this->cte_spill.readBlockAt(idx);
-}
-
-Status CTE::pushBlock(const Block & block)
-{
-    std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
-    Status ret = Status::Ok;
-    {
-        std::unique_lock<std::shared_mutex> status_lock(this->aux_rw_lock);
-        if (this->cte_status != CTE::Normal)
-        {
-            // Block memory usage will be calculated after the finish of spill
-            this->tmp_blocks.push_back(block);
-            return Status::IOOut;
-        }
-
-
-        // This function is called in cpu pool, we don't want to wait for this lock too long.
-        // This lock may be held when spill is in execution. So we need ensure that cte status is not changed
-        lock.lock();
-
-        this->memory_usage += block.bytes();
-        if (this->memory_usage >= this->memory_threshold)
-        {
-            this->cte_status = CTE::NeedSpill;
-            ret = Status::IOOut;
-        }
-    }
+    if unlikely (block.rows() == 0)
+        return true;
 
     if unlikely (this->blocks.empty())
         this->pipe_cv.notifyAll();
     this->blocks.push_back(block);
-    return ret;
-}
-
-void CTE::notifyEOF()
-{
-    std::unique_lock<std::shared_mutex> lock(this->rw_lock);
-    this->is_eof = true;
-
-    // Just in case someone is in WAITING_FOR_NOTIFY status
-    this->pipe_cv.notifyAll();
+    return true;
 }
 
 void CTE::spillBlocks()

@@ -18,8 +18,11 @@
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/Plans/PhysicalCTESource.h>
 #include <Interpreters/Context.h>
+#include <Operators/CTEReader.h>
 #include <Operators/CTESource.h>
 
+#include <memory>
+#include <string>
 
 namespace DB
 {
@@ -33,7 +36,7 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     DAGSchema dag_schema;
     for (int i = 0; i < cte_source.field_types_size(); ++i)
     {
-        String name = genNameForExchangeReceiver(i);
+        String name = genNameForCTESource(i);
         TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(cte_source.field_types(i));
         dag_schema.emplace_back(std::move(name), std::move(info));
     }
@@ -45,7 +48,9 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
         fine_grained_shuffle,
         log->identifier(),
         Block(schema),
-        cte_source.cte_id());
+        cte_source.cte_id(),
+        cte_source.cte_sink_num(),
+        cte_source.cte_source_num());
 }
 
 void PhysicalCTESource::buildPipelineExecGroupImpl(
@@ -57,17 +62,41 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
     if (fine_grained_shuffle.enabled())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
 
-    String query_id_and_cte_id_prefix = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
+    String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
+    exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
+    exec_context.setHasCTESource();
 
-    for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
+    if (fine_grained_shuffle.enabled())
     {
-        String query_id_and_cte_id = fmt::format("{}_{}", query_id_and_cte_id_prefix, partition_id);
-        group_builder.addConcurrency(std::make_unique<CTESourceOp>(
-            exec_context,
-            log->identifier(),
-            query_id_and_cte_id,
-            context.getCTEManager()));
+        for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
+        {
+            auto cte_reader = std::make_shared<CTEReader>(
+                query_id_and_cte_id,
+                std::to_string(partition_id),
+                context.getCTEManager(),
+                this->expected_sink_num,
+                this->expected_source_num);
+            exec_context.addCTE(cte_reader->getCTE());
+            group_builder.addConcurrency(
+                std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, schema));
+        }
     }
+    else
+    {
+        auto cte_reader = std::make_shared<CTEReader>(
+            query_id_and_cte_id,
+            "",
+            context.getCTEManager(),
+            this->expected_sink_num,
+            this->expected_source_num);
+        exec_context.addCTE(cte_reader->getCTE());
+        for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
+        {
+            group_builder.addConcurrency(
+                std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, schema));
+        }
+    }
+
     context.getDAGContext()->addInboundIOProfileInfos(this->executor_id, group_builder.getCurIOProfileInfos());
 }
 

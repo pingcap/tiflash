@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
@@ -152,7 +153,7 @@ MPPTask::~MPPTask()
     if (query_memory_tracker != nullptr && current_memory_tracker != query_memory_tracker)
         current_memory_tracker = query_memory_tracker;
     abortTunnels("", true);
-    LOG_INFO(log, "finish MPPTask: {}", id.toString());
+    LOG_INFO(log, "finish MPPTask: {}, total run time is {} ms", id.toString(), total_run_time_ms);
 }
 
 bool MPPTask::isRootMPPTask() const
@@ -189,13 +190,43 @@ void MPPTask::abortQueryExecutor()
     }
 }
 
+void MPPTask::abortCTE()
+{
+    if (this->dag_context->hasCTESource())
+    {
+        auto ctes = this->dag_context->getCTEs();
+
+        // CTESource may be waiting for the finish signal from cte sink
+        // We'd better to manually do notification in case of missing signal from cte sink
+        // or the CTESource will hang
+        for (auto & cte : ctes)
+            cte->notifyCancel();
+        this->context->getCTEManager()->releaseCTEs(this->dag_context->getQueryIDAndCTEID());
+    }
+}
+
 void MPPTask::finishWrite()
 {
-    RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
-    if (dag_context->collect_execution_summaries
-        && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
-        tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
-    tunnel_set->finishWrite();
+    if (this->has_cte_sink)
+    {
+        tipb::SelectResponse resp;
+        if (dag_context->collect_execution_summaries)
+            resp = mpp_task_statistics.genExecutionSummaryResponse();
+
+        // The finish of pushing all blocks not means that cte sink job has been done.
+        // Execution summary statistic also need to be sent. So we can release cte
+        // only when execution sumary statistic has been sent.
+        this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEID());
+        this->notify_cte_finish = true;
+    }
+    else
+    {
+        RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+        if (dag_context->collect_execution_summaries
+            && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
+            tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
+        tunnel_set->finishWrite();
+    }
 }
 
 void MPPTask::run()
@@ -205,6 +236,15 @@ void MPPTask::run()
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
+    if unlikely (!dag_context->dag_request.rootExecutor().has_exchange_sender())
+    {
+        if unlikely (!dag_context->dag_request.rootExecutor().has_cte_sink())
+            throw Exception("Task has either exchange sender or cte sink");
+
+        // There is no need to register tunnel for cte sink
+        this->has_cte_sink = true;
+        return;
+    }
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();
@@ -614,6 +654,7 @@ void MPPTask::runImpl()
 
             // finish MPPTunnel
             finishWrite();
+
             // finish receiver
             receiver_set->close();
         }
@@ -623,6 +664,13 @@ void MPPTask::runImpl()
     {
         auto catch_err_msg = getCurrentExceptionMessage(true, true);
         err_msg = err_msg.empty() ? catch_err_msg : fmt::format("{}, {}", err_msg, catch_err_msg);
+    }
+
+    if (this->has_cte_sink && !this->notify_cte_finish)
+    {
+        tipb::SelectResponse resp;
+        this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEID());
+        this->notify_cte_finish = true;
     }
 
     if (err_msg.empty())
@@ -666,7 +714,8 @@ void MPPTask::runImpl()
     mpp_task_statistics.end(status.load(), getErrString());
     mpp_task_statistics.logTracingJson();
 
-    LOG_DEBUG(log, "task ends, time cost is {} ms.", stopwatch.elapsedMilliseconds());
+    total_run_time_ms = stopwatch.elapsedMilliseconds();
+    LOG_DEBUG(log, "task ends, time cost is {} ms.", total_run_time_ms);
     unregisterTask();
 }
 
@@ -719,13 +768,13 @@ void MPPTask::reportStatus(const String & err_msg)
         }
         if (resp.has_error())
         {
-            LOG_WARNING(log, "ReportMPPTaskStatus resp error: {}", resp.error().msg());
+            LOG_INFO(log, "ReportMPPTaskStatus resp error: {}", resp.error().msg());
         }
     }
     catch (...)
     {
         std::string local_err_msg = getCurrentExceptionMessage(true);
-        LOG_ERROR(log, "Failed to ReportMPPTaskStatus to {}, due to {}", meta.coordinator_address(), local_err_msg);
+        LOG_INFO(log, "Failed to ReportMPPTaskStatus to {}, due to {}", meta.coordinator_address(), local_err_msg);
     }
 }
 
@@ -777,6 +826,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             abortTunnels(message, false);
             abortReceivers();
             abortQueryExecutor();
+            abortCTE();
             scheduleThisTask(ScheduleState::FAILED);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish abort task from running");
@@ -808,14 +858,17 @@ int MPPTask::estimateCountOfNewThreads()
 {
     auto query_executor = query_executor_holder.tryGet();
     RUNTIME_CHECK_MSG(
-        query_executor && dag_context->tunnel_set != nullptr,
+        query_executor
+            && (dag_context->tunnel_set != nullptr || dag_context->dag_request->root_executor().has_cte_sink()),
         "It should not estimate the threads for the uninitialized task {}",
         id.toString());
 
     // Estimated count of new threads from query executor, MppTunnels, mpp_receivers.
     assert(query_executor.value());
-    return (*query_executor)->estimateNewThreadCount() + 1 + dag_context->tunnel_set->getExternalThreadCnt()
-        + new_thread_count_of_mpp_receiver;
+    int external_thread_count = 0;
+    if likely (dag_context->tunnel_set != nullptr)
+        external_thread_count = dag_context->tunnel_set->getExternalThreadCnt();
+    return (*query_executor)->estimateNewThreadCount() + 1 + external_thread_count + new_thread_count_of_mpp_receiver;
 }
 
 } // namespace DB

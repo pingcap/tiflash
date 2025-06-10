@@ -20,27 +20,21 @@ namespace DB
 {
 void CTESourceOp::operateSuffixImpl()
 {
-    this->cte.reset();
-    this->cte_manager->releaseCTE(this->query_id_and_cte_id);
     LOG_DEBUG(log, "finish read {} rows from cte source", total_rows);
 }
 
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {
-    if (this->block_from_disk)
-    {
-        block = this->block_from_disk;
-        this->block_from_disk = Block();
-        return OperatorStatus::HAS_OUTPUT;
-    }
-
-    auto res = this->cte->tryGetBlockAt(this->block_fetch_idx);
+    auto res = this->cte_reader->fetchNextBlock();
     switch (res.first)
     {
     case Status::Eof:
+        this->cte_reader->getResp(this->resp);
+        if (this->resp.execution_summaries_size() != 0)
+            this->io_profile_info->remote_execution_summary.add(this->resp);
     case Status::Ok:
         block = res.second;
-        ++(this->block_fetch_idx);
+        this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
     case Status::IOIn:
         // Expected block is in disk, we need to read it from disk
@@ -52,15 +46,16 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
             return OperatorStatus::WAITING;
         }
     case Status::BlockUnavailable:
-        if unlikely (this->block_fetch_idx == 0)
-            // CTE has not begun to receive data yet when block_fetch_idx == 0
-            // So we need to wait the notify from CTE
-            return OperatorStatus::WAIT_FOR_NOTIFY;
+        if likely (this->cte_reader->isBlockGenerated())
+        {
+            return OperatorStatus::WAITING;
+        }
         else
         {
-            // CTE not have enough block, we need to wait for it
-            this->wait_type = CTESourceOp::NeedMoreBlock;
-            return OperatorStatus::WAITING;
+            // CTE has not begun to receive data yet
+            // So we need to wait the notify from CTE
+            this->cte_reader->setNotifyFuture();
+            return OperatorStatus::WAIT_FOR_NOTIFY;
         }
     case Status::Cancelled:
         return OperatorStatus::CANCELLED;
@@ -78,7 +73,7 @@ OperatorStatus CTESourceOp::awaitImpl()
 {
     if (this->wait_type == CTESourceOp::WaitType::NeedMoreBlock)
     {
-        auto ret = this->cte->tryGetBlockAt(this->block_fetch_idx);
+        auto res = this->cte_reader->checkAvailableBlock();
         switch (ret.first)
         {
         case Status::IOOut:

@@ -24,18 +24,10 @@ namespace DB
 class CTESinkOp : public SinkOp
 {
 public:
-    CTESinkOp(
-        PipelineExecutorContext & exec_context_,
-        const String & req_id,
-        const String & query_id_and_cte_id_,
-        CTEManager * cte_manager_)
+    CTESinkOp(PipelineExecutorContext & exec_context_, const String & req_id, std::shared_ptr<CTE> cte_)
         : SinkOp(exec_context_, req_id)
-        , query_id_and_cte_id(query_id_and_cte_id_)
-        , cte_manager(cte_manager_)
-        , cte(cte_manager_->getCTE(query_id_and_cte_id_))
+        , cte(cte_)
     {}
-
-    ~CTESinkOp() override { assert(!this->cte); }
 
     String getName() const override { return "CTESinkOp"; }
     bool canHandleSelectiveBlock() const override { return true; }
@@ -47,10 +39,7 @@ protected:
     OperatorStatus awaitImpl() override;
 
 private:
-    String query_id_and_cte_id;
-    CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
     size_t total_rows = 0;
-    bool input_done = false;
 };
 } // namespace DB

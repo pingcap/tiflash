@@ -250,10 +250,10 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     }
     case tipb::ExecType::TypeCTESink:
     {
+        buildFinalProjectionForCTE(executor->cte_sink());
         auto fine_grained_shuffle = FineGrainedShuffle(executor);
         GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
-        pushBack(
-            PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack(), executor->cte_sink().cte_id()));
+        pushBack(PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack(), executor->cte_sink()));
         break;
     }
     default:
@@ -275,6 +275,17 @@ void PhysicalPlan::buildFinalProjection(const String & column_prefix, bool is_ro
             dagContext().keep_session_timezone_info,
             popBack())
         : PhysicalProjection::buildNonRootFinal(context, log, column_prefix, popBack());
+    pushBack(final_projection);
+}
+
+void PhysicalPlan::buildFinalProjectionForCTE(const tipb::CTESink & sink)
+{
+    const auto & final_projection = PhysicalProjection::buildRootFinalForCTE(
+        context,
+        log,
+        popBack(),
+        sink,
+        dagContext().keep_session_timezone_info);
     pushBack(final_projection);
 }
 
@@ -303,7 +314,8 @@ PhysicalPlanNodePtr PhysicalPlan::popBack()
 void PhysicalPlan::addRootFinalProjectionIfNeed()
 {
     RUNTIME_CHECK(root_node);
-    if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender)
+    if (root_node->tp() != PlanType::ExchangeSender && root_node->tp() != PlanType::MockExchangeSender
+        && root_node->tp() != PlanType::CTESink)
     {
         pushBack(root_node);
         buildFinalProjection(fmt::format("{}_", root_node->execId()), true);

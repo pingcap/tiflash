@@ -18,18 +18,72 @@
 
 #include <memory>
 #include <mutex>
-#include <utility>
 
 namespace DB
 {
+// Data race is prevented by the lock in CTEManager
+class CTEWithCounter
+{
+public:
+    explicit CTEWithCounter(std::shared_ptr<CTE> cte_, Int32 expected_total_sink_num_, Int32 expected_total_source_num_)
+        : cte(cte_)
+        , expected_sink_num(expected_total_sink_num_)
+        , expected_source_num(expected_total_source_num_)
+    {}
+
+    void sinkExit() { this->sink_exit_num++; }
+    void sourceExit() { this->source_exit_num++; }
+
+    Int32 getSinkExitNum() const { return this->sink_exit_num; }
+    Int32 getSourceExitNum() const { return this->source_exit_num; }
+    Int32 getTotalExitNum() const { return this->getSinkExitNum() + this->getSourceExitNum(); }
+
+    Int32 getExpectedSinkNum() const { return this->expected_sink_num; }
+    Int32 getExpectedTotalNum() const { return this->getExpectedSinkNum() + this->expected_source_num; }
+
+    std::shared_ptr<CTE> getCTE() const { return this->cte; }
+
+private:
+    std::shared_ptr<CTE> cte;
+
+    Int32 sink_exit_num = 0;
+    Int32 source_exit_num = 0;
+    Int32 expected_sink_num;
+    Int32 expected_source_num;
+};
+
+// TODO Test this class with UT
 class CTEManager
 {
 public:
-    std::shared_ptr<CTE> getCTE(const String & query_id_and_cte_id);
-    void releaseCTE(const String & query_id_and_cte_id);
+    std::shared_ptr<CTE> getCTEBySink(
+        const String & query_id_and_cte_id,
+        const String & partition_id,
+        Int32 expected_sink_num,
+        Int32 expected_source_num)
+    {
+        return this->getCTEimpl(query_id_and_cte_id, partition_id, expected_sink_num, expected_source_num);
+    }
+    std::shared_ptr<CTE> getCTEBySource(
+        const String & query_id_and_cte_id,
+        const String & partition_id,
+        Int32 expected_sink_num,
+        Int32 expected_source_num)
+    {
+        return this->getCTEimpl(query_id_and_cte_id, partition_id, expected_sink_num, expected_source_num);
+    }
+    void releaseCTEBySource(const String & query_id_and_cte_id, const String & partition_id);
+    void releaseCTEBySink(const tipb::SelectResponse & resp, const String & query_id_and_cte_id);
+    void releaseCTEs(const String & query_id_and_cte_id);
 
 private:
+    std::shared_ptr<CTE> getCTEimpl(
+        const String & query_id_and_cte_id,
+        const String & partition_id,
+        Int32 expected_sink_num,
+        Int32 expected_source_num);
+
     std::mutex mu;
-    std::map<String, std::pair<Int32, std::shared_ptr<CTE>>> ctes;
+    std::map<String, std::map<String, CTEWithCounter>> ctes;
 };
 } // namespace DB

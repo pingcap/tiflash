@@ -44,14 +44,21 @@ public:
         return ::DB::tests::createColumn<Int64>(data, name, column_id);
     }
 
-    static ColumnWithTypeAndName colVecFloat32(std::string_view sequence, const String & name = "", Int64 column_id = 0)
+    static ColumnWithTypeAndName colVecFloat32(
+        std::string_view sequence,
+        const String & name = "",
+        Int64 column_id = 0,
+        int dimension = 1)
     {
         auto data = genSequence<Int64>(sequence);
         std::vector<Array> data_in_array;
         for (auto & v : data)
         {
             Array vec;
-            vec.push_back(static_cast<Float64>(v));
+            for (int i = 0; i < dimension; i++)
+            {
+                vec.push_back(static_cast<Float64>(v));
+            }
             data_in_array.push_back(vec);
         }
         return ::DB::tests::createVecFloat32Column<Array>(data_in_array, name, column_id);
@@ -70,17 +77,27 @@ public:
     struct AnnQueryInfoTopKOptions
     {
         std::vector<float> vec;
+        // note: when set to true, vector cd must be excluded in the read columns and distance cd must be included (at the end of read columns)
+        // to follow the protocol.
+        bool enable_distance_proj = false;
         UInt32 top_k;
         Int64 column_id = 100; // vec_column_id
         Int64 index_id = 0;
         tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::L2;
+        bool vector_is_nullable = false; // indicate if vector column is nullable type
     };
 
     static ANNQueryInfoPtr annQueryInfoTopK(AnnQueryInfoTopKOptions options)
     {
         auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
         ann_query_info->set_query_type(tipb::ANNQueryType::OrderBy);
-        ann_query_info->set_deprecated_column_id(options.column_id);
+        // set columnInfo
+        ann_query_info->mutable_column()->set_column_id(options.column_id);
+        ann_query_info->mutable_column()->set_tp(TiDB::TP::TypeTiDBVectorFloat32);
+        if (!options.vector_is_nullable)
+            ann_query_info->mutable_column()->set_flag(1); // 1 is NotNullFlag (1 << 0)
+
+        ann_query_info->set_enable_distance_proj(options.enable_distance_proj);
         ann_query_info->set_distance_metric(options.distance_metric);
         ann_query_info->set_top_k(options.top_k);
         ann_query_info->set_ref_vec_f32(encodeVectorFloat32(options.vec));

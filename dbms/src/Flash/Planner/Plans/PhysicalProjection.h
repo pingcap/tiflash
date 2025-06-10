@@ -50,6 +50,13 @@ public:
         bool keep_session_timezone_info,
         const PhysicalPlanNodePtr & child);
 
+    static PhysicalPlanNodePtr buildRootFinalForCTE(
+        const Context & context,
+        const LoggerPtr & log,
+        const PhysicalPlanNodePtr & child,
+        const tipb::CTESink & sink,
+        bool keep_session_timezone_info);
+
     PhysicalProjection(
         const String & executor_id_,
         const NamesAndTypes & schema_,

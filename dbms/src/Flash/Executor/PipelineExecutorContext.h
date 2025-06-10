@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Core/AutoSpillTrigger.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue_fwd.h>
@@ -142,6 +143,17 @@ public:
     void addSharedQueue(const SharedQueuePtr & shared_queue);
 
     void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
+
+    void setQueryIDAndCTEID(const String & query_id_and_cte_id)
+    {
+        this->dag_context->setQueryIDAndCTEID(query_id_and_cte_id);
+    }
+
+    void addCTE(std::shared_ptr<CTE> cte) { this->dag_context->addCTE(cte); }
+    void addCTE(std::shared_ptr<CTE> & cte) { this->dag_context->addCTE(cte); }
+
+    void sinkNeedRelease() { this->dag_context->sinkNeedRelease(); }
+    void setHasCTESource() { this->dag_context->setHasCTESource(); }
 
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);

@@ -407,6 +407,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_failed_repeated, {{"type", "failed_repeated"}}),                                                                       \
       F(type_failed_build_chkpt, {{"type", "failed_build_chkpt"}}),                                                                 \
       F(type_reuse_chkpt_cache, {{"type", "reuse_chkpt_cache"}}),                                                                   \
+      F(type_failed_query_state, {{"type", "failed_query_state"}}),                                                                 \
       F(type_restore, {{"type", "restore"}}),                                                                                       \
       F(type_succeed, {{"type", "succeed"}}))                                                                                       \
     M(tiflash_fap_task_state,                                                                                                       \
@@ -847,13 +848,16 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       "system calls duration in seconds",                                                                                           \
       Histogram,                                                                                                                    \
       F(type_fsync, {{"type", "fsync"}}, ExpBuckets{0.0001, 2, 20}))                                                                \
-    M(tiflash_storage_delta_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"}))                 \
+    M(tiflash_storage_mvcc_index_cache, "", Counter, F(type_hit, {"type", "hit"}), F(type_miss, {"type", "miss"}))                  \
     M(tiflash_resource_group,                                                                                                       \
       "meta info of resource group",                                                                                                \
       Gauge,                                                                                                                        \
       F(type_remaining_tokens, {"type", "remaining_tokens"}),                                                                       \
       F(type_avg_speed, {"type", "avg_speed"}),                                                                                     \
       F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
+      F(type_low_token_threshold, {"type", "low_token_threshold"}),                                                                 \
+      F(type_request_gac_count, {"type", "request_gac_count"}),                                                                     \
+      F(type_enter_degrade_mode, {"type", "enter_degrade_mode"}),                                                                   \
       F(type_bucket_fill_rate, {"type", "bucket_fill_rate"}),                                                                       \
       F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
       F(type_compute_ru_consumption, {"type", "compute_ru_consumption"}),                                                           \
@@ -903,6 +907,16 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_load_dmfile_local, {{"type", "load_dmfile_local"}}, ExpBuckets{0.001, 2, 20}),                                         \
       F(type_load_dmfile_s3, {{"type", "load_dmfile_s3"}}, ExpBuckets{0.001, 2, 20}),                                               \
       F(type_search, {{"type", "search"}}, ExpBuckets{0.001, 2, 20}))                                                               \
+    M(tiflash_fts_index_duration,                                                                                                   \
+      "FTS index operation duration (brute not included)",                                                                          \
+      Histogram,                                                                                                                    \
+      F(type_build, {{"type", "build"}}, ExpBuckets{0.001, 2, 20}),                                                                 \
+      F(type_load_cf, {{"type", "load_cf"}}, ExpBuckets{0.001, 2, 20}),                                                             \
+      F(type_load_cache, {{"type", "load_cache"}}, ExpBuckets{0.001, 2, 20}),                                                       \
+      F(type_load_dmfile_local, {{"type", "load_dmfile_local"}}, ExpBuckets{0.001, 2, 20}),                                         \
+      F(type_load_dmfile_s3, {{"type", "load_dmfile_s3"}}, ExpBuckets{0.001, 2, 20}),                                               \
+      F(type_search_scored, {{"type", "search_scored"}}, ExpBuckets{0.001, 2, 20}),                                                 \
+      F(type_search_noscore, {{"type", "search_noscore"}}, ExpBuckets{0.001, 2, 20}))                                               \
     M(tiflash_inverted_index_active_instances,                                                                                      \
       "Active Inverted index instances",                                                                                            \
       Gauge,                                                                                                                        \
@@ -960,6 +974,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_sent_cross_zone, {"type", "sent_cross_zone"}),                                                                         \
       F(type_received_total, {"type", "received_total"}),                                                                           \
       F(type_received_cross_zone, {"type", "received_cross_zone"}))                                                                 \
+    M(tiflash_spilled_files,                                                                                                        \
+      "Information about spilled files",                                                                                            \
+      Gauge,                                                                                                                        \
+      F(type_current_spilled_bytes, {"type", "current_spilled_bytes"}))                                                             \
     M(tiflash_storage_version_chain_ms,                                                                                             \
       "Durations of VersionChain",                                                                                                  \
       Histogram,                                                                                                                    \

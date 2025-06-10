@@ -182,7 +182,7 @@ struct Settings
     M(SettingUInt64, dt_merged_file_max_size, 16 * 1024 * 1024, "Small files are merged into one or more files not larger than dt_merged_file_max_size")                                                                                \
     M(SettingDouble, dt_page_gc_threshold, 0.5, "Max valid rate of deciding to do a GC in PageStorage")                                                                                                                                 \
     M(SettingDouble, dt_page_gc_threshold_raft_data, 0.05, "Max valid rate of deciding to do a GC for BlobFile storing PageData in PageStorage")                                                                                        \
-    M(SettingInt64, enable_version_chain, 0, "Enable version chain or not: 0 - disable, 1 - enabled. "                                                                                                                                  \
+    M(SettingInt64, enable_version_chain, 1, "Enable version chain or not: 0 - disable, 1 - enabled. "                                                                                                                                  \
                                              "More details are in the comments of `enum class VersionChainMode`."                                                                                                                       \
                                              "Modifying this configuration requires a restart to reset the in-memory state.")                                                                                                           \
     /* DeltaTree engine testing settings */\
@@ -255,6 +255,7 @@ struct Settings
     M(SettingUInt64, disagg_build_task_timeout, DEFAULT_DISAGG_TASK_BUILD_TIMEOUT_SEC, "disagg task establish timeout, unit is second.")                                                                                                \
     M(SettingUInt64, disagg_task_snapshot_timeout, DEFAULT_DISAGG_TASK_TIMEOUT_SEC, "disagg task snapshot max endurable time, unit is second.")                                                                                         \
     M(SettingUInt64, disagg_fetch_pages_timeout, DEFAULT_DISAGG_FETCH_PAGES_TIMEOUT_SEC, "fetch disagg pages timeout for one segment, unit is second.")                                                                                 \
+    M(SettingString, disagg_blocklist_wn_store_id, "", "comma separated unsigned integers representing `store_id`s of stores that are blocklisted.")                                                                                    \
     /* Disagg arch FastAddPeer settings */ \
     M(SettingInt64, fap_wait_checkpoint_timeout_seconds, 80, "The max time wait for a usable checkpoint for FAP")                                                                                                                       \
     M(SettingUInt64, fap_task_timeout_seconds, 120, "The max time FAP can take before fallback")                                                                                                                                        \

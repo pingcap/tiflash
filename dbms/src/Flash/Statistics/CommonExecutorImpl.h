@@ -114,4 +114,28 @@ struct TopNImpl
     static bool isSourceExecutor() { return false; }
 };
 using TopNStatistics = ExecutorStatistics<TopNImpl>;
+
+struct CTESinkImpl
+{
+    static constexpr bool has_extra_info = false;
+
+    static constexpr auto type = "CTESink";
+
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_cte_sink(); }
+
+    static bool isSourceExecutor() { return false; }
+};
+using CTESinkStatistics = ExecutorStatistics<CTESinkImpl>;
+
+struct CTESourceImpl
+{
+    static constexpr bool has_extra_info = false;
+
+    static constexpr auto type = "CTESource";
+
+    static bool isMatch(const tipb::Executor * executor) { return executor->has_cte_source(); }
+
+    static bool isSourceExecutor() { return true; }
+};
+using CTESourceStatistics = ExecutorStatistics<CTESourceImpl>;
 } // namespace DB

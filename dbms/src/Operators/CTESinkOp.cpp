@@ -20,11 +20,6 @@ namespace DB
 {
 void CTESinkOp::operateSuffixImpl()
 {
-    this->cte.reset();
-    this->cte_manager->releaseCTE(this->query_id_and_cte_id);
-
-    // In case some tasks are still in WAITING_FOR_NOTIFY status
-    this->cte->notifyEOF();
     LOG_DEBUG(log, "finish write with {} rows", this->total_rows);
 }
 
@@ -32,8 +27,6 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
 {
     if (!block)
     {
-        this->input_done = true;
-        this->cte->notifyEOF();
         return OperatorStatus::FINISHED;
     }
     this->total_rows += block.rows();
@@ -53,6 +46,9 @@ OperatorStatus CTESinkOp::executeIOImpl()
 {
     this->cte->spillBlocks();
     return OperatorStatus::NEED_INPUT;
+    if (this->cte->pushBlock(block))
+        return OperatorStatus::NEED_INPUT;
+    return OperatorStatus::CANCELLED;
 }
 
 OperatorStatus CTESinkOp::awaitImpl()
