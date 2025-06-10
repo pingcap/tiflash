@@ -646,7 +646,7 @@ void WindowTransformAction::stepToFrameEnd()
 
 std::tuple<RowNumber, bool> WindowTransformAction::stepToStartForRangeFrame()
 {
-    if (!partition_ended)
+    if (!window_description.frame.begin_preceding && !partition_ended)
         // If we find the frame end and the partition_ended is false.
         // The prev_frame_start may be equal to partition_end which
         // will cause the assert fail in advancePartitionEnd function.
@@ -660,7 +660,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToStartForRangeFrame()
 
 std::tuple<RowNumber, bool> WindowTransformAction::stepToEndForRangeFrame()
 {
-    if (!window_description.frame.end_preceding && !partition_ended)
+    if (!partition_ended)
         // If we find the frame end and the partition_ended is false.
         // Some previous blocks may be dropped, this is an unexpected behaviour.
         // So, we shouldn't do anything before the partition_ended is true.
