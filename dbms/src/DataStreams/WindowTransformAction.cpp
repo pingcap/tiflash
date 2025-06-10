@@ -646,7 +646,7 @@ void WindowTransformAction::stepToFrameEnd()
 
 std::tuple<RowNumber, bool> WindowTransformAction::stepToStartForRangeFrame()
 {
-    if (!window_description.frame.begin_preceding && !partition_ended)
+    if (!partition_ended)
         // If we find the frame end and the partition_ended is false.
         // The prev_frame_start may be equal to partition_end which
         // will cause the assert fail in advancePartitionEnd function.
