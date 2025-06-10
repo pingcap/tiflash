@@ -89,8 +89,15 @@ void CTE::spillBlocks()
 
 void CTE::registerTask(TaskPtr && task)
 {
-    // TODO can we directly register the task? Can we ensure that someone must wake it up?
-    pipe_cv.registerTask(std::move(task));
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        if (!this->hasDataNoLock())
+        {
+            pipe_cv.registerTask(std::move(task));
+            return;
+        }
+    }
+    this->pipe_cv.notifyTaskDirectly(std::move(task));
 }
 
 CTE::CTEStatus CTE::getStatus()
