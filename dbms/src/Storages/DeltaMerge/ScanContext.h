@@ -18,6 +18,7 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <common/types.h>
 #include <fmt/format.h>
 #include <pingcap/pd/Types.h>
@@ -133,12 +134,10 @@ public:
     std::atomic<uint64_t> fts_brute_total_read_ms{0};
     std::atomic<uint64_t> fts_brute_total_search_ms{0};
 
-    const pingcap::pd::KeyspaceID keyspace_id;
+    const KeyspaceID keyspace_id;
     const String resource_group_name;
 
-    explicit ScanContext(
-        const pingcap::pd::KeyspaceID & keyspace_id_ = pingcap::pd::NullspaceID,
-        const String & name = "")
+    explicit ScanContext(const KeyspaceID & keyspace_id_ = NullspaceID, const String & name = "")
         : keyspace_id(keyspace_id_)
         , resource_group_name(name)
     {}
