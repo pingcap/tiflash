@@ -664,6 +664,11 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToEndForRangeFrame()
         // If we find the frame end and the partition_ended is false.
         // Some previous blocks may be dropped, this is an unexpected behaviour.
         // So, we shouldn't do anything before the partition_ended is true.
+        //
+        // Still return false even when end_preceding is true, because there may still
+        // same rows as current_row in the next block. So we cannot stop find the frame
+        // end until got the partition end(or got the first row that is greater than
+        // current_row).
         return std::make_tuple(RowNumber(), false);
 
     if (window_description.is_desc)
