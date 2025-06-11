@@ -17,6 +17,7 @@
 #include <Common/Exception.h>
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/toRU.h>
+#include <Storages/KVStore/Types.h>
 
 #include <mutex>
 #include <thread>
@@ -50,9 +51,17 @@ public:
     using GetPriorityFuncType = uint64_t (*)(const std::string &);
     using IsResourceGroupThrottledFuncType = bool (*)(const std::string &);
 
+    void consumeCPUResource(const KeyspaceID &, const std::string & name, double ru, uint64_t cpu_time_ns) const
+    {
+        consumeResource(name, ru, cpu_time_ns);
+    }
     void consumeCPUResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
     {
         consumeResource(name, ru, cpu_time_ns);
+    }
+    void consumeBytesResource(const KeyspaceID &, const std::string & name, double ru) const
+    {
+        consumeResource(name, ru, 0);
     }
     void consumeBytesResource(const std::string & name, double ru) const { consumeResource(name, ru, 0); }
     void consumeResource(const std::string & name, double ru, uint64_t cpu_time_ns) const
@@ -62,15 +71,15 @@ public:
 
         consume_resource_func(name, ru, cpu_time_ns);
     }
-    std::optional<uint64_t> getPriority(const std::string & name) const
+    std::optional<uint64_t> getPriority(const KeyspaceID &, const std::string & name) const
     {
         if (name.empty())
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
         return {get_priority_func(name)};
     }
-    void warmupResourceGroupInfoCache(const std::string &) {}
-    static uint64_t estWaitDuraMS(const std::string &) { return 100; }
+    void warmupResourceGroupInfoCache(const KeyspaceID &, const std::string &) {}
+    static uint64_t estWaitDuraMS(const KeyspaceID &, const std::string &) { return 100; }
 
     void registerRefillTokenCallback(const std::function<void()> & cb)
     {

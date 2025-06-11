@@ -1183,8 +1183,11 @@ try
 #ifdef DBMS_PUBLIC_GTEST
             LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #else
-            LocalAdmissionController::global_instance
-                = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+            const bool with_keyspace = (storage_config.api_version == 2);
+            LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(
+                tmt_context.getKVCluster(),
+                tmt_context.getEtcdClient(),
+                with_keyspace);
 #endif
 
             auto get_pool_size = [](const auto & setting) {
