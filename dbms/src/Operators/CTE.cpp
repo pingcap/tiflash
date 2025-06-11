@@ -17,16 +17,13 @@
 #include <Core/Block.h>
 
 #include <cassert>
-#include <deque>
 #include <mutex>
 #include <shared_mutex>
 
 namespace DB
 {
-Status CTE::tryGetBunchBlocks(size_t idx, std::deque<Block> & queue)
+FetchStatus CTE::tryGetBlockAt(size_t idx, Block & block)
 {
-    assert(queue.empty());
-
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
     if unlikely (this->is_cancelled)
         return Status::Cancelled;
@@ -40,9 +37,8 @@ Status CTE::tryGetBunchBlocks(size_t idx, std::deque<Block> & queue)
             return {Status::BlockUnavailable, Block()};
     }
 
-    for (size_t i = idx; i < block_num; i++)
-        queue.push_back(this->blocks[i]);
-    return Status::Ok;
+    block = this->blocks[idx];
+    return FetchStatus::Ok;
 }
 
 bool CTE::pushBlock(const Block & block)

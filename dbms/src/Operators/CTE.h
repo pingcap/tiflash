@@ -49,7 +49,7 @@ public:
     };
 
     CTEStatus getStatus();
-    Status tryGetBunchBlocks(size_t idx, std::deque<Block> & queue);
+    Status tryGetBlockAt(size_t idx, Block & block);
     bool pushBlock(const Block & block);
     void notifyEOF() { this->notifyImpl<true>(true); }
     void notifyCancel() { this->notifyImpl<true>(false); }
