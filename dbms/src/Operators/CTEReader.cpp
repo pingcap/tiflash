@@ -21,15 +21,9 @@ namespace DB
 {
 std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
 {
+    Block block;
     std::lock_guard<std::mutex> lock(this->mu);
-    if (!this->blocks.empty())
-    {
-        Block block = std::move(this->blocks.front());
-        this->blocks.pop_front();
-        return {FetchStatus::Ok, block};
-    }
-
-    auto ret = this->cte->tryGetBunchBlocks(this->block_fetch_idx, this->blocks);
+    auto ret = this->cte->tryGetBlockAt(this->block_fetch_idx, block);
     switch (ret)
     {
     case FetchStatus::Eof:
@@ -39,9 +33,7 @@ std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
     case FetchStatus::Cancelled:
         return {ret, Block()};
     case FetchStatus::Ok:
-        this->block_fetch_idx += this->blocks.size();
-        Block block = std::move(this->blocks.front());
-        this->blocks.pop_front();
+        this->block_fetch_idx++;
         return {ret, block};
     }
     throw Exception("Should not reach here");
@@ -49,11 +41,9 @@ std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
 
 FetchStatus CTEReader::checkAvailableBlock()
 {
+    Block block;
     std::lock_guard<std::mutex> lock(this->mu);
-    if (!this->blocks.empty())
-        return FetchStatus::Ok;
-
-    auto ret = this->cte->tryGetBunchBlocks(this->block_fetch_idx, this->blocks);
+    auto ret = this->cte->tryGetBlockAt(this->block_fetch_idx, block);
     switch (ret)
     {
     case FetchStatus::Eof:
@@ -61,7 +51,7 @@ FetchStatus CTEReader::checkAvailableBlock()
     case FetchStatus::Cancelled:
         return ret;
     case FetchStatus::Ok:
-        this->block_fetch_idx += this->blocks.size();
+        // Do not add block_fetch_idx here as we only check if there are available blocks
         return FetchStatus::Ok;
     }
     throw Exception("Should not reach here");

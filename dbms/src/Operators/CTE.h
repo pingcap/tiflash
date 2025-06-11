@@ -36,7 +36,7 @@ enum class FetchStatus
 class CTE : public NotifyFuture
 {
 public:
-    FetchStatus tryGetBunchBlocks(size_t idx, std::deque<Block> & queue);
+    FetchStatus tryGetBlockAt(size_t idx, Block & block);
     bool pushBlock(const Block & block);
     void notifyEOF() { this->notifyImpl<true>(true); }
     void notifyCancel() { this->notifyImpl<true>(false); }

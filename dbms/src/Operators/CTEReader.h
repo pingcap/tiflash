@@ -19,7 +19,6 @@
 #include <Operators/CTE.h>
 #include <tipb/select.pb.h>
 
-#include <deque>
 #include <memory>
 #include <mutex>
 
@@ -79,7 +78,6 @@ private:
     std::shared_ptr<CTE> cte;
 
     std::mutex mu;
-    std::deque<Block> blocks;
     size_t block_fetch_idx = 0;
 
     bool resp_fetched = false;
