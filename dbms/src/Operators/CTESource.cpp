@@ -28,15 +28,15 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
     auto res = this->cte_reader->fetchNextBlock();
     switch (res.first)
     {
-    case FetchStatus::Eof:
+    case Status::Eof:
         this->cte_reader->getResp(this->resp);
         if (this->resp.execution_summaries_size() != 0)
             this->io_profile_info->remote_execution_summary.add(this->resp);
-    case FetchStatus::Ok:
+    case Status::Ok:
         block = res.second;
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
-    case FetchStatus::Waiting:
+    case Status::Waiting:
         if likely (this->cte_reader->isBlockGenerated())
         {
             return OperatorStatus::WAITING;
@@ -48,7 +48,7 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
             this->cte_reader->setNotifyFuture();
             return OperatorStatus::WAIT_FOR_NOTIFY;
         }
-    case FetchStatus::Cancelled:
+    case Status::Cancelled:
         return OperatorStatus::CANCELLED;
     }
 }
@@ -58,12 +58,12 @@ OperatorStatus CTESourceOp::awaitImpl()
     auto res = this->cte_reader->checkAvailableBlock();
     switch (res)
     {
-    case DB::FetchStatus::Eof:
-    case DB::FetchStatus::Ok:
+    case DB::Status::Eof:
+    case DB::Status::Ok:
         return OperatorStatus::HAS_OUTPUT;
-    case DB::FetchStatus::Waiting:
+    case DB::Status::Waiting:
         return OperatorStatus::WAITING;
-    case DB::FetchStatus::Cancelled:
+    case DB::Status::Cancelled:
         return OperatorStatus::CANCELLED;
     }
 }
