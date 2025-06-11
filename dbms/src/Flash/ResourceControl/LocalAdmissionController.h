@@ -44,16 +44,6 @@ struct GACRequestInfo
     std::string resource_group_name;
     double acquire_tokens;
     double ru_consumption_delta;
-
-    std::string toString() const
-    {
-        return fmt::format(
-            "keyspace_id: {}, rg: {}, acquire_tokens: {}, ru_consumption_delta: {}",
-            keyspace_id,
-            resource_group_name,
-            acquire_tokens,
-            ru_consumption_delta);
-    }
 };
 
 inline std::string getResourceGroupMetricName(const KeyspaceID & keyspace_id, const std::string & name)

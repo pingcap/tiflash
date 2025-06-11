@@ -169,8 +169,9 @@ void ResourceGroup::updateNormalMode(double add_tokens, double new_capacity, con
     bucket->reConfig(config, now);
     LOG_DEBUG(
         log,
-        "token bucket of rg {} reconfig to normal mode. from: {}, to: {}",
-        name_with_keyspace_id,
+        "token bucket of rg {}(keyspace={}) reconfig to normal mode. from: {}, to: {}",
+        name,
+        keyspace_id,
         ori_bucket_info,
         bucket->toString());
 
@@ -213,8 +214,9 @@ void ResourceGroup::updateTrickleMode(
         trickle_expire_timepoint = now + trickle_dura - GAC_RTT_ANTICIPATION;
     LOG_DEBUG(
         log,
-        "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}, trickle_dura: {}ms",
-        name_with_keyspace_id,
+        "token bucket of rg {}(keyspace={}) reconfig to trickle mode: from: {}, to: {}, trickle_dura: {}ms",
+        name,
+        keyspace_id,
         ori_bucket_info,
         bucket->toString(),
         trickle_dura.count());
@@ -235,8 +237,9 @@ void ResourceGroup::updateDegradeMode(const SteadyClock::time_point & now)
         endRequestWithoutLock();
         LOG_INFO(
             log,
-            "resource group({}) cannot receive gac response(bucket: {}, mode: {}) for {} seconds",
-            name_with_keyspace_id,
+            "resource group({} keyspace={}) cannot receive gac response(bucket: {}, mode: {}) for {} seconds",
+            name,
+            keyspace_id,
             bucket->toString(),
             magic_enum::enum_name(bucket_mode),
             std::chrono::duration_cast<std::chrono::seconds>(LocalAdmissionController::DEGRADE_MODE_DURATION).count());
@@ -310,17 +313,17 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & k
     {
         throw ::DB::Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "warmupResourceGroupInfoCache({}-{}) failed: {}",
-            keyspace_id,
+            "warmupResourceGroupInfoCache: {}(keyspace={}) failed: {}",
             name,
+            keyspace_id,
             getCurrentExceptionMessage(false));
     }
 
     RUNTIME_CHECK_MSG(
         !resp.has_error(),
-        "warmupResourceGroupInfoCache({}-{}) failed: {}",
-        keyspace_id,
+        "warmupResourceGroupInfoCache: {}(keyspace={}) failed: {}",
         name,
+        keyspace_id,
         resp.error().message());
 
     checkGACRespValid(resp.group());
@@ -630,17 +633,16 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
         KeyspaceID keyspace_id = NullspaceID;
         if (one_resp.has_keyspace_id())
             keyspace_id = one_resp.keyspace_id().value();
-        const auto name_with_keyspace_id = getResourceGroupMetricName(keyspace_id, name);
         auto resource_group = findResourceGroup(keyspace_id, name);
         if (resource_group == nullptr)
         {
-            LOG_ERROR(log, "cannot find resource group: {}", name_with_keyspace_id);
+            LOG_ERROR(log, "cannot find resource group: {}(keyspace={})", name, keyspace_id);
             continue;
         }
 
         handled_resource_group_names.emplace_back(keyspace_id, name);
 
-        const String err_msg = fmt::format("handle acquire token resp failed: rg: {}", name_with_keyspace_id);
+        const String err_msg = fmt::format("handle acquire token resp failed: rg: {}(keyspace={})", name, keyspace_id);
         // It's possible for one_resp.granted_r_u_tokens() to be empty
         // when the acquire_token_req is only for report RU consumption.
         if (one_resp.granted_r_u_tokens().empty())
@@ -710,6 +712,7 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
         // https://github.com/tikv/pd/blob/e9757fbe03260775262763c67f62296fcb26b3c2/pkg/mcs/resourcemanager/server/token_buckets.go#L47
         int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
 
+        const auto name_with_keyspace_id = getResourceGroupMetricName(keyspace_id, name);
         if (added_tokens > 0)
             GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_tokens, name_with_keyspace_id)
                 .Set(added_tokens);
@@ -855,7 +858,7 @@ bool LocalAdmissionController::handleDeleteEvent(
         std::lock_guard lock(mu);
         erase_num = deleteResourceGroupWithoutLock(keyspace_id, name);
     }
-    LOG_DEBUG(log, "delete resource group {}-{}, erase_num: {}", keyspace_id, name, erase_num);
+    LOG_DEBUG(log, "delete resource group {}(keyspace={}), erase_num: {}", name, keyspace_id, erase_num);
     return true;
 }
 
@@ -893,7 +896,7 @@ bool LocalAdmissionController::handlePutEvent(
             updateMaxRUPerSecAfterDeleteWithoutLock(rg->user_ru_per_sec);
         }
     }
-    LOG_DEBUG(log, "modify resource group({}-{}) to: {}", keyspace_id, name, group_pb.ShortDebugString());
+    LOG_DEBUG(log, "modify resource group {}(keyspace={}) to: {}", name, keyspace_id, group_pb.ShortDebugString());
     return true;
 }
 
@@ -1012,7 +1015,8 @@ std::unique_ptr<MockLocalAdmissionController> LocalAdmissionController::global_i
 std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_instance;
 #endif
 
-// Defined in PD resource_manager_client.go.
+// When keyspace is enabled, PD store resource group info in etcd path of GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH
+// instead of GAC_RESOURCE_GROUP_ETCD_PATH.
 const std::string LocalAdmissionController::GAC_RESOURCE_GROUP_ETCD_PATH = "resource_group/settings";
 const std::string LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH = "resource_group/keyspace/settings";
 

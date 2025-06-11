@@ -16,6 +16,7 @@
 #include <Storages/DeltaMerge/ConcatSkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/SegmentRowID.h>
+#include <Storages/KVStore/Types.h>
 
 namespace DB::DM
 {
@@ -29,7 +30,7 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     , precede_stream_rows(0)
     , scan_context(scan_context_)
     , lac_bytes_collector(
-          scan_context_ ? scan_context_->keyspace_id : pingcap::pd::NullspaceID,
+          scan_context_ ? scan_context_->keyspace_id : NullspaceID,
           scan_context_ ? scan_context_->resource_group_name : "")
 {
     assert(rows.size() == inputs_.size());
