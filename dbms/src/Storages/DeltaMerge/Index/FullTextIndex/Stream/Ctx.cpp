@@ -47,7 +47,7 @@ auto buildCtx(
     RUNTIME_CHECK(schema != nullptr);
 
     // Currently only TopK is supported.
-    RUNTIME_CHECK(fts_query_info->query_type() == tipb::FTSQueryTypeTopK);
+    RUNTIME_CHECK(fts_query_info->query_type() == tipb::FTSQueryTypeWithScore);
     RUNTIME_CHECK(fts_query_info->has_index_id());
     RUNTIME_CHECK(fts_query_info->columns().size() == 1);
 
