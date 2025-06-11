@@ -19,41 +19,40 @@
 
 namespace DB
 {
-std::pair<FetchStatus, Block> CTEReader::fetchNextBlock()
+std::pair<Status, Block> CTEReader::fetchNextBlock()
 {
     Block block;
     std::lock_guard<std::mutex> lock(this->mu);
     auto ret = this->cte->tryGetBlockAt(this->block_fetch_idx, block);
     switch (ret)
     {
-    case FetchStatus::Eof:
+    case Status::Eof:
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
-    case FetchStatus::Waiting:
-    case FetchStatus::Cancelled:
+    case Status::IOOut:
+    case Status::IOIn:
+    case Status::Cancelled:
+    case Status::BlockUnavailable:
         return {ret, Block()};
-    case FetchStatus::Ok:
+    case Status::Ok:
         this->block_fetch_idx++;
         return {ret, block};
     }
     throw Exception("Should not reach here");
 }
 
-FetchStatus CTEReader::checkAvailableBlock()
+Status CTEReader::fetchBlockFromDisk(Block & block)
 {
-    Block block;
     std::lock_guard<std::mutex> lock(this->mu);
-    auto ret = this->cte->tryGetBlockAt(this->block_fetch_idx, block);
-    switch (ret)
-    {
-    case FetchStatus::Eof:
-    case FetchStatus::Waiting:
-    case FetchStatus::Cancelled:
-        return ret;
-    case FetchStatus::Ok:
-        // Do not add block_fetch_idx here as we only check if there are available blocks
-        return FetchStatus::Ok;
-    }
-    throw Exception("Should not reach here");
+    auto status = this->cte->getBlockFromDisk(this->block_fetch_idx, block);
+    if likely (status == Status::Ok)
+        this->block_fetch_idx++;
+    return status;
+}
+
+Status CTEReader::checkAvailableBlock()
+{
+    std::lock_guard<std::mutex> lock(this->mu);
+    return this->cte->checkAvailableBlock(this->block_fetch_idx);
 }
 } // namespace DB

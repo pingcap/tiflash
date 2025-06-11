@@ -44,9 +44,7 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
 
 OperatorStatus CTESinkOp::executeIOImpl()
 {
-    this->cte->spillBlocks();
-    return OperatorStatus::NEED_INPUT;
-    if (this->cte->pushBlock(block))
+    if likely (this->cte->spillBlocks())
         return OperatorStatus::NEED_INPUT;
     return OperatorStatus::CANCELLED;
 }

@@ -35,9 +35,9 @@ public:
         std::shared_ptr<CTEReader> cte_reader_,
         const NamesAndTypes & schema)
         : SourceOp(exec_context_, req_id)
+        , wait_type(NeedMoreBlock)
         , cte_reader(cte_reader_)
         , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, 1))
-        , wait_type(NeedMoreBlock)
     {
         setHeader(Block(getColumnWithTypeAndName(schema)));
     }
@@ -61,9 +61,6 @@ private:
     };
 
     String query_id_and_cte_id;
-    CTEManager * cte_manager;
-    std::shared_ptr<CTE> cte;
-
     Block block_from_disk;
 
     uint64_t total_rows{};

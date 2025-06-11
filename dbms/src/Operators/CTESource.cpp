@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Operators/CTE.h>
 #include <Operators/CTESource.h>
 #include <Operators/Operator.h>
@@ -25,6 +26,13 @@ void CTESourceOp::operateSuffixImpl()
 
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {
+    if (this->block_from_disk)
+    {
+        block = this->block_from_disk;
+        this->block_from_disk.clear();
+        return OperatorStatus::HAS_OUTPUT;
+    }
+
     auto res = this->cte_reader->fetchNextBlock();
     switch (res.first)
     {
@@ -40,11 +48,11 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         // Expected block is in disk, we need to read it from disk
         return OperatorStatus::IO_IN;
     case Status::IOOut:
-        {
-            // CTE is spilling blocks to disk, we need to wait the finish of spill
-            this->wait_type = CTESourceOp::Spill;
-            return OperatorStatus::WAITING;
-        }
+    {
+        // CTE is spilling blocks to disk, we need to wait the finish of spill
+        this->wait_type = CTESourceOp::Spill;
+        return OperatorStatus::WAITING;
+    }
     case Status::BlockUnavailable:
         if likely (this->cte_reader->isBlockGenerated())
         {
@@ -64,9 +72,17 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
 
 OperatorStatus CTESourceOp::executeIOImpl()
 {
-    this->block_from_disk = this->cte->getBlockFromDisk(this->block_fetch_idx);
-    this->block_fetch_idx++;
-    return OperatorStatus::HAS_OUTPUT;
+    RUNTIME_CHECK(!this->block_from_disk);
+    auto status = this->cte_reader->fetchBlockFromDisk(this->block_from_disk);
+    switch (status)
+    {
+    case Status::Ok:
+        return OperatorStatus::HAS_OUTPUT;
+    case Status::Cancelled:
+        return OperatorStatus::CANCELLED;
+    default:
+        throw Exception(fmt::format("Get unexpected status {}", magic_enum::enum_name(status)));
+    }
 }
 
 OperatorStatus CTESourceOp::awaitImpl()
@@ -74,10 +90,8 @@ OperatorStatus CTESourceOp::awaitImpl()
     if (this->wait_type == CTESourceOp::WaitType::NeedMoreBlock)
     {
         auto res = this->cte_reader->checkAvailableBlock();
-        switch (ret.first)
+        switch (res)
         {
-        case Status::IOOut:
-            this->wait_type = CTESourceOp::WaitType::Spill;
         case Status::BlockUnavailable:
             return OperatorStatus::WAITING;
         case Status::Ok:
@@ -85,13 +99,13 @@ OperatorStatus CTESourceOp::awaitImpl()
             return OperatorStatus::HAS_OUTPUT;
         case Status::Cancelled:
             return OperatorStatus::CANCELLED;
-        case Status::IOIn:
-            return OperatorStatus::IO_IN;
+        default:
+            throw Exception(fmt::format("Get unexpected status {}", magic_enum::enum_name(res)));
         }
     }
     else if (this->wait_type == CTESourceOp::WaitType::Spill)
     {
-        switch (this->cte->getStatus())
+        switch (this->cte_reader->getCTEStatus())
         {
         case CTE::CTEStatus::Normal:
             return OperatorStatus::HAS_OUTPUT;
@@ -102,7 +116,7 @@ OperatorStatus CTESourceOp::awaitImpl()
     }
     else
     {
-        throw Exception("Unexpected wait type");
+        throw Exception(fmt::format("Unexpected wait type {}", magic_enum::enum_name(this->wait_type)));
     }
 }
 } // namespace DB

@@ -14,10 +14,10 @@
 
 #pragma once
 
+#include <Core/CTESpill.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <Operators/CTE.h>
 #include <Operators/Operator.h>
-#include <Core/CTESpill.h>
 
 namespace DB
 {

@@ -40,7 +40,7 @@ void CTESpill::writeBlocks(const Blocks & blocks)
             prev_block_offset = this->block_offsets.back().second;
 
         const auto block_size = this->write_streams.back().writeAndReturnBlockSize(block);
-        this->block_offsets.push_back((std::make_pair(this->spilled_files.size()-1, prev_block_offset+block_size)));
+        this->block_offsets.push_back((std::make_pair(this->spilled_files.size() - 1, prev_block_offset + block_size)));
     }
 }
 
@@ -48,8 +48,11 @@ Block CTESpill::readBlockAt(Int64 idx)
 {
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
     if unlikely (idx >= static_cast<Int64>(this->block_offsets.size()))
-        throw Exception(fmt::format("Requested block idx({}) is larger than total block number({})", idx, this->block_offsets.size()));
-    
+        throw Exception(fmt::format(
+            "Requested block idx({}) is larger than total block number({})",
+            idx,
+            this->block_offsets.size()));
+
     auto block_location = this->block_offsets[idx];
     Int64 stream_idx = block_location.first;
     Int64 block_offset = block_location.second;
@@ -71,15 +74,18 @@ Int64 CTESpill::blockNum()
 Int64 CTESpill::getBlockSizeNoLock(Int64 idx) const
 {
     if unlikely (idx >= static_cast<Int64>(this->block_offsets.size()))
-        throw Exception(fmt::format("Requested block idx({}) is larger than total block number({})", idx, this->block_offsets.size()));
-    
+        throw Exception(fmt::format(
+            "Requested block idx({}) is larger than total block number({})",
+            idx,
+            this->block_offsets.size()));
+
     if unlikely (idx == 0)
         return this->block_offsets[0].second;
-    
-    Int64 prev_block_file_idx = this->block_offsets[idx-1].first;
+
+    Int64 prev_block_file_idx = this->block_offsets[idx - 1].first;
     if unlikely (prev_block_file_idx != this->block_offsets[idx].first)
         return this->block_offsets[idx].second;
-    
-    return this->block_offsets[idx].second - this->block_offsets[idx-1].second;
+
+    return this->block_offsets[idx].second - this->block_offsets[idx - 1].second;
 }
 } // namespace DB

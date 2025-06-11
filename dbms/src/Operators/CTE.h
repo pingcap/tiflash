@@ -50,12 +50,14 @@ public:
 
     CTEStatus getStatus();
     Status tryGetBlockAt(size_t idx, Block & block);
-    bool pushBlock(const Block & block);
+    Status checkAvailableBlock(size_t idx);
+    Status pushBlock(const Block & block);
+    Status getBlockFromDisk(size_t idx, Block & block);
+
     void notifyEOF() { this->notifyImpl<true>(true); }
     void notifyCancel() { this->notifyImpl<true>(false); }
 
-    // TODO should have return value to indicate if spill successes
-    void spillBlocks();
+    bool spillBlocks();
 
     void registerTask(TaskPtr && task) override;
 
@@ -92,6 +94,7 @@ private:
     }
 
     // Return true if CTE has data
+    // TODO should also consider blocks in the disk
     inline bool hasDataNoLock() const { return !this->blocks.empty(); }
 
     std::shared_mutex rw_lock;

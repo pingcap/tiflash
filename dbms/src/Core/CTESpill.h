@@ -16,10 +16,10 @@
 
 #include <Core/SpillConfig.h>
 #include <Core/Spiller.h>
-#include <common/types.h>
-#include <IO/BaseFile/WriteReadableFile.h>
 #include <DataStreams/NativeBlockInputStream.h>
 #include <DataStreams/NativeBlockOutputStream.h>
+#include <IO/BaseFile/WriteReadableFile.h>
+#include <common/types.h>
 
 #include <shared_mutex>
 #include <utility>
