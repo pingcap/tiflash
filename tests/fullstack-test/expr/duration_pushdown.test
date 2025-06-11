@@ -47,32 +47,32 @@ mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflas
 |                    0 |
 +----------------------+
 
-#=> DBGInvoke __enable_fail_point(force_remote_read_for_batch_cop)
-#mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select a from t;
-#+-----------------+
-#| a               |
-#+-----------------+
-#| 700:10:10.1235  |
-#| -700:10:10.1235 |
-#+-----------------+
+=> DBGInvoke __enable_fail_point(force_remote_read_for_batch_cop)
+mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select a from t;
++-----------------+
+| a               |
++-----------------+
+| 700:10:10.1235  |
+| -700:10:10.1235 |
++-----------------+
 
-#mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select t1.a from t t1 join t t2 on t1.a=t2.a;
-#+-----------------+
-#| a               |
-#+-----------------+
-#| 700:10:10.1235  |
-#| -700:10:10.1235 |
-#+-----------------+
+mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select t1.a from t t1 join t t2 on t1.a=t2.a;
++-----------------+
+| a               |
++-----------------+
+| 700:10:10.1235  |
+| -700:10:10.1235 |
++-----------------+
 
-#mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select a='700:10:10.123500' from t;
-#+----------------------+
-#| a='700:10:10.123500' |
-#+----------------------+
-#|                    1 |
-#|                    0 |
-#+----------------------+
+mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select a='700:10:10.123500' from t;
++----------------------+
+| a='700:10:10.123500' |
++----------------------+
+|                    1 |
+|                    0 |
++----------------------+
 
-#=> DBGInvoke __disable_fail_point(force_remote_read_for_batch_cop)
+=> DBGInvoke __disable_fail_point(force_remote_read_for_batch_cop)
 
 mysql> use test; set tidb_enforce_mpp=1; set tidb_isolation_read_engines='tiflash'; select hour(a) from t;
 +---------+

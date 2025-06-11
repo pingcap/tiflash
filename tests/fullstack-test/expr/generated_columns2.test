@@ -39,11 +39,11 @@ func> wait_table test t
 
 mysql> analyze table test.t;
 
-#mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, hour(t) from test.t where t = '000:10:10.123456';
-#+------+------+------+------+---------+
-#| a    | b    | c    | d    | hour(t) |
-#+------+------+------+------+---------+
-#|    1 |    2 |    2 |    3 |       0 |
-#+------+------+------+------+---------+
+mysql> set tidb_isolation_read_engines='tiflash'; select a, b, c, d, hour(t) from test.t where t = '000:10:10.123456';
++------+------+------+------+---------+
+| a    | b    | c    | d    | hour(t) |
++------+------+------+------+---------+
+|    1 |    2 |    2 |    3 |       0 |
++------+------+------+------+---------+
 
 mysql> drop table test.t;

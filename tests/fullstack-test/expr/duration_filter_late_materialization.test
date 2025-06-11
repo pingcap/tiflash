@@ -35,11 +35,11 @@ mysql> alter table test.t set tiflash replica 1;
 
 func> wait_table test t
 
-#mysql> select * from test.t where a = '500:11:11.123500';
+mysql> select * from test.t where a = '500:11:11.123500';
 # success, but the result is empty
-#mysql> select hour(a), i from test.t where a = '500:11:11.123500';
-#mysql> select minute(a), i from test.t where a = '500:11:11.123500';
-#mysql> select second(a), i from test.t where a = '500:11:11.123500';
+mysql> select hour(a), i from test.t where a = '500:11:11.123500';
+mysql> select minute(a), i from test.t where a = '500:11:11.123500';
+mysql> select second(a), i from test.t where a = '500:11:11.123500';
 mysql> select a, i from test.t where hour(a) = 500;
 mysql> select a, i from test.t where minute(a) = 13;
 mysql> select a, i from test.t where second(a) = 14;

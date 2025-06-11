@@ -22,14 +22,14 @@ mysql> insert into test.t values ('2021-05-23 11:45:14.192', '2021-05-23 11:45:1
 mysql> insert into test.t values ('2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981', '2021-05-23 11:45:14.191981');
 mysql> analyze table test.t;
 
-#mysql> set @@session.tidb_isolation_read_engines = "tikv"; select count(*), unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d) from test.t group by unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d);
-#+----------+-------------------+-------------------+-------------------+-------------------+
-#| count(*) | unix_timestamp(a) | unix_timestamp(b) | unix_timestamp(c) | unix_timestamp(d) |
-#+----------+-------------------+-------------------+-------------------+-------------------+
-#|        1 |        1621728000 |        1621770314 |    1621770314.192 | 1621770314.192000 |
-#|        1 |        1621728000 |        1621770314 |    1621770314.192 | 1621770314.191981 |
-#|        1 |        1621728000 |        1621770314 |    1621770314.000 | 1621770314.000000 |
-#+----------+-------------------+-------------------+-------------------+-------------------+
+mysql> set @@session.tidb_isolation_read_engines = "tikv"; select count(*), unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d) from test.t group by unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d);
++----------+-------------------+-------------------+-------------------+-------------------+
+| count(*) | unix_timestamp(a) | unix_timestamp(b) | unix_timestamp(c) | unix_timestamp(d) |
++----------+-------------------+-------------------+-------------------+-------------------+
+|        1 |        1621728000 |        1621770314 |    1621770314.192 | 1621770314.192000 |
+|        1 |        1621728000 |        1621770314 |    1621770314.192 | 1621770314.191981 |
+|        1 |        1621728000 |        1621770314 |    1621770314.000 | 1621770314.000000 |
++----------+-------------------+-------------------+-------------------+-------------------+
 
 mysql> set @@session.tidb_isolation_read_engines = "tiflash"; select count(*), unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d) from test.t group by unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d);
 +----------+-------------------+-------------------+-------------------+-------------------+
@@ -40,14 +40,14 @@ mysql> set @@session.tidb_isolation_read_engines = "tiflash"; select count(*), u
 |        1 |        1621728000 |        1621770314 |    1621770314.000 | 1621770314.000000 |
 +----------+-------------------+-------------------+-------------------+-------------------+
 
-#mysql> set time_zone = '+1:00';  set @@session.tidb_isolation_read_engines = "tikv"; select count(*), unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d) from test.t group by unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d);
-#+----------+-------------------+-------------------+-------------------+-------------------+
-#| count(*) | unix_timestamp(a) | unix_timestamp(b) | unix_timestamp(c) | unix_timestamp(d) |
-#+----------+-------------------+-------------------+-------------------+-------------------+
-#|        1 |        1621724400 |        1621766714 |    1621770314.192 | 1621770314.191981 |
-#|        1 |        1621724400 |        1621766714 |    1621770314.000 | 1621770314.000000 |
-#|        1 |        1621724400 |        1621766714 |    1621770314.192 | 1621770314.192000 |
-#+----------+-------------------+-------------------+-------------------+-------------------+
+mysql> set time_zone = '+1:00';  set @@session.tidb_isolation_read_engines = "tikv"; select count(*), unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d) from test.t group by unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d);
++----------+-------------------+-------------------+-------------------+-------------------+
+| count(*) | unix_timestamp(a) | unix_timestamp(b) | unix_timestamp(c) | unix_timestamp(d) |
++----------+-------------------+-------------------+-------------------+-------------------+
+|        1 |        1621724400 |        1621766714 |    1621770314.192 | 1621770314.191981 |
+|        1 |        1621724400 |        1621766714 |    1621770314.000 | 1621770314.000000 |
+|        1 |        1621724400 |        1621766714 |    1621770314.192 | 1621770314.192000 |
++----------+-------------------+-------------------+-------------------+-------------------+
 
 mysql> set time_zone = '+1:00';  set @@session.tidb_isolation_read_engines = "tiflash"; select count(*), unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d) from test.t group by unix_timestamp(a),unix_timestamp(b),unix_timestamp(c),unix_timestamp(d);
 +----------+-------------------+-------------------+-------------------+-------------------+
@@ -59,14 +59,14 @@ mysql> set time_zone = '+1:00';  set @@session.tidb_isolation_read_engines = "ti
 +----------+-------------------+-------------------+-------------------+-------------------+
 
 # date
-#mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tikv"; select a, unix_timestamp(a) from test.t where unix_timestamp(a)='1621728000';
-#+------------+-------------------+
-#| a          | unix_timestamp(a) |
-#+------------+-------------------+
-#| 2021-05-23 |        1621728000 |
-#| 2021-05-23 |        1621728000 |
-#| 2021-05-23 |        1621728000 |
-#+------------+-------------------+
+mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tikv"; select a, unix_timestamp(a) from test.t where unix_timestamp(a)='1621728000';
++------------+-------------------+
+| a          | unix_timestamp(a) |
++------------+-------------------+
+| 2021-05-23 |        1621728000 |
+| 2021-05-23 |        1621728000 |
+| 2021-05-23 |        1621728000 |
++------------+-------------------+
 mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tiflash"; select a, unix_timestamp(a) from test.t where unix_timestamp(a)='1621728000';
 +------------+-------------------+
 | a          | unix_timestamp(a) |
@@ -76,14 +76,14 @@ mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tif
 | 2021-05-23 |        1621728000 |
 +------------+-------------------+
 
-#mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tikv"; select a, unix_timestamp(a) from test.t where unix_timestamp(a)='1621724400';
-#+------------+-------------------+
-#| a          | unix_timestamp(a) |
-#+------------+-------------------+
-#| 2021-05-23 |        1621724400 |
-#| 2021-05-23 |        1621724400 |
-#| 2021-05-23 |        1621724400 |
-#+------------+-------------------+
+mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tikv"; select a, unix_timestamp(a) from test.t where unix_timestamp(a)='1621724400';
++------------+-------------------+
+| a          | unix_timestamp(a) |
++------------+-------------------+
+| 2021-05-23 |        1621724400 |
+| 2021-05-23 |        1621724400 |
+| 2021-05-23 |        1621724400 |
++------------+-------------------+
 mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tiflash"; select a, unix_timestamp(a) from test.t where unix_timestamp(a)='1621724400';
 +------------+-------------------+
 | a          | unix_timestamp(a) |
@@ -94,14 +94,14 @@ mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tif
 +------------+-------------------+
 
 # datetime
-#mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tikv"; select b, unix_timestamp(b) from test.t where unix_timestamp(b)='1621770314';
-#+---------------------+-------------------+
-#| b                   | unix_timestamp(b) |
-#+---------------------+-------------------+
-#| 2021-05-23 11:45:14 |        1621770314 |
-#| 2021-05-23 11:45:14 |        1621770314 |
-#| 2021-05-23 11:45:14 |        1621770314 |
-#+---------------------+-------------------+
+mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tikv"; select b, unix_timestamp(b) from test.t where unix_timestamp(b)='1621770314';
++---------------------+-------------------+
+| b                   | unix_timestamp(b) |
++---------------------+-------------------+
+| 2021-05-23 11:45:14 |        1621770314 |
+| 2021-05-23 11:45:14 |        1621770314 |
+| 2021-05-23 11:45:14 |        1621770314 |
++---------------------+-------------------+
 mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tiflash"; select b, unix_timestamp(b) from test.t where unix_timestamp(b)='1621770314';
 +---------------------+-------------------+
 | b                   | unix_timestamp(b) |
@@ -111,14 +111,14 @@ mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tif
 | 2021-05-23 11:45:14 |        1621770314 |
 +---------------------+-------------------+
 
-#mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tikv"; select b, unix_timestamp(b) from test.t where unix_timestamp(b)='1621766714';
-#+---------------------+-------------------+
-#| b                   | unix_timestamp(b) |
-#+---------------------+-------------------+
-#| 2021-05-23 11:45:14 |        1621766714 |
-#| 2021-05-23 11:45:14 |        1621766714 |
-#| 2021-05-23 11:45:14 |        1621766714 |
-#+---------------------+-------------------+
+mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tikv"; select b, unix_timestamp(b) from test.t where unix_timestamp(b)='1621766714';
++---------------------+-------------------+
+| b                   | unix_timestamp(b) |
++---------------------+-------------------+
+| 2021-05-23 11:45:14 |        1621766714 |
+| 2021-05-23 11:45:14 |        1621766714 |
+| 2021-05-23 11:45:14 |        1621766714 |
++---------------------+-------------------+
 mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tiflash"; select b, unix_timestamp(b) from test.t where unix_timestamp(b)='1621766714';
 +---------------------+-------------------+
 | b                   | unix_timestamp(b) |
@@ -129,13 +129,13 @@ mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tif
 +---------------------+-------------------+
 
 # timestamp(3)
-#mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tikv"; select c, unix_timestamp(c) from test.t where unix_timestamp(c)='1621770314.192';
-#+-------------------------+-------------------+
-#| c                       | unix_timestamp(c) |
-#+-------------------------+-------------------+
-#| 2021-05-23 11:45:14.192 |    1621770314.192 |
-#| 2021-05-23 11:45:14.192 |    1621770314.192 |
-#+-------------------------+-------------------+
+mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tikv"; select c, unix_timestamp(c) from test.t where unix_timestamp(c)='1621770314.192';
++-------------------------+-------------------+
+| c                       | unix_timestamp(c) |
++-------------------------+-------------------+
+| 2021-05-23 11:45:14.192 |    1621770314.192 |
+| 2021-05-23 11:45:14.192 |    1621770314.192 |
++-------------------------+-------------------+
 mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tiflash"; select c, unix_timestamp(c) from test.t where unix_timestamp(c)='1621770314.192';
 +-------------------------+-------------------+
 | c                       | unix_timestamp(c) |
@@ -143,13 +143,13 @@ mysql> set time_zone = '+0:00'; set @@session.tidb_isolation_read_engines = "tif
 | 2021-05-23 11:45:14.192 |    1621770314.192 |
 | 2021-05-23 11:45:14.192 |    1621770314.192 |
 +-------------------------+-------------------+
-#mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tikv"; select c, unix_timestamp(c) from test.t where unix_timestamp(c)='1621770314.192';
-#+-------------------------+-------------------+
-#| c                       | unix_timestamp(c) |
-#+-------------------------+-------------------+
-#| 2021-05-23 12:45:14.192 |    1621770314.192 |
-#| 2021-05-23 12:45:14.192 |    1621770314.192 |
-#+-------------------------+-------------------+
+mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tikv"; select c, unix_timestamp(c) from test.t where unix_timestamp(c)='1621770314.192';
++-------------------------+-------------------+
+| c                       | unix_timestamp(c) |
++-------------------------+-------------------+
+| 2021-05-23 12:45:14.192 |    1621770314.192 |
+| 2021-05-23 12:45:14.192 |    1621770314.192 |
++-------------------------+-------------------+
 mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tiflash"; select c, unix_timestamp(c) from test.t where unix_timestamp(c)='1621770314.192';
 +-------------------------+-------------------+
 | c                       | unix_timestamp(c) |
@@ -159,12 +159,12 @@ mysql> set time_zone = '+1:00'; set @@session.tidb_isolation_read_engines = "tif
 +-------------------------+-------------------+
 
 # timestamp(6)
-#mysql> set @@session.tidb_isolation_read_engines = "tikv"; select d, unix_timestamp(d) from test.t where unix_timestamp(d)='1621770314.191981';
-#+----------------------------+-------------------+
-#| d                          | unix_timestamp(d) |
-#+----------------------------+-------------------+
-#| 2021-05-23 11:45:14.191981 | 1621770314.191981 |
-#+----------------------------+-------------------+
+mysql> set @@session.tidb_isolation_read_engines = "tikv"; select d, unix_timestamp(d) from test.t where unix_timestamp(d)='1621770314.191981';
++----------------------------+-------------------+
+| d                          | unix_timestamp(d) |
++----------------------------+-------------------+
+| 2021-05-23 11:45:14.191981 | 1621770314.191981 |
++----------------------------+-------------------+
 mysql> set @@session.tidb_isolation_read_engines = "tiflash";select d, unix_timestamp(d) from test.t where unix_timestamp(d)='1621770314.191981';
 +----------------------------+-------------------+
 | d                          | unix_timestamp(d) |
@@ -172,12 +172,12 @@ mysql> set @@session.tidb_isolation_read_engines = "tiflash";select d, unix_time
 | 2021-05-23 11:45:14.191981 | 1621770314.191981 |
 +----------------------------+-------------------+
 
-#mysql> set @@session.tidb_isolation_read_engines = "tikv"; select d, unix_timestamp(d) from test.t where unix_timestamp(d)=1621770314.192000;
-#+----------------------------+-------------------+
-#| d                          | unix_timestamp(d) |
-#+----------------------------+-------------------+
-#| 2021-05-23 11:45:14.192000 | 1621770314.192000 |
-#+----------------------------+-------------------+
+mysql> set @@session.tidb_isolation_read_engines = "tikv"; select d, unix_timestamp(d) from test.t where unix_timestamp(d)=1621770314.192000;
++----------------------------+-------------------+
+| d                          | unix_timestamp(d) |
++----------------------------+-------------------+
+| 2021-05-23 11:45:14.192000 | 1621770314.192000 |
++----------------------------+-------------------+
 mysql> set @@session.tidb_isolation_read_engines = "tiflash";select d, unix_timestamp(d) from test.t where unix_timestamp(d)=1621770314.192000;
 +----------------------------+-------------------+
 | d                          | unix_timestamp(d) |
@@ -185,12 +185,12 @@ mysql> set @@session.tidb_isolation_read_engines = "tiflash";select d, unix_time
 | 2021-05-23 11:45:14.192000 | 1621770314.192000 |
 +----------------------------+-------------------+
 
-#mysql> set @@session.tidb_isolation_read_engines = "tikv"; select d, unix_timestamp(d) from test.t where unix_timestamp(d)=1621770314;
-#+----------------------------+-------------------+
-#| d                          | unix_timestamp(d) |
-#+----------------------------+-------------------+
-#| 2021-05-23 11:45:14.000000 | 1621770314.000000 |
-#+----------------------------+-------------------+
+mysql> set @@session.tidb_isolation_read_engines = "tikv"; select d, unix_timestamp(d) from test.t where unix_timestamp(d)=1621770314;
++----------------------------+-------------------+
+| d                          | unix_timestamp(d) |
++----------------------------+-------------------+
+| 2021-05-23 11:45:14.000000 | 1621770314.000000 |
++----------------------------+-------------------+
 mysql> set @@session.tidb_isolation_read_engines = "tiflash";select d, unix_timestamp(d) from test.t where unix_timestamp(d)=1621770314;
 +----------------------------+-------------------+
 | d                          | unix_timestamp(d) |
