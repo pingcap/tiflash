@@ -20,23 +20,23 @@
 
 namespace DB
 {
-Status CTE::tryGetBlockAt(size_t idx, Block & block)
+CTEOpStatus CTE::tryGetBlockAt(size_t idx, Block & block)
 {
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
     if unlikely (this->is_cancelled)
-        return Status::Cancelled;
+        return CTEOpStatus::Cancelled;
 
     auto block_num = this->blocks.size();
     if (block_num <= idx)
     {
         if (this->is_eof)
-            return Status::Eof;
+            return CTEOpStatus::Eof;
         else
-            return Status::Waiting;
+            return CTEOpStatus::Waiting;
     }
 
     block = this->blocks[idx];
-    return Status::Ok;
+    return CTEOpStatus::Ok;
 }
 
 bool CTE::pushBlock(const Block & block)

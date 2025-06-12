@@ -19,40 +19,40 @@
 
 namespace DB
 {
-std::pair<Status, Block> CTEReader::fetchNextBlock()
+std::pair<CTEOpStatus, Block> CTEReader::fetchNextBlock()
 {
     Block block;
     std::lock_guard<std::mutex> lock(this->mu);
     auto ret = this->cte->tryGetBlockAt(this->block_fetch_idx, block);
     switch (ret)
     {
-    case Status::Eof:
+    case CTEOpStatus::Eof:
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
-    case Status::Waiting:
-    case Status::Cancelled:
+    case CTEOpStatus::Waiting:
+    case CTEOpStatus::Cancelled:
         return {ret, Block()};
-    case Status::Ok:
+    case CTEOpStatus::Ok:
         this->block_fetch_idx++;
         return {ret, block};
     }
     throw Exception("Should not reach here");
 }
 
-Status CTEReader::checkAvailableBlock()
+CTEOpStatus CTEReader::checkAvailableBlock()
 {
     Block block;
     std::lock_guard<std::mutex> lock(this->mu);
     auto ret = this->cte->tryGetBlockAt(this->block_fetch_idx, block);
     switch (ret)
     {
-    case Status::Eof:
-    case Status::Waiting:
-    case Status::Cancelled:
+    case CTEOpStatus::Eof:
+    case CTEOpStatus::Waiting:
+    case CTEOpStatus::Cancelled:
         return ret;
-    case Status::Ok:
+    case CTEOpStatus::Ok:
         // Do not add block_fetch_idx here as we only check if there are available blocks
-        return Status::Ok;
+        return CTEOpStatus::Ok;
     }
     throw Exception("Should not reach here");
 }

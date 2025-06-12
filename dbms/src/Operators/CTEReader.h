@@ -46,8 +46,8 @@ public:
         this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id, this->partition_id);
     }
 
-    std::pair<Status, Block> fetchNextBlock();
-    Status checkAvailableBlock();
+    std::pair<CTEOpStatus, Block> fetchNextBlock();
+    CTEOpStatus checkAvailableBlock();
 
     void getResp(tipb::SelectResponse & resp)
     {

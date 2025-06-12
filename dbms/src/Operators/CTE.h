@@ -25,7 +25,7 @@
 
 namespace DB
 {
-enum class Status
+enum class CTEOpStatus
 {
     Ok,
     Waiting,
@@ -36,7 +36,7 @@ enum class Status
 class CTE : public NotifyFuture
 {
 public:
-    Status tryGetBlockAt(size_t idx, Block & block);
+    CTEOpStatus tryGetBlockAt(size_t idx, Block & block);
     bool pushBlock(const Block & block);
     void notifyEOF() { this->notifyImpl<true>(true); }
     void notifyCancel() { this->notifyImpl<true>(false); }
