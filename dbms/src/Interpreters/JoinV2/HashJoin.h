@@ -99,6 +99,7 @@ private:
     }
 
 private:
+    friend JoinBuildHelper;
     friend JoinProbeHelper;
     friend SemiJoinProbeHelper;
     friend JoinProbeBuildScanner;
@@ -158,6 +159,8 @@ private:
 
     /// Row containers
     std::vector<std::unique_ptr<MultipleRowContainer>> multi_row_containers;
+    /// Non-joined blocks
+    NonJoinedBlocks non_joined_blocks;
 
     /// Build row phase
     size_t build_concurrency = 0;

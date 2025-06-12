@@ -13,10 +13,9 @@
 // limitations under the License.
 
 #include <Common/typeid_cast.h>
+#include <Interpreters/JoinV2/HashJoin.h>
 #include <Interpreters/JoinV2/HashJoinBuild.h>
 
-#include "Interpreters/JoinUtils.h"
-#include "Parsers/ASTTablesInSelectQuery.h"
 
 namespace DB
 {
@@ -27,14 +26,12 @@ extern const int UNKNOWN_SET_DATA_VARIANT;
 
 
 template <typename KeyGetter, bool has_null_map, bool need_record_null_rows>
-void NO_INLINE insertBlockToRowContainersTypeImpl(
-    ASTTableJoin::Kind kind,
+void NO_INLINE JoinBuildHelper::insertBlockToRowContainersImpl(
+    HashJoin * join,
     Block & block,
     size_t rows,
     const ColumnRawPtrs & key_columns,
     ConstNullMapPtr null_map,
-    const HashJoinRowLayout & row_layout,
-    std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
     JoinBuildWorkerData & wd,
     bool check_lm_row_size)
 {
@@ -43,29 +40,45 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
     using HashValueType = typename KeyGetter::HashValueType;
     static_assert(sizeof(HashValueType) <= sizeof(decltype(wd.hashes)::value_type));
 
+    const auto kind = join->kind;
+    const auto & row_layout = join->row_layout;
+    const auto & settings = join->settings;
+    auto & multi_row_containers = join->multi_row_containers;
+    auto & non_joined_blocks = join->non_joined_blocks;
+
     auto & key_getter = *static_cast<KeyGetterType *>(wd.key_getter.get());
     key_getter.reset(key_columns, row_layout.raw_key_column_indexes.size());
 
+    RUNTIME_CHECK(multi_row_containers.size() == JOIN_BUILD_PARTITION_COUNT);
     wd.row_sizes.clear();
     bool is_right_semi_family = isRightSemiFamily(kind);
     if (is_right_semi_family)
     {
         wd.row_sizes.resize_fill(rows, row_layout.other_column_for_other_condition_fixed_size);
-        wd.right_semi_selector.resize(rows);
+        wd.right_semi_selector.clear();
+        wd.right_semi_selector.reserve(rows);
+        if constexpr (has_null_map)
+        {
+            wd.right_semi_offsets.clear();
+            wd.right_semi_offsets.reserve(rows);
+        }
     }
     else
     {
         wd.row_sizes.resize_fill(rows, row_layout.other_column_fixed_size);
     }
+    if constexpr (has_null_map && need_record_null_rows)
+    {
+        wd.non_joined_offsets.clear();
+        wd.non_joined_offsets.reserve(rows);
+    }
     wd.hashes.resize(rows);
-    /// The last partition is used to hold rows with null join key.
-    constexpr size_t part_count = JOIN_BUILD_PARTITION_COUNT + 1;
     wd.partition_row_sizes.clear();
-    wd.partition_row_sizes.resize_fill_zero(part_count);
+    wd.partition_row_sizes.resize_fill_zero(JOIN_BUILD_PARTITION_COUNT);
     wd.partition_row_count.clear();
-    wd.partition_row_count.resize_fill_zero(part_count);
+    wd.partition_row_count.resize_fill_zero(JOIN_BUILD_PARTITION_COUNT);
     wd.partition_last_row_index.clear();
-    wd.partition_last_row_index.resize_fill(part_count, -1);
+    wd.partition_last_row_index.resize_fill(JOIN_BUILD_PARTITION_COUNT, -1);
 
     if (check_lm_row_size)
     {
@@ -94,27 +107,23 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
 
     for (size_t i = 0; i < rows; ++i)
     {
-        if (has_null_map && (*null_map)[i])
+        if constexpr (has_null_map)
         {
-            // TODO: the non-key row does not needed for right semi join. However, IColumn::scatterTo must need a selector for all rows
-            if (is_right_semi_family)
-                wd.right_semi_selector[i] = part_count - 1;
-            if constexpr (need_record_null_rows)
+            if ((*null_map)[i])
             {
-                RUNTIME_CHECK_MSG(false, "need_record_null_rows is not supported yet");
-                //TODO
-                //wd.row_sizes[i] += sizeof(RowPtr);
-                //wd.row_sizes[i] = alignRowSize(wd.row_sizes[i]);
-                //wd.partition_row_sizes[part_count - 1] += wd.row_sizes[i];
-                //++wd.partition_row_count[part_count - 1];
+                if constexpr (need_record_null_rows)
+                    wd.non_joined_offsets.push_back(i);
+                continue;
             }
-            continue;
+            if (is_right_semi_family)
+                wd.right_semi_offsets.push_back(i);
         }
+
         const auto & key = key_getter.getJoinKeyWithBuffer(i);
         wd.hashes[i] = static_cast<HashValueType>(Hash()(key));
         size_t part_num = getJoinBuildPartitionNum<HashValueType>(wd.hashes[i]);
         if (is_right_semi_family)
-            wd.right_semi_selector[i] = part_num;
+            wd.right_semi_selector.push_back(part_num);
 
         size_t ptr_and_key_size = sizeof(RowPtr) + key_getter.getJoinKeyByteSize(key);
         if constexpr (KeyGetterType::joinKeyCompareHashFirst())
@@ -152,8 +161,9 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         ++wd.partition_row_count[part_num];
     }
 
-    std::array<RowContainer, part_count> partition_row_container;
-    for (size_t i = 0; i < part_count; ++i)
+    std::array<RowContainer, JOIN_BUILD_PARTITION_COUNT> partition_row_container;
+    size_t row_count = 0;
+    for (size_t i = 0; i < JOIN_BUILD_PARTITION_COUNT; ++i)
     {
         if (wd.partition_row_count[i] > 0)
         {
@@ -169,13 +179,12 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
                 container.hashes.reserve(wd.partition_row_count[i]);
 
             wd.partition_row_sizes[i] = 0;
-            if (i != JOIN_BUILD_PARTITION_COUNT)
-            {
-                // Do not add the count of null rows
-                wd.row_count += wd.partition_row_count[i];
-            }
+            row_count += wd.partition_row_count[i];
         }
     }
+    RUNTIME_CHECK(row_count <= rows);
+    wd.row_count += row_count;
+    wd.non_joined_row_count += rows - row_count;
 
     constexpr size_t step = 256;
     wd.row_ptrs.reserve(step);
@@ -189,14 +198,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         {
             if (has_null_map && (*null_map)[j])
             {
-                if constexpr (need_record_null_rows)
-                {
-                    //TODO
-                }
-                else
-                {
-                    wd.row_ptrs.push_back(nullptr);
-                }
+                wd.row_ptrs.push_back(nullptr);
                 continue;
             }
             size_t part_num = getJoinBuildPartitionNum<HashValueType>(wd.hashes[j]);
@@ -226,7 +228,7 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
         for (size_t i = 0; i < other_column_count; ++i)
         {
             size_t index = row_layout.other_column_indexes[i].first;
-            if constexpr (has_null_map && !need_record_null_rows)
+            if constexpr (has_null_map)
                 block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end - start, true);
             else
                 block.getByPosition(index).column->serializeToPos(wd.row_ptrs, start, end - start, false);
@@ -235,19 +237,19 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
 
     if (isRightSemiFamily(kind))
     {
-        IColumn::ScatterColumns scatter_columns(part_count);
+        IColumn::ScatterColumns scatter_columns(JOIN_BUILD_PARTITION_COUNT);
         for (size_t i = row_layout.other_column_count_for_other_condition; i < row_layout.other_column_indexes.size();
              ++i)
         {
             size_t index = row_layout.other_column_indexes[i].first;
             auto & column_data = block.getByPosition(index);
             size_t column_memory = column_data.column->byteSize();
-            for (size_t j = 0; j < part_count; ++j)
+            for (size_t j = 0; j < JOIN_BUILD_PARTITION_COUNT; ++j)
             {
                 auto new_column_data = column_data.cloneEmpty();
                 if (wd.partition_row_count[j] > 0)
                 {
-                    size_t memory_hint = column_memory * wd.partition_row_count[j] / rows + 16;
+                    size_t memory_hint = 1.2 * column_memory * wd.partition_row_count[j] / rows;
                     new_column_data.column->assumeMutable()->reserveWithTotalMemoryHint(
                         wd.partition_row_count[j],
                         memory_hint);
@@ -255,96 +257,113 @@ void NO_INLINE insertBlockToRowContainersTypeImpl(
                 scatter_columns[j] = new_column_data.column->assumeMutable();
                 partition_row_container[j].other_column_block.insert(std::move(new_column_data));
             }
-            column_data.column->scatterTo(scatter_columns, wd.right_semi_selector);
+            if constexpr (has_null_map)
+                column_data.column->scatterTo(scatter_columns, wd.right_semi_selector, wd.right_semi_offsets);
+            else
+                column_data.column->scatterTo(scatter_columns, wd.right_semi_selector);
         }
     }
 
-    for (size_t i = 0; i < part_count; ++i)
+    if constexpr (has_null_map && need_record_null_rows)
+    {
+        if (!wd.non_joined_offsets.empty())
+        {
+            join->initOutputBlock(wd.non_joined_block);
+            RUNTIME_CHECK(wd.non_joined_block.rows() < settings.max_block_size);
+            size_t columns = wd.non_joined_block.columns();
+            auto fill_block = [&](size_t offset_start, size_t length) {
+                for (size_t i = 0; i < columns; ++i)
+                {
+                    const auto & name = wd.non_joined_block.getByPosition(i).name;
+                    auto & src_column = block.getByName(name).column;
+                    wd.non_joined_block.getByPosition(i).column->assumeMutable()->insertSelectiveRangeFrom(
+                        *src_column,
+                        wd.non_joined_offsets,
+                        offset_start,
+                        length);
+                }
+            };
+            size_t offset_start = 0;
+            size_t offset_size = wd.non_joined_offsets.size();
+            while (true)
+            {
+                size_t remaining_size = settings.max_block_size - wd.non_joined_block.rows();
+                if (remaining_size > offset_size - offset_start)
+                {
+                    fill_block(offset_start, offset_size - offset_start);
+                    break;
+                }
+                fill_block(offset_start, remaining_size);
+                offset_start += remaining_size;
+                non_joined_blocks.insertFullBlock(std::move(wd.non_joined_block));
+                wd.non_joined_block = {};
+                if (offset_start >= offset_size)
+                    break;
+                join->initOutputBlock(wd.non_joined_block);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < JOIN_BUILD_PARTITION_COUNT; ++i)
     {
         if (wd.partition_row_count[i] > 0)
             multi_row_containers[i]->insert(std::move(partition_row_container[i]), wd.partition_row_count[i]);
     }
 }
 
-template <typename KeyGetter>
-void insertBlockToRowContainersType(
-    ASTTableJoin::Kind kind,
+void JoinBuildHelper::insertBlockToRowContainers(
+    HashJoin * join,
     Block & block,
     size_t rows,
     const ColumnRawPtrs & key_columns,
     ConstNullMapPtr null_map,
-    const HashJoinRowLayout & row_layout,
-    std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
-    JoinBuildWorkerData & worker_data,
+    JoinBuildWorkerData & wd,
     bool check_lm_row_size)
 {
-#define CALL(has_null_map, need_record_null_rows)                                       \
-    insertBlockToRowContainersTypeImpl<KeyGetter, has_null_map, need_record_null_rows>( \
-        kind,                                                                           \
-        block,                                                                          \
-        rows,                                                                           \
-        key_columns,                                                                    \
-        null_map,                                                                       \
-        row_layout,                                                                     \
-        multi_row_containers,                                                           \
-        worker_data,                                                                    \
-        check_lm_row_size);
-
-    bool need_record_null_rows = needRecordNotInsertRows(kind);
-    if (null_map)
-    {
-        if (need_record_null_rows)
-        {
-            CALL(true, true);
-        }
-        else
-        {
-            CALL(true, false);
-        }
+#define CALL2(KeyGetter, has_null_map, need_record_null_rows)                           \
+    {                                                                                   \
+        insertBlockToRowContainersImpl<KeyGetter, has_null_map, need_record_null_rows>( \
+            join,                                                                       \
+            block,                                                                      \
+            rows,                                                                       \
+            key_columns,                                                                \
+            null_map,                                                                   \
+            wd,                                                                         \
+            check_lm_row_size);                                                         \
     }
-    else
-    {
-        CALL(false, false);
-    }
-#undef CALL
-}
 
-void insertBlockToRowContainers(
-    HashJoinKeyMethod method,
-    ASTTableJoin::Kind kind,
-    Block & block,
-    size_t rows,
-    const ColumnRawPtrs & key_columns,
-    ConstNullMapPtr null_map,
-    const HashJoinRowLayout & row_layout,
-    std::vector<std::unique_ptr<MultipleRowContainer>> & multi_row_containers,
-    JoinBuildWorkerData & worker_data,
-    bool check_lm_row_size)
-{
-    switch (method)
+#define CALL1(KeyGetter)                                                  \
+    {                                                                     \
+        bool need_record_null_rows = needRecordNotInsertRows(join->kind); \
+        if (null_map)                                                     \
+        {                                                                 \
+            if (need_record_null_rows)                                    \
+                CALL2(KeyGetter, true, true)                              \
+            else                                                          \
+                CALL2(KeyGetter, true, false)                             \
+        }                                                                 \
+        else                                                              \
+            CALL2(KeyGetter, false, false)                                \
+    }
+
+    switch (join->method)
     {
 #define M(METHOD)                                                                          \
     case HashJoinKeyMethod::METHOD:                                                        \
         using KeyGetterType##METHOD = HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>; \
-        insertBlockToRowContainersType<KeyGetterType##METHOD>(                             \
-            kind,                                                                          \
-            block,                                                                         \
-            rows,                                                                          \
-            key_columns,                                                                   \
-            null_map,                                                                      \
-            row_layout,                                                                    \
-            multi_row_containers,                                                          \
-            worker_data,                                                                   \
-            check_lm_row_size);                                                            \
+        CALL1(KeyGetterType##METHOD)                                                       \
         break;
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M
 
     default:
         throw Exception(
-            fmt::format("Unknown JOIN keys variant {}.", magic_enum::enum_name(method)),
+            fmt::format("Unknown JOIN keys variant {}.", magic_enum::enum_name(join->method)),
             ErrorCodes::UNKNOWN_SET_DATA_VARIANT);
     }
+
+#undef CALL1
+#undef CALL2
 }
 
 } // namespace DB

@@ -22,7 +22,7 @@ namespace DB
 
 using enum ASTTableJoin::Kind;
 
-JoinProbeBuildScanner::JoinProbeBuildScanner(const HashJoin * join)
+JoinProbeBuildScanner::JoinProbeBuildScanner(HashJoin * join)
     : join(join)
 {
     join_key_getter = createHashJoinKeyGetter(join->method, join->collators);
@@ -136,10 +136,15 @@ Block JoinProbeBuildScanner::scanImpl(JoinProbeWorkerData & wd)
     const auto & multi_row_containers = join->multi_row_containers;
     const size_t max_block_size = join->settings.max_block_size;
     const size_t left_columns = join->left_sample_block_pruned.columns();
+    auto & non_joined_blocks = join->non_joined_blocks;
 
     auto & key_getter = *static_cast<KeyGetterType *>(join_key_getter.get());
     constexpr size_t key_offset
         = sizeof(RowPtr) + (KeyGetterType::joinKeyCompareHashFirst() ? sizeof(HashValueType) : 0);
+
+    Block * non_full_block = non_joined_blocks.getNextFullBlock();
+    if (non_full_block != nullptr)
+        return *non_full_block;
 
     size_t scan_size = 0;
     RowContainer * container = wd.current_container;

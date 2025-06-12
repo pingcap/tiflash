@@ -23,7 +23,7 @@ class HashJoin;
 class JoinProbeBuildScanner
 {
 public:
-    explicit JoinProbeBuildScanner(const HashJoin * join);
+    explicit JoinProbeBuildScanner(HashJoin * join);
 
     Block scan(JoinProbeWorkerData & wd);
 
@@ -56,7 +56,7 @@ private:
     using FuncType = Block (JoinProbeBuildScanner::*)(JoinProbeWorkerData &);
     FuncType scan_func_ptr = nullptr;
 
-    const HashJoin * join;
+    HashJoin * join;
     std::mutex scan_build_lock;
     size_t scan_build_index = 0;
     /// Used for deserializing join key and getting required key offset

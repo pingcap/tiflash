@@ -329,7 +329,7 @@ void HashJoin::initBuild(const Block & sample_block, size_t build_concurrency_)
     build_workers_data.resize(build_concurrency);
     for (size_t i = 0; i < build_concurrency; ++i)
         build_workers_data[i].key_getter = createHashJoinKeyGetter(method, collators);
-    for (size_t i = 0; i < JOIN_BUILD_PARTITION_COUNT + 1; ++i)
+    for (size_t i = 0; i < JOIN_BUILD_PARTITION_COUNT; ++i)
         multi_row_containers.emplace_back(std::make_unique<MultipleRowContainer>());
 
     build_initialized = true;
@@ -352,7 +352,28 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
     }
 
     left_sample_block_pruned = left_sample_block;
-    removeUselessColumn(left_sample_block_pruned);
+
+    const NameSet & probe_output_name_set = has_other_condition
+        ? output_columns_names_set_for_other_condition_after_finalize
+        : output_column_names_set_after_finalize;
+    for (size_t pos = 0; pos < left_sample_block_pruned.columns();)
+    {
+        if (!probe_output_name_set.contains(left_sample_block_pruned.getByPosition(pos).name))
+        {
+            if (std::find(
+                    key_names_left.begin(),
+                    key_names_left.end(),
+                    left_sample_block_pruned.getByPosition(pos).name)
+                == key_names_left.end())
+            {
+                LOG_ERROR(log, "shit");
+            }
+            left_sample_block_pruned.erase(pos);
+        }
+        else
+            ++pos;
+    }
+    //removeUselessColumn(left_sample_block_pruned);
 
     all_sample_block_pruned = left_sample_block_pruned.cloneEmpty();
     size_t right_columns = right_sample_block_pruned.columns();
@@ -434,12 +455,19 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
 bool HashJoin::finishOneBuildRow(size_t stream_index)
 {
     auto & wd = build_workers_data[stream_index];
+    if (wd.non_joined_block.rows() > 0)
+    {
+        non_joined_blocks.insertNonFullBlock(std::move(wd.non_joined_block));
+        wd.non_joined_block = {};
+    }
     LOG_DEBUG(
         log,
-        "{} insert block to row containers cost {}ms, row count {}, padding size {}({:.2f}% of all size {})",
+        "{} insert block to row containers cost {}ms, row count {}, non-joined count {}, padding size {}({:.2f}% of "
+        "all size {})",
         stream_index,
         wd.build_time,
         wd.row_count,
+        wd.non_joined_row_count,
         wd.padding_size,
         100.0 * wd.padding_size / wd.all_size,
         wd.all_size);
@@ -582,15 +610,12 @@ void HashJoin::buildRowFromBlock(const Block & b, size_t stream_index)
 
     assertBlocksHaveEqualStructure(block, right_sample_block_pruned, "Join Build");
 
-    insertBlockToRowContainers(
-        method,
-        kind,
+    JoinBuildHelper::insertBlockToRowContainers(
+        this,
         block,
         rows,
         key_columns,
         null_map,
-        row_layout,
-        multi_row_containers,
         build_workers_data[stream_index],
         shouldCheckLateMaterialization());
 
