@@ -36,24 +36,24 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
     auto res = this->cte_reader->fetchNextBlock();
     switch (res.first)
     {
-    case Status::Eof:
+    case CTEOpStatus::Eof:
         this->cte_reader->getResp(this->resp);
         if (this->resp.execution_summaries_size() != 0)
             this->io_profile_info->remote_execution_summary.add(this->resp);
-    case Status::Ok:
+    case CTEOpStatus::Ok:
         block = res.second;
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
-    case Status::IOIn:
+    case CTEOpStatus::IOIn:
         // Expected block is in disk, we need to read it from disk
         return OperatorStatus::IO_IN;
-    case Status::IOOut:
+    case CTEOpStatus::IOOut:
     {
         // CTE is spilling blocks to disk, we need to wait the finish of spill
         this->wait_type = CTESourceOp::Spill;
         return OperatorStatus::WAITING;
     }
-    case Status::BlockUnavailable:
+    case CTEOpStatus::BlockUnavailable:
         if likely (this->cte_reader->isBlockGenerated())
         {
             return OperatorStatus::WAITING;
@@ -65,7 +65,7 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
             this->cte_reader->setNotifyFuture();
             return OperatorStatus::WAIT_FOR_NOTIFY;
         }
-    case Status::Cancelled:
+    case CTEOpStatus::Cancelled:
         return OperatorStatus::CANCELLED;
     }
 }
@@ -76,9 +76,9 @@ OperatorStatus CTESourceOp::executeIOImpl()
     auto status = this->cte_reader->fetchBlockFromDisk(this->block_from_disk);
     switch (status)
     {
-    case Status::Ok:
+    case CTEOpStatus::Ok:
         return OperatorStatus::HAS_OUTPUT;
-    case Status::Cancelled:
+    case CTEOpStatus::Cancelled:
         return OperatorStatus::CANCELLED;
     default:
         throw Exception(fmt::format("Get unexpected status {}", magic_enum::enum_name(status)));
@@ -92,12 +92,12 @@ OperatorStatus CTESourceOp::awaitImpl()
         auto res = this->cte_reader->checkAvailableBlock();
         switch (res)
         {
-        case Status::BlockUnavailable:
+        case CTEOpStatus::BlockUnavailable:
             return OperatorStatus::WAITING;
-        case Status::Ok:
-        case Status::Eof:
+        case CTEOpStatus::Ok:
+        case CTEOpStatus::Eof:
             return OperatorStatus::HAS_OUTPUT;
-        case Status::Cancelled:
+        case CTEOpStatus::Cancelled:
             return OperatorStatus::CANCELLED;
         default:
             throw Exception(fmt::format("Get unexpected status {}", magic_enum::enum_name(res)));

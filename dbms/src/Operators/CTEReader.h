@@ -46,9 +46,9 @@ public:
         this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id, this->partition_id);
     }
 
-    std::pair<Status, Block> fetchNextBlock();
-    Status fetchBlockFromDisk(Block & block);
-    Status checkAvailableBlock();
+    std::pair<CTEOpStatus, Block> fetchNextBlock();
+    CTEOpStatus fetchBlockFromDisk(Block & block);
+    CTEOpStatus checkAvailableBlock();
 
     CTE::CTEStatus getCTEStatus() const { return this->cte->getStatus(); }
 

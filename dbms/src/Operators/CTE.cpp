@@ -22,7 +22,7 @@
 
 namespace DB
 {
-Status CTE::tryGetBlockAt(size_t idx, Block & block)
+CTEOpStatus CTE::tryGetBlockAt(size_t idx, Block & block)
 {
     {
         std::shared_lock<std::shared_mutex> status_lock(this->aux_rw_lock);
@@ -33,13 +33,13 @@ Status CTE::tryGetBlockAt(size_t idx, Block & block)
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
 
     if unlikely (this->is_cancelled)
-        return Status::Cancelled;
+        return CTEOpStatus::Cancelled;
 
     if (this->is_spill_triggered)
     {
         auto spilled_block_num = static_cast<size_t>(this->cte_spill.blockNum());
         if (idx < spilled_block_num)
-            return Status::IOIn;
+            return CTEOpStatus::IOIn;
 
         idx -= spilled_block_num;
     }
@@ -48,13 +48,13 @@ Status CTE::tryGetBlockAt(size_t idx, Block & block)
     if (block_num <= idx)
     {
         if (this->is_eof)
-            return Status::Eof;
+            return CTEOpStatus::Eof;
         else
-            return Status::BlockUnavailable;
+            return CTEOpStatus::BlockUnavailable;
     }
 
     block = this->blocks[idx];
-    return Status::Ok;
+    return CTEOpStatus::Ok;
 }
 
 Status CTE::checkAvailableBlock(size_t idx)

@@ -37,7 +37,7 @@ public:
         : SourceOp(exec_context_, req_id)
         , wait_type(NeedMoreBlock)
         , cte_reader(cte_reader_)
-        , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, 1))
+        , io_profile_info(IOProfileInfo::createForLocal(profile_info_ptr))
     {
         setHeader(Block(getColumnWithTypeAndName(schema)));
     }

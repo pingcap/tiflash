@@ -26,7 +26,7 @@
 
 namespace DB
 {
-enum class Status
+enum class CTEOpStatus
 {
     Ok,
     BlockUnavailable, // It means that we do not have specified block so far
@@ -49,10 +49,10 @@ public:
     };
 
     CTEStatus getStatus();
-    Status tryGetBlockAt(size_t idx, Block & block);
-    Status checkAvailableBlock(size_t idx);
-    Status pushBlock(const Block & block);
-    Status getBlockFromDisk(size_t idx, Block & block);
+    CTEOpStatus tryGetBlockAt(size_t idx, Block & block);
+    CTEOpStatus checkAvailableBlock(size_t idx);
+    CTEOpStatus pushBlock(const Block & block);
+    CTEOpStatus getBlockFromDisk(size_t idx, Block & block);
 
     void notifyEOF() { this->notifyImpl<true>(true); }
     void notifyCancel() { this->notifyImpl<true>(false); }

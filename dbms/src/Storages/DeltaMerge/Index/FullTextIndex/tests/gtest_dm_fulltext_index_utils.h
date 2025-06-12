@@ -70,7 +70,7 @@ public:
     static FTSQueryInfoPtr ftsQueryInfoTopK(FtsQueryInfoTopKOptions options)
     {
         auto fts_query_info = std::make_shared<tipb::FTSQueryInfo>();
-        fts_query_info->set_query_type(tipb::FTSQueryType::FTSQueryTypeTopK);
+        fts_query_info->set_query_type(tipb::FTSQueryType::FTSQueryTypeWithScore);
         fts_query_info->set_index_id(options.index_id);
         auto * column_info = fts_query_info->add_columns();
         column_info->set_column_id(options.column_id);
