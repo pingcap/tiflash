@@ -58,6 +58,7 @@ Block CTESpill::readBlockAt(Int64 idx)
     Int64 block_offset = block_location.second;
     Int64 block_size = this->getBlockSizeNoLock(idx);
 
+    // TODO why we resize buf? Maybe we can delete this code.
     if (this->buf.size() < static_cast<size_t>(block_size))
         this->buf.resize(block_size);
 
