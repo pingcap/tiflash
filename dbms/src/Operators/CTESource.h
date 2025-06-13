@@ -36,7 +36,7 @@ public:
         const NamesAndTypes & schema)
         : SourceOp(exec_context_, req_id)
         , cte_reader(cte_reader_)
-        , io_profile_info(IOProfileInfo::createForLocal(profile_info_ptr))
+        , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, 1))
     {
         setHeader(Block(getColumnWithTypeAndName(schema)));
     }
