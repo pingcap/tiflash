@@ -13,9 +13,11 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/Logger.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/Operator.h>
 #include <Operators/OperatorHelper.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {

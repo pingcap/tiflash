@@ -88,6 +88,7 @@ public:
         header = header_;
     }
 
+
     const OperatorProfileInfoPtr & getProfileInfo() const { return profile_info_ptr; }
 
     virtual IOProfileInfoPtr getIOProfileInfo() const { throw Exception("Unsupport"); }

@@ -16,7 +16,6 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
-#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
 #include <memory.h>
@@ -117,7 +116,7 @@ public:
 
     const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
 
-    void onErrorOccurred(const String & err_msg) { exec_context.onErrorOccurred(err_msg); }
+    void onErrorOccurred(const String & err_msg);
 
     void setNotifyType(NotifyType type) { notify_type = type; }
     NotifyType getNotifyType() const { return notify_type; }
