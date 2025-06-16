@@ -71,11 +71,12 @@ void IORateLimitConfig::parse(const String & storage_io_rate_limit, const Logger
 std::string IORateLimitConfig::toString() const
 {
     return fmt::format(
-        "max_bytes_per_sec {} max_read_bytes_per_sec {} max_write_bytes_per_sec {} use_max_bytes_per_sec {} "
-        "fg_write_weight {} bg_write_weight {} fg_read_weight {} bg_read_weight {} fg_write_max_bytes_per_sec {} "
-        "bg_write_max_bytes_per_sec {} fg_read_max_bytes_per_sec {} bg_read_max_bytes_per_sec {} emergency_pct {} "
-        "high_pct {} "
-        "medium_pct {} tune_base {} min_bytes_per_sec {} auto_tune_sec {}",
+        "IORateLimitConfig{{max_bytes_per_sec={} max_read_bytes_per_sec={} max_write_bytes_per_sec={} "
+        "use_max_bytes_per_sec={} "
+        "fg_write_weight={} bg_write_weight={} fg_read_weight={} bg_read_weight={} "
+        "fg_write_max_bytes_per_sec={} bg_write_max_bytes_per_sec={} "
+        "fg_read_max_bytes_per_sec={} bg_read_max_bytes_per_sec={} "
+        "emergency_pct={} high_pct={} medium_pct={} tune_base={} min_bytes_per_sec={} auto_tune_sec={}}}",
         max_bytes_per_sec,
         max_read_bytes_per_sec,
         max_write_bytes_per_sec,

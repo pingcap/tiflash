@@ -633,6 +633,16 @@ background_write_weight=2
 foreground_read_weight=5
 background_read_weight=2
         )",
+        R"(
+            # Only limit the fg/bg write
+            [storage]
+            [storage.io_rate_limit]
+            max_bytes_per_sec=1024000
+            foreground_write_weight=80
+            background_write_weight=20
+            foreground_read_weight=0
+            background_read_weight=0
+            )",
     };
 
     auto log = Logger::get();
@@ -731,12 +741,32 @@ background_read_weight=2
         ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 292571) << io_config.toString();
     };
 
+    auto verify_case4 = [](const IORateLimitConfig & io_config) {
+        ASSERT_EQ(io_config.max_bytes_per_sec, 1024000);
+        ASSERT_EQ(io_config.max_read_bytes_per_sec, 0);
+        ASSERT_EQ(io_config.max_write_bytes_per_sec, 0);
+        ASSERT_TRUE(io_config.use_max_bytes_per_sec);
+        ASSERT_EQ(io_config.fg_write_weight, 80);
+        ASSERT_EQ(io_config.bg_write_weight, 20);
+        ASSERT_EQ(io_config.fg_read_weight, 0);
+        ASSERT_EQ(io_config.bg_read_weight, 0);
+        ASSERT_EQ(io_config.readWeight(), 0);
+        ASSERT_EQ(io_config.writeWeight(), 100);
+        ASSERT_EQ(io_config.totalWeight(), 100);
+        // fg_write:bg_write = 80:20
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 1024000 * 80 / 100) << io_config.toString();
+        ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 1024000 * 20 / 100) << io_config.toString();
+        // fg_read:bg_read = 0:0
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0) << io_config.toString();
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0) << io_config.toString();
+    };
 
     std::vector<std::function<void(const IORateLimitConfig &)>> case_verifiers{
         verify_case0,
         verify_case1,
         verify_case2,
         verify_case3,
+        verify_case4,
     };
 
     for (size_t i = 0; i < tests.size(); ++i)
