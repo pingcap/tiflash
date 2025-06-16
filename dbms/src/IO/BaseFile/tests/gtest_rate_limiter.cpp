@@ -13,7 +13,12 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+<<<<<<< HEAD:dbms/src/IO/BaseFile/tests/gtest_rate_limiter.cpp
 #include <IO/BaseFile/RateLimiter.h>
+=======
+#include <Encryption/RateLimiter.h>
+#include <TestUtils/TiFlashTestBasic.h>
+>>>>>>> bb283359ab (Add more tests about ratelimiter write only):dbms/src/Encryption/tests/gtest_rate_limiter.cpp
 #include <fcntl.h>
 #include <gtest/gtest.h>
 #include <unistd.h>
@@ -205,13 +210,13 @@ TEST(ReadLimiterTest, GetIOStatPeroid200ms)
     ASSERT_EQ(limiter.getAvailableBalance(), -1);
     request(limiter, 50);
     TimePointMS t1 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
-    UInt64 elasped = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
-    ASSERT_GE(elasped, refill_period_ms);
+    UInt64 elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t1 - t0).count();
+    ASSERT_GE(elapsed, refill_period_ms);
     ASSERT_GE(limiter.getAvailableBalance(), -31);
     request(limiter, 1);
     TimePointMS t2 = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now());
-    elasped = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t0).count();
-    ASSERT_GE(elasped, 3 * refill_period_ms);
+    elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(t2 - t0).count();
+    ASSERT_GE(elapsed, 3 * refill_period_ms);
     ASSERT_GE(limiter.getAvailableBalance(), 8);
     request(limiter, limiter.getAvailableBalance() + 1);
     ASSERT_EQ(limiter.getAvailableBalance(), -1);
@@ -485,7 +490,49 @@ TEST(IORateLimiterTest, IOStatMultiThread)
         t.join();
     }
 }
-#endif
+#endif // __linux__
+
+TEST(IORateLimiterTest, CreateOnlyWriteLimiter)
+try
+{
+    // create a config with only write limiter
+    StorageIORateLimitConfig io_config;
+    io_config.max_bytes_per_sec = 1024000;
+    io_config.fg_write_weight = 80;
+    io_config.bg_write_weight = 20;
+    io_config.fg_read_weight = 0;
+    io_config.bg_read_weight = 0;
+    ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 0);
+    ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 0);
+    ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 1024000 * 20 / 100);
+    ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 1024000 * 80 / 100);
+
+    // apply the config to IORateLimiter
+    IORateLimiter io_rate_limiter;
+    io_rate_limiter.updateLimiterByConfig(io_config);
+    // read limiter should be reset
+    ASSERT_EQ(io_rate_limiter.getReadLimiter(), nullptr);
+    // write limiter should be created
+    ASSERT_NE(io_rate_limiter.getWriteLimiter(), nullptr);
+
+    std::this_thread::sleep_for(300ms);
+    io_rate_limiter.autoTune();
+
+    {
+        std::this_thread::sleep_for(300ms);
+        auto tuner = io_rate_limiter.createIOLimitTuner();
+        ASSERT_EQ(tuner->bg_read_stat, nullptr);
+        ASSERT_EQ(tuner->fg_read_stat, nullptr);
+        ASSERT_NE(tuner->bg_write_stat, nullptr);
+        ASSERT_NE(tuner->fg_write_stat, nullptr);
+        // the tuner should only tune write limiter
+        auto res = tuner->tune();
+        ASSERT_EQ(res.read_tuned, false);
+        ASSERT_EQ(res.max_bg_read_bytes_per_sec, 0);
+        ASSERT_EQ(res.max_fg_read_bytes_per_sec, 0);
+    }
+}
+CATCH
 
 LimiterStatUPtr createLimiterStat(
     UInt64 alloc_bytes,
@@ -767,6 +814,120 @@ TEST(IOLimitTunerTest, Tune2)
     ASSERT_TRUE(res.write_tuned);
     ASSERT_TRUE(res.read_tuned);
     ASSERT_GT(res.max_bg_read_bytes_per_sec, 10);
+}
+
+TEST(IOLimitTunerTest, TuneWriteOnly)
+{
+    StorageIORateLimitConfig io_config;
+    io_config.max_bytes_per_sec = 20480 * 1024; // 20MB/s
+    io_config.fg_read_weight = 0;
+    io_config.bg_read_weight = 0;
+    io_config.fg_write_weight = 80;
+    io_config.bg_write_weight = 20;
+    io_config.min_bytes_per_sec = 10;
+
+    {
+        auto bg_write_stat = createLimiterStat(1024, 1000, 1000, io_config.getBgWriteMaxBytesPerSec());
+        // fg write reach medium
+        auto fg_write_stat = createLimiterStat(10905191, 1000, 1000, io_config.getFgWriteMaxBytesPerSec());
+
+        IOLimitTuner tuner( //
+            std::move(bg_write_stat),
+            std::move(fg_write_stat),
+            nullptr,
+            nullptr,
+            io_config);
+        auto [max_read_bps, max_write_bps, rw_tuned] = tuner.tuneReadWrite();
+        ASSERT_EQ(max_read_bps, 0); // read_bps must be 0
+        ASSERT_EQ(max_write_bps, io_config.max_bytes_per_sec);
+        ASSERT_FALSE(rw_tuned);
+
+        auto res = tuner.tune();
+        ASSERT_TRUE(res.write_tuned);
+        ASSERT_FALSE(res.read_tuned); // read limiter is not created, so not tuned.
+        // greater than 80% of max write bps
+        ASSERT_GT(res.max_fg_write_bytes_per_sec, io_config.getFgWriteMaxBytesPerSec());
+        // less than 20% of max write bps
+        ASSERT_LT(res.max_bg_write_bytes_per_sec, io_config.getBgWriteMaxBytesPerSec());;
+    }
+
+    {
+        auto bg_write_stat = createLimiterStat(1024, 1000, 1000, io_config.getBgWriteMaxBytesPerSec());
+        // fg write reach high
+        auto fg_write_stat = createLimiterStat(14260640, 1000, 1000, io_config.getFgWriteMaxBytesPerSec());
+
+        IOLimitTuner tuner( //
+            std::move(bg_write_stat),
+            std::move(fg_write_stat),
+            nullptr,
+            nullptr,
+            io_config);
+        auto [max_read_bps, max_write_bps, rw_tuned] = tuner.tuneReadWrite();
+        ASSERT_EQ(max_read_bps, 0); // read_bps must be 0
+        ASSERT_EQ(max_write_bps, io_config.max_bytes_per_sec);
+        ASSERT_FALSE(rw_tuned);
+
+        auto res = tuner.tune();
+        ASSERT_TRUE(res.write_tuned);
+        ASSERT_FALSE(res.read_tuned); // read limiter is not created, so not tuned.
+        // greater than 80% of max write bps
+        ASSERT_GT(res.max_fg_write_bytes_per_sec, io_config.getFgWriteMaxBytesPerSec());
+        // less than 20% of max write bps
+        ASSERT_LT(res.max_bg_write_bytes_per_sec, io_config.getBgWriteMaxBytesPerSec());
+    }
+
+
+    {
+        // bg write reach medium
+        auto bg_write_stat = createLimiterStat(2726300, 1000, 1000, io_config.getBgWriteMaxBytesPerSec());
+        // fg write low
+        auto fg_write_stat = createLimiterStat(20 * 1024, 1000, 1000, io_config.getFgWriteMaxBytesPerSec());
+
+        IOLimitTuner tuner( //
+            std::move(bg_write_stat),
+            std::move(fg_write_stat),
+            nullptr,
+            nullptr,
+            io_config);
+        auto [max_read_bps, max_write_bps, rw_tuned] = tuner.tuneReadWrite();
+        ASSERT_EQ(max_read_bps, 0); // read_bps must be 0
+        ASSERT_EQ(max_write_bps, io_config.max_bytes_per_sec);
+        ASSERT_FALSE(rw_tuned);
+
+        auto res = tuner.tune();
+        ASSERT_TRUE(res.write_tuned);
+        ASSERT_FALSE(res.read_tuned); // read limiter is not created, so not tuned.
+        // less than 80% of max write bps
+        ASSERT_LT(res.max_fg_write_bytes_per_sec, io_config.getFgWriteMaxBytesPerSec());
+        // greater than 20% of max write bps
+        ASSERT_GT(res.max_bg_write_bytes_per_sec, io_config.getBgWriteMaxBytesPerSec());
+    }
+
+    {
+        // fg write reach medium
+        auto bg_write_stat = createLimiterStat(2726300, 1000, 1000, io_config.getBgWriteMaxBytesPerSec());
+        // fg write reach high
+        auto fg_write_stat = createLimiterStat(14260640, 1000, 1000, io_config.getFgWriteMaxBytesPerSec());
+
+        IOLimitTuner tuner( //
+            std::move(bg_write_stat),
+            std::move(fg_write_stat),
+            nullptr,
+            nullptr,
+            io_config);
+        auto [max_read_bps, max_write_bps, rw_tuned] = tuner.tuneReadWrite();
+        ASSERT_EQ(max_read_bps, 0); // read_bps must be 0
+        ASSERT_EQ(max_write_bps, io_config.max_bytes_per_sec);
+        ASSERT_FALSE(rw_tuned);
+
+        auto res = tuner.tune();
+        ASSERT_TRUE(res.write_tuned);
+        ASSERT_FALSE(res.read_tuned); // read limiter is not created, so not tuned.
+        // greater than 80% of max write bps
+        ASSERT_GT(res.max_fg_write_bytes_per_sec, io_config.getFgWriteMaxBytesPerSec());
+        // less than 20% of max write bps
+        ASSERT_LT(res.max_bg_write_bytes_per_sec, io_config.getBgWriteMaxBytesPerSec());
+    }
 }
 
 } // namespace tests
