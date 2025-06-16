@@ -350,7 +350,7 @@ public:
                 max_bg_write_bytes_per_sec,
                 max_fg_write_bytes_per_sec,
                 write_tuned);
-        };
+        }
 
         bool operator==(const TuneResult & a) const
         {

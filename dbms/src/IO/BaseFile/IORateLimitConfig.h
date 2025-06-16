@@ -81,7 +81,7 @@ public:
     UInt64 writeWeight() const;
     UInt64 totalWeight() const;
 
-    bool operator==(const StorageIORateLimitConfig & config) const;
+    bool operator==(const IORateLimitConfig & config) const;
 };
 
 } // namespace DB

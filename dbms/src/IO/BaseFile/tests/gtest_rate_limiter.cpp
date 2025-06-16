@@ -13,12 +13,8 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-<<<<<<< HEAD:dbms/src/IO/BaseFile/tests/gtest_rate_limiter.cpp
 #include <IO/BaseFile/RateLimiter.h>
-=======
-#include <Encryption/RateLimiter.h>
 #include <TestUtils/TiFlashTestBasic.h>
->>>>>>> bb283359ab (Add more tests about ratelimiter write only):dbms/src/Encryption/tests/gtest_rate_limiter.cpp
 #include <fcntl.h>
 #include <gtest/gtest.h>
 #include <unistd.h>
@@ -496,7 +492,7 @@ TEST(IORateLimiterTest, CreateOnlyWriteLimiter)
 try
 {
     // create a config with only write limiter
-    StorageIORateLimitConfig io_config;
+    IORateLimitConfig io_config;
     io_config.max_bytes_per_sec = 1024000;
     io_config.fg_write_weight = 80;
     io_config.bg_write_weight = 20;
@@ -818,7 +814,7 @@ TEST(IOLimitTunerTest, Tune2)
 
 TEST(IOLimitTunerTest, TuneWriteOnly)
 {
-    StorageIORateLimitConfig io_config;
+    IORateLimitConfig io_config;
     io_config.max_bytes_per_sec = 20480 * 1024; // 20MB/s
     io_config.fg_read_weight = 0;
     io_config.bg_read_weight = 0;
@@ -848,7 +844,8 @@ TEST(IOLimitTunerTest, TuneWriteOnly)
         // greater than 80% of max write bps
         ASSERT_GT(res.max_fg_write_bytes_per_sec, io_config.getFgWriteMaxBytesPerSec());
         // less than 20% of max write bps
-        ASSERT_LT(res.max_bg_write_bytes_per_sec, io_config.getBgWriteMaxBytesPerSec());;
+        ASSERT_LT(res.max_bg_write_bytes_per_sec, io_config.getBgWriteMaxBytesPerSec());
+        ;
     }
 
     {

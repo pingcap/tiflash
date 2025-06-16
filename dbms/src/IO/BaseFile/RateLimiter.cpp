@@ -357,7 +357,11 @@ Int64 ReadLimiter::getAvailableBalance()
     Int64 bytes = get_read_bytes();
     if (unlikely(bytes < last_stat_bytes))
     {
-        LOG_WARNING(log, "last_stat: {} current_stat: {}", last_stat_bytes, bytes);
+        LOG_WARNING(
+            log,
+            "unexpected last_stat_bytes > current_bytes, last_stat={} current_stat={}",
+            last_stat_bytes,
+            bytes);
     }
     else if (likely(bytes == last_stat_bytes))
     {
