@@ -64,7 +64,6 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
         exec_context.sinkNeedRelease();
     }
 
-
     group_builder.transform([&](auto & builder) {
         if (fine_grained_shuffle.enabled())
         {

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
-#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Operators/SharedQueue.h>
 
 #include <magic_enum.hpp>

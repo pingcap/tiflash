@@ -19,7 +19,7 @@
 #include <Flash/Planner/Plans/PhysicalCTESource.h>
 #include <Interpreters/Context.h>
 #include <Operators/CTEReader.h>
-#include <Operators/CTESource.h>
+#include <Operators/CTESourceOp.h>
 
 #include <memory>
 #include <string>
@@ -103,6 +103,7 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
 void PhysicalCTESource::finalizeImpl(const Names & parent_require)
 {
     FinalizeHelper::checkSchemaContainsParentRequire(schema, parent_require);
+    FinalizeHelper::prependProjectionInputIfNeed()
 }
 
 const Block & PhysicalCTESource::getSampleBlock() const

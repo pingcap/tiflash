@@ -13,7 +13,7 @@
 // limitations under the License.
 
 #include <Operators/CTE.h>
-#include <Operators/CTESource.h>
+#include <Operators/CTESourceOp.h>
 #include <Operators/Operator.h>
 
 namespace DB
