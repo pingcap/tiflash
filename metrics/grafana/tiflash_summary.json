@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1701943063097,
+  "iteration": 1750084725100,
   "links": [],
   "panels": [
     {
@@ -7715,370 +7715,6 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The storage I/O limiter metrics.",
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 70
-          },
-          "hiddenSeries": false,
-          "id": 84,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "max": true,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "sum(rate(tiflash_storage_io_limiter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
-              "format": "time_series",
-              "instant": false,
-              "intervalFactor": 2,
-              "legendFormat": "{{type}}",
-              "refId": "A"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "I/O Limiter Throughput",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "decimals": 0,
-              "format": "binBps",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The storage I/O limiter metrics.",
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 70
-          },
-          "hiddenSeries": false,
-          "id": 266,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "max": true,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null as zero",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [
-            {
-              "$$hashKey": "object:563",
-              "alias": "/-/",
-              "yaxis": 2
-            }
-          ],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "sum(rate(tiflash_storage_io_limiter_pending_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
-              "format": "time_series",
-              "instant": false,
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": "{{type}}",
-              "refId": "A"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "I/O Limiter Pending Rate and Duration",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "$$hashKey": "object:230",
-              "decimals": 0,
-              "format": "ops",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "$$hashKey": "object:231",
-              "format": "s",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "I/O Limiter current pending count.",
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 70
-          },
-          "hiddenSeries": false,
-          "id": 86,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [
-            {
-              "alias": "/pending/",
-              "yaxis": 2
-            }
-          ],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "expr": "avg(tiflash_system_current_metric_RateLimiterPendingWriteRequest{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "format": "time_series",
-              "interval": "",
-              "intervalFactor": 1,
-              "legendFormat": "other-current-{{instance}}",
-              "refId": "A",
-              "hide": true
-            },
-            {
-              "exemplar": true,
-              "expr": "avg(tiflash_system_current_metric_IOLimiterPendingBgWriteReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "bgwrite-current-{{instance}}",
-              "refId": "B"
-            },
-            {
-              "exemplar": true,
-              "expr": "avg(tiflash_system_current_metric_IOLimiterPendingFgWriteReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "fgwrite-current-{{instance}}",
-              "refId": "C"
-            },
-            {
-              "exemplar": true,
-              "expr": "avg(tiflash_system_current_metric_IOLimiterPendingBgReadReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "bgread-current-{{instance}}",
-              "refId": "D"
-            },
-            {
-              "exemplar": true,
-              "expr": "avg(tiflash_system_current_metric_IOLimiterPendingFgReadReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "fgread-current-{{instance}}",
-              "refId": "E"
-            },
-            {
-              "exemplar": true,
-              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "{{type}}-pending-max",
-              "refId": "F"
-            },
-            {
-              "exemplar": true,
-              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "{{type}}-pending-P99",
-              "refId": "G"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "I/O Limiter Current Pending Count",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "decimals": 0,
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "format": "s",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
           "description": "The information of data sharing cache hit ratio. Data sharing cache is purpose-built for OLAP workload that can reduce repeated data reads of concurrent table scanning.",
           "fieldConfig": {
             "defaults": {},
@@ -8090,7 +7726,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 78
+            "y": 70
           },
           "hiddenSeries": false,
           "id": 132,
@@ -8222,7 +7858,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 78
+            "y": 70
           },
           "hiddenSeries": false,
           "id": 269,
@@ -8251,7 +7887,6 @@
           "renderer": "flot",
           "seriesOverrides": [
             {
-              "$$hashKey": "object:308",
               "alias": "/push_block/",
               "yaxis": 2
             }
@@ -8291,7 +7926,6 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:321",
               "decimals": null,
               "format": "ops",
               "label": null,
@@ -8301,13 +7935,161 @@
               "show": true
             },
             {
-              "$$hashKey": "object:322",
               "format": "binBps",
               "label": null,
               "logBase": 1,
               "max": null,
               "min": "0",
               "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "cache misses or cache hits of mark_cache.\nBased on this infactor, we can check whether mark_cache is large enough",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 78
+          },
+          "hiddenSeries": false,
+          "id": 169,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_system_profile_event_MarkCacheMisses{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "interval": "",
+              "legendFormat": "mark cache misses",
+              "queryType": "randomWalk",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "max(tiflash_system_profile_event_MarkCacheHits{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "mark cache hits",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "Effectiveness of Mark Cache",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "transformations": [
+            {
+              "id": "calculateField",
+              "options": {
+                "alias": "mark cache count total",
+                "binary": {
+                  "left": "mark cache misses",
+                  "operator": "+",
+                  "reducer": "sum",
+                  "right": "mark cache hits"
+                },
+                "mode": "binary",
+                "reduce": {
+                  "reducer": "sum"
+                }
+              }
+            },
+            {
+              "id": "calculateField",
+              "options": {
+                "alias": "mark cache effectiveness",
+                "binary": {
+                  "left": "mark cache hits",
+                  "operator": "/",
+                  "reducer": "sum",
+                  "right": "mark cache count total"
+                },
+                "mode": "binary",
+                "reduce": {
+                  "reducer": "sum"
+                }
+              }
+            },
+            {
+              "id": "filterFieldsByName",
+              "options": {
+                "include": {
+                  "names": [
+                    "Time",
+                    "mark cache effectiveness"
+                  ]
+                }
+              }
+            }
+          ],
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "percentunit",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "percent",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": false
             }
           ],
           "yaxis": {
@@ -8520,12 +8302,12 @@
           "dashLength": 10,
           "dashes": false,
           "datasource": "${DS_TEST-CLUSTER}",
-          "description": "cache misses or cache hits of mark_cache.\nBased on this infactor, we can check whether mark_cache is large enough",
+          "description": "The memory usage of mark cache and minmax index cache",
           "fieldConfig": {
             "defaults": {},
             "overrides": []
           },
-          "fill": 1,
+          "fill": 0,
           "fillGradient": 0,
           "gridPos": {
             "h": 8,
@@ -8534,46 +8316,68 @@
             "y": 86
           },
           "hiddenSeries": false,
-          "id": 169,
+          "id": 238,
           "legend": {
+            "alignAsTable": true,
             "avg": false,
-            "current": false,
-            "max": false,
+            "current": true,
+            "max": true,
             "min": false,
+            "rightSide": true,
             "show": true,
+            "sideWidth": 250,
+            "sort": "max",
+            "sortDesc": true,
             "total": false,
-            "values": false
+            "values": true
           },
           "lines": true,
           "linewidth": 1,
+          "links": [],
           "nullPointMode": "null",
           "options": {
             "alertThreshold": true
           },
           "percentage": false,
           "pluginVersion": "7.5.11",
-          "pointradius": 2,
+          "pointradius": 5,
           "points": false,
           "renderer": "flot",
-          "seriesOverrides": [],
+          "seriesOverrides": [
+            {
+              "alias": "/limit/",
+              "color": "#F2495C",
+              "hideTooltip": true,
+              "legend": false,
+              "linewidth": 2
+            }
+          ],
           "spaceLength": 10,
           "stack": false,
           "steppedLine": false,
           "targets": [
             {
               "exemplar": true,
-              "expr": "max(tiflash_system_profile_event_MarkCacheMisses{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "expr": "tiflash_system_asynchronous_metric_MarkCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "hide": false,
               "interval": "",
-              "legendFormat": "mark cache misses",
-              "queryType": "randomWalk",
+              "legendFormat": "mark_cache_{{instance}}",
+              "refId": "L"
+            },
+            {
+              "exemplar": true,
+              "expr": "tiflash_system_asynchronous_metric_MinMaxIndexFiles{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "minmax_index_cache_{{instance}}",
               "refId": "A"
             },
             {
               "exemplar": true,
-              "expr": "max(tiflash_system_profile_event_MarkCacheHits{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "expr": "tiflash_system_asynchronous_metric_RNDeltaIndexCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
               "hide": false,
               "interval": "",
-              "legendFormat": "mark cache hits",
+              "legendFormat": "rn_delta_index_cache_{{instance}}",
               "refId": "B"
             }
           ],
@@ -8581,57 +8385,12 @@
           "timeFrom": null,
           "timeRegions": [],
           "timeShift": null,
-          "title": "Effectiveness of Mark Cache",
+          "title": "Mark Cache and Minmax Index Cache Memory Usage",
           "tooltip": {
             "shared": true,
             "sort": 0,
             "value_type": "individual"
           },
-          "transformations": [
-            {
-              "id": "calculateField",
-              "options": {
-                "alias": "mark cache count total",
-                "binary": {
-                  "left": "mark cache misses",
-                  "operator": "+",
-                  "reducer": "sum",
-                  "right": "mark cache hits"
-                },
-                "mode": "binary",
-                "reduce": {
-                  "reducer": "sum"
-                }
-              }
-            },
-            {
-              "id": "calculateField",
-              "options": {
-                "alias": "mark cache effectiveness",
-                "binary": {
-                  "left": "mark cache hits",
-                  "operator": "/",
-                  "reducer": "sum",
-                  "right": "mark cache count total"
-                },
-                "mode": "binary",
-                "reduce": {
-                  "reducer": "sum"
-                }
-              }
-            },
-            {
-              "id": "filterFieldsByName",
-              "options": {
-                "include": {
-                  "names": [
-                    "Time",
-                    "mark cache effectiveness"
-                  ]
-                }
-              }
-            }
-          ],
           "type": "graph",
           "xaxis": {
             "buckets": null,
@@ -8642,15 +8401,15 @@
           },
           "yaxes": [
             {
-              "format": "percentunit",
+              "format": "bytes",
               "label": null,
               "logBase": 1,
               "max": null,
-              "min": null,
+              "min": "0",
               "show": true
             },
             {
-              "format": "percent",
+              "format": "short",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -8799,7 +8558,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 165
+            "y": 94
           },
           "hiddenSeries": false,
           "id": 292,
@@ -8822,7 +8581,7 @@
             "alertThreshold": true
           },
           "percentage": false,
-          "pluginVersion": "7.5.17",
+          "pluginVersion": "7.5.11",
           "pointradius": 5,
           "points": false,
           "renderer": "flot",
@@ -8888,135 +8647,7 @@
           },
           "yaxes": [
             {
-              "$$hashKey": "object:222",
               "format": "µs",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": "0",
-              "show": true
-            },
-            {
-              "$$hashKey": "object:223",
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": false
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "The memory usage of mark cache and minmax index cache",
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 0,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 94
-          },
-          "hiddenSeries": false,
-          "id": 238,
-          "legend": {
-            "alignAsTable": true,
-            "avg": false,
-            "current": true,
-            "max": true,
-            "min": false,
-            "rightSide": true,
-            "show": true,
-            "sideWidth": 250,
-            "sort": "max",
-            "sortDesc": true,
-            "total": false,
-            "values": true
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 5,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [
-            {
-              "alias": "/limit/",
-              "color": "#F2495C",
-              "hideTooltip": true,
-              "legend": false,
-              "linewidth": 2
-            }
-          ],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "tiflash_system_asynchronous_metric_MarkCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "mark_cache_{{instance}}",
-              "refId": "L"
-            },
-            {
-              "exemplar": true,
-              "expr": "tiflash_system_asynchronous_metric_MinMaxIndexFiles{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "minmax_index_cache_{{instance}}",
-              "refId": "A"
-            },
-            {
-              "exemplar": true,
-              "expr": "tiflash_system_asynchronous_metric_RNDeltaIndexCacheBytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}",
-              "hide": false,
-              "interval": "",
-              "legendFormat": "rn_delta_index_cache_{{instance}}",
-              "refId": "B"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "Mark Cache and Minmax Index Cache Memory Usage",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "bytes",
               "label": null,
               "logBase": 1,
               "max": null,
@@ -9051,6 +8682,488 @@
         "x": 0,
         "y": 6
       },
+      "id": 294,
+      "panels": [
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The storage I/O limiter metrics.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 7
+          },
+          "hiddenSeries": false,
+          "id": 84,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sort": "current",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "sum(rate(tiflash_storage_io_limiter{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "instant": false,
+              "intervalFactor": 2,
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "I/O Limiter Throughput",
+          "tooltip": {
+            "shared": true,
+            "sort": 2,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "binBps",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "Current limit bytes per second of Storage I/O limiter",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 7
+          },
+          "hiddenSeries": false,
+          "id": 296,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "sort": "max",
+            "sortDesc": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": true,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_storage_io_limiter_curr{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (type)",
+              "format": "time_series",
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "I/O Limiter Threshold",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "The storage I/O limiter metrics.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 15
+          },
+          "hiddenSeries": false,
+          "id": 266,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": true,
+            "max": true,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": true
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null as zero",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "/-/",
+              "yaxis": 2
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_storage_io_limiter_pending_count{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (type)",
+              "format": "time_series",
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{type}}",
+              "refId": "A"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "I/O Limiter Pending Rate and Duration",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "ops",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "I/O Limiter current pending count.",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 15
+          },
+          "hiddenSeries": false,
+          "id": 86,
+          "legend": {
+            "alignAsTable": true,
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "rightSide": true,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [
+            {
+              "alias": "/pending/",
+              "yaxis": 2
+            }
+          ],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "expr": "avg(tiflash_system_current_metric_RateLimiterPendingWriteRequest{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "hide": true,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "other-current-{{instance}}",
+              "refId": "A"
+            },
+            {
+              "exemplar": true,
+              "expr": "avg(tiflash_system_current_metric_IOLimiterPendingBgWriteReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "bgwrite-current-{{instance}}",
+              "refId": "B"
+            },
+            {
+              "exemplar": true,
+              "expr": "avg(tiflash_system_current_metric_IOLimiterPendingFgWriteReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "fgwrite-current-{{instance}}",
+              "refId": "C"
+            },
+            {
+              "exemplar": true,
+              "expr": "avg(tiflash_system_current_metric_IOLimiterPendingBgReadReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "bgread-current-{{instance}}",
+              "refId": "D"
+            },
+            {
+              "exemplar": true,
+              "expr": "avg(tiflash_system_current_metric_IOLimiterPendingFgReadReq{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "fgread-current-{{instance}}",
+              "refId": "E"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(1.00, sum(round(1000000000*rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m]))) by (le, type) / 1000000000)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{type}}-pending-max",
+              "refId": "F"
+            },
+            {
+              "exemplar": true,
+              "expr": "histogram_quantile(0.99, sum(rate(tiflash_storage_io_limiter_pending_seconds_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}[1m])) by (le, type))",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "{{type}}-pending-P99",
+              "refId": "G"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "I/O Limiter Current Pending Count",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "decimals": 0,
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": "0",
+              "show": true
+            },
+            {
+              "format": "s",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
+        }
+      ],
+      "title": "Rate Limiter",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "datasource": null,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 7
+      },
       "id": 64,
       "panels": [
         {
@@ -9070,7 +9183,7 @@
             "h": 8,
             "w": 24,
             "x": 0,
-            "y": 7
+            "y": 8
           },
           "hiddenSeries": false,
           "id": 62,
@@ -9189,7 +9302,7 @@
             "h": 8,
             "w": 12,
             "x": 0,
-            "y": 15
+            "y": 16
           },
           "height": "",
           "hiddenSeries": false,
@@ -9308,7 +9421,7 @@
             "h": 8,
             "w": 12,
             "x": 12,
-            "y": 15
+            "y": 16
           },
           "height": "",
           "hiddenSeries": false,
@@ -9425,7 +9538,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 23
+            "y": 24
           },
           "height": "",
           "hiddenSeries": false,
@@ -9547,7 +9660,7 @@
             "h": 9,
             "w": 24,
             "x": 0,
-            "y": 32
+            "y": 33
           },
           "hiddenSeries": false,
           "id": 90,
@@ -9654,7 +9767,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 7
+        "y": 8
       },
       "id": 119,
       "panels": [
@@ -10917,7 +11030,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 9
       },
       "id": 34,
       "panels": [
@@ -10937,7 +11050,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 9
+            "y": 10
           },
           "hiddenSeries": false,
           "id": 167,
@@ -11037,7 +11150,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 9
+            "y": 10
           },
           "hiddenSeries": false,
           "id": 35,
@@ -11135,7 +11248,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 16
+            "y": 17
           },
           "hiddenSeries": false,
           "id": 37,
@@ -11269,7 +11382,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 16
+            "y": 17
           },
           "hiddenSeries": false,
           "id": 36,
@@ -11391,7 +11504,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 23
+            "y": 24
           },
           "hiddenSeries": false,
           "id": 82,
@@ -11546,7 +11659,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 30
+            "y": 31
           },
           "hiddenSeries": false,
           "id": 242,
@@ -11657,7 +11770,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 37
+            "y": 38
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -11727,7 +11840,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 37
+            "y": 38
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -11797,7 +11910,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 44
+            "y": 45
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -11869,7 +11982,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 44
+            "y": 45
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -11931,7 +12044,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 51
+            "y": 52
           },
           "hiddenSeries": false,
           "id": 235,
@@ -12031,7 +12144,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 51
+            "y": 52
           },
           "hiddenSeries": false,
           "id": 241,
@@ -12139,7 +12252,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 58
+            "y": 59
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12220,7 +12333,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 58
+            "y": 59
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12293,7 +12406,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 65
+            "y": 66
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12369,7 +12482,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 65
+            "y": 66
           },
           "hiddenSeries": false,
           "id": 249,
@@ -12467,7 +12580,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 72
+            "y": 73
           },
           "hiddenSeries": false,
           "id": 240,
@@ -12571,7 +12684,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 72
+            "y": 73
           },
           "hiddenSeries": false,
           "id": 239,
@@ -12708,7 +12821,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 79
+            "y": 80
           },
           "hiddenSeries": false,
           "id": 75,
@@ -12824,7 +12937,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 86
+            "y": 87
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12894,7 +13007,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 86
+            "y": 87
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -12964,7 +13077,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 93
+            "y": 94
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13030,7 +13143,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 100
+            "y": 101
           },
           "height": "",
           "hiddenSeries": false,
@@ -13144,7 +13257,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 107
+            "y": 108
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13213,7 +13326,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 107
+            "y": 108
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13283,7 +13396,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 114
+            "y": 115
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -13349,7 +13462,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 114
+            "y": 115
           },
           "hiddenSeries": false,
           "id": 91,
@@ -13473,7 +13586,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 9
+        "y": 10
       },
       "id": 95,
       "panels": [
@@ -13703,7 +13816,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 10
+        "y": 11
       },
       "id": 171,
       "panels": [
@@ -15337,7 +15450,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 11
+        "y": 12
       },
       "id": 172,
       "panels": [
@@ -16243,7 +16356,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 12
+        "y": 13
       },
       "id": 202,
       "panels": [
@@ -17283,7 +17396,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 13
+        "y": 14
       },
       "id": 248,
       "panels": [

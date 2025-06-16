@@ -24,6 +24,10 @@ set(CMAKE_MACOSX_RPATH 1)
 
 option(TIFLASH_ENABLE_LLVM_DEVELOPMENT "enable facilities for development with LLVM" OFF)
 
+if(NOT CMAKE_PREFIX_PATH AND DEFINED ENV{CMAKE_PREFIX_PATH})
+    message(STATUS "Reading CMAKE_PREFIX_PATH from env... $ENV{CMAKE_PREFIX_PATH}")
+    set(CMAKE_PREFIX_PATH "$ENV{CMAKE_PREFIX_PATH}")
+endif()
 if(CMAKE_PREFIX_PATH)
     # append paths for cmake to check libs
     set(ENV{LD_LIBRARY_PATH}
