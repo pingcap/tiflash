@@ -536,6 +536,7 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
     {
         bg_read_limiter->updateMaxBytesPerSec(bg_bytes);
     }
+    GET_METRIC(tiflash_storage_io_limiter_curr, type_bg_read_bytes).Set(bg_bytes);
 
     if (fg_bytes == 0)
     {
@@ -549,6 +550,7 @@ void IORateLimiter::updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes)
     {
         fg_read_limiter->updateMaxBytesPerSec(fg_bytes);
     }
+    GET_METRIC(tiflash_storage_io_limiter_curr, type_fg_read_bytes).Set(fg_bytes);
 }
 
 void IORateLimiter::updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes)
@@ -566,6 +568,7 @@ void IORateLimiter::updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes)
     {
         bg_write_limiter->updateMaxBytesPerSec(bg_bytes);
     }
+    GET_METRIC(tiflash_storage_io_limiter_curr, type_bg_write_bytes).Set(bg_bytes);
 
     if (fg_bytes == 0)
     {
@@ -579,6 +582,7 @@ void IORateLimiter::updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes)
     {
         fg_write_limiter->updateMaxBytesPerSec(fg_bytes);
     }
+    GET_METRIC(tiflash_storage_io_limiter_curr, type_fg_write_bytes).Set(fg_bytes);
 }
 
 void IORateLimiter::setBackgroundThreadIds(std::vector<pid_t> thread_ids)
