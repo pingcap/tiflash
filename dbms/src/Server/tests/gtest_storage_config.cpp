@@ -692,10 +692,10 @@ background_read_weight=2
     };
 
     auto verify_case2 = [](const StorageIORateLimitConfig & io_config) {
-        ASSERT_EQ(io_config.max_bytes_per_sec, 0);
+        ASSERT_EQ(io_config.max_bytes_per_sec, 0); // ignored
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 1024000);
-        ASSERT_FALSE(io_config.use_max_bytes_per_sec);
+        ASSERT_FALSE(io_config.use_max_bytes_per_sec); // use max_read_bytes_per_sec and max_write_bytes_per_sec
         ASSERT_EQ(io_config.fg_write_weight, 1);
         ASSERT_EQ(io_config.bg_write_weight, 2);
         ASSERT_EQ(io_config.fg_read_weight, 5);
@@ -703,17 +703,19 @@ background_read_weight=2
         ASSERT_EQ(io_config.readWeight(), 7);
         ASSERT_EQ(io_config.writeWeight(), 3);
         ASSERT_EQ(io_config.totalWeight(), 10);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 731428);
+        // fg_write:bg_write = 1:2
         ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 341333);
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 292571);
         ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 682666);
+        // fg_read:bg_read = 5:2
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 731428);
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 292571);
     };
 
     auto verify_case3 = [](const StorageIORateLimitConfig & io_config) {
-        ASSERT_EQ(io_config.max_bytes_per_sec, 1024000);
+        ASSERT_EQ(io_config.max_bytes_per_sec, 1024000); // ignored
         ASSERT_EQ(io_config.max_read_bytes_per_sec, 1024000);
         ASSERT_EQ(io_config.max_write_bytes_per_sec, 1024000);
-        ASSERT_TRUE(io_config.use_max_bytes_per_sec);
+        ASSERT_FALSE(io_config.use_max_bytes_per_sec); // use max_read_bytes_per_sec and max_write_bytes_per_sec
         ASSERT_EQ(io_config.fg_write_weight, 1);
         ASSERT_EQ(io_config.bg_write_weight, 2);
         ASSERT_EQ(io_config.fg_read_weight, 5);
@@ -721,19 +723,22 @@ background_read_weight=2
         ASSERT_EQ(io_config.readWeight(), 7);
         ASSERT_EQ(io_config.writeWeight(), 3);
         ASSERT_EQ(io_config.totalWeight(), 10);
-        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 102400);
-        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 102400 * 2);
-        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 102400 * 5);
-        ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 102400 * 2);
+        // fg_write:bg_write = 1:2
+        ASSERT_EQ(io_config.getFgWriteMaxBytesPerSec(), 341333) << io_config.toString();
+        ASSERT_EQ(io_config.getBgWriteMaxBytesPerSec(), 682666) << io_config.toString();
+        // fg_read:bg_read = 5:2
+        ASSERT_EQ(io_config.getFgReadMaxBytesPerSec(), 731428) << io_config.toString();
+        ASSERT_EQ(io_config.getBgReadMaxBytesPerSec(), 292571) << io_config.toString();
     };
 
-    std::vector<std::function<void(const StorageIORateLimitConfig &)>> case_verifiers;
-    case_verifiers.push_back(verify_case0);
-    case_verifiers.push_back(verify_case1);
-    case_verifiers.push_back(verify_case2);
-    case_verifiers.push_back(verify_case3);
+    std::vector<std::function<void(const StorageIORateLimitConfig &)>> case_verifiers{
+        verify_case0,
+        verify_case1,
+        verify_case2,
+        verify_case3,
+    };
 
-    for (size_t i = 0; i < 2u /*tests.size()*/; ++i)
+    for (size_t i = 0; i < tests.size(); ++i)
     {
         const auto & test_case = tests[i];
         auto config = loadConfigFromString(test_case);
