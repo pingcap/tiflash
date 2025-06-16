@@ -34,10 +34,11 @@ struct StorageIORateLimitConfig
 public:
     // For disk that read bandwidth and write bandwith are calculated together, such as AWS's EBS.
     UInt64 max_bytes_per_sec;
-    // For disk that read bandwidth and write bandwith are calculated separatly, such as GCP's persistent disks.
+    // For disk that read bandwidth and write bandwith are calculated separately, such as GCP's persistent disks.
     UInt64 max_read_bytes_per_sec;
     UInt64 max_write_bytes_per_sec;
 
+    // only true when both max_read_bytes_per_sec and max_write_bytes_per_sec are 0
     bool use_max_bytes_per_sec;
 
     // Currently, IORateLimiter supports 4 I/O type: foreground write, foreground read, background write and background read.
@@ -53,6 +54,7 @@ public:
     Int32 medium_pct;
 
     Int32 tune_base;
+    // Keep at least `min_bytes_per_sec` Bytes/s for each I/O type.
     Int64 min_bytes_per_sec;
 
     Int32 auto_tune_sec;
