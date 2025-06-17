@@ -54,44 +54,44 @@ CTEOpStatus CTE::tryGetBlockAt(size_t idx, Block & block)
     return CTEOpStatus::Ok;
 }
 
-Status CTE::checkAvailableBlock(size_t idx)
+CTEOpStatus CTE::checkAvailableBlock(size_t idx)
 {
     {
         std::shared_lock<std::shared_mutex> status_lock(this->aux_rw_lock);
         if (this->cte_status != CTE::Normal)
-            return Status::BlockUnavailable;
+            return CTEOpStatus::BlockUnavailable;
     }
 
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
 
     if unlikely (this->is_cancelled)
-        return Status::Cancelled;
+        return CTEOpStatus::Cancelled;
 
     if (this->is_spill_triggered)
     {
         auto spilled_block_num = static_cast<size_t>(this->cte_spill.blockNum());
         if (idx < spilled_block_num)
-            return Status::Ok;
+            return CTEOpStatus::Ok;
 
         idx -= spilled_block_num;
     }
 
     if (this->blocks.size() > idx)
-        return Status::Ok;
-    return Status::BlockUnavailable;
+        return CTEOpStatus::Ok;
+    return CTEOpStatus::BlockUnavailable;
 }
 
-Status CTE::pushBlock(const Block & block)
+CTEOpStatus CTE::pushBlock(const Block & block)
 {
     std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
-    Status ret = Status::Ok;
+    CTEOpStatus ret = CTEOpStatus::Ok;
     {
         std::unique_lock<std::shared_mutex> status_lock(this->aux_rw_lock);
         if (this->cte_status != CTE::Normal)
         {
             // Block memory usage will be calculated after the finish of spill
             this->tmp_blocks.push_back(block);
-            return Status::IOOut;
+            return CTEOpStatus::IOOut;
         }
 
         // This function is called in cpu pool, we don't want to wait for this lock too long.
@@ -99,17 +99,17 @@ Status CTE::pushBlock(const Block & block)
         lock.lock();
 
         if unlikely (this->is_cancelled)
-            return Status::Cancelled;
+            return CTEOpStatus::Cancelled;
 
         if unlikely (block.rows() == 0)
             // All rows in block may have been filtered and it's needles to store this block
-            return Status::Ok;
+            return CTEOpStatus::Ok;
 
         this->memory_usage += block.bytes();
         if (this->memory_usage >= this->memory_threshold)
         {
             this->cte_status = CTE::NeedSpill;
-            ret = Status::IOOut;
+            ret = CTEOpStatus::IOOut;
         }
     }
 
@@ -120,11 +120,11 @@ Status CTE::pushBlock(const Block & block)
     return ret;
 }
 
-Status CTE::getBlockFromDisk(size_t idx, Block & block)
+CTEOpStatus CTE::getBlockFromDisk(size_t idx, Block & block)
 {
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
     if unlikely (this->is_cancelled)
-        return Status::Cancelled;
+        return CTEOpStatus::Cancelled;
 
     if unlikely (!this->is_spill_triggered)
         // We can call this function only when spill is triggered
@@ -134,7 +134,7 @@ Status CTE::getBlockFromDisk(size_t idx, Block & block)
         throw Exception("Requested block is not in disk");
 
     block = this->cte_spill.readBlockAt(idx);
-    return Status::Ok;
+    return CTEOpStatus::Ok;
 }
 
 bool CTE::spillBlocks()

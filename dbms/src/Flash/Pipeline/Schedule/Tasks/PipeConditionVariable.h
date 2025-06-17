@@ -57,11 +57,8 @@ public:
         case NotifyType::WAIT_ON_SHARED_QUEUE_WRITE:
             GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_shared_queue_write).Increment(change);
             break;
-        case NotifyType::WAIT_ON_CTE_SINK:
-            GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_cte_sink);
-            break;
-        case NotifyType::WAIT_ON_CTE_SOURCE:
-            GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_cte_source);
+        case NotifyType::WAIT_ON_CTE:
+            GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_cte);
             break;
         }
     }
