@@ -573,12 +573,15 @@ void MPPTask::runImpl()
         auto time_cost_in_preprocess_ms = time_cost_in_preprocess_ns / MILLISECOND_TO_NANO;
         LOG_DEBUG(log, "task preprocess done");
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
-        LOG_DEBUG(
-            log,
-            "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}",
-            schedule_entry.getNeededThreads(),
-            dag_context->tunnel_set->getExternalThreadCnt(),
-            new_thread_count_of_mpp_receiver);
+
+        // tunnel_set may be nullptr when we get cte sink
+        if (dag_context->tunnel_set != nullptr)
+            LOG_DEBUG(
+                log,
+                "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}",
+                schedule_entry.getNeededThreads(),
+                dag_context->tunnel_set->getExternalThreadCnt(),
+                new_thread_count_of_mpp_receiver);
 
         scheduleOrWait();
 

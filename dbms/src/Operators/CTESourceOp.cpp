@@ -14,7 +14,7 @@
 
 #include <Common/Exception.h>
 #include <Operators/CTE.h>
-#include <Operators/CTESource.h>
+#include <Operators/CTESourceOp.h>
 #include <Operators/Operator.h>
 
 namespace DB

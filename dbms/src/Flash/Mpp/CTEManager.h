@@ -62,7 +62,7 @@ public:
         Int32 expected_sink_num,
         Int32 expected_source_num)
     {
-        return this->getCTEimpl(query_id_and_cte_id, partition_id, expected_sink_num, expected_source_num);
+        return this->getCTEImpl(query_id_and_cte_id, partition_id, expected_sink_num, expected_source_num);
     }
     std::shared_ptr<CTE> getCTEBySource(
         const String & query_id_and_cte_id,
@@ -70,20 +70,20 @@ public:
         Int32 expected_sink_num,
         Int32 expected_source_num)
     {
-        return this->getCTEimpl(query_id_and_cte_id, partition_id, expected_sink_num, expected_source_num);
+        return this->getCTEImpl(query_id_and_cte_id, partition_id, expected_sink_num, expected_source_num);
     }
     void releaseCTEBySource(const String & query_id_and_cte_id, const String & partition_id);
     void releaseCTEBySink(const tipb::SelectResponse & resp, const String & query_id_and_cte_id);
     void releaseCTEs(const String & query_id_and_cte_id);
 
 private:
-    std::shared_ptr<CTE> getCTEimpl(
+    std::shared_ptr<CTE> getCTEImpl(
         const String & query_id_and_cte_id,
         const String & partition_id,
         Int32 expected_sink_num,
         Int32 expected_source_num);
 
     std::mutex mu;
-    std::map<String, std::map<String, CTEWithCounter>> ctes;
+    std::unordered_map<String, std::unordered_map<String, CTEWithCounter>> ctes;
 };
 } // namespace DB

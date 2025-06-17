@@ -169,7 +169,7 @@ struct MPPTaskId
 
     bool isUnknown() const { return task_id == unknown_task_id; }
 
-    inline String getQueryIDForCTE() const { return isUnknown() ? "" : gather_id.toStringForQueryID(); }
+    inline String getQueryID() const { return isUnknown() ? "" : gather_id.toStringForQueryID(); }
     String toString() const;
     static const MPPTaskId unknown_mpp_task_id;
     static const MPPQueryId Max_Query_Id;

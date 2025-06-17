@@ -28,14 +28,18 @@ void CTEManager::releaseCTEBySource(const String & query_id_and_cte_id, const St
     if unlikely (iter == this->ctes.end())
         // Maybe the task is cancelled and all ctes have been released
         return;
+
     auto iter_for_cte = iter->second.find(partition_id);
-    if unlikely (iter_for_cte == iter->second.end())
-        throw Exception(fmt::format("Can't find cte: {}, partition: {}", query_id_and_cte_id, partition_id));
+    RUNTIME_CHECK_MSG(
+        iter_for_cte != iter->second.end(),
+        "Can't find cte: {}, partition: {}",
+        query_id_and_cte_id,
+        partition_id);
 
     if (iter_for_cte->second.getTotalExitNum() == iter_for_cte->second.getExpectedTotalNum())
         iter->second.erase(iter_for_cte);
 
-    if (iter->second.size() == 0)
+    if (iter->second.empty())
         this->ctes.erase(iter);
 }
 
@@ -84,7 +88,7 @@ void CTEManager::releaseCTEs(const String & query_id_and_cte_id)
         this->ctes.erase(iter);
 }
 
-std::shared_ptr<CTE> CTEManager::getCTEimpl(
+std::shared_ptr<CTE> CTEManager::getCTEImpl(
     const String & query_id_and_cte_id,
     const String & partition_id,
     Int32 expected_sink_num,
@@ -93,18 +97,13 @@ std::shared_ptr<CTE> CTEManager::getCTEimpl(
     std::lock_guard<std::mutex> lock(this->mu);
     auto iter = this->ctes.find(query_id_and_cte_id);
     if (iter == this->ctes.end())
-        this->ctes[query_id_and_cte_id] = std::map<String, CTEWithCounter>{};
+        this->ctes[query_id_and_cte_id] = std::unordered_map<String, CTEWithCounter>{};
 
-    auto iter_for_cte = this->ctes[query_id_and_cte_id].find(partition_id);
-    if (iter_for_cte == this->ctes[query_id_and_cte_id].end())
-    {
-        // It's the first time we request for the specific cte
-        // Create it because no one created it before.
-        auto cte = std::make_shared<CTE>();
-        CTEWithCounter cte_with_counter(cte, expected_sink_num, expected_source_num);
-        this->ctes[query_id_and_cte_id].insert(std::make_pair(partition_id, cte_with_counter));
-        return cte;
-    }
+    auto & cte_map = this->ctes[query_id_and_cte_id];
+    auto [iter_for_cte, _] = cte_map.emplace(
+        std::piecewise_construct,
+        std::forward_as_tuple(partition_id),
+        std::forward_as_tuple(std::make_shared<CTE>(), expected_sink_num, expected_source_num));
 
     return iter_for_cte->second.getCTE();
 }

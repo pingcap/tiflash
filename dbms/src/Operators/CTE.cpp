@@ -20,6 +20,8 @@
 #include <mutex>
 #include <shared_mutex>
 
+#include "Flash/Pipeline/Schedule/Tasks/Task.h"
+
 namespace DB
 {
 CTEOpStatus CTE::tryGetBlockAt(size_t idx, Block & block)
@@ -46,12 +48,7 @@ CTEOpStatus CTE::tryGetBlockAt(size_t idx, Block & block)
 
     auto block_num = this->blocks.size();
     if (block_num <= idx)
-    {
-        if (this->is_eof)
-            return CTEOpStatus::Eof;
-        else
-            return CTEOpStatus::BlockUnavailable;
-    }
+        return this->is_eof ? CTEOpStatus::Eof : CTEOpStatus::BlockUnavailable;
 
     block = this->blocks[idx];
     return CTEOpStatus::Ok;
@@ -181,6 +178,7 @@ void CTE::registerTask(TaskPtr && task)
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
         if (!this->hasDataNoLock())
         {
+            task->setNotifyType(NotifyType::WAIT_ON_CTE);
             pipe_cv.registerTask(std::move(task));
             return;
         }

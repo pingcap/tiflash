@@ -19,7 +19,7 @@
 #include <Flash/Planner/Plans/PhysicalCTESource.h>
 #include <Interpreters/Context.h>
 #include <Operators/CTEReader.h>
-#include <Operators/CTESource.h>
+#include <Operators/CTESourceOp.h>
 
 #include <memory>
 #include <string>

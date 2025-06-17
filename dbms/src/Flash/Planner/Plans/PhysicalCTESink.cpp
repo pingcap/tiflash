@@ -61,9 +61,7 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     {
         cte = context.getCTEManager()
                   ->getCTEBySink(query_id_and_cte_id, "", this->expected_sink_num, this->expected_source_num);
-        exec_context.sinkNeedRelease();
     }
-
 
     group_builder.transform([&](auto & builder) {
         if (fine_grained_shuffle.enabled())

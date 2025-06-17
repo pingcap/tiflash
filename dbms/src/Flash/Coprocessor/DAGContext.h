@@ -365,11 +365,10 @@ public:
     void setQueryIDAndCTEID(const String & query_id_and_cte_id)
     {
         // MPP Task has only one CTESink, it's impossible to set query_id_and_cte_id twice
-        RUNTIME_CHECK(this->query_id_and_cte_id.empty());
+        RUNTIME_CHECK(this->query_id_and_cte_id.empty(), this->query_id_and_cte_id);
         this->query_id_and_cte_id = query_id_and_cte_id;
     }
 
-    void sinkNeedRelease() { this->sink_need_release = true; }
     std::vector<std::shared_ptr<CTE>> getCTEs() const { return this->ctes; }
     void addCTE(std::shared_ptr<CTE> & cte) { this->ctes.push_back(cte); }
     bool hasCTESource() const { return this->has_cte_source; }
@@ -494,7 +493,6 @@ private:
 
     String query_id_and_cte_id;
     bool has_cte_source = false;
-    bool sink_need_release = false;
     std::vector<std::shared_ptr<CTE>> ctes;
 };
 
