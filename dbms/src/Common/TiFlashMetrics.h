@@ -353,6 +353,13 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}),                                                               \
       F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),                                                                   \
       F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))                                                               \
+    M(tiflash_storage_io_limiter_curr,                                                                                              \
+      "Current limit bytes per second of Storage I/O limiter",                                                                      \
+      Gauge,                                                                                                                        \
+      F(type_fg_read_bytes, {"type", "fg_read_bytes"}),                                                                             \
+      F(type_bg_read_bytes, {"type", "bg_read_bytes"}),                                                                             \
+      F(type_fg_write_bytes, {"type", "fg_write_bytes"}),                                                                           \
+      F(type_bg_write_bytes, {"type", "bg_write_bytes"}))                                                                           \
     M(tiflash_storage_rough_set_filter_rate,                                                                                        \
       "Bucketed histogram of rough set filter rate",                                                                                \
       Histogram,                                                                                                                    \
