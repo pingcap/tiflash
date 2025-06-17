@@ -18,6 +18,7 @@
 #include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <tipb/select.pb.h>
 
 #include <mutex>
@@ -28,20 +29,23 @@ namespace DB
 enum class CTEOpStatus
 {
     Ok,
-    Waiting,
+    BlockNotAvailable,
     Eof,
     Cancelled
 };
 
-class CTE : public NotifyFuture
+class CTE
 {
 public:
     CTEOpStatus tryGetBlockAt(size_t idx, Block & block);
+
     bool pushBlock(const Block & block);
     void notifyEOF() { this->notifyImpl<true>(true); }
     void notifyCancel() { this->notifyImpl<true>(false); }
 
-    void registerTask(TaskPtr && task) override;
+    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t expected_block_fetch_idx);
+    void registerTask(TaskPtr && task, NotifyType type);
+    void notifyTaskDirectly(TaskPtr && task) { this->pipe_cv.notifyTaskDirectly(std::move(task)); }
 
     void addResp(const tipb::SelectResponse & resp)
     {
@@ -59,6 +63,18 @@ public:
     }
 
 private:
+    CTEOpStatus checkBlockAvailableNoLock(size_t idx)
+    {
+        if unlikely (this->is_cancelled)
+            return CTEOpStatus::Cancelled;
+
+        auto block_num = this->blocks.size();
+        if (block_num <= idx)
+            return this->is_eof ? CTEOpStatus::Eof : CTEOpStatus::BlockNotAvailable;
+
+        return CTEOpStatus::Ok;
+    }
+
     template <bool has_lock>
     void notifyImpl(bool is_eof)
     {
@@ -75,15 +91,10 @@ private:
         this->pipe_cv.notifyAll();
     }
 
-    // Return true if CTE has data
-    inline bool hasDataNoLock() const { return !this->blocks.empty(); }
-
     std::shared_mutex rw_lock;
     Blocks blocks;
     size_t memory_usage = 0;
 
-    // Tasks in WAITING_FOR_NOTIFY are saved in this deque
-    std::deque<TaskPtr> waiting_tasks;
     PipeConditionVariable pipe_cv;
 
     bool is_eof = false;

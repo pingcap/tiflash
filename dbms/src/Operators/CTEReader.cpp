@@ -29,30 +29,13 @@ std::pair<CTEOpStatus, Block> CTEReader::fetchNextBlock()
     case CTEOpStatus::Eof:
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
-    case CTEOpStatus::Waiting:
+    case CTEOpStatus::BlockNotAvailable:
+        this->notifier.setFetchBlockIdx(this->block_fetch_idx);
     case CTEOpStatus::Cancelled:
         return {ret, Block()};
     case CTEOpStatus::Ok:
         this->block_fetch_idx++;
         return {ret, block};
-    }
-    throw Exception("Should not reach here");
-}
-
-CTEOpStatus CTEReader::checkAvailableBlock()
-{
-    Block block;
-    std::lock_guard<std::mutex> lock(this->mu);
-    auto ret = this->cte->tryGetBlockAt(this->block_fetch_idx, block);
-    switch (ret)
-    {
-    case CTEOpStatus::Eof:
-    case CTEOpStatus::Waiting:
-    case CTEOpStatus::Cancelled:
-        return ret;
-    case CTEOpStatus::Ok:
-        // Do not add block_fetch_idx here as we only check if there are available blocks
-        return CTEOpStatus::Ok;
     }
     throw Exception("Should not reach here");
 }

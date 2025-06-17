@@ -12,28 +12,24 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Operators/CTE.h>
 
 #include <cassert>
 #include <mutex>
 #include <shared_mutex>
 
-#include "Flash/Pipeline/Schedule/Tasks/Task.h"
-
 namespace DB
 {
 CTEOpStatus CTE::tryGetBlockAt(size_t idx, Block & block)
 {
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
-    if unlikely (this->is_cancelled)
-        return CTEOpStatus::Cancelled;
-
-    auto block_num = this->blocks.size();
-    if (block_num <= idx)
-        return this->is_eof ? CTEOpStatus::Eof : CTEOpStatus::Waiting;
+    auto status = this->checkBlockAvailableNoLock(idx);
+    if (status != CTEOpStatus::Ok)
+        return status;
 
     block = this->blocks[idx];
-    return CTEOpStatus::Ok;
+    return status;
 }
 
 bool CTE::pushBlock(const Block & block)
@@ -46,23 +42,27 @@ bool CTE::pushBlock(const Block & block)
         return true;
 
     this->memory_usage += block.bytes();
-    if unlikely (this->blocks.empty())
-        this->pipe_cv.notifyAll();
     this->blocks.push_back(block);
+    this->pipe_cv.notifyOne();
     return true;
 }
 
-void CTE::registerTask(TaskPtr && task)
+void CTE::registerTask(TaskPtr && task, NotifyType type)
 {
+    task->setNotifyType(type);
+    pipe_cv.registerTask(std::move(task));
+}
+
+void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t expected_block_fetch_idx)
+{
+    std::shared_lock<std::shared_mutex> shared_lock(this->rw_lock);
+    CTEOpStatus status = this->checkBlockAvailableNoLock(expected_block_fetch_idx);
+    if (status == CTEOpStatus::Ok)
     {
-        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
-        if (!this->hasDataNoLock())
-        {
-            task->setNotifyType(NotifyType::WAIT_ON_CTE);
-            pipe_cv.registerTask(std::move(task));
-            return;
-        }
+        this->notifyTaskDirectly(std::move(task));
+        return;
     }
-    this->pipe_cv.notifyTaskDirectly(std::move(task));
+
+    this->registerTask(std::move(task), NotifyType::WAIT_ON_CTE);
 }
 } // namespace DB

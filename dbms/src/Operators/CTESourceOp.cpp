@@ -36,33 +36,9 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         block = res.second;
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
-    case CTEOpStatus::Waiting:
-        if likely (this->cte_reader->isBlockGenerated())
-        {
-            return OperatorStatus::WAITING;
-        }
-        else
-        {
-            // CTE has not begun to receive data yet
-            // So we need to wait the notify from CTE
-            this->cte_reader->setNotifyFuture();
-            return OperatorStatus::WAIT_FOR_NOTIFY;
-        }
-    case CTEOpStatus::Cancelled:
-        return OperatorStatus::CANCELLED;
-    }
-}
-
-OperatorStatus CTESourceOp::awaitImpl()
-{
-    auto res = this->cte_reader->checkAvailableBlock();
-    switch (res)
-    {
-    case CTEOpStatus::Eof:
-    case CTEOpStatus::Ok:
-        return OperatorStatus::HAS_OUTPUT;
-    case CTEOpStatus::Waiting:
-        return OperatorStatus::WAITING;
+    case CTEOpStatus::BlockNotAvailable:
+        this->cte_reader->setNotifyFuture();
+        return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::Cancelled:
         return OperatorStatus::CANCELLED;
     }

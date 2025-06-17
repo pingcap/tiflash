@@ -50,8 +50,6 @@ protected:
 
     OperatorStatus readImpl(Block & block) override;
 
-    OperatorStatus awaitImpl() override;
-
 private:
     std::shared_ptr<CTEReader> cte_reader;
     uint64_t total_rows{};

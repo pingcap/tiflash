@@ -16,14 +16,42 @@
 
 #include <Flash/Mpp/CTEManager.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Operators/CTE.h>
 #include <tipb/select.pb.h>
 
 #include <memory>
 #include <mutex>
+#include <shared_mutex>
 
 namespace DB
 {
+class CTEReaderNotifyFuture : public NotifyFuture
+{
+public:
+    explicit CTEReaderNotifyFuture(std::shared_ptr<CTE> cte_)
+        : cte(cte_)
+    {}
+
+    void setFetchBlockIdx(size_t idx)
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        expected_block_fetch_idx = idx;
+    }
+
+    void registerTask(TaskPtr && task) override
+    {
+        std::shared_lock<std::shared_mutex> shared_lock(this->rw_lock);
+        this->cte->checkBlockAvailableAndRegisterTask(std::move(task), this->expected_block_fetch_idx);
+    }
+
+private:
+    std::shared_mutex rw_lock;
+    size_t expected_block_fetch_idx = 0;
+
+    std::shared_ptr<CTE> cte;
+};
+
 class CTEReader
 {
 public:
@@ -38,6 +66,7 @@ public:
         , cte_manager(cte_manager_)
         , cte(cte_manager_
                   ->getCTEBySource(query_id_and_cte_id_, partition_id, expected_sink_num_, expected_source_num_))
+        , notifier(cte)
     {}
 
     ~CTEReader()
@@ -58,16 +87,7 @@ public:
         resp.CopyFrom(this->resp);
     }
 
-    bool isBlockGenerated()
-    {
-        std::lock_guard<std::mutex> lock(this->mu);
-
-        // `block_fetch_idx == 0` means that CTE hasn't received block yet, maybe it is waiting
-        // for the finish of join executor and etc.
-        return this->block_fetch_idx != 0;
-    }
-
-    void setNotifyFuture() { ::DB::setNotifyFuture(cte.get()); }
+    void setNotifyFuture() { ::DB::setNotifyFuture(&(this->notifier)); }
 
     std::shared_ptr<CTE> getCTE() const { return this->cte; }
 
@@ -76,6 +96,7 @@ private:
     String partition_id;
     CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
+    CTEReaderNotifyFuture notifier;
 
     std::mutex mu;
     size_t block_fetch_idx = 0;
