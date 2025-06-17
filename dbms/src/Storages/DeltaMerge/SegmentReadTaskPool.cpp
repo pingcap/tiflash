@@ -188,10 +188,40 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
     return t;
 }
 
-const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks()
+const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks() const
 {
     std::lock_guard lock(mutex);
     return tasks_wrapper.getTasks();
+}
+
+std::pair<ConnectionProfileInfo, ConnectionProfileInfo> SegmentReadTaskPool::getRemoteConnectionInfo() const
+{
+    const auto all_tasks = getTasks();
+    const auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
+    const auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
+    ConnectionProfileInfo inter_zone_info(inter_type);
+    ConnectionProfileInfo inner_zone_info(inner_type);
+    for (const auto & ele : all_tasks)
+    {
+        const auto & info_opt = ele.second->extra_remote_info;
+        RUNTIME_CHECK(info_opt.has_value());
+        const auto & connection_info = info_opt->connection_profile_info;
+        if (connection_info.type == inter_type)
+        {
+            inter_zone_info.packets += connection_info.packets;
+            inter_zone_info.bytes += connection_info.bytes;
+        }
+        else if (connection_info.type == inner_type)
+        {
+            inner_zone_info.packets += connection_info.packets;
+            inner_zone_info.bytes += connection_info.bytes;
+        }
+        else
+        {
+            throw Exception("unexpected connection type");
+        }
+    }
+    return {inter_zone_info, inner_zone_info};
 }
 
 // Choose a segment to read.

@@ -22,7 +22,7 @@
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
-
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 
 namespace DB::DM
 {
@@ -152,7 +152,7 @@ public:
     }
 
     SegmentReadTaskPtr nextTask();
-    const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks();
+    const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks() const;
     SegmentReadTaskPtr getTask(const GlobalSegmentID & seg_id);
 
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
@@ -180,6 +180,9 @@ public:
     {
         q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ);
     }
+
+    std::once_flag & getRemoteConnectionInfoFlag() { return get_remote_connection_flag; }
+    std::pair<ConnectionProfileInfo, ConnectionProfileInfo> getRemoteConnectionInfo() const;
 
 public:
     const uint64_t pool_id;
@@ -255,6 +258,7 @@ private:
     static uint64_t nextPoolId() { return pool_id_gen.fetch_add(1, std::memory_order_relaxed); }
     inline static constexpr Int64 check_ru_interval_ms = 100;
 
+    std::once_flag get_remote_connection_flag;
     friend class tests::SegmentReadTasksPoolTest;
 };
 

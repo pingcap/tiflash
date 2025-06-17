@@ -26,12 +26,14 @@ UnorderedSourceOp::UnorderedSourceOp(
     int extra_table_id_index_,
     const String & req_id,
     const RuntimeFilteList & runtime_filter_list_,
-    int max_wait_time_ms_)
+    int max_wait_time_ms_,
+    bool is_disagg_)
     : SourceOp(exec_context_, req_id)
     , task_pool(task_pool_)
     , ref_no(0)
     , waiting_rf_list(runtime_filter_list_)
     , max_wait_time_ms(max_wait_time_ms_)
+    , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, /*is_local=*/!is_disagg_))
 {
     setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
     ref_no = task_pool->increaseUnorderedInputStreamRefCount();
@@ -96,6 +98,15 @@ void UnorderedSourceOp::operatePrefixImpl()
                     std::move(ready_rf_list)));
             }
         }
+    });
+}
+
+void UnorderedSourceOp::operateSuffixImpl()
+{
+    std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
+        auto [inter_info, inner_info] = task_pool->getRemoteConnectionInfo();
+        io_profile_info->connection_profile_infos.push_back(inter_info);
+        io_profile_info->connection_profile_infos.push_back(inner_info);
     });
 }
 } // namespace DB

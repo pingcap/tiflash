@@ -63,12 +63,11 @@ SegmentReadTask::SegmentReadTask(
     const ScanContextPtr & scan_context,
     const RemotePb::RemoteSegment & proto,
     const DisaggTaskId & snapshot_id,
-    StoreID store_id_,
-    const String & store_address,
+    const RemoteStoreInfo & remote_store_info,
     KeyspaceID keyspace_id,
     TableID physical_table_id,
     ColumnID pk_col_id)
-    : store_id(store_id_)
+    : store_id(remote_store_info.store_id)
 {
     CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
     auto tracing_id = fmt::format(
@@ -152,11 +151,13 @@ SegmentReadTask::SegmentReadTask(
     auto persisted_page_count
         = extract_remote_pages(read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles());
 
+    const bool same_zone = (remote_store_info.zone_label == remote_store_info.cn_zone_label),
     extra_remote_info.emplace(ExtraRemoteSegmentInfo{
-        .store_address = store_address,
+        .store_address = remote_store_info.store_address,
         .snapshot_id = snapshot_id,
         .remote_page_ids = std::move(remote_page_ids),
         .remote_page_sizes = std::move(remote_page_sizes),
+        .connection_profile_info = ConnectionProfileInfo(ConnectionProfileInfo::inferConnectionType(/*is_local=*/false, same_zone));
     });
 
     LOG_DEBUG(
@@ -169,7 +170,7 @@ SegmentReadTask::SegmentReadTask(
         persisted_page_count,
         extra_remote_info->remote_page_ids,
         read_snapshot->delta->getSharedDeltaIndex()->toString(),
-        store_address);
+        remote_store_info.store_address);
 }
 
 SegmentReadTask::~SegmentReadTask()
@@ -612,7 +613,6 @@ void SegmentReadTask::doFetchPagesImpl(
     UInt64 wait_write_page_ns = 0;
 
     Stopwatch sw_total;
-    UInt64 packet_count = 0;
     UInt64 write_page_task_count = 0;
     const UInt64 page_count = remaining_pages_to_fetch.size();
 
@@ -643,7 +643,8 @@ void SegmentReadTask::doFetchPagesImpl(
             throw Exception(ErrorCodes::FETCH_PAGES_ERROR, "{} (from {})", packet.error().msg(), *this);
 
         read_page_ns = sw_read_packet.elapsed();
-        packet_count += 1;
+        extra_remote_info->connection_profile_info.bytes += packet.ByteSizeLong();
+        extra_remote_info->connection_profile_info.packets += 1;
         MemTrackerWrapper packet_mem_tracker_wrapper(packet.SpaceUsedLong(), fetch_pages_mem_tracker.get());
 
         // Handle `chunks`.
@@ -743,7 +744,7 @@ void SegmentReadTask::doFetchPagesImpl(
         "total_ms={}, read_stream_ms={}, deserialize_page_ms={}, schedule_write_page_ms={}",
         *this,
         page_count,
-        packet_count,
+        extra_remote_info->connection_profile_info.packets,
         write_page_task_count,
         sw_total.elapsed() / 1000000,
         read_page_ns / 1000000,

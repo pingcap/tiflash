@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/KVStore/Types.h>
 #include <grpcpp/support/sync_stream.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 
 namespace DB::DM
 {
@@ -56,6 +57,18 @@ struct ExtraRemoteSegmentInfo
     DisaggTaskId snapshot_id;
     std::vector<UInt64> remote_page_ids;
     std::vector<size_t> remote_page_sizes;
+    ConnectionProfileInfo connection_profile_info;
+};
+
+struct RemoteStoreInfo
+{
+    // Target wn info:
+    String store_address;
+    StoreID store_id;
+    String zone_label;
+
+    // Self zone label info:
+    String cn_zone_label;
 };
 
 struct SegmentReadTask

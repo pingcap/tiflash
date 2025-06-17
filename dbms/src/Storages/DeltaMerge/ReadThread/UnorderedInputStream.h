@@ -116,6 +116,11 @@ protected:
 
     void readSuffixImpl() override
     {
+        std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
+            auto [inter_info, inner_info] = task_pool->getRemoteConnectionInfo();
+            connection_profile_infos.push_back(inter_info);
+            connection_profile_infos.push_back(inner_info);
+        });
         LOG_DEBUG(
             log,
             "Finish read from storage, pool_id={} ref_no={} rows={}",
@@ -156,6 +161,7 @@ private:
     std::vector<RuntimeFilterPtr> runtime_filter_list;
     int max_wait_time_ms;
 
+    std::vector<ConnectionProfileInfo> connection_profile_infos;
     friend class tests::DeltaMergeStoreRWTest;
 };
 } // namespace DB::DM
