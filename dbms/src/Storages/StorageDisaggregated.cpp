@@ -41,7 +41,8 @@ StorageDisaggregated::StorageDisaggregated(
 {
     const auto my_store_id = context.getTMTContext().getKVStore()->getStoreID();
     pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
-    // TODO: PD may not have CN label info when AutoScaler is enabled.
+    // TODO: PD may not have label info of CN when AutoScaler is enabled.
+    // Need to find a way to fix that later.
     const auto store_labels = context.getTMTContext().getKVCluster()->region_cache->getStore(bo, my_store_id).labels;
     auto iter = store_labels.find(ZONE_LABEL_KEY);
     if (iter != store_labels.end())

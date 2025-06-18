@@ -112,9 +112,9 @@ void UnorderedSourceOp::operatePrefixImpl()
 
 void UnorderedSourceOp::operateSuffixImpl()
 {
-    // If io_profile_info is local, it means this table scan is not in CN, and it only read local data.
-    // So no need to update connection info, which indicate it's a remote table scan,
-    // like CoprocessorReader or read delta data from WN).
+    // If io_profile_info is local, it means this table scan only read local data.
+    // So no need to update connection info, because connection info indicate it's a remote table scan,
+    // like CoprocessorReader or read delta data from WN.
     if (!io_profile_info->is_local)
     {
         std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
