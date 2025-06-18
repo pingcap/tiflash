@@ -68,7 +68,7 @@ struct ConnectionProfileInfo
     String getTypeString() const { return String(magic_enum::enum_name(type)); }
     void merge(const ConnectionProfileInfo & other)
     {
-        RUNTIME_CHECK(type == other.type);
+        RUNTIME_CHECK(type == other.type, magic_enum::enum_name(type), magic_enum::enum_name(other.type));
         packets += other.packets;
         bytes += other.bytes;
     }
