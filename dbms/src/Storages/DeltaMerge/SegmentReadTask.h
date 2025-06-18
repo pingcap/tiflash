@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
@@ -23,7 +24,6 @@
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/KVStore/Types.h>
 #include <grpcpp/support/sync_stream.h>
-#include <Flash/Statistics/ConnectionProfileInfo.h>
 
 namespace DB::DM
 {
@@ -60,17 +60,6 @@ struct ExtraRemoteSegmentInfo
     ConnectionProfileInfo connection_profile_info;
 };
 
-struct RemoteStoreInfo
-{
-    // Target wn info:
-    String store_address;
-    StoreID store_id;
-    String zone_label;
-
-    // Self zone label info:
-    String cn_zone_label;
-};
-
 struct SegmentReadTask
 {
 public:
@@ -100,7 +89,9 @@ public:
         const String & store_address,
         KeyspaceID keyspace_id,
         TableID physical_table_id,
-        ColumnID pk_col_id);
+        ColumnID pk_col_id,
+        bool is_same_zone,
+        size_t establish_disagg_task_resp_size);
 
     ~SegmentReadTask();
 

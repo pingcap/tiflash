@@ -201,10 +201,14 @@ std::pair<ConnectionProfileInfo, ConnectionProfileInfo> SegmentReadTaskPool::get
     const auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
     ConnectionProfileInfo inter_zone_info(inter_type);
     ConnectionProfileInfo inner_zone_info(inner_type);
+
+    size_t connection_info_count = 0;
     for (const auto & ele : all_tasks)
     {
         const auto & info_opt = ele.second->extra_remote_info;
-        RUNTIME_CHECK(info_opt.has_value());
+        if (!info_opt.has_value())
+            continue;
+        connection_info_count++;
         const auto & connection_info = info_opt->connection_profile_info;
         if (connection_info.type == inter_type)
         {
@@ -221,6 +225,12 @@ std::pair<ConnectionProfileInfo, ConnectionProfileInfo> SegmentReadTaskPool::get
             throw Exception("unexpected connection type");
         }
     }
+    // If this node is CN, all segment read task must be remote, and connection_info_count should be equal to all_tasks.size(),
+    // If this node is not CN(WN or non-disagg mode), all segment read task should be local, and connection_info_count should be zero.
+    RUNTIME_CHECK(
+        connection_info_count == all_tasks.size() || connection_info_count == 0,
+        connection_info_count,
+        all_tasks.size());
     return {inter_zone_info, inner_zone_info};
 }
 

@@ -33,10 +33,19 @@ UnorderedSourceOp::UnorderedSourceOp(
     , ref_no(0)
     , waiting_rf_list(runtime_filter_list_)
     , max_wait_time_ms(max_wait_time_ms_)
-    , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, /*is_local=*/!is_disagg_))
 {
     setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
     ref_no = task_pool->increaseUnorderedInputStreamRefCount();
+
+    if (is_disagg_)
+    {
+        const size_t connections = 2; // one for inter zone, one for inner zone.
+        io_profile_info = IOProfileInfo::createForRemote(profile_info_ptr, connections);
+    }
+    else
+    {
+        io_profile_info = IOProfileInfo::createForLocal(profile_info_ptr);
+    }
 }
 
 OperatorStatus UnorderedSourceOp::readImpl(Block & block)
@@ -104,9 +113,11 @@ void UnorderedSourceOp::operatePrefixImpl()
 void UnorderedSourceOp::operateSuffixImpl()
 {
     std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
+        auto & connection_infos = io_profile_info->connection_profile_infos;
+        RUNTIME_CHECK(connection_infos.size() == 2, connection_infos.size());
         auto [inter_info, inner_info] = task_pool->getRemoteConnectionInfo();
-        io_profile_info->connection_profile_infos.push_back(inter_info);
-        io_profile_info->connection_profile_infos.push_back(inner_info);
+        connection_infos[0] = inter_info;
+        connection_infos[1] = inner_info;
     });
 }
 } // namespace DB

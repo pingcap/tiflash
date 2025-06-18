@@ -18,6 +18,7 @@
 #include <Flash/Coprocessor/RequestUtils.h>
 #include <Interpreters/Context.h>
 #include <Operators/ExpressionTransformOp.h>
+#include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/S3/S3Common.h>
@@ -37,7 +38,15 @@ StorageDisaggregated::StorageDisaggregated(
     , log(Logger::get(context_.getDAGContext()->log ? context_.getDAGContext()->log->identifier() : ""))
     , sender_target_mpp_task_id(context_.getDAGContext()->getMPPTaskMeta())
     , filter_conditions(filter_conditions_)
-{}
+{
+    const auto my_store_id = context.getTMTContext().getKVStore()->getStoreID();
+    pingcap::kv::Backoffer bo(pingcap::kv::copBuildTaskMaxBackoff);
+    // TODO: PD may not have CN label info when AutoScaler is enabled.
+    const auto store_labels = context.getTMTContext().getKVCluster()->region_cache->getStore(bo, my_store_id).labels;
+    auto iter = store_labels.find(ZONE_LABEL_KEY);
+    if (iter != store_labels.end())
+        zone_label = std::make_optional(iter->second);
+}
 
 BlockInputStreams StorageDisaggregated::read(
     const Names &,

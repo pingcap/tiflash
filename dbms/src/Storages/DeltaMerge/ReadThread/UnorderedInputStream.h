@@ -75,6 +75,8 @@ public:
         max_wait_time_ms = max_wait_time_ms_;
     }
 
+    std::vector<ConnectionProfileInfo> getConnectionProfileInfos() const { return connection_profile_infos; }
+
 protected:
     Block readImpl() override
     {

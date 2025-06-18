@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <common/defines.h>
 #include <common/types.h>
 
@@ -31,6 +32,16 @@ struct ConnectionProfileInfo
         InterZoneRemote = 2,
     };
     using ConnTypeVec = std::vector<ConnectionProfileInfo::ConnectionType>;
+
+    static ConnectionProfileInfo createForInterZone()
+    {
+        return ConnectionProfileInfo(ConnectionProfileInfo::ConnectionType::InterZoneRemote);
+    }
+    static ConnectionProfileInfo createForInnerZone()
+    {
+        return ConnectionProfileInfo(ConnectionProfileInfo::ConnectionType::InnerZoneRemote);
+    }
+
     static ALWAYS_INLINE ConnectionType inferConnectionType(bool is_local, bool same_zone)
     {
         if (is_local)
@@ -55,6 +66,12 @@ struct ConnectionProfileInfo
     {}
 
     String getTypeString() const { return String(magic_enum::enum_name(type)); }
+    void merge(const ConnectionProfileInfo & other)
+    {
+        RUNTIME_CHECK(type == other.type);
+        packets += other.packets;
+        bytes += other.bytes;
+    }
 
     Int64 packets = 0;
     Int64 bytes = 0;

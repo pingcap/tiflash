@@ -16,6 +16,8 @@
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
+#include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
@@ -74,6 +76,16 @@ void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProf
     }
 }
 
+void TableScanStatistics::updateTableScanDetailForDisaggIfNecessary(const IProfilingBlockInputStream * stream)
+{
+    const auto * unordered_stream = dynamic_cast<const DM::UnorderedInputStream *>(stream);
+    const auto * rn_segment_stream = dynamic_cast<const DM::Remote::RNSegmentInputStream *>(stream);
+    if (unordered_stream)
+        updateTableScanDetail(unordered_stream->getConnectionProfileInfos());
+    else if (rn_segment_stream)
+        updateTableScanDetail(rn_segment_stream->getConnectionProfileInfos());
+}
+
 void TableScanStatistics::collectExtraRuntimeDetail()
 {
     switch (dag_context.getExecutionMode())
@@ -91,6 +103,8 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             else if (const auto * local_stream = dynamic_cast<const IProfilingBlockInputStream *>(&stream);
                      local_stream)
             {
+                updateTableScanDetailForDisaggIfNecessary(local_stream);
+
                 /// local read input stream also is IProfilingBlockInputStream
                 const auto & prof = local_stream->getProfileInfo();
                 local_table_scan_detail.bytes += prof.bytes;

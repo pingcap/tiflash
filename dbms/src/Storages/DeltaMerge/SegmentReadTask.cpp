@@ -63,11 +63,14 @@ SegmentReadTask::SegmentReadTask(
     const ScanContextPtr & scan_context,
     const RemotePb::RemoteSegment & proto,
     const DisaggTaskId & snapshot_id,
-    const RemoteStoreInfo & remote_store_info,
+    StoreID store_id_,
+    const String & store_address,
     KeyspaceID keyspace_id,
     TableID physical_table_id,
-    ColumnID pk_col_id)
-    : store_id(remote_store_info.store_id)
+    ColumnID pk_col_id,
+    bool is_same_zone,
+    size_t establish_disagg_task_resp_size)
+    : store_id(store_id_)
 {
     CurrentMetrics::add(CurrentMetrics::DT_SegmentReadTasks);
     auto tracing_id = fmt::format(
@@ -151,14 +154,15 @@ SegmentReadTask::SegmentReadTask(
     auto persisted_page_count
         = extract_remote_pages(read_snapshot->delta->getPersistedFileSetSnapshot()->getColumnFiles());
 
-    const bool same_zone = (remote_store_info.zone_label == remote_store_info.cn_zone_label),
     extra_remote_info.emplace(ExtraRemoteSegmentInfo{
-        .store_address = remote_store_info.store_address,
+        .store_address = store_address,
         .snapshot_id = snapshot_id,
         .remote_page_ids = std::move(remote_page_ids),
         .remote_page_sizes = std::move(remote_page_sizes),
-        .connection_profile_info = ConnectionProfileInfo(ConnectionProfileInfo::inferConnectionType(/*is_local=*/false, same_zone));
+        .connection_profile_info
+        = ConnectionProfileInfo(ConnectionProfileInfo::inferConnectionType(/*is_local=*/false, is_same_zone)),
     });
+    extra_remote_info->connection_profile_info.bytes += establish_disagg_task_resp_size;
 
     LOG_DEBUG(
         read_snapshot->log,
@@ -170,7 +174,7 @@ SegmentReadTask::SegmentReadTask(
         persisted_page_count,
         extra_remote_info->remote_page_ids,
         read_snapshot->delta->getSharedDeltaIndex()->toString(),
-        remote_store_info.store_address);
+        store_address);
 }
 
 SegmentReadTask::~SegmentReadTask()
