@@ -370,14 +370,13 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
         // todo why thread pool again?
         auto f = BuildReadTaskForWNTablePool::get().scheduleWithFuture(
             [&, i] {
-                const auto & serialized_physical_table = resp.tables()[i];
                 buildReadTaskForWriteNodeTable(
                     db_context,
                     scan_context,
                     snapshot_id,
                     resp.store_id(),
                     req->address(),
-                    serialized_physical_table,
+                    resp.tables()[i],
                     is_same_zone,
                     /*is_first_table=*/i == 0,
                     resp_size,
@@ -392,12 +391,15 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 
 bool StorageDisaggregated::isSameZone(const pingcap::coprocessor::BatchCopTask & batch_cop_task) const
 {
-    if (!zone_label.has_value())
-        return false;
+    // Assume it's same zone when there is no zone label.
     const auto & wn_labels = batch_cop_task.labels;
+    if (!zone_label.has_value() || wn_labels.empty())
+        return true;
+
     auto iter = wn_labels.find(ZONE_LABEL_KEY);
     if (iter == wn_labels.end())
-        return false;
+        return true;
+
     return iter->second == *zone_label;
 }
 
@@ -423,15 +425,14 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     IOPoolHelper::FutureContainer futures(log, table.segments().size());
     for (auto i = 0; i < table.segments().size(); ++i)
     {
-        const auto & remote_seg = table.segments()[i];
         const bool is_first_seg = (is_first_table && i == 0);
         auto f = BuildReadTaskPool::get().scheduleWithFuture(
-            [&]() {
+            [&, i, is_first_seg]() {
                 auto seg_read_task = std::make_shared<DM::SegmentReadTask>(
                     table_tracing_logger,
                     db_context,
                     scan_context,
-                    remote_seg,
+                    table.segments()[i],
                     snapshot_id,
                     store_id,
                     store_address,
@@ -701,7 +702,10 @@ struct SrouceOpBuilder
             read_tasks,
             *column_defines,
             extra_table_id_index,
-            tracing_id);
+            tracing_id,
+            /*runtime_filter_list_=*/std::vector<RuntimeFilterPtr>{},
+            /*max_wait_time_ms_=*/0,
+            /*is_disagg_=*/true);
     }
 };
 

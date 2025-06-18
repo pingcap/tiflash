@@ -77,6 +77,4 @@ struct ConnectionProfileInfo
     Int64 bytes = 0;
     ConnectionType type = Local;
 };
-
-using ConnectionProfileInfoPtr = std::shared_ptr<ConnectionProfileInfo>;
 } // namespace DB
