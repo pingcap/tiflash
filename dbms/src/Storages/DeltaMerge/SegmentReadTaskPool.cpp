@@ -88,6 +88,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     MemoryTrackerSetter setter(true, mem_tracker.get());
 
     t->fetchPages();
+    recordExtraRemoteInfoIfNecessary(t);
 
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {
@@ -194,22 +195,20 @@ const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskP
     return tasks_wrapper.getTasks();
 }
 
-std::pair<ConnectionProfileInfo, ConnectionProfileInfo> SegmentReadTaskPool::getRemoteConnectionInfo() const
+std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentReadTaskPool::getRemoteConnectionInfo()
+    const
 {
-    const auto all_tasks = getTasks();
     const auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
     const auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
     ConnectionProfileInfo inter_zone_info(inter_type);
     ConnectionProfileInfo inner_zone_info(inner_type);
 
-    size_t connection_info_count = 0;
-    for (const auto & ele : all_tasks)
+    if (extra_remote_segment_infos.empty())
+        return {};
+
+    for (const auto & info : extra_remote_segment_infos)
     {
-        const auto & info_opt = ele.second->extra_remote_info;
-        if (!info_opt.has_value())
-            continue;
-        connection_info_count++;
-        const auto & connection_info = info_opt->connection_profile_info;
+        const auto & connection_info = info.connection_profile_info;
         if (connection_info.type == inter_type)
         {
             inter_zone_info.packets += connection_info.packets;
@@ -225,13 +224,7 @@ std::pair<ConnectionProfileInfo, ConnectionProfileInfo> SegmentReadTaskPool::get
             throw Exception("unexpected connection type");
         }
     }
-    // If this node is CN, all segment read task must be remote, and connection_info_count should be equal to all_tasks.size(),
-    // If this node is not CN(WN or non-disagg mode), all segment read task should be local, and connection_info_count should be zero.
-    RUNTIME_CHECK(
-        connection_info_count == all_tasks.size() || connection_info_count == 0,
-        connection_info_count,
-        all_tasks.size());
-    return {inter_zone_info, inner_zone_info};
+    return {{inter_zone_info, inner_zone_info}};
 }
 
 // Choose a segment to read.

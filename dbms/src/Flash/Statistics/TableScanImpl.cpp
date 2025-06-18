@@ -70,8 +70,8 @@ void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProf
             remote_table_scan_detail.inter_zone_conn_profile_info.packets += connection_profile_info.packets;
             remote_table_scan_detail.inter_zone_conn_profile_info.bytes += connection_profile_info.bytes;
         }
-        // Stats both send and receive bytes here, because remote execution summaries are not used now
-        base.updateSendConnectionInfo(connection_profile_info);
+        // Only update receive connection info because in CN, remote table scan only fetch from WN.
+        // So no need to update send connection info.
         base.updateReceiveConnectionInfo(connection_profile_info);
     }
 }

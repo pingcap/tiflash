@@ -119,9 +119,10 @@ protected:
     void readSuffixImpl() override
     {
         std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
-            auto [inter_info, inner_info] = task_pool->getRemoteConnectionInfo();
-            connection_profile_infos.push_back(inter_info);
-            connection_profile_infos.push_back(inner_info);
+            auto pool_connection_info_opt = task_pool->getRemoteConnectionInfo();
+            RUNTIME_CHECK(pool_connection_info_opt);
+            connection_profile_infos.push_back(pool_connection_info_opt->first);
+            connection_profile_infos.push_back(pool_connection_info_opt->second);
         });
         LOG_DEBUG(
             log,

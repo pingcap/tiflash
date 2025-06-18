@@ -89,14 +89,14 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 
         if (!res)
         {
+            const auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
+            const auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
+
             RUNTIME_CHECK(current_seg_task->extra_remote_info.has_value());
-            if (current_seg_task->extra_remote_info->connection_profile_info.type
-                == ConnectionProfileInfo::ConnectionType::InterZoneRemote)
+            if (current_seg_task->extra_remote_info->connection_profile_info.type == inter_type)
                 connection_profile_infos[INTER_ZONE_INDEX].merge(
                     current_seg_task->extra_remote_info->connection_profile_info);
-            else if (
-                current_seg_task->extra_remote_info->connection_profile_info.type
-                == ConnectionProfileInfo::ConnectionType::InterZoneRemote)
+            else if (current_seg_task->extra_remote_info->connection_profile_info.type == inner_type)
                 connection_profile_infos[INNER_ZONE_INDEX].merge(
                     current_seg_task->extra_remote_info->connection_profile_info);
             else

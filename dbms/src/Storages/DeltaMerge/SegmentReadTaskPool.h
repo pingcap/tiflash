@@ -182,7 +182,12 @@ public:
     }
 
     std::once_flag & getRemoteConnectionInfoFlag() { return get_remote_connection_flag; }
-    std::pair<ConnectionProfileInfo, ConnectionProfileInfo> getRemoteConnectionInfo() const;
+    std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> getRemoteConnectionInfo() const;
+    void recordExtraRemoteInfoIfNecessary(SegmentReadTaskPtr & task)
+    {
+        if (task->extra_remote_info)
+            extra_remote_segment_infos.push_back(*(task->extra_remote_info));
+    }
 
 public:
     const uint64_t pool_id;
@@ -259,6 +264,7 @@ private:
     inline static constexpr Int64 check_ru_interval_ms = 100;
 
     std::once_flag get_remote_connection_flag;
+    std::vector<DM::ExtraRemoteSegmentInfo> extra_remote_segment_infos;
     friend class tests::SegmentReadTasksPoolTest;
 };
 

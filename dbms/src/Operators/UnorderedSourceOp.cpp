@@ -39,7 +39,7 @@ UnorderedSourceOp::UnorderedSourceOp(
 
     if (is_disagg_)
     {
-        const size_t connections = 2; // one for inter zone, one for inner zone.
+        const size_t connections = 2;
         io_profile_info = IOProfileInfo::createForRemote(profile_info_ptr, connections);
     }
     else
@@ -112,12 +112,19 @@ void UnorderedSourceOp::operatePrefixImpl()
 
 void UnorderedSourceOp::operateSuffixImpl()
 {
-    std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
-        auto & connection_infos = io_profile_info->connection_profile_infos;
-        RUNTIME_CHECK(connection_infos.size() == 2, connection_infos.size());
-        auto [inter_info, inner_info] = task_pool->getRemoteConnectionInfo();
-        connection_infos[0] = inter_info;
-        connection_infos[1] = inner_info;
-    });
+    // If io_profile_info is local, it means this table scan is not in CN, and it only read local data.
+    // So no need to update connection info, which indicate it's a remote table scan,
+    // like CoprocessorReader or read delta data from WN).
+    if (!io_profile_info->is_local)
+    {
+        std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
+            auto & connection_infos = io_profile_info->connection_profile_infos;
+            RUNTIME_CHECK(connection_infos.size() == 2, connection_infos.size());
+            auto pool_connection_info_opt = task_pool->getRemoteConnectionInfo();
+            RUNTIME_CHECK(pool_connection_info_opt);
+            connection_infos[0] = pool_connection_info_opt->first;
+            connection_infos[1] = pool_connection_info_opt->second;
+        });
+    }
 }
 } // namespace DB
