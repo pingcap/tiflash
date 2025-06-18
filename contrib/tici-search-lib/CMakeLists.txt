@@ -1,4 +1,4 @@
-set(TICI_PROJECT_DIR "${CMAKE_SOURCE_DIR}/contrib/tici/components/searchlib")
+set(TICI_PROJECT_DIR "${CMAKE_SOURCE_DIR}/contrib/tici")
 set(TICI_LIB_NAME "tici_search_lib") 
 set(TICI_LIB "${CMAKE_CURRENT_BINARY_DIR}/release/${CMAKE_STATIC_LIBRARY_PREFIX}${TICI_LIB_NAME}${CMAKE_STATIC_LIBRARY_SUFFIX}")
 

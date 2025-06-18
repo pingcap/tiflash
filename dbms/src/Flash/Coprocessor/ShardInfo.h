@@ -35,13 +35,13 @@ struct ShardInfo
 {
     UInt64 shard_id;
     UInt64 shard_epoch;
-    using KeyRanges = std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>>;
+    using KeyRanges = google::protobuf::RepeatedPtrField<coprocessor::KeyRange>;
     KeyRanges key_ranges;
 
     explicit ShardInfo(const coprocessor::ShardInfo & info)
         : shard_id(info.shard_id())
         , shard_epoch(info.shard_epoch())
-        , key_ranges(genCopKeyRange(info.ranges()))
+        , key_ranges(info.ranges())
     {}
 
     String toString() const
@@ -50,7 +50,7 @@ struct ShardInfo
         sb << "ShardID: " << shard_id << ", ShardEpoch: " << shard_epoch << ", KeyRanges: ";
         for (const auto & range : key_ranges)
         {
-            sb << "[" << range.first->toString() << ", " << range.second->toString() << ") ";
+            sb << "[" << range.start() << ", " << range.end() << ") ";
         }
         return sb.str();
     }
