@@ -70,7 +70,7 @@ void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProf
             remote_table_scan_detail.inter_zone_conn_profile_info.packets += connection_profile_info.packets;
             remote_table_scan_detail.inter_zone_conn_profile_info.bytes += connection_profile_info.bytes;
         }
-        // Only update receive connection info because in CN, remote table scan only fetch from WN.
+        // Only update receive connection info, because remote table scan only fetch from WN in CN.
         // So no need to update send connection info.
         base.updateReceiveConnectionInfo(connection_profile_info);
     }
@@ -78,11 +78,9 @@ void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProf
 
 void TableScanStatistics::updateTableScanDetailForDisaggIfNecessary(const IProfilingBlockInputStream * stream)
 {
-    const auto * unordered_stream = dynamic_cast<const DM::UnorderedInputStream *>(stream);
-    const auto * rn_segment_stream = dynamic_cast<const DM::Remote::RNSegmentInputStream *>(stream);
-    if (unordered_stream)
+    if (const auto * unordered_stream = dynamic_cast<const DM::UnorderedInputStream *>(stream))
         updateTableScanDetail(unordered_stream->getConnectionProfileInfos());
-    else if (rn_segment_stream)
+    else if (const auto * rn_segment_stream = dynamic_cast<const DM::Remote::RNSegmentInputStream *>(stream))
         updateTableScanDetail(rn_segment_stream->getConnectionProfileInfos());
 }
 

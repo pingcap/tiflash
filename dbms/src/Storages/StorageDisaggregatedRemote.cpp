@@ -392,7 +392,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 bool StorageDisaggregated::isSameZone(const pingcap::coprocessor::BatchCopTask & batch_cop_task) const
 {
     // Assume it's same zone when there is no zone label.
-    const auto & wn_labels = batch_cop_task.labels;
+    const auto & wn_labels = batch_cop_task.store_labels;
     if (!zone_label.has_value() || wn_labels.empty())
         return true;
 

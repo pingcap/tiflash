@@ -137,8 +137,8 @@ OperatorStatus RNSegmentSourceOp::executeIOImpl()
     }
     else
     {
-        const auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
-        const auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
+        static constexpr auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
+        static constexpr auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
 
         auto & connection_profile_infos = io_profile_info->connection_profile_infos;
         RUNTIME_CHECK(connection_profile_infos.size() == 2, connection_profile_infos.size());
