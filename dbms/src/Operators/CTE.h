@@ -31,7 +31,8 @@ enum class CTEOpStatus
     Ok,
     BlockNotAvailable,
     Eof,
-    Cancelled
+    Cancelled,
+    Error
 };
 
 class CTE
@@ -42,6 +43,18 @@ public:
     bool pushBlock(const Block & block);
     void notifyEOF() { this->notifyImpl<true>(true); }
     void notifyCancel() { this->notifyImpl<true>(false); }
+
+    void notifyError(const String & err_msg)
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        this->err_msg = err_msg;
+    }
+
+    String getError()
+    {
+        std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+        return this->err_msg;
+    }
 
     void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t expected_block_fetch_idx);
     void registerTask(TaskPtr && task, NotifyType type);
@@ -102,5 +115,7 @@ private:
 
     bool get_resp = false;
     tipb::SelectResponse resp;
+
+    String err_msg;
 };
 } // namespace DB

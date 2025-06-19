@@ -36,6 +36,8 @@ std::pair<CTEOpStatus, Block> CTEReader::fetchNextBlock()
     case CTEOpStatus::Ok:
         this->block_fetch_idx++;
         return {ret, block};
+    case DB::CTEOpStatus::Error:
+        throw Exception(this->cte->getError());
     }
     throw Exception("Should not reach here");
 }

@@ -41,6 +41,8 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::Cancelled:
         return OperatorStatus::CANCELLED;
+    default:
+        throw Exception("Should not reach here");
     }
 }
 } // namespace DB

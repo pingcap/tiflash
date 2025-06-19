@@ -25,12 +25,14 @@ void CTESinkOp::operateSuffixImpl()
 OperatorStatus CTESinkOp::writeImpl(Block && block)
 {
     if (!block)
-    {
         return OperatorStatus::FINISHED;
-    }
+
     this->total_rows += block.rows();
     if (this->cte->pushBlock(block))
         return OperatorStatus::NEED_INPUT;
-    return OperatorStatus::CANCELLED;
+    const String & err = this->cte->getError();
+    if (err.empty())
+        return OperatorStatus::CANCELLED;
+    throw Exception(err);
 }
 } // namespace DB
