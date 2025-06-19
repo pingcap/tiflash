@@ -749,21 +749,28 @@ try
         ORDER_COL_NAME,
         false,
         static_cast<Int64>(0));
-    frame.end = buildRangeFrameBound(
+
+    std::vector<tipb::WindowBoundType> window_bound_types{
         tipb::WindowBoundType::Preceding,
-        tipb::RangeCmpDataType::Int,
-        ORDER_COL_NAME,
-        false,
-        static_cast<Int64>(0));
+        tipb::WindowBoundType::Following};
 
+    for (auto window_bound_type : window_bound_types)
+    {
+        frame.end = buildRangeFrameBound(
+            window_bound_type,
+            tipb::RangeCmpDataType::Int,
+            ORDER_COL_NAME,
+            false,
+            static_cast<Int64>(0));
 
-    executeFunctionAndAssert(
-        toNullableVec<Int64>(std::vector<std::optional<Int64>>{10, 10, 10, 10, 10, 10, 10, 10, 10, 10}),
-        Count(value_col),
-        {toVec<Int64>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
-         toVec<Int64>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
-         toVec<Int64>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0})},
-        frame);
+        executeFunctionAndAssert(
+            toNullableVec<Int64>(std::vector<std::optional<Int64>>{10, 10, 10, 10, 10, 10, 10, 10, 10, 10}),
+            Count(value_col),
+            {toVec<Int64>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
+             toVec<Int64>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0}),
+             toVec<Int64>({0, 0, 0, 0, 0, 0, 0, 0, 0, 0})},
+            frame);
+    }
 }
 CATCH
 } // namespace DB::tests
