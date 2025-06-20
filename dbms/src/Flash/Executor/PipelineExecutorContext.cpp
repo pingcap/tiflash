@@ -185,6 +185,11 @@ void PipelineExecutorContext::cancel()
             // pipeline tasks waiting in the WAIT_FOR_NOTIFY state from never being notified.
             if (dag_context->tunnel_set)
                 dag_context->tunnel_set->close(getTrimmedErrMsg(), false);
+
+            auto ctes = dag_context->getCTEs();
+            if (!ctes.empty())
+                ctes[0]->notifyError(getTrimmedErrMsg());
+
             if (auto mpp_receiver_set = dag_context->getMPPReceiverSet(); mpp_receiver_set)
                 mpp_receiver_set->cancel();
         }

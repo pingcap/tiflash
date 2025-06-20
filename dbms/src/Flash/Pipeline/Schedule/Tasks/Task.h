@@ -16,7 +16,6 @@
 
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
-#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskProfileInfo.h>
 #include <Flash/Pipeline/Schedule/Tasks/TaskTimer.h>
 #include <memory.h>
@@ -57,6 +56,7 @@ enum class NotifyType
     WAIT_ON_JOIN_BUILD_FINISH,
     WAIT_ON_JOIN_PROBE_FINISH,
     WAIT_ON_RESULT_QUEUE_WRITE,
+    WAIT_ON_CTE,
 };
 
 class PipelineExecutorContext;
@@ -117,7 +117,7 @@ public:
 
     const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
 
-    void onErrorOccurred(const String & err_msg) { exec_context.onErrorOccurred(err_msg); }
+    void onErrorOccurred(const String & err_msg);
 
     void setNotifyType(NotifyType type) { notify_type = type; }
     NotifyType getNotifyType() const { return notify_type; }
