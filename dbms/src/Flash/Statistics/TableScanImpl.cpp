@@ -70,8 +70,10 @@ void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProf
             remote_table_scan_detail.inter_zone_conn_profile_info.packets += connection_profile_info.packets;
             remote_table_scan_detail.inter_zone_conn_profile_info.bytes += connection_profile_info.bytes;
         }
-        // Only update receive connection info, because remote table scan only fetch from WN in CN.
-        // So no need to update send connection info.
+        // Whether it's for remote read (non-disaggregated mode) or network between CN and WN (disaggregated mode),
+        // send bytes are always collected on the node that sends the request (i.e., the node where the table scan executor resides).
+        // Therefore, both send bytes and receive bytes are collected here.
+        base.updateSendConnectionInfo(connection_profile_info);
         base.updateReceiveConnectionInfo(connection_profile_info);
     }
 }

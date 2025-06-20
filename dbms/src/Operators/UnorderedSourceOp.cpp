@@ -120,10 +120,14 @@ void UnorderedSourceOp::operateSuffixImpl()
         std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
             auto & connection_infos = io_profile_info->connection_profile_infos;
             RUNTIME_CHECK(connection_infos.size() == 2, connection_infos.size());
+
             auto pool_connection_info_opt = task_pool->getRemoteConnectionInfo();
-            RUNTIME_CHECK(pool_connection_info_opt);
-            connection_infos[0] = pool_connection_info_opt->first;
-            connection_infos[1] = pool_connection_info_opt->second;
+            RUNTIME_CHECK(pool_connection_info_opt.has_value() || task_pool->getTotalReadTasks() == 0);
+            if (pool_connection_info_opt)
+            {
+                connection_infos[0] = pool_connection_info_opt->first;
+                connection_infos[1] = pool_connection_info_opt->second;
+            }
         });
     }
 }

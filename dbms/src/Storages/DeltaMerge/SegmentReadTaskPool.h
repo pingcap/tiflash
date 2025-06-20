@@ -188,6 +188,7 @@ public:
         if (task->extra_remote_info)
             extra_remote_segment_infos.push_back(*(task->extra_remote_info));
     }
+    size_t getTotalReadTasks() const { return total_read_tasks; }
 
 public:
     const uint64_t pool_id;
@@ -230,6 +231,7 @@ private:
     const uint64_t start_ts;
     const size_t expected_block_size;
     const ReadMode read_mode;
+    const size_t total_read_tasks;
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;

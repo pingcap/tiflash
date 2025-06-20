@@ -120,10 +120,14 @@ protected:
     {
         std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
             auto pool_connection_info_opt = task_pool->getRemoteConnectionInfo();
-            RUNTIME_CHECK(pool_connection_info_opt);
+            RUNTIME_CHECK(pool_connection_info_opt || task_pool->getTotalReadTasks() == 0);
             RUNTIME_CHECK(connection_profile_infos.empty());
-            connection_profile_infos.push_back(pool_connection_info_opt->first);
-            connection_profile_infos.push_back(pool_connection_info_opt->second);
+
+            if (pool_connection_info_opt)
+            {
+                connection_profile_infos.push_back(pool_connection_info_opt->first);
+                connection_profile_infos.push_back(pool_connection_info_opt->second);
+            }
         });
         LOG_DEBUG(
             log,
