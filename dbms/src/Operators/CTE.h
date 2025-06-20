@@ -60,6 +60,7 @@ struct CTEPartition
     Blocks blocks;
     std::unordered_map<size_t, IdxWithPadding> fetch_block_idxs;
     size_t memory_usages = 0; // TODO need a unified statistic
+    std::unique_ptr<PipeConditionVariable> pipe_cv;
 };
 
 class CTE
@@ -97,8 +98,11 @@ public:
 
     void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id);
 
-    void registerTask(TaskPtr && task, NotifyType type);
-    void notifyTaskDirectly(TaskPtr && task) { this->pipe_cv.notifyTaskDirectly(std::move(task)); }
+    void registerTask(size_t partition_id, TaskPtr && task, NotifyType type);
+    void notifyTaskDirectly(size_t partition_id, TaskPtr && task)
+    {
+        this->partitions[partition_id].pipe_cv->notifyTaskDirectly(std::move(task));
+    }
 
     void addResp(const tipb::SelectResponse & resp)
     {
@@ -122,7 +126,8 @@ private:
         if unlikely (this->is_cancelled)
             return CTEOpStatus::Cancelled;
 
-        if (this->partitions[partition_id].blocks.size() <= this->partitions[partition_id].fetch_block_idxs[cte_reader_id].idx)
+        if (this->partitions[partition_id].blocks.size()
+            <= this->partitions[partition_id].fetch_block_idxs[cte_reader_id].idx)
             return this->is_eof ? CTEOpStatus::Eof : CTEOpStatus::BlockNotAvailable;
 
         return CTEOpStatus::Ok;
@@ -140,13 +145,12 @@ private:
         else
             this->is_cancelled = true;
 
-        // Just in case someone is in WAITING_FOR_NOTIFY status
-        this->pipe_cv.notifyAll();
+        for (auto & partition : this->partitions)
+            partition.pipe_cv->notifyAll();
     }
 
     std::vector<CTEPartition> partitions;
-    PipeConditionVariable pipe_cv;
-    
+
     std::shared_mutex rw_lock;
     size_t next_cte_reader_id = 0;
     bool is_eof = false;

@@ -23,7 +23,10 @@ namespace DB
 {
 constexpr size_t PARTITION_NUM = 70; // TODO maybe need more tests to select a reasonable value
 
-inline size_t getPartitionID(size_t id) { return id % PARTITION_NUM; }
+inline size_t getPartitionID(size_t id)
+{
+    return id % PARTITION_NUM;
+}
 
 CTE::CTE()
 {
@@ -33,9 +36,10 @@ CTE::CTE()
         this->partitions.back().mu = std::make_unique<std::mutex>();
         this->partitions.back().read_mu = std::make_unique<std::mutex>();
         this->partitions.back().write_mu = std::make_unique<std::mutex>();
+        this->partitions.back().pipe_cv = std::make_unique<PipeConditionVariable>();
     }
 }
-    
+
 CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block)
 {
     auto partition_id = getPartitionID(source_id);
@@ -68,14 +72,14 @@ bool CTE::pushBlock(size_t sink_id, const Block & block)
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
     this->partitions[partition_id].memory_usages += block.bytes();
     this->partitions[partition_id].blocks.push_back(block);
-    this->pipe_cv.notifyOne();
+    this->partitions[partition_id].pipe_cv->notifyOne();
     return true;
 }
 
-void CTE::registerTask(TaskPtr && task, NotifyType type)
+void CTE::registerTask(size_t partition_id, TaskPtr && task, NotifyType type)
 {
     task->setNotifyType(type);
-    pipe_cv.registerTask(std::move(task));
+    this->partitions[partition_id].pipe_cv->registerTask(std::move(task));
 }
 
 void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id)
@@ -91,10 +95,10 @@ void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_
 
     if (status == CTEOpStatus::Ok)
     {
-        this->notifyTaskDirectly(std::move(task));
+        this->notifyTaskDirectly(partition_id, std::move(task));
         return;
     }
 
-    this->registerTask(std::move(task), NotifyType::WAIT_ON_CTE);
+    this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE);
 }
 } // namespace DB
