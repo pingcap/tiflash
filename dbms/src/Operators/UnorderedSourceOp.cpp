@@ -39,6 +39,7 @@ UnorderedSourceOp::UnorderedSourceOp(
 
     if (is_disagg_)
     {
+        // One connection for inter zone, the other one for inner zone.
         const size_t connections = 2;
         io_profile_info = IOProfileInfo::createForRemote(profile_info_ptr, connections);
     }
@@ -122,7 +123,10 @@ void UnorderedSourceOp::operateSuffixImpl()
             RUNTIME_CHECK(connection_infos.size() == 2, connection_infos.size());
 
             auto pool_connection_info_opt = task_pool->getRemoteConnectionInfo();
-            RUNTIME_CHECK(pool_connection_info_opt.has_value() || task_pool->getTotalReadTasks() == 0);
+            RUNTIME_CHECK(
+                pool_connection_info_opt.has_value() || (task_pool->getTotalReadTasks() == 0),
+                pool_connection_info_opt.has_value(),
+                task_pool->getTotalReadTasks());
             if (pool_connection_info_opt)
             {
                 connection_infos[0] = pool_connection_info_opt->first;

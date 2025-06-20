@@ -88,7 +88,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     MemoryTrackerSetter setter(true, mem_tracker.get());
 
     t->fetchPages();
-    recordExtraRemoteInfoIfNecessary(t);
+    recordRemoteConnectionInfoIfNecessary(t);
 
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {

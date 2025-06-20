@@ -367,7 +367,6 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     IOPoolHelper::FutureContainer futures(log, resp.tables().size());
     for (auto i = 0; i < resp.tables().size(); ++i)
     {
-        // todo why thread pool again?
         auto f = BuildReadTaskForWNTablePool::get().scheduleWithFuture(
             [&, i] {
                 buildReadTaskForWriteNodeTable(
@@ -639,7 +638,10 @@ struct InputStreamBuilder
             read_tasks,
             *columns_to_read,
             extra_table_id_index,
-            tracing_id);
+            tracing_id,
+            std::vector<RuntimeFilterPtr>(),
+            /*max_wait_time_ms_=*/0,
+            /*is_disagg_=*/true);
     }
 };
 
