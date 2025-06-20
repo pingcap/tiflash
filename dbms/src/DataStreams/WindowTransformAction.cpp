@@ -660,8 +660,7 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToStartForRangeFrame()
 
 std::tuple<RowNumber, bool> WindowTransformAction::stepToEndForRangeFrame()
 {
-    auto end_preceding = window_description.frame.end_preceding;
-    if ((!end_preceding || (end_preceding && window_description.frame.end_offset == 0)) && !partition_ended)
+    if ((!end_preceding || (end_preceding && frame.end_offset == 0)) && !partition_ended)
         // If we find the frame end and the partition_ended is false.
         // Some previous blocks may be dropped, this is an unexpected behaviour.
         // So, we shouldn't do anything before the partition_ended is true.
