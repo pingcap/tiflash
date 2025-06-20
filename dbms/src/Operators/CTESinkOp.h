@@ -18,6 +18,8 @@
 #include <Operators/CTE.h>
 #include <Operators/Operator.h>
 
+#include "Common/Stopwatch.h"
+
 namespace DB
 {
 class CTESinkOp : public SinkOp

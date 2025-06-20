@@ -22,34 +22,25 @@
 
 #include <memory>
 #include <mutex>
-#include <shared_mutex>
 
 namespace DB
 {
 class CTEReaderNotifyFuture : public NotifyFuture
 {
 public:
-    explicit CTEReaderNotifyFuture(std::shared_ptr<CTE> cte_)
+    CTEReaderNotifyFuture(std::shared_ptr<CTE> cte_, size_t cte_reader_id_)
         : cte(cte_)
+        , cte_reader_id(cte_reader_id_)
     {}
-
-    void setFetchBlockIdx(size_t idx)
-    {
-        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
-        expected_block_fetch_idx = idx;
-    }
 
     void registerTask(TaskPtr && task) override
     {
-        std::shared_lock<std::shared_mutex> shared_lock(this->rw_lock);
-        this->cte->checkBlockAvailableAndRegisterTask(std::move(task), this->expected_block_fetch_idx);
+        this->cte->checkBlockAvailableAndRegisterTask(std::move(task), this->cte_reader_id);
     }
 
 private:
-    std::shared_mutex rw_lock;
-    size_t expected_block_fetch_idx = 0;
-
     std::shared_ptr<CTE> cte;
+    size_t cte_reader_id;
 };
 
 class CTEReader
@@ -66,7 +57,8 @@ public:
         , cte_manager(cte_manager_)
         , cte(cte_manager_
                   ->getCTEBySource(query_id_and_cte_id_, partition_id, expected_sink_num_, expected_source_num_))
-        , notifier(cte)
+        , cte_reader_id(this->cte->getCTEReaderID())
+        , notifier(cte, this->cte_reader_id)
     {}
 
     ~CTEReader()
@@ -75,7 +67,7 @@ public:
         this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id, this->partition_id);
     }
 
-    std::pair<CTEOpStatus, Block> fetchNextBlock();
+    CTEOpStatus fetchNextBlock(Block & block);
     CTEOpStatus checkAvailableBlock();
 
     void getResp(tipb::SelectResponse & resp)
@@ -96,11 +88,10 @@ private:
     String partition_id;
     CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
+    size_t cte_reader_id;
     CTEReaderNotifyFuture notifier;
 
     std::mutex mu;
-    size_t block_fetch_idx = 0;
-
     bool resp_fetched = false;
     tipb::SelectResponse resp;
 };

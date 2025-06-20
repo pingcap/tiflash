@@ -25,15 +25,14 @@ void CTESourceOp::operateSuffixImpl()
 
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {
-    auto res = this->cte_reader->fetchNextBlock();
-    switch (res.first)
+    auto ret = this->cte_reader->fetchNextBlock(block);
+    switch (ret)
     {
     case CTEOpStatus::Eof:
         this->cte_reader->getResp(this->resp);
         if (this->resp.execution_summaries_size() != 0)
             this->io_profile_info->remote_execution_summary.add(this->resp);
     case CTEOpStatus::Ok:
-        block = res.second;
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
     case CTEOpStatus::BlockNotAvailable:

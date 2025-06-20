@@ -17,24 +17,26 @@
 
 #include <cassert>
 #include <mutex>
-#include <shared_mutex>
 
 namespace DB
 {
-CTEOpStatus CTE::tryGetBlockAt(size_t idx, Block & block)
+CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, Block & block)
 {
-    std::shared_lock<std::shared_mutex> lock(this->rw_lock);
-    auto status = this->checkBlockAvailableNoLock(idx);
+    std::lock_guard<std::mutex> read_lock(this->read_mu);
+    std::lock_guard<std::mutex> lock(this->mu);
+    auto status = this->checkBlockAvailableNoLock(cte_reader_id);
     if (status != CTEOpStatus::Ok)
         return status;
 
-    block = this->blocks[idx];
+    block = this->blocks[this->fetch_block_idxs[cte_reader_id].idx];
+    this->fetch_block_idxs[cte_reader_id].idx++;
     return status;
 }
 
 bool CTE::pushBlock(const Block & block)
 {
-    std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+    std::lock_guard<std::mutex> write_lock(this->write_mu);
+    std::lock_guard<std::mutex> lock(this->mu);
     if unlikely (this->is_cancelled)
         return false;
 
@@ -53,10 +55,11 @@ void CTE::registerTask(TaskPtr && task, NotifyType type)
     pipe_cv.registerTask(std::move(task));
 }
 
-void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t expected_block_fetch_idx)
+void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id)
 {
-    std::shared_lock<std::shared_mutex> shared_lock(this->rw_lock);
-    CTEOpStatus status = this->checkBlockAvailableNoLock(expected_block_fetch_idx);
+    std::lock_guard<std::mutex> lock(this->read_mu);
+    std::lock_guard<std::mutex> shared_lock(this->mu);
+    CTEOpStatus status = this->checkBlockAvailableNoLock(cte_reader_id);
     if (status == CTEOpStatus::Ok)
     {
         this->notifyTaskDirectly(std::move(task));

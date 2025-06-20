@@ -19,23 +19,21 @@
 
 namespace DB
 {
-std::pair<CTEOpStatus, Block> CTEReader::fetchNextBlock()
+CTEOpStatus CTEReader::fetchNextBlock(Block & block)
 {
-    Block block;
-    std::lock_guard<std::mutex> lock(this->mu);
-    auto ret = this->cte->tryGetBlockAt(this->block_fetch_idx, block);
+    auto ret = this->cte->tryGetBlockAt(this->cte_reader_id, block);
     switch (ret)
     {
     case CTEOpStatus::Eof:
+    {
+        std::lock_guard<std::mutex> lock(this->mu);
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
+    }
     case CTEOpStatus::BlockNotAvailable:
-        this->notifier.setFetchBlockIdx(this->block_fetch_idx);
     case CTEOpStatus::Cancelled:
-        return {ret, Block()};
     case CTEOpStatus::Ok:
-        this->block_fetch_idx++;
-        return {ret, block};
+        return ret;
     case DB::CTEOpStatus::Error:
         throw Exception(this->cte->getError());
     }

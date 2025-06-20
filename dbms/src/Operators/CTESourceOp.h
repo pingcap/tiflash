@@ -42,7 +42,6 @@ public:
     }
 
     String getName() const override { return "CTESourceOp"; }
-
     IOProfileInfoPtr getIOProfileInfo() const override { return io_profile_info; }
 
 protected:

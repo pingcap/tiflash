@@ -19,10 +19,11 @@
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <absl/base/optimization.h>
 #include <tipb/select.pb.h>
 
 #include <mutex>
-#include <shared_mutex>
+#include <unordered_map>
 
 namespace DB
 {
@@ -35,10 +36,31 @@ enum class CTEOpStatus
     Error
 };
 
+struct IdxWithPadding
+{
+    explicit IdxWithPadding(size_t idx_)
+        : idx(idx_)
+    {}
+
+    size_t idx;
+
+    // To avoid false sharing
+    char padding[ABSL_CACHELINE_SIZE]{};
+};
+
 class CTE
 {
 public:
-    CTEOpStatus tryGetBlockAt(size_t idx, Block & block);
+    size_t getCTEReaderID()
+    {
+        std::lock_guard<std::mutex> lock(this->mu);
+        auto ret = this->next_cte_reader_id;
+        this->next_cte_reader_id++;
+        this->fetch_block_idxs.insert(std::make_tuple(ret, IdxWithPadding(0)));
+        return ret;
+    }
+
+    CTEOpStatus tryGetBlockAt(size_t cte_reader_id, Block & block);
 
     bool pushBlock(const Block & block);
     void notifyEOF() { this->notifyImpl<true>(true); }
@@ -46,28 +68,30 @@ public:
 
     void notifyError(const String & err_msg)
     {
-        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        std::lock_guard<std::mutex> lock(this->mu);
         this->err_msg = err_msg;
     }
 
     String getError()
     {
-        std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+        std::lock_guard<std::mutex> lock(this->mu);
         return this->err_msg;
     }
 
-    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t expected_block_fetch_idx);
+    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id);
+
     void registerTask(TaskPtr && task, NotifyType type);
     void notifyTaskDirectly(TaskPtr && task) { this->pipe_cv.notifyTaskDirectly(std::move(task)); }
 
     void addResp(const tipb::SelectResponse & resp)
     {
-        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        std::lock_guard<std::mutex> lock(this->mu);
         this->resp.MergeFrom(resp);
     }
 
     void tryToGetResp(tipb::SelectResponse & resp)
     {
+        std::lock_guard<std::mutex> lock(this->mu);
         if (!this->get_resp)
         {
             this->get_resp = true;
@@ -76,13 +100,12 @@ public:
     }
 
 private:
-    CTEOpStatus checkBlockAvailableNoLock(size_t idx)
+    CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id)
     {
         if unlikely (this->is_cancelled)
             return CTEOpStatus::Cancelled;
 
-        auto block_num = this->blocks.size();
-        if (block_num <= idx)
+        if (this->blocks.size() <= this->fetch_block_idxs[cte_reader_id].idx)
             return this->is_eof ? CTEOpStatus::Eof : CTEOpStatus::BlockNotAvailable;
 
         return CTEOpStatus::Ok;
@@ -91,7 +114,7 @@ private:
     template <bool has_lock>
     void notifyImpl(bool is_eof)
     {
-        std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
+        std::unique_lock<std::mutex> lock(this->mu, std::defer_lock);
         if constexpr (has_lock)
             lock.lock();
 
@@ -104,9 +127,20 @@ private:
         this->pipe_cv.notifyAll();
     }
 
-    std::shared_mutex rw_lock;
+    // Suppose there are 100 read threads and 10 write threads, for write threads
+    // they are hard to get mu lock and the write operation will be blocked
+    // for longer time. In order to make read operation and write operation to
+    // have same opportunity to get the mu, we introduce read_mu and write_mu,
+    // so that there are only one read thread and one write thread to try to
+    // get the mu.
+    std::mutex read_mu;
+    std::mutex write_mu;
+
+    std::mutex mu;
     Blocks blocks;
     size_t memory_usage = 0;
+    std::unordered_map<size_t, IdxWithPadding> fetch_block_idxs;
+    size_t next_cte_reader_id = 0;
 
     PipeConditionVariable pipe_cv;
 
