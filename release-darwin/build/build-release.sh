@@ -27,6 +27,7 @@ PATH=$PATH:/root/.cargo/bin
 NPROC=${NPROC:-$(sysctl -n hw.physicalcpu || grep -c ^processor /proc/cpuinfo)}
 CMAKE_BUILD_TYPE="RELWITHDEBINFO"
 
+: "${ENABLE_NEXT_GEN:=0}"
 if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
   CMAKE_ENABLE_NEXT_GEN="ON"
   echo "Building TiFlash with next-gen features enabled"

@@ -660,10 +660,12 @@ std::tuple<RowNumber, bool> WindowTransformAction::stepToStartForRangeFrame()
 
 std::tuple<RowNumber, bool> WindowTransformAction::stepToEndForRangeFrame()
 {
-    if (!window_description.frame.end_preceding && !partition_ended)
-        // If we find the frame end and the partition_ended is false.
-        // Some previous blocks may be dropped, this is an unexpected behaviour.
-        // So, we shouldn't do anything before the partition_ended is true.
+    auto end_preceding = window_description.frame.end_preceding;
+    if ((!end_preceding || (end_preceding && window_description.frame.end_offset == 0)) && !partition_ended)
+        // Still return false even when end_preceding is true and end_offset == 0, because there may still
+        // same rows as current_row in the next block. So we cannot stop find the frame
+        // end until got the partition end(or got the first row that is greater than
+        // current_row).
         return std::make_tuple(RowNumber(), false);
 
     if (window_description.is_desc)
