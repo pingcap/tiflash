@@ -39,7 +39,7 @@ uint64_t ResourceGroup::getPriority(uint64_t max_ru_per_sec) const
     const auto remaining_token = bucket->peek();
     if (!burstable && remaining_token <= 0.0)
     {
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_exhausted, name).Increment();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_exhausted, name_with_keyspace_id).Increment();
         return std::numeric_limits<uint64_t>::max();
     }
 
@@ -82,11 +82,12 @@ std::optional<GACRequestInfo> ResourceGroup::buildRequestInfoIfNecessary(const S
     if (report_token_consumption == 0.0 && acquire_tokens == 0.0)
     {
         endRequestWithoutLock();
-        return std::nullopt;
+        return {};
     }
     else
     {
         return GACRequestInfo{
+            .keyspace_id = keyspace_id,
             .resource_group_name = name,
             .acquire_tokens = acquire_tokens,
             .ru_consumption_delta = report_token_consumption,
@@ -168,8 +169,9 @@ void ResourceGroup::updateNormalMode(double add_tokens, double new_capacity, con
     bucket->reConfig(config, now);
     LOG_DEBUG(
         log,
-        "token bucket of rg {} reconfig to normal mode. from: {}, to: {}",
+        "token bucket of rg {}(keyspace={}) reconfig to normal mode. from: {}, to: {}",
         name,
+        keyspace_id,
         ori_bucket_info,
         bucket->toString());
 
@@ -212,8 +214,9 @@ void ResourceGroup::updateTrickleMode(
         trickle_expire_timepoint = now + trickle_dura - GAC_RTT_ANTICIPATION;
     LOG_DEBUG(
         log,
-        "token bucket of rg {} reconfig to trickle mode: from: {}, to: {}, trickle_dura: {}ms",
+        "token bucket of rg {}(keyspace={}) reconfig to trickle mode: from: {}, to: {}, trickle_dura: {}ms",
         name,
+        keyspace_id,
         ori_bucket_info,
         bucket->toString(),
         trickle_dura.count());
@@ -234,12 +237,13 @@ void ResourceGroup::updateDegradeMode(const SteadyClock::time_point & now)
         endRequestWithoutLock();
         LOG_INFO(
             log,
-            "resource group({}) cannot receive gac response(bucket: {}, mode: {}) for {} seconds",
+            "resource group({} keyspace={}) cannot receive gac response(bucket: {}, mode: {}) for {} seconds",
             name,
+            keyspace_id,
             bucket->toString(),
             magic_enum::enum_name(bucket_mode),
             std::chrono::duration_cast<std::chrono::seconds>(LocalAdmissionController::DEGRADE_MODE_DURATION).count());
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_enter_degrade_mode, name).Increment();
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_enter_degrade_mode, name_with_keyspace_id).Increment();
     }
 }
 
@@ -263,7 +267,8 @@ void ResourceGroup::updateRUConsumptionSpeedIfNecessary(const SteadyClock::time_
 
     ru_consumption_delta_for_compute_speed = 0.0;
     last_compute_ru_consumption_speed = now;
-    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name).Set(smooth_ru_consumption_speed);
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_avg_speed, name_with_keyspace_id)
+        .Set(smooth_ru_consumption_speed);
 }
 
 LACRUConsumptionDeltaInfo ResourceGroup::updateRUConsumptionDeltaInfoWithoutLock()
@@ -276,13 +281,14 @@ LACRUConsumptionDeltaInfo ResourceGroup::updateRUConsumptionDeltaInfoWithoutLock
     info.speed = smooth_ru_consumption_speed;
     info.delta = ru_consumption_delta;
 
-    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name).Increment(ru_consumption_delta);
+    GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_total_consumption, name_with_keyspace_id)
+        .Increment(ru_consumption_delta);
 
     ru_consumption_delta = 0;
     return info;
 }
 
-void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & name)
+void LocalAdmissionController::warmupResourceGroupInfoCache(const KeyspaceID & keyspace_id, const std::string & name)
 {
     if (unlikely(stopped))
         return;
@@ -290,11 +296,12 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & 
     if (name.empty())
         return;
 
-    ResourceGroupPtr group = findResourceGroup(name);
+    ResourceGroupPtr group = findResourceGroup(keyspace_id, name);
     if (group != nullptr)
         return;
 
     resource_manager::GetResourceGroupRequest req;
+    req.mutable_keyspace_id()->set_value(keyspace_id);
     req.set_resource_group_name(name);
     resource_manager::GetResourceGroupResponse resp;
 
@@ -306,16 +313,22 @@ void LocalAdmissionController::warmupResourceGroupInfoCache(const std::string & 
     {
         throw ::DB::Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "warmupResourceGroupInfoCache({}) failed: {}",
+            "warmupResourceGroupInfoCache: {}(keyspace={}) failed: {}",
             name,
+            keyspace_id,
             getCurrentExceptionMessage(false));
     }
 
-    RUNTIME_CHECK_MSG(!resp.has_error(), "warmupResourceGroupInfoCache({}) failed: {}", name, resp.error().message());
+    RUNTIME_CHECK_MSG(
+        !resp.has_error(),
+        "warmupResourceGroupInfoCache: {}(keyspace={}) failed: {}",
+        name,
+        keyspace_id,
+        resp.error().message());
 
     checkGACRespValid(resp.group());
 
-    addResourceGroup(resp.group());
+    addResourceGroup(keyspace_id, resp.group());
 }
 
 void LocalAdmissionController::mainLoop()
@@ -358,10 +371,10 @@ void LocalAdmissionController::mainLoop()
         if (current_tick < cur_tick_end)
         {
             std::unique_lock<std::mutex> lock(mu);
-            if (low_token_resource_groups.empty())
+            if (keyspace_low_token_resource_groups.empty())
             {
                 if (cv.wait_until(lock, cur_tick_end, [this]() {
-                        return stopped.load() || !low_token_resource_groups.empty();
+                        return stopped.load() || !keyspace_low_token_resource_groups.empty();
                     }))
                 {
                     if (stopped.load())
@@ -400,8 +413,8 @@ void LocalAdmissionController::mainLoop()
 void LocalAdmissionController::updateRUConsumptionSpeed()
 {
     std::lock_guard lock(mu);
-    for (const auto & resource_group : resource_groups)
-        resource_group.second->updateRUConsumptionSpeedIfNecessary(current_tick);
+    for (auto & ele : keyspace_resource_groups)
+        ele.second->updateRUConsumptionSpeedIfNecessary(current_tick);
 }
 
 std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::buildGACRequest(bool is_final_report)
@@ -410,11 +423,12 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
     if unlikely (is_final_report)
     {
         // Doesn't need to lock for resource_groups because all threads should already been joined!
-        for (const auto & resource_group : resource_groups)
+        for (const auto & ele : keyspace_resource_groups)
         {
-            const auto consumption_delta_info = resource_group.second->updateRUConsumptionDeltaInfoWithoutLock();
+            const auto consumption_delta_info = ele.second->updateRUConsumptionDeltaInfoWithoutLock();
             request_infos.push_back({
-                .resource_group_name = resource_group.first,
+                .keyspace_id = ele.first.first,
+                .resource_group_name = ele.first.second,
                 .acquire_tokens = 0,
                 .ru_consumption_delta = consumption_delta_info.delta,
             });
@@ -422,22 +436,21 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
     }
     else
     {
-        std::unordered_set<std::string> local_low_token_resource_groups;
+        std::unordered_set<std::pair<KeyspaceID, std::string>, LACPairHash> local_keyspace_low_token_resource_groups;
         {
             std::lock_guard lock(mu);
-            local_low_token_resource_groups = low_token_resource_groups;
-            low_token_resource_groups.clear();
+            local_keyspace_low_token_resource_groups = keyspace_low_token_resource_groups;
+            keyspace_low_token_resource_groups.clear();
         }
 
-        for (const auto & iter : resource_groups)
+        for (const auto & ele : keyspace_resource_groups)
         {
-            const auto rg_name = iter.first;
-            const bool need_fetch_token = local_low_token_resource_groups.contains(rg_name);
-            const bool need_report = iter.second->shouldReportRUConsumption(current_tick);
+            const bool need_fetch_token = local_keyspace_low_token_resource_groups.contains(ele.first);
+            const bool need_report = ele.second->shouldReportRUConsumption(current_tick);
 
             if (need_fetch_token || need_report)
             {
-                auto req_info_opt = iter.second->buildRequestInfoIfNecessary(current_tick);
+                auto req_info_opt = ele.second->buildRequestInfoIfNecessary(current_tick);
                 if (req_info_opt.has_value())
                     request_infos.push_back(req_info_opt.value());
             }
@@ -454,6 +467,7 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
     for (const auto & info : request_infos)
     {
         auto * group_request = gac_req.add_requests();
+        group_request->mutable_keyspace_id()->set_value(info.keyspace_id);
         group_request->set_resource_group_name(info.resource_group_name);
         assert(info.acquire_tokens > 0.0 || info.ru_consumption_delta > 0.0 || is_final_report);
         if (info.acquire_tokens > 0.0 || is_final_report)
@@ -462,7 +476,10 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
             auto * req_ru = ru_items->add_request_r_u();
             req_ru->set_type(resource_manager::RequestUnitType::RU);
             req_ru->set_value(info.acquire_tokens);
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_req_acquire_tokens, info.resource_group_name)
+            GET_RESOURCE_GROUP_METRIC(
+                tiflash_resource_group,
+                type_gac_req_acquire_tokens,
+                getResourceGroupMetricName(info.keyspace_id, info.resource_group_name))
                 .Set(info.acquire_tokens);
         }
         if (info.ru_consumption_delta > 0.0 || is_final_report)
@@ -473,7 +490,7 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
             GET_RESOURCE_GROUP_METRIC(
                 tiflash_resource_group,
                 type_gac_req_ru_consumption_delta,
-                info.resource_group_name)
+                getResourceGroupMetricName(info.keyspace_id, info.resource_group_name))
                 .Set(info.ru_consumption_delta);
         }
     }
@@ -509,14 +526,13 @@ void LocalAdmissionController::requestGACLoop()
     }
 }
 
-static std::vector<std::string> extractGACReqNames(const resource_manager::TokenBucketsRequest & gac_req)
+static std::vector<std::pair<KeyspaceID, std::string>> extractGACReqNames(
+    const resource_manager::TokenBucketsRequest & gac_req)
 {
-    std::vector<std::string> res;
+    std::vector<std::pair<KeyspaceID, std::string>> res;
     res.reserve(gac_req.requests_size());
     for (const auto & req : gac_req.requests())
-    {
-        res.push_back(req.resource_group_name());
-    }
+        res.push_back({req.keyspace_id().value(), req.resource_group_name()});
     return res;
 }
 
@@ -539,33 +555,40 @@ void LocalAdmissionController::doRequestGAC()
         {
             const auto req_rg_names = extractGACReqNames(req);
             for (const auto & req_rg_name : req_rg_names)
-                GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_request_gac_count, req_rg_name).Increment();
+                GET_RESOURCE_GROUP_METRIC(
+                    tiflash_resource_group,
+                    type_request_gac_count,
+                    getResourceGroupMetricName(req_rg_name.first, req_rg_name.second))
+                    .Increment();
 
             const auto resp = cluster->pd_client->acquireTokenBuckets(req);
             LOG_DEBUG(log, "request to GAC done, req: {}. resp: {}", req.ShortDebugString(), resp.ShortDebugString());
 
             auto handled = handleTokenBucketsResp(resp);
 
-            std::vector<std::string> not_found;
+            std::vector<std::pair<KeyspaceID, std::string>> not_found;
             // not_found includes resource group names that appears in gac_req but not found in resp.
             // This can happen when the resource group has been deleted.
             if unlikely (handled.size() != req_rg_names.size())
             {
                 for (const auto & req_rg_name : req_rg_names)
                 {
-                    if (std::find(handled.begin(), handled.end(), req_rg_name) == std::end(handled))
-                        not_found.emplace_back(req_rg_name);
+                    if (std::find(handled.begin(), handled.end(), std::make_pair(req_rg_name.first, req_rg_name.second))
+                        == std::end(handled))
+                        not_found.push_back(req_rg_name);
                 }
 
                 std::lock_guard lock(mu);
-                for (const auto & name : not_found)
+                for (const auto & not_found_ele : not_found)
                 {
-                    auto erase_num = resource_groups.erase(name);
+                    auto erase_num = deleteResourceGroupWithoutLock(not_found_ele.first, not_found_ele.second);
                     LOG_INFO(
                         log,
-                        "delete resource group {} because acquireTokenBuckets didn't handle it, GAC may have already "
+                        "delete resource group {}-{} because acquireTokenBuckets didn't handle it, GAC may have "
+                        "already "
                         "delete it. erase_num: {}",
-                        name,
+                        not_found_ele.first,
+                        not_found_ele.second,
                         erase_num);
                 }
             }
@@ -576,14 +599,11 @@ void LocalAdmissionController::doRequestGAC()
 void LocalAdmissionController::checkDegradeMode()
 {
     std::lock_guard lock(mu);
-    for (const auto & ele : resource_groups)
-    {
-        auto group = ele.second;
-        group->updateDegradeMode(current_tick);
-    }
+    for (auto & ele : keyspace_resource_groups)
+        ele.second->updateDegradeMode(current_tick);
 }
 
-std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
+std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handleTokenBucketsResp(
     const resource_manager::TokenBucketsResponse & resp)
 {
     if unlikely (resp.has_error())
@@ -592,7 +612,7 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         return {};
     }
 
-    std::vector<std::string> handled_resource_group_names;
+    std::vector<std::pair<KeyspaceID, std::string>> handled_resource_group_names;
     handled_resource_group_names.reserve(resp.responses_size());
     if (resp.responses().empty())
     {
@@ -610,16 +630,19 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         }
 
         const auto & name = one_resp.resource_group_name();
-        auto resource_group = findResourceGroup(name);
+        KeyspaceID keyspace_id = NullspaceID;
+        if (one_resp.has_keyspace_id())
+            keyspace_id = one_resp.keyspace_id().value();
+        auto resource_group = findResourceGroup(keyspace_id, name);
         if (resource_group == nullptr)
         {
-            LOG_ERROR(log, "cannot find resource group: {}", name);
+            LOG_ERROR(log, "cannot find resource group: {}(keyspace={})", name, keyspace_id);
             continue;
         }
 
-        handled_resource_group_names.push_back(name);
+        handled_resource_group_names.emplace_back(keyspace_id, name);
 
-        const String err_msg = fmt::format("handle acquire token resp failed: rg: {}", name);
+        const String err_msg = fmt::format("handle acquire token resp failed: rg: {}(keyspace={})", name, keyspace_id);
         // It's possible for one_resp.granted_r_u_tokens() to be empty
         // when the acquire_token_req is only for report RU consumption.
         if (one_resp.granted_r_u_tokens().empty())
@@ -689,10 +712,13 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
         // https://github.com/tikv/pd/blob/e9757fbe03260775262763c67f62296fcb26b3c2/pkg/mcs/resourcemanager/server/token_buckets.go#L47
         int64_t capacity = granted_token_bucket.granted_tokens().settings().burst_limit();
 
+        const auto name_with_keyspace_id = getResourceGroupMetricName(keyspace_id, name);
         if (added_tokens > 0)
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_tokens, name).Set(added_tokens);
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_tokens, name_with_keyspace_id)
+                .Set(added_tokens);
         if (capacity > 0)
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_capacity, name).Set(capacity);
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_gac_resp_capacity, name_with_keyspace_id)
+                .Set(capacity);
 
         // fill_rate should never be setted.
         // This is not critical error, just ignore and handle rest resource groups.
@@ -722,13 +748,13 @@ std::vector<std::string> LocalAdmissionController::handleTokenBucketsResp(
     return handled_resource_group_names;
 }
 
-void LocalAdmissionController::watchGACLoop()
+void LocalAdmissionController::watchGACLoop(const std::string & etcd_path)
 {
     while (!stopped.load())
     {
         try
         {
-            doWatch();
+            doWatch(etcd_path);
         }
         catch (...)
         {
@@ -755,16 +781,17 @@ void LocalAdmissionController::watchGACLoop()
     }
 }
 
-void LocalAdmissionController::doWatch()
+void LocalAdmissionController::doWatch(const std::string & etcd_path)
 {
     auto stream = etcd_client->watch(watch_gac_grpc_context.get());
-    auto watch_req = setupWatchReq();
+    auto watch_req = setupWatchReq(etcd_path);
     LOG_DEBUG(log, "watchGAC req: {}", watch_req.ShortDebugString());
     const bool write_ok = stream->Write(watch_req);
+    const std::string err_msg = "watch resource group event failed: ";
     if (!write_ok)
     {
         auto status = stream->Finish();
-        LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + status.error_message());
+        LOG_ERROR(log, err_msg + status.error_message());
         return;
     }
 
@@ -775,13 +802,13 @@ void LocalAdmissionController::doWatch()
         if (!read_ok)
         {
             auto status = stream->Finish();
-            LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + "read watch stream failed, " + status.error_message());
+            LOG_ERROR(log, err_msg + "read watch stream failed, " + status.error_message());
             break;
         }
         LOG_DEBUG(log, "watchGAC got resp: {}", resp.ShortDebugString());
         if (resp.canceled())
         {
-            LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + "watch is canceled");
+            LOG_ERROR(log, err_msg + "watch is canceled");
             break;
         }
         for (const auto & event : resp.events())
@@ -791,12 +818,12 @@ void LocalAdmissionController::doWatch()
             switch (event.type())
             {
             case mvccpb::Event_EventType_DELETE:
-                if (!handleDeleteEvent(kv, err_msg))
-                    LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + err_msg);
+                if (!handleDeleteEvent(etcd_path, kv, err_msg))
+                    LOG_ERROR(log, err_msg + err_msg);
                 break;
             case mvccpb::Event_EventType_PUT:
-                if (!handlePutEvent(kv, err_msg))
-                    LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + err_msg);
+                if (!handlePutEvent(etcd_path, kv, err_msg))
+                    LOG_ERROR(log, err_msg + err_msg);
                 break;
             default:
                 RUNTIME_ASSERT(false, log, "unexpect event type {}", magic_enum::enum_name(event.type()));
@@ -805,42 +832,44 @@ void LocalAdmissionController::doWatch()
     }
 }
 
-etcdserverpb::WatchRequest LocalAdmissionController::setupWatchReq()
+etcdserverpb::WatchRequest LocalAdmissionController::setupWatchReq(const std::string & etcd_path)
 {
     etcdserverpb::WatchRequest watch_req;
     auto * watch_create_req = watch_req.mutable_create_request();
-    watch_create_req->set_key(GAC_RESOURCE_GROUP_ETCD_PATH);
-    auto end_key = GAC_RESOURCE_GROUP_ETCD_PATH;
+    watch_create_req->set_key(etcd_path);
+    auto end_key = etcd_path;
     end_key[end_key.length() - 1] += 1;
     watch_create_req->set_range_end(end_key);
     return watch_req;
 }
 
-bool LocalAdmissionController::handleDeleteEvent(const mvccpb::KeyValue & kv, std::string & err_msg)
+bool LocalAdmissionController::handleDeleteEvent(
+    const std::string & etcd_path,
+    const mvccpb::KeyValue & kv,
+    std::string & err_msg)
 {
+    KeyspaceID keyspace_id = NullspaceID;
     std::string name;
-    if (!parseResourceGroupNameFromWatchKey(kv.key(), name, err_msg))
+    if (!parseResourceGroupNameFromWatchKey(etcd_path, kv.key(), keyspace_id, name, err_msg))
         return false;
 
     size_t erase_num = 0;
     {
         std::lock_guard lock(mu);
-        if (auto delete_iter = resource_groups.find(name); delete_iter != resource_groups.end())
-        {
-            erase_num = 1;
-            const auto deleted_user_ru_per_sec = delete_iter->second->user_ru_per_sec;
-            resource_groups.erase(delete_iter);
-            updateMaxRUPerSecAfterDeleteWithoutLock(deleted_user_ru_per_sec);
-        }
+        erase_num = deleteResourceGroupWithoutLock(keyspace_id, name);
     }
-    LOG_DEBUG(log, "delete resource group {}, erase_num: {}", name, erase_num);
+    LOG_DEBUG(log, "delete resource group {}(keyspace={}), erase_num: {}", name, keyspace_id, erase_num);
     return true;
 }
 
-bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::string & err_msg)
+bool LocalAdmissionController::handlePutEvent(
+    const std::string & etcd_path,
+    const mvccpb::KeyValue & kv,
+    std::string & err_msg)
 {
+    KeyspaceID keyspace_id = NullspaceID;
     std::string name;
-    if (!parseResourceGroupNameFromWatchKey(kv.key(), name, err_msg))
+    if (!parseResourceGroupNameFromWatchKey(etcd_path, kv.key(), keyspace_id, name, err_msg))
         return false;
 
     resource_manager::ResourceGroup group_pb;
@@ -851,8 +880,8 @@ bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::
     }
     {
         std::lock_guard lock(mu);
-        auto iter = resource_groups.find(name);
-        if (iter == resource_groups.end())
+        auto rg = findResourceGroupWithoutLock(keyspace_id, name);
+        if (rg == nullptr)
         {
             // It happens when query of this resource group has not came.
             LOG_DEBUG(
@@ -863,39 +892,50 @@ bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::
         }
         else
         {
-            const auto deleted_user_ru_per_sec = iter->second->user_ru_per_sec;
-            iter->second->resetResourceGroup(group_pb);
-            updateMaxRUPerSecAfterDeleteWithoutLock(deleted_user_ru_per_sec);
+            rg->resetResourceGroup(group_pb);
+            updateMaxRUPerSecAfterDeleteWithoutLock(rg->user_ru_per_sec);
         }
     }
-    LOG_DEBUG(log, "modify resource group to: {}", group_pb.ShortDebugString());
+    LOG_DEBUG(log, "modify resource group {}(keyspace={}) to: {}", name, keyspace_id, group_pb.ShortDebugString());
     return true;
 }
 
 bool LocalAdmissionController::parseResourceGroupNameFromWatchKey(
+    const std::string & etcd_key_prefix,
     const std::string & etcd_key,
+    KeyspaceID & keyspace_id,
     std::string & parsed_rg_name,
     std::string & err_msg)
 {
-    const std::string & key_prefix = GAC_RESOURCE_GROUP_ETCD_PATH;
-    // Expect etcd_key: resource_group/settings/rg_name
-    // key_prefix is resource_group/settings
-    if (etcd_key.length() <= key_prefix.length() + 1)
+    // Expect etcd_key: resource_group/settings/rg_name OR resource_group/settings/keyspace_id/rg_name
+    // etcd_key_prefix is resource_group/settings
+    if (etcd_key.length() <= etcd_key_prefix.length() + 1)
     {
-        err_msg = fmt::format(
-            "expect etcd key: {}/resource_group_name, but got {}",
-            GAC_RESOURCE_GROUP_ETCD_PATH,
-            etcd_key);
+        err_msg = fmt::format("expect etcd key: {}/resource_group_name, but got {}", etcd_key_prefix, etcd_key);
         return false;
     }
-    parsed_rg_name = std::string(etcd_key.begin() + key_prefix.length() + 1, etcd_key.end());
-    return true;
+
+    if (etcd_key_prefix == GAC_RESOURCE_GROUP_ETCD_PATH)
+    {
+        keyspace_id = NullspaceID;
+        parsed_rg_name = std::string(etcd_key.begin() + etcd_key_prefix.length() + 1, etcd_key.end());
+        return true;
+    }
+    else if (etcd_key_prefix == GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH)
+    {
+        return parseKeyspaceEtcdKey(etcd_key_prefix, etcd_key, keyspace_id, parsed_rg_name, err_msg);
+    }
+    else
+    {
+        err_msg = "unexpected etcd_key_prefix: " + etcd_key_prefix;
+        return false;
+    }
 }
 
 void LocalAdmissionController::checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb)
 {
-    RUNTIME_CHECK_MSG(!new_group_pb.name().empty(), "resource group name from GAC is empty");
-    RUNTIME_CHECK_MSG(new_group_pb.mode() == resource_manager::GroupMode::RUMode, "resource group is not RUMode");
+    RUNTIME_CHECK(!new_group_pb.name().empty());
+    RUNTIME_CHECK(new_group_pb.mode() == resource_manager::GroupMode::RUMode);
 }
 
 void LocalAdmissionController::updateMaxRUPerSecAfterDeleteWithoutLock(uint64_t deleted_user_ru_per_sec)
@@ -903,10 +943,10 @@ void LocalAdmissionController::updateMaxRUPerSecAfterDeleteWithoutLock(uint64_t 
     if (max_ru_per_sec == deleted_user_ru_per_sec)
     {
         max_ru_per_sec = 0;
-        for (const auto & resource_group : resource_groups)
+        for (auto & ele : keyspace_resource_groups)
         {
-            if (max_ru_per_sec < resource_group.second->user_ru_per_sec)
-                max_ru_per_sec = resource_group.second->user_ru_per_sec;
+            if (max_ru_per_sec < ele.second->user_ru_per_sec)
+                max_ru_per_sec = ele.second->user_ru_per_sec;
         }
     }
 }
@@ -945,7 +985,7 @@ void LocalAdmissionController::stop()
     // This can happen when disagg CN is scaled-in/out frequently.
     // NOTE: Make sure all threads have been joined before call buildGACRequest().
     const auto gac_req = buildGACRequest(/*is_final_report=*/true);
-    RUNTIME_CHECK(resource_groups.empty() || gac_req.has_value());
+    RUNTIME_CHECK(keyspace_resource_groups.empty() || gac_req.has_value());
     auto resp = cluster->pd_client->acquireTokenBuckets(gac_req.value());
 
     if (resp.has_error())
@@ -975,8 +1015,38 @@ std::unique_ptr<MockLocalAdmissionController> LocalAdmissionController::global_i
 std::unique_ptr<LocalAdmissionController> LocalAdmissionController::global_instance;
 #endif
 
-// Defined in PD resource_manager_client.go.
+// When keyspace is enabled, PD store resource group info in etcd path of GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH
+// instead of GAC_RESOURCE_GROUP_ETCD_PATH.
 const std::string LocalAdmissionController::GAC_RESOURCE_GROUP_ETCD_PATH = "resource_group/settings";
-const std::string LocalAdmissionController::WATCH_GAC_ERR_PREFIX = "watch resource group event failed: ";
+const std::string LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH = "resource_group/keyspace/settings";
+
+bool LocalAdmissionController::parseKeyspaceEtcdKey(
+    const std::string & etcd_key_prefix,
+    const std::string & etcd_key,
+    KeyspaceID & parsed_keyspace_id,
+    std::string & parsed_rg_name,
+    std::string & err_msg)
+{
+    // resource_group/settings/keyspace_id/rg_name -> keyspace_id/rg_name
+    auto tmp_str = std::string(etcd_key.begin() + etcd_key_prefix.length() + 1, etcd_key.end());
+    size_t slash_pos = tmp_str.find('/');
+    if (slash_pos == std::string::npos)
+    {
+        err_msg = fmt::format("invalid etcd_key: {}, parse keyspace fail", etcd_key);
+        return false;
+    }
+    auto keyspace_str = tmp_str.substr(0, slash_pos);
+    parsed_rg_name = tmp_str.substr(slash_pos + 1);
+    try
+    {
+        parsed_keyspace_id = static_cast<KeyspaceID>(std::stoul(keyspace_str));
+    }
+    catch (const std::exception & e)
+    {
+        err_msg = fmt::format("invalid etcd_key: {}, parse keyspace failed: {}", etcd_key, e.what());
+        return false;
+    }
+    return true;
+}
 
 } // namespace DB

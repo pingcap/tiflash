@@ -185,6 +185,7 @@ public:
                 nullptr,
                 nullptr,
                 nullptr,
+                NullspaceID,
                 resource_group_name);
         }
         return all_contexts;
@@ -384,6 +385,7 @@ TEST_F(TestResourceControlQueue, BasicTest)
             nullptr,
             nullptr,
             nullptr,
+            NullspaceID,
             group_name);
 
         for (int j = 0; j < task_num_per_resource_group; ++j)
@@ -420,6 +422,7 @@ TEST_F(TestResourceControlQueue, BasicTimeoutTest)
         nullptr,
         nullptr,
         nullptr,
+        NullspaceID,
         group_name);
 
     auto task = std::make_unique<SimpleTask>(*exec_context);
@@ -449,7 +452,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
     TaskScheduler task_scheduler(config);
 
     PipelineExecutorContext
-        exec_context("mock-query-id", "mock-req-id", mem_tracker, nullptr, nullptr, nullptr, rg_name);
+        exec_context("mock-query-id", "mock-req-id", mem_tracker, nullptr, nullptr, nullptr, NullspaceID, rg_name);
 
     auto task = std::make_unique<SimpleTask>(exec_context);
     // This task should use 5*100ms cpu_time.
@@ -564,7 +567,7 @@ TEST_F(TestResourceControlQueue, ResourceControlPriorityQueueTest)
     ResourceControlQueue<CPUMultiLevelFeedbackQueue> test_queue;
     for (size_t i = 0; i < priority_vals.size(); ++i)
     {
-        test_queue.resource_group_infos.push({"rg-" + std::to_string(i), priority_vals[i], nullptr});
+        test_queue.resource_group_infos.push({NullspaceID, "rg-" + std::to_string(i), priority_vals[i], nullptr});
     }
 
     std::sort(priority_vals.begin(), priority_vals.end());
@@ -616,7 +619,7 @@ TEST_F(TestResourceControlQueue, cancel)
         queue.submit(tasks);
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
-            queue.cancel(query_id_prefix + rg_names[i], rg_names[i]);
+            queue.cancel(TaskCancelInfo{.query_id = query_id_prefix + rg_names[i], .resource_group_name = rg_names[i]});
             for (size_t j = 0; j < tasks_per_resource_group; ++j)
             {
                 TaskPtr task;
@@ -636,7 +639,7 @@ TEST_F(TestResourceControlQueue, cancel)
         ResourceControlQueue<CPUMultiLevelFeedbackQueue> queue;
         for (size_t i = 0; i < resource_groups.size(); ++i)
         {
-            queue.cancel(query_id_prefix + rg_names[i], rg_names[i]);
+            queue.cancel(TaskCancelInfo{.query_id = query_id_prefix + rg_names[i], .resource_group_name = rg_names[i]});
             if (i == 0)
                 queue.submit(tasks);
 
@@ -674,6 +677,74 @@ TEST_F(TestResourceControlQueue, tokenBucket)
         }
         ASSERT_GT(bucket.peek(), init_tokens);
         ASSERT_GE(bucket.peek(), init_tokens + fill_rate * 1000 * std::chrono::microseconds(5).count() / 1000000);
+    }
+}
+
+TEST_F(TestResourceControlQueue, parseEtcdKey)
+{
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings/1234/rg1";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, 1234);
+        ASSERT_EQ(name, "rg1");
+        ASSERT_TRUE(err_msg.empty());
+    }
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings//123";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, NullspaceID);
+        ASSERT_EQ(name, "123");
+        ASSERT_TRUE(err_msg.contains("parse keyspace fail"));
+    }
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings//";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, NullspaceID);
+        ASSERT_EQ(name, "");
+        ASSERT_TRUE(err_msg.contains("parse keyspace fail"));
+    }
+    {
+        KeyspaceID id = NullspaceID;
+        std::string name;
+        std::string err_msg;
+
+        const std::string k1 = "resource_group/keyspace/settings/rg1";
+        LocalAdmissionController::parseKeyspaceEtcdKey(
+            LocalAdmissionController::GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH,
+            k1,
+            id,
+            name,
+            err_msg);
+        ASSERT_EQ(id, NullspaceID);
+        ASSERT_EQ(name, "");
+        ASSERT_TRUE(err_msg.contains("parse keyspace fail"));
     }
 }
 

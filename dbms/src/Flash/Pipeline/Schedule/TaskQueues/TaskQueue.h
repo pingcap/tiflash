@@ -44,7 +44,7 @@ public:
     // And the tasks in the queue can still be taken normally.
     virtual void finish() = 0;
 
-    virtual void cancel(const String & query_id, const String & resource_group_name) = 0;
+    virtual void cancel(const TaskCancelInfo & cancel_info) = 0;
 
 protected:
     LoggerPtr logger = Logger::get();
