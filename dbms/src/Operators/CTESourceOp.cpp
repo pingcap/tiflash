@@ -15,6 +15,7 @@
 #include <Operators/CTE.h>
 #include <Operators/CTESourceOp.h>
 #include <Operators/Operator.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 
 namespace DB
 {
@@ -25,7 +26,7 @@ void CTESourceOp::operateSuffixImpl()
 
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {
-    auto ret = this->cte_reader->fetchNextBlock(block);
+    auto ret = this->cte_reader->fetchNextBlock(this->id, block);
     switch (ret)
     {
     case CTEOpStatus::Eof:
@@ -36,7 +37,7 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
     case CTEOpStatus::BlockNotAvailable:
-        this->cte_reader->setNotifyFuture();
+        DB::setNotifyFuture(&(this->notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::Cancelled:
         return OperatorStatus::CANCELLED;

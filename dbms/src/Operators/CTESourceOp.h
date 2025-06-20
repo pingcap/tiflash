@@ -26,6 +26,26 @@
 
 namespace DB
 {
+class CTESourceNotifyFuture : public NotifyFuture
+{
+public:
+    CTESourceNotifyFuture(std::shared_ptr<CTE> cte_, size_t cte_reader_id_, size_t source_id_)
+        : cte(cte_)
+        , cte_reader_id(cte_reader_id_)
+        , source_id(source_id_)
+    {}
+
+    void registerTask(TaskPtr && task) override
+    {
+        this->cte->checkBlockAvailableAndRegisterTask(std::move(task), this->cte_reader_id, this->source_id);
+    }
+
+private:
+    std::shared_ptr<CTE> cte;
+    size_t cte_reader_id;
+    size_t source_id;
+};
+
 class CTESourceOp : public SourceOp
 {
 public:
@@ -33,10 +53,13 @@ public:
         PipelineExecutorContext & exec_context_,
         const String & req_id,
         std::shared_ptr<CTEReader> cte_reader_,
+        size_t id_,
         const NamesAndTypes & schema)
         : SourceOp(exec_context_, req_id)
         , cte_reader(cte_reader_)
         , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, 1))
+        , id(id_)
+        , notifier(this->cte_reader->getCTE(), this->cte_reader->getID(), this->id)
     {
         setHeader(Block(getColumnWithTypeAndName(schema)));
     }
@@ -54,5 +77,7 @@ private:
     uint64_t total_rows{};
     IOProfileInfoPtr io_profile_info;
     tipb::SelectResponse resp;
+    size_t id;
+    CTESourceNotifyFuture notifier;
 };
 } // namespace DB

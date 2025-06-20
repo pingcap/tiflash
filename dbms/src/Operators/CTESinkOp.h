@@ -18,16 +18,15 @@
 #include <Operators/CTE.h>
 #include <Operators/Operator.h>
 
-#include "Common/Stopwatch.h"
-
 namespace DB
 {
 class CTESinkOp : public SinkOp
 {
 public:
-    CTESinkOp(PipelineExecutorContext & exec_context_, const String & req_id, std::shared_ptr<CTE> cte_)
+    CTESinkOp(PipelineExecutorContext & exec_context_, const String & req_id, std::shared_ptr<CTE> cte_, size_t id_)
         : SinkOp(exec_context_, req_id)
         , cte(cte_)
+        , id(id_)
     {}
 
     String getName() const override { return "CTESinkOp"; }
@@ -40,5 +39,6 @@ protected:
 private:
     std::shared_ptr<CTE> cte;
     size_t total_rows = 0;
+    size_t id;
 };
 } // namespace DB

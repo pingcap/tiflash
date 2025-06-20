@@ -78,7 +78,7 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
                 this->expected_source_num);
             exec_context.addCTE(cte_reader->getCTE());
             group_builder.addConcurrency(
-                std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, schema));
+                std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, partition_id, schema));
         }
     }
     else
@@ -90,10 +90,10 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
             this->expected_sink_num,
             this->expected_source_num);
         exec_context.addCTE(cte_reader->getCTE());
-        for (size_t partition_id = 0; partition_id < concurrency; ++partition_id)
+        for (size_t i = 0; i < concurrency; ++i)
         {
             group_builder.addConcurrency(
-                std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, schema));
+                std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, i, schema));
         }
     }
 

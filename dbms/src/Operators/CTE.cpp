@@ -17,34 +17,57 @@
 
 #include <cassert>
 #include <mutex>
+#include <shared_mutex>
 
 namespace DB
 {
-CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, Block & block)
+constexpr size_t PARTITION_NUM = 70; // TODO maybe need more tests to select a reasonable value
+
+inline size_t getPartitionID(size_t id) { return id % PARTITION_NUM; }
+
+CTE::CTE()
 {
-    std::lock_guard<std::mutex> read_lock(this->read_mu);
-    std::lock_guard<std::mutex> lock(this->mu);
-    auto status = this->checkBlockAvailableNoLock(cte_reader_id);
+    for (size_t i = 0; i < PARTITION_NUM; i++)
+    {
+        this->partitions.push_back(CTEPartition());
+        this->partitions.back().mu = std::make_unique<std::mutex>();
+        this->partitions.back().read_mu = std::make_unique<std::mutex>();
+        this->partitions.back().write_mu = std::make_unique<std::mutex>();
+    }
+}
+    
+CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block)
+{
+    auto partition_id = getPartitionID(source_id);
+
+    std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
+    std::lock_guard<std::mutex> read_lock(*this->partitions[partition_id].read_mu);
+    std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
+    auto status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
     if (status != CTEOpStatus::Ok)
         return status;
 
-    block = this->blocks[this->fetch_block_idxs[cte_reader_id].idx];
-    this->fetch_block_idxs[cte_reader_id].idx++;
+    auto idx = this->partitions[partition_id].fetch_block_idxs[cte_reader_id].idx++;
+    block = this->partitions[partition_id].blocks[idx];
     return status;
 }
 
-bool CTE::pushBlock(const Block & block)
+bool CTE::pushBlock(size_t sink_id, const Block & block)
 {
-    std::lock_guard<std::mutex> write_lock(this->write_mu);
-    std::lock_guard<std::mutex> lock(this->mu);
-    if unlikely (this->is_cancelled)
-        return false;
+    {
+        std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
+        if unlikely (this->is_cancelled)
+            return false;
+    }
 
     if unlikely (block.rows() == 0)
         return true;
 
-    this->memory_usage += block.bytes();
-    this->blocks.push_back(block);
+    auto partition_id = getPartitionID(sink_id);
+    std::lock_guard<std::mutex> write_lock(*this->partitions[partition_id].write_mu);
+    std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
+    this->partitions[partition_id].memory_usages += block.bytes();
+    this->partitions[partition_id].blocks.push_back(block);
     this->pipe_cv.notifyOne();
     return true;
 }
@@ -55,11 +78,17 @@ void CTE::registerTask(TaskPtr && task, NotifyType type)
     pipe_cv.registerTask(std::move(task));
 }
 
-void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id)
+void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id)
 {
-    std::lock_guard<std::mutex> lock(this->read_mu);
-    std::lock_guard<std::mutex> shared_lock(this->mu);
-    CTEOpStatus status = this->checkBlockAvailableNoLock(cte_reader_id);
+    auto partition_id = getPartitionID(source_id);
+    CTEOpStatus status;
+
+    {
+        std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
+        std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
+        status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
+    }
+
     if (status == CTEOpStatus::Ok)
     {
         this->notifyTaskDirectly(std::move(task));

@@ -25,24 +25,6 @@
 
 namespace DB
 {
-class CTEReaderNotifyFuture : public NotifyFuture
-{
-public:
-    CTEReaderNotifyFuture(std::shared_ptr<CTE> cte_, size_t cte_reader_id_)
-        : cte(cte_)
-        , cte_reader_id(cte_reader_id_)
-    {}
-
-    void registerTask(TaskPtr && task) override
-    {
-        this->cte->checkBlockAvailableAndRegisterTask(std::move(task), this->cte_reader_id);
-    }
-
-private:
-    std::shared_ptr<CTE> cte;
-    size_t cte_reader_id;
-};
-
 class CTEReader
 {
 public:
@@ -58,7 +40,6 @@ public:
         , cte(cte_manager_
                   ->getCTEBySource(query_id_and_cte_id_, partition_id, expected_sink_num_, expected_source_num_))
         , cte_reader_id(this->cte->getCTEReaderID())
-        , notifier(cte, this->cte_reader_id)
     {}
 
     ~CTEReader()
@@ -67,7 +48,7 @@ public:
         this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id, this->partition_id);
     }
 
-    CTEOpStatus fetchNextBlock(Block & block);
+    CTEOpStatus fetchNextBlock(size_t source_id, Block & block);
     CTEOpStatus checkAvailableBlock();
 
     void getResp(tipb::SelectResponse & resp)
@@ -79,9 +60,8 @@ public:
         resp.CopyFrom(this->resp);
     }
 
-    void setNotifyFuture() { ::DB::setNotifyFuture(&(this->notifier)); }
-
     std::shared_ptr<CTE> getCTE() const { return this->cte; }
+    size_t getID() const { return this->cte_reader_id; }
 
 private:
     String query_id_and_cte_id;
@@ -89,7 +69,6 @@ private:
     CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
     size_t cte_reader_id;
-    CTEReaderNotifyFuture notifier;
 
     std::mutex mu;
     bool resp_fetched = false;

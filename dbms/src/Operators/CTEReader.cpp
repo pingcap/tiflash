@@ -19,9 +19,9 @@
 
 namespace DB
 {
-CTEOpStatus CTEReader::fetchNextBlock(Block & block)
+CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
 {
-    auto ret = this->cte->tryGetBlockAt(this->cte_reader_id, block);
+    auto ret = this->cte->tryGetBlockAt(this->cte_reader_id, source_id, block);
     switch (ret)
     {
     case CTEOpStatus::Eof:

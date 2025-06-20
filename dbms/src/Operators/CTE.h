@@ -22,8 +22,11 @@
 #include <absl/base/optimization.h>
 #include <tipb/select.pb.h>
 
+#include <memory>
 #include <mutex>
+#include <shared_mutex>
 #include <unordered_map>
+#include <utility>
 
 namespace DB
 {
@@ -38,60 +41,74 @@ enum class CTEOpStatus
 
 struct IdxWithPadding
 {
+    IdxWithPadding() = default;
     explicit IdxWithPadding(size_t idx_)
         : idx(idx_)
     {}
 
-    size_t idx;
+    size_t idx = 0;
 
     // To avoid false sharing
     char padding[ABSL_CACHELINE_SIZE]{};
 };
 
+struct CTEPartition
+{
+    std::unique_ptr<std::mutex> mu;
+    std::unique_ptr<std::mutex> read_mu;
+    std::unique_ptr<std::mutex> write_mu;
+    Blocks blocks;
+    std::unordered_map<size_t, IdxWithPadding> fetch_block_idxs;
+    size_t memory_usages = 0; // TODO need a unified statistic
+};
+
 class CTE
 {
 public:
+    CTE();
+
     size_t getCTEReaderID()
     {
-        std::lock_guard<std::mutex> lock(this->mu);
-        auto ret = this->next_cte_reader_id;
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        auto cte_reader_id = this->next_cte_reader_id;
         this->next_cte_reader_id++;
-        this->fetch_block_idxs.insert(std::make_tuple(ret, IdxWithPadding(0)));
-        return ret;
+        for (auto & item : this->partitions)
+            item.fetch_block_idxs.insert(std::make_pair(cte_reader_id, IdxWithPadding(0)));
+        return cte_reader_id;
     }
 
-    CTEOpStatus tryGetBlockAt(size_t cte_reader_id, Block & block);
+    CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block);
 
-    bool pushBlock(const Block & block);
+    bool pushBlock(size_t sink_id, const Block & block);
     void notifyEOF() { this->notifyImpl<true>(true); }
     void notifyCancel() { this->notifyImpl<true>(false); }
 
     void notifyError(const String & err_msg)
     {
-        std::lock_guard<std::mutex> lock(this->mu);
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
         this->err_msg = err_msg;
     }
 
     String getError()
     {
-        std::lock_guard<std::mutex> lock(this->mu);
+        std::shared_lock<std::shared_mutex> lock(this->rw_lock);
         return this->err_msg;
     }
 
-    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id);
+    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id);
 
     void registerTask(TaskPtr && task, NotifyType type);
     void notifyTaskDirectly(TaskPtr && task) { this->pipe_cv.notifyTaskDirectly(std::move(task)); }
 
     void addResp(const tipb::SelectResponse & resp)
     {
-        std::lock_guard<std::mutex> lock(this->mu);
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
         this->resp.MergeFrom(resp);
     }
 
     void tryToGetResp(tipb::SelectResponse & resp)
     {
-        std::lock_guard<std::mutex> lock(this->mu);
+        std::shared_lock<std::shared_mutex> lock(this->rw_lock);
         if (!this->get_resp)
         {
             this->get_resp = true;
@@ -100,12 +117,12 @@ public:
     }
 
 private:
-    CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id)
+    CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id)
     {
         if unlikely (this->is_cancelled)
             return CTEOpStatus::Cancelled;
 
-        if (this->blocks.size() <= this->fetch_block_idxs[cte_reader_id].idx)
+        if (this->partitions[partition_id].blocks.size() <= this->partitions[partition_id].fetch_block_idxs[cte_reader_id].idx)
             return this->is_eof ? CTEOpStatus::Eof : CTEOpStatus::BlockNotAvailable;
 
         return CTEOpStatus::Ok;
@@ -114,7 +131,7 @@ private:
     template <bool has_lock>
     void notifyImpl(bool is_eof)
     {
-        std::unique_lock<std::mutex> lock(this->mu, std::defer_lock);
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
         if constexpr (has_lock)
             lock.lock();
 
@@ -127,23 +144,11 @@ private:
         this->pipe_cv.notifyAll();
     }
 
-    // Suppose there are 100 read threads and 10 write threads, for write threads
-    // they are hard to get mu lock and the write operation will be blocked
-    // for longer time. In order to make read operation and write operation to
-    // have same opportunity to get the mu, we introduce read_mu and write_mu,
-    // so that there are only one read thread and one write thread to try to
-    // get the mu.
-    std::mutex read_mu;
-    std::mutex write_mu;
-
-    std::mutex mu;
-    Blocks blocks;
-    size_t memory_usage = 0;
-    std::unordered_map<size_t, IdxWithPadding> fetch_block_idxs;
-    size_t next_cte_reader_id = 0;
-
+    std::vector<CTEPartition> partitions;
     PipeConditionVariable pipe_cv;
-
+    
+    std::shared_mutex rw_lock;
+    size_t next_cte_reader_id = 0;
     bool is_eof = false;
     bool is_cancelled = false;
 

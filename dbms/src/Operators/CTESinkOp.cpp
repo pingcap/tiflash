@@ -28,7 +28,7 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
         return OperatorStatus::FINISHED;
 
     this->total_rows += block.rows();
-    if (this->cte->pushBlock(block))
+    if (this->cte->pushBlock(this->id, block))
         return OperatorStatus::NEED_INPUT;
     const String & err = this->cte->getError();
     if (err.empty())

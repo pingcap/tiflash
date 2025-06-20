@@ -63,6 +63,8 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
                   ->getCTEBySink(query_id_and_cte_id, "", this->expected_sink_num, this->expected_source_num);
     }
 
+    size_t id = 0;
+    
     group_builder.transform([&](auto & builder) {
         if (fine_grained_shuffle.enabled())
         {
@@ -74,7 +76,8 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
             partition_id++;
         }
 
-        builder.setSinkOp(std::make_unique<CTESinkOp>(exec_context, log->identifier(), cte));
+        builder.setSinkOp(std::make_unique<CTESinkOp>(exec_context, log->identifier(), cte, id));
+        id++;
     });
 }
 
