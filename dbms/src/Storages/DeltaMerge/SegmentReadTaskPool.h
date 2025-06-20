@@ -186,7 +186,7 @@ public:
     void recordExtraRemoteInfoIfNecessary(SegmentReadTaskPtr & task)
     {
         if (task->extra_remote_info)
-            extra_remote_segment_infos.push_back(*(task->extra_remote_info));
+            remote_connection_infos.push_back(task->extra_remote_info->connection_profile_info);
     }
     size_t getTotalReadTasks() const { return total_read_tasks; }
 
@@ -266,7 +266,10 @@ private:
     inline static constexpr Int64 check_ru_interval_ms = 100;
 
     std::once_flag get_remote_connection_flag;
-    std::vector<DM::ExtraRemoteSegmentInfo> extra_remote_segment_infos;
+    // Each remote segment task have a connection info to record network bytes,
+    // and it will be collected by TableScan as runtime statistics.
+    std::vector<ConnectionProfileInfo> remote_connection_infos;
+
     friend class tests::SegmentReadTasksPoolTest;
 };
 

@@ -204,12 +204,11 @@ std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentRe
     ConnectionProfileInfo inter_zone_info(inter_type);
     ConnectionProfileInfo inner_zone_info(inner_type);
 
-    if (extra_remote_segment_infos.empty())
+    if (remote_connection_infos.empty())
         return {};
 
-    for (const auto & info : extra_remote_segment_infos)
+    for (const auto & connection_info : remote_connection_infos)
     {
-        const auto & connection_info = info.connection_profile_info;
         if (connection_info.type == inter_type)
             inter_zone_info.merge(connection_info);
         else if (connection_info.type == inner_type)
