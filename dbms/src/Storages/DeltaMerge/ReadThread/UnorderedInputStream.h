@@ -178,7 +178,7 @@ private:
     int max_wait_time_ms;
 
     std::vector<ConnectionProfileInfo> connection_profile_infos;
-    bool is_disagg;
+    const bool is_disagg;
     friend class tests::DeltaMergeStoreRWTest;
 };
 } // namespace DB::DM
