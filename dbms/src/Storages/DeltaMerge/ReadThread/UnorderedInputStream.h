@@ -37,7 +37,8 @@ public:
         int extra_table_id_index_,
         const String & req_id,
         const RuntimeFilteList & runtime_filter_list_ = std::vector<RuntimeFilterPtr>{},
-        int max_wait_time_ms_ = 0)
+        int max_wait_time_ms_ = 0,
+        bool is_disagg_ = false)
         : task_pool(task_pool_)
         , header(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_))
         , log(Logger::get(req_id))
@@ -45,6 +46,7 @@ public:
         , task_pool_added(false)
         , runtime_filter_list(runtime_filter_list_)
         , max_wait_time_ms(max_wait_time_ms_)
+        , is_disagg(is_disagg_)
     {
         ref_no = task_pool->increaseUnorderedInputStreamRefCount();
     }
@@ -74,6 +76,8 @@ public:
         runtime_filter_list = runtime_filter_list_;
         max_wait_time_ms = max_wait_time_ms_;
     }
+
+    std::vector<ConnectionProfileInfo> getConnectionProfileInfos() const { return connection_profile_infos; }
 
 protected:
     Block readImpl() override
@@ -116,6 +120,23 @@ protected:
 
     void readSuffixImpl() override
     {
+        if (is_disagg)
+        {
+            std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
+                auto pool_connection_info_opt = task_pool->getRemoteConnectionInfo();
+                RUNTIME_CHECK(
+                    pool_connection_info_opt.has_value() || (task_pool->getTotalReadTasks() == 0),
+                    pool_connection_info_opt.has_value(),
+                    task_pool->getTotalReadTasks());
+                RUNTIME_CHECK(connection_profile_infos.empty(), connection_profile_infos.size());
+
+                if (pool_connection_info_opt)
+                {
+                    connection_profile_infos.push_back(pool_connection_info_opt->first);
+                    connection_profile_infos.push_back(pool_connection_info_opt->second);
+                }
+            });
+        }
         LOG_DEBUG(
             log,
             "Finish read from storage, pool_id={} ref_no={} rows={}",
@@ -156,6 +177,8 @@ private:
     std::vector<RuntimeFilterPtr> runtime_filter_list;
     int max_wait_time_ms;
 
+    std::vector<ConnectionProfileInfo> connection_profile_infos;
+    const bool is_disagg;
     friend class tests::DeltaMergeStoreRWTest;
 };
 } // namespace DB::DM

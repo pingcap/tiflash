@@ -16,6 +16,8 @@
 #include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Flash/Statistics/TableScanImpl.h>
 #include <Interpreters/Join.h>
+#include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
+#include <Storages/DeltaMerge/Remote/RNSegmentInputStream.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 namespace DB
@@ -68,10 +70,20 @@ void TableScanStatistics::updateTableScanDetail(const std::vector<ConnectionProf
             remote_table_scan_detail.inter_zone_conn_profile_info.packets += connection_profile_info.packets;
             remote_table_scan_detail.inter_zone_conn_profile_info.bytes += connection_profile_info.bytes;
         }
-        // Stats both send and receive bytes here, because remote execution summaries are not used now
+        // Whether it's for remote read (non-disaggregated mode) or communication between CN and WN (disaggregated mode),
+        // send bytes are always collected on the node that sends the request (i.e., the node where the table scan executor resides).
+        // Therefore, both send bytes and receive bytes are collected here.
         base.updateSendConnectionInfo(connection_profile_info);
         base.updateReceiveConnectionInfo(connection_profile_info);
     }
+}
+
+void TableScanStatistics::updateTableScanDetailForDisaggIfNecessary(const IProfilingBlockInputStream * stream)
+{
+    if (const auto * unordered_stream = dynamic_cast<const DM::UnorderedInputStream *>(stream))
+        updateTableScanDetail(unordered_stream->getConnectionProfileInfos());
+    else if (const auto * rn_segment_stream = dynamic_cast<const DM::Remote::RNSegmentInputStream *>(stream))
+        updateTableScanDetail(rn_segment_stream->getConnectionProfileInfos());
 }
 
 void TableScanStatistics::collectExtraRuntimeDetail()
@@ -91,6 +103,8 @@ void TableScanStatistics::collectExtraRuntimeDetail()
             else if (const auto * local_stream = dynamic_cast<const IProfilingBlockInputStream *>(&stream);
                      local_stream)
             {
+                updateTableScanDetailForDisaggIfNecessary(local_stream);
+
                 /// local read input stream also is IProfilingBlockInputStream
                 const auto & prof = local_stream->getProfileInfo();
                 local_table_scan_detail.bytes += prof.bytes;
