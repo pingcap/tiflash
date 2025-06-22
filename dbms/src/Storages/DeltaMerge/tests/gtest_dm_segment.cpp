@@ -34,6 +34,8 @@
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/logger_useful.h>
+#include <jemalloc/jemalloc_rename.h>
+#include <jemalloc/jemalloc.h>
 
 #include <ctime>
 #include <future>
@@ -294,8 +296,13 @@ try
     }
 
     auto schema = tableColumns();
-    for (size_t i = 0; i < 100'000'000; ++i)
+    // for (size_t i = 0; i < 100'000'000; ++i)
+    for (size_t i = 0; i < 100; ++i)
     {
+        if (i % 10 == 0)
+        {
+            je_mallctl("prof.dump", nullptr, nullptr, nullptr, 0);
+        }
         // read written data (only in delta)
         auto in = segment->getInputStreamModeNormal(dmContext(), *schema, {RowKeyRange::newAll(false, 1)});
 
@@ -315,6 +322,7 @@ try
                 tot_n_writers);
         }
     }
+    je_mallctl("prof.dump", nullptr, nullptr, nullptr, 0);
 }
 CATCH
 

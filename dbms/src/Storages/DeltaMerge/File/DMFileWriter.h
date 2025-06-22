@@ -66,10 +66,11 @@ public:
                              .with_checksum_frame_size(detail::getFrameSizeOrDefault(*dmfile))
                              .build())
             , compressed_buf(
-                  dmfile->configuration ? std::unique_ptr<WriteBuffer>(
-                      new CompressedWriteBuffer<false>(*plain_file, compression_settings))
-                                        : std::unique_ptr<WriteBuffer>(
-                                            new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
+                  dmfile->configuration //
+                      ? std::unique_ptr<WriteBuffer>(
+                          new CompressedWriteBuffer<false>(*plain_file, compression_settings))
+                      : std::unique_ptr<WriteBuffer>(
+                          new CompressedWriteBuffer<true>(*plain_file, compression_settings)))
             , minmaxes(do_index ? std::make_shared<MinMaxIndex>(*type) : nullptr)
         {
             if (!dmfile->useMetaV2())

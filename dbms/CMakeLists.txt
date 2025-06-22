@@ -317,7 +317,7 @@ if (ENABLE_TESTS)
     target_compile_definitions(dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_compile_definitions(dbms PUBLIC MULTIPLE_CONTEXT_GTEST)
 
-    target_link_libraries(gtests_dbms test_util_gtest_main tiflash_functions tiflash-dttool-lib delta_merge kvstore)
+    target_link_libraries(gtests_dbms test_util_gtest_main tiflash_functions tiflash-dttool-lib delta_merge kvstore common)
 
     install (TARGETS gtests_dbms
             COMPONENT tiflash-gtest
