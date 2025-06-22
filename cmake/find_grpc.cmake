@@ -43,7 +43,7 @@ endif()
 if(NOT EXTERNAL_GRPC_LIBRARY_FOUND)
     if(NOT MISSING_INTERNAL_GRPC_LIBRARY)
         set(gRPC_INCLUDE_DIRS "${TiFlash_SOURCE_DIR}/contrib/grpc/include")
-        set(gRPC_LIBRARIES grpc grpc++)
+        set(gRPC_LIBRARIES grpc grpc++ grpc++_reflection)
         set(gRPC_CPP_PLUGIN $<TARGET_FILE:grpc_cpp_plugin>)
 
         include("${TiFlash_SOURCE_DIR}/contrib/grpc-cmake/protobuf_generate_grpc.cmake")

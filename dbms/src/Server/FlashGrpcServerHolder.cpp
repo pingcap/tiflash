@@ -16,6 +16,7 @@
 #include <Flash/EstablishCall.h>
 #include <Interpreters/Context.h>
 #include <Server/FlashGrpcServerHolder.h>
+#include <grpcpp/ext/proto_server_reflection_plugin.h>
 
 // In order to include grpc::SecureServerCredentials which used in
 // sslServerCredentialsWithFetcher()
@@ -131,6 +132,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(
     : log(log_)
     , is_shutdown(std::make_shared<std::atomic<bool>>(false))
 {
+    grpc::reflection::InitProtoReflectionServerBuilderPlugin();
     grpc::ServerBuilder builder;
 
     if (!context.isTest() && context.getSecurityConfig()->hasTlsConfig())
@@ -161,6 +163,7 @@ FlashGrpcServerHolder::FlashGrpcServerHolder(
     builder.RegisterService(flash_service.get());
     LOG_INFO(log, "Flash service registered");
     builder.RegisterService(diagnostics_service.get());
+    
     LOG_INFO(log, "Diagnostics service registered");
 
     /// Kick off grpc server.
