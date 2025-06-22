@@ -131,20 +131,24 @@ ProcessMemoryUsage get_process_mem_usage()
 TEST_F(SegmentOperationTest, TestMassiveSegment)
 try
 {
-    size_t level = 30;
+    const size_t level = 5;
     for (size_t lvl = 0; lvl < level; ++lvl)
     {
         size_t num_expected_segs = 1000;
-        // size_t num_expected_segs = 100;
+        // size_t num_expected_segs = 10;
         size_t progress_interval = 100;
-        auto lvl_beg_seg_id = segments.rbegin()->first;
-        auto seg_id = lvl_beg_seg_id;
+        const auto lvl_beg_seg_id = segments.rbegin()->first;
+        {
+            auto seg = segments[lvl_beg_seg_id];
+            LOG_INFO(log, "lvl={} beg_seg_id={} rowkey={}", lvl, lvl_beg_seg_id, seg->getRowKeyRange().toString());
+        }
+        auto next_split_seg_id = lvl_beg_seg_id;
         for (size_t i = 0; i < num_expected_segs; ++i)
         {
-            auto split_point = (1 + i) * 500;
-            auto n_seg_id = splitSegmentAt(seg_id, split_point, Segment::SplitMode::Logical);
+            auto split_point = (lvl * num_expected_segs + 1 + i) * 500;
+            auto n_seg_id = splitSegmentAt(next_split_seg_id, split_point, Segment::SplitMode::Logical);
             ASSERT_TRUE(n_seg_id.has_value()) << fmt::format("i={} sp={}", i, split_point);
-            seg_id = *n_seg_id;
+            next_split_seg_id = *n_seg_id;
             if (i % progress_interval == 0)
             {
                 auto mu = get_process_mem_usage();
@@ -166,6 +170,10 @@ try
         size_t round = 0;
         for (auto && [seg_id, seg] : segments)
         {
+            // next_split_seg_id is the last segment created in this level, skip it
+            if (seg_id == next_split_seg_id)
+                continue;
+
             if (seg_id < lvl_beg_seg_id)
                 continue; // skip segments created in previous levels
 
@@ -181,7 +189,7 @@ try
                     write_rows * round,
                     mu.resident_mb);
             }
-            writeSegment(seg_id, write_rows, /* at */ round * write_rows);
+            writeSegment(seg_id, write_rows, /* at */ lvl * num_expected_segs * write_rows + round * write_rows);
             round++;
         }
         {
