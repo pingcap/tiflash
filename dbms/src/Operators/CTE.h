@@ -66,7 +66,7 @@ struct CTEPartition
 class CTE
 {
 public:
-    CTE();
+    void init();
 
     size_t getCTEReaderID()
     {
@@ -81,8 +81,8 @@ public:
     CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block);
 
     bool pushBlock(size_t sink_id, const Block & block);
-    void notifyEOF() { this->notifyImpl<true>(true); }
-    void notifyCancel() { this->notifyImpl<true>(false); }
+    void notifyEOF() { this->notifyImpl(true); }
+    void notifyCancel() { this->notifyImpl(false); }
 
     void notifyError(const String & err_msg)
     {
@@ -133,12 +133,9 @@ private:
         return CTEOpStatus::Ok;
     }
 
-    template <bool has_lock>
     void notifyImpl(bool is_eof)
     {
-        std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
-        if constexpr (has_lock)
-            lock.lock();
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
 
         if likely (is_eof)
             this->is_eof = true;

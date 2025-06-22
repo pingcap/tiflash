@@ -28,7 +28,7 @@ inline size_t getPartitionID(size_t id)
     return id % PARTITION_NUM;
 }
 
-CTE::CTE()
+void CTE::init()
 {
     for (size_t i = 0; i < PARTITION_NUM; i++)
     {
@@ -87,18 +87,16 @@ void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_
     auto partition_id = getPartitionID(source_id);
     CTEOpStatus status;
 
-    {
-        std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
-        std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
-        status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
-    }
+    std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
+    std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
+    status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
 
-    if (status == CTEOpStatus::Ok)
+    if (status == CTEOpStatus::BlockNotAvailable)
     {
-        this->notifyTaskDirectly(partition_id, std::move(task));
+        this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE);
         return;
     }
 
-    this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE);
+    this->notifyTaskDirectly(partition_id, std::move(task));
 }
 } // namespace DB

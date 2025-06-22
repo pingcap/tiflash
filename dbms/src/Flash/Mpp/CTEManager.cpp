@@ -101,11 +101,14 @@ std::shared_ptr<CTE> CTEManager::getCTEImpl(
         this->ctes[query_id_and_cte_id] = std::unordered_map<String, CTEWithCounter>{};
 
     auto & cte_map = this->ctes[query_id_and_cte_id];
-    auto [iter_for_cte, _] = cte_map.emplace(
+    auto [iter_for_cte, inserted] = cte_map.emplace(
         std::piecewise_construct,
         std::forward_as_tuple(partition_id),
         std::forward_as_tuple(std::make_shared<CTE>(), expected_sink_num, expected_source_num));
 
-    return iter_for_cte->second.getCTE();
+    auto cte = iter_for_cte->second.getCTE();
+    if (inserted)
+        cte->init();
+    return cte;
 }
 } // namespace DB
