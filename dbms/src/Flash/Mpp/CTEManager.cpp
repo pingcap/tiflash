@@ -36,6 +36,7 @@ void CTEManager::releaseCTEBySource(const String & query_id_and_cte_id, const St
         query_id_and_cte_id,
         partition_id);
 
+    iter_for_cte->second.sourceExit();
     if (iter_for_cte->second.getTotalExitNum() == iter_for_cte->second.getExpectedTotalNum())
         iter->second.erase(iter_for_cte);
 
