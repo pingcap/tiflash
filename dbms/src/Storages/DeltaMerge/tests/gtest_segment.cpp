@@ -32,6 +32,8 @@
 
 #include <future>
 
+#include "Storages/DeltaMerge/Segment.h"
+
 namespace ProfileEvents
 {
 extern const Event DMSegmentIsEmptyFastPath;
@@ -71,6 +73,129 @@ class SegmentOperationTest : public SegmentTestBasic
 protected:
     DB::LoggerPtr log = DB::Logger::get("SegmentOperationTest");
 };
+
+
+namespace
+{
+struct ProcessMemoryUsage
+{
+    double resident_mb;
+    Int64 cur_proc_num_threads;
+    double cur_virt_mb;
+};
+
+bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size)
+{
+    resident_set = 0.0;
+
+    // 'file' stat seems to give the most reliable results
+    std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
+    // if "/proc/self/stat" is not supported
+    if (!stat_stream.is_open())
+        return false;
+
+    // dummy vars for leading entries in stat that we don't care about
+    std::string pid, comm, state, ppid, pgrp, session, tty_nr;
+    std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
+    std::string utime, stime, cutime, cstime, priority, nice;
+    std::string itrealvalue, starttime;
+
+    // the field we want
+    Int64 rss;
+
+    stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags >> minflt >> cminflt
+        >> majflt >> cmajflt >> utime >> stime >> cutime >> cstime >> priority >> nice >> cur_proc_num_threads
+        >> itrealvalue >> starttime >> cur_virt_size >> rss; // don't care about the rest
+
+    stat_stream.close();
+
+    Int64 page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
+    resident_set = rss * page_size_kb;
+    return true;
+}
+ProcessMemoryUsage get_process_mem_usage()
+{
+    double resident_set;
+    Int64 cur_proc_num_threads = 1;
+    UInt64 cur_virt_size = 0;
+    process_mem_usage(resident_set, cur_proc_num_threads, cur_virt_size);
+    resident_set *= 1024; // unit: byte
+    return ProcessMemoryUsage{
+        resident_set / 1024.0 / 1024,
+        cur_proc_num_threads,
+        cur_virt_size / 1024.0 / 1024,
+    };
+}
+} // namespace
+
+TEST_F(SegmentOperationTest, TestMassiveSegment)
+try
+{
+    size_t level = 30;
+    for (size_t lvl = 0; lvl < level; ++lvl)
+    {
+        size_t num_expected_segs = 1000;
+        // size_t num_expected_segs = 100;
+        size_t progress_interval = 100;
+        auto lvl_beg_seg_id = segments.rbegin()->first;
+        auto seg_id = lvl_beg_seg_id;
+        for (size_t i = 0; i < num_expected_segs; ++i)
+        {
+            auto split_point = (1 + i) * 500;
+            auto n_seg_id = splitSegmentAt(seg_id, split_point, Segment::SplitMode::Logical);
+            ASSERT_TRUE(n_seg_id.has_value()) << fmt::format("i={} sp={}", i, split_point);
+            seg_id = *n_seg_id;
+            if (i % progress_interval == 0)
+            {
+                auto mu = get_process_mem_usage();
+                LOG_INFO(
+                    log,
+                    "lvl={} round={} split_point={} next_seg_id={} mem_resident_set={:.3f}MB)",
+                    lvl,
+                    i,
+                    split_point,
+                    *n_seg_id,
+                    mu.resident_mb);
+            }
+        }
+        {
+            auto mu = get_process_mem_usage();
+            LOG_INFO(log, "lvl={} round={} mem_resident_set={:.3f}MB", lvl, num_expected_segs, mu.resident_mb);
+        }
+
+        size_t round = 0;
+        for (auto && [seg_id, seg] : segments)
+        {
+            if (seg_id < lvl_beg_seg_id)
+                continue; // skip segments created in previous levels
+
+            auto write_rows = 500;
+            if (round % progress_interval == 0)
+            {
+                auto mu = get_process_mem_usage();
+                LOG_INFO(
+                    log,
+                    "lvl={} round={} written_rows={} mem_resident_set={:.3f}MB",
+                    lvl,
+                    round,
+                    write_rows * round,
+                    mu.resident_mb);
+            }
+            writeSegment(seg_id, write_rows, /* at */ round * write_rows);
+            round++;
+        }
+        {
+            auto mu = get_process_mem_usage();
+            LOG_INFO(
+                log,
+                "TestMassiveSegment done, segments.size()={} lvl={} mem_resident_set={:.3f}MB",
+                lvl,
+                segments.size(),
+                mu.resident_mb);
+        }
+    }
+}
+CATCH
 
 TEST_F(SegmentOperationTest, Issue4956)
 try

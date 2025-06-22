@@ -938,7 +938,7 @@ std::vector<char> DMFile::readMetaV2(const FileProviderPtr & file_provider)
         {
             break;
         }
-        LOG_WARNING(log, "{}'s size is larger than {}", metav2Path(), buf.size());
+        //LOG_WARNING(log, "{}'s size is larger than {}", metav2Path(), buf.size());
         buf.resize(buf.size() + meta_buffer_size);
     }
     buf.resize(read_bytes);

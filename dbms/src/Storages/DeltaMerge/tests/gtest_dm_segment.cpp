@@ -280,8 +280,8 @@ try
             DB::tests::typeFromString("Nullable(String)"),
         });
     }
-
     setColumns(columns);
+
     const size_t num_rows_write = 1;
     {
         Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
