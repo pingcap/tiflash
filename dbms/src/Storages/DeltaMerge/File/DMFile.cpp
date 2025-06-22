@@ -78,6 +78,8 @@ inline String getNGCPath(const String & prefix)
 
 // Some static helper functions
 
+size_t MergedFileWriter::tot_num_file_writer = 0;
+
 String DMFile::getPathByStatus(const String & parent_path, UInt64 file_id, DMFile::Status status)
 {
     String s = parent_path + "/";

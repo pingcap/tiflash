@@ -180,7 +180,7 @@ private:
     // else `meta_file` is for pack stats.
     WriteBufferFromFileBasePtr meta_file;
 
-    DMFile::MergedFileWriter merged_file;
+    MergedFileWriter merged_file;
 
     // use to avoid count data written in index file for empty dmfile
     bool is_empty_file = true;

@@ -39,6 +39,10 @@
 #include <future>
 #include <memory>
 
+#include "Storages/DeltaMerge/ColumnDefine_fwd.h"
+#include "Storages/DeltaMerge/DeltaMergeDefines.h"
+#include "Storages/Page/PageStorage.h"
+
 
 namespace CurrentMetrics
 {
@@ -95,6 +99,7 @@ protected:
             page_id_allocator,
             "test.t1");
         storage_pool->restore();
+        // If not pre-defined, use default columns
         ColumnDefinesPtr cols = (!pre_define_columns) ? DMTestEnv::getDefaultColumns() : pre_define_columns;
         setColumns(cols);
 
@@ -211,6 +216,107 @@ try
 }
 CATCH
 
+namespace
+{
+struct ProcessMemoryUsage
+{
+    double resident_set; // in KB
+    Int64 cur_proc_num_threads;
+    UInt64 cur_virt_size; // in Byte
+};
+
+bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size)
+{
+    resident_set = 0.0;
+
+    // 'file' stat seems to give the most reliable results
+    std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
+    // if "/proc/self/stat" is not supported
+    if (!stat_stream.is_open())
+        return false;
+
+    // dummy vars for leading entries in stat that we don't care about
+    std::string pid, comm, state, ppid, pgrp, session, tty_nr;
+    std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
+    std::string utime, stime, cutime, cstime, priority, nice;
+    std::string itrealvalue, starttime;
+
+    // the field we want
+    Int64 rss;
+
+    stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags >> minflt >> cminflt
+        >> majflt >> cmajflt >> utime >> stime >> cutime >> cstime >> priority >> nice >> cur_proc_num_threads
+        >> itrealvalue >> starttime >> cur_virt_size >> rss; // don't care about the rest
+
+    stat_stream.close();
+
+    Int64 page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
+    resident_set = rss * page_size_kb;
+    return true;
+}
+ProcessMemoryUsage get_process_mem_usage()
+{
+    double resident_set;
+    Int64 cur_proc_num_threads = 1;
+    UInt64 cur_virt_size = 0;
+    process_mem_usage(resident_set, cur_proc_num_threads, cur_virt_size);
+    resident_set *= 1024; // unit: byte
+    return ProcessMemoryUsage{resident_set, cur_proc_num_threads, cur_virt_size};
+}
+
+} // namespace
+TEST_F(SegmentTest, RepeatMergeDelta)
+try
+{
+    ColumnDefinesPtr columns = DMTestEnv::getDefaultColumns();
+    for (Int64 i = 0; i < 350; ++i)
+    {
+        // add a new column
+        columns->emplace_back(ColumnDefine{
+            i + 100,
+            fmt::format("field_{}", i),
+            DB::tests::typeFromString("Nullable(String)"),
+        });
+    }
+
+    setColumns(columns);
+    const size_t num_rows_write = 1;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        // write to segment
+        segment->write(dmContext(), block);
+        // estimate segment
+        auto estimated_rows = segment->getEstimatedRows();
+        ASSERT_EQ(estimated_rows, block.rows());
+
+        auto estimated_bytes = segment->getEstimatedBytes();
+        ASSERT_EQ(estimated_bytes, block.bytes());
+    }
+
+    auto schema = tableColumns();
+    for (size_t i = 0; i < 100'000'000; ++i)
+    {
+        // read written data (only in delta)
+        auto in = segment->getInputStreamModeNormal(dmContext(), *schema, {RowKeyRange::newAll(false, 1)});
+
+        // merge delta
+        segment = segment->mergeDelta(dmContext(), schema);
+
+        // if (i % 10 == 0)
+        {
+            auto tot_n_writers = MergedFileWriter::tot_num_file_writer;
+            auto mu = get_process_mem_usage();
+            LOG_INFO(
+                Logger::get(),
+                "RepeatMergeDelta: {}. Memory: resident_set = {:.2f} MB, cur_virt_size = {:.2f} MB, tot_n_writers={}",
+                i,
+                mu.resident_set / 1024.0 / 1024,
+                mu.cur_virt_size / 1024.0 / 1024,
+                tot_n_writers);
+        }
+    }
+}
+CATCH
 
 TEST_F(SegmentTest, ClipBlockRows)
 try

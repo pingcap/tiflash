@@ -44,6 +44,24 @@ namespace DB
 {
 namespace DM
 {
+
+struct MergedFile
+{
+    UInt64 number = 0;
+    UInt64 size = 0;
+};
+
+struct MergedFileWriter
+{
+    MergedFile file_info;
+    std::unique_ptr<WriteBufferFromWritableFile> buffer;
+
+    MergedFileWriter() { ++tot_num_file_writer; }
+    ~MergedFileWriter() { --tot_num_file_writer; }
+
+    static size_t tot_num_file_writer;
+};
+
 using DMFilePtr = std::shared_ptr<DMFile>;
 using DMFiles = std::vector<DMFilePtr>;
 
@@ -498,17 +516,7 @@ public:
 
     DMFileFormat::Version version;
 
-    struct MergedFile
-    {
-        UInt64 number = 0;
-        UInt64 size = 0;
-    };
-
-    struct MergedFileWriter
-    {
-        MergedFile file_info;
-        std::unique_ptr<WriteBufferFromWritableFile> buffer;
-    };
+    
     PaddedPODArray<MergedFile> merged_files;
     // Filename -> MergedSubFileInfo
     std::unordered_map<String, MergedSubFileInfo> merged_sub_file_infos;

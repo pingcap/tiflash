@@ -54,7 +54,7 @@ DMFileWriter::DMFileWriter(
             /*create_new_encryption_info*/ false,
             write_limiter);
 
-        merged_file.file_info = DMFile::MergedFile({0, 0});
+        merged_file.file_info = MergedFile({0, 0});
     }
 
     for (auto & cd : write_columns)
@@ -114,7 +114,7 @@ DMFileWriter::WriteBufferFromFileBasePtr DMFileWriter::createPackStatsFile()
 
 void DMFileWriter::addStreams(ColId col_id, DataTypePtr type, bool do_index)
 {
-    auto callback = [&](const IDataType::SubstreamPath & substream_path) {
+    auto callback = [this, &type, col_id, do_index](const IDataType::SubstreamPath & substream_path) {
         const auto stream_name = DMFile::getFileNameBase(col_id, substream_path);
         auto stream = std::make_unique<Stream>(
             dmfile,
