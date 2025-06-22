@@ -16,7 +16,7 @@ version: '2.3'
 
 services:
   tiflash-wn0:
-    image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
+    image: ${TIFLASH_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
     security_opt:
       - seccomp:unconfined
     volumes:
@@ -31,9 +31,13 @@ services:
     depends_on:
       - "minio0"
       - "tikv0"
+    environment:
+      - MALLOC_CONF=prof:true
     restart: on-failure
+    ports:
+      - "127.0.0.1:20292:20292"  # tiflash-wn0 proxy status port
   tiflash-cn0:
-    image: ${TIDB_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
+    image: ${TIFLASH_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
     security_opt:
       - seccomp:unconfined
     volumes:
@@ -48,4 +52,6 @@ services:
     depends_on:
       - "minio0"
       - "tikv0"
+    environment:
+      - MALLOC_CONF=prof:true
     restart: on-failure

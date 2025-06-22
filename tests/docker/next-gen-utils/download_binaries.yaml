@@ -1,0 +1,45 @@
+# Copyright 2025 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+version: '2.3'
+
+services:
+  pd0:
+    image: ${PD_IMAGE:-hub.pingcap.net/tikv/pd/image:master-next-gen}
+    security_opt: [seccomp:unconfined]
+    volumes:
+      - ./binaries/pd:/data/out
+    entrypoint: cp -v /pd-server /pd-ctl /pd-recover /data/out/
+    restart: on-failure
+  tikv0:
+    image: ${TIKV_IMAGE:-hub.pingcap.net/tikv/tikv/image:dedicated-next-gen}
+    security_opt: [seccomp:unconfined]
+    volumes:
+      - ./binaries/tikv:/data/out
+    entrypoint: cp -v /tikv-server /tikv-worker /cse-ctl /data/out/
+    restart: on-failure
+  tidb0:
+    image: ${TIDB_IMAGE:-hub.pingcap.net/pingcap/tidb/images/tidb-server:master-next-gen}
+    security_opt: [seccomp:unconfined]
+    volumes:
+      - ./binaries/tidb:/data/out
+    entrypoint: cp -v /tidb-server /data/out/
+    restart: on-failure
+  tiflash0:
+    image: ${TIFLASH_IMAGE:-hub.pingcap.net/pingcap/tiflash/image:master-next-gen}
+    security_opt: [seccomp:unconfined]
+    volumes:
+      - ./binaries/tiflash:/data/out
+    entrypoint: cp -rv /tiflash/ /data/out/
+    restart: on-failure
