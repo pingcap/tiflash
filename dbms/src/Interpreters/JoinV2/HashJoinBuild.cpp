@@ -235,7 +235,7 @@ void NO_INLINE JoinBuildHelper::insertBlockToRowContainersImpl(
         }
     }
 
-    if (isRightSemiFamily(kind))
+    if (is_right_semi_family)
     {
         IColumn::ScatterColumns scatter_columns(JOIN_BUILD_PARTITION_COUNT);
         for (size_t i = row_layout.other_column_count_for_other_condition; i < row_layout.other_column_indexes.size();
@@ -274,13 +274,21 @@ void NO_INLINE JoinBuildHelper::insertBlockToRowContainersImpl(
             auto fill_block = [&](size_t offset_start, size_t length) {
                 for (size_t i = 0; i < columns; ++i)
                 {
+                    auto des_mut_column = wd.non_joined_block.getByPosition(i).column->assumeMutable();
                     const auto & name = wd.non_joined_block.getByPosition(i).name;
+                    if (!block.has(name))
+                    {
+                        // If block does not have this column, this column should be nullable and from the left side
+                        RUNTIME_CHECK_MSG(
+                            des_mut_column->isColumnNullable(),
+                            "Column with name {} is not nullable",
+                            name);
+                        auto & nullable_column = static_cast<ColumnNullable &>(*des_mut_column);
+                        nullable_column.insertManyDefaults(length);
+                        continue;
+                    }
                     auto & src_column = block.getByName(name).column;
-                    wd.non_joined_block.getByPosition(i).column->assumeMutable()->insertSelectiveRangeFrom(
-                        *src_column,
-                        wd.non_joined_offsets,
-                        offset_start,
-                        length);
+                    des_mut_column->insertSelectiveRangeFrom(*src_column, wd.non_joined_offsets, offset_start, length);
                 }
             };
             size_t offset_start = 0;

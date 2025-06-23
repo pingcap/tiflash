@@ -435,7 +435,15 @@ struct JoinProbeAdder<RightOuter, has_other_condition, late_materialization>
         RowPtr row_ptr,
         size_t ptr_offset)
     {
-        wd.right_join_row_ptrs.push_back(hasRowPtrMatchedFlag(row_ptr) ? nullptr : row_ptr);
+        if constexpr (has_other_condition)
+        {
+            wd.right_join_row_ptrs.push_back(hasRowPtrMatchedFlag(row_ptr) ? nullptr : row_ptr);
+        }
+        else
+        {
+            setRowPtrMatchedFlag(row_ptr);
+        }
+
         ++current_offset;
         wd.selective_offsets.push_back(idx);
         helper.insertRowToBatch<late_materialization, false>(wd, added_columns, row_ptr + ptr_offset);
@@ -701,7 +709,9 @@ Block JoinProbeHelper::probeImpl(JoinProbeContext & ctx, JoinProbeWorkerData & w
     for (size_t i = 0; i < right_columns; ++i)
         wd.result_block.safeGetByPosition(left_columns + i).column = std::move(added_columns[i]);
 
-    if constexpr (kind == Inner || kind == LeftOuter || kind == Semi || kind == Anti)
+    if constexpr (
+        kind == Inner || kind == LeftOuter || kind == RightOuter || kind == Semi || kind == Anti || kind == RightSemi
+        || kind == RightAnti)
     {
         if (wd.selective_offsets.empty())
             return join->output_block_after_finalize;

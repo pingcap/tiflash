@@ -114,7 +114,6 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     size_t current_container_index = 0;
     /// Schema: HashJoin::output_block_after_finalize
     Block scan_result_block;
-    size_t current_scan_block_rows = 0;
     bool is_scan_end = false;
 
     /// Metrics

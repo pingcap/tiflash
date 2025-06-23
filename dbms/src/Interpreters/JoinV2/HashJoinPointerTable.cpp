@@ -149,7 +149,7 @@ bool HashJoinPointerTable::buildImpl(
             if (old_head != nullptr)
                 unalignedStore<RowPtr>(row_ptr, old_head);
         }
-    } while (build_size < max_build_size);
+    } while (build_size < max_build_size * 2);
     wd.build_pointer_table_size += build_size;
     wd.build_pointer_table_time += watch.elapsedMilliseconds();
     return is_end;

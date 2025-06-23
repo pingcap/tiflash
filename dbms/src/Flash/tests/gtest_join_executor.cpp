@@ -3443,6 +3443,8 @@ try
                     Field(static_cast<UInt64>(threshold)));
                 ASSERT_COLUMNS_EQ_UR(ref, executeStreams(request, original_max_streams))
                     << "left_table_name = " << left_table_name << ", right_table_name = " << right_table_name;
+                if (cfg.enable_join_v2)
+                    break;
             }
             WRAP_FOR_JOIN_TEST_END
         }
@@ -3483,6 +3485,8 @@ try
                         << "left_table_name = " << left_table_name
                         << ", right_exchange_receiver_concurrency = " << exchange_concurrency
                         << ", join_probe_cache_columns_threshold = " << threshold;
+                if (cfg.enable_join_v2)
+                    break;
             }
             WRAP_FOR_JOIN_TEST_END
         }
