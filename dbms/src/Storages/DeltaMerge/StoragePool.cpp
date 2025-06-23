@@ -716,6 +716,7 @@ PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, c
         dtfile_id = ++max_data_page_id;
 
         auto existed_path = delegator.getDTFilePath(dtfile_id, /*throw_on_not_exist=*/false);
+#if 0
         fiu_do_on(FailPoints::force_set_dtfile_exist_when_acquire_id, {
             static std::atomic<UInt64> fail_point_called(0);
             if (existed_path.empty() && fail_point_called.load() % 10 == 0)
@@ -724,6 +725,7 @@ PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, c
             }
             fail_point_called++;
         });
+#endif
         if (likely(existed_path.empty()))
         {
             break;
