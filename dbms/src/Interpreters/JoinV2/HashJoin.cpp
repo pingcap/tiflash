@@ -352,28 +352,7 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
     }
 
     left_sample_block_pruned = left_sample_block;
-
-    const NameSet & probe_output_name_set = has_other_condition
-        ? output_columns_names_set_for_other_condition_after_finalize
-        : output_column_names_set_after_finalize;
-    for (size_t pos = 0; pos < left_sample_block_pruned.columns();)
-    {
-        if (!probe_output_name_set.contains(left_sample_block_pruned.getByPosition(pos).name))
-        {
-            if (std::find(
-                    key_names_left.begin(),
-                    key_names_left.end(),
-                    left_sample_block_pruned.getByPosition(pos).name)
-                == key_names_left.end())
-            {
-                LOG_ERROR(log, "shit");
-            }
-            left_sample_block_pruned.erase(pos);
-        }
-        else
-            ++pos;
-    }
-    //removeUselessColumn(left_sample_block_pruned);
+    removeUselessColumn(left_sample_block_pruned);
 
     all_sample_block_pruned = left_sample_block_pruned.cloneEmpty();
     size_t right_columns = right_sample_block_pruned.columns();
