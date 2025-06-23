@@ -61,8 +61,18 @@ void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
     TiFlashStorageTestBasic::SetUp();
     options = config;
     table_columns = std::make_shared<ColumnDefines>();
+    ColumnDefinesPtr cols = DMTestEnv::getDefaultColumns();
+    for (Int64 i = 0; i < 1000; ++i)
+    {
+        // add a new column
+        cols->emplace_back(ColumnDefine{
+            i + 100,
+            fmt::format("field_{}", i),
+            DB::tests::typeFromString("Nullable(String)"),
+        });
+    }
 
-    root_segment = reload(config.is_common_handle, nullptr, std::move(config.db_settings));
+    root_segment = reload(config.is_common_handle, cols, std::move(config.db_settings));
     ASSERT_EQ(root_segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     segments.clear();
     segments[DELTA_MERGE_FIRST_SEGMENT_ID] = root_segment;
@@ -368,6 +378,19 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(PageIdU64 segment_id, UI
         RUNTIME_CHECK(write_end_key_this_round <= segment_end_key);
 
         Block block = prepareWriteBlock(*write_start_key, write_end_key_this_round, is_deleted);
+        for (Int64 i = 0; i < 1000; ++i)
+        {
+            auto null_col = ColumnNullable::create(ColumnString::create(), ColumnUInt8::create());
+            for (size_t j = 0; j < write_rows_this_round; ++j)
+            {
+                null_col->insertDefault();
+            }
+            block.insert(ColumnWithTypeAndName{
+                std::move(null_col),
+                std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>()),
+                fmt::format("field_{}", i),
+            });
+        }
         blocks.emplace_back(block);
         remaining_rows -= write_rows_this_round;
 
@@ -396,7 +419,7 @@ void SegmentTestBasic::writeSegment(PageIdU64 segment_id, UInt64 write_rows, std
     LOG_DEBUG(logger, "write to segment, segment={} segment_rows={} start_key={} end_key={}", segment->info(), segment_row_num, start_key, end_key);
 
     auto block = prepareWriteBlockInSegmentRange(segment_id, write_rows, start_at, /* is_deleted */ false);
-    segment->write(*dm_context, block, false);
+    segment->writeToCache(*dm_context, block, 0, block.rows());
 
     EXPECT_EQ(getSegmentRowNumWithoutMVCC(segment_id), segment_row_num + write_rows);
     operation_statistics["write"]++;
