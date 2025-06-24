@@ -37,14 +37,19 @@ void checkColumnSize(const String & identifier, size_t expected, size_t actual)
             actual);
 }
 
-void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual)
+const DataTypePtr & checkDataTypeName(
+    const String & identifier,
+    size_t column_index,
+    const String & expected,
+    const String & actual,
+    const DataTypePtr & type_of_expected)
 {
     if (likely(expected == actual))
-        return;
+        return type_of_expected;
     if (expected == DataTypeString::NameV2 && actual == DataTypeString::LegacyName)
-        return;
+        return DataTypeFactory::instance().getOrSet(DataTypeString::LegacyName);
     if (expected == DataTypeString::NullableNameV2 && actual == DataTypeString::NullableLegacyName)
-        return;
+        return DataTypeFactory::instance().getOrSet(DataTypeString::NullableLegacyName);
 
     throw Exception(
         ErrorCodes::LOGICAL_ERROR,

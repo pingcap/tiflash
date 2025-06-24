@@ -181,8 +181,12 @@ Block NativeBlockInputStream::readImpl()
         readBinary(type_name, istr);
         if (header)
         {
-            CodecUtils::checkDataTypeName("NativeBlockInputStream", i, header_datatypes[i].name, type_name);
-            column.type = header_datatypes[i].type;
+            column.type = CodecUtils::checkDataTypeName(
+                "NativeBlockInputStream",
+                i,
+                header_datatypes[i].name,
+                type_name,
+                header_datatypes[i].type);
         }
         else
         {

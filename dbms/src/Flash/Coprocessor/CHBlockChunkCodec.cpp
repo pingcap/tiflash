@@ -231,8 +231,14 @@ void CHBlockChunkCodec::readColumnMeta(size_t i, ReadBuffer & istr, ColumnWithTy
     String type_name;
     readBinary(type_name, istr);
     if (header)
-        CodecUtils::checkDataTypeName("CHBlockChunkCodec", i, header_datatypes[i].name, type_name);
-    column.type = DataTypeFactory::instance().getOrSet(type_name); // Respect the type name from encoder
+        column.type = CodecUtils::checkDataTypeName(
+            "CHBlockChunkCodec",
+            i,
+            header_datatypes[i].name,
+            type_name,
+            header_datatypes[i].type);
+    else
+        column.type = DataTypeFactory::instance().getOrSet(type_name);
 }
 
 Block CHBlockChunkCodec::decode(const String & str, const DAGSchema & schema)

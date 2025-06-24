@@ -81,12 +81,14 @@ Block DecodeHeader(ReadBuffer & istr, const Block & header, size_t & total_rows)
             String type_name;
             readBinary(type_name, istr);
             if (header)
-                CodecUtils::checkDataTypeName(
-                    "CHBlockChunkCodecV1",
-                    i,
-                    header.getByPosition(i).type->getName(),
-                    type_name);
-            column.type = DataTypeFactory::instance().getOrSet(type_name); // Respect the type name from encoder
+            {
+                const auto & type = header.getByPosition(i).type;
+                column.type = CodecUtils::checkDataTypeName("CHBlockChunkCodecV1", i, type->getName(), type_name, type);
+            }
+            else
+            {
+                column.type = DataTypeFactory::instance().getOrSet(type_name);
+            }
         }
         res.insert(std::move(column));
     }
@@ -441,12 +443,14 @@ static void checkSchema(const Block & header, const Block & block)
     CodecUtils::checkColumnSize("CHBlockChunkCodecV1", header.columns(), block.columns());
     for (size_t column_index = 0; column_index < header.columns(); ++column_index)
     {
-        auto && type_name = block.getByPosition(column_index).type->getName();
+        const auto & header_type = header.getByPosition(column_index).type;
+        auto && block_type_name = block.getByPosition(column_index).type->getName();
         CodecUtils::checkDataTypeName(
             "CHBlockChunkCodecV1",
             column_index,
-            header.getByPosition(column_index).type->getName(),
-            type_name);
+            header_type->getName(),
+            block_type_name,
+            header_type);
     }
 }
 

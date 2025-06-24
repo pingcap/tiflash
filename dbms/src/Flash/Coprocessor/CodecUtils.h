@@ -33,7 +33,12 @@ struct DataTypeWithTypeName
 };
 
 void checkColumnSize(const String & identifier, size_t expected, size_t actual);
-void checkDataTypeName(const String & identifier, size_t column_index, const String & expected, const String & actual);
+const DataTypePtr & checkDataTypeName(
+    const String & identifier,
+    size_t column_index,
+    const String & expected,
+    const String & actual,
+    const DataTypePtr & type_of_expected);
 const IDataType & convertDataType(const IDataType & type);
 const IDataType & convertDataTypeByPacketVersion(const IDataType & type, MPPDataPacketVersion packet_version);
 } // namespace CodecUtils
