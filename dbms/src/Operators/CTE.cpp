@@ -21,26 +21,9 @@
 
 namespace DB
 {
-constexpr size_t PARTITION_NUM = 30;
-
-inline size_t getPartitionID(size_t id)
-{
-    return id % PARTITION_NUM;
-}
-
-void CTE::init()
-{
-    for (size_t i = 0; i < PARTITION_NUM; i++)
-    {
-        this->partitions.push_back(CTEPartition());
-        this->partitions.back().mu = std::make_unique<std::mutex>();
-        this->partitions.back().pipe_cv = std::make_unique<PipeConditionVariable>();
-    }
-}
-
 CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block)
 {
-    auto partition_id = getPartitionID(source_id);
+    auto partition_id = this->getPartitionID(source_id);
 
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
@@ -64,7 +47,7 @@ bool CTE::pushBlock(size_t sink_id, const Block & block)
     if unlikely (block.rows() == 0)
         return true;
 
-    auto partition_id = getPartitionID(sink_id);
+    auto partition_id = this->getPartitionID(sink_id);
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
     this->partitions[partition_id].memory_usages += block.bytes();
     this->partitions[partition_id].blocks.push_back(block);
@@ -80,7 +63,7 @@ void CTE::registerTask(size_t partition_id, TaskPtr && task, NotifyType type)
 
 void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id)
 {
-    auto partition_id = getPartitionID(source_id);
+    auto partition_id = this->getPartitionID(source_id);
     CTEOpStatus status;
 
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);

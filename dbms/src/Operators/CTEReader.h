@@ -30,22 +30,21 @@ class CTEReader
 public:
     CTEReader(
         const String & query_id_and_cte_id_,
-        const String & partition_id_,
+        size_t partition_num,
         CTEManager * cte_manager_,
         Int32 expected_sink_num_,
         Int32 expected_source_num_)
         : query_id_and_cte_id(query_id_and_cte_id_)
-        , partition_id(partition_id_)
         , cte_manager(cte_manager_)
         , cte(cte_manager_
-                  ->getCTEBySource(query_id_and_cte_id_, partition_id, expected_sink_num_, expected_source_num_))
+                  ->getCTEBySource(query_id_and_cte_id_, partition_num, expected_sink_num_, expected_source_num_))
         , cte_reader_id(this->cte->getCTEReaderID())
     {}
 
     ~CTEReader()
     {
         this->cte.reset();
-        this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id, this->partition_id);
+        this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id);
     }
 
     CTEOpStatus fetchNextBlock(size_t source_id, Block & block);
@@ -65,7 +64,6 @@ public:
 
 private:
     String query_id_and_cte_id;
-    String partition_id;
     CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
     size_t cte_reader_id;

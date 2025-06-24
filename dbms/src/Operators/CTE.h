@@ -16,8 +16,8 @@
 
 #include <Common/RWLock.h>
 #include <Core/Block.h>
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <absl/base/optimization.h>
 #include <tipb/select.pb.h>
 
@@ -63,6 +63,17 @@ struct CTEPartition
 class CTE
 {
 public:
+    explicit CTE(size_t partition_num_)
+        : partition_num(partition_num_)
+    {
+        for (size_t i = 0; i < this->partition_num; i++)
+        {
+            this->partitions.push_back(CTEPartition());
+            this->partitions.back().mu = std::make_unique<std::mutex>();
+            this->partitions.back().pipe_cv = std::make_unique<PipeConditionVariable>();
+        }
+    }
+
     void init();
 
     size_t getCTEReaderID()
@@ -118,6 +129,8 @@ public:
     }
 
 private:
+    size_t getPartitionID(size_t id) const { return id % this->partition_num; }
+
     CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id)
     {
         if unlikely (this->is_cancelled)
@@ -143,6 +156,7 @@ private:
             partition.pipe_cv->notifyAll();
     }
 
+    size_t partition_num;
     std::vector<CTEPartition> partitions;
 
     std::shared_mutex rw_lock;

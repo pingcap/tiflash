@@ -20,8 +20,8 @@
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
-#include <Operators/SharedQueue.h>
 #include <Operators/CTE.h>
+#include <Operators/SharedQueue.h>
 
 #include <exception>
 

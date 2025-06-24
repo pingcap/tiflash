@@ -50,32 +50,22 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
-    size_t /*concurrency*/)
+    size_t concurrency)
 {
-    size_t partition_id = 0;
     String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
     exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
 
-    std::shared_ptr<CTE> cte;
-    if (!fine_grained_shuffle.enabled())
-    {
-        cte = context.getCTEManager()
-                  ->getCTEBySink(query_id_and_cte_id, "", this->expected_sink_num, this->expected_source_num);
-    }
+    if (fine_grained_shuffle.enabled())
+        concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
+
+    std::shared_ptr<CTE> cte = context.getCTEManager()->getCTEBySink(
+        query_id_and_cte_id,
+        concurrency,
+        this->expected_sink_num,
+        this->expected_source_num);
 
     size_t id = 0;
-
     group_builder.transform([&](auto & builder) {
-        if (fine_grained_shuffle.enabled())
-        {
-            cte = context.getCTEManager()->getCTEBySink(
-                query_id_and_cte_id,
-                std::to_string(partition_id),
-                this->expected_sink_num,
-                this->expected_source_num);
-            partition_id++;
-        }
-
         builder.setSinkOp(std::make_unique<CTESinkOp>(exec_context, log->identifier(), cte, id));
         id++;
     });
