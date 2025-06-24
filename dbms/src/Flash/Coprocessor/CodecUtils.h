@@ -33,7 +33,7 @@ struct DataTypeWithTypeName
 };
 
 void checkColumnSize(const String & identifier, size_t expected, size_t actual);
-const DataTypePtr & checkDataTypeName(
+const DataTypePtr checkDataTypeName(
     const String & identifier,
     size_t column_index,
     const String & expected,
