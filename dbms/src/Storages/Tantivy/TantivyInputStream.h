@@ -85,8 +85,7 @@ protected:
             table_id,
             index_id,
             shard_id,
-            key_ranges.first,
-            key_ranges.second,
+            key_ranges,
             query_fields,
             return_fields,
             query_json_str,
@@ -162,17 +161,23 @@ private:
         return fields;
     }
 
-    static std::pair<rust::Vec<rust::String>, rust::Vec<rust::String>> getKeyRanges(
-        const std::vector<std::pair<DecodedTiKVKeyPtr, DecodedTiKVKeyPtr>> & key_ranges)
+    static rust::Vec<::Range> getKeyRanges(ShardInfo::KeyRanges & key_ranges)
     {
-        rust::Vec<rust::String> start_key_ranges;
-        rust::Vec<rust::String> end_key_ranges;
+        rust::Vec<::Range> res;
         for (const auto & range : key_ranges)
         {
-            start_key_ranges.push_back(range.first->toString());
-            end_key_ranges.push_back(range.second->toString());
+            rust::Slice<::std::uint8_t const> start(
+                reinterpret_cast<const unsigned char *>(range.start().c_str()),
+                range.start().size());
+            rust::Slice<::std::uint8_t const> end(
+                reinterpret_cast<const unsigned char *>(range.end().c_str()),
+                range.end().size());
+            res.push_back({
+                .start = std::move(start),
+                .end = std::move(end),
+            });
         }
-        return std::make_pair(std::move(start_key_ranges), std::move(end_key_ranges));
+        return res;
     }
 };
 
