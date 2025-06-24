@@ -74,8 +74,6 @@ public:
         }
     }
 
-    void init();
-
     size_t getCTEReaderID()
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
