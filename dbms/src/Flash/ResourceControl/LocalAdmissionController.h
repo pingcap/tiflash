@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/HashTable/Hash.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Executor/toRU.h>
@@ -39,19 +40,16 @@ using SteadyClock = std::chrono::steady_clock;
 
 struct GACRequestInfo
 {
+    KeyspaceID keyspace_id;
     std::string resource_group_name;
     double acquire_tokens;
     double ru_consumption_delta;
-
-    std::string toString() const
-    {
-        return fmt::format(
-            "rg: {}, acquire_tokens: {}, ru_consumption_delta: {}",
-            resource_group_name,
-            acquire_tokens,
-            ru_consumption_delta);
-    }
 };
+
+inline std::string getResourceGroupMetricName(const KeyspaceID & keyspace_id, const std::string & name)
+{
+    return fmt::format("{}-{}", keyspace_id, name);
+}
 
 struct LACRUConsumptionDeltaInfo
 {
@@ -73,11 +71,21 @@ struct LACRUConsumptionDeltaInfo
 class ResourceGroup final : private boost::noncopyable
 {
 public:
-    explicit ResourceGroup(const resource_manager::ResourceGroup & group_pb_, const SteadyClock::time_point & tp)
-        : name(group_pb_.name())
+    explicit ResourceGroup(
+        const KeyspaceID & keyspace_id_,
+        const resource_manager::ResourceGroup & group_pb_,
+        const SteadyClock::time_point & tp)
+        : keyspace_id(keyspace_id_)
+        , name(group_pb_.name())
+        , name_with_keyspace_id(getResourceGroupMetricName(keyspace_id_, group_pb_.name()))
         , group_pb(group_pb_)
         , log(Logger::get("resource group:" + group_pb_.name()))
     {
+        RUNTIME_CHECK(
+            !group_pb_.has_keyspace_id() || keyspace_id_ == group_pb_.keyspace_id().value(),
+            keyspace_id_,
+            group_pb_.keyspace_id().value());
+
         resetResourceGroup(group_pb_);
         const auto & setting = group_pb.r_u_settings().r_u().settings();
         initStaticTokenBucket(setting.burst_limit());
@@ -92,7 +100,8 @@ public:
 
 #ifdef DBMS_PUBLIC_GTEST
     ResourceGroup(const std::string & group_name_, uint32_t user_priority_, uint64_t user_ru_per_sec_, bool burstable_)
-        : name(group_name_)
+        : keyspace_id(NullspaceID)
+        , name(group_name_)
         , user_priority_val(getUserPriorityVal(user_priority_))
         , user_ru_per_sec(user_ru_per_sec_)
         , burstable(burstable_)
@@ -140,7 +149,21 @@ private:
     friend class LocalAdmissionController;
     friend class MockLocalAdmissionController;
 
+    KeyspaceID getKeyspaceID() const { return keyspace_id; }
     std::string getName() const { return name; }
+
+    void consumeCPUResource(double ru, uint64_t cpu_time_in_ns_)
+    {
+        consumeResource(ru, cpu_time_in_ns_);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_consumption, name_with_keyspace_id)
+            .Increment(ru);
+    }
+    void consumeBytesResource(double ru, uint64_t cpu_time_in_ns_)
+    {
+        consumeResource(ru, cpu_time_in_ns_);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_storage_ru_consumption, name_with_keyspace_id)
+            .Increment(ru);
+    }
 
     void consumeResource(double ru, uint64_t cpu_time_in_ns_)
     {
@@ -152,7 +175,8 @@ private:
         if (!burstable)
         {
             bucket->consume(ru, now);
-            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(bucket->peek());
+            GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name_with_keyspace_id)
+                .Set(bucket->peek());
         }
     }
 
@@ -235,10 +259,13 @@ private:
 
     void updateBucketMetrics(const TokenBucket::TokenBucketConfig & config) const
     {
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name).Set(config.fill_rate);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name).Set(config.capacity);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name).Set(config.tokens);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_low_token_threshold, name)
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_fill_rate, name_with_keyspace_id)
+            .Set(config.fill_rate);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_bucket_capacity, name_with_keyspace_id)
+            .Set(config.capacity);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_remaining_tokens, name_with_keyspace_id)
+            .Set(config.tokens);
+        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_low_token_threshold, name_with_keyspace_id)
             .Set(config.low_token_threshold);
     }
 
@@ -269,7 +296,9 @@ private:
     mutable std::mutex mu;
 
     // Meta info.
+    const KeyspaceID keyspace_id;
     const std::string name;
+    const std::string name_with_keyspace_id; // For metrics.
     uint32_t user_priority_val = 0;
     uint64_t user_ru_per_sec = 0;
     bool burstable = false;
@@ -307,6 +336,17 @@ private:
 
 using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 
+struct LACPairHash
+{
+    size_t operator()(const std::pair<KeyspaceID, std::string> & p) const
+    {
+        uint64_t seed = 0;
+        hash_combine(seed, p.first);
+        hash_combine(seed, p.second);
+        return static_cast<size_t>(seed);
+    }
+};
+
 // LocalAdmissionController is the local(tiflash) part of the distributed token bucket algorithm.
 // It manages all resource groups:
 // 1. Creation, deletion and config updates of resource group.
@@ -315,14 +355,17 @@ using ResourceGroupPtr = std::shared_ptr<ResourceGroup>;
 class LocalAdmissionController final : private boost::noncopyable
 {
 public:
-    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_)
+    LocalAdmissionController(::pingcap::kv::Cluster * cluster_, Etcd::ClientPtr etcd_client_, bool with_keyspace)
         : cluster(cluster_)
         , etcd_client(etcd_client_)
         , watch_gac_grpc_context(std::make_unique<grpc::ClientContext>())
     {
         background_threads.emplace_back([this] { this->mainLoop(); });
-        background_threads.emplace_back([this] { this->watchGACLoop(); });
         background_threads.emplace_back([this] { this->requestGACLoop(); });
+        if (with_keyspace)
+            background_threads.emplace_back([this] { this->watchGACLoop(GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH); });
+        else
+            background_threads.emplace_back([this] { this->watchGACLoop(GAC_RESOURCE_GROUP_ETCD_PATH); });
 
         current_tick = SteadyClock::now();
         last_clear_cpu_time = current_tick;
@@ -342,19 +385,21 @@ public:
         }
     }
 
-    void consumeCPUResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+    void consumeCPUResource(
+        const KeyspaceID & keyspace_id,
+        const std::string & name,
+        double ru,
+        uint64_t cpu_time_in_ns)
     {
-        consumeResource(name, ru, cpu_time_in_ns);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_compute_ru_consumption, name).Increment(ru);
+        consumeResource<true>(keyspace_id, name, ru, cpu_time_in_ns);
     }
 
-    void consumeBytesResource(const std::string & name, double ru)
+    void consumeBytesResource(const KeyspaceID & keyspace_id, const std::string & name, double ru)
     {
-        consumeResource(name, ru, 0);
-        GET_RESOURCE_GROUP_METRIC(tiflash_resource_group, type_storage_ru_consumption, name).Increment(ru);
+        consumeResource<false>(keyspace_id, name, ru, 0);
     }
 
-    uint64_t estWaitDuraMS(const std::string & name) const
+    uint64_t estWaitDuraMS(const KeyspaceID & keyspace_id, const std::string & name) const
     {
         if (unlikely(stopped))
             return 0;
@@ -362,7 +407,7 @@ public:
         if (name.empty())
             return 0;
 
-        ResourceGroupPtr group = findResourceGroup(name);
+        ResourceGroupPtr group = findResourceGroup(keyspace_id, name);
         if unlikely (!group)
         {
             LOG_DEBUG(log, "cannot get priority for {}, maybe it has been deleted", name);
@@ -371,7 +416,7 @@ public:
         return group->estWaitDuraMS(DEFAULT_MAX_EST_WAIT_DURATION.count());
     }
 
-    std::optional<uint64_t> getPriority(const std::string & name)
+    std::optional<uint64_t> getPriority(const KeyspaceID & keyspace_id, const std::string & name)
     {
         if (unlikely(stopped))
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
@@ -379,7 +424,7 @@ public:
         if (name.empty())
             return {HIGHEST_RESOURCE_GROUP_PRIORITY};
 
-        auto [group, tmp_max_ru_per_sec] = findResourceGroupAndMaxRUPerSec(name);
+        auto [group, tmp_max_ru_per_sec] = findResourceGroupAndMaxRUPerSec(keyspace_id, name);
         if unlikely (!group)
         {
             LOG_DEBUG(log, "cannot get priority for {}, maybe it has been deleted", name);
@@ -391,7 +436,7 @@ public:
 
     // Fetch resource group info from GAC if necessary and store in local cache.
     // Throw exception if got error when fetching from GAC.
-    void warmupResourceGroupInfoCache(const std::string & name);
+    void warmupResourceGroupInfoCache(const KeyspaceID & keyspace_id, const std::string & name);
 
     static bool isRUExhausted(uint64_t priority) { return priority == std::numeric_limits<uint64_t>::max(); }
 
@@ -432,9 +477,11 @@ public:
     static constexpr double ACQUIRE_RU_AMPLIFICATION = 1.1;
     static constexpr auto DEFAULT_MAX_EST_WAIT_DURATION = std::chrono::milliseconds(1000);
 
+#ifndef DBMS_PUBLIC_GTEST
 private:
+#endif
     static const std::string GAC_RESOURCE_GROUP_ETCD_PATH;
-    static const std::string WATCH_GAC_ERR_PREFIX;
+    static const std::string GAC_KEYSPACE_RESOURCE_GROUP_ETCD_PATH;
     static constexpr auto NETWORK_EXCEPTION_RETRY_DURATION_SEC = 3;
 
     // For tidb_enable_resource_control is disabled.
@@ -442,7 +489,8 @@ private:
 
     static constexpr auto CLEAR_CPU_TIME_DURATION = std::chrono::seconds(30);
 
-    void consumeResource(const std::string & name, double ru, uint64_t cpu_time_in_ns)
+    template <bool is_consume_cpu>
+    void consumeResource(const KeyspaceID & keyspace_id, const std::string & name, double ru, uint64_t cpu_time_in_ns)
     {
         if (unlikely(stopped))
             return;
@@ -451,19 +499,27 @@ private:
         if (name.empty())
             return;
 
-        ResourceGroupPtr group = findResourceGroup(name);
+        ResourceGroupPtr group = findResourceGroup(keyspace_id, name);
         if unlikely (!group)
         {
             LOG_DEBUG(log, "cannot consume ru for {}, maybe it has been deleted", name);
             return;
         }
 
-        group->consumeResource(ru, cpu_time_in_ns);
+        if constexpr (is_consume_cpu)
+        {
+            group->consumeCPUResource(ru, cpu_time_in_ns);
+        }
+        else
+        {
+            assert(cpu_time_in_ns == 0);
+            group->consumeBytesResource(ru, 0);
+        }
         if (group->lowToken() || group->trickleModeLeaseExpire(SteadyClock::now()))
         {
             {
                 std::lock_guard lock(mu);
-                low_token_resource_groups.insert(name);
+                keyspace_low_token_resource_groups.insert({keyspace_id, name});
             }
             cv.notify_all();
         }
@@ -472,21 +528,28 @@ private:
     // findResourceGroup() should be private,
     // this is to avoid user call member function of ResourceGroup directly.
     // So we can avoid dead lock.
-    ResourceGroupPtr findResourceGroup(const std::string & name) const
+    ResourceGroupPtr findResourceGroup(const KeyspaceID & keyspace_id, const std::string & name) const
     {
         std::lock_guard lock(mu);
-        auto iter = resource_groups.find(name);
-        return iter == resource_groups.end() ? nullptr : iter->second;
+        return findResourceGroupWithoutLock(keyspace_id, name);
     }
-    std::pair<ResourceGroupPtr, uint64_t> findResourceGroupAndMaxRUPerSec(const std::string & name) const
+    std::pair<ResourceGroupPtr, uint64_t> findResourceGroupAndMaxRUPerSec(
+        const KeyspaceID & keyspace_id,
+        const std::string & name) const
     {
         std::lock_guard lock(mu);
-        auto iter = resource_groups.find(name);
-        auto rg = (iter == resource_groups.end() ? nullptr : iter->second);
+        auto rg = findResourceGroupWithoutLock(keyspace_id, name);
         return {rg, max_ru_per_sec};
     }
+    ResourceGroupPtr findResourceGroupWithoutLock(const KeyspaceID & keyspace_id, const std::string & name) const
+    {
+        auto iter = keyspace_resource_groups.find({keyspace_id, name});
+        if unlikely (iter == keyspace_resource_groups.end())
+            return nullptr;
+        return iter->second;
+    }
 
-    void addResourceGroup(const resource_manager::ResourceGroup & new_group_pb)
+    void addResourceGroup(const KeyspaceID & keyspace_id, const resource_manager::ResourceGroup & new_group_pb)
     {
         uint64_t user_ru_per_sec = new_group_pb.r_u_settings().r_u().settings().fill_rate();
         std::lock_guard lock(mu);
@@ -494,19 +557,30 @@ private:
         if (max_ru_per_sec < user_ru_per_sec)
             max_ru_per_sec = user_ru_per_sec;
 
-        auto iter = resource_groups.find(new_group_pb.name());
-        if (iter != resource_groups.end())
+        auto iter = keyspace_resource_groups.find({keyspace_id, new_group_pb.name()});
+        if (iter != keyspace_resource_groups.end())
             return;
 
         LOG_INFO(log, "add new resource group, info: {}", new_group_pb.ShortDebugString());
-        auto new_group = std::make_shared<ResourceGroup>(new_group_pb, current_tick);
-        resource_groups.insert({new_group_pb.name(), new_group});
+        auto new_group = std::make_shared<ResourceGroup>(keyspace_id, new_group_pb, current_tick);
+        keyspace_resource_groups.insert({{keyspace_id, new_group_pb.name()}, new_group});
 
         if (refill_token_callback)
             refill_token_callback();
     }
+    size_t deleteResourceGroupWithoutLock(const KeyspaceID & keyspace_id, const std::string & name)
+    {
+        auto iter = keyspace_resource_groups.find({keyspace_id, name});
+        if (iter == keyspace_resource_groups.end())
+            return 0;
 
-    std::vector<std::string> handleTokenBucketsResp(const resource_manager::TokenBucketsResponse & resp);
+        updateMaxRUPerSecAfterDeleteWithoutLock(iter->second->user_ru_per_sec);
+        keyspace_resource_groups.erase(iter);
+        return 1;
+    }
+
+    std::vector<std::pair<KeyspaceID, std::string>> handleTokenBucketsResp(
+        const resource_manager::TokenBucketsResponse & resp);
 
     static void checkGACRespValid(const resource_manager::ResourceGroup & new_group_pb);
 
@@ -515,7 +589,7 @@ private:
     // 3. Check if resource group need to goto degrade mode.
     void mainLoop();
     // Watch GAC event to delete resource group.
-    void watchGACLoop();
+    void watchGACLoop(const std::string & etcd_path);
     // Send request to gac, separate from mainLoop() to avoid affect the ru consumption speed computation.
     void requestGACLoop();
 
@@ -528,12 +602,14 @@ private:
     void doRequestGAC();
 
     // watchGACLoop related methods.
-    void doWatch();
-    static etcdserverpb::WatchRequest setupWatchReq();
-    bool handleDeleteEvent(const mvccpb::KeyValue & kv, std::string & err_msg);
-    bool handlePutEvent(const mvccpb::KeyValue & kv, std::string & err_msg);
+    void doWatch(const std::string & etcd_path);
+    static etcdserverpb::WatchRequest setupWatchReq(const std::string & etcd_path);
+    bool handleDeleteEvent(const std::string & etcd_path, const mvccpb::KeyValue & kv, std::string & err_msg);
+    bool handlePutEvent(const std::string & etcd_path, const mvccpb::KeyValue & kv, std::string & err_msg);
     static bool parseResourceGroupNameFromWatchKey(
+        const std::string & etcd_key_prefix,
         const std::string & etcd_key,
+        KeyspaceID & keyspace_id,
         std::string & parsed_rg_name,
         std::string & err_msg);
     void updateMaxRUPerSecAfterDeleteWithoutLock(uint64_t deleted_user_ru_per_sec);
@@ -543,13 +619,20 @@ private:
         static_assert(CLEAR_CPU_TIME_DURATION > ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL);
         if (now - last_clear_cpu_time >= CLEAR_CPU_TIME_DURATION)
         {
-            for (auto & resource_group : resource_groups)
-                resource_group.second->clearCPUTime();
+            for (auto & ele : keyspace_resource_groups)
+                ele.second->clearCPUTime();
             last_clear_cpu_time = now;
         }
     }
 
     void stop();
+
+    static bool parseKeyspaceEtcdKey(
+        const std::string & etcd_key_prefix,
+        const std::string & etcd_key,
+        KeyspaceID & keyspace_id,
+        std::string & parsed_rg_name,
+        std::string & err_msg);
 
 private:
     mutable std::mutex mu;
@@ -561,8 +644,8 @@ private:
 
     std::atomic<bool> stopped = false;
 
-    std::unordered_map<std::string, ResourceGroupPtr> resource_groups{};
-    std::unordered_set<std::string> low_token_resource_groups{};
+    std::unordered_map<std::pair<KeyspaceID, std::string>, ResourceGroupPtr, LACPairHash> keyspace_resource_groups{};
+    std::unordered_set<std::pair<KeyspaceID, std::string>, LACPairHash> keyspace_low_token_resource_groups{};
 
     uint64_t max_ru_per_sec = 0;
 
@@ -587,8 +670,9 @@ private:
 class LACBytesCollector
 {
 public:
-    explicit LACBytesCollector(const std::string & name)
-        : resource_group_name(name)
+    explicit LACBytesCollector(const KeyspaceID & keyspace_id_, const std::string & name)
+        : keyspace_id(keyspace_id_)
+        , resource_group_name(name)
         , delta_bytes(0)
     {}
 
@@ -615,10 +699,12 @@ private:
         assert(delta_bytes != 0);
         if (!resource_group_name.empty())
             LocalAdmissionController::global_instance->consumeBytesResource(
+                keyspace_id,
                 resource_group_name,
                 bytesToRU(delta_bytes));
     }
 
+    const KeyspaceID keyspace_id;
     const std::string resource_group_name;
     uint64_t delta_bytes;
 };

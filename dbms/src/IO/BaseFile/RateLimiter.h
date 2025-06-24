@@ -231,17 +231,23 @@ private:
     std::unique_ptr<IOLimitTuner> createIOLimitTuner();
     void autoTune();
     void runAutoTune();
-    // readConfig return true if need to update limiter.
-    bool readConfig(Poco::Util::AbstractConfiguration & config_, IORateLimitConfig & new_io_config);
+
+    // readConfig read from `config_` and replace the `this->io_config`
+    // return true if need to update limiter.
+    bool reloadConfig(Poco::Util::AbstractConfiguration & config_);
+
+    void updateLimiterByConfig(const IORateLimitConfig & cfg);
     void updateReadLimiter(Int64 bg_bytes, Int64 fg_bytes);
     void updateWriteLimiter(Int64 bg_bytes, Int64 fg_bytes);
 
     IORateLimitConfig io_config;
+    std::mutex limiter_mtx; // guard for 4 limiters below
+    // Background write and foreground write
     WriteLimiterPtr bg_write_limiter;
     WriteLimiterPtr fg_write_limiter;
+    // Background read and foreground read
     ReadLimiterPtr bg_read_limiter;
     ReadLimiterPtr fg_read_limiter;
-    std::mutex mtx;
 
     std::mutex bg_thread_ids_mtx;
     std::vector<pid_t> bg_thread_ids;
@@ -253,7 +259,7 @@ private:
     ReadInfo read_info;
     const UInt64 update_read_info_period_ms;
 
-    // Noncopyable and nonmovable.
+    // Noncopyable and non-movable.
     DISALLOW_COPY_AND_MOVE(IORateLimiter);
 };
 
@@ -274,8 +280,8 @@ public:
     String toString() const
     {
         return fmt::format(
-            "alloc_bytes {} elapsed_ms {} refill_period_ms {} refill_bytes_per_period {} avg_bytes_per_sec {} "
-            "max_bytes_per_sec {} pct {}",
+            "{{alloc_bytes={} elapsed_ms={} refill_period_ms={} refill_bytes_per_period={} avg_bytes_per_sec={} "
+            "max_bytes_per_sec={} pct={}}}",
             alloc_bytes,
             elapsed_ms,
             refill_period_ms,
@@ -315,7 +321,7 @@ public:
     String toString() const
     {
         return fmt::format(
-            "bg_write {} fg_write {} bg_read {} fg_read {} io_config {}",
+            "{{bg_write={} fg_write={} bg_read={} fg_read={} io_config={}}}",
             bg_write_stat ? bg_write_stat->toString() : "null",
             fg_write_stat ? fg_write_stat->toString() : "null",
             bg_read_stat ? bg_read_stat->toString() : "null",
@@ -336,15 +342,15 @@ public:
         String toString() const
         {
             return fmt::format(
-                "max_bg_read_bytes_per_sec {} max_fg_read_bytes_per_sec {} read_tuned {} max_bg_write_bytes_per_sec {} "
-                "max_fg_write_bytes_per_sec {} write_tuned {}",
+                "{{max_bg_read_bytes_per_sec={} max_fg_read_bytes_per_sec={} read_tuned={} "
+                "max_bg_write_bytes_per_sec={} max_fg_write_bytes_per_sec={} write_tuned={}}}",
                 max_bg_read_bytes_per_sec,
                 max_fg_read_bytes_per_sec,
                 read_tuned,
                 max_bg_write_bytes_per_sec,
                 max_fg_write_bytes_per_sec,
                 write_tuned);
-        };
+        }
 
         bool operator==(const TuneResult & a) const
         {
@@ -406,19 +412,20 @@ private:
         High = 3,
         Emergency = 4
     };
-    Watermark writeWatermark() const { return getWatermark(fg_write_stat, bg_write_stat, writePct()); }
-    Watermark readWatermark() const { return getWatermark(fg_read_stat, bg_read_stat, readPct()); }
+    Watermark writeWatermark() const { return getWatermarkByFgBg(fg_write_stat, bg_write_stat, writePct()); }
+    Watermark readWatermark() const { return getWatermarkByFgBg(fg_read_stat, bg_read_stat, readPct()); }
     Watermark getWatermark(int pct) const;
-    Watermark getWatermark(const LimiterStatUPtr & fg, const LimiterStatUPtr & bg, int pct) const;
+    Watermark getWatermarkByFgBg(const LimiterStatUPtr & fg, const LimiterStatUPtr & bg, int pct) const;
 
-    // Returns <max_read_bytes_per_sec, max_write_bytes_per_sec, has_tuned>
+    // Return <max_read_bytes_per_sec, max_write_bytes_per_sec, has_tuned>
     std::tuple<Int64, Int64, bool> tuneReadWrite() const;
-    // Retunes <bg, fg, has_tune>
+    // Return <bg, fg, has_tune>
     std::tuple<Int64, Int64, bool> tuneRead(Int64 max_bytes_per_sec) const;
-    // Retunes <bg, fg, has_tune>
+    // Return <bg, fg, has_tune>
     std::tuple<Int64, Int64, bool> tuneWrite(Int64 max_bytes_per_sec) const;
     // <bg, fg, has_tune>
     std::tuple<Int64, Int64, bool> tuneBgFg(
+        std::string_view action,
         Int64 max_bytes_per_sec,
         const LimiterStatUPtr & bg,
         Int64 config_bg_max_bytes_per_sec,
@@ -445,7 +452,7 @@ private:
         String toString() const
         {
             return fmt::format(
-                "max {} avg {} watermark {} config_max {}",
+                "{{max={} avg={} watermark={} config_max={}}}",
                 max_bytes_per_sec,
                 avg_bytes_per_sec,
                 magic_enum::enum_name(watermark),

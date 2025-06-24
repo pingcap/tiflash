@@ -59,6 +59,8 @@ public:
             break;
         case NotifyType::WAIT_ON_CTE:
             GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_cte).Increment(change);
+        case NotifyType::WAIT_ON_NOTHING:
+            throw Exception("task notify type should be set before register or notify");
             break;
         }
     }

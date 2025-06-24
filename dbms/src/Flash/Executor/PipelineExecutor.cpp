@@ -42,13 +42,16 @@ PipelineExecutor::PipelineExecutor(
           context.getDAGContext(),
           auto_spill_trigger,
           register_operator_spill_context,
+          context.getDAGContext()->getKeyspaceID(),
           context.getDAGContext()->getResourceGroupName())
 {
     PhysicalPlan physical_plan{context, log->identifier()};
     physical_plan.build(context.getDAGContext()->dag_request());
     physical_plan.outputAndOptimize();
     root_pipeline = physical_plan.toPipeline(exec_context, context);
-    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(dagContext().getResourceGroupName());
+    LocalAdmissionController::global_instance->warmupResourceGroupInfoCache(
+        dagContext().getKeyspaceID(),
+        dagContext().getResourceGroupName());
 }
 
 void PipelineExecutor::scheduleEvents()
