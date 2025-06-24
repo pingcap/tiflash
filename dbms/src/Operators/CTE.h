@@ -16,9 +16,8 @@
 
 #include <Common/RWLock.h>
 #include <Core/Block.h>
-#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <absl/base/optimization.h>
 #include <tipb/select.pb.h>
 
@@ -55,8 +54,6 @@ struct IdxWithPadding
 struct CTEPartition
 {
     std::unique_ptr<std::mutex> mu;
-    std::unique_ptr<std::mutex> read_mu;
-    std::unique_ptr<std::mutex> write_mu;
     Blocks blocks;
     std::unordered_map<size_t, IdxWithPadding> fetch_block_idxs;
     size_t memory_usages = 0; // TODO need a unified statistic

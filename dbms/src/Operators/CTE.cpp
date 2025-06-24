@@ -21,7 +21,7 @@
 
 namespace DB
 {
-constexpr size_t PARTITION_NUM = 70; // TODO maybe need more tests to select a reasonable value
+constexpr size_t PARTITION_NUM = 30;
 
 inline size_t getPartitionID(size_t id)
 {
@@ -34,8 +34,6 @@ void CTE::init()
     {
         this->partitions.push_back(CTEPartition());
         this->partitions.back().mu = std::make_unique<std::mutex>();
-        this->partitions.back().read_mu = std::make_unique<std::mutex>();
-        this->partitions.back().write_mu = std::make_unique<std::mutex>();
         this->partitions.back().pipe_cv = std::make_unique<PipeConditionVariable>();
     }
 }
@@ -45,7 +43,6 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & b
     auto partition_id = getPartitionID(source_id);
 
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
-    std::lock_guard<std::mutex> read_lock(*this->partitions[partition_id].read_mu);
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
     auto status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
     if (status != CTEOpStatus::Ok)
@@ -68,7 +65,6 @@ bool CTE::pushBlock(size_t sink_id, const Block & block)
         return true;
 
     auto partition_id = getPartitionID(sink_id);
-    std::lock_guard<std::mutex> write_lock(*this->partitions[partition_id].write_mu);
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
     this->partitions[partition_id].memory_usages += block.bytes();
     this->partitions[partition_id].blocks.push_back(block);

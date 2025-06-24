@@ -36,7 +36,6 @@
 #include <Flash/Executor/toRU.h>
 #include <Flash/Mpp/MPPTaskId.h>
 #include <Interpreters/SubqueryForSet.h>
-#include <Operators/CTE.h>
 #include <Operators/IOProfileInfo.h>
 #include <Operators/OperatorProfileInfo.h>
 #include <Parsers/makeDummyQuery.h>
@@ -57,6 +56,7 @@ class CoprocessorReader;
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
 class AutoSpillTrigger;
+class CTE;
 
 struct JoinProfileInfo
 {
