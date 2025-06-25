@@ -28,7 +28,7 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & b
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
     auto status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
-    if (status != CTEOpStatus::Ok)
+    if (status != CTEOpStatus::OK)
         return status;
 
     auto idx = this->partitions[partition_id].fetch_block_idxs[cte_reader_id].idx++;
@@ -70,7 +70,7 @@ void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
     status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
 
-    if (status == CTEOpStatus::BlockNotAvailable)
+    if (status == CTEOpStatus::BLOCK_NOT_AVAILABLE)
     {
         this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE);
         return;

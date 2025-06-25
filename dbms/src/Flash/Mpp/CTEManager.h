@@ -74,7 +74,7 @@ public:
     }
     void releaseCTEBySource(const String & query_id_and_cte_id);
     void releaseCTEBySink(const tipb::SelectResponse & resp, const String & query_id_and_cte_id);
-    void releaseCTEs(const String & query_id_and_cte_id);
+    void releaseCTE(const String & query_id_and_cte_id);
 
 private:
     std::shared_ptr<CTE> getCTEImpl(

@@ -31,11 +31,10 @@ namespace DB
 {
 enum class CTEOpStatus
 {
-    Ok,
-    BlockNotAvailable,
-    Eof,
-    Cancelled,
-    Error
+    OK,
+    BLOCK_NOT_AVAILABLE,
+    END_OF_FILE,
+    CANCELLED
 };
 
 struct IdxWithPadding
@@ -87,14 +86,8 @@ public:
     CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block);
 
     bool pushBlock(size_t sink_id, const Block & block);
-    void notifyEOF() { this->notifyImpl(true); }
-    void notifyCancel() { this->notifyImpl(false); }
-
-    void notifyError(const String & err_msg)
-    {
-        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
-        this->err_msg = err_msg;
-    }
+    void notifyEOF() { this->notifyImpl(true, ""); }
+    void notifyCancel(const String & msg) { this->notifyImpl(false, msg); }
 
     String getError()
     {
@@ -132,23 +125,26 @@ private:
     CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id)
     {
         if unlikely (this->is_cancelled)
-            return CTEOpStatus::Cancelled;
+            return CTEOpStatus::CANCELLED;
 
         if (this->partitions[partition_id].blocks.size()
             <= this->partitions[partition_id].fetch_block_idxs[cte_reader_id].idx)
-            return this->is_eof ? CTEOpStatus::Eof : CTEOpStatus::BlockNotAvailable;
+            return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;
 
-        return CTEOpStatus::Ok;
+        return CTEOpStatus::OK;
     }
 
-    void notifyImpl(bool is_eof)
+    void notifyImpl(bool is_eof, const String & msg)
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
 
         if likely (is_eof)
             this->is_eof = true;
         else
+        {
             this->is_cancelled = true;
+            this->err_msg = msg;
+        }
 
         for (auto & partition : this->partitions)
             partition.pipe_cv->notifyAll();

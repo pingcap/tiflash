@@ -29,18 +29,16 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
     auto ret = this->cte_reader->fetchNextBlock(this->id, block);
     switch (ret)
     {
-    case CTEOpStatus::Eof:
+    case CTEOpStatus::END_OF_FILE:
         this->cte_reader->getResp(this->resp);
         if (this->resp.execution_summaries_size() != 0)
             this->io_profile_info->remote_execution_summary.add(this->resp);
-    case CTEOpStatus::Ok:
+    case CTEOpStatus::OK:
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
-    case CTEOpStatus::BlockNotAvailable:
+    case CTEOpStatus::BLOCK_NOT_AVAILABLE:
         DB::setNotifyFuture(&(this->notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;
-    case CTEOpStatus::Cancelled:
-        return OperatorStatus::CANCELLED;
     default:
         throw Exception("Should not reach here");
     }

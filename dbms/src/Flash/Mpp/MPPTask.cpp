@@ -153,6 +153,7 @@ MPPTask::~MPPTask()
     if (query_memory_tracker != nullptr && current_memory_tracker != query_memory_tracker)
         current_memory_tracker = query_memory_tracker;
     abortTunnels("", true);
+    abortCTE("");
     LOG_INFO(log, "finish MPPTask: {}, total run time is {} ms", id.toString(), total_run_time_ms);
 }
 
@@ -190,9 +191,9 @@ void MPPTask::abortQueryExecutor()
     }
 }
 
-void MPPTask::abortCTE()
+void MPPTask::abortCTE(const String & message)
 {
-    if (this->dag_context->hasCTESource())
+    if (this->has_cte_sink.load())
     {
         auto ctes = this->dag_context->getCTEs();
 
@@ -200,14 +201,14 @@ void MPPTask::abortCTE()
         // We'd better to manually do notification in case of missing signal from cte sink
         // or the CTESource will hang
         for (auto & cte : ctes)
-            cte->notifyCancel();
-        this->context->getCTEManager()->releaseCTEs(this->dag_context->getQueryIDAndCTEID());
+            cte->notifyCancel(message);
+        this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEID());
     }
 }
 
 void MPPTask::finishWrite()
 {
-    if (this->has_cte_sink)
+    if (this->has_cte_sink.load())
     {
         tipb::SelectResponse resp;
         if (dag_context->collect_execution_summaries)
@@ -238,11 +239,11 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
     if unlikely (!dag_context->dag_request.rootExecutor().has_exchange_sender())
     {
-        if unlikely (!dag_context->dag_request.rootExecutor().has_cte_sink())
-            throw Exception("Task has either exchange sender or cte sink");
-
+        RUNTIME_CHECK_MSG(
+            dag_context->dag_request.rootExecutor().has_cte_sink(),
+            "Task should has either exchange sender or cte sink");
         // There is no need to register tunnel for cte sink
-        this->has_cte_sink = true;
+        this->has_cte_sink.store(true);
         return;
     }
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
@@ -669,7 +670,7 @@ void MPPTask::runImpl()
         err_msg = err_msg.empty() ? catch_err_msg : fmt::format("{}, {}", err_msg, catch_err_msg);
     }
 
-    if (this->has_cte_sink && !this->notify_cte_finish)
+    if (this->has_cte_sink.load() && !this->notify_cte_finish)
     {
         tipb::SelectResponse resp;
         this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEID());
@@ -817,6 +818,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// if the task is in initializing state, mpp task can return error to TiDB directly,
             /// so just close all tunnels here
             abortTunnels("", false);
+            abortCTE(message);
             LOG_WARNING(log, "Finish abort task from uninitialized");
             break;
         }
@@ -829,7 +831,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             abortTunnels(message, false);
             abortReceivers();
             abortQueryExecutor();
-            abortCTE();
+            abortCTE(message);
             scheduleThisTask(ScheduleState::FAILED);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish abort task from running");

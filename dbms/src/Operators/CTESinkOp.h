@@ -30,7 +30,6 @@ public:
     {}
 
     String getName() const override { return "CTESinkOp"; }
-    bool canHandleSelectiveBlock() const override { return true; }
 
 protected:
     void operateSuffixImpl() override;

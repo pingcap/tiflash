@@ -24,17 +24,16 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
     auto ret = this->cte->tryGetBlockAt(this->cte_reader_id, source_id, block);
     switch (ret)
     {
-    case CTEOpStatus::Eof:
+    case CTEOpStatus::END_OF_FILE:
     {
         std::lock_guard<std::mutex> lock(this->mu);
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
     }
-    case CTEOpStatus::BlockNotAvailable:
-    case CTEOpStatus::Cancelled:
-    case CTEOpStatus::Ok:
+    case CTEOpStatus::BLOCK_NOT_AVAILABLE:
+    case CTEOpStatus::OK:
         return ret;
-    case DB::CTEOpStatus::Error:
+    case CTEOpStatus::CANCELLED:
         throw Exception(this->cte->getError());
     }
     throw Exception("Should not reach here");

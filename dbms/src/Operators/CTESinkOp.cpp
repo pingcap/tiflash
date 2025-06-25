@@ -30,9 +30,6 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
     this->total_rows += block.rows();
     if (this->cte->pushBlock(this->id, block))
         return OperatorStatus::NEED_INPUT;
-    const String & err = this->cte->getError();
-    if (err.empty())
-        return OperatorStatus::CANCELLED;
-    throw Exception(err);
+    return OperatorStatus::CANCELLED;
 }
 } // namespace DB

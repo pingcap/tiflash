@@ -48,7 +48,6 @@ public:
     }
 
     CTEOpStatus fetchNextBlock(size_t source_id, Block & block);
-    CTEOpStatus checkAvailableBlock();
 
     void getResp(tipb::SelectResponse & resp)
     {
