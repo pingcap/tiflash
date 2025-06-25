@@ -121,6 +121,7 @@ public:
         const String & tracing_id,
         bool enable_read_thread_,
         Int64 num_streams_,
+        const KeyspaceID & keyspace_id_,
         const String & res_group_name_);
 
     ~SegmentReadTaskPool() override
@@ -254,6 +255,7 @@ private:
     const Int64 block_slot_limit;
     const Int64 active_segment_limit;
 
+    const KeyspaceID keyspace_id;
     const String res_group_name;
     std::mutex ru_mu;
     std::atomic<Int64> last_time_check_ru = 0;

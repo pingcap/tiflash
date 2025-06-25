@@ -93,7 +93,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {
         auto bytes = t->read_snapshot->estimatedBytesOfInternalColumns();
-        LocalAdmissionController::global_instance->consumeBytesResource(res_group_name, bytesToRU(bytes));
+        LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
     }
     t->initInputStream(
         columns_to_read,
@@ -127,6 +127,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     const String & tracing_id,
     bool enable_read_thread_,
     Int64 num_streams_,
+    const KeyspaceID & keyspace_id_,
     const String & res_group_name_)
     : pool_id(nextPoolId())
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
@@ -150,6 +151,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
     // situations where the computation may be faster and the storage layer may not be able to keep up.
     , active_segment_limit(std::max(num_streams_, 2))
+    , keyspace_id(keyspace_id_)
     , res_group_name(res_group_name_)
 {
     if (tasks_wrapper.empty())
@@ -368,9 +370,9 @@ static Int64 currentMS()
         .count();
 }
 
-static bool checkIsRUExhausted(const String & res_group_name)
+static bool checkIsRUExhausted(const KeyspaceID & keyspace_id, const String & res_group_name)
 {
-    auto priority = LocalAdmissionController::global_instance->getPriority(res_group_name);
+    auto priority = LocalAdmissionController::global_instance->getPriority(keyspace_id, res_group_name);
     if (unlikely(!priority.has_value()))
     {
         return false;
@@ -416,7 +418,7 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
 
     // Check and reset everything.
     read_bytes_after_last_check = 0;
-    ru_is_exhausted = checkIsRUExhausted(res_group_name);
+    ru_is_exhausted = checkIsRUExhausted(keyspace_id, res_group_name);
     last_time_check_ru = ms;
     return ru_is_exhausted;
 }
