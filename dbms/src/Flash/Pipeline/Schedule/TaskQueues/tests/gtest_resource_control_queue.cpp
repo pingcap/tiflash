@@ -455,7 +455,7 @@ TEST_F(TestResourceControlQueue, RunOutOfRU)
     TaskScheduler task_scheduler(config);
 
     PipelineExecutorContext
-        exec_context("mock-query-id", "mock-req-id", mem_tracker, nullptr, nullptr, nullptr, NullspaceID, rg_name);
+        exec_context("mock-query-id", "mock-query-id-for-cte", "mock-req-id", mem_tracker, nullptr, nullptr, nullptr, NullspaceID, rg_name);
 
     auto task = std::make_unique<SimpleTask>(exec_context);
     // This task should use 5*100ms cpu_time.
