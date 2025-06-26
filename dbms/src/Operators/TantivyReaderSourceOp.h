@@ -37,7 +37,8 @@ public:
         const NamesAndTypes & query_columns,
         const NamesAndTypes & return_columns,
         const String & query_json_str,
-        const UInt64 & limit);
+        const UInt64 & limit,
+        const UInt64 & read_ts);
 
     String getName() const override;
 

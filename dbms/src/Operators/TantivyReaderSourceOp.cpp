@@ -31,7 +31,8 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
     const NamesAndTypes & query_columns,
     const NamesAndTypes & return_columns,
     const String & query_json_str,
-    const UInt64 & limit)
+    const UInt64 & limit,
+    const UInt64 & read_ts)
     : SourceOp(exec_context_, req_id)
 {
     setHeader(Block(return_columns));
@@ -44,7 +45,8 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
         query_columns,
         return_columns,
         query_json_str,
-        limit);
+        limit,
+        read_ts);
 }
 
 String TantivyReaderSourceOp::getName() const

@@ -29,6 +29,7 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Operators/TantivyReaderSourceOp.h>
 #include <Storages/IStorage.h>
+#include <Storages/RegionQueryInfo.h>
 #include <Storages/StorageTantivy.h>
 #include <Storages/Tantivy/TantivyInputStream.h>
 #include <common/defines.h>
@@ -61,7 +62,7 @@ void StorageTantivy::read(
     PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     [[maybe_unused]] const Names & column_names,
-    [[maybe_unused]] const SelectQueryInfo & info,
+    const SelectQueryInfo & info,
     [[maybe_unused]] const Context & context,
     [[maybe_unused]] size_t max_block_size,
     [[maybe_unused]] unsigned num_streams)
@@ -78,7 +79,8 @@ void StorageTantivy::read(
         query_columns,
         return_columns,
         tici_scan.getQuery(),
-        tici_scan.getLimit()));
+        tici_scan.getLimit(),
+        info.mvcc_query_info->start_ts));
 }
 
 } // namespace DB
