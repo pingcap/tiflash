@@ -16,7 +16,7 @@
 disaggregated-tiflash = true
 
 # setup keyspace for tidb
-keyspace-name = "a"
+keyspace-name = "SYSTEM"
 
 enable-telemetry = false
 temp-dir = "/data/tmp"
