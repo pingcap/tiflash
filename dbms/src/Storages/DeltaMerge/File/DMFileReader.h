@@ -100,9 +100,6 @@ public:
     friend class tests::DMFileMetaV2Test;
 
 private:
-    // Initialize, called by constructor
-    void initPackOffset();
-
     // Split the first read block info to multiple read block infos accroding to `filter`
     // Used by readWithFilter, return new read block infos.
     std::vector<ReadBlockInfo> splitReadBlockInfos(const ReadBlockInfo & read_info, const IColumn::Filter & filter)
@@ -196,7 +193,7 @@ private:
 
     std::deque<ReadBlockInfo> read_block_infos;
     // row_offset of the given pack_id
-    std::vector<size_t> pack_offset;
+    const std::vector<size_t> pack_offset;
     // last read pack_id + 1, used by getSkippedRows
     size_t next_pack_id = 0;
 

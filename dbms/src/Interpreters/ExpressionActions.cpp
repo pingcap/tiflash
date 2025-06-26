@@ -403,6 +403,7 @@ void ExpressionAction::execute(Block & block) const
             new_block.insert(std::move(column));
         }
         new_block.setRSResult(block.getRSResult());
+        new_block.setStartOffset(block.startOffset());
         block.swap(new_block);
 
         break;
