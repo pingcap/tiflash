@@ -30,6 +30,9 @@ namespace DB
 class CTESpill
 {
 public:
+    // TODO maybe need refine
+    explicit CTESpill() = default;
+
     // TODO maybe we need an initialization function as spill may not be triggered and we can initialize it until spill is triggered
 
     // TODO all function need lock as CTESpill may be concurrently accessed
@@ -48,8 +51,7 @@ private:
     std::vector<NativeBlockOutputStream> write_streams;
     std::vector<std::pair<Int64, Int64>> block_offsets;
     FileProviderPtr file_provider;
-    Int64 write_offset; // Always write to the last file, so we need only one offset
-    SpillConfig config; // TODO initialize it
+    // SpillConfig config; // TODO initialize it
 
     std::vector<char> buf;
 };

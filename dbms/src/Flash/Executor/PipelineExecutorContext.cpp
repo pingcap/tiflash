@@ -20,6 +20,7 @@
 #include <Flash/Mpp/Utils.h>
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
+#include <Operators/CTE.h>
 #include <Operators/SharedQueue.h>
 
 #include <exception>
@@ -185,12 +186,20 @@ void PipelineExecutorContext::cancel()
             // pipeline tasks waiting in the WAIT_FOR_NOTIFY state from never being notified.
             if (dag_context->tunnel_set)
                 dag_context->tunnel_set->close(getTrimmedErrMsg(), false);
+
+            auto ctes = dag_context->getCTEs();
+            if (!ctes.empty())
+                ctes[0]->notifyCancel(getTrimmedErrMsg());
+
             if (auto mpp_receiver_set = dag_context->getMPPReceiverSet(); mpp_receiver_set)
                 mpp_receiver_set->cancel();
         }
         cancelResultQueueIfNeed();
         if likely (TaskScheduler::instance && !query_id.empty())
-            TaskScheduler::instance->cancel(query_id, resource_group_name);
+            TaskScheduler::instance->cancel(TaskCancelInfo{
+                .query_id = query_id,
+                .keyspace_id = getKeyspaceID(),
+                .resource_group_name = resource_group_name});
     }
 }
 

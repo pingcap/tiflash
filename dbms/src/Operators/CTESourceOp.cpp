@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/CTE.h>
 #include <Operators/CTESourceOp.h>
 #include <Operators/Operator.h>
@@ -33,90 +34,46 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         return OperatorStatus::HAS_OUTPUT;
     }
 
-    auto res = this->cte_reader->fetchNextBlock();
-    switch (res.first)
+    auto ret = this->cte_reader->fetchNextBlock(this->id, block);
+    switch (ret)
     {
-    case CTEOpStatus::Eof:
+    case CTEOpStatus::END_OF_FILE:
         this->cte_reader->getResp(this->resp);
         if (this->resp.execution_summaries_size() != 0)
             this->io_profile_info->remote_execution_summary.add(this->resp);
-    case CTEOpStatus::Ok:
-        block = res.second;
+    case CTEOpStatus::OK:
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
-    case CTEOpStatus::IOIn:
+    case CTEOpStatus::IO_IN:
         // Expected block is in disk, we need to read it from disk
         return OperatorStatus::IO_IN;
-    case CTEOpStatus::IOOut:
-    {
+    case CTEOpStatus::IO_OUT:
         // CTE is spilling blocks to disk, we need to wait the finish of spill
         this->wait_type = CTESourceOp::Spill;
-        return OperatorStatus::WAITING;
-    }
-    case CTEOpStatus::BlockUnavailable:
-        if likely (this->cte_reader->isBlockGenerated())
-        {
-            return OperatorStatus::WAITING;
-        }
-        else
-        {
-            // CTE has not begun to receive data yet
-            // So we need to wait the notify from CTE
-            this->cte_reader->setNotifyFuture();
-            return OperatorStatus::WAIT_FOR_NOTIFY;
-        }
-    case CTEOpStatus::Cancelled:
+        // TODO set corresponding notifier
+        return OperatorStatus::WAIT_FOR_NOTIFY;
+    case CTEOpStatus::CANCELLED:
         return OperatorStatus::CANCELLED;
+    case CTEOpStatus::BLOCK_NOT_AVAILABLE:
+        DB::setNotifyFuture(&(this->notifier));
+        return OperatorStatus::WAIT_FOR_NOTIFY;
+    default:
+        throw Exception("Should not reach here");
     }
 }
 
 OperatorStatus CTESourceOp::executeIOImpl()
 {
     RUNTIME_CHECK(!this->block_from_disk);
-    auto status = this->cte_reader->fetchBlockFromDisk(this->block_from_disk);
+    auto status = this->cte_reader->fetchBlockFromDisk(this->id, this->block_from_disk);
     switch (status)
     {
-    case CTEOpStatus::Ok:
+    case CTEOpStatus::OK:
         return OperatorStatus::HAS_OUTPUT;
-    case CTEOpStatus::Cancelled:
+    case CTEOpStatus::CANCELLED:
         return OperatorStatus::CANCELLED;
     default:
         throw Exception(fmt::format("Get unexpected status {}", magic_enum::enum_name(status)));
-    }
-}
-
-OperatorStatus CTESourceOp::awaitImpl()
-{
-    if (this->wait_type == CTESourceOp::WaitType::NeedMoreBlock)
-    {
-        auto res = this->cte_reader->checkAvailableBlock();
-        switch (res)
-        {
-        case CTEOpStatus::BlockUnavailable:
-            return OperatorStatus::WAITING;
-        case CTEOpStatus::Ok:
-        case CTEOpStatus::Eof:
-            return OperatorStatus::HAS_OUTPUT;
-        case CTEOpStatus::Cancelled:
-            return OperatorStatus::CANCELLED;
-        default:
-            throw Exception(fmt::format("Get unexpected status {}", magic_enum::enum_name(res)));
-        }
-    }
-    else if (this->wait_type == CTESourceOp::WaitType::Spill)
-    {
-        switch (this->cte_reader->getCTEStatus())
-        {
-        case CTE::CTEStatus::Normal:
-            return OperatorStatus::HAS_OUTPUT;
-        case CTE::CTEStatus::NeedSpill:
-        case CTE::CTEStatus::InSpilling:
-            return OperatorStatus::WAITING;
-        }
-    }
-    else
-    {
-        throw Exception(fmt::format("Unexpected wait type {}", magic_enum::enum_name(this->wait_type)));
     }
 }
 } // namespace DB

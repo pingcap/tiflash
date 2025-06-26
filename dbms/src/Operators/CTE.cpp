@@ -14,131 +14,141 @@
 
 #include <Common/Exception.h>
 #include <Core/Block.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Operators/CTE.h>
 
 #include <cassert>
 #include <mutex>
 #include <shared_mutex>
 
-#include "Flash/Pipeline/Schedule/Tasks/Task.h"
-
 namespace DB
 {
-CTEOpStatus CTE::tryGetBlockAt(size_t idx, Block & block)
+CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block)
 {
     {
         std::shared_lock<std::shared_mutex> status_lock(this->aux_rw_lock);
-        if (this->cte_status != CTE::Normal)
-            return Status::IOOut;
+        if (this->cte_status != CTEStatus::NORMAL)
+            return CTEOpStatus::IO_OUT;
     }
 
-    std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+    std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
 
     if unlikely (this->is_cancelled)
-        return CTEOpStatus::Cancelled;
+        return CTEOpStatus::CANCELLED;
+
+    auto partition_id = this->getPartitionID(source_id);
+    std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
 
     if (this->is_spill_triggered)
     {
-        auto spilled_block_num = static_cast<size_t>(this->cte_spill.blockNum());
-        if (idx < spilled_block_num)
-            return CTEOpStatus::IOIn;
+        // TODO need refinement
+        // auto spilled_block_num = static_cast<size_t>(this->cte_spill.blockNum());
+        // if (idx < spilled_block_num)
+        //     return CTEOpStatus::IOIn;
 
-        idx -= spilled_block_num;
     }
 
-    auto block_num = this->blocks.size();
-    if (block_num <= idx)
-        return this->is_eof ? CTEOpStatus::Eof : CTEOpStatus::BlockUnavailable;
 
-    block = this->blocks[idx];
-    return CTEOpStatus::Ok;
+    auto status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
+    if (status != CTEOpStatus::OK)
+        return status;
+
+    auto idx = this->partitions[partition_id].fetch_block_idxs[cte_reader_id].idx++;
+    block = this->partitions[partition_id].blocks[idx];
+    return status;
 }
 
-CTEOpStatus CTE::checkAvailableBlock(size_t idx)
+CTEOpStatus CTE::checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id)
 {
     {
         std::shared_lock<std::shared_mutex> status_lock(this->aux_rw_lock);
-        if (this->cte_status != CTE::Normal)
-            return CTEOpStatus::BlockUnavailable;
+        if (this->cte_status != CTEStatus::NORMAL)
+            return CTEOpStatus::BLOCK_NOT_AVAILABLE;
     }
 
-    std::shared_lock<std::shared_mutex> lock(this->rw_lock);
-
     if unlikely (this->is_cancelled)
-        return CTEOpStatus::Cancelled;
+        return CTEOpStatus::CANCELLED;
 
     if (this->is_spill_triggered)
     {
-        auto spilled_block_num = static_cast<size_t>(this->cte_spill.blockNum());
-        if (idx < spilled_block_num)
-            return CTEOpStatus::Ok;
+        // TODO judge if block is in the disk
+        // auto spilled_block_num = static_cast<size_t>(this->cte_spill.blockNum());
+        // if (idx < spilled_block_num)
+        //     return CTEOpStatus::OK;
 
-        idx -= spilled_block_num;
+        // idx -= spilled_block_num;
     }
 
-    if (this->blocks.size() > idx)
-        return CTEOpStatus::Ok;
-    return CTEOpStatus::BlockUnavailable;
+    if (this->partitions[partition_id].blocks.size()
+        <= this->partitions[partition_id].fetch_block_idxs[cte_reader_id].idx)
+        return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;
+
+    return CTEOpStatus::OK;
 }
 
-CTEOpStatus CTE::pushBlock(const Block & block)
+CTEOpStatus CTE::pushBlock(size_t sink_id, const Block & block)
 {
-    std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
-    CTEOpStatus ret = CTEOpStatus::Ok;
+    auto partition_id = this->getPartitionID(sink_id);
+    CTEOpStatus ret = CTEOpStatus::OK;
     {
         std::unique_lock<std::shared_mutex> status_lock(this->aux_rw_lock);
-        if (this->cte_status != CTE::Normal)
+        if (this->cte_status != CTEStatus::NORMAL)
         {
-            // Block memory usage will be calculated after the finish of spill
-            this->tmp_blocks.push_back(block);
-            return CTEOpStatus::IOOut;
-        }
-
-        // This function is called in cpu pool, we don't want to wait for this lock too long.
-        // This lock may be held when spill is in execution. So we need ensure that cte status is not changed
-        lock.lock();
-
-        if unlikely (this->is_cancelled)
-            return CTEOpStatus::Cancelled;
-
-        if unlikely (block.rows() == 0)
-            // All rows in block may have been filtered and it's needles to store this block
-            return CTEOpStatus::Ok;
-
-        this->memory_usage += block.bytes();
-        if (this->memory_usage >= this->memory_threshold)
-        {
-            this->cte_status = CTE::NeedSpill;
-            ret = CTEOpStatus::IOOut;
+            if likely (block.rows() != 0)
+                // Block memory usage will be calculated after the finish of spill
+                this->partitions[partition_id].tmp_blocks.push_back(block);
+            return CTEOpStatus::IO_OUT;
         }
     }
 
-    if unlikely (!this->hasDataNoLock())
-        // It's the first time to get block; wake up all tasks that are waiting for blocks.
-        this->pipe_cv.notifyAll();
-    this->blocks.push_back(block);
+    // This function is called in cpu pool, we don't want to wait for this lock too long.
+    // This lock may be held when spill is in execution. So we need ensure that cte status is not changed
+    std::unique_lock<std::shared_mutex> rw_lock(this->rw_lock);
+
+    if unlikely (this->is_cancelled)
+        return CTEOpStatus::CANCELLED;
+
+    if unlikely (block.rows() == 0)
+        // All rows in block may have been filtered and it's needles to store this block
+        return CTEOpStatus::OK;
+
+    std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
+    this->partitions[partition_id].memory_usage += block.bytes();
+    this->partitions[partition_id].blocks.push_back(block);
+    this->partitions[partition_id].pipe_cv->notifyOne();
+
+    // TODO memory usage judgement should be considered from global perspective
+    // if (this->partitions[partition_id].memory_usage >= this->memory_threshold)
+    // {
+    //     this->cte_status = CTE::NEED_SPILL;
+    //     ret = CTEOpStatus::IO_OUT;
+    // }
     return ret;
 }
 
-CTEOpStatus CTE::getBlockFromDisk(size_t idx, Block & block)
+CTEOpStatus CTE::getBlockFromDisk(size_t source_id, size_t idx, Block & block)
 {
+    auto partition_id = this->getPartitionID(source_id);
+    
     std::shared_lock<std::shared_mutex> lock(this->rw_lock);
     if unlikely (this->is_cancelled)
-        return CTEOpStatus::Cancelled;
+        return CTEOpStatus::CANCELLED;
 
-    if unlikely (!this->is_spill_triggered)
-        // We can call this function only when spill is triggered
-        throw Exception("Spill should be triggered");
+    // We can call this function only when spill is triggered
+    RUNTIME_CHECK_MSG(this->is_spill_triggered, "Spill should be triggered");
 
-    if unlikely (static_cast<size_t>(this->cte_spill.blockNum()) <= idx)
-        throw Exception("Requested block is not in disk");
+    // TODO
+    RUNTIME_CHECK_MSG(static_cast<size_t>(this->cte_spill.blockNum()) <= idx, "Requested block is not in disk");
 
-    block = this->cte_spill.readBlockAt(idx);
-    return CTEOpStatus::Ok;
+    // TODO
+    // block = this->cte_spill.readBlockAt(idx);
+    return CTEOpStatus::OK;
 }
 
-bool CTE::spillBlocks()
+// TODO maybe CTEPartition should also implement a similiar function
+bool CTE::spillBlocks(size_t sink_id)
 {
+    auto partition_id = this->getPartitionID(sink_id);
     std::unique_lock<std::shared_mutex> lock(this->rw_lock);
 
     if unlikely (this->is_cancelled)
@@ -146,44 +156,49 @@ bool CTE::spillBlocks()
 
     while (true)
     {
-        this->cte_spill.writeBlocks(this->blocks);
-        this->blocks.clear();
-        this->memory_usage = 0;
+        this->cte_spill.writeBlocks(this->partitions[partition_id].blocks);
+        this->partitions[partition_id].blocks.clear();
+        this->partitions[partition_id].memory_usage = 0;
 
         std::unique_lock<std::shared_mutex> aux_lock(this->aux_rw_lock);
-        for (const auto & block : this->tmp_blocks)
+        for (const auto & block : this->partitions[partition_id].tmp_blocks)
         {
-            this->blocks.push_back(block);
-            this->memory_usage += block.bytes();
+            this->partitions[partition_id].blocks.push_back(block);
+            this->partitions[partition_id].memory_usage += block.bytes();
         }
 
-        this->tmp_blocks.clear();
+        this->partitions[partition_id].tmp_blocks.clear();
 
-        if (this->memory_usage < this->memory_threshold)
+        // TODO we need to consider total memory usage, not partition memory usage
+        if (this->partitions[partition_id].memory_usage < this->memory_threshold)
         {
-            this->cte_status = CTEStatus::Normal;
+            this->cte_status = CTEStatus::NORMAL;
             break;
         }
     }
 
     // Many tasks may be waiting for the finish of spill
-    this->pipe_cv.notifyAll();
+    this->partitions[partition_id].pipe_cv->notifyAll();
     return true;
 }
 
-void CTE::registerTask(TaskPtr && task)
+// TODO sometimes we register task because of spill, consider this situation
+void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id)
 {
-    // TODO sometimes we register task because of spill, consider this situation
+    auto partition_id = this->getPartitionID(source_id);
+    CTEOpStatus status;
+
+    std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
+    std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
+    status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
+
+    if (status == CTEOpStatus::BLOCK_NOT_AVAILABLE)
     {
-        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
-        if (!this->hasDataNoLock())
-        {
-            task->setNotifyType(NotifyType::WAIT_ON_CTE);
-            pipe_cv.registerTask(std::move(task));
-            return;
-        }
+        this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE);
+        return;
     }
-    this->pipe_cv.notifyTaskDirectly(std::move(task));
+
+    this->notifyTaskDirectly(partition_id, std::move(task));
 }
 
 CTE::CTEStatus CTE::getStatus()

@@ -19,40 +19,35 @@
 
 namespace DB
 {
-std::pair<CTEOpStatus, Block> CTEReader::fetchNextBlock()
+CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
 {
-    Block block;
-    std::lock_guard<std::mutex> lock(this->mu);
-    auto ret = this->cte->tryGetBlockAt(this->block_fetch_idx, block);
+    auto ret = this->cte->tryGetBlockAt(this->cte_reader_id, source_id, block);
     switch (ret)
     {
-    case CTEOpStatus::Eof:
+    case CTEOpStatus::END_OF_FILE:
+    {
+        std::lock_guard<std::mutex> lock(this->mu);
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
-    case CTEOpStatus::IOOut:
-    case CTEOpStatus::IOIn:
-    case CTEOpStatus::Cancelled:
-    case CTEOpStatus::BlockUnavailable:
-        return {ret, Block()};
-    case CTEOpStatus::Ok:
-        this->block_fetch_idx++;
-        return {ret, block};
+    }
+    case CTEOpStatus::IO_OUT:
+    case CTEOpStatus::IO_IN:
+    case CTEOpStatus::BLOCK_NOT_AVAILABLE:
+    case CTEOpStatus::OK:
+        return ret;
+    case CTEOpStatus::CANCELLED:
+        throw Exception(this->cte->getError());
     }
     throw Exception("Should not reach here");
 }
 
-CTEOpStatus CTEReader::fetchBlockFromDisk(Block & block)
+CTEOpStatus CTEReader::fetchBlockFromDisk(size_t source_id, Block & block)
 {
-    std::lock_guard<std::mutex> lock(this->mu);
-    auto status = this->cte->getBlockFromDisk(this->block_fetch_idx, block);
-    if likely (status == CTEOpStatus::Ok)
-        this->block_fetch_idx++;
-    return status;
-}
-
-CTEOpStatus CTEReader::checkAvailableBlock()
-{
-    std::lock_guard<std::mutex> lock(this->mu);
-    return this->cte->checkAvailableBlock(this->block_fetch_idx);
+    // TODO implement it
+    // std::lock_guard<std::mutex> lock(this->mu);
+    // auto status = this->cte->getBlockFromDisk(this->block_fetch_idx, block);
+    // if likely (status == CTEOpStatus::Ok)
+    //     this->block_fetch_idx++;
+    // return status;
 }
 } // namespace DB

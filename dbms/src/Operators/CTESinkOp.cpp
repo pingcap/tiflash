@@ -15,6 +15,7 @@
 #include <Operators/CTESinkOp.h>
 #include <Operators/Operator.h>
 #include <fmt/core.h>
+#include "Operators/CTE.h"
 
 namespace DB
 {
@@ -26,34 +27,28 @@ void CTESinkOp::operateSuffixImpl()
 OperatorStatus CTESinkOp::writeImpl(Block && block)
 {
     if (!block)
-    {
         return OperatorStatus::FINISHED;
-    }
+
     this->total_rows += block.rows();
-    auto status = this->cte->pushBlock(block);
+    auto status = this->cte->pushBlock(this->id, block);
     switch (status)
     {
-    case Status::IOOut:
+    case CTEOpStatus::IO_OUT:
+        // TODO set notifier
         return OperatorStatus::IO_OUT;
-    case Status::Ok:
+    case CTEOpStatus::OK:
         return OperatorStatus::NEED_INPUT;
+    case CTEOpStatus::CANCELLED:
+        return OperatorStatus::CANCELLED;
     default:
-        throw Exception(fmt::format("Get unexpected Status: {}", magic_enum::enum_name(status)));
+        throw Exception(fmt::format("Get unexpected CTEOpStatus: {}", magic_enum::enum_name(status)));
     }
 }
 
 OperatorStatus CTESinkOp::executeIOImpl()
 {
-    if likely (this->cte->spillBlocks())
+    if likely (this->cte->spillBlocks(this->id))
         return OperatorStatus::NEED_INPUT;
     return OperatorStatus::CANCELLED;
-}
-
-OperatorStatus CTESinkOp::awaitImpl()
-{
-    // CTESinkOp waits for the finish of spill
-    if (this->cte->getStatus() == CTE::CTEStatus::Normal)
-        return OperatorStatus::NEED_INPUT;
-    return OperatorStatus::WAITING;
 }
 } // namespace DB

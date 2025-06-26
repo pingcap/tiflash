@@ -16,6 +16,7 @@
 
 #include <Flash/Mpp/CTEManager.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Operators/CTE.h>
 #include <tipb/select.pb.h>
 
@@ -29,26 +30,25 @@ class CTEReader
 public:
     CTEReader(
         const String & query_id_and_cte_id_,
-        const String & partition_id_,
+        size_t partition_num,
         CTEManager * cte_manager_,
         Int32 expected_sink_num_,
         Int32 expected_source_num_)
         : query_id_and_cte_id(query_id_and_cte_id_)
-        , partition_id(partition_id_)
         , cte_manager(cte_manager_)
         , cte(cte_manager_
-                  ->getCTEBySource(query_id_and_cte_id_, partition_id, expected_sink_num_, expected_source_num_))
+                  ->getCTEBySource(query_id_and_cte_id_, partition_num, expected_sink_num_, expected_source_num_))
+        , cte_reader_id(this->cte->getCTEReaderID())
     {}
 
     ~CTEReader()
     {
         this->cte.reset();
-        this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id, this->partition_id);
+        this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id);
     }
 
-    std::pair<CTEOpStatus, Block> fetchNextBlock();
-    CTEOpStatus fetchBlockFromDisk(Block & block);
-    CTEOpStatus checkAvailableBlock();
+    CTEOpStatus fetchNextBlock(size_t source_id, Block & block);
+    CTEOpStatus fetchBlockFromDisk(size_t source_id, Block & block);
 
     CTE::CTEStatus getCTEStatus() const { return this->cte->getStatus(); }
 
@@ -61,28 +61,16 @@ public:
         resp.CopyFrom(this->resp);
     }
 
-    bool isBlockGenerated()
-    {
-        std::lock_guard<std::mutex> lock(this->mu);
-
-        // `block_fetch_idx == 0` means that CTE hasn't received block yet, maybe it is waiting
-        // for the finish of join executor and etc.
-        return this->block_fetch_idx != 0;
-    }
-
-    void setNotifyFuture() { ::DB::setNotifyFuture(cte.get()); }
-
     std::shared_ptr<CTE> getCTE() const { return this->cte; }
+    size_t getID() const { return this->cte_reader_id; }
 
 private:
     String query_id_and_cte_id;
-    String partition_id;
     CTEManager * cte_manager;
     std::shared_ptr<CTE> cte;
+    size_t cte_reader_id;
 
     std::mutex mu;
-    size_t block_fetch_idx = 0;
-
     bool resp_fetched = false;
     tipb::SelectResponse resp;
 };
