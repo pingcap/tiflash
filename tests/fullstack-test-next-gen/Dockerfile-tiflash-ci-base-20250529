@@ -1,0 +1,13 @@
+FROM rockylinux:9.3
+
+USER root
+WORKDIR /root/
+
+ENV HOME=/root/
+ENV TZ=Asia/Shanghai
+ENV LD_LIBRARY_PATH=/tiflash
+
+RUN dnf install -y glibc-langpack-en
+RUN ln -snf /usr/share/zoneinfo/ /etc/localtime && echo  > /etc/timezone
+
+RUN dnf install -y https://dev.mysql.com/get/mysql80-community-release-el8-1.noarch.rpm &&     dnf install -y mysql-community-client --nogpgcheck

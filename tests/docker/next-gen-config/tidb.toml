@@ -15,7 +15,8 @@
 # Enable disagg tiflash for next-gen
 disaggregated-tiflash = true
 
-# setup keyspace for tidb
+# After https://github.com/pingcap/tidb/pull/61752, the next-gen cluster requires a SYSTEM keyspace tidb.
+# Now tests are ran on the SYSTEM keyspace tidb.
 keyspace-name = "SYSTEM"
 
 enable-telemetry = false
