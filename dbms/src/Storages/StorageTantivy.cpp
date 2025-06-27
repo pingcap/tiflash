@@ -62,7 +62,7 @@ void StorageTantivy::read(
     PipelineExecutorContext & exec_status,
     PipelineExecGroupBuilder & group_builder,
     [[maybe_unused]] const Names & column_names,
-    const SelectQueryInfo & info,
+    [[maybe_unused]] const SelectQueryInfo & info,
     [[maybe_unused]] const Context & context,
     [[maybe_unused]] size_t max_block_size,
     [[maybe_unused]] unsigned num_streams)
@@ -80,7 +80,7 @@ void StorageTantivy::read(
         return_columns,
         tici_scan.getQuery(),
         tici_scan.getLimit(),
-        info.mvcc_query_info->start_ts));
+        /*read_ts*/ 0)); // TODO: currently, info.mvcc_query_info is null.
 }
 
 } // namespace DB
