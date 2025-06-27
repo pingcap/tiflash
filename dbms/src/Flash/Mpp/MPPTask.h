@@ -124,6 +124,7 @@ private:
     void abortTunnels(const String & message, bool wait_sender_finish);
     void abortReceivers();
     void abortQueryExecutor();
+    void abortCTE(const String & message);
 
     void finishWrite();
 
@@ -198,6 +199,9 @@ private:
     MPPTunnelSetPtr tunnel_set;
 
     MPPReceiverSetPtr receiver_set;
+
+    std::atomic<bool> has_cte_sink = false;
+    bool notify_cte_finish = false;
 
     int new_thread_count_of_mpp_receiver = 0;
 
