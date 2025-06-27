@@ -42,7 +42,8 @@ public:
         NamesAndTypes query_columns_,
         NamesAndTypes return_columns_,
         String query_json_str_,
-        UInt64 limit_)
+        UInt64 limit_,
+        UInt64 read_ts_)
         : log(log_)
         , table_id(table_id_)
         , index_id(index_id_)
@@ -51,6 +52,7 @@ public:
         , return_columns(return_columns_)
         , query_json_str(query_json_str_)
         , limit(limit_)
+        , read_ts(read_ts_)
     {}
 
     String getName() const override { return NAME; }
@@ -89,7 +91,8 @@ protected:
             query_fields,
             return_fields,
             query_json_str,
-            search_param);
+            search_param,
+            read_ts);
 
         Block res(return_columns);
         if (documents.empty())
@@ -147,6 +150,7 @@ private:
     NamesAndTypes return_columns;
     String query_json_str;
     UInt64 limit;
+    UInt64 read_ts;
 
     size_t processed_shard = 0;
 
