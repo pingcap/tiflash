@@ -161,10 +161,11 @@ private:
     /// file is read, otherwise, the spilled file will be released when destruct the spiller. Currently, all the spilled
     /// file can be released on restore since it is only read once, but in the future if SharedScan(shared cte) need spill,
     /// the data may be restored multiple times and release_spilled_file_on_restore need to be set to false.
-    const bool release_spilled_file_on_restore;
+    bool release_spilled_file_on_restore;
     bool enable_append_write = false;
 };
 
 using SpillerPtr = std::unique_ptr<Spiller>;
+using SpillerSharedPtr = std::shared_ptr<Spiller>;
 
 } // namespace DB

@@ -16,56 +16,17 @@
 
 #include <Common/RWLock.h>
 #include <Core/Block.h>
-#include <Core/CTESpill.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <absl/base/optimization.h>
 #include <tipb/select.pb.h>
+#include <Operators/CTEPartition.h>
 
-#include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <unordered_map>
 #include <utility>
 
 namespace DB
 {
-enum class CTEOpStatus
-{
-    OK,
-    BLOCK_NOT_AVAILABLE, // It means that we do not have specified block so far
-    IO_OUT,
-    IO_IN,
-    END_OF_FILE,
-    CANCELLED
-};
-
-struct IdxWithPadding
-{
-    IdxWithPadding() = default;
-    explicit IdxWithPadding(size_t idx_)
-        : idx(idx_)
-    {}
-
-    size_t idx = 0;
-
-    // To avoid false sharing
-    char padding[ABSL_CACHELINE_SIZE]{};
-};
-
-struct CTEPartition
-{
-    std::unique_ptr<std::mutex> mu;
-    Blocks blocks;
-    std::unordered_map<size_t, IdxWithPadding> fetch_block_idxs; // TODO id needs to be adjusted after some blocks have been spilled to the disk
-    size_t memory_usage = 0; // TODO need a unified statistic
-    std::unique_ptr<PipeConditionVariable> pipe_cv;
-
-    // TODO handle this, some blocks can not be spilled when spill is in execution, they can only be stored temporary
-    Blocks tmp_blocks;
-};
-
 class CTE
 {
 public:
@@ -79,13 +40,6 @@ public:
             this->partitions.back().pipe_cv = std::make_unique<PipeConditionVariable>();
         }
     }
-
-    enum CTEStatus
-    {
-        NORMAL = 0,
-        NEED_SPILL,
-        IN_SPILLING,
-    };
 
     size_t getCTEReaderID()
     {
@@ -109,8 +63,6 @@ public:
         return this->err_msg;
     }
 
-    CTEStatus getStatus();
-
     void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id);
 
     void registerTask(size_t partition_id, TaskPtr && task, NotifyType type);
@@ -119,7 +71,7 @@ public:
         this->partitions[partition_id].pipe_cv->notifyTaskDirectly(std::move(task));
     }
 
-    CTEOpStatus getBlockFromDisk(size_t source_id, size_t idx, Block & block);
+    CTEOpStatus getBlockFromDisk(size_t cte_reader_id, size_t source_id, Block & block);
     bool spillBlocks(size_t sink_id);
 
     void addResp(const tipb::SelectResponse & resp)
@@ -141,7 +93,8 @@ public:
 private:
     size_t getPartitionID(size_t id) const { return id % this->partition_num; }
 
-    CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id);
+    // rw_lock and mu of partition need to be locked
+    CTEOpStatus checkBlockAvailableInMemoryNoLock(size_t cte_reader_id, size_t partition_id);
 
     void notifyImpl(bool is_eof, const String & msg)
     {
@@ -164,15 +117,7 @@ private:
     size_t partition_num;
     std::vector<CTEPartition> partitions;
 
-    size_t memory_threshold = 0;
-    
-    CTEStatus cte_status = CTEStatus::NORMAL;
-    
-    // Protecting cte_status and tmp_blocks
-    std::shared_mutex aux_rw_lock;
-    
-    CTESpill cte_spill;
-    bool is_spill_triggered = false;
+    CTESpillContext cte_spill_context;
 
     std::shared_mutex rw_lock;
     bool is_eof = false;
