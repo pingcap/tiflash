@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Operators/CTE.h>
 
 #include <cassert>
@@ -21,10 +20,8 @@
 
 namespace DB
 {
-CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block)
+CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block)
 {
-    auto partition_id = this->getPartitionID(source_id);
-
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
     auto status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
@@ -36,7 +33,7 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & b
     return status;
 }
 
-bool CTE::pushBlock(size_t sink_id, const Block & block)
+bool CTE::pushBlock(size_t partition_id, const Block & block)
 {
     {
         std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
@@ -47,7 +44,6 @@ bool CTE::pushBlock(size_t sink_id, const Block & block)
     if unlikely (block.rows() == 0)
         return true;
 
-    auto partition_id = this->getPartitionID(sink_id);
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
     this->partitions[partition_id].memory_usages += block.bytes();
     this->partitions[partition_id].blocks.push_back(block);
@@ -61,9 +57,8 @@ void CTE::registerTask(size_t partition_id, TaskPtr && task, NotifyType type)
     this->partitions[partition_id].pipe_cv->registerTask(std::move(task));
 }
 
-void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id)
+void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id)
 {
-    auto partition_id = this->getPartitionID(source_id);
     CTEOpStatus status;
 
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);

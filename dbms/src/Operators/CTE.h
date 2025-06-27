@@ -14,51 +14,19 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/RWLock.h>
 #include <Core/Block.h>
-#include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <absl/base/optimization.h>
+#include <Operators/CTEPartition.h>
 #include <tipb/select.pb.h>
 
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <unordered_map>
 #include <utility>
 
 namespace DB
 {
-enum class CTEOpStatus
-{
-    OK,
-    BLOCK_NOT_AVAILABLE,
-    END_OF_FILE,
-    CANCELLED
-};
-
-struct IdxWithPadding
-{
-    IdxWithPadding() = default;
-    explicit IdxWithPadding(size_t idx_)
-        : idx(idx_)
-    {}
-
-    size_t idx = 0;
-
-    // To avoid false sharing
-    char padding[ABSL_CACHELINE_SIZE]{};
-};
-
-struct CTEPartition
-{
-    std::unique_ptr<std::mutex> mu;
-    Blocks blocks;
-    std::unordered_map<size_t, IdxWithPadding> fetch_block_idxs;
-    size_t memory_usages = 0; // TODO need a unified statistic
-    std::unique_ptr<PipeConditionVariable> pipe_cv;
-};
-
 class CTE
 {
 public:
@@ -73,6 +41,15 @@ public:
         }
     }
 
+    void checkPartitionNum(size_t partition_num) const
+    {
+        RUNTIME_CHECK_MSG(
+            this->partition_num == partition_num,
+            "expect partition num: {}, actual: {}",
+            this->partition_num,
+            partition_num);
+    }
+
     size_t getCTEReaderID()
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
@@ -83,9 +60,9 @@ public:
         return cte_reader_id;
     }
 
-    CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block);
+    CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block);
 
-    bool pushBlock(size_t sink_id, const Block & block);
+    bool pushBlock(size_t partition_id, const Block & block);
     void notifyEOF() { this->notifyImpl(true, ""); }
     void notifyCancel(const String & msg) { this->notifyImpl(false, msg); }
 
@@ -95,7 +72,7 @@ public:
         return this->err_msg;
     }
 
-    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id);
+    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id);
 
     void registerTask(size_t partition_id, TaskPtr && task, NotifyType type);
     void notifyTaskDirectly(size_t partition_id, TaskPtr && task)
@@ -120,8 +97,6 @@ public:
     }
 
 private:
-    size_t getPartitionID(size_t id) const { return id % this->partition_num; }
-
     CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id)
     {
         if unlikely (this->is_cancelled)
@@ -150,7 +125,7 @@ private:
             partition.pipe_cv->notifyAll();
     }
 
-    size_t partition_num;
+    const size_t partition_num;
     std::vector<CTEPartition> partitions;
 
     std::shared_mutex rw_lock;
