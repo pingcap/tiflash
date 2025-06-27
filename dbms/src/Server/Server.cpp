@@ -1167,8 +1167,6 @@ try
             }
         }
 
-        SCOPE_EXIT({ proxy_machine.stopProxy(tmt_context); });
-
         {
             // Report the unix timestamp, git hash, release version
             Poco::Timestamp ts;
@@ -1238,8 +1236,6 @@ try
                 LocalAdmissionController::global_instance->safeStop();
         });
 
-        proxy_machine.runKVStore(tmt_context);
-
         try
         {
             // Bind CPU affinity after all threads started.
@@ -1250,8 +1246,33 @@ try
             LOG_ERROR(log, "CPUAffinityManager::bindThreadCPUAffinity throws exception.");
         }
 
+        // Ready to provide service
+        tmt_context.setStatusRunning();
+
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
+
+        LOG_INFO(log, "Set store context status Stopping");
+        tmt_context.setStatusStopping();
+
+        // Wait for all mpp tasks to complete
+        auto monitor = tmt_context.getMPPTaskManager()->getMPPTaskMonitor();
+        while (true)
+        {
+            {
+                std::unique_lock lock(monitor->mu);
+                if (monitor->monitored_tasks.empty())
+                    break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        }
+
+        proxy_machine.stoppingProxy(tmt_context);
+
+        LOG_INFO(log, "Set store context status Terminated");
+        tmt_context.setStatusTerminated();
+
+        proxy_machine.stopProxy(tmt_context);
 
         {
             // Set limiters stopping and wakeup threads in waitting queue.
