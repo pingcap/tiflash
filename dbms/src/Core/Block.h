@@ -153,9 +153,11 @@ public:
     Block sortColumns() const;
 
     void clear();
-    // swap all data.
+    // The following functions will swap two block.
+    // `swap` will swap all data in blocks.
+    // And `swapCloumnData` will only swap column data,
+    // `start_offset` and `rs_result` will keep unchanged.
     void swap(Block & other) noexcept;
-    // only swap column data.
     void swapCloumnData(Block & other) noexcept;
 
     /** Updates SipHash of the Block, using update method of columns.

@@ -34,8 +34,7 @@ bool ExpandTransformAction::tryOutput(Block & block)
 {
     if (!block_cache || i_th_project >= expand->getLevelProjectionNum())
         return false;
-    auto res_block = expand->next(block_cache, i_th_project++);
-    block.swapCloumnData(res_block);
+    block = expand->next(block_cache, i_th_project++);
     return true;
 }
 
@@ -50,7 +49,6 @@ void ExpandTransformAction::transform(Block & block)
     expand->getBeforeExpandActions()->execute(block);
     block_cache = block;
     i_th_project = 0;
-    auto res_block = expand->next(block_cache, i_th_project++);
-    block.swapCloumnData(res_block);
+    block = expand->next(block_cache, i_th_project++);
 }
 } // namespace DB
