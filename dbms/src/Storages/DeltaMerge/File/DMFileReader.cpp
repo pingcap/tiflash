@@ -37,6 +37,19 @@ extern const int LOGICAL_ERROR;
 namespace DB::DM
 {
 
+std::vector<size_t> initPackOffset(const DMFilePtr & dmfile)
+{
+    const auto & pack_stats = dmfile->getPackStats();
+    std::vector<size_t> pack_offset(pack_stats.size());
+    size_t offset = 0;
+    for (size_t i = 0; i < pack_stats.size(); ++i)
+    {
+        pack_offset[i] = offset;
+        offset += pack_stats[i].rows;
+    }
+    return pack_offset;
+}
+
 DMFileReader::DMFileReader(
     const DMFilePtr & dmfile_,
     const ColumnDefines & read_columns_,
@@ -84,6 +97,7 @@ DMFileReader::DMFileReader(
           dmfile->getPackStats(),
           read_one_pack_every_time_ ? 1 : std::numeric_limits<size_t>::max(),
           rows_threshold_per_read_))
+    , pack_offset(initPackOffset(dmfile))
 {
     // Initialize column_streams
     for (const auto & cd : read_columns)
@@ -112,22 +126,6 @@ DMFileReader::DMFileReader(
     if (max_sharing_column_bytes > 0)
     {
         data_sharing_col_data_cache = std::make_unique<ColumnCache>(ColumnCacheType::DataSharingCache);
-    }
-
-    initPackOffset();
-}
-
-void DMFileReader::initPackOffset()
-{
-    const auto & pack_stats = dmfile->getPackStats();
-    pack_offset.resize(pack_stats.size());
-    {
-        size_t offset = 0;
-        for (size_t i = 0; i < pack_stats.size(); ++i)
-        {
-            pack_offset[i] = offset;
-            offset += pack_stats[i].rows;
-        }
     }
 }
 
@@ -224,7 +222,6 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
     res.setStartOffset(start_row_offset);
     res.setRSResult(block_pack_res);
     addSkippedRows(ori_block_info.read_rows - total_passed_count);
-
     return res;
 }
 
