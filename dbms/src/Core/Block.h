@@ -153,7 +153,10 @@ public:
     Block sortColumns() const;
 
     void clear();
+    // swap all data.
     void swap(Block & other) noexcept;
+    // only swap column data.
+    void swapCloumnData(Block & other) noexcept;
 
     /** Updates SipHash of the Block, using update method of columns.
       * Returns hash for block, that could be used to differentiate blocks

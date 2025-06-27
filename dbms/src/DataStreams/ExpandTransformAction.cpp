@@ -16,7 +16,6 @@
 #include <Columns/countBytesInFilter.h>
 #include <DataStreams/ExpandTransformAction.h>
 
-#include <algorithm>
 
 namespace DB
 {
@@ -36,7 +35,7 @@ bool ExpandTransformAction::tryOutput(Block & block)
     if (!block_cache || i_th_project >= expand->getLevelProjectionNum())
         return false;
     auto res_block = expand->next(block_cache, i_th_project++);
-    block.swap(res_block);
+    block.swapCloumnData(res_block);
     return true;
 }
 
@@ -52,6 +51,6 @@ void ExpandTransformAction::transform(Block & block)
     block_cache = block;
     i_th_project = 0;
     auto res_block = expand->next(block_cache, i_th_project++);
-    block.swap(res_block);
+    block.swapCloumnData(res_block);
 }
 } // namespace DB

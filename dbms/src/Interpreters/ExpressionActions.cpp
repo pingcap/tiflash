@@ -299,7 +299,7 @@ void ExpressionAction::prepare(Block & sample_block)
             new_block.insert(std::move(column));
         }
 
-        sample_block.swap(new_block);
+        sample_block.swapCloumnData(new_block);
         break;
     }
 
@@ -402,9 +402,7 @@ void ExpressionAction::execute(Block & block) const
                 column.name = alias;
             new_block.insert(std::move(column));
         }
-        new_block.setRSResult(block.getRSResult());
-        new_block.setStartOffset(block.startOffset());
-        block.swap(new_block);
+        block.swapCloumnData(new_block);
 
         break;
     }
