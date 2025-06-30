@@ -16,6 +16,8 @@
 
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/RegionInfo.h>
+#include <Flash/Coprocessor/ShardInfo.h>
+#include <Flash/Coprocessor/TiCIScan.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <TiDB/Schema/TiDB.h>
 
@@ -59,7 +61,16 @@ struct RemoteRequest
         UInt64 connection_id,
         const String & connection_alias,
         const LoggerPtr & log);
+
+    static RemoteRequest build(
+        const ShardInfoList & shard_infos,
+        DAGContext & dag_context,
+        const TiCIScan & tici_scan,
+        UInt64 connection_id,
+        const String & connection_alias,
+        const LoggerPtr & log);
     static std::vector<pingcap::coprocessor::KeyRange> buildKeyRanges(const RegionRetryList & retry_regions);
+    static std::vector<pingcap::coprocessor::KeyRange> buildKeyRanges(const ShardInfoList & retry_shards);
     static std::string printRetryRegions(const RegionRetryList & retry_regions, TableID table_id);
 
     tipb::DAGRequest dag_request;
