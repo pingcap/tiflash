@@ -16,7 +16,6 @@
 
 #include <Interpreters/CTESpillContext.h>
 #include <Core/Spiller.h>
-#include <absl/base/optimization.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 
 #include <cstddef>
@@ -43,28 +42,15 @@ enum class CTEOpStatus
     CANCELLED
 };
 
-struct IdxWithPadding
-{
-    IdxWithPadding() = default;
-    explicit IdxWithPadding(size_t idx_)
-        : idx(idx_)
-    {}
-
-    size_t idx = 0;
-
-    // To avoid false sharing
-    char padding[ABSL_CACHELINE_SIZE]{};
-};
-
 struct CTEPartition
 {
     size_t getIdxInMemoryNoLock(size_t cte_reader_id);
-    bool isBlockAvailableInDiskNoLock(size_t cte_reader_id) { return this->fetch_block_idxs[cte_reader_id].idx < this->total_block_in_disk_num; }
+    bool isBlockAvailableInDiskNoLock(size_t cte_reader_id) { return this->fetch_block_idxs[cte_reader_id] < this->total_block_in_disk_num; }
     bool isBlockAvailableInMemoryNoLock(size_t cte_reader_id) { return this->getIdxInMemoryNoLock(cte_reader_id) < this->blocks.size(); }
     bool exceedMemoryThresholdNoLock() const { return this->memory_usage >= this->memory_threoshold; }
     void setCTEPartitionStatusNoLock(CTEPartitionStatus status) { this->status = status; }
     bool isSpillTriggeredNoLock() const { return this->total_block_in_disk_num > 0; }
-    void addIdxNoLock(size_t cte_reader_id) { this->fetch_block_idxs[cte_reader_id].idx++; }
+    void addIdxNoLock(size_t cte_reader_id) { this->fetch_block_idxs[cte_reader_id]++; }
 
     void spillBlocks();
     void getBlockFromDisk(size_t cte_reader_id, Block & block);
@@ -73,7 +59,7 @@ struct CTEPartition
     
     std::unique_ptr<std::mutex> mu;
     Blocks blocks;
-    std::unordered_map<size_t, IdxWithPadding> fetch_block_idxs;
+    std::unordered_map<size_t, size_t> fetch_block_idxs;
     size_t memory_usage = 0;
     size_t memory_threoshold = 0;
     std::unique_ptr<PipeConditionVariable> pipe_cv;

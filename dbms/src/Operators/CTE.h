@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Common/RWLock.h>
 #include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
@@ -41,17 +42,26 @@ public:
         }
     }
 
+    void checkPartitionNum(size_t partition_num) const
+    {
+        RUNTIME_CHECK_MSG(
+            this->partition_num == partition_num,
+            "expect partition num: {}, actual: {}",
+            this->partition_num,
+            partition_num);
+    }
+
     size_t getCTEReaderID()
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
         auto cte_reader_id = this->next_cte_reader_id;
         this->next_cte_reader_id++;
         for (auto & item : this->partitions)
-            item.fetch_block_idxs.insert(std::make_pair(cte_reader_id, IdxWithPadding(0)));
+            item.fetch_block_idxs.insert(std::make_pair(cte_reader_id, 0));
         return cte_reader_id;
     }
 
-    CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block);
+    CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block);
 
     CTEOpStatus pushBlock(size_t sink_id, const Block & block);
     void notifyEOF() { this->notifyImpl(true, ""); }
@@ -63,7 +73,7 @@ public:
         return this->err_msg;
     }
 
-    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id);
+    void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id);
 
     void registerTask(size_t partition_id, TaskPtr && task, NotifyType type);
     void notifyTaskDirectly(size_t partition_id, TaskPtr && task)

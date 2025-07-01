@@ -8,9 +8,9 @@ namespace DB
 {
 size_t CTEPartition::getIdxInMemoryNoLock(size_t cte_reader_id)
 {
-    if (this->total_block_in_disk_num >= this->fetch_block_idxs[cte_reader_id].idx)
-        return this->fetch_block_idxs[cte_reader_id].idx;
-    return this->fetch_block_idxs[cte_reader_id].idx - this->total_block_in_disk_num;
+    if (this->total_block_in_disk_num >= this->fetch_block_idxs[cte_reader_id])
+        return this->fetch_block_idxs[cte_reader_id];
+    return this->fetch_block_idxs[cte_reader_id] - this->total_block_in_disk_num;
 }
 
 void CTEPartition::spillBlocks()
@@ -25,7 +25,7 @@ void CTEPartition::spillBlocks()
     std::vector<size_t> split_idxs{0};
     split_idxs.reserve(cte_reader_num+1);
     for (auto iter : this->fetch_block_idxs)
-        split_idxs.push_back(iter.second.idx);
+        split_idxs.push_back(iter.second);
     std::sort(split_idxs.begin(), split_idxs.end());
 
     auto begin_iter = this->blocks.begin();

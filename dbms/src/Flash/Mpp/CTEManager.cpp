@@ -71,6 +71,9 @@ std::shared_ptr<CTE> CTEManager::getCTEImpl(
         this->ctes.insert(std::make_pair(
             query_id_and_cte_id,
             CTEWithCounter(std::make_shared<CTE>(concurrency), expected_sink_num, expected_source_num)));
-    return this->ctes.find(query_id_and_cte_id)->second.getCTE();
+
+    auto cte = this->ctes.find(query_id_and_cte_id)->second.getCTE();
+    cte->checkPartitionNum(concurrency);
+    return cte;
 }
 } // namespace DB

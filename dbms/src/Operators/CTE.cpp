@@ -12,9 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+<<<<<<< HEAD
 #include <Common/Exception.h>
 #include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+=======
+>>>>>>> cte
 #include <Operators/CTE.h>
 #include <Operators/CTEPartition.h>
 
@@ -24,7 +27,7 @@
 
 namespace DB
 {
-CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t source_id, Block & block)
+CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block)
 {
     auto partition_id = this->getPartitionID(source_id);
 
@@ -156,7 +159,6 @@ bool CTE::spillBlocks(size_t sink_id)
 // TODO sometimes we register task because of spill, consider this situation
 void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t source_id)
 {
-    auto partition_id = this->getPartitionID(source_id);
     CTEOpStatus status;
 
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
