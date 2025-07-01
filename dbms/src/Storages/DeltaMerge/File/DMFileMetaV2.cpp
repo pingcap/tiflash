@@ -284,7 +284,7 @@ void DMFileMetaV2::read(const FileProviderPtr & file_provider, const ReadMode & 
         {
             break;
         }
-        LOG_WARNING(log, "{}'s size is larger than {}", metaPath(), buf.size());
+        // LOG_WARNING(log, "{}'s size is larger than {}", metaPath(), buf.size());
         buf.resize(buf.size() + meta_buffer_size);
     }
     buf.resize(read_bytes);

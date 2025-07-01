@@ -97,12 +97,29 @@ ColumnFile::AppendResult ColumnFileInMemory::append(
         const auto & cache_col = *cache->block.getByPosition(i).column;
         auto * mutable_cache_col = const_cast<IColumn *>(&cache_col);
         size_t alloc_bytes = mutable_cache_col->allocatedBytes();
+        if (mutable_cache_col->capacity() < mutable_cache_col->size() + limit)
+        {
+            // If the column is not enough, we reserve more space by 1.5 factor
+            mutable_cache_col->reserveWithStrategy(
+                mutable_cache_col->size() + limit,
+                IColumn::ReserveStrategy::ScaleFactor1_5);
+        }
         mutable_cache_col->insertRangeFrom(*col, offset, limit);
         new_alloc_block_bytes += mutable_cache_col->allocatedBytes() - alloc_bytes;
     }
 
     rows += limit;
     bytes += data_bytes;
+    // TODO: Remove this logging
+    LOG_INFO(
+        Logger::get(),
+        "Append rows to ColumnFileInMemory, new_rows={} new_bytes={} new_alloc_bytes={} max_capacity={} total_rows={} "
+        "total_bytes={}",
+        limit - offset,
+        data_bytes,
+        new_alloc_block_bytes,
+        rows,
+        bytes);
     return AppendResult{true, new_alloc_block_bytes};
 }
 
