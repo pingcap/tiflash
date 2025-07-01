@@ -79,12 +79,12 @@ num_symbols: 1
 curl -X POST "http://${TiFLASH_IP}:${TIFLASH_STATUS_PORT}/debug/pprof/symbol" -d '<address-list>'
 ```
 
-#### Parameters
+### Parameters
 
 - **address-list** : Specifies the addresses to be resolved to symbol. The addresses are joined by '+'
   - Example: `0x56424a39c97e+0x564251100e4c`
 
-#### Response
+### Response
 
 Returns the address and resolved symbol line by line
 
