@@ -50,7 +50,7 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         return OperatorStatus::IO_IN;
     case CTEOpStatus::IO_OUT:
         // CTE is spilling blocks to disk, we need to wait the finish of spill
-        // TODO set corresponding notifier
+        DB::setNotifyFuture(&(this->io_notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::CANCELLED:
         return OperatorStatus::CANCELLED;
@@ -71,7 +71,8 @@ OperatorStatus CTESourceOp::executeIOImpl()
     case CTEOpStatus::OK:
         return OperatorStatus::HAS_OUTPUT;
     case CTEOpStatus::IO_OUT:
-        // TODO set notifier to wait for the finish of spill
+        // CTE is spilling blocks to disk, we need to wait the finish of spill
+        DB::setNotifyFuture(&(this->io_notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::CANCELLED:
         return OperatorStatus::CANCELLED;

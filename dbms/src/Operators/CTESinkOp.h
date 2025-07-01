@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Core/CTESpill.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <Operators/CTE.h>
 #include <Operators/Operator.h>
@@ -28,6 +27,7 @@ public:
         : SinkOp(exec_context_, req_id)
         , cte(cte_)
         , id(id_)
+        , io_notifier(this->cte, id)
     {}
 
     String getName() const override { return "CTESinkOp"; }
@@ -41,5 +41,6 @@ private:
     std::shared_ptr<CTE> cte;
     size_t total_rows = 0;
     size_t id;
+    CTEIONotifier io_notifier;
 };
 } // namespace DB

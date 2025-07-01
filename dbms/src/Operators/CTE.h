@@ -134,4 +134,22 @@ private:
 
     String err_msg;
 };
+
+class CTEIONotifier : public NotifyFuture
+{
+public:
+    CTEIONotifier(std::shared_ptr<CTE> cte_, size_t partition_id_)
+        : cte(cte_)
+        , partition_id(partition_id_)
+    {}
+
+    void registerTask(TaskPtr && task) override
+    {
+        this->cte->checkInSpillingAndRegisterTask(std::move(task), this->partition_id);
+    }
+
+private:
+    std::shared_ptr<CTE> cte;
+    size_t partition_id;
+};
 } // namespace DB

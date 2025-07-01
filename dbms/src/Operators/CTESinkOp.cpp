@@ -17,6 +17,9 @@
 #include <Operators/Operator.h>
 #include <fmt/core.h>
 
+#include "Operators/CTEPartition.h"
+#include "magic_enum.hpp"
+
 namespace DB
 {
 void CTESinkOp::operateSuffixImpl()
@@ -34,8 +37,9 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
     switch (status)
     {
     case CTEOpStatus::IO_OUT:
-        // TODO set notifier
-        return OperatorStatus::IO_OUT;
+        // CTE is spilling blocks to disk, we need to wait the finish of spill
+        DB::setNotifyFuture(&(this->io_notifier));
+        return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::OK:
         return OperatorStatus::NEED_INPUT;
     case CTEOpStatus::CANCELLED:
@@ -47,8 +51,20 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
 
 OperatorStatus CTESinkOp::executeIOImpl()
 {
-    if likely (this->cte->spillBlocks(this->id))
+    auto status = this->cte->spillBlocks(this->id);
+    switch (status)
+    {
+    case CTEOpStatus::OK:
         return OperatorStatus::NEED_INPUT;
-    return OperatorStatus::CANCELLED;
+    case CTEOpStatus::IO_OUT:
+        // CTE is spilling blocks to disk, we need to wait the finish of spill
+        DB::setNotifyFuture(&(this->io_notifier));
+
+        return OperatorStatus::WAIT_FOR_NOTIFY;
+    case CTEOpStatus::CANCELLED:
+        return OperatorStatus::CANCELLED;
+    default:
+        throw Exception(fmt::format("Unexpected status {}", magic_enum::enum_name(status)));
+    }
 }
 } // namespace DB

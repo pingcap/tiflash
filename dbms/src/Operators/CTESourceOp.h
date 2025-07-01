@@ -60,6 +60,7 @@ public:
         , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, 1))
         , id(id_)
         , notifier(this->cte_reader->getCTE(), this->cte_reader->getID(), this->id)
+        , io_notifier(this->cte_reader->getCTE(), id)
     {
         setHeader(Block(getColumnWithTypeAndName(schema)));
     }
@@ -84,5 +85,6 @@ private:
     tipb::SelectResponse resp;
     size_t id;
     CTESourceNotifyFuture notifier;
+    CTEIONotifier io_notifier;
 };
 } // namespace DB

@@ -85,7 +85,7 @@ struct CTEPartition
     Blocks blocks;
     std::unordered_map<size_t, size_t> fetch_block_idxs;
     size_t memory_usage = 0;
-    size_t memory_threoshold = 0;
+    size_t memory_threoshold = 0; // TODO initialize it
     std::unique_ptr<PipeConditionVariable> pipe_cv;
     Blocks tmp_blocks;
 
