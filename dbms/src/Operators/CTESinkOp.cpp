@@ -12,10 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Operators/CTE.h>
 #include <Operators/CTESinkOp.h>
 #include <Operators/Operator.h>
 #include <fmt/core.h>
-#include "Operators/CTE.h"
 
 namespace DB
 {

@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Interpreters/CTESpillContext.h>
 #include <Common/Exception.h>
+#include <Interpreters/CTESpillContext.h>
 
 #include <mutex>
 
@@ -24,13 +24,13 @@ SpillerSharedPtr CTESpillContext::getSpillAt(size_t idx)
     std::lock_guard<std::mutex> lock(this->mu);
     auto spiller_num = this->spillers.size();
 
-    // The spiller whose idx is lower that the parameter idx must have been created
+    // The spiller whose idx is lower that the parameter idx must have been created before
     RUNTIME_CHECK_MSG(idx <= spiller_num, "idx: {}, spiller_num: {}", idx, spiller_num);
 
     if (idx < spiller_num)
         return this->spillers[idx];
-    
-    
+
+    // TODO create new spiller
     return this->spillers[idx];
 }
 } // namespace DB

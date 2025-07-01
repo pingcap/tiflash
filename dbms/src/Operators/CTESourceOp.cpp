@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/CTE.h>
+#include <Operators/CTEPartition.h>
 #include <Operators/CTESourceOp.h>
 #include <Operators/Operator.h>
 
@@ -49,7 +50,6 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         return OperatorStatus::IO_IN;
     case CTEOpStatus::IO_OUT:
         // CTE is spilling blocks to disk, we need to wait the finish of spill
-        this->wait_type = CTESourceOp::Spill;
         // TODO set corresponding notifier
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::CANCELLED:
@@ -70,6 +70,9 @@ OperatorStatus CTESourceOp::executeIOImpl()
     {
     case CTEOpStatus::OK:
         return OperatorStatus::HAS_OUTPUT;
+    case CTEOpStatus::IO_OUT:
+        // TODO set notifier to wait for the finish of spill
+        return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::CANCELLED:
         return OperatorStatus::CANCELLED;
     default:

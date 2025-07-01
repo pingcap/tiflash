@@ -19,8 +19,8 @@
 #include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <tipb/select.pb.h>
 #include <Operators/CTEPartition.h>
+#include <tipb/select.pb.h>
 
 #include <mutex>
 #include <shared_mutex>
@@ -35,11 +35,7 @@ public:
         : partition_num(partition_num_)
     {
         for (size_t i = 0; i < this->partition_num; i++)
-        {
-            this->partitions.push_back(CTEPartition());
-            this->partitions.back().mu = std::make_unique<std::mutex>();
-            this->partitions.back().pipe_cv = std::make_unique<PipeConditionVariable>();
-        }
+            this->partitions.push_back(CTEPartition(i, &(this->cte_spill_context)));
     }
 
     void checkPartitionNum(size_t partition_num) const
@@ -62,8 +58,7 @@ public:
     }
 
     CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block);
-
-    CTEOpStatus pushBlock(size_t sink_id, const Block & block);
+    CTEOpStatus pushBlock(size_t partition_id, const Block & block);
     void notifyEOF() { this->notifyImpl(true, ""); }
     void notifyCancel(const String & msg) { this->notifyImpl(false, msg); }
 
@@ -74,15 +69,21 @@ public:
     }
 
     void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id);
+    void checkInSpillingAndRegisterTask(TaskPtr && task, size_t partition_id);
 
-    void registerTask(size_t partition_id, TaskPtr && task, NotifyType type);
+    CTEOpStatus getBlockFromDisk(size_t cte_reader_id, size_t partition_id, Block & block);
+    CTEOpStatus spillBlocks(size_t partition_id);
+
+    void registerTask(size_t partition_id, TaskPtr && task, NotifyType type)
+    {
+        task->setNotifyType(type);
+        this->partitions[partition_id].pipe_cv->registerTask(std::move(task));
+    }
+
     void notifyTaskDirectly(size_t partition_id, TaskPtr && task)
     {
         this->partitions[partition_id].pipe_cv->notifyTaskDirectly(std::move(task));
     }
-
-    CTEOpStatus getBlockFromDisk(size_t cte_reader_id, size_t source_id, Block & block);
-    bool spillBlocks(size_t sink_id);
 
     void addResp(const tipb::SelectResponse & resp)
     {
@@ -101,11 +102,6 @@ public:
     }
 
 private:
-    size_t getPartitionID(size_t id) const { return id % this->partition_num; }
-
-    // rw_lock and mu of partition need to be locked
-    CTEOpStatus checkBlockAvailableInMemoryNoLock(size_t cte_reader_id, size_t partition_id);
-
     void notifyImpl(bool is_eof, const String & msg)
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
@@ -127,7 +123,7 @@ private:
     size_t partition_num;
     std::vector<CTEPartition> partitions;
 
-    CTESpillContext cte_spill_context;
+    CTESpillContext cte_spill_context; // TODO initialize it
 
     std::shared_mutex rw_lock;
     bool is_eof = false;

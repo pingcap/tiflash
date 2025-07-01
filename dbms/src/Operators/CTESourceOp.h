@@ -56,7 +56,6 @@ public:
         size_t id_,
         const NamesAndTypes & schema)
         : SourceOp(exec_context_, req_id)
-        , wait_type(NeedMoreBlock)
         , cte_reader(cte_reader_)
         , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, 1))
         , id(id_)
@@ -75,17 +74,10 @@ protected:
     OperatorStatus executeIOImpl() override;
 
 private:
-    enum WaitType
-    {
-        NeedMoreBlock,
-        Spill,
-    };
-
     String query_id_and_cte_id;
     Block block_from_disk;
 
     uint64_t total_rows{};
-    WaitType wait_type;
     std::shared_ptr<CTEReader> cte_reader;
 
     IOProfileInfoPtr io_profile_info;

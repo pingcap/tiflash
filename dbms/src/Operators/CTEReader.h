@@ -47,10 +47,8 @@ public:
         this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id);
     }
 
-    CTEOpStatus fetchNextBlock(size_t source_id, Block & block);
-    CTEOpStatus fetchBlockFromDisk(size_t source_id, Block & block);
-
-    CTE::CTEStatus getCTEStatus() const { return this->cte->getStatus(); }
+    CTEOpStatus fetchNextBlock(size_t partition_id, Block & block);
+    CTEOpStatus fetchBlockFromDisk(size_t partition_id, Block & block);
 
     void getResp(tipb::SelectResponse & resp)
     {

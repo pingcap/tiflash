@@ -14,10 +14,10 @@
 
 #pragma once
 
-#include <Core/OperatorSpillContext.h>
-#include <Core/SpillConfig.h>
 #include <Common/Exception.h>
 #include <Core/Block.h>
+#include <Core/OperatorSpillContext.h>
+#include <Core/SpillConfig.h>
 #include <Core/Spiller.h>
 
 namespace DB
@@ -30,13 +30,13 @@ public:
         const Block & spill_block_schema_,
         UInt64 operator_spill_threshold_,
         const LoggerPtr & log_)
-    : OperatorSpillContext(operator_spill_threshold_, "cte", log_)
-    , spill_config(spill_config_)
-    , spill_block_schema(spill_block_schema_)
+        : OperatorSpillContext(operator_spill_threshold_, "cte", log_)
+        , spill_config(spill_config_)
+        , spill_block_schema(spill_block_schema_)
     {}
 
     ~CTESpillContext() override = default;
-    
+
     Int64 getTotalRevocableMemoryImpl() override { throw Exception(""); } // TODO implement
     bool supportFurtherSpill() const override { throw Exception(""); } // TODO implement
     bool supportAutoTriggerSpill() const override { throw Exception(""); } // TODO implement

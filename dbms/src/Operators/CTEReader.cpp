@@ -19,9 +19,9 @@
 
 namespace DB
 {
-CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
+CTEOpStatus CTEReader::fetchNextBlock(size_t partition_id, Block & block)
 {
-    auto ret = this->cte->tryGetBlockAt(this->cte_reader_id, source_id, block);
+    auto ret = this->cte->tryGetBlockAt(this->cte_reader_id, partition_id, block);
     switch (ret)
     {
     case CTEOpStatus::END_OF_FILE:
@@ -41,13 +41,8 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
     throw Exception("Should not reach here");
 }
 
-CTEOpStatus CTEReader::fetchBlockFromDisk(size_t source_id, Block & block)
+CTEOpStatus CTEReader::fetchBlockFromDisk(size_t partition_id, Block & block)
 {
-    // TODO implement it
-    // std::lock_guard<std::mutex> lock(this->mu);
-    // auto status = this->cte->getBlockFromDisk(this->block_fetch_idx, block);
-    // if likely (status == CTEOpStatus::Ok)
-    //     this->block_fetch_idx++;
-    // return status;
+    return this->cte->getBlockFromDisk(this->cte_reader_id, partition_id, block);
 }
 } // namespace DB
