@@ -18,6 +18,7 @@
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
+#include <Storages/KVStore/Types.h>
 #include <common/types.h>
 #include <fmt/format.h>
 #include <sys/types.h>
@@ -28,6 +29,8 @@
 
 namespace DB::DM
 {
+class PushDownFilter;
+using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 /// ScanContext is used to record statistical information in table scan for current query.
 /// For each table scan(one executor id), there is only one ScanContext.
 /// ScanContext helps to collect the statistical information of the table scan to show in `EXPLAIN ANALYZE`.
@@ -62,7 +65,6 @@ public:
     std::atomic<uint64_t> delta_rows{0};
     std::atomic<uint64_t> delta_bytes{0};
 
-    ReadMode read_mode = ReadMode::Normal;
 
     // - read_mode == Normal, apply mvcc to all read blocks
     // - read_mode == Bitmap, it will apply mvcc to get the bitmap
@@ -84,7 +86,9 @@ public:
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
+    ReadMode read_mode = ReadMode::Normal; // note: share struct padding with keyspace_id
     const String resource_group_name;
+    PushDownFilterPtr pushdown_executor;
 
     explicit ScanContext(const String & name = "")
         : resource_group_name(name)

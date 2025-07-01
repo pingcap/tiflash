@@ -107,6 +107,7 @@ extern const Metric DT_SnapshotOfDeltaMerge;
 extern const Metric DT_SnapshotOfPlaceIndex;
 extern const Metric DT_SnapshotOfSegmentIngest;
 extern const Metric DT_SnapshotOfBitmapFilter;
+extern const Metric DT_NumSegment;
 } // namespace CurrentMetrics
 
 namespace DB
@@ -252,7 +253,8 @@ Segment::Segment( //
     PageIdU64 next_segment_id_,
     const DeltaValueSpacePtr & delta_,
     const StableValueSpacePtr & stable_)
-    : epoch(epoch_)
+    : holder_counter(CurrentMetrics::DT_NumSegment)
+    , epoch(epoch_)
     , rowkey_range(rowkey_range_)
     , is_common_handle(rowkey_range.is_common_handle)
     , rowkey_column_size(rowkey_range.rowkey_column_size)

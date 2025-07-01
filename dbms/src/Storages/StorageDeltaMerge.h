@@ -283,6 +283,9 @@ private:
     };
     const bool data_path_contains_database_name = false;
 
+    // Keep track of the number of StorageDeltaMerge in memory.
+    CurrentMetrics::Increment holder_counter;
+
     mutable std::mutex store_mutex;
 
     std::unique_ptr<TableColumnInfo> table_column_info; // After create DeltaMergeStore object, it is deprecated.
@@ -316,6 +319,7 @@ private:
     std::atomic<bool> shutdown_called{false};
 
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
+
 
     Context & global_context;
 

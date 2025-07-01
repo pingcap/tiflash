@@ -95,6 +95,7 @@ struct SegmentStats
     UInt64 delta_persisted_column_files = 0;
     UInt64 delta_persisted_delete_ranges = 0;
     UInt64 delta_cache_size = 0;
+    UInt64 delta_cache_alloc_size = 0;
     UInt64 delta_index_size = 0;
 
     UInt64 stable_page_id = 0;
@@ -111,6 +112,7 @@ using SegmentsStats = std::vector<SegmentStats>;
 
 struct StoreStats
 {
+    UInt64 column_count = 0;
     UInt64 segment_count = 0;
 
     UInt64 total_rows = 0;
@@ -122,6 +124,7 @@ struct StoreStats
 
     Float64 delta_placed_rate = 0;
     UInt64 delta_cache_size = 0;
+    UInt64 delta_cache_alloc_size = 0;
     Float64 delta_cache_rate = 0;
     Float64 delta_cache_wasted_rate = 0;
 

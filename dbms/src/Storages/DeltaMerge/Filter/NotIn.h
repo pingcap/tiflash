@@ -46,6 +46,20 @@ public:
         return s + "]}";
     };
 
+    Poco::JSON::Object::Ptr toJSONObject() override
+    {
+        Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+        obj->set("op", name());
+        obj->set("col", attr.col_name);
+        Poco::JSON::Array arr;
+        for (const auto & v : values)
+        {
+            arr.add(applyVisitor(FieldVisitorToDebugString(), v));
+        }
+        obj->set("value", arr);
+        return obj;
+    }
+
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
         RSResults res(pack_count, RSResult::Some);
