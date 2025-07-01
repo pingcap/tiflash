@@ -56,7 +56,7 @@ public:
         auto cte_reader_id = this->next_cte_reader_id;
         this->next_cte_reader_id++;
         for (auto & item : this->partitions)
-            item.fetch_block_idxs.insert(std::make_pair(cte_reader_id, IdxWithPadding(0)));
+            item.fetch_block_idxs.insert(std::make_pair(cte_reader_id, 0));
         return cte_reader_id;
     }
 
@@ -103,7 +103,7 @@ private:
             return CTEOpStatus::CANCELLED;
 
         if (this->partitions[partition_id].blocks.size()
-            <= this->partitions[partition_id].fetch_block_idxs[cte_reader_id].idx)
+            <= this->partitions[partition_id].fetch_block_idxs[cte_reader_id])
             return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;
 
         return CTEOpStatus::OK;

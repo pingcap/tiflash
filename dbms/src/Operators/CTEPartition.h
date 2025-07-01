@@ -16,7 +16,6 @@
 
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
-#include <absl/base/optimization.h>
 
 #include <unordered_map>
 
@@ -30,24 +29,11 @@ enum class CTEOpStatus
     CANCELLED
 };
 
-struct IdxWithPadding
-{
-    IdxWithPadding() = default;
-    explicit IdxWithPadding(size_t idx_)
-        : idx(idx_)
-    {}
-
-    size_t idx = 0;
-
-    // To avoid false sharing
-    char padding[ABSL_CACHELINE_SIZE]{};
-};
-
 struct CTEPartition
 {
     std::unique_ptr<std::mutex> mu;
     Blocks blocks;
-    std::unordered_map<size_t, IdxWithPadding> fetch_block_idxs;
+    std::unordered_map<size_t, size_t> fetch_block_idxs;
     size_t memory_usages = 0;
     std::unique_ptr<PipeConditionVariable> pipe_cv;
 };
