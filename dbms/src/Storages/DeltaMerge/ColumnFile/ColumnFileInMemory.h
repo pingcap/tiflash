@@ -67,6 +67,7 @@ public:
 
     size_t getRows() const override { return rows; }
     size_t getBytes() const override { return bytes; }
+    size_t getAllocateBytes() const override { return cache->block.allocatedBytes(); }
 
     CachePtr getCache() { return cache; }
 

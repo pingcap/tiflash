@@ -83,16 +83,27 @@ bool ColumnFileInMemory::append(
         || cache->block.bytes() >= context.delta_cache_limit_bytes)
         return false;
 
+    size_t new_alloc_block_bytes = 0;
     for (size_t i = 0; i < cache->block.columns(); ++i)
     {
         const auto & col = data.getByPosition(i).column;
         const auto & cache_col = *cache->block.getByPosition(i).column;
         auto * mutable_cache_col = const_cast<IColumn *>(&cache_col);
+        size_t alloc_bytes = mutable_cache_col->allocatedBytes();
         mutable_cache_col->insertRangeFrom(*col, offset, limit);
+        new_alloc_block_bytes += mutable_cache_col->allocatedBytes() - alloc_bytes;
     }
 
     rows += limit;
     bytes += data_bytes;
+    LOG_INFO(
+        Logger::get(),
+        "Append rows to ColumnFileInMemory, new_rows={} new_bytes={} new_alloc_bytes={} total_rows={} total_bytes={}",
+        limit - offset,
+        data_bytes,
+        new_alloc_block_bytes,
+        rows,
+        bytes);
     return true;
 }
 

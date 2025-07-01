@@ -18,9 +18,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetSnapshot.h>
 #include <Storages/DeltaMerge/Delta/ColumnFileFlushTask.h>
 
-namespace DB
-{
-namespace DM
+namespace DB::DM
 {
 class MemTableSet;
 using MemTableSetPtr = std::shared_ptr<MemTableSet>;
@@ -41,11 +39,13 @@ public:
 #endif
     // Note that we must update `column_files_count` for outer thread-safe after `column_files` changed
     ColumnFiles column_files;
+
+    // In order to avoid data-race, we use atomic variables to track the state of this MemTableSet.
     // TODO: check the proper memory_order when use this atomic variable
     std::atomic<size_t> column_files_count;
-
     std::atomic<size_t> rows = 0;
     std::atomic<size_t> bytes = 0;
+    std::atomic<size_t> allocated_bytes = 0;
     std::atomic<size_t> deletes = 0;
 
     LoggerPtr log;
@@ -88,6 +88,7 @@ public:
     size_t getColumnFileCount() const { return column_files_count.load(); }
     size_t getRows() const { return rows.load(); }
     size_t getBytes() const { return bytes.load(); }
+    size_t getAllocatedBytes() const { return allocated_bytes.load(); }
     size_t getDeletes() const { return deletes.load(); }
     /// Thread safe part end
 
@@ -153,5 +154,4 @@ public:
     void removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush_task);
 };
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

@@ -867,7 +867,7 @@ void StoragePool::drop()
     }
 }
 
-PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, const char * who) const
+PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, [[maybe_unused]] const char * who) const
 {
     // In case that there is a DTFile created on disk but TiFlash crashes without persisting the ID.
     // After TiFlash process restored, the ID will be inserted into the stable delegator, but we may
@@ -891,12 +891,12 @@ PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, c
             break;
         }
         // else there is a DTFile with that id, continue to acquire a new ID.
-        LOG_WARNING(
-            logger,
-            "The DTFile is already exists, continute to acquire another ID. call={} path={} file_id={}",
-            who,
-            existed_path,
-            dtfile_id);
+        // LOG_WARNING(
+        //     logger,
+        //     "The DTFile is already exists, continue to acquire another ID. call={} path={} file_id={}",
+        //     who,
+        //     existed_path,
+        //     dtfile_id);
     } while (true);
     return dtfile_id;
 }

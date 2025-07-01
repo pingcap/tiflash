@@ -13,15 +13,14 @@
 // limitations under the License.
 
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/DeltaMergeStore_Statistics.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/Page/PageStorage.h>
 #include <tipb/executor.pb.h>
 
-namespace DB
-{
-namespace DM
+namespace DB::DM
 {
 
 StoreStats DeltaMergeStore::getStoreStats()
@@ -176,6 +175,7 @@ SegmentsStats DeltaMergeStore::getSegmentsStats()
         stat.delta_persisted_column_files = delta_persisted->getColumnFileCount();
         stat.delta_persisted_delete_ranges = delta_persisted->getDeletes();
         stat.delta_cache_size = delta->getTotalCacheBytes();
+        stat.delta_cache_alloc_size = delta->getTotalAllocatedBytes();
         stat.delta_index_size = delta->getDeltaIndexBytes();
 
         stat.stable_page_id = stable->getId();
@@ -294,5 +294,4 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
     return stats;
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

@@ -94,6 +94,7 @@ public:
 
     virtual size_t getRows() const { return 0; }
     virtual size_t getBytes() const { return 0; }
+    virtual size_t getAllocateBytes() const { return 0; }
     virtual size_t getDeletes() const { return 0; }
 
     virtual Type getType() const = 0;
