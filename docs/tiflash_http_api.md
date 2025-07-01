@@ -5,6 +5,12 @@ In the context of the following line,
 - `TIFLASH_IP` is the ip or domain name of TiFlash server. `127.0.0.1` by default.
 - `TIFLASH_STATUS_PORT` is the port of `flash.proxy.status-addr`. `20292` by default.
 
+Note that if TLS is enabled, you need to specify the `--key`, `--cert`, `--cacert` for running `curl`. For example:
+
+```bash
+curl --key tls.key --cert tls.crt --cacert ca.crt "https://${TIFLASH_IP}:${TIFLASH_STATUS_PORT}/debug/pprof/profile"
+```
+
 ## CPU Profiling
 
 Collect and export CPU profiling data within a specified time range.
