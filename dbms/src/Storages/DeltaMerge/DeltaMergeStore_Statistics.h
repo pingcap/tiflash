@@ -67,6 +67,7 @@ struct StoreStats
 
     Float64 delta_placed_rate = 0;
     UInt64 delta_cache_size = 0;
+    UInt64 delta_cache_alloc_size = 0;
     Float64 delta_cache_rate = 0;
     Float64 delta_cache_wasted_rate = 0;
 
