@@ -58,7 +58,7 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     if (fine_grained_shuffle.enabled())
         concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
 
-    std::shared_ptr<CTE> cte = context.getCTEManager()->getCTEBySink(
+    std::shared_ptr<CTE> cte = context.getCTEManager()->getCTE(
         query_id_and_cte_id,
         concurrency,
         this->expected_sink_num,

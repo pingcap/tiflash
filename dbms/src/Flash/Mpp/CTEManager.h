@@ -52,37 +52,19 @@ private:
     Int32 expected_source_num;
 };
 
-// TODO Test this class with UT
 class CTEManager
 {
 public:
-    std::shared_ptr<CTE> getCTEBySink(
+    std::shared_ptr<CTE> getCTE(
         const String & query_id_and_cte_id,
         Int32 concurrency,
         Int32 expected_sink_num,
-        Int32 expected_source_num)
-    {
-        return this->getCTEImpl(query_id_and_cte_id, concurrency, expected_sink_num, expected_source_num);
-    }
-    std::shared_ptr<CTE> getCTEBySource(
-        const String & query_id_and_cte_id,
-        Int32 concurrency,
-        Int32 expected_sink_num,
-        Int32 expected_source_num)
-    {
-        return this->getCTEImpl(query_id_and_cte_id, concurrency, expected_sink_num, expected_source_num);
-    }
+        Int32 expected_source_num);
     void releaseCTEBySource(const String & query_id_and_cte_id);
     void releaseCTEBySink(const tipb::SelectResponse & resp, const String & query_id_and_cte_id);
     void releaseCTE(const String & query_id_and_cte_id);
 
 private:
-    std::shared_ptr<CTE> getCTEImpl(
-        const String & query_id_and_cte_id,
-        Int32 concurrency,
-        Int32 expected_sink_num,
-        Int32 expected_source_num);
-
     std::mutex mu;
     std::unordered_map<String, CTEWithCounter> ctes;
 };

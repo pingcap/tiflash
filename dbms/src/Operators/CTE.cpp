@@ -59,11 +59,9 @@ void CTE::registerTask(size_t partition_id, TaskPtr && task, NotifyType type)
 
 void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id)
 {
-    CTEOpStatus status;
-
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
-    status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
+    CTEOpStatus status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
 
     if (status == CTEOpStatus::BLOCK_NOT_AVAILABLE)
     {
