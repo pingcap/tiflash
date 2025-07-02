@@ -44,13 +44,14 @@ enum class CTEOpStatus
 
 struct CTEPartition
 {
-    CTEPartition(size_t partition_id_, CTESpillContext * spill_context_)
+    explicit CTEPartition(size_t partition_id_)
         : partition_id(partition_id_)
         , mu(std::make_unique<std::mutex>())
         , pipe_cv(std::make_unique<PipeConditionVariable>())
         , status_lock(std::make_unique<std::mutex>())
-        , spill_context(spill_context_)
     {}
+
+    void init(std::shared_ptr<CTESpillContext> spill_context_) { this->spill_context = spill_context_; }
 
     size_t getIdxInMemoryNoLock(size_t cte_reader_id);
     bool isBlockAvailableInDiskNoLock(size_t cte_reader_id)
@@ -61,10 +62,15 @@ struct CTEPartition
     {
         return this->getIdxInMemoryNoLock(cte_reader_id) < this->blocks.size();
     }
-    bool exceedMemoryThresholdNoLock() const { return this->memory_usage >= this->memory_threoshold; }
     void setCTEPartitionStatusNoLock(CTEPartitionStatus status) { this->status = status; }
     bool isSpillTriggeredNoLock() const { return this->total_block_in_disk_num > 0; }
     void addIdxNoLock(size_t cte_reader_id) { this->fetch_block_idxs[cte_reader_id]++; }
+    bool exceedMemoryThresholdNoLock() const
+    {
+        if (this->memory_threoshold == 0)
+            return false;
+        return this->memory_usage >= this->memory_threoshold;
+    }
 
     CTEOpStatus pushBlock(const Block & block);
     CTEOpStatus tryGetBlockAt(size_t cte_reader_id, Block & block);
@@ -98,6 +104,6 @@ struct CTEPartition
     std::unordered_map<size_t, BlockInputStreamPtr> cte_reader_restore_streams;
     UInt64 total_block_in_disk_num = 0;
 
-    CTESpillContext * spill_context;
+    std::shared_ptr<CTESpillContext> spill_context;
 };
 } // namespace DB

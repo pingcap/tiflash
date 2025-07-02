@@ -26,13 +26,16 @@ class CTESpillContext final : public OperatorSpillContext
 {
 public:
     CTESpillContext(
+        size_t partition_num_,
         const SpillConfig & spill_config_,
         const Block & spill_block_schema_,
         UInt64 operator_spill_threshold_,
-        const LoggerPtr & log_)
-        : OperatorSpillContext(operator_spill_threshold_, "cte", log_)
+        const String & query_id_and_cte_id_)
+        : OperatorSpillContext(operator_spill_threshold_, "cte", Logger::get(query_id_and_cte_id_))
+        , partition_num(partition_num_)
         , spill_config(spill_config_)
         , spill_block_schema(spill_block_schema_)
+        , query_id_and_cte_id(query_id_and_cte_id_)
     {}
 
     ~CTESpillContext() override = default;
@@ -46,9 +49,11 @@ public:
 
 private:
     std::mutex mu;
+    size_t partition_num;
     SpillConfig spill_config;
     Block spill_block_schema;
 
     std::vector<SpillerSharedPtr> spillers;
+    String query_id_and_cte_id;
 };
 } // namespace DB

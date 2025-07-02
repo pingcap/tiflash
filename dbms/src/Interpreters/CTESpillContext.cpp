@@ -30,7 +30,18 @@ SpillerSharedPtr CTESpillContext::getSpillAt(size_t idx)
     if (idx < spiller_num)
         return this->spillers[idx];
 
-    // TODO create new spiller
-    return this->spillers[idx];
+    SpillConfig config(
+        this->spill_config.spill_dir,
+        fmt::format("cte_spill_{}", idx),
+        this->spill_config.max_cached_data_bytes_in_spiller,
+        this->spill_config.max_spilled_rows_per_file,
+        this->spill_config.max_spilled_bytes_per_file,
+        this->spill_config.file_provider,
+        this->spill_config.for_all_constant_max_streams,
+        this->spill_config.for_all_constant_block_size);
+
+    this->spillers.push_back(
+        std::make_shared<Spiller>(config, false, this->partition_num, this->spill_block_schema, this->log));
+    return this->spillers.back();
 }
 } // namespace DB

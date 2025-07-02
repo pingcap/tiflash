@@ -13,17 +13,37 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Interpreters/CTESpillContext.h>
 #include <Operators/CTE.h>
 #include <Operators/CTEPartition.h>
 
 #include <cassert>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 
 namespace DB
 {
+void CTE::initCTESpillContext(
+    const SpillConfig & spill_config_,
+    const Block & spill_block_schema_,
+    UInt64 operator_spill_threshold_,
+    const String & query_id_and_cte_id)
+{
+    std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+    this->cte_spill_context = std::make_shared<CTESpillContext>(
+        this->partition_num,
+        spill_config_,
+        spill_block_schema_,
+        operator_spill_threshold_,
+        query_id_and_cte_id);
+    for (auto & item : this->partitions)
+        item.init(this->cte_spill_context);
+}
+
 CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block)
 {
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);

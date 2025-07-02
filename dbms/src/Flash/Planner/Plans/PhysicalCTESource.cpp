@@ -79,7 +79,6 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
             std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, i, schema));
     }
 
-
     context.getDAGContext()->addInboundIOProfileInfos(this->executor_id, group_builder.getCurIOProfileInfos());
 }
 

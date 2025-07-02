@@ -35,8 +35,14 @@ public:
         : partition_num(partition_num_)
     {
         for (size_t i = 0; i < this->partition_num; i++)
-            this->partitions.push_back(CTEPartition(i, &(this->cte_spill_context)));
+            this->partitions.push_back(CTEPartition(i));
     }
+
+    void initCTESpillContext(
+        const SpillConfig & spill_config_,
+        const Block & spill_block_schema_,
+        UInt64 operator_spill_threshold_,
+        const String & query_id_and_cte_id);
 
     void checkPartitionNum(size_t partition_num) const
     {
@@ -123,8 +129,6 @@ private:
     size_t partition_num;
     std::vector<CTEPartition> partitions;
 
-    CTESpillContext cte_spill_context; // TODO initialize it
-
     std::shared_mutex rw_lock;
     bool is_eof = false;
     bool is_cancelled = false;
@@ -133,6 +137,7 @@ private:
     tipb::SelectResponse resp;
 
     String err_msg;
+    std::shared_ptr<CTESpillContext> cte_spill_context;
 };
 
 class CTEIONotifier : public NotifyFuture
