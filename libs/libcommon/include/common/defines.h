@@ -207,3 +207,25 @@ static ALWAYS_INLINE inline void TIFLASH_NO_OPTIMIZE(T && var)
 #else
 #define MAYBE_UNUSED_MEMBER
 #endif
+
+// clang-format off
+
+/// Macros for Clang Thread Safety Analysis (TSA). They can be safely ignored by other compilers.
+/// Feel free to extend, but please stay close to https://clang.llvm.org/docs/ThreadSafetyAnalysis.html#mutexheader
+#define TSA_GUARDED_BY(...) __attribute__((guarded_by(__VA_ARGS__)))                            /// data is protected by given capability
+#define TSA_PT_GUARDED_BY(...) __attribute__((pt_guarded_by(__VA_ARGS__)))                      /// pointed-to data is protected by the given capability
+#define TSA_REQUIRES(...) __attribute__((requires_capability(__VA_ARGS__)))                     /// thread needs exclusive possession of given capability
+#define TSA_REQUIRES_SHARED(...) __attribute__((requires_shared_capability(__VA_ARGS__)))       /// thread needs shared possession of given capability
+#define TSA_ACQUIRED_AFTER(...) __attribute__((acquired_after(__VA_ARGS__)))                    /// annotated lock must be locked after given lock
+#define TSA_NO_THREAD_SAFETY_ANALYSIS __attribute__((no_thread_safety_analysis))                /// disable TSA for a function
+#define TSA_CAPABILITY(...) __attribute__((capability(__VA_ARGS__)))                            /// object of a class can be used as capability
+#define TSA_ACQUIRE(...) __attribute__((acquire_capability(__VA_ARGS__)))                       /// function acquires a capability, but does not release it
+#define TSA_TRY_ACQUIRE(...) __attribute__((try_acquire_capability(__VA_ARGS__)))               /// function tries to acquire a capability and returns a boolean value indicating success or failure
+#define TSA_RELEASE(...) __attribute__((release_capability(__VA_ARGS__)))                       /// function releases the given capability
+#define TSA_ACQUIRE_SHARED(...) __attribute__((acquire_shared_capability(__VA_ARGS__)))         /// function acquires a shared capability, but does not release it
+#define TSA_TRY_ACQUIRE_SHARED(...) __attribute__((try_acquire_shared_capability(__VA_ARGS__))) /// function tries to acquire a shared capability and returns a boolean value indicating success or failure
+#define TSA_RELEASE_SHARED(...) __attribute__((release_shared_capability(__VA_ARGS__)))         /// function releases the given shared capability
+#define TSA_SCOPED_LOCKABLE __attribute__((scoped_lockable))                                    /// object of a class has scoped lockable capability
+#define TSA_RETURN_CAPABILITY(...) __attribute__((lock_returned(__VA_ARGS__)))                  /// to return capabilities in functions
+
+// clang-format on
