@@ -153,7 +153,6 @@ MPPTask::~MPPTask()
     if (query_memory_tracker != nullptr && current_memory_tracker != query_memory_tracker)
         current_memory_tracker = query_memory_tracker;
     abortTunnels("", true);
-    abortCTE("");
     LOG_INFO(log, "finish MPPTask: {}, total run time is {} ms", id.toString(), total_run_time_ms);
 }
 

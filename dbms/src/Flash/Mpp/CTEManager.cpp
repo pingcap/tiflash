@@ -36,7 +36,7 @@ void CTEManager::releaseCTEBySource(const String & query_id_and_cte_id)
 
 void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const String & query_id_and_cte_id)
 {
-    std::unique_lock<std::mutex> lock(this->mu);
+    std::lock_guard<std::mutex> lock(this->mu);
     auto iter = this->ctes.find(query_id_and_cte_id);
     if unlikely (iter == this->ctes.end())
         // Maybe the task is cancelled and the cte has been released
@@ -59,7 +59,7 @@ void CTEManager::releaseCTE(const String & query_id_and_cte_id)
         this->ctes.erase(iter);
 }
 
-std::shared_ptr<CTE> CTEManager::getCTEImpl(
+std::shared_ptr<CTE> CTEManager::getCTE(
     const String & query_id_and_cte_id,
     Int32 concurrency,
     Int32 expected_sink_num,

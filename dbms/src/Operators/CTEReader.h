@@ -36,8 +36,7 @@ public:
         Int32 expected_source_num_)
         : query_id_and_cte_id(query_id_and_cte_id_)
         , cte_manager(cte_manager_)
-        , cte(cte_manager_
-                  ->getCTEBySource(query_id_and_cte_id_, partition_num, expected_sink_num_, expected_source_num_))
+        , cte(cte_manager_->getCTE(query_id_and_cte_id_, partition_num, expected_sink_num_, expected_source_num_))
         , cte_reader_id(this->cte->getCTEReaderID())
     {}
 
