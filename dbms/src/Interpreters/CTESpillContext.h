@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Core/OperatorSpillContext.h>
 #include <Core/SpillConfig.h>
@@ -22,28 +23,22 @@
 
 namespace DB
 {
-class CTESpillContext final : public OperatorSpillContext
+class CTESpillContext
 {
 public:
     CTESpillContext(
         size_t partition_num_,
         const SpillConfig & spill_config_,
         const Block & spill_block_schema_,
-        UInt64 operator_spill_threshold_,
+        UInt64 spill_threshold_,
         const String & query_id_and_cte_id_)
-        : OperatorSpillContext(operator_spill_threshold_, "cte", Logger::get(query_id_and_cte_id_))
-        , partition_num(partition_num_)
+        : partition_num(partition_num_)
         , spill_config(spill_config_)
         , spill_block_schema(spill_block_schema_)
+        , spill_threshold(spill_threshold_)
         , query_id_and_cte_id(query_id_and_cte_id_)
+        , log(Logger::get(query_id_and_cte_id_))
     {}
-
-    ~CTESpillContext() override = default;
-
-    Int64 getTotalRevocableMemoryImpl() override { throw Exception(""); } // TODO implement
-    bool supportFurtherSpill() const override { throw Exception(""); } // TODO implement
-    bool supportAutoTriggerSpill() const override { throw Exception(""); } // TODO implement
-    Int64 triggerSpillImpl(Int64) override { throw Exception(""); } // TODO implement
 
     SpillerSharedPtr getSpillAt(size_t idx);
 
@@ -52,8 +47,10 @@ private:
     size_t partition_num;
     SpillConfig spill_config;
     Block spill_block_schema;
+    UInt64 spill_threshold;
 
     std::vector<SpillerSharedPtr> spillers;
     String query_id_and_cte_id;
+    LoggerPtr log;
 };
 } // namespace DB

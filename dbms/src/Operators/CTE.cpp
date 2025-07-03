@@ -40,8 +40,9 @@ void CTE::initCTESpillContext(
         spill_block_schema_,
         operator_spill_threshold_,
         query_id_and_cte_id);
+    size_t memory_threoshold = operator_spill_threshold_ / this->partition_num;
     for (auto & item : this->partitions)
-        item.init(this->cte_spill_context);
+        item.init(this->cte_spill_context, memory_threoshold);
 }
 
 CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block)

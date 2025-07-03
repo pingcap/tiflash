@@ -51,7 +51,11 @@ struct CTEPartition
         , status_lock(std::make_unique<std::mutex>())
     {}
 
-    void init(std::shared_ptr<CTESpillContext> spill_context_) { this->spill_context = spill_context_; }
+    void init(std::shared_ptr<CTESpillContext> spill_context_, size_t memory_threoshold_)
+    {
+        this->spill_context = spill_context_;
+        this->memory_threoshold = memory_threoshold_;
+    }
 
     size_t getIdxInMemoryNoLock(size_t cte_reader_id);
     bool isBlockAvailableInDiskNoLock(size_t cte_reader_id)
@@ -91,7 +95,7 @@ struct CTEPartition
     Blocks blocks;
     std::unordered_map<size_t, size_t> fetch_block_idxs;
     size_t memory_usage = 0;
-    size_t memory_threoshold = 0; // TODO initialize it
+    size_t memory_threoshold = 0;
     std::unique_ptr<PipeConditionVariable> pipe_cv;
     Blocks tmp_blocks;
 

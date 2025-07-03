@@ -34,6 +34,7 @@ public:
     explicit CTE(size_t partition_num_)
         : partition_num(partition_num_)
     {
+        RUNTIME_CHECK(this->partition_num > 0);
         for (size_t i = 0; i < this->partition_num; i++)
             this->partitions.push_back(CTEPartition(i));
     }

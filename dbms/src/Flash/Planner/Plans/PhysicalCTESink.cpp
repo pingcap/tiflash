@@ -20,7 +20,6 @@
 #include <Operators/CTESinkOp.h>
 
 #include <memory>
-#include <string>
 
 namespace DB
 {
@@ -80,7 +79,11 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
         settings.max_threads,
         settings.max_block_size);
 
-    cte->initCTESpillContext(spill_config, group_builder.getCurrentHeader(), 0, query_id_and_cte_id);
+    cte->initCTESpillContext(
+        spill_config,
+        group_builder.getCurrentHeader(),
+        settings.max_bytes_before_cte_spill,
+        query_id_and_cte_id);
 }
 
 void PhysicalCTESink::finalizeImpl(const Names & parent_require)
