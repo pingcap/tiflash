@@ -288,6 +288,10 @@ void ColumnString::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
+size_t ColumnString::capacity() const
+{
+    return chars.capacity() / APPROX_STRING_SIZE; // Approximate capacity based on average string size.
+}
 
 void ColumnString::reserve(size_t n)
 {

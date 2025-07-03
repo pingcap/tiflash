@@ -256,6 +256,7 @@ public:
     int compareAt(size_t n, size_t m, const IColumn & rhs, int nan_direction_hint) const override;
     void getExtremes(Field & min, Field & max) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
+    size_t capacity() const override;
     void reserve(size_t n) override;
     void reserveAlign(size_t n, size_t alignment) override;
     size_t byteSize() const override;

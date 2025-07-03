@@ -514,6 +514,9 @@ public:
       */
     virtual void getExtremes(Field & min, Field & max) const = 0;
 
+    /// Returns the number of elements that this column can hold without reallocating.
+    virtual size_t capacity() const = 0;
+
     /// Reserves memory for specified amount of elements. If reservation isn't possible, does nothing.
     /// It affects performance only (not correctness).
     virtual void reserve(size_t /*n*/) {}

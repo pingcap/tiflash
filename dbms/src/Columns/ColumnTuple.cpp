@@ -421,6 +421,11 @@ void ColumnTuple::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
+size_t ColumnTuple::capacity() const
+{
+    return columns.empty() ? 0 : columns[0]->capacity();
+}
+
 void ColumnTuple::reserve(size_t n)
 {
     const size_t tuple_size = columns.size();

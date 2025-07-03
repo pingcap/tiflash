@@ -632,6 +632,11 @@ void ColumnNullable::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
+size_t ColumnNullable::capacity() const
+{
+    return getNestedColumn().capacity();
+}
+
 void ColumnNullable::reserve(size_t n)
 {
     getNestedColumn().reserve(n);

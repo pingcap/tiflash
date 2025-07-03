@@ -454,6 +454,8 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
+    size_t capacity() const override;
+
     void reserve(size_t n) override;
     void reserveAlign(size_t n, size_t alignment) override;
 

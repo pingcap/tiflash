@@ -113,7 +113,8 @@ public:
     size_t byteSize() const override { return data.size() * sizeof(data[0]); }
     size_t byteSize(size_t /*offset*/, size_t limit) const override { return limit * sizeof(data[0]); }
     size_t allocatedBytes() const override { return data.allocated_bytes(); }
-    //void protect() override { data.protect(); }
+
+    size_t capacity() const override { return data.capacity(); }
     void reserve(size_t n) override { data.reserve(n); }
     void reserveAlign(size_t n, size_t alignment) override { data.reserve(n, alignment); }
 
