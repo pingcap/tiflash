@@ -201,14 +201,14 @@ const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskP
 std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentReadTaskPool::getRemoteConnectionInfo()
     const
 {
+    std::lock_guard lock(conn_mu);
+    if (remote_connection_infos.empty())
+        return {};
+
     static constexpr auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
     static constexpr auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
     ConnectionProfileInfo inter_zone_info(inter_type);
     ConnectionProfileInfo inner_zone_info(inner_type);
-
-    std::lock_guard lock(conn_mu);
-    if (remote_connection_infos.empty())
-        return {};
 
     for (const auto & connection_info : remote_connection_infos)
     {
