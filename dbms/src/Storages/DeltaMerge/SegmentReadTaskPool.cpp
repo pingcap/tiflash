@@ -206,6 +206,7 @@ std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentRe
     ConnectionProfileInfo inter_zone_info(inter_type);
     ConnectionProfileInfo inner_zone_info(inner_type);
 
+    std::lock_guard lock(conn_mu);
     if (remote_connection_infos.empty())
         return {};
 

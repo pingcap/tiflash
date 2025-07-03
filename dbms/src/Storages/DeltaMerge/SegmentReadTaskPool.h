@@ -188,11 +188,13 @@ public:
     {
         if (task->extra_remote_info)
         {
-            LOG_INFO(log, "gjt debug add conn");
-            // LOG_INFO(log, "gjt debug connection type: {}, task: {}",
-            //         task->extra_remote_info->connection_profile_info.getTypeString(),
-            //         task->toString());
-            remote_connection_infos.push_back(task->extra_remote_info->connection_profile_info);
+            LOG_INFO(log, "gjt debug connection type: {}, task: {}",
+                    task->extra_remote_info->connection_profile_info.getTypeString(),
+                    task->toString());
+            {
+                std::lock_guard lock(conn_mu);
+                remote_connection_infos.push_back(task->extra_remote_info->connection_profile_info);
+            }
         }
     }
     size_t getTotalReadTasks() const { return total_read_tasks; }
@@ -273,6 +275,7 @@ private:
     static uint64_t nextPoolId() { return pool_id_gen.fetch_add(1, std::memory_order_relaxed); }
     inline static constexpr Int64 check_ru_interval_ms = 100;
 
+    mutable std::mutex conn_mu;
     std::once_flag get_remote_connection_flag;
     // Each remote segment task have a connection info to record network bytes,
     // and it will be collected by TableScan as runtime statistics.
