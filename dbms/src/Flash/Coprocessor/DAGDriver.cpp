@@ -29,6 +29,7 @@
 #include <Interpreters/ProcessList.h>
 #include <Storages/KVStore/Read/LockException.h>
 #include <Storages/KVStore/Read/RegionException.h>
+#include <Storages/KVStore/TMTContext.h>
 #include <pingcap/Exception.h>
 
 namespace DB
@@ -112,6 +113,8 @@ template <DAGRequestKind Kind>
 void DAGDriver<Kind>::execute()
 try
 {
+    if (context.getTMTContext().checkShuttingDown())
+        throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
     auto start_time = Clock::now();
     DAGContext & dag_context = *context.getDAGContext();
     const auto & resource_group = dag_context.getResourceGroupName();
