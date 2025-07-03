@@ -29,7 +29,6 @@
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
 #include <Storages/DeltaMerge/DeltaMergeStore_Statistics.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
-#include <Storages/DeltaMerge/DeltaMergeStore_Statistics.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo_fwd.h>

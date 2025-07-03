@@ -28,7 +28,6 @@
 #include <boost/noncopyable.hpp>
 #include <cassert>
 #include <cstddef>
-#include <iostream>
 #include <memory>
 
 #ifndef NDEBUG
@@ -47,6 +46,20 @@ inline constexpr size_t integerRoundUp(size_t value, size_t dividend)
 {
     return ((value + dividend - 1) / dividend) * dividend;
 }
+
+namespace PODArrayDetails
+{
+/// The amount of memory occupied by the num_elements of the elements.
+size_t byte_size(size_t num_elements, size_t element_size); /// NOLINT
+
+/// Minimum amount of memory to allocate for num_elements, including padding.
+size_t minimum_memory_for_elements(
+    size_t num_elements,
+    size_t element_size,
+    size_t pad_left,
+    size_t pad_right); /// NOLINT
+
+}; // namespace PODArrayDetails
 
 /** A dynamic array for POD types.
   * Designed for a small number of large arrays (rather than a lot of small ones).
@@ -109,20 +122,10 @@ protected:
 
     bool is_shared_memory;
 
-    [[nodiscard]] __attribute__((always_inline)) std::optional<MemoryTrackerSetter> swicthMemoryTracker()
+    [[nodiscard]] __attribute__((always_inline)) std::optional<MemoryTrackerSetter> switchMemoryTracker()
     {
         return is_shared_memory ? std::make_optional<MemoryTrackerSetter>(true, shared_column_data_mem_tracker.get())
                                 : std::nullopt;
-    }
-
-    /// The amount of memory occupied by the num_elements of the elements.
-    static size_t byte_size(size_t num_elements) { return num_elements * ELEMENT_SIZE; }
-
-    /// Minimum amount of memory to allocate for num_elements, including padding.
-    static size_t minimum_memory_for_elements(size_t num_elements)
-    {
-        auto res = byte_size(num_elements) + pad_right + pad_left;
-        return res;
     }
 
     void alloc_for_num_elements(size_t num_elements)
@@ -133,14 +136,14 @@ protected:
         //If the users want to do PODArray initialize first, and also will push_back other elements later,
         //in push_back or emplace_back will do the reserveForNextSize to alloc extra memory.
         //Thus, we don't need do roundUpToPowerOfTwoOrZero here, and it can cut down extra memory usage,
-        //and will not have bad affact on performance.
-        alloc(minimum_memory_for_elements(num_elements));
+        //and will not have bad affect on performance.
+        alloc(PODArrayDetails::minimum_memory_for_elements(num_elements, ELEMENT_SIZE, pad_left, pad_right));
     }
 
     template <typename... TAllocatorParams>
     void alloc(size_t bytes, TAllocatorParams &&... allocator_params)
     {
-        auto guard = swicthMemoryTracker();
+        auto guard = switchMemoryTracker();
         c_start = c_end
             = reinterpret_cast<char *>(TAllocator::alloc(bytes, std::forward<TAllocatorParams>(allocator_params)...))
             + pad_left;
@@ -157,7 +160,7 @@ protected:
 
         unprotect();
 
-        auto guard = swicthMemoryTracker();
+        auto guard = switchMemoryTracker();
         TAllocator::free(c_start - pad_left, allocated_bytes());
     }
 
@@ -172,7 +175,7 @@ protected:
 
         unprotect();
 
-        auto guard = swicthMemoryTracker();
+        auto guard = switchMemoryTracker();
         ptrdiff_t end_diff = c_end - c_start;
 
         c_start = reinterpret_cast<char *>(TAllocator::realloc(
@@ -197,12 +200,14 @@ protected:
     template <typename... TAllocatorParams>
     void reserveForNextSize(TAllocatorParams &&... allocator_params)
     {
-        if (size() == 0)
+        if (empty())
         {
             // The allocated memory should be multiplication of ELEMENT_SIZE to hold the element, otherwise,
             // memory issue such as corruption could appear in edge case.
             realloc(
-                std::max(((INITIAL_SIZE - 1) / ELEMENT_SIZE + 1) * ELEMENT_SIZE, minimum_memory_for_elements(1)),
+                std::max(
+                    ((INITIAL_SIZE - 1) / ELEMENT_SIZE + 1) * ELEMENT_SIZE,
+                    PODArrayDetails::minimum_memory_for_elements(1, ELEMENT_SIZE, pad_left, pad_right)),
                 std::forward<TAllocatorParams>(allocator_params)...);
         }
         else
@@ -240,7 +245,7 @@ public:
     size_t capacity() const { return (c_end_of_storage - c_start) / ELEMENT_SIZE; }
 
     /// This method is safe to use only for information about memory usage.
-    size_t allocated_bytes() const { return c_end_of_storage - c_start + pad_right + pad_left; }
+    size_t allocated_bytes() const { return c_end_of_storage - c_start + pad_right + pad_left; } // NOLINT
 
     void clear() { c_end = c_start; }
 
@@ -249,7 +254,17 @@ public:
     {
         if (n > capacity())
             realloc(
-                roundUpToPowerOfTwoOrZero(minimum_memory_for_elements(n)),
+                roundUpToPowerOfTwoOrZero(
+                    PODArrayDetails::minimum_memory_for_elements(n, ELEMENT_SIZE, pad_left, pad_right)),
+                std::forward<TAllocatorParams>(allocator_params)...);
+    }
+
+    template <typename... TAllocatorParams>
+    void reserve_exact(size_t n, TAllocatorParams &&... allocator_params) /// NOLINT
+    {
+        if (n > capacity())
+            realloc(
+                PODArrayDetails::minimum_memory_for_elements(n, ELEMENT_SIZE, pad_left, pad_right),
                 std::forward<TAllocatorParams>(allocator_params)...);
     }
 
@@ -260,20 +275,26 @@ public:
         resize_assume_reserved(n);
     }
 
-    void resize_assume_reserved(const size_t n) { c_end = c_start + byte_size(n); }
+    void resize_assume_reserved(const size_t n) // NOLINT
+    {
+        c_end = c_start + PODArrayDetails::byte_size(n, ELEMENT_SIZE);
+    }
 
-    const char * raw_data() const { return c_start; }
+    const char * raw_data() const { return c_start; } // NOLINT(readability-identifier-naming)
 
     template <typename... TAllocatorParams>
-    void push_back_raw(const char * ptr, TAllocatorParams &&... allocator_params)
+    void push_back_raw(const char * ptr, TAllocatorParams &&... allocator_params) // NOLINT
     {
         push_back_raw_many(1, ptr, std::forward<TAllocatorParams>(allocator_params)...);
     }
 
     template <typename... TAllocatorParams>
-    void push_back_raw_many(size_t number_of_items, const void * ptr, TAllocatorParams &&... allocator_params)
+    void push_back_raw_many( // NOLINT(readability-identifier-naming)
+        size_t number_of_items,
+        const void * ptr,
+        TAllocatorParams &&... allocator_params)
     {
-        size_t items_byte_size = byte_size(number_of_items);
+        size_t items_byte_size = PODArrayDetails::byte_size(number_of_items, ELEMENT_SIZE);
         if (unlikely(c_end + items_byte_size > c_end_of_storage))
             reserve(size() + number_of_items, std::forward<TAllocatorParams>(allocator_params)...);
         memcpy(c_end, ptr, items_byte_size);
@@ -323,30 +344,34 @@ protected:
     const T * t_end() const { return reinterpret_cast<const T *>(this->c_end); }
     const T * t_end_of_storage() const { return reinterpret_cast<const T *>(this->c_end_of_storage); }
 
+    size_t byte_size(size_t n) const { return PODArrayDetails::byte_size(n, sizeof(T)); }
+
 public:
     using value_type = T;
 
     /// You can not just use `typedef`, because there is ambiguity for the constructors and `assign` functions.
-    struct iterator : public boost::iterator_adaptor<iterator, T *>
+    struct iterator // NOLINT(readability-identifier-naming)
+        : public boost::iterator_adaptor<iterator, T *>
     {
-        iterator() {}
-        iterator(T * ptr_)
+        iterator() = default;
+        iterator(T * ptr_) // NOLINT
             : iterator::iterator_adaptor_(ptr_)
         {}
     };
 
-    struct const_iterator : public boost::iterator_adaptor<const_iterator, const T *>
+    struct const_iterator // NOLINT(readability-identifier-naming)
+        : public boost::iterator_adaptor<const_iterator, const T *>
     {
-        const_iterator() {}
-        const_iterator(const T * ptr_)
+        const_iterator() = default;
+        const_iterator(const T * ptr_) // NOLINT
             : const_iterator::iterator_adaptor_(ptr_)
         {}
     };
 
 
-    PODArray() {}
+    PODArray() = default;
 
-    PODArray(size_t n)
+    PODArray(size_t n) // NOLINT
     {
         this->alloc_for_num_elements(n);
         this->c_end += this->byte_size(n);
@@ -398,7 +423,7 @@ public:
 
     /// Same as resize, but zeroes new elements.
     template <typename... TAllocatorParams>
-    void resize_fill_zero(size_t n, TAllocatorParams &&... allocator_params)
+    void resize_fill_zero(size_t n, TAllocatorParams &&... allocator_params) // NOLINT(readability-identifier-naming)
     {
         size_t old_size = this->size();
         if (n > old_size)
@@ -410,7 +435,10 @@ public:
     }
 
     template <typename... TAllocatorParams>
-    void resize_fill(size_t n, const T & value, TAllocatorParams &&... allocator_params)
+    void resize_fill( // NOLINT(readability-identifier-naming)
+        size_t n,
+        const T & value,
+        TAllocatorParams &&... allocator_params)
     {
         size_t old_size = this->size();
         if (n > old_size)
@@ -422,7 +450,7 @@ public:
     }
 
     template <typename U, typename... TAllocatorParams>
-    void push_back(U && x, TAllocatorParams &&... allocator_params)
+    void push_back(U && x, TAllocatorParams &&... allocator_params) // NOLINT(readability-identifier-naming)
     {
         // FIXME:: It's dangerous here !!
         if (unlikely(this->c_end >= this->c_end_of_storage))
@@ -436,7 +464,7 @@ public:
       *  and it couldn't be used if Allocator requires custom parameters.
       */
     template <typename... Args>
-    void emplace_back(Args &&... args)
+    void emplace_back(Args &&... args) // NOLINT(readability-identifier-naming)
     {
         if (unlikely(this->c_end >= this->c_end_of_storage))
             this->reserveForNextSize();
@@ -445,7 +473,7 @@ public:
         this->c_end += this->byte_size(1);
     }
 
-    void pop_back() { this->c_end -= this->byte_size(1); }
+    void pop_back() { this->c_end -= this->byte_size(1); } // NOLINT(readability-identifier-naming)
 
     /// Do not insert into the array a piece of itself. Because with the resize, the iterators on themselves can be invalidated.
     template <typename It1, typename It2, typename... TAllocatorParams>
@@ -494,7 +522,7 @@ public:
     }
 
     template <typename It1, typename It2>
-    void insert_assume_reserved(It1 from_begin, It2 from_end)
+    void insert_assume_reserved(It1 from_begin, It2 from_end) // NOLINT(readability-identifier-naming)
     {
         size_t bytes_to_copy = this->byte_size(from_end - from_begin);
         memcpy(this->c_end, reinterpret_cast<const void *>(&*from_begin), bytes_to_copy);

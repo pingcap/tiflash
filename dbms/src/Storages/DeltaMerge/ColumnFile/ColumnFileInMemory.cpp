@@ -91,6 +91,7 @@ ColumnFile::AppendResult ColumnFileInMemory::append(
         return AppendResult{false, 0};
 
     size_t new_alloc_block_bytes = 0;
+    size_t max_capacity = 0;
     for (size_t i = 0; i < cache->block.columns(); ++i)
     {
         const auto & col = data.getByPosition(i).column;
@@ -105,6 +106,7 @@ ColumnFile::AppendResult ColumnFileInMemory::append(
                 IColumn::ReserveStrategy::ScaleFactor1_5);
         }
         mutable_cache_col->insertRangeFrom(*col, offset, limit);
+        max_capacity = std::max(max_capacity, mutable_cache_col->capacity());
         new_alloc_block_bytes += mutable_cache_col->allocatedBytes() - alloc_bytes;
     }
 
@@ -118,6 +120,7 @@ ColumnFile::AppendResult ColumnFileInMemory::append(
         limit - offset,
         data_bytes,
         new_alloc_block_bytes,
+        max_capacity,
         rows,
         bytes);
     return AppendResult{true, new_alloc_block_bytes};

@@ -45,6 +45,9 @@ public:
 
     ConstSetPtr getData() const { return data; }
 
+    // A fake capacity for ColumnSet, as it does not hold data in the same way as other columns.
+    size_t capacity() const override { return 1; }
+
 private:
     ConstSetPtr data;
 };

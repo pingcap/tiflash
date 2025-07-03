@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/CurrentMetrics.h>
 #include <Common/Logger.h>
 #include <Common/MPMCQueue.h>
 #include <Common/MemoryTracker.h>
@@ -24,10 +23,6 @@
 #include <common/logger_useful.h>
 
 #include <atomic>
-#include <list>
-#include <mutex>
-#include <queue>
-#include <thread>
 
 
 /** Allows to process multiple block input streams (sources) in parallel, using specified number of threads.

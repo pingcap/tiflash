@@ -181,7 +181,8 @@ public:
         Permutation & res) const override;
     void adjustPermutationWithNullDirection(bool reverse, size_t limit, int null_direction_hint, Permutation & res)
         const;
-    void reserve(size_t n) override;
+    size_t capacity() const override;
+    void reserveWithStrategy(size_t n, IColumn::ReserveStrategy strategy) override;
     void reserveAlign(size_t n, size_t alignment) override;
     void reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint) override;
     void reserveAlignWithTotalMemoryHint(size_t n, Int64 total_memory_hint, size_t alignment) override;

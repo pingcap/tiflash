@@ -620,11 +620,19 @@ struct Less
 } // namespace
 
 
-void ColumnArray::reserve(size_t n)
+void ColumnArray::reserveWithStrategy(size_t n, ReserveStrategy strategy)
 {
-    getOffsets().reserve(n);
+    switch (strategy)
+    {
+    case ReserveStrategy::Default:
+        getOffsets().reserve(n);
+        break;
+    case ReserveStrategy::ScaleFactor1_5:
+        getOffsets().reserve(n / 2 * 3);
+        break;
+    }
     /// The average size of arrays is not taken into account here. Or it is considered to be no more than 1.
-    getData().reserve(n);
+    getData().reserveWithStrategy(n, strategy);
 }
 
 void ColumnArray::reserveAlign(size_t n, size_t alignment)

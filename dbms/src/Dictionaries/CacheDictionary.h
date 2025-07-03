@@ -16,14 +16,12 @@
 
 #include <Columns/ColumnString.h>
 #include <Common/ArenaWithFreeLists.h>
-#include <Common/CurrentMetrics.h>
 #include <Dictionaries/DictionaryStructure.h>
 #include <Dictionaries/IDictionary.h>
 #include <Dictionaries/IDictionarySource.h>
 
 #include <atomic>
 #include <chrono>
-#include <cmath>
 #include <ext/bit_cast.h>
 #include <map>
 #include <pcg_random.hpp>

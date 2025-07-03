@@ -421,11 +421,18 @@ void ColumnTuple::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
-void ColumnTuple::reserve(size_t n)
+size_t ColumnTuple::capacity() const
+{
+    return columns.empty() ? 0 : columns[0]->capacity();
+}
+
+void ColumnTuple::reserveWithStrategy(size_t n, IColumn::ReserveStrategy strategy)
 {
     const size_t tuple_size = columns.size();
     for (size_t i = 0; i < tuple_size; ++i)
-        getColumn(i).reserve(n);
+    {
+        getColumn(i).reserveWithStrategy(n, strategy);
+    }
 }
 
 void ColumnTuple::reserveAlign(size_t n, size_t alignment)

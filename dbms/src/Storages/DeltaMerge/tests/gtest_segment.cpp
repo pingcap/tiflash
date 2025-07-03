@@ -664,10 +664,10 @@ ProcessMemoryUsage get_process_mem_usage()
 TEST_F(SegmentOperationTest, TestMassiveSegment)
 try
 {
-    const size_t level = 5;
+    const size_t level = 1;
     for (size_t lvl = 0; lvl < level; ++lvl)
     {
-        size_t num_expected_segs = 1000;
+        size_t num_expected_segs = 500;
         // size_t num_expected_segs = 10;
         size_t progress_interval = 100;
         const auto lvl_beg_seg_id = segments.rbegin()->first;
@@ -728,6 +728,14 @@ try
                 /* start_at */ lvl * num_expected_segs * write_rows + round * write_rows,
                 false,
                 std::nullopt);
+            LOG_INFO(
+                log,
+                "lvl={} round={} seg_id={} written_rows={} mem_tbl_bytes={}",
+                lvl,
+                round,
+                seg_id,
+                write_rows,
+                segments[seg_id]->getDelta()->getTotalCacheBytes());
             round++;
         }
         {

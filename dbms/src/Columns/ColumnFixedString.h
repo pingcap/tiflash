@@ -193,6 +193,8 @@ public:
 
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 
+    size_t capacity() const override { return chars.capacity() / n; }
+
     void insertRangeFrom(const IColumn & src, size_t start, size_t length) override;
 
     ColumnPtr filter(const IColumn::Filter & filt, ssize_t result_size_hint) const override;
@@ -223,7 +225,7 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    void reserve(size_t size) override { chars.reserve(n * size); }
+    void reserveWithStrategy(size_t size, IColumn::ReserveStrategy strategy) override;
     void reserveAlign(size_t size, size_t alignment) override { chars.reserve(n * size, alignment); }
 
     void getExtremes(Field & min, Field & max) const override;

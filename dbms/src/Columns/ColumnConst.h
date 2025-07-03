@@ -261,6 +261,8 @@ public:
     ColumnPtr permute(const Permutation & perm, size_t limit) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
 
+    size_t capacity() const override { return data->capacity(); }
+
     size_t byteSize() const override { return data->byteSize() + sizeof(s); }
 
     size_t byteSize(size_t /*offset*/, size_t /*limit*/) const override { return byteSize(); }

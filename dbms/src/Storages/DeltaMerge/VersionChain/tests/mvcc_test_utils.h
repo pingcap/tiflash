@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/CurrentMetrics.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Segment.h>

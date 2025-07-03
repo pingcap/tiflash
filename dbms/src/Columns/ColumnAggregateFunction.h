@@ -98,7 +98,7 @@ private:
     {}
 
 public:
-    ~ColumnAggregateFunction();
+    ~ColumnAggregateFunction() override;
 
     void set(const AggregateFunctionPtr & func_) { func = func_; }
 
@@ -327,6 +327,8 @@ public:
     int compareAt(size_t, size_t, const IColumn &, int) const override { return 0; }
 
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
+
+    size_t capacity() const override { return data.capacity(); }
 
     /** More efficient manipulation methods */
     Container & getData() { return data; }
