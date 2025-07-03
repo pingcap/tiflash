@@ -208,7 +208,6 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
     }
     rows += limit;
     bytes += append_bytes;
-    
 }
 
 void MemTableSet::appendDeleteRange(const RowKeyRange & delete_range)

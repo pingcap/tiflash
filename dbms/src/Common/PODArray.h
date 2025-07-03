@@ -28,7 +28,6 @@
 #include <boost/noncopyable.hpp>
 #include <cassert>
 #include <cstddef>
-#include <iostream>
 #include <memory>
 
 #ifndef NDEBUG
@@ -109,7 +108,7 @@ protected:
 
     bool is_shared_memory;
 
-    [[nodiscard]] __attribute__((always_inline)) std::optional<MemoryTrackerSetter> swicthMemoryTracker()
+    [[nodiscard]] __attribute__((always_inline)) std::optional<MemoryTrackerSetter> switchMemoryTracker()
     {
         return is_shared_memory ? std::make_optional<MemoryTrackerSetter>(true, shared_column_data_mem_tracker.get())
                                 : std::nullopt;
@@ -140,7 +139,7 @@ protected:
     template <typename... TAllocatorParams>
     void alloc(size_t bytes, TAllocatorParams &&... allocator_params)
     {
-        auto guard = swicthMemoryTracker();
+        auto guard = switchMemoryTracker();
         c_start = c_end
             = reinterpret_cast<char *>(TAllocator::alloc(bytes, std::forward<TAllocatorParams>(allocator_params)...))
             + pad_left;
@@ -157,7 +156,7 @@ protected:
 
         unprotect();
 
-        auto guard = swicthMemoryTracker();
+        auto guard = switchMemoryTracker();
         TAllocator::free(c_start - pad_left, allocated_bytes());
     }
 
@@ -172,7 +171,7 @@ protected:
 
         unprotect();
 
-        auto guard = swicthMemoryTracker();
+        auto guard = switchMemoryTracker();
         ptrdiff_t end_diff = c_end - c_start;
 
         c_start = reinterpret_cast<char *>(TAllocator::realloc(
@@ -240,7 +239,7 @@ public:
     size_t capacity() const { return (c_end_of_storage - c_start) / ELEMENT_SIZE; }
 
     /// This method is safe to use only for information about memory usage.
-    size_t allocated_bytes() const { return c_end_of_storage - c_start + pad_right + pad_left; }
+    size_t allocated_bytes() const { return c_end_of_storage - c_start + pad_right + pad_left; } // NOLINT
 
     void clear() { c_end = c_start; }
 
@@ -260,18 +259,21 @@ public:
         resize_assume_reserved(n);
     }
 
-    void resize_assume_reserved(const size_t n) { c_end = c_start + byte_size(n); }
+    void resize_assume_reserved(const size_t n) { c_end = c_start + byte_size(n); } // NOLINT
 
-    const char * raw_data() const { return c_start; }
+    const char * raw_data() const { return c_start; } // NOLINT(readability-identifier-naming)
 
     template <typename... TAllocatorParams>
-    void push_back_raw(const char * ptr, TAllocatorParams &&... allocator_params)
+    void push_back_raw(const char * ptr, TAllocatorParams &&... allocator_params) // NOLINT
     {
         push_back_raw_many(1, ptr, std::forward<TAllocatorParams>(allocator_params)...);
     }
 
     template <typename... TAllocatorParams>
-    void push_back_raw_many(size_t number_of_items, const void * ptr, TAllocatorParams &&... allocator_params)
+    void push_back_raw_many( // NOLINT(readability-identifier-naming)
+        size_t number_of_items,
+        const void * ptr,
+        TAllocatorParams &&... allocator_params)
     {
         size_t items_byte_size = byte_size(number_of_items);
         if (unlikely(c_end + items_byte_size > c_end_of_storage))
@@ -327,26 +329,28 @@ public:
     using value_type = T;
 
     /// You can not just use `typedef`, because there is ambiguity for the constructors and `assign` functions.
-    struct iterator : public boost::iterator_adaptor<iterator, T *>
+    struct iterator // NOLINT(readability-identifier-naming)
+        : public boost::iterator_adaptor<iterator, T *>
     {
-        iterator() {}
+        iterator() = default;
         iterator(T * ptr_)
             : iterator::iterator_adaptor_(ptr_)
         {}
     };
 
-    struct const_iterator : public boost::iterator_adaptor<const_iterator, const T *>
+    struct const_iterator // NOLINT(readability-identifier-naming)
+        : public boost::iterator_adaptor<const_iterator, const T *>
     {
-        const_iterator() {}
+        const_iterator() = default;
         const_iterator(const T * ptr_)
             : const_iterator::iterator_adaptor_(ptr_)
         {}
     };
 
 
-    PODArray() {}
+    PODArray() = default;
 
-    PODArray(size_t n)
+    PODArray(size_t n) // NOLINT
     {
         this->alloc_for_num_elements(n);
         this->c_end += this->byte_size(n);
@@ -398,7 +402,7 @@ public:
 
     /// Same as resize, but zeroes new elements.
     template <typename... TAllocatorParams>
-    void resize_fill_zero(size_t n, TAllocatorParams &&... allocator_params)
+    void resize_fill_zero(size_t n, TAllocatorParams &&... allocator_params) // NOLINT(readability-identifier-naming)
     {
         size_t old_size = this->size();
         if (n > old_size)
@@ -410,7 +414,10 @@ public:
     }
 
     template <typename... TAllocatorParams>
-    void resize_fill(size_t n, const T & value, TAllocatorParams &&... allocator_params)
+    void resize_fill( // NOLINT(readability-identifier-naming)
+        size_t n,
+        const T & value,
+        TAllocatorParams &&... allocator_params)
     {
         size_t old_size = this->size();
         if (n > old_size)
@@ -422,7 +429,7 @@ public:
     }
 
     template <typename U, typename... TAllocatorParams>
-    void push_back(U && x, TAllocatorParams &&... allocator_params)
+    void push_back(U && x, TAllocatorParams &&... allocator_params) // NOLINT(readability-identifier-naming)
     {
         // FIXME:: It's dangerous here !!
         if (unlikely(this->c_end >= this->c_end_of_storage))
@@ -436,7 +443,7 @@ public:
       *  and it couldn't be used if Allocator requires custom parameters.
       */
     template <typename... Args>
-    void emplace_back(Args &&... args)
+    void emplace_back(Args &&... args) // NOLINT(readability-identifier-naming)
     {
         if (unlikely(this->c_end >= this->c_end_of_storage))
             this->reserveForNextSize();
@@ -445,7 +452,7 @@ public:
         this->c_end += this->byte_size(1);
     }
 
-    void pop_back() { this->c_end -= this->byte_size(1); }
+    void pop_back() { this->c_end -= this->byte_size(1); } // NOLINT(readability-identifier-naming)
 
     /// Do not insert into the array a piece of itself. Because with the resize, the iterators on themselves can be invalidated.
     template <typename It1, typename It2, typename... TAllocatorParams>
@@ -494,7 +501,7 @@ public:
     }
 
     template <typename It1, typename It2>
-    void insert_assume_reserved(It1 from_begin, It2 from_end)
+    void insert_assume_reserved(It1 from_begin, It2 from_end) // NOLINT(readability-identifier-naming)
     {
         size_t bytes_to_copy = this->byte_size(from_end - from_begin);
         memcpy(this->c_end, reinterpret_cast<const void *>(&*from_begin), bytes_to_copy);

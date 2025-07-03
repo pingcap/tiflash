@@ -41,6 +41,7 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
             // Copy data from cache
             const auto & type = getDataType(cd.id);
             auto col_data = type->createColumn();
+            col_data->reserve(rows);
             col_data->insertRangeFrom(*(cache->block.getByPosition(col_offset).column), 0, rows);
             // Cast if need
             auto col_converted = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
@@ -90,6 +91,11 @@ bool ColumnFileInMemory::append(
         const auto & cache_col = *cache->block.getByPosition(i).column;
         auto * mutable_cache_col = const_cast<IColumn *>(&cache_col);
         size_t alloc_bytes = mutable_cache_col->allocatedBytes();
+        if (mutable_cache_col->capacity() < mutable_cache_col->size() + limit)
+        {
+            // If the column is not enough, we need to reserve more space.
+            mutable_cache_col->reserve(mutable_cache_col->size() + limit);
+        }
         mutable_cache_col->insertRangeFrom(*col, offset, limit);
         new_alloc_block_bytes += mutable_cache_col->allocatedBytes() - alloc_bytes;
     }

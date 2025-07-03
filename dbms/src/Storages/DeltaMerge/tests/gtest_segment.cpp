@@ -727,6 +727,14 @@ try
                 /* start_at */ lvl * num_expected_segs * write_rows + round * write_rows,
                 false,
                 std::nullopt);
+            LOG_INFO(
+                log,
+                "lvl={} round={} seg_id={} written_rows={} mem_tbl_bytes={}",
+                lvl,
+                round,
+                seg_id,
+                write_rows,
+                segments[seg_id]->getDelta()->getTotalCacheBytes());
             round++;
         }
         {
