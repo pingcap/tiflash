@@ -216,7 +216,7 @@ std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentRe
         else if (connection_info.type == inner_type)
             inner_zone_info.merge(connection_info);
         else
-            throw Exception("unexpected connection type");
+            throw Exception(fmt::format("unexpected connection type: {}", connection_info.getTypeString()));
     }
     return {{inter_zone_info, inner_zone_info}};
 }
