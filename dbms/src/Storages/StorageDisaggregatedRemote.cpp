@@ -359,21 +359,27 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
         }
     }
 
+    const bool is_same_zone = isSameZone(batch_cop_task);
+    const size_t resp_size = resp.ByteSizeLong();
+
     // Now we have successfully established disaggregated read for this write node.
     // Let's parse the result and generate actual segment read tasks.
     // There may be multiple tables, so we concurrently build tasks for these tables.
     IOPoolHelper::FutureContainer futures(log, resp.tables().size());
-    for (const auto & serialized_physical_table : resp.tables())
+    for (auto i = 0; i < resp.tables().size(); ++i)
     {
         auto f = BuildReadTaskForWNTablePool::get().scheduleWithFuture(
-            [&] {
+            [&, i] {
                 buildReadTaskForWriteNodeTable(
                     db_context,
                     scan_context,
                     snapshot_id,
                     resp.store_id(),
                     req->address(),
-                    serialized_physical_table,
+                    resp.tables()[i],
+                    is_same_zone,
+                    /*is_first_table=*/i == 0,
+                    resp_size,
                     output_lock,
                     output_seg_tasks);
             },
@@ -383,6 +389,20 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     futures.getAllResults();
 }
 
+bool StorageDisaggregated::isSameZone(const pingcap::coprocessor::BatchCopTask & batch_cop_task) const
+{
+    // Assume it's same zone when there is no zone label.
+    const auto & wn_labels = batch_cop_task.store_labels;
+    if (!zone_label.has_value() || wn_labels.empty())
+        return true;
+
+    auto iter = wn_labels.find(ZONE_LABEL_KEY);
+    if (iter == wn_labels.end())
+        return true;
+
+    return iter->second == *zone_label;
+}
+
 void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     const Context & db_context,
     const DM::ScanContextPtr & scan_context,
@@ -390,6 +410,9 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
     StoreID store_id,
     const String & store_address,
     const String & serialized_physical_table,
+    bool is_same_zone,
+    bool is_first_table,
+    size_t resp_size,
     std::mutex & output_lock,
     DM::SegmentReadTasks & output_seg_tasks)
 {
@@ -400,21 +423,24 @@ void StorageDisaggregated::buildReadTaskForWriteNodeTable(
         fmt::format("store_id={} keyspace={} table_id={}", store_id, table.keyspace_id(), table.table_id()));
 
     IOPoolHelper::FutureContainer futures(log, table.segments().size());
-    for (const auto & remote_seg : table.segments())
+    for (auto i = 0; i < table.segments().size(); ++i)
     {
+        const bool is_first_seg = (is_first_table && i == 0);
         auto f = BuildReadTaskPool::get().scheduleWithFuture(
-            [&]() {
+            [&, i, is_first_seg]() {
                 auto seg_read_task = std::make_shared<DM::SegmentReadTask>(
                     table_tracing_logger,
                     db_context,
                     scan_context,
-                    remote_seg,
+                    table.segments()[i],
                     snapshot_id,
                     store_id,
                     store_address,
                     table.keyspace_id(),
                     table.table_id(),
-                    table.pk_col_id());
+                    table.pk_col_id(),
+                    is_same_zone,
+                    is_first_seg ? resp_size : 0);
                 std::lock_guard lock(output_lock);
                 output_seg_tasks.push_back(seg_read_task);
             },
@@ -614,7 +640,10 @@ struct InputStreamBuilder
             read_tasks,
             *columns_to_read,
             extra_table_id_index,
-            tracing_id);
+            tracing_id,
+            std::vector<RuntimeFilterPtr>(),
+            /*max_wait_time_ms_=*/0,
+            /*is_disagg_=*/true);
     }
 };
 
@@ -677,7 +706,10 @@ struct SrouceOpBuilder
             read_tasks,
             *column_defines,
             extra_table_id_index,
-            tracing_id);
+            tracing_id,
+            /*runtime_filter_list_=*/std::vector<RuntimeFilterPtr>{},
+            /*max_wait_time_ms_=*/0,
+            /*is_disagg_=*/true);
     }
 };
 

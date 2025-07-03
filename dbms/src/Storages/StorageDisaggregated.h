@@ -94,8 +94,12 @@ private:
         StoreID store_id,
         const String & store_address,
         const String & serialized_physical_table,
+        bool is_same_zone,
+        bool is_first_table,
+        size_t resp_size,
         std::mutex & output_lock,
         DM::SegmentReadTasks & output_seg_tasks);
+    bool isSameZone(const pingcap::coprocessor::BatchCopTask & batch_cop_task) const;
 
     std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> buildEstablishDisaggTaskReq(
         const Context & db_context,
@@ -151,5 +155,7 @@ private:
     const FilterConditions & filter_conditions;
 
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
+    static constexpr auto ZONE_LABEL_KEY = "zone";
+    std::optional<String> zone_label;
 };
 } // namespace DB

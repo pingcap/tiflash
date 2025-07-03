@@ -55,14 +55,13 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
     exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
 
-    if (fine_grained_shuffle.enabled())
-        concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
-
     std::shared_ptr<CTE> cte = context.getCTEManager()->getCTE(
         query_id_and_cte_id,
         concurrency,
         this->expected_sink_num,
         this->expected_source_num);
+
+    RUNTIME_CHECK(group_builder.concurrency() == concurrency);
 
     size_t id = 0;
     group_builder.transform([&](auto & builder) {

@@ -746,6 +746,12 @@ void Block::swap(Block & other) noexcept
     std::swap(rs_result, other.rs_result);
 }
 
+void Block::swapCloumnData(Block & other) noexcept
+{
+    std::swap(info, other.info);
+    data.swap(other.data);
+    index_by_name.swap(other.index_by_name);
+}
 
 void Block::updateHash(SipHash & hash) const
 {

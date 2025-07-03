@@ -89,6 +89,20 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 
         if (!res)
         {
+            static constexpr auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
+            static constexpr auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
+
+            RUNTIME_CHECK(connection_profile_infos.size() == 2, connection_profile_infos.size());
+            RUNTIME_CHECK(current_seg_task->extra_remote_info.has_value());
+            if (current_seg_task->extra_remote_info->connection_profile_info.type == inter_type)
+                connection_profile_infos[INTER_ZONE_INDEX].merge(
+                    current_seg_task->extra_remote_info->connection_profile_info);
+            else if (current_seg_task->extra_remote_info->connection_profile_info.type == inner_type)
+                connection_profile_infos[INNER_ZONE_INDEX].merge(
+                    current_seg_task->extra_remote_info->connection_profile_info);
+            else
+                throw Exception("unexpected connection type");
+
             // Current stream is drained, try read from next stream.
             current_seg_task = nullptr;
             continue;

@@ -17,12 +17,12 @@
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/ResourceControl/LocalAdmissionController.h>
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
-
 
 namespace DB::DM
 {
@@ -153,7 +153,7 @@ public:
     }
 
     SegmentReadTaskPtr nextTask();
-    const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks();
+    const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks() const;
     SegmentReadTaskPtr getTask(const GlobalSegmentID & seg_id);
 
     BlockInputStreamPtr buildInputStream(SegmentReadTaskPtr & t);
@@ -181,6 +181,15 @@ public:
     {
         q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ);
     }
+
+    std::once_flag & getRemoteConnectionInfoFlag() { return get_remote_connection_flag; }
+    std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> getRemoteConnectionInfo() const;
+    void recordRemoteConnectionInfoIfNecessary(const SegmentReadTaskPtr & task)
+    {
+        if (task->extra_remote_info)
+            remote_connection_infos.push_back(task->extra_remote_info->connection_profile_info);
+    }
+    size_t getTotalReadTasks() const { return total_read_tasks; }
 
 public:
     const uint64_t pool_id;
@@ -223,6 +232,7 @@ private:
     const uint64_t start_ts;
     const size_t expected_block_size;
     const ReadMode read_mode;
+    const size_t total_read_tasks;
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
@@ -256,6 +266,11 @@ private:
     inline static BlockStat global_blk_stat;
     static uint64_t nextPoolId() { return pool_id_gen.fetch_add(1, std::memory_order_relaxed); }
     inline static constexpr Int64 check_ru_interval_ms = 100;
+
+    std::once_flag get_remote_connection_flag;
+    // Each remote segment task have a connection info to record network bytes,
+    // and it will be collected by TableScan as runtime statistics.
+    std::vector<ConnectionProfileInfo> remote_connection_infos;
 
     friend class tests::SegmentReadTasksPoolTest;
 };

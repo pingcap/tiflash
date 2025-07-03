@@ -156,7 +156,6 @@ public:
     }
 
     void addCTE(std::shared_ptr<CTE> cte) { this->dag_context->addCTE(cte); }
-    void addCTE(std::shared_ptr<CTE> & cte) { this->dag_context->addCTE(cte); }
 
     void setHasCTESource() { this->dag_context->setHasCTESource(); }
 

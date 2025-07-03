@@ -88,6 +88,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     MemoryTrackerSetter setter(true, mem_tracker.get());
 
     t->fetchPages();
+    recordRemoteConnectionInfoIfNecessary(t);
 
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {
@@ -136,6 +137,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , start_ts(start_ts_)
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
+    , total_read_tasks(tasks_.size())
     , tasks_wrapper(enable_read_thread_, std::move(tasks_))
     , after_segment_read(after_segment_read_)
     , log(Logger::get(tracing_id))
@@ -190,10 +192,33 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
     return t;
 }
 
-const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks()
+const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks() const
 {
     std::lock_guard lock(mutex);
     return tasks_wrapper.getTasks();
+}
+
+std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentReadTaskPool::getRemoteConnectionInfo()
+    const
+{
+    static constexpr auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
+    static constexpr auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
+    ConnectionProfileInfo inter_zone_info(inter_type);
+    ConnectionProfileInfo inner_zone_info(inner_type);
+
+    if (remote_connection_infos.empty())
+        return {};
+
+    for (const auto & connection_info : remote_connection_infos)
+    {
+        if (connection_info.type == inter_type)
+            inter_zone_info.merge(connection_info);
+        else if (connection_info.type == inner_type)
+            inner_zone_info.merge(connection_info);
+        else
+            throw Exception("unexpected connection type");
+    }
+    return {{inter_zone_info, inner_zone_info}};
 }
 
 // Choose a segment to read.

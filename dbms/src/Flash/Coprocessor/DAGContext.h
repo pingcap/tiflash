@@ -371,7 +371,6 @@ public:
 
     std::vector<std::shared_ptr<CTE>> getCTEs() const { return this->ctes; }
     void addCTE(std::shared_ptr<CTE> & cte) { this->ctes.push_back(cte); }
-    bool hasCTESource() const { return this->has_cte_source; }
     void setHasCTESource() { this->has_cte_source = true; }
 
 public:
