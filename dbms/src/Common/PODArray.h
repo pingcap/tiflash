@@ -47,6 +47,20 @@ inline constexpr size_t integerRoundUp(size_t value, size_t dividend)
     return ((value + dividend - 1) / dividend) * dividend;
 }
 
+namespace PODArrayDetails
+{
+/// The amount of memory occupied by the num_elements of the elements.
+size_t byte_size(size_t num_elements, size_t element_size); /// NOLINT
+
+/// Minimum amount of memory to allocate for num_elements, including padding.
+size_t minimum_memory_for_elements(
+    size_t num_elements,
+    size_t element_size,
+    size_t pad_left,
+    size_t pad_right); /// NOLINT
+
+}; // namespace PODArrayDetails
+
 /** A dynamic array for POD types.
   * Designed for a small number of large arrays (rather than a lot of small ones).
   * To be more precise - for use in ColumnVector.
@@ -114,16 +128,6 @@ protected:
                                 : std::nullopt;
     }
 
-    /// The amount of memory occupied by the num_elements of the elements.
-    static size_t byte_size(size_t num_elements) { return num_elements * ELEMENT_SIZE; }
-
-    /// Minimum amount of memory to allocate for num_elements, including padding.
-    static size_t minimum_memory_for_elements(size_t num_elements)
-    {
-        auto res = byte_size(num_elements) + pad_right + pad_left;
-        return res;
-    }
-
     void alloc_for_num_elements(size_t num_elements)
     {
         //alloc_for_num_elements is only used when initialized PODArray based on size or two iterators.
@@ -132,8 +136,8 @@ protected:
         //If the users want to do PODArray initialize first, and also will push_back other elements later,
         //in push_back or emplace_back will do the reserveForNextSize to alloc extra memory.
         //Thus, we don't need do roundUpToPowerOfTwoOrZero here, and it can cut down extra memory usage,
-        //and will not have bad affact on performance.
-        alloc(minimum_memory_for_elements(num_elements));
+        //and will not have bad affect on performance.
+        alloc(PODArrayDetails::minimum_memory_for_elements(num_elements, ELEMENT_SIZE, pad_left, pad_right));
     }
 
     template <typename... TAllocatorParams>
@@ -196,12 +200,14 @@ protected:
     template <typename... TAllocatorParams>
     void reserveForNextSize(TAllocatorParams &&... allocator_params)
     {
-        if (size() == 0)
+        if (empty())
         {
             // The allocated memory should be multiplication of ELEMENT_SIZE to hold the element, otherwise,
             // memory issue such as corruption could appear in edge case.
             realloc(
-                std::max(((INITIAL_SIZE - 1) / ELEMENT_SIZE + 1) * ELEMENT_SIZE, minimum_memory_for_elements(1)),
+                std::max(
+                    ((INITIAL_SIZE - 1) / ELEMENT_SIZE + 1) * ELEMENT_SIZE,
+                    PODArrayDetails::minimum_memory_for_elements(1, ELEMENT_SIZE, pad_left, pad_right)),
                 std::forward<TAllocatorParams>(allocator_params)...);
         }
         else
@@ -248,7 +254,17 @@ public:
     {
         if (n > capacity())
             realloc(
-                roundUpToPowerOfTwoOrZero(minimum_memory_for_elements(n)),
+                roundUpToPowerOfTwoOrZero(
+                    PODArrayDetails::minimum_memory_for_elements(n, ELEMENT_SIZE, pad_left, pad_right)),
+                std::forward<TAllocatorParams>(allocator_params)...);
+    }
+
+    template <typename... TAllocatorParams>
+    void reserve_exact(size_t n, TAllocatorParams &&... allocator_params) /// NOLINT
+    {
+        if (n > capacity())
+            realloc(
+                PODArrayDetails::minimum_memory_for_elements(n, ELEMENT_SIZE, pad_left, pad_right),
                 std::forward<TAllocatorParams>(allocator_params)...);
     }
 
@@ -259,7 +275,10 @@ public:
         resize_assume_reserved(n);
     }
 
-    void resize_assume_reserved(const size_t n) { c_end = c_start + byte_size(n); } // NOLINT
+    void resize_assume_reserved(const size_t n) // NOLINT
+    {
+        c_end = c_start + PODArrayDetails::byte_size(n, ELEMENT_SIZE);
+    }
 
     const char * raw_data() const { return c_start; } // NOLINT(readability-identifier-naming)
 
@@ -275,7 +294,7 @@ public:
         const void * ptr,
         TAllocatorParams &&... allocator_params)
     {
-        size_t items_byte_size = byte_size(number_of_items);
+        size_t items_byte_size = PODArrayDetails::byte_size(number_of_items, ELEMENT_SIZE);
         if (unlikely(c_end + items_byte_size > c_end_of_storage))
             reserve(size() + number_of_items, std::forward<TAllocatorParams>(allocator_params)...);
         memcpy(c_end, ptr, items_byte_size);
@@ -325,6 +344,8 @@ protected:
     const T * t_end() const { return reinterpret_cast<const T *>(this->c_end); }
     const T * t_end_of_storage() const { return reinterpret_cast<const T *>(this->c_end_of_storage); }
 
+    size_t byte_size(size_t n) const { return PODArrayDetails::byte_size(n, sizeof(T)); }
+
 public:
     using value_type = T;
 
@@ -333,7 +354,7 @@ public:
         : public boost::iterator_adaptor<iterator, T *>
     {
         iterator() = default;
-        iterator(T * ptr_)
+        iterator(T * ptr_) // NOLINT
             : iterator::iterator_adaptor_(ptr_)
         {}
     };
@@ -342,7 +363,7 @@ public:
         : public boost::iterator_adaptor<const_iterator, const T *>
     {
         const_iterator() = default;
-        const_iterator(const T * ptr_)
+        const_iterator(const T * ptr_) // NOLINT
             : const_iterator::iterator_adaptor_(ptr_)
         {}
     };
