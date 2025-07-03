@@ -1008,7 +1008,7 @@ try
     LOG_INFO(log, "Init S3 GC Manager");
     global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());
     // Initialize the thread pool of storage before the storage engine is initialized.
-    LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
+    LOG_INFO(log, "dt_enable_read_thread {}", global_context->NetSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DM::DMFileReaderPool::instance();
     DM::SegmentReaderPoolManager::instance().init(
@@ -1167,8 +1167,6 @@ try
             }
         }
 
-        SCOPE_EXIT({ proxy_machine.stopProxy(tmt_context); });
-
         {
             // Report the unix timestamp, git hash, release version
             Poco::Timestamp ts;
@@ -1226,7 +1224,8 @@ try
         }
 
         /// startup grpc server to serve raft and/or flash services.
-        FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
+        auto flash_grpc_server_holder
+            = std::make_unique<FlashGrpcServerHolder>(this->context(), this->config(), raft_config, log);
 
         SCOPE_EXIT({
             // Stop LAC for AutoScaler managed CN before FlashGrpcServerHolder is destructed.
@@ -1238,8 +1237,6 @@ try
                 LocalAdmissionController::global_instance->safeStop();
         });
 
-        proxy_machine.runKVStore(tmt_context);
-
         try
         {
             // Bind CPU affinity after all threads started.
@@ -1250,8 +1247,49 @@ try
             LOG_ERROR(log, "CPUAffinityManager::bindThreadCPUAffinity throws exception.");
         }
 
+        // Ready to provide service
+        tmt_context.setStatusRunning();
+
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
+
+        LOG_INFO(log, "Set store context status Stopping");
+        tmt_context.setStatusStopping();
+
+        // Wait for all mpp tasks to finish
+        auto monitor = tmt_context.getMPPTaskManager()->getMPPTaskMonitor();
+        auto start = std::chrono::steady_clock::now();
+        // The maximum seconds TiFlash will wait for all current MPP tasks to finish before shutting down
+        static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
+        auto graceful_wait_before_shutdown = global_context->getUsersConfig()->getUInt64(GRACEFUL_WIAT_BEFORE_SHUTDOWN, 60);
+        auto max_wait_time = start + std::chrono::seconds(graceful_wait_before_shutdown);
+        while (true)
+        {
+            {
+                std::unique_lock lock(monitor->mu);
+                if (monitor->monitored_tasks.empty())
+                    break;
+            }
+            auto current_time = std::chrono::steady_clock::now();
+            if (current_time >= max_wait_time)
+            {
+                LOG_WARNING(
+                    log,
+                    "Timed out waiting for MPP tasks to finish after {}s",
+                    graceful_wait_before_shutdown);
+                break;
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+
+        proxy_machine.waitAllReadIndexTasksFinish(tmt_context);
+
+        LOG_INFO(log, "Set store context status Terminated");
+        tmt_context.setStatusTerminated();
+
+        // Stop grpc server
+        flash_grpc_server_holder.reset();
+        proxy_machine.stopProxy(tmt_context);
 
         {
             // Set limiters stopping and wakeup threads in waitting queue.
