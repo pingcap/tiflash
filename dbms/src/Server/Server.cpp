@@ -1008,7 +1008,7 @@ try
     LOG_INFO(log, "Init S3 GC Manager");
     global_context->getTMTContext().initS3GCManager(proxy_machine.getProxyHelper());
     // Initialize the thread pool of storage before the storage engine is initialized.
-    LOG_INFO(log, "dt_enable_read_thread {}", global_context->NetSettingsRef().dt_enable_read_thread);
+    LOG_INFO(log, "dt_enable_read_thread {}", global_context->getSettingsRef().dt_enable_read_thread);
     // `DMFileReaderPool` should be constructed before and destructed after `SegmentReaderPoolManager`.
     DM::DMFileReaderPool::instance();
     DM::SegmentReaderPoolManager::instance().init(
