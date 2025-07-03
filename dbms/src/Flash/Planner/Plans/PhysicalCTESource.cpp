@@ -59,9 +59,6 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
     Context & context,
     size_t concurrency)
 {
-    if (fine_grained_shuffle.enabled())
-        concurrency = std::min(concurrency, fine_grained_shuffle.stream_count);
-
     String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
     exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
     exec_context.setHasCTESource();

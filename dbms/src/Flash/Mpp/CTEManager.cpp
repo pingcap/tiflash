@@ -54,9 +54,7 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
 void CTEManager::releaseCTE(const String & query_id_and_cte_id)
 {
     std::lock_guard<std::mutex> lock(this->mu);
-    auto iter = this->ctes.find(query_id_and_cte_id);
-    if (iter != this->ctes.end())
-        this->ctes.erase(iter);
+    this->ctes.erase(this->ctes.find(query_id_and_cte_id));
 }
 
 std::shared_ptr<CTE> CTEManager::getCTE(
