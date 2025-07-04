@@ -55,6 +55,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_)
 
         {"delta_placed_rate", std::make_shared<DataTypeFloat64>()},
         {"delta_cache_size", std::make_shared<DataTypeUInt64>()},
+        {"delta_cache_alloc_size", std::make_shared<DataTypeUInt64>()},
         {"delta_cache_rate", std::make_shared<DataTypeFloat64>()},
         {"delta_cache_wasted_rate", std::make_shared<DataTypeFloat64>()},
 
@@ -178,6 +179,7 @@ BlockInputStreams StorageSystemDTTables::read(
 
             res_columns[j++]->insert(stat.delta_placed_rate);
             res_columns[j++]->insert(stat.delta_cache_size);
+            res_columns[j++]->insert(stat.delta_cache_alloc_size);
             res_columns[j++]->insert(stat.delta_cache_rate);
             res_columns[j++]->insert(stat.delta_cache_wasted_rate);
 

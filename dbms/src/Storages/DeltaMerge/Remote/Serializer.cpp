@@ -309,7 +309,7 @@ ColumnFileInMemoryPtr Serializer::deserializeCFInMemory(const RemotePb::ColumnFi
     }
 
     auto block = block_schema->cloneWithColumns(std::move(columns));
-    auto cache = std::make_shared<ColumnFile::Cache>(std::move(block));
+    auto cache = std::make_shared<ColumnFileInMemory::Cache>(std::move(block));
 
     // We do not try to reuse the CFSchema from `SharedBlockSchemas`, because the ColumnFile will be freed immediately after the request.
     auto schema = std::make_shared<ColumnFileSchema>(*block_schema);

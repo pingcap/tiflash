@@ -30,6 +30,8 @@
 
 namespace DB::DM
 {
+class PushDownExecutor;
+using PushDownExecutorPtr = std::shared_ptr<PushDownExecutor>;
 /// ScanContext is used to record statistical information in table scan for current query.
 /// For each table scan(one executor id), there is only one ScanContext.
 /// ScanContext helps to collect the statistical information of the table scan to show in `EXPLAIN ANALYZE`.
@@ -69,7 +71,6 @@ public:
     std::atomic<uint64_t> delta_rows{0};
     std::atomic<uint64_t> delta_bytes{0};
 
-    ReadMode read_mode = ReadMode::Normal;
 
     // - read_mode == Normal, apply mvcc to all read blocks
     // - read_mode == Bitmap, it will apply mvcc to get the bitmap
@@ -135,7 +136,9 @@ public:
     std::atomic<uint64_t> fts_brute_total_search_ms{0};
 
     const KeyspaceID keyspace_id;
+    ReadMode read_mode = ReadMode::Normal; // note: share struct padding with keyspace_id
     const String resource_group_name;
+    PushDownExecutorPtr pushdown_executor;
 
     explicit ScanContext(const KeyspaceID & keyspace_id_ = NullspaceID, const String & name = "")
         : keyspace_id(keyspace_id_)

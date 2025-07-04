@@ -22,8 +22,31 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/PathPool.h>
 
+namespace CurrentMetrics
+{
+extern const Metric DT_NumMemTable;
+extern const Metric DT_BytesMemTable;
+} // namespace CurrentMetrics
+
 namespace DB::DM
 {
+
+MemTableSet::MemTableSet(const ColumnFiles & in_memory_files)
+    : holder_counter(CurrentMetrics::DT_NumMemTable, 1)
+    , holder_allocated_bytes(CurrentMetrics::DT_BytesMemTable, 0)
+    , column_files(in_memory_files)
+    , log(Logger::get())
+{
+    column_files_count = column_files.size();
+    for (const auto & file : column_files)
+    {
+        rows += file->getRows();
+        bytes += file->getBytes();
+        allocated_bytes += file->getAllocateBytes();
+        deletes += file->getDeletes();
+    }
+    holder_allocated_bytes.changeTo(allocated_bytes.load());
+}
 
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
@@ -41,6 +64,7 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 
     rows += column_file->getRows();
     bytes += column_file->getBytes();
+    allocated_bytes += column_file->getAllocateBytes();
     deletes += column_file->getDeletes();
 }
 
@@ -181,31 +205,33 @@ void MemTableSet::appendColumnFile(const ColumnFilePtr & column_file)
 void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t offset, size_t limit)
 {
     // If the `column_files` is not empty, and the last `column_file` is a `ColumnInMemoryFile`, we will merge the newly block into the last `column_file`.
-    // Otherwise, create a new `ColumnInMemoryFile` and write into it.
-    bool success = false;
+    ColumnFile::AppendResult append_res;
     size_t append_bytes = block.bytes(offset, limit);
     if (!column_files.empty())
     {
         auto & last_column_file = column_files.back();
         if (last_column_file->isAppendable())
-            success = last_column_file->append(context, block, offset, limit, append_bytes);
+            append_res = last_column_file->append(context, block, offset, limit, append_bytes);
     }
 
-    if (!success)
+    if (!append_res.success)
     {
-        auto schema = getSharedBlockSchemas(context)->getOrCreate(block);
+        /// Otherwise, create a new `ColumnInMemoryFile` and write into it.
 
+        // Try to reuse the global shared schema block.
+        auto schema = getSharedBlockSchemas(context)->getOrCreate(block);
         // Create a new column file.
         auto new_column_file = std::make_shared<ColumnFileInMemory>(schema);
         // Must append the empty `new_column_file` to `column_files` before appending data to it,
         // because `appendColumnFileInner` will update stats related to `column_files` but we will update stats relate to `new_column_file` here.
         appendColumnFileInner(new_column_file);
-        success = new_column_file->append(context, block, offset, limit, append_bytes);
-        if (unlikely(!success))
+        append_res = new_column_file->append(context, block, offset, limit, append_bytes);
+        if (unlikely(!append_res.success))
             throw Exception("Write to MemTableSet failed", ErrorCodes::LOGICAL_ERROR);
     }
     rows += limit;
     bytes += append_bytes;
+    allocated_bytes += append_res.new_alloc_bytes;
 }
 
 void MemTableSet::appendDeleteRange(const RowKeyRange & delete_range)
@@ -340,6 +366,7 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
 
     size_t new_rows = 0;
     size_t new_bytes = 0;
+    size_t new_alloc_bytes = 0;
     size_t new_deletes = 0;
     for (size_t i = tasks.size(); i < column_files.size(); ++i)
     {
@@ -347,12 +374,14 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
         new_column_files.emplace_back(column_file);
         new_rows += column_file->getRows();
         new_bytes += column_file->getBytes();
+        new_alloc_bytes += column_file->getAllocateBytes();
         new_deletes += column_file->getDeletes();
     }
     column_files.swap(new_column_files);
     column_files_count = column_files.size();
     rows = new_rows;
     bytes = new_bytes;
+    allocated_bytes = new_alloc_bytes;
     deletes = new_deletes;
 }
 

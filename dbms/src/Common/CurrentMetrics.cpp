@@ -88,7 +88,10 @@
     M(ConnectionPoolSize)                       \
     M(MemoryTrackingQueryStorageTask)           \
     M(MemoryTrackingFetchPages)                 \
-    M(MemoryTrackingSharedColumnData)
+    M(MemoryTrackingSharedColumnData)           \
+    M(DT_NumSegments)                           \
+    M(DT_NumMemTable)                           \
+    M(DT_BytesMemTable)
 
 namespace CurrentMetrics
 {

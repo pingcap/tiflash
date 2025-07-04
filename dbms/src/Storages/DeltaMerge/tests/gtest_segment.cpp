@@ -607,6 +607,59 @@ try
 }
 CATCH
 
+namespace
+{
+struct ProcessMemoryUsage
+{
+    double resident_mb;
+    Int64 cur_proc_num_threads;
+    double cur_virt_mb;
+};
+
+bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size)
+{
+    resident_set = 0.0;
+
+    // 'file' stat seems to give the most reliable results
+    std::ifstream stat_stream("/proc/self/stat", std::ios_base::in);
+    // if "/proc/self/stat" is not supported
+    if (!stat_stream.is_open())
+        return false;
+
+    // dummy vars for leading entries in stat that we don't care about
+    std::string pid, comm, state, ppid, pgrp, session, tty_nr;
+    std::string tpgid, flags, minflt, cminflt, majflt, cmajflt;
+    std::string utime, stime, cutime, cstime, priority, nice;
+    std::string itrealvalue, starttime;
+
+    // the field we want
+    Int64 rss;
+
+    stat_stream >> pid >> comm >> state >> ppid >> pgrp >> session >> tty_nr >> tpgid >> flags >> minflt >> cminflt
+        >> majflt >> cmajflt >> utime >> stime >> cutime >> cstime >> priority >> nice >> cur_proc_num_threads
+        >> itrealvalue >> starttime >> cur_virt_size >> rss; // don't care about the rest
+
+    stat_stream.close();
+
+    Int64 page_size_kb = sysconf(_SC_PAGE_SIZE) / 1024; // in case x86-64 is configured to use 2MB pages
+    resident_set = rss * page_size_kb;
+    return true;
+}
+ProcessMemoryUsage get_process_mem_usage()
+{
+    double resident_set;
+    Int64 cur_proc_num_threads = 1;
+    UInt64 cur_virt_size = 0;
+    process_mem_usage(resident_set, cur_proc_num_threads, cur_virt_size);
+    resident_set *= 1024; // unit: byte
+    return ProcessMemoryUsage{
+        resident_set / 1024.0 / 1024,
+        cur_proc_num_threads,
+        cur_virt_size / 1024.0 / 1024,
+    };
+}
+} // namespace
+
 class SegmentEnableLogicalSplitTest : public SegmentOperationTest
 {
 protected:
