@@ -201,7 +201,7 @@ const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskP
 std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentReadTaskPool::getRemoteConnectionInfo()
     const
 {
-    std::lock_guard lock(conn_mu);
+    std::lock_guard lock(connection_info_mu);
     if (remote_connection_infos.empty())
         return {};
 

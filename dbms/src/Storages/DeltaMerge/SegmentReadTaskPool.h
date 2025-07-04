@@ -188,7 +188,7 @@ public:
     {
         if (task->extra_remote_info)
         {
-            std::lock_guard lock(conn_mu);
+            std::lock_guard lock(connection_info_mu);
             remote_connection_infos.push_back(task->extra_remote_info->connection_profile_info);
         }
     }
@@ -270,7 +270,7 @@ private:
     static uint64_t nextPoolId() { return pool_id_gen.fetch_add(1, std::memory_order_relaxed); }
     inline static constexpr Int64 check_ru_interval_ms = 100;
 
-    mutable std::mutex conn_mu;
+    mutable std::mutex connection_info_mu;
     std::once_flag get_remote_connection_flag;
     // Each remote segment task have a connection info to record network bytes,
     // and it will be collected by TableScan as runtime statistics.
