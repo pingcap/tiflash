@@ -891,12 +891,12 @@ PageIdU64 StoragePool::newDataPageIdForDTFile(StableDiskDelegator & delegator, [
             break;
         }
         // else there is a DTFile with that id, continue to acquire a new ID.
-        // LOG_WARNING(
-        //     logger,
-        //     "The DTFile is already exists, continue to acquire another ID. call={} path={} file_id={}",
-        //     who,
-        //     existed_path,
-        //     dtfile_id);
+        LOG_WARNING(
+            logger,
+            "The DTFile is already exists, continue to acquire another ID. call={} path={} file_id={}",
+            who,
+            existed_path,
+            dtfile_id);
     } while (true);
     return dtfile_id;
 }
