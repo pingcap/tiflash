@@ -277,8 +277,15 @@ size_t DeltaValueSpace::getTotalCacheBytes() const
     return mem_table_set->getBytes();
 }
 
+size_t DeltaValueSpace::getTotalAllocatedBytes() const
+{
+    std::scoped_lock lock(mutex);
+    return mem_table_set->getAllocatedBytes();
+}
+
 size_t DeltaValueSpace::getValidCacheRows() const
 {
+    // FIXME: Seems that this function is the same as getTotalCacheRows().
     std::scoped_lock lock(mutex);
     return mem_table_set->getRows();
 }
