@@ -56,6 +56,7 @@ using SegmentsStats = std::vector<SegmentStats>;
 
 struct StoreStats
 {
+    UInt64 column_count = 0;
     UInt64 segment_count = 0;
 
     UInt64 total_rows = 0;

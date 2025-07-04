@@ -38,6 +38,7 @@ StoreStats DeltaMergeStore::getStoreStats()
     {
         std::shared_lock lock(read_write_mutex);
         stat.segment_count = segments.size();
+        stat.column_count = original_table_columns.size();
 
         for (const auto & [handle, segment] : segments)
         {
@@ -84,6 +85,7 @@ StoreStats DeltaMergeStore::getStoreStats()
             }
         }
     } // access to `segments` end
+
 
     stat.delta_rate_rows = static_cast<Float64>(stat.total_delta_rows) / stat.total_rows;
     stat.delta_rate_segments = static_cast<Float64>(stat.delta_count) / stat.segment_count;
