@@ -38,7 +38,6 @@ void CTE::initCTESpillContext(
         this->partition_num,
         spill_config_,
         spill_block_schema_,
-        operator_spill_threshold_,
         query_id_and_cte_id);
     size_t memory_threoshold = operator_spill_threshold_ / this->partition_num;
     for (auto & item : this->partitions)
@@ -51,7 +50,7 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
     if unlikely (this->is_cancelled)
         return CTEOpStatus::CANCELLED;
 
-    auto status = this->partitions[partition_id].tryGetBlockAt(cte_reader_id, block);
+    auto status = this->partitions[partition_id].tryGetBlock(cte_reader_id, block);
     switch (status)
     {
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
@@ -104,7 +103,7 @@ void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_
         return;
     }
 
-    std::lock_guard<std::mutex> status_lock(*(this->partitions[partition_id].status_lock));
+    std::lock_guard<std::mutex> aux_lock(*(this->partitions[partition_id].aux_lock));
     if (this->partitions[partition_id].status == CTEPartitionStatus::IN_SPILLING)
     {
         this->notifyTaskDirectly(partition_id, std::move(task));
@@ -127,7 +126,7 @@ void CTE::checkInSpillingAndRegisterTask(TaskPtr && task, size_t partition_id)
         return;
     }
 
-    std::lock_guard<std::mutex> status_lock(*(this->partitions[partition_id].status_lock));
+    std::lock_guard<std::mutex> aux_lock(*(this->partitions[partition_id].aux_lock));
     if (this->partitions[partition_id].status == CTEPartitionStatus::IN_SPILLING)
         this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE);
     else

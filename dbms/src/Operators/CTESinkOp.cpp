@@ -13,12 +13,12 @@
 // limitations under the License.
 
 #include <Operators/CTE.h>
+#include <Operators/CTEPartition.h>
 #include <Operators/CTESinkOp.h>
 #include <Operators/Operator.h>
 #include <fmt/core.h>
 
-#include "Operators/CTEPartition.h"
-#include "magic_enum.hpp"
+#include <magic_enum.hpp>
 
 namespace DB
 {
@@ -59,7 +59,6 @@ OperatorStatus CTESinkOp::executeIOImpl()
     case CTEOpStatus::IO_OUT:
         // CTE is spilling blocks to disk, we need to wait the finish of spill
         DB::setNotifyFuture(&(this->io_notifier));
-
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::CANCELLED:
         return OperatorStatus::CANCELLED;

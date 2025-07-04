@@ -48,7 +48,7 @@ struct CTEPartition
         : partition_id(partition_id_)
         , mu(std::make_unique<std::mutex>())
         , pipe_cv(std::make_unique<PipeConditionVariable>())
-        , status_lock(std::make_unique<std::mutex>())
+        , aux_lock(std::make_unique<std::mutex>())
     {}
 
     void init(std::shared_ptr<CTESpillContext> spill_context_, size_t memory_threoshold_)
@@ -73,11 +73,11 @@ struct CTEPartition
     {
         if (this->memory_threoshold == 0)
             return false;
-        return this->memory_usage >= this->memory_threoshold;
+        return this->memory_usage > this->memory_threoshold;
     }
 
     CTEOpStatus pushBlock(const Block & block);
-    CTEOpStatus tryGetBlockAt(size_t cte_reader_id, Block & block);
+    CTEOpStatus tryGetBlock(size_t cte_reader_id, Block & block);
     CTEOpStatus spillBlocks();
     CTEOpStatus getBlockFromDisk(size_t cte_reader_id, Block & block);
 
@@ -97,11 +97,11 @@ struct CTEPartition
     size_t memory_usage = 0;
     size_t memory_threoshold = 0;
     std::unique_ptr<PipeConditionVariable> pipe_cv;
-    Blocks tmp_blocks;
 
-    // Protecting cte_status
-    std::unique_ptr<std::mutex> status_lock;
+    // Protecting cte_status and tmp_blocks
+    std::unique_ptr<std::mutex> aux_lock;
     CTEPartitionStatus status = CTEPartitionStatus::NORMAL;
+    Blocks tmp_blocks;
 
     std::vector<UInt64> block_in_disk_nums;
     std::unordered_map<size_t, SpillerSharedPtr> spillers;
