@@ -41,6 +41,7 @@ void ColumnFileInMemory::fillColumns(const ColumnDefines & col_defs, size_t col_
             // Copy data from cache
             const auto & type = getDataType(cd.id);
             auto col_data = type->createColumn();
+            col_data->reserve(rows);
             col_data->insertRangeFrom(*(cache->block.getByPosition(col_offset).column), 0, rows);
             // Cast if need
             auto col_converted = convertColumnByColumnDefineIfNeed(type, std::move(col_data), cd);
@@ -64,7 +65,13 @@ ColumnFileReaderPtr ColumnFileInMemory::getReader(
     return std::make_shared<ColumnFileInMemoryReader>(*this, col_defs);
 }
 
-bool ColumnFileInMemory::append(
+void ColumnFileInMemory::disableAppend()
+{
+    disable_append = true;
+    // TODO: Call shrinkToFit() to release the extra memory of the cache block.
+}
+
+ColumnFile::AppendResult ColumnFileInMemory::append(
     const DMContext & context,
     const Block & data,
     size_t offset,
@@ -72,16 +79,16 @@ bool ColumnFileInMemory::append(
     size_t data_bytes)
 {
     if (disable_append)
-        return false;
+        return AppendResult{false, 0};
 
     std::scoped_lock lock(cache->mutex);
     if (!isSameSchema(cache->block, data))
-        return false;
+        return AppendResult{false, 0};
 
     // check whether this instance overflows
     if (cache->block.rows() >= context.delta_cache_limit_rows
         || cache->block.bytes() >= context.delta_cache_limit_bytes)
-        return false;
+        return AppendResult{false, 0};
 
     size_t new_alloc_block_bytes = 0;
     for (size_t i = 0; i < cache->block.columns(); ++i)
@@ -96,15 +103,7 @@ bool ColumnFileInMemory::append(
 
     rows += limit;
     bytes += data_bytes;
-    LOG_INFO(
-        Logger::get(),
-        "Append rows to ColumnFileInMemory, new_rows={} new_bytes={} new_alloc_bytes={} total_rows={} total_bytes={}",
-        limit - offset,
-        data_bytes,
-        new_alloc_block_bytes,
-        rows,
-        bytes);
-    return true;
+    return AppendResult{true, new_alloc_block_bytes};
 }
 
 Block ColumnFileInMemory::readDataForFlush() const

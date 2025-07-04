@@ -37,6 +37,10 @@ private:
 #else
 public:
 #endif
+    // Keep track of the number of mem-table in memory.
+    CurrentMetrics::Increment holder_counter;
+    CurrentMetrics::Increment holder_allocated_bytes;
+
     // Note that we must update `column_files_count` for outer thread-safe after `column_files` changed
     ColumnFiles column_files;
 
@@ -54,18 +58,7 @@ private:
     void appendColumnFileInner(const ColumnFilePtr & column_file);
 
 public:
-    explicit MemTableSet(const ColumnFiles & in_memory_files = {})
-        : column_files(in_memory_files)
-        , log(Logger::get())
-    {
-        column_files_count = column_files.size();
-        for (const auto & file : column_files)
-        {
-            rows += file->getRows();
-            bytes += file->getBytes();
-            deletes += file->getDeletes();
-        }
-    }
+    explicit MemTableSet(const ColumnFiles & in_memory_files = {});
 
     /**
      * Resets the logger by using the one from the segment.

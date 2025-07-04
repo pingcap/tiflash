@@ -73,19 +73,6 @@ public:
         INMEMORY_FILE = 4,
     };
 
-    struct Cache
-    {
-        explicit Cache(const Block & header)
-            : block(header.cloneWithColumns(header.cloneEmptyColumns()))
-        {}
-        explicit Cache(Block && block)
-            : block(std::move(block))
-        {}
-
-        std::mutex mutex;
-        Block block;
-    };
-    using CachePtr = std::shared_ptr<Cache>;
     using ColIdToOffset = std::unordered_map<ColId, size_t>;
 
 public:
@@ -138,7 +125,13 @@ public:
     /// been persisted in the disk and their data will be immutable.
     virtual bool isAppendable() const { return false; }
     virtual void disableAppend() {}
-    virtual bool append(
+
+    struct AppendResult
+    {
+        bool success = false; // whether the append is successful
+        size_t new_alloc_bytes = 0; // the new allocated bytes after append
+    };
+    virtual AppendResult append(
         const DMContext & /*dm_context*/,
         const Block & /*data*/,
         size_t /*offset*/,

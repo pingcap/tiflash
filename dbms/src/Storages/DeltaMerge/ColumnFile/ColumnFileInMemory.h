@@ -30,6 +30,20 @@ class ColumnFileInMemory : public ColumnFile
     friend class ColumnFileInMemoryReader;
     friend struct Remote::Serializer;
 
+    struct Cache
+    {
+        explicit Cache(const Block & header)
+            : block(header.cloneWithColumns(header.cloneEmptyColumns()))
+        {}
+        explicit Cache(Block && block)
+            : block(std::move(block))
+        {}
+
+        std::mutex mutex;
+        Block block;
+    };
+    using CachePtr = std::shared_ptr<Cache>;
+
 private:
     ColumnFileSchemaPtr schema;
 
@@ -83,9 +97,13 @@ public:
         ReadTag) const override;
 
     bool isAppendable() const override { return !disable_append; }
-    void disableAppend() override { disable_append = true; }
-    bool append(const DMContext & dm_context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
-        override;
+    void disableAppend() override;
+    AppendResult append(
+        const DMContext & dm_context,
+        const Block & data,
+        size_t offset,
+        size_t limit,
+        size_t data_bytes) override;
 
     Block readDataForFlush() const;
 
