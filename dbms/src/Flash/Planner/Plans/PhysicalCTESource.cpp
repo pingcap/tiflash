@@ -61,7 +61,8 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
 {
     String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
     exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
-    exec_context.setHasCTESource();
+
+    RUNTIME_CHECK(group_builder.concurrency() <= concurrency);
 
     auto cte_reader = std::make_shared<CTEReader>(
         query_id_and_cte_id,
@@ -75,7 +76,6 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
         group_builder.addConcurrency(
             std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, i, schema));
     }
-
 
     context.getDAGContext()->addInboundIOProfileInfos(this->executor_id, group_builder.getCurIOProfileInfos());
 }

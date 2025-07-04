@@ -61,7 +61,7 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
         this->expected_sink_num,
         this->expected_source_num);
 
-    RUNTIME_CHECK(group_builder.concurrency() == concurrency);
+    RUNTIME_CHECK(group_builder.concurrency() <= concurrency);
 
     size_t id = 0;
     group_builder.transform([&](auto & builder) {

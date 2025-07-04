@@ -371,7 +371,6 @@ public:
 
     std::vector<std::shared_ptr<CTE>> getCTEs() const { return this->ctes; }
     void addCTE(std::shared_ptr<CTE> & cte) { this->ctes.push_back(cte); }
-    void setHasCTESource() { this->has_cte_source = true; }
 
 public:
     DAGRequest dag_request;
@@ -491,7 +490,6 @@ private:
     String connection_alias;
 
     String query_id_and_cte_id;
-    bool has_cte_source = false;
     std::vector<std::shared_ptr<CTE>> ctes;
 };
 
