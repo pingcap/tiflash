@@ -94,14 +94,16 @@ Block RNSegmentInputStream::readImpl(FilterPtr & res_filter, bool return_filter)
 
             RUNTIME_CHECK(connection_profile_infos.size() == 2, connection_profile_infos.size());
             RUNTIME_CHECK(current_seg_task->extra_remote_info.has_value());
-            if (current_seg_task->extra_remote_info->connection_profile_info.type == inter_type)
-                connection_profile_infos[INTER_ZONE_INDEX].merge(
-                    current_seg_task->extra_remote_info->connection_profile_info);
-            else if (current_seg_task->extra_remote_info->connection_profile_info.type == inner_type)
-                connection_profile_infos[INNER_ZONE_INDEX].merge(
-                    current_seg_task->extra_remote_info->connection_profile_info);
-            else
-                throw Exception("unexpected connection type");
+
+            const auto & task_connection_info = current_seg_task->extra_remote_info->connection_profile_info;
+            RUNTIME_CHECK(
+                task_connection_info.type == inter_type || task_connection_info.type == inner_type,
+                task_connection_info.getTypeString());
+
+            if (task_connection_info.type == inter_type)
+                connection_profile_infos[INTER_ZONE_INDEX].merge(task_connection_info);
+            else if (task_connection_info.type == inner_type)
+                connection_profile_infos[INNER_ZONE_INDEX].merge(task_connection_info);
 
             // Current stream is drained, try read from next stream.
             current_seg_task = nullptr;

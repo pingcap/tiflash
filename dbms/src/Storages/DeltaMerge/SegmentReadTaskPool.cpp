@@ -201,22 +201,24 @@ const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskP
 std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentReadTaskPool::getRemoteConnectionInfo()
     const
 {
+    std::lock_guard lock(connection_info_mu);
+    if (remote_connection_infos.empty())
+        return {};
+
     static constexpr auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
     static constexpr auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
     ConnectionProfileInfo inter_zone_info(inter_type);
     ConnectionProfileInfo inner_zone_info(inner_type);
 
-    if (remote_connection_infos.empty())
-        return {};
-
     for (const auto & connection_info : remote_connection_infos)
     {
+        RUNTIME_CHECK(
+            connection_info.type == inter_type || connection_info.type == inner_type,
+            connection_info.getTypeString());
         if (connection_info.type == inter_type)
             inter_zone_info.merge(connection_info);
         else if (connection_info.type == inner_type)
             inner_zone_info.merge(connection_info);
-        else
-            throw Exception("unexpected connection type");
     }
     return {{inter_zone_info, inner_zone_info}};
 }
