@@ -84,8 +84,13 @@ public:
 
     bool isAppendable() const override { return !disable_append; }
     void disableAppend() override { disable_append = true; }
-    bool append(const DMContext & dm_context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
-        override;
+
+    AppendResult append(
+        const DMContext & dm_context,
+        const Block & data,
+        size_t offset,
+        size_t limit,
+        size_t data_bytes) override;
 
     Block readDataForFlush() const;
 

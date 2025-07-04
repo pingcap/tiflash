@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/CurrentMetrics.h>
 #include <Common/MemoryTracker.h>
 #include <Common/Stopwatch.h>
 #include <Common/Throttler.h>

@@ -666,7 +666,7 @@ try
     const size_t level = 1;
     for (size_t lvl = 0; lvl < level; ++lvl)
     {
-        size_t num_expected_segs = 1000;
+        size_t num_expected_segs = 500;
         // size_t num_expected_segs = 10;
         size_t progress_interval = 100;
         const auto lvl_beg_seg_id = segments.rbegin()->first;

@@ -837,6 +837,8 @@ private:
 #else
 public:
 #endif
+
+    CurrentMetrics::Increment counter_holder;
     /// The version of this segment. After split / merge / mergeDelta / replaceData, epoch got increased by 1.
     const UInt64 epoch;
 

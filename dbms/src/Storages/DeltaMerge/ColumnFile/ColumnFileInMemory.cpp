@@ -65,7 +65,7 @@ ColumnFileReaderPtr ColumnFileInMemory::getReader(
     return std::make_shared<ColumnFileInMemoryReader>(*this, col_defs);
 }
 
-bool ColumnFileInMemory::append(
+ColumnFile::AppendResult ColumnFileInMemory::append(
     const DMContext & context,
     const Block & data,
     size_t offset,
@@ -73,16 +73,16 @@ bool ColumnFileInMemory::append(
     size_t data_bytes)
 {
     if (disable_append)
-        return false;
+        return AppendResult{false, 0};
 
     std::scoped_lock lock(cache->mutex);
     if (!isSameSchema(cache->block, data))
-        return false;
+        return AppendResult{false, 0};
 
     // check whether this instance overflows
     if (cache->block.rows() >= context.delta_cache_limit_rows
         || cache->block.bytes() >= context.delta_cache_limit_bytes)
-        return false;
+        return AppendResult{false, 0};
 
     size_t new_alloc_block_bytes = 0;
     size_t max_capacity = 0;
@@ -97,8 +97,8 @@ bool ColumnFileInMemory::append(
             // If the column is not enough, we reserve more space by 1.5 factor
             mutable_cache_col->reserveWithStrategy(mutable_cache_col->size() + limit, IColumn::ReserveStrategy::ScaleFactor1_5);
         }
-        max_capacity = std::max(max_capacity, mutable_cache_col->capacity());
         mutable_cache_col->insertRangeFrom(*col, offset, limit);
+        max_capacity = std::max(max_capacity, mutable_cache_col->capacity());
         new_alloc_block_bytes += mutable_cache_col->allocatedBytes() - alloc_bytes;
     }
 
@@ -113,7 +113,7 @@ bool ColumnFileInMemory::append(
         max_capacity,
         rows,
         bytes);
-    return true;
+    return AppendResult{true, new_alloc_block_bytes};
 }
 
 Block ColumnFileInMemory::readDataForFlush() const
