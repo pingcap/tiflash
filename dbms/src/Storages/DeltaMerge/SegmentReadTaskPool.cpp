@@ -212,12 +212,13 @@ std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentRe
 
     for (const auto & connection_info : remote_connection_infos)
     {
+        RUNTIME_CHECK(
+            connection_info.type == inter_type || connection_info.type == inner_type,
+            connection_info.getTypeString());
         if (connection_info.type == inter_type)
             inter_zone_info.merge(connection_info);
         else if (connection_info.type == inner_type)
             inner_zone_info.merge(connection_info);
-        else
-            throw Exception(fmt::format("unexpected connection type: {}", connection_info.getTypeString()));
     }
     return {{inter_zone_info, inner_zone_info}};
 }
