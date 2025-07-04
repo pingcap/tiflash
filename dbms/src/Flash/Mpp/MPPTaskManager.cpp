@@ -82,6 +82,31 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
     return ptr;
 }
 
+void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & global_context)
+{
+    auto start = std::chrono::steady_clock::now();
+    // The maximum seconds TiFlash will wait for all current MPP tasks to finish before shutting down
+    static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
+    auto graceful_wait_before_shutdown = global_context->getUsersConfig()->getUInt64(GRACEFUL_WIAT_BEFORE_SHUTDOWN, 60);
+    auto max_wait_time = start + std::chrono::seconds(graceful_wait_before_shutdown);
+    while (true)
+    {
+        // The first sleep before checking to reduce the chance of missing MPP tasks that are still in the process of being dispatched
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        {
+            std::unique_lock lock(mu);
+            if (monitored_tasks.empty())
+                break;
+        }
+        auto current_time = std::chrono::steady_clock::now();
+        if (current_time >= max_wait_time)
+        {
+            LOG_WARNING(log, "Timed out waiting for MPP tasks to finish after {}s", graceful_wait_before_shutdown);
+            break;
+        }
+    }
+}
+
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)
     : scheduler(std::move(scheduler_))
     , aborted_query_gather_cache(ABORTED_MPPGATHER_CACHE_SIZE)
