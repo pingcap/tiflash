@@ -23,6 +23,7 @@
 #pragma GCC diagnostic pop
 
 #include <Common/ConcurrentBoundedQueue.h>
+#include <Common/Exception.h>
 #include <Common/Logger.h>
 #include <Core/QueryOperatorSpillContexts.h>
 #include <Core/TaskOperatorSpillContexts.h>
@@ -55,6 +56,7 @@ class CoprocessorReader;
 using CoprocessorReaderPtr = std::shared_ptr<CoprocessorReader>;
 
 class AutoSpillTrigger;
+class CTE;
 
 struct JoinProfileInfo
 {
@@ -359,6 +361,17 @@ public:
 
     MPPReceiverSetPtr getMPPReceiverSet() const { return mpp_receiver_set; }
 
+    String getQueryIDAndCTEID() const noexcept { return this->query_id_and_cte_id; }
+    void setQueryIDAndCTEID(const String & query_id_and_cte_id)
+    {
+        // MPP Task has only one CTESink, it's impossible to set query_id_and_cte_id twice
+        RUNTIME_CHECK(this->query_id_and_cte_id.empty(), this->query_id_and_cte_id);
+        this->query_id_and_cte_id = query_id_and_cte_id;
+    }
+
+    std::vector<std::shared_ptr<CTE>> getCTEs() const { return this->ctes; }
+    void addCTE(std::shared_ptr<CTE> & cte) { this->ctes.push_back(cte); }
+
 public:
     DAGRequest dag_request;
     /// Some existing code inherited from Clickhouse assume that each query must have a valid query string and query ast,
@@ -475,6 +488,9 @@ private:
     UInt64 connection_id;
     // It's the session alias between mysql client and tidb
     String connection_alias;
+
+    String query_id_and_cte_id;
+    std::vector<std::shared_ptr<CTE>> ctes;
 };
 
 } // namespace DB

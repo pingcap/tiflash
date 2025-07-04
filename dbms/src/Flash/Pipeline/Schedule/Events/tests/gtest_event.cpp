@@ -519,7 +519,7 @@ CATCH
 TEST_F(EventTestRunner, memoryTrace)
 try
 {
-    PipelineExecutorContext exec_context{"", "", MemoryTracker::create()};
+    PipelineExecutorContext exec_context{"", "", "", MemoryTracker::create()};
     auto event = std::make_shared<AssertMemoryTraceEvent>(exec_context);
     if (event->prepare())
         event->schedule();
