@@ -157,8 +157,6 @@ public:
 
     void addCTE(std::shared_ptr<CTE> cte) { this->dag_context->addCTE(cte); }
 
-    void setHasCTESource() { this->dag_context->setHasCTESource(); }
-
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 

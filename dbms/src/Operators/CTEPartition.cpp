@@ -44,6 +44,7 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
 
     auto idx = this->getIdxInMemoryNoLock(cte_reader_id);
     block = this->blocks[idx];
+    this->addIdxNoLock(cte_reader_id);
     return CTEOpStatus::OK;
 }
 

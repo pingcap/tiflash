@@ -60,7 +60,7 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
         this->expected_sink_num,
         this->expected_source_num);
 
-    RUNTIME_CHECK(group_builder.concurrency() == concurrency);
+    RUNTIME_CHECK(group_builder.concurrency() <= concurrency);
 
     size_t id = 0;
     group_builder.transform([&](auto & builder) {
@@ -71,7 +71,7 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     const Settings & settings = context.getSettingsRef();
     SpillConfig spill_config(
         context.getTemporaryPath(),
-        "",
+        " ",
         settings.max_cached_data_bytes_in_spiller,
         settings.max_spilled_rows_per_file,
         settings.max_spilled_bytes_per_file,
