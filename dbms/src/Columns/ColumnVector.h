@@ -422,7 +422,18 @@ public:
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, IColumn::Permutation & res) const override;
 
     size_t capacity() const override { return data.capacity(); }
-    void reserve(size_t n) override { data.reserve(n); }
+    void reserveWithStrategy(size_t n, IColumn::ReserveStrategy strategy) override
+    {
+        switch (strategy)
+        {
+        case IColumn::ReserveStrategy::Default:
+            data.reserve(n);
+            break;
+        case IColumn::ReserveStrategy::ScaleFactor1_5:
+            data.reserve_exact(n / 2 * 3);
+            break;
+        }
+    }
     void reserveAlign(size_t n, size_t alignment) override { data.reserve(n, alignment); }
 
     const char * getFamilyName() const override;

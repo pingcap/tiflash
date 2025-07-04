@@ -115,7 +115,7 @@ public:
     size_t allocatedBytes() const override { return data.allocated_bytes(); }
 
     size_t capacity() const override { return data.capacity(); }
-    void reserve(size_t n) override { data.reserve(n); }
+    void reserveWithStrategy(size_t n, IColumn::ReserveStrategy strategy) override;
     void reserveAlign(size_t n, size_t alignment) override { data.reserve(n, alignment); }
 
     void insertFrom(const IColumn & src, size_t n) override

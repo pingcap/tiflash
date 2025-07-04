@@ -257,7 +257,7 @@ public:
     void getExtremes(Field & min, Field & max) const override;
     void getPermutation(bool reverse, size_t limit, int nan_direction_hint, Permutation & res) const override;
     size_t capacity() const override;
-    void reserve(size_t n) override;
+    void reserveWithStrategy(size_t n, IColumn::ReserveStrategy strategy) override;
     void reserveAlign(size_t n, size_t alignment) override;
     size_t byteSize() const override;
     size_t byteSize(size_t offset, size_t limit) const override;

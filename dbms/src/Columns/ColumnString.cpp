@@ -293,10 +293,19 @@ size_t ColumnString::capacity() const
     return chars.capacity() / APPROX_STRING_SIZE; // Approximate capacity based on average string size.
 }
 
-void ColumnString::reserve(size_t n)
+void ColumnString::reserveWithStrategy(size_t n, IColumn::ReserveStrategy strategy)
 {
-    offsets.reserve(n);
-    chars.reserve(n * APPROX_STRING_SIZE);
+    switch (strategy)
+    {
+    case IColumn::ReserveStrategy::Default:
+        offsets.reserve(n);
+        chars.reserve(n * APPROX_STRING_SIZE);
+        break;
+    case IColumn::ReserveStrategy::ScaleFactor1_5:
+        offsets.reserve_exact(n / 2 * 3);
+        chars.reserve_exact(n * APPROX_STRING_SIZE / 2 * 3);
+        break;
+    }
 }
 
 void ColumnString::reserveAlign(size_t n, size_t alignment)

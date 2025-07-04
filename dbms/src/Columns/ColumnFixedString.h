@@ -225,7 +225,7 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    void reserve(size_t size) override { chars.reserve(n * size); }
+    void reserveWithStrategy(size_t size, IColumn::ReserveStrategy strategy) override;
     void reserveAlign(size_t size, size_t alignment) override { chars.reserve(n * size, alignment); }
 
     void getExtremes(Field & min, Field & max) const override;

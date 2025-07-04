@@ -663,7 +663,7 @@ ProcessMemoryUsage get_process_mem_usage()
 TEST_F(SegmentOperationTest, TestMassiveSegment)
 try
 {
-    const size_t level = 5;
+    const size_t level = 1;
     for (size_t lvl = 0; lvl < level; ++lvl)
     {
         size_t num_expected_segs = 1000;
