@@ -64,6 +64,7 @@ void CollectProcInfoBackgroundTask::memCheckJob()
     {
         while (!end_syn)
         {
+            // Update the memory usage of the current process. Defined in Common/MemoryTracker.cpp
             auto res = get_process_mem_usage();
             real_rss = res.resident_bytes;
             proc_num_threads = res.cur_proc_num_threads;

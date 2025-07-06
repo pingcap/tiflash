@@ -22,8 +22,6 @@ namespace DB
 {
 std::tuple<uint64_t *, uint64_t *> getAllocDeallocPtr();
 
-bool process_mem_usage(double & resident_set, Int64 & cur_proc_num_threads, UInt64 & cur_virt_size);
-
 struct ProcessMemoryUsage
 {
     UInt64 resident_bytes;
