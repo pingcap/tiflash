@@ -48,6 +48,7 @@
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
@@ -863,7 +864,7 @@ BlockInputStreams StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter = PushDownExecutor::build(
+    auto pushdown_executor = PushDownExecutor::build(
         query_info,
         columns_to_read,
         store->getTableColumns(),
@@ -875,6 +876,7 @@ BlockInputStreams StorageDeltaMerge::read(
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
+    scan_context->pushdown_executor = pushdown_executor;
 
     auto streams = store->read(
         context,
@@ -883,7 +885,7 @@ BlockInputStreams StorageDeltaMerge::read(
         ranges,
         num_streams,
         /*start_ts=*/mvcc_query_info.start_ts,
-        filter,
+        pushdown_executor,
         runtime_filter_list,
         query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
@@ -953,7 +955,7 @@ void StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter = PushDownExecutor::build(
+    auto pushdown_executor = PushDownExecutor::build(
         query_info,
         columns_to_read,
         store->getTableColumns(),
@@ -965,6 +967,7 @@ void StorageDeltaMerge::read(
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
+    scan_context->pushdown_executor = pushdown_executor;
 
     store->read(
         exec_context_,
@@ -975,7 +978,7 @@ void StorageDeltaMerge::read(
         ranges,
         num_streams,
         /*start_ts=*/mvcc_query_info.start_ts,
-        filter,
+        pushdown_executor,
         runtime_filter_list,
         query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,

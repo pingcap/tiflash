@@ -18,7 +18,6 @@
 #include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Interpreters/Context.h>
-#include <Poco/JSON/Object.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/SelectQueryInfo.h>
 #include <TiDB/Decode/TypeMapping.h>
@@ -236,7 +235,7 @@ Poco::JSON::Object::Ptr PushDownExecutor::toJSONObject() const
     Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
     if (rs_operator)
     {
-        json->set("rs_operator", rs_operator->toDebugString());
+        json->set("rs_operator", rs_operator->toJSONObject());
     }
     if (ann_query_info)
     {
