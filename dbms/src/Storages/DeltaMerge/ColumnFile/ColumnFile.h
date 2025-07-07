@@ -65,9 +65,9 @@ protected:
         : id(++MAX_COLUMN_FILE_ID)
     {}
 
+public:
     virtual ~ColumnFile() = default;
 
-public:
     enum Type : UInt32
     {
         DELETE_RANGE = 1,
@@ -89,7 +89,6 @@ public:
         Block block;
     };
     using CachePtr = std::shared_ptr<Cache>;
-
     using ColIdToOffset = std::unordered_map<ColId, size_t>;
 
 public:

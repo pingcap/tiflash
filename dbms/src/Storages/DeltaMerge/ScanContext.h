@@ -65,6 +65,7 @@ public:
     std::atomic<uint64_t> delta_rows{0};
     std::atomic<uint64_t> delta_bytes{0};
 
+    ReadMode read_mode = ReadMode::Normal;
 
     // - read_mode == Normal, apply mvcc to all read blocks
     // - read_mode == Bitmap, it will apply mvcc to get the bitmap
@@ -86,7 +87,6 @@ public:
     // Building bitmap
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
-    ReadMode read_mode = ReadMode::Normal; // note: share struct padding with keyspace_id
     const String resource_group_name;
     PushDownFilterPtr pushdown_executor;
 
