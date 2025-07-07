@@ -79,6 +79,12 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
 
 CTEOpStatus CTEPartition::spillBlocks()
 {
+    LOG_INFO(
+        this->spill_context->getLog(),
+        fmt::format(
+            "Partition {} starts cte spill for {}",
+            this->partition_id,
+            this->spill_context->getQueryIdAndCTEId()));
     std::unique_lock<std::mutex> lock(*(this->mu), std::defer_lock);
     {
         std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
@@ -95,7 +101,10 @@ CTEOpStatus CTEPartition::spillBlocks()
 
         lock.lock();
         for (const auto & block : this->tmp_blocks)
+        {
+            this->memory_usage += block.bytes();
             this->blocks.push_back(block);
+        }
         this->tmp_blocks.clear();
     }
 
@@ -123,6 +132,14 @@ CTEOpStatus CTEPartition::spillBlocks()
         this->spillers.insert(std::make_pair(split_idxs[i], spiller));
         spiller->spillBlocks(std::move(spilled_blocks), this->partition_id);
     }
+
+    LOG_INFO(
+        this->spill_context->getLog(),
+        fmt::format(
+            "Partition {} finishes cte spill for {}, spilled memory: {}",
+            this->partition_id,
+            this->spill_context->getQueryIdAndCTEId(),
+            this->memory_usage));
 
     this->blocks.clear();
     this->memory_usage = 0;

@@ -39,6 +39,8 @@ public:
     {}
 
     SpillerSharedPtr getSpillAt(size_t idx);
+    LoggerPtr getLog() const { return this->log; }
+    String getQueryIdAndCTEId() const { return this->query_id_and_cte_id; }
 
 private:
     std::mutex mu;
