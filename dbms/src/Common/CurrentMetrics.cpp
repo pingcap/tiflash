@@ -65,6 +65,13 @@
     M(DT_SnapshotOfReplayVersionChain)          \
     M(DT_SnapshotOfBitmapFilter)                \
     M(DT_SnapshotOfDisaggReadNodeRead)          \
+    M(NumKeyspace)                              \
+    M(NumIStorage)                              \
+    M(DT_NumStorageDeltaMerge)                  \
+    M(DT_NumSegment)                            \
+    M(DT_NumMemTable)                           \
+    M(DT_BytesMemTable)                         \
+    M(DT_BytesMemTableAllocated)                \
     M(IOLimiterPendingBgWriteReq)               \
     M(IOLimiterPendingFgWriteReq)               \
     M(IOLimiterPendingBgReadReq)                \
@@ -88,10 +95,7 @@
     M(ConnectionPoolSize)                       \
     M(MemoryTrackingQueryStorageTask)           \
     M(MemoryTrackingFetchPages)                 \
-    M(MemoryTrackingSharedColumnData)           \
-    M(DT_NumSegments)                           \
-    M(DT_NumMemTable)                           \
-    M(DT_BytesMemTable)
+    M(MemoryTrackingSharedColumnData)
 
 namespace CurrentMetrics
 {

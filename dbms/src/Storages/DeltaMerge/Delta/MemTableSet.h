@@ -32,6 +32,46 @@ class MemTableSet
     : public std::enable_shared_from_this<MemTableSet>
     , private boost::noncopyable
 {
+private:
+    struct Statistic
+    {
+        // TODO: check the proper memory_order when use this atomic variable
+        std::atomic<size_t> column_files_count = 0;
+        std::atomic<size_t> rows = 0;
+        std::atomic<size_t> bytes = 0;
+        std::atomic<size_t> allocated_bytes = 0;
+        std::atomic<size_t> deletes = 0;
+
+        CurrentMetrics::Increment holder_bytes;
+        CurrentMetrics::Increment holder_allocated_bytes;
+
+        Statistic();
+
+        String info() const
+        {
+            return fmt::format(
+                "MemTableSet: {} column files, {} rows, {} bytes, {} deletes",
+                column_files_count.load(),
+                rows.load(),
+                bytes.load(),
+                deletes.load());
+        }
+
+        void append(
+            size_t rows_added,
+            size_t bytes_added,
+            size_t allocated_bytes_added,
+            size_t deletes_added,
+            size_t files_added);
+
+        void resetTo(
+            size_t new_column_files_count,
+            size_t new_rows,
+            size_t new_bytes,
+            size_t new_allocated_bytes,
+            size_t new_deletes);
+    };
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -39,18 +79,13 @@ public:
 #endif
     // Keep track of the number of mem-table in memory.
     CurrentMetrics::Increment holder_counter;
-    CurrentMetrics::Increment holder_allocated_bytes;
 
     // Note that we must update `column_files_count` for outer thread-safe after `column_files` changed
     ColumnFiles column_files;
 
-    // In order to avoid data-race, we use atomic variables to track the state of this MemTableSet.
-    // TODO: check the proper memory_order when use this atomic variable
-    std::atomic<size_t> column_files_count;
-    std::atomic<size_t> rows = 0;
-    std::atomic<size_t> bytes = 0;
-    std::atomic<size_t> allocated_bytes = 0;
-    std::atomic<size_t> deletes = 0;
+    // In order to avoid data-race and make it lightweight for accessing the statistic
+    // of mem-table, we use atomic variables to track the state of this MemTableSet.
+    Statistic stat;
 
     LoggerPtr log;
 
@@ -68,21 +103,13 @@ public:
     void resetLogger(const LoggerPtr & segment_log) { log = segment_log; }
 
     /// Thread safe part start
-    String info() const
-    {
-        return fmt::format(
-            "MemTableSet: {} column files, {} rows, {} bytes, {} deletes",
-            column_files_count.load(),
-            rows.load(),
-            bytes.load(),
-            deletes.load());
-    }
+    String info() const { return stat.info(); }
 
-    size_t getColumnFileCount() const { return column_files_count.load(); }
-    size_t getRows() const { return rows.load(); }
-    size_t getBytes() const { return bytes.load(); }
-    size_t getAllocatedBytes() const { return allocated_bytes.load(); }
-    size_t getDeletes() const { return deletes.load(); }
+    size_t getColumnFileCount() const { return stat.column_files_count.load(); }
+    size_t getRows() const { return stat.rows.load(); }
+    size_t getBytes() const { return stat.bytes.load(); }
+    size_t getAllocatedBytes() const { return stat.allocated_bytes.load(); }
+    size_t getDeletes() const { return stat.deletes.load(); }
     /// Thread safe part end
 
     /**

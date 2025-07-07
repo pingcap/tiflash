@@ -44,6 +44,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_)
         {"belonging_table_id", std::make_shared<DataTypeInt64>()},
         {"is_tombstone", std::make_shared<DataTypeUInt64>()},
 
+        {"column_count", std::make_shared<DataTypeUInt64>()},
         {"segment_count", std::make_shared<DataTypeUInt64>()},
 
         {"total_rows", std::make_shared<DataTypeUInt64>()},
@@ -168,6 +169,7 @@ BlockInputStreams StorageSystemDTTables::read(
             res_columns[j++]->insert(table_info.belonging_table_id);
             res_columns[j++]->insert(dm_storage->getTombstone());
 
+            res_columns[j++]->insert(stat.column_count);
             res_columns[j++]->insert(stat.segment_count);
 
             res_columns[j++]->insert(stat.total_rows);

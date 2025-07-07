@@ -26,26 +26,72 @@ namespace CurrentMetrics
 {
 extern const Metric DT_NumMemTable;
 extern const Metric DT_BytesMemTable;
+extern const Metric DT_BytesMemTableAllocated;
 } // namespace CurrentMetrics
 
 namespace DB::DM
 {
 
+/// Member functions of MemTableSet::Statistic ///
+
+MemTableSet::Statistic::Statistic()
+    : holder_bytes(CurrentMetrics::DT_BytesMemTable, 0)
+    , holder_allocated_bytes(CurrentMetrics::DT_BytesMemTableAllocated, 0)
+{}
+
+void MemTableSet::Statistic::append(
+    size_t rows_added,
+    size_t bytes_added,
+    size_t allocated_bytes_added,
+    size_t deletes_added,
+    size_t files_added)
+{
+    column_files_count += files_added;
+    rows += rows_added;
+    bytes += bytes_added;
+    allocated_bytes += allocated_bytes_added;
+    deletes += deletes_added;
+    // update the current metrics
+    holder_bytes.changeTo(bytes.load());
+    holder_allocated_bytes.changeTo(allocated_bytes.load());
+}
+
+void MemTableSet::Statistic::resetTo(
+    size_t new_column_files_count,
+    size_t new_rows,
+    size_t new_bytes,
+    size_t new_allocated_bytes,
+    size_t new_deletes)
+{
+    column_files_count = new_column_files_count;
+    rows = new_rows;
+    bytes = new_bytes;
+    allocated_bytes = new_allocated_bytes;
+    deletes = new_deletes;
+    // update the current metrics
+    holder_bytes.changeTo(bytes.load());
+    holder_allocated_bytes.changeTo(allocated_bytes.load());
+}
+
+/// Member functions of MemTableSet ///
+
 MemTableSet::MemTableSet(const ColumnFiles & in_memory_files)
     : holder_counter(CurrentMetrics::DT_NumMemTable, 1)
-    , holder_allocated_bytes(CurrentMetrics::DT_BytesMemTable, 0)
     , column_files(in_memory_files)
     , log(Logger::get())
 {
-    column_files_count = column_files.size();
+    size_t new_rows = 0;
+    size_t new_bytes = 0;
+    size_t new_alloc_bytes = 0;
+    size_t new_deletes = 0;
     for (const auto & file : column_files)
     {
-        rows += file->getRows();
-        bytes += file->getBytes();
-        allocated_bytes += file->getAllocateBytes();
-        deletes += file->getDeletes();
+        new_rows += file->getRows();
+        new_bytes += file->getBytes();
+        new_alloc_bytes += file->getAllocateBytes();
+        new_deletes += file->getDeletes();
     }
-    holder_allocated_bytes.changeTo(allocated_bytes.load());
+    stat.resetTo(column_files.size(), new_rows, new_bytes, new_alloc_bytes, new_deletes);
 }
 
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
@@ -60,12 +106,12 @@ void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
     }
 
     column_files.push_back(column_file);
-    column_files_count = column_files.size();
-
-    rows += column_file->getRows();
-    bytes += column_file->getBytes();
-    allocated_bytes += column_file->getAllocateBytes();
-    deletes += column_file->getDeletes();
+    stat.append(
+        column_file->getRows(),
+        column_file->getBytes(),
+        column_file->getAllocateBytes(),
+        column_file->getDeletes(),
+        /*files_added=*/1);
 }
 
 std::pair</* New */ ColumnFiles, /* Flushed */ ColumnFiles> MemTableSet::diffColumnFiles(
@@ -229,9 +275,13 @@ void MemTableSet::appendToCache(DMContext & context, const Block & block, size_t
         if (unlikely(!append_res.success))
             throw Exception("Write to MemTableSet failed", ErrorCodes::LOGICAL_ERROR);
     }
-    rows += limit;
-    bytes += append_bytes;
-    allocated_bytes += append_res.new_alloc_bytes;
+
+    stat.append( //
+        limit,
+        append_bytes,
+        append_res.new_alloc_bytes,
+        /*deletes_added*/ 0,
+        /*files_added*/ 0);
 }
 
 void MemTableSet::appendDeleteRange(const RowKeyRange & delete_range)
@@ -294,13 +344,18 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(
     // This may indicate that you forget to acquire a lock -- there are modifications
     // while this function is still running...
     RUNTIME_CHECK(
-        total_rows == rows && total_deletes == deletes,
+        total_rows == stat.rows && total_deletes == stat.deletes,
         total_rows,
-        rows.load(),
+        stat.rows.load(),
         total_deletes,
-        deletes.load());
+        stat.deletes.load());
 
-    return std::make_shared<ColumnFileSetSnapshot>(data_provider, std::move(column_files_snap), rows, bytes, deletes);
+    return std::make_shared<ColumnFileSetSnapshot>(
+        data_provider,
+        std::move(column_files_snap),
+        stat.rows,
+        stat.bytes,
+        stat.deletes);
 }
 
 ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(
@@ -333,7 +388,7 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(
         cur_rows_offset += column_file->getRows();
         cur_deletes_offset += column_file->getDeletes();
     }
-    if (unlikely(flush_task->getFlushRows() != rows || flush_task->getFlushDeletes() != deletes))
+    if (unlikely(flush_task->getFlushRows() != stat.rows || flush_task->getFlushDeletes() != stat.deletes))
     {
         LOG_ERROR(
             log,
@@ -341,8 +396,8 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(
             "Files: {}",
             flush_task->getFlushRows(),
             flush_task->getFlushDeletes(),
-            rows.load(),
-            deletes.load(),
+            stat.rows.load(),
+            stat.deletes.load(),
             ColumnFile::filesToString(column_files));
         throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
     }
@@ -378,11 +433,12 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
         new_deletes += column_file->getDeletes();
     }
     column_files.swap(new_column_files);
-    column_files_count = column_files.size();
-    rows = new_rows;
-    bytes = new_bytes;
-    allocated_bytes = new_alloc_bytes;
-    deletes = new_deletes;
+    stat.resetTo( //
+        column_files.size(),
+        new_rows,
+        new_bytes,
+        new_alloc_bytes,
+        new_deletes);
 }
 
 

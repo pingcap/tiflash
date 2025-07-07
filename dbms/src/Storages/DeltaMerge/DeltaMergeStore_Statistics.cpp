@@ -86,7 +86,6 @@ StoreStats DeltaMergeStore::getStoreStats()
         }
     } // access to `segments` end
 
-
     stat.delta_rate_rows = static_cast<Float64>(stat.total_delta_rows) / stat.total_rows;
     stat.delta_rate_segments = static_cast<Float64>(stat.delta_count) / stat.segment_count;
 
@@ -169,19 +168,23 @@ SegmentsStats DeltaMergeStore::getSegmentsStats()
 
         stat.delta_rate = static_cast<Float64>(delta->getRows()) / stat.rows;
         {
-            const auto & delta_memtable = delta->getMemTableSet();
-            const auto & delta_persisted = delta->getPersistedFileSet();
+            // Keep a copy to the shared_ptr of MemTableSet
+            const auto delta_memtable = delta->getMemTableSet();
             stat.delta_memtable_rows = delta_memtable->getRows();
             stat.delta_memtable_size = delta_memtable->getBytes();
             stat.delta_memtable_column_files = delta_memtable->getColumnFileCount();
             stat.delta_memtable_delete_ranges = delta_memtable->getDeletes();
+            stat.delta_cache_size = delta_memtable->getBytes(); // FIXME: this is the same as delta_memtable_size
+            stat.delta_cache_alloc_size = delta_memtable->getAllocatedBytes();
+        }
+        {
+            // Keep a copy to the shared_ptr of PersistedFileSet
+            const auto delta_persisted = delta->getPersistedFileSet();
             stat.delta_persisted_page_id = delta_persisted->getId();
             stat.delta_persisted_rows = delta_persisted->getRows();
             stat.delta_persisted_size = delta_persisted->getBytes();
             stat.delta_persisted_column_files = delta_persisted->getColumnFileCount();
             stat.delta_persisted_delete_ranges = delta_persisted->getDeletes();
-            stat.delta_cache_size = delta_memtable->getBytes(); // FIXME: this is the same as delta_memtable_size
-            stat.delta_cache_alloc_size = delta_memtable->getAllocatedBytes();
         }
         stat.delta_index_size = delta->getDeltaIndexBytes();
 
