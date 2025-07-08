@@ -47,6 +47,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
@@ -60,6 +61,10 @@
 #include <common/config_common.h>
 #include <common/logger_useful.h>
 
+namespace CurrentMetrics
+{
+extern const Metric DT_NumStorageDeltaMerge;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -86,7 +91,11 @@ StorageDeltaMerge::StorageDeltaMerge(
     Timestamp tombstone,
     Context & global_context_)
     : IManageableStorage{columns_, tombstone}
+<<<<<<< HEAD
     , data_path_contains_database_name(db_engine != "TiFlash")
+=======
+    , holder_counter(CurrentMetrics::DT_NumStorageDeltaMerge, 1)
+>>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
     , store_inited(false)
     , max_column_id_used(0)
     , global_context(global_context_.getGlobalContext())
@@ -971,13 +980,25 @@ BlockInputStreams StorageDeltaMerge::read(
     RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
 
+<<<<<<< HEAD
     auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, query_info.req_id, tracing_logger);
+=======
+    auto pushdown_executor = PushDownExecutor::build(
+        query_info,
+        columns_to_read,
+        store->getTableColumns(),
+        query_info.dag_query ? query_info.dag_query->used_indexes
+                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
+        context,
+        tracing_logger);
+>>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 
     auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, context);
 
     const auto & scan_context = mvcc_query_info.scan_context;
+    scan_context->pushdown_executor = pushdown_executor;
 
     auto streams = store->read(
         context,
@@ -985,8 +1006,13 @@ BlockInputStreams StorageDeltaMerge::read(
         columns_to_read,
         ranges,
         num_streams,
+<<<<<<< HEAD
         /*max_version=*/mvcc_query_info.read_tso,
         filter,
+=======
+        /*start_ts=*/mvcc_query_info.start_ts,
+        pushdown_executor,
+>>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
         runtime_filter_list,
         query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
         query_info.req_id,
@@ -1065,13 +1091,25 @@ void StorageDeltaMerge::read(
     RUNTIME_CHECK(query_info.mvcc_query_info != nullptr);
     const auto & mvcc_query_info = *query_info.mvcc_query_info;
 
+<<<<<<< HEAD
     auto ranges = parseMvccQueryInfo(mvcc_query_info, num_streams, context, query_info.req_id, tracing_logger);
+=======
+    auto pushdown_executor = PushDownExecutor::build(
+        query_info,
+        columns_to_read,
+        store->getTableColumns(),
+        query_info.dag_query ? query_info.dag_query->used_indexes
+                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
+        context,
+        tracing_logger);
+>>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 
     auto filter = parsePushDownFilter(query_info, columns_to_read, context, tracing_logger);
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, context);
 
     const auto & scan_context = mvcc_query_info.scan_context;
+    scan_context->pushdown_executor = pushdown_executor;
 
     store->read(
         exec_context_,
@@ -1081,8 +1119,13 @@ void StorageDeltaMerge::read(
         columns_to_read,
         ranges,
         num_streams,
+<<<<<<< HEAD
         /*max_version=*/mvcc_query_info.read_tso,
         filter,
+=======
+        /*start_ts=*/mvcc_query_info.start_ts,
+        pushdown_executor,
+>>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
         runtime_filter_list,
         query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
         query_info.req_id,

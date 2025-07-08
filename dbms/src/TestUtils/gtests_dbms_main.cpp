@@ -23,7 +23,11 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestBasic.h>
+<<<<<<< HEAD
 #include <TestUtils/TiFlashTestEnv.h>
+=======
+#include <common/logger_util.h>
+>>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 #include <gtest/gtest.h>
 #include <signal.h>
 
@@ -66,7 +70,8 @@ int main(int argc, char ** argv)
     install_fault_signal_handlers({SIGSEGV, SIGILL, SIGFPE, SIGABRT, SIGTERM});
 
     bool enable_colors = isatty(STDERR_FILENO) && isatty(STDOUT_FILENO);
-    DB::tests::TiFlashTestEnv::setupLogger("trace", std::cerr, enable_colors);
+    const auto log_level = Utils::normalizeLogLevel(Poco::Environment::get("LOG_LEVEL", "trace"));
+    DB::tests::TiFlashTestEnv::setupLogger(log_level, std::cerr, enable_colors);
     auto run_mode = DB::PageStorageRunMode::ONLY_V3;
     DB::tests::TiFlashTestEnv::initializeGlobalContext(/*testdata_path*/ {}, run_mode);
     DB::ServerInfo server_info;
