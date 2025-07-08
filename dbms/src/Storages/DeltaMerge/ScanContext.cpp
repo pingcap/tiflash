@@ -18,6 +18,7 @@
 #include <Poco/JSON/Object.h>
 #pragma GCC diagnostic pop
 #include <Poco/UUIDGenerator.h>
+#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 #include <magic_enum.hpp>
@@ -181,6 +182,11 @@ String ScanContext::toJson() const
         vec_idx->set("read_vec", total_vector_idx_read_vec_time_ms.load());
         vec_idx->set("read_others", total_vector_idx_read_others_time_ms.load());
         json->set("vector_idx", vec_idx);
+    }
+
+    if (pushdown_executor)
+    {
+        json->set("pushdown", pushdown_executor->toJSONObject());
     }
 
     std::stringstream buf;

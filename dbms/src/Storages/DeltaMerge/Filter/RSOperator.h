@@ -14,6 +14,11 @@
 
 #pragma once
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 #include <Common/FieldVisitors.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Index/RSIndex.h>
@@ -50,6 +55,7 @@ public:
 
     virtual String name() = 0;
     virtual String toDebugString() = 0;
+    virtual Poco::JSON::Object::Ptr toJSONObject() = 0;
 
     virtual RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) = 0;
 
@@ -84,6 +90,14 @@ public:
             name(),
             attr.col_name,
             applyVisitor(FieldVisitorToDebugString(), value));
+    }
+    Poco::JSON::Object::Ptr toJSONObject() override
+    {
+        Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+        obj->set("op", name());
+        obj->set("col", attr.col_name);
+        obj->set("value", applyVisitor(FieldVisitorToDebugString(), value));
+        return obj;
     }
 };
 
@@ -120,6 +134,18 @@ public:
             ",");
         buf.append("]}");
         return buf.toString();
+    }
+    Poco::JSON::Object::Ptr toJSONObject() override
+    {
+        Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+        obj->set("op", name());
+        Poco::JSON::Array arr;
+        for (const auto & child : children)
+        {
+            arr.add(child->toJSONObject());
+        }
+        obj->set("children", arr);
+        return obj;
     }
 };
 

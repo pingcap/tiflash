@@ -34,6 +34,14 @@ public:
 
     String toDebugString() override { return fmt::format(R"({{"op":"{}","col":"{}"}})", name(), attr.col_name); }
 
+    Poco::JSON::Object::Ptr toJSONObject() override
+    {
+        Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+        obj->set("op", name());
+        obj->set("col", attr.col_name);
+        return obj;
+    }
+
     RSResults roughCheck(size_t start_pack, size_t pack_count, const RSCheckParam & param) override
     {
         auto rs_index = getRSIndex(param, attr);
