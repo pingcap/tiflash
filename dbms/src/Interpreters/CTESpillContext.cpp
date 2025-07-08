@@ -19,20 +19,11 @@
 
 namespace DB
 {
-SpillerSharedPtr CTESpillContext::getSpillAt(size_t idx)
+SpillerPtr CTESpillContext::getSpiller(size_t partition_id, size_t spill_id)
 {
-    std::lock_guard<std::mutex> lock(this->mu);
-    auto spiller_num = this->spillers.size();
-
-    // The spiller whose idx is lower that the parameter idx must have been created before
-    RUNTIME_CHECK_MSG(idx <= spiller_num, "idx: {}, spiller_num: {}", idx, spiller_num);
-
-    if (idx < spiller_num)
-        return this->spillers[idx];
-
     SpillConfig config(
         this->spill_config.spill_dir,
-        fmt::format("cte_spill_{}", idx),
+        fmt::format("cte_spill_{}_{}", partition_id, spill_id),
         this->spill_config.max_cached_data_bytes_in_spiller,
         this->spill_config.max_spilled_rows_per_file,
         this->spill_config.max_spilled_bytes_per_file,
@@ -40,8 +31,6 @@ SpillerSharedPtr CTESpillContext::getSpillAt(size_t idx)
         this->spill_config.for_all_constant_max_streams,
         this->spill_config.for_all_constant_block_size);
 
-    this->spillers.push_back(
-        std::make_shared<Spiller>(config, false, this->partition_num, this->spill_block_schema, this->log));
-    return this->spillers.back();
+    return std::make_unique<Spiller>(config, false, this->partition_num, this->spill_block_schema, this->log);
 }
 } // namespace DB

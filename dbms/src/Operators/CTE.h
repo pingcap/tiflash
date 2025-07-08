@@ -39,6 +39,12 @@ public:
             this->partitions.push_back(CTEPartition(i));
     }
 
+    ~CTE()
+    {
+        for (auto & p : this->partitions)
+            p.debugOutput();
+    }
+
     void initCTESpillContext(
         const SpillConfig & spill_config_,
         const Block & spill_block_schema_,

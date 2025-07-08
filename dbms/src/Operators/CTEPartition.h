@@ -36,8 +36,9 @@ enum class CTEOpStatus
 {
     OK,
     BLOCK_NOT_AVAILABLE, // It means that we do not have specified block so far
-    IO_OUT,
+    WAIT_SPILL,
     IO_IN,
+    NEED_SPILL,
     END_OF_FILE,
     CANCELLED
 };
@@ -50,6 +51,20 @@ struct CTEPartition
         , pipe_cv(std::make_unique<PipeConditionVariable>())
         , aux_lock(std::make_unique<std::mutex>())
     {}
+
+    void debugOutput()
+    {
+        auto * log = &Poco::Logger::get("LRUCache");
+        LOG_INFO(
+            log,
+            fmt::format(
+                "xzxdebug CTEPartition total_recv_block_num: {}, total_spill_block_num: {}, total_fetch_block_num: {}, "
+                "total_byte_usage: {}",
+                total_recv_block_num,
+                total_spill_block_num,
+                total_fetch_block_num,
+                total_byte_usage));
+    }
 
     void init(std::shared_ptr<CTESpillContext> spill_context_, size_t memory_threoshold_)
     {
@@ -89,6 +104,11 @@ struct CTEPartition
         return this->isBlockAvailableInMemoryNoLock(cte_reader_id);
     }
 
+    size_t total_recv_block_num = 0;
+    size_t total_spill_block_num = 0;
+    size_t total_fetch_block_num = 0;
+    size_t total_byte_usage = 0;
+
     size_t partition_id;
 
     std::unique_ptr<std::mutex> mu;
@@ -104,7 +124,7 @@ struct CTEPartition
     Blocks tmp_blocks;
 
     std::vector<UInt64> block_in_disk_nums;
-    std::unordered_map<size_t, SpillerSharedPtr> spillers;
+    std::unordered_map<size_t, SpillerPtr> spillers;
     std::unordered_map<size_t, BlockInputStreamPtr> cte_reader_restore_streams;
     UInt64 total_block_in_disk_num = 0;
 

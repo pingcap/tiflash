@@ -17,6 +17,8 @@
 
 #include <mutex>
 
+#include "Operators/CTEPartition.h"
+
 namespace DB
 {
 CTEOpStatus CTEReader::fetchNextBlock(size_t partition_id, Block & block)
@@ -30,7 +32,8 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t partition_id, Block & block)
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
     }
-    case CTEOpStatus::IO_OUT:
+    case CTEOpStatus::WAIT_SPILL:
+    case CTEOpStatus::NEED_SPILL:
     case CTEOpStatus::IO_IN:
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
     case CTEOpStatus::OK:

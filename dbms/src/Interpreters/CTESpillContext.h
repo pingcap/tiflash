@@ -38,17 +38,15 @@ public:
         , log(Logger::get(query_id_and_cte_id_))
     {}
 
-    SpillerSharedPtr getSpillAt(size_t idx);
+    SpillerPtr getSpiller(size_t partition_id, size_t spill_id);
     LoggerPtr getLog() const { return this->log; }
     String getQueryIdAndCTEId() const { return this->query_id_and_cte_id; }
 
 private:
-    std::mutex mu;
     size_t partition_num;
     SpillConfig spill_config;
     Block spill_block_schema;
 
-    std::vector<SpillerSharedPtr> spillers;
     String query_id_and_cte_id;
     LoggerPtr log;
 };

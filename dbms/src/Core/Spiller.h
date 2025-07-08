@@ -166,6 +166,5 @@ private:
 };
 
 using SpillerPtr = std::unique_ptr<Spiller>;
-using SpillerSharedPtr = std::shared_ptr<Spiller>;
 
 } // namespace DB

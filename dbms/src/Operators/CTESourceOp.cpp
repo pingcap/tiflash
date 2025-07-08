@@ -35,6 +35,8 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         return OperatorStatus::HAS_OUTPUT;
     }
 
+    auto * log = &Poco::Logger::get("LRUCache");
+
     auto ret = this->cte_reader->fetchNextBlock(this->id, block);
     switch (ret)
     {
@@ -42,14 +44,17 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
         this->cte_reader->getResp(this->resp);
         if (this->resp.execution_summaries_size() != 0)
             this->io_profile_info->remote_execution_summary.add(this->resp);
+        LOG_INFO(log, "xzxdebug encounter eof in CTESourceOp");
     case CTEOpStatus::OK:
         this->total_rows += block.rows();
         return OperatorStatus::HAS_OUTPUT;
     case CTEOpStatus::IO_IN:
+        LOG_INFO(log, "xzxdebug CTESourceOp is going to read block from disk");
         // Expected block is in disk, we need to read it from disk
         return OperatorStatus::IO_IN;
-    case CTEOpStatus::IO_OUT:
+    case CTEOpStatus::WAIT_SPILL:
         // CTE is spilling blocks to disk, we need to wait the finish of spill
+        LOG_INFO(log, "xzxdebug waiting for spill in CTESourceOp");
         DB::setNotifyFuture(&(this->io_notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::CANCELLED:
@@ -64,13 +69,17 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
 
 OperatorStatus CTESourceOp::executeIOImpl()
 {
+    auto * log = &Poco::Logger::get("LRUCache");
+    LOG_INFO(log, "xzxdebug CTESourceOp enters executeIOImpl");
+
     RUNTIME_CHECK(!this->block_from_disk);
     auto status = this->cte_reader->fetchBlockFromDisk(this->id, this->block_from_disk);
     switch (status)
     {
     case CTEOpStatus::OK:
         return OperatorStatus::HAS_OUTPUT;
-    case CTEOpStatus::IO_OUT:
+    case CTEOpStatus::WAIT_SPILL:
+        LOG_INFO(log, "xzxdebug CTESourceOp wait spill in executeIOImpl");
         // CTE is spilling blocks to disk, we need to wait the finish of spill
         DB::setNotifyFuture(&(this->io_notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;

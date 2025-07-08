@@ -31,15 +31,20 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
 {
     if (!block)
         return OperatorStatus::FINISHED;
+    auto * log = &Poco::Logger::get("LRUCache");
 
     this->total_rows += block.rows();
     auto status = this->cte->pushBlock(this->id, block);
     switch (status)
     {
-    case CTEOpStatus::IO_OUT:
+    case CTEOpStatus::WAIT_SPILL:
+        LOG_INFO(log, "xzxdebug CTESinkOp waits for the finish of spill");
         // CTE is spilling blocks to disk, we need to wait the finish of spill
         DB::setNotifyFuture(&(this->io_notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;
+    case CTEOpStatus::NEED_SPILL:
+        LOG_INFO(log, "xzxdebug CTESinkOp starts spill");
+        return OperatorStatus::IO_OUT;
     case CTEOpStatus::OK:
         return OperatorStatus::NEED_INPUT;
     case CTEOpStatus::CANCELLED:
@@ -51,12 +56,15 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
 
 OperatorStatus CTESinkOp::executeIOImpl()
 {
+    auto * log = &Poco::Logger::get("LRUCache");
+    LOG_INFO(log, "xzxdebug CTESinkOp enter executeIOImpl");
     auto status = this->cte->spillBlocks(this->id);
     switch (status)
     {
     case CTEOpStatus::OK:
         return OperatorStatus::NEED_INPUT;
-    case CTEOpStatus::IO_OUT:
+    case CTEOpStatus::WAIT_SPILL:
+        LOG_INFO(log, "xzxdebug CTESinkOp waits for spill in executeIOImpl");
         // CTE is spilling blocks to disk, we need to wait the finish of spill
         DB::setNotifyFuture(&(this->io_notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;

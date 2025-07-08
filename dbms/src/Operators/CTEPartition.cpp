@@ -16,6 +16,7 @@
 #include <Operators/CTEPartition.h>
 
 #include <algorithm>
+#include <iterator>
 #include <mutex>
 #include <utility>
 
@@ -32,7 +33,7 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
 {
     std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
     if (this->status == CTEPartitionStatus::IN_SPILLING)
-        return CTEOpStatus::IO_OUT;
+        return CTEOpStatus::WAIT_SPILL;
 
     std::lock_guard<std::mutex> lock(*this->mu);
 
@@ -45,25 +46,34 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
     auto idx = this->getIdxInMemoryNoLock(cte_reader_id);
     block = this->blocks[idx];
     this->addIdxNoLock(cte_reader_id);
+    this->total_fetch_block_num++;
     return CTEOpStatus::OK;
 }
 
 CTEOpStatus CTEPartition::pushBlock(const Block & block)
 {
     std::unique_lock<std::mutex> aux_lock(*(this->aux_lock));
-    if (this->status != CTEPartitionStatus::NORMAL)
+    CTEOpStatus ret_status = CTEOpStatus::OK;
+    switch (this->status)
     {
+    case CTEPartitionStatus::NEED_SPILL:
+        ret_status = CTEOpStatus::NEED_SPILL;
+    case CTEPartitionStatus::IN_SPILLING:
+        ret_status = CTEOpStatus::WAIT_SPILL;
         if likely (block.rows() != 0)
-        {
             // Block memory usage will be calculated after the finish of spill
             this->tmp_blocks.push_back(block);
-        }
-        return CTEOpStatus::IO_OUT;
+        return ret_status;
+    case CTEPartitionStatus::NORMAL:
+        break;
     }
 
     // mu must be held after aux_lock so that we will not be blocked by spill.
     // Blocked in cpu pool is very bad.
     std::lock_guard<std::mutex> lock(*this->mu);
+
+    this->total_recv_block_num++;
+    this->total_byte_usage += block.bytes();
 
     this->memory_usage += block.bytes();
     this->blocks.push_back(block);
@@ -72,9 +82,10 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     if unlikely (this->exceedMemoryThresholdNoLock())
     {
         this->setCTEPartitionStatusNoLock(CTEPartitionStatus::NEED_SPILL);
-        return CTEOpStatus::IO_OUT;
+        LOG_INFO(this->spill_context->getLog(), "xzxdebug exceed memory, switch to NEED_spill");
+        ret_status = CTEOpStatus::NEED_SPILL;
     }
-    return CTEOpStatus::OK;
+    return ret_status;
 }
 
 CTEOpStatus CTEPartition::spillBlocks()
@@ -93,7 +104,7 @@ CTEOpStatus CTEPartition::spillBlocks()
         case CTEPartitionStatus::NORMAL:
             return CTEOpStatus::OK;
         case CTEPartitionStatus::IN_SPILLING:
-            return CTEOpStatus::IO_OUT;
+            return CTEOpStatus::WAIT_SPILL;
         case CTEPartitionStatus::NEED_SPILL:
             this->setCTEPartitionStatusNoLock(CTEPartitionStatus::IN_SPILLING);
             break;
@@ -108,29 +119,33 @@ CTEOpStatus CTEPartition::spillBlocks()
         this->tmp_blocks.clear();
     }
 
-    auto cte_reader_num = this->fetch_block_idxs.size();
-    std::vector<size_t> split_idxs{0};
-    split_idxs.reserve(cte_reader_num + 1);
-    for (auto iter : this->fetch_block_idxs)
-        split_idxs.push_back(iter.second);
-    std::sort(split_idxs.begin(), split_idxs.end());
+    // Key represents logical index
+    // Value represents physical index at `this->blocks`
+    std::map<size_t, size_t> split_idxs;
+    split_idxs.insert(std::make_pair(this->total_block_in_disk_num, 0));
+    for (const auto & [_, logical_idx] : this->fetch_block_idxs)
+        if (logical_idx > this->total_block_in_disk_num)
+            split_idxs.insert(std::make_pair(logical_idx, logical_idx - this->total_block_in_disk_num));
 
-    auto begin_iter = this->blocks.begin();
-    auto idx_num = split_idxs.size();
-    for (size_t i = 0; i < idx_num; i++)
+    auto blocks_begin_iter = this->blocks.begin();
+    auto split_iter = split_idxs.begin();
+    auto total_block_in_memory_num = this->blocks.size();
+    while (split_iter != split_idxs.end())
     {
-        if (split_idxs[i] >= this->blocks.size())
-            break;
+        auto next_iter = std::next(split_iter);
 
         Blocks spilled_blocks;
-        if (i == idx_num - 1)
-            spilled_blocks.assign(begin_iter + split_idxs[i], this->blocks.end());
+        if (next_iter == split_idxs.end() || next_iter->second >= total_block_in_memory_num)
+            spilled_blocks.assign(blocks_begin_iter + split_iter->second, this->blocks.end());
         else
-            spilled_blocks.assign(begin_iter + split_idxs[i], begin_iter + split_idxs[i + 1]);
+            spilled_blocks.assign(blocks_begin_iter + split_iter->second, blocks_begin_iter + next_iter->second);
+        this->total_block_in_disk_num += spilled_blocks.size();
+        this->total_spill_block_num += spilled_blocks.size(); // TODO remove
 
-        auto spiller = this->spill_context->getSpillAt(i);
-        this->spillers.insert(std::make_pair(split_idxs[i], spiller));
+        auto spiller = this->spill_context->getSpiller(this->partition_id, this->spillers.size());
         spiller->spillBlocks(std::move(spilled_blocks), this->partition_id);
+        spiller->finishSpill();
+        this->spillers.insert(std::make_pair(split_iter->first, std::move(spiller)));
     }
 
     LOG_INFO(
@@ -157,13 +172,8 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
     std::unique_lock<std::mutex> lock(*(this->mu), std::defer_lock);
     {
         std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
-        switch (this->status)
-        {
-        case CTEPartitionStatus::IN_SPILLING:
-            return CTEOpStatus::IO_OUT;
-        default:
-            break;
-        }
+        if (this->status == CTEPartitionStatus::IN_SPILLING)
+            return CTEOpStatus::WAIT_SPILL;
 
         lock.lock();
     }
@@ -171,6 +181,8 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
     RUNTIME_CHECK_MSG(this->isSpillTriggeredNoLock(), "Spill should be triggered");
     RUNTIME_CHECK_MSG(this->isBlockAvailableInDiskNoLock(cte_reader_id), "Requested block is not in disk");
 
+    auto * log = &Poco::Logger::get("LRUCache");
+    LOG_INFO(log, fmt::format("xzxdebug try to get block for {}", cte_reader_id));
     bool retry = false;
     do
     {
@@ -179,8 +191,22 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
         {
             auto spiller_iter = this->spillers.find(this->fetch_block_idxs[cte_reader_id]);
             if (spiller_iter == this->spillers.end())
+            {
+                LOG_INFO(
+                    log,
+                    fmt::format(
+                        "xzxdebug fail to find restore stream {}, {}",
+                        cte_reader_id,
+                        this->fetch_block_idxs[cte_reader_id]));
                 // All blocks in disk have been consumed
                 return CTEOpStatus::OK;
+            }
+            LOG_INFO(
+                log,
+                fmt::format(
+                    "xzxdebug success to find restore stream {}, {}",
+                    cte_reader_id,
+                    this->fetch_block_idxs[cte_reader_id]));
             auto streams = spiller_iter->second->restoreBlocks(this->partition_id, 1);
             RUNTIME_CHECK(streams.size() == 1);
             iter->second = streams[0];
@@ -188,6 +214,7 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
         }
 
         block = iter->second->read();
+        LOG_INFO(log, fmt::format("xzxdebug read for {}, {}", cte_reader_id, this->fetch_block_idxs[cte_reader_id]));
         if (!block)
         {
             RUNTIME_CHECK(!retry);
@@ -195,6 +222,9 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
             iter->second->readSuffix();
             iter->second = nullptr;
             retry = true;
+            LOG_INFO(
+                log,
+                fmt::format("xzxdebug retry for {}, {}", cte_reader_id, this->fetch_block_idxs[cte_reader_id]));
             continue;
         }
 
