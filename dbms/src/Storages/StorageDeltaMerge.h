@@ -283,6 +283,9 @@ private:
     };
     const bool data_path_contains_database_name = false;
 
+    // Keep track of the number of StorageDeltaMerge in memory.
+    CurrentMetrics::Increment holder_counter;
+
     mutable std::mutex store_mutex;
 
     std::unique_ptr<TableColumnInfo> table_column_info; // After create DeltaMergeStore object, it is deprecated.
@@ -313,9 +316,24 @@ private:
     // Used to allocate new column-id when this table is NOT synced from TiDB
     ColumnID max_column_id_used;
 
+<<<<<<< HEAD
     std::atomic<bool> shutdown_called{false};
 
     std::atomic<UInt64> next_version = 1; //TODO: remove this!!!
+=======
+    // TODO: remove the following two members, which are only used for debug from ch-client.
+    Strings pk_column_names;
+    std::atomic<UInt64> next_version = 1;
+
+    std::atomic<bool> shutdown_called{false};
+    bool is_common_handle = false;
+    bool pk_is_handle = false;
+
+    // `decoding_schema_changed` and `decoding_schema_epoch` must be used under the protection of table structure lock
+    bool decoding_schema_changed = false;
+
+    const bool data_path_contains_database_name = false;
+>>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 
     Context & global_context;
 

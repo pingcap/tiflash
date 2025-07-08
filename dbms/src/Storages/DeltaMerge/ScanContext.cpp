@@ -18,6 +18,7 @@
 #include <Poco/JSON/Object.h>
 #pragma GCC diagnostic pop
 #include <Poco/UUIDGenerator.h>
+#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 #include <magic_enum.hpp>
@@ -155,6 +156,30 @@ String ScanContext::toJson() const
     };
     json->set("region_num_of_instance", to_json_array(region_num_of_instance));
 
+<<<<<<< HEAD
+=======
+    if (vector_idx_load_from_cache.load() //
+            + vector_idx_load_from_disk.load() //
+            + vector_idx_load_from_s3.load()
+        > 0)
+    {
+        Poco::JSON::Object::Ptr vec_idx = new Poco::JSON::Object();
+        vec_idx->set("tot_load", vector_idx_load_time_ms.load());
+        vec_idx->set("load_s3", vector_idx_load_from_s3.load());
+        vec_idx->set("load_disk", vector_idx_load_from_disk.load());
+        vec_idx->set("load_cache", vector_idx_load_from_cache.load());
+        vec_idx->set("tot_search", vector_idx_search_time_ms.load());
+        vec_idx->set("read_vec", vector_idx_read_vec_time_ms.load());
+        vec_idx->set("read_others", vector_idx_read_others_time_ms.load());
+        json->set("vector_idx", vec_idx);
+    }
+
+    if (pushdown_executor)
+    {
+        json->set("pushdown", pushdown_executor->toJSONObject());
+    }
+
+>>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
     std::stringstream buf;
     json->stringify(buf);
     return buf.str();

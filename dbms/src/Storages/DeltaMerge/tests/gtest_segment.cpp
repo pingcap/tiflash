@@ -551,6 +551,7 @@ try
 CATCH
 
 
+<<<<<<< HEAD
 TEST_F(SegmentOperationTest, DeltaIndexError)
 try
 {
@@ -656,6 +657,8 @@ try
 }
 CATCH
 
+=======
+>>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 class SegmentEnableLogicalSplitTest : public SegmentOperationTest
 {
 protected:
