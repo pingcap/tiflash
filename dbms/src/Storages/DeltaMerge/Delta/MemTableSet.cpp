@@ -22,12 +22,6 @@
 #include <Storages/DeltaMerge/WriteBatchesImpl.h>
 #include <Storages/PathPool.h>
 
-<<<<<<< HEAD
-namespace DB
-{
-namespace DM
-{
-=======
 namespace CurrentMetrics
 {
 extern const Metric DT_NumMemTable;
@@ -100,7 +94,6 @@ MemTableSet::MemTableSet(const ColumnFiles & in_memory_files)
     stat.resetTo(column_files.size(), new_rows, new_bytes, new_alloc_bytes, new_deletes);
 }
 
->>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 void MemTableSet::appendColumnFileInner(const ColumnFilePtr & column_file)
 {
     if (!column_files.empty())
@@ -326,9 +319,9 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(
         column_files.back()->disableAppend();
 
     auto snap = std::make_shared<ColumnFileSetSnapshot>(data_provider);
-    snap->rows = rows;
-    snap->bytes = bytes;
-    snap->deletes = deletes;
+    snap->rows = stat.rows;
+    snap->bytes = stat.bytes;
+    snap->deletes = stat.deletes;
     snap->column_files.reserve(column_files.size());
 
     size_t total_rows = 0;
@@ -361,16 +354,7 @@ ColumnFileSetSnapshotPtr MemTableSet::createSnapshot(
         total_deletes,
         stat.deletes.load());
 
-<<<<<<< HEAD
     return snap;
-=======
-    return std::make_shared<ColumnFileSetSnapshot>(
-        data_provider,
-        std::move(column_files_snap),
-        stat.rows,
-        stat.bytes,
-        stat.deletes);
->>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 }
 
 ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(
@@ -411,15 +395,9 @@ ColumnFileFlushTaskPtr MemTableSet::buildFlushTask(
             "Files: {}",
             flush_task->getFlushRows(),
             flush_task->getFlushDeletes(),
-<<<<<<< HEAD
-            rows.load(),
-            deletes.load(),
-            columnFilesToString(column_files));
-=======
             stat.rows.load(),
             stat.deletes.load(),
-            ColumnFile::filesToString(column_files));
->>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
+            columnFilesToString(column_files));
         throw Exception("Rows and deletes check failed.", ErrorCodes::LOGICAL_ERROR);
     }
 
@@ -463,5 +441,4 @@ void MemTableSet::removeColumnFilesInFlushTask(const ColumnFileFlushTask & flush
 }
 
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

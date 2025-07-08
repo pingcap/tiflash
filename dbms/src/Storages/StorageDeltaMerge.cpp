@@ -92,11 +92,8 @@ StorageDeltaMerge::StorageDeltaMerge(
     Timestamp tombstone,
     Context & global_context_)
     : IManageableStorage{columns_, tombstone}
-<<<<<<< HEAD
     , data_path_contains_database_name(db_engine != "TiFlash")
-=======
     , holder_counter(CurrentMetrics::DT_NumStorageDeltaMerge, 1)
->>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
     , store_inited(false)
     , max_column_id_used(0)
     , global_context(global_context_.getGlobalContext())
@@ -844,23 +841,12 @@ BlockInputStreams StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-<<<<<<< HEAD
     auto filter = PushDownFilter::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
-=======
-    auto pushdown_executor = PushDownExecutor::build(
-        query_info,
-        columns_to_read,
-        store->getTableColumns(),
-        query_info.dag_query ? query_info.dag_query->used_indexes
-                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
-        context,
-        tracing_logger);
->>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
-    scan_context->pushdown_executor = pushdown_executor;
+    scan_context->pushdown_executor = filter;
 
     auto streams = store->read(
         context,
@@ -869,7 +855,7 @@ BlockInputStreams StorageDeltaMerge::read(
         ranges,
         num_streams,
         /*start_ts=*/mvcc_query_info.start_ts,
-        pushdown_executor,
+        filter,
         runtime_filter_list,
         query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
         query_info.req_id,
@@ -939,23 +925,12 @@ void StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-<<<<<<< HEAD
     auto filter = PushDownFilter::build(query_info, columns_to_read, store->getTableColumns(), context, tracing_logger);
-=======
-    auto pushdown_executor = PushDownExecutor::build(
-        query_info,
-        columns_to_read,
-        store->getTableColumns(),
-        query_info.dag_query ? query_info.dag_query->used_indexes
-                             : google::protobuf::RepeatedPtrField<tipb::ColumnarIndexInfo>{},
-        context,
-        tracing_logger);
->>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
-    scan_context->pushdown_executor = pushdown_executor;
+    scan_context->pushdown_executor = filter;
 
     store->read(
         exec_context_,
@@ -966,7 +941,7 @@ void StorageDeltaMerge::read(
         ranges,
         num_streams,
         /*start_ts=*/mvcc_query_info.start_ts,
-        pushdown_executor,
+        filter,
         runtime_filter_list,
         query_info.dag_query == nullptr ? 0 : query_info.dag_query->rf_max_wait_time_ms,
         query_info.req_id,

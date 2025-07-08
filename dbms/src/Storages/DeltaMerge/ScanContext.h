@@ -28,8 +28,8 @@
 
 namespace DB::DM
 {
-class PushDownExecutor;
-using PushDownExecutorPtr = std::shared_ptr<PushDownExecutor>;
+class PushDownFilter;
+using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 /// ScanContext is used to record statistical information in table scan for current query.
 /// For each table scan(one executor id), there is only one ScanContext.
 /// ScanContext helps to collect the statistical information of the table scan to show in `EXPLAIN ANALYZE`.
@@ -69,6 +69,7 @@ public:
     std::atomic<uint64_t> delta_rows{0};
     std::atomic<uint64_t> delta_bytes{0};
 
+    ReadMode read_mode = ReadMode::Normal;
 
     // - read_mode == Normal, apply mvcc to all read blocks
     // - read_mode == Bitmap, it will apply mvcc to get the bitmap
@@ -99,48 +100,8 @@ public:
     std::atomic<uint64_t> total_vector_idx_read_vec_time_ms{0};
     std::atomic<uint64_t> total_vector_idx_read_others_time_ms{0};
 
-<<<<<<< HEAD
-=======
-    std::atomic<uint32_t> inverted_idx_load_from_s3{0};
-    std::atomic<uint32_t> inverted_idx_load_from_disk{0};
-    std::atomic<uint32_t> inverted_idx_load_from_cache{0};
-    std::atomic<uint64_t> inverted_idx_load_time_ms{0};
-    std::atomic<uint64_t> inverted_idx_search_time_ms{0};
-    std::atomic<uint32_t> inverted_idx_search_skipped_packs{0};
-    std::atomic<uint64_t> inverted_idx_indexed_rows{0};
-    std::atomic<uint64_t> inverted_idx_search_selected_rows{0};
-
-    std::atomic<uint32_t> fts_n_from_inmemory_noindex{0};
-    std::atomic<uint32_t> fts_n_from_tiny_index{0};
-    std::atomic<uint32_t> fts_n_from_tiny_noindex{0};
-    std::atomic<uint32_t> fts_n_from_dmf_index{0};
-    std::atomic<uint32_t> fts_n_from_dmf_noindex{0};
-    std::atomic<uint64_t> fts_rows_from_inmemory_noindex{0};
-    std::atomic<uint64_t> fts_rows_from_tiny_index{0};
-    std::atomic<uint64_t> fts_rows_from_tiny_noindex{0};
-    std::atomic<uint64_t> fts_rows_from_dmf_index{0};
-    std::atomic<uint64_t> fts_rows_from_dmf_noindex{0};
-    std::atomic<uint64_t> fts_idx_load_total_ms{0};
-    std::atomic<uint32_t> fts_idx_load_from_cache{0};
-    std::atomic<uint32_t> fts_idx_load_from_column_file{0};
-    std::atomic<uint32_t> fts_idx_load_from_stable_s3{0};
-    std::atomic<uint32_t> fts_idx_load_from_stable_disk{0};
-    std::atomic<uint32_t> fts_idx_search_n{0};
-    std::atomic<uint64_t> fts_idx_search_total_ms{0};
-    std::atomic<uint64_t> fts_idx_dm_search_rows{0};
-    std::atomic<uint64_t> fts_idx_dm_total_read_fts_ms{0};
-    std::atomic<uint64_t> fts_idx_dm_total_read_others_ms{0};
-    std::atomic<uint64_t> fts_idx_tiny_search_rows{0};
-    std::atomic<uint64_t> fts_idx_tiny_total_read_fts_ms{0};
-    std::atomic<uint64_t> fts_idx_tiny_total_read_others_ms{0};
-    std::atomic<uint64_t> fts_brute_total_read_ms{0};
-    std::atomic<uint64_t> fts_brute_total_search_ms{0};
-
-    const KeyspaceID keyspace_id;
-    ReadMode read_mode = ReadMode::Normal; // note: share struct padding with keyspace_id
->>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
     const String resource_group_name;
-    PushDownExecutorPtr pushdown_executor;
+    PushDownFilterPtr pushdown_executor;
 
     explicit ScanContext(const String & name = "")
         : resource_group_name(name)

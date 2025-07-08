@@ -23,11 +23,8 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/S3/S3Common.h>
 #include <TestUtils/TiFlashTestBasic.h>
-<<<<<<< HEAD
 #include <TestUtils/TiFlashTestEnv.h>
-=======
 #include <common/logger_util.h>
->>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 #include <gtest/gtest.h>
 #include <signal.h>
 

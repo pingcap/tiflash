@@ -47,7 +47,7 @@ public:
             ",");
         buf.append("]}");
         return buf.toString();
-    };
+    }
 
     Poco::JSON::Object::Ptr toJSONObject() override
     {

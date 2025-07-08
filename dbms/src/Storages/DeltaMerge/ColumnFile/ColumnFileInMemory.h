@@ -31,20 +31,6 @@ class ColumnFileInMemory : public ColumnFile
     friend class ColumnFileInMemoryReader;
     friend struct Remote::Serializer;
 
-    struct Cache
-    {
-        explicit Cache(const Block & header)
-            : block(header.cloneWithColumns(header.cloneEmptyColumns()))
-        {}
-        explicit Cache(Block && block)
-            : block(std::move(block))
-        {}
-
-        std::mutex mutex;
-        Block block;
-    };
-    using CachePtr = std::shared_ptr<Cache>;
-
 private:
     ColumnFileSchemaPtr schema;
 

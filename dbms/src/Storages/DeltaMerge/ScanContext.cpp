@@ -18,7 +18,7 @@
 #include <Poco/JSON/Object.h>
 #pragma GCC diagnostic pop
 #include <Poco/UUIDGenerator.h>
-#include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 #include <magic_enum.hpp>

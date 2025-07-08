@@ -40,13 +40,7 @@ class PushDownFilter
 public:
     PushDownFilter(
         const RSOperatorPtr & rs_operator_,
-<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/Filter/PushDownFilter.h
-        const ExpressionActionsPtr & beofre_where_,
-=======
-        const ANNQueryInfoPtr & ann_query_info_,
-        const FTSQueryInfoPtr & fts_query_info_,
         const ExpressionActionsPtr & before_where_,
->>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275)):dbms/src/Storages/DeltaMerge/Filter/PushDownExecutor.h
         const ExpressionActionsPtr & project_after_where_,
         const ColumnDefinesPtr & filter_columns_,
         const String filter_column_name_,

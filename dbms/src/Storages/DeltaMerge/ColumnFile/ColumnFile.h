@@ -74,6 +74,19 @@ public:
         INMEMORY_FILE = 4,
     };
 
+    struct Cache
+    {
+        explicit Cache(const Block & header)
+            : block(header.cloneWithColumns(header.cloneEmptyColumns()))
+        {}
+        explicit Cache(Block && block)
+            : block(std::move(block))
+        {}
+
+        std::mutex mutex;
+        Block block;
+    };
+    using CachePtr = std::shared_ptr<Cache>;
     using ColIdToOffset = std::unordered_map<ColId, size_t>;
 
 public:
