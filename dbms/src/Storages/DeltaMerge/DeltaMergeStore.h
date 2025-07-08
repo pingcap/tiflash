@@ -27,6 +27,7 @@
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaMergeInterfaces.h>
+#include <Storages/DeltaMerge/DeltaMergeStore_Statistics.h>
 #include <Storages/DeltaMerge/File/DMFile_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
@@ -74,6 +75,7 @@ namespace tests
 class DeltaMergeStoreTest;
 }
 
+<<<<<<< HEAD
 struct SegmentStats
 {
     UInt64 segment_id = 0;
@@ -173,6 +175,31 @@ struct StoreStats
 };
 
 class DeltaMergeStore : private boost::noncopyable
+=======
+struct LocalIndexStats
+{
+    UInt64 column_id{};
+    UInt64 index_id{};
+    String index_kind{};
+
+    UInt64 rows_stable_indexed{}; // Total rows
+    UInt64 rows_stable_not_indexed{}; // Total rows
+    UInt64 rows_delta_indexed{}; // Total rows
+    UInt64 rows_delta_not_indexed{}; // Total rows
+
+    // If the index is finally failed to be built, then this is not empty
+    String error_message{};
+};
+using LocalIndexesStats = std::vector<LocalIndexStats>;
+
+
+class DeltaMergeStore;
+using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
+
+class DeltaMergeStore
+    : private boost::noncopyable
+    , public std::enable_shared_from_this<DeltaMergeStore>
+>>>>>>> 6344098691 (metrics: Enhance the o11y of TiFlash storage layer (#10275))
 {
 public:
     friend class ::DB::DM::tests::DeltaMergeStoreTest;

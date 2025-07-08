@@ -14,6 +14,10 @@
 
 #include <Storages/IStorage.h>
 
+namespace CurrentMetrics
+{
+extern const Metric NumIStorage;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -24,6 +28,14 @@ extern const int DEADLOCK_AVOIDED;
 extern const int TABLE_IS_DROPPED;
 } // namespace ErrorCodes
 
+IStorage::IStorage()
+    : holder_counter(CurrentMetrics::NumIStorage, 1)
+{}
+
+IStorage::IStorage(ColumnsDescription columns_)
+    : ITableDeclaration(std::move(columns_))
+    , holder_counter(CurrentMetrics::NumIStorage, 1)
+{}
 
 RWLock::LockHolder IStorage::tryLockTimed(
     const RWLockPtr & rwlock,

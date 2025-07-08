@@ -37,7 +37,7 @@ public:
     Block getSampleBlockNonMaterialized() const;
     Block getSampleBlockForColumns(const Names & column_names) const;
 
-    /** The hidden coloumns will not be returned. Mainly for INSERT query.
+    /** The hidden columns will not be returned. Mainly for INSERT query.
       */
     Block getSampleBlockNoHidden() const;
     Block getSampleBlockNonMaterializedNoHidden() const;

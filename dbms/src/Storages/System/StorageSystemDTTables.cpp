@@ -40,6 +40,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_)
         {"table_id", std::make_shared<DataTypeInt64>()},
         {"is_tombstone", std::make_shared<DataTypeUInt64>()},
 
+        {"column_count", std::make_shared<DataTypeUInt64>()},
         {"segment_count", std::make_shared<DataTypeUInt64>()},
 
         {"total_rows", std::make_shared<DataTypeUInt64>()},
@@ -51,6 +52,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_)
 
         {"delta_placed_rate", std::make_shared<DataTypeFloat64>()},
         {"delta_cache_size", std::make_shared<DataTypeUInt64>()},
+        {"delta_cache_alloc_size", std::make_shared<DataTypeUInt64>()},
         {"delta_cache_rate", std::make_shared<DataTypeFloat64>()},
         {"delta_cache_wasted_rate", std::make_shared<DataTypeFloat64>()},
 
@@ -154,6 +156,7 @@ BlockInputStreams StorageSystemDTTables::read(
             res_columns[j++]->insert(table_id);
             res_columns[j++]->insert(dm_storage->getTombstone());
 
+            res_columns[j++]->insert(stat.column_count);
             res_columns[j++]->insert(stat.segment_count);
 
             res_columns[j++]->insert(stat.total_rows);
@@ -165,6 +168,7 @@ BlockInputStreams StorageSystemDTTables::read(
 
             res_columns[j++]->insert(stat.delta_placed_rate);
             res_columns[j++]->insert(stat.delta_cache_size);
+            res_columns[j++]->insert(stat.delta_cache_alloc_size);
             res_columns[j++]->insert(stat.delta_cache_rate);
             res_columns[j++]->insert(stat.delta_cache_wasted_rate);
 
