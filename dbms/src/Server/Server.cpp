@@ -1019,7 +1019,16 @@ try
     auto schema_cache_size = config().getInt("schema_cache_size", 10000);
     global_context->initializeSharedBlockSchemas(schema_cache_size);
 
-    start_reader_server("reader.toml");
+    if (config().getBool("tici.enable", false))
+    {
+        auto config_path = config().getString("tici.config_path", "reader.toml");
+        start_reader_server(config_path);
+    }
+    else
+    {
+        LOG_INFO(log, "tici is disabled");
+    }
+
     // Load remaining databases
     loadMetadata(*global_context);
     LOG_DEBUG(log, "Load metadata done.");
