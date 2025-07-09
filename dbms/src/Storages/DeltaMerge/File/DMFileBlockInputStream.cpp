@@ -184,18 +184,21 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
 
     // All check passed. Let's read via vector index.
 
-    DMFilePackFilterResultPtr pack_filter = DMFilePackFilter::loadFrom(
-        dmfile,
-        index_cache,
-        /*set_cache_if_miss*/ true,
-        rowkey_ranges,
-        rs_filter,
-        read_packs,
-        file_provider,
-        read_limiter,
-        scan_context,
-        tracing_id,
-        ReadTag::Query);
+    if (!pack_filter)
+    {
+        pack_filter = DMFilePackFilter::loadFrom(
+            dmfile,
+            index_cache,
+            /*set_cache_if_miss*/ true,
+            rowkey_ranges,
+            rs_filter,
+            read_packs,
+            file_provider,
+            read_limiter,
+            scan_context,
+            tracing_id,
+            ReadTag::Query);
+    }
 
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
