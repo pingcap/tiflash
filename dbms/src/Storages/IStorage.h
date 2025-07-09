@@ -65,6 +65,10 @@ class IStorage
     , public ITableDeclaration
 {
 public:
+    IStorage();
+
+    explicit IStorage(ColumnsDescription columns_);
+
     /// The main name of the table type (for example, StorageDeltaMerge).
     virtual std::string getName() const = 0;
 
@@ -349,6 +353,8 @@ private:
     /// DROP-like queries take this lock for write (lockExclusively), to be sure
     /// that all table threads finished.
     mutable RWLockPtr drop_lock = RWLock::create();
+
+    CurrentMetrics::Increment holder_counter;
 };
 
 /// table name -> table

@@ -57,6 +57,7 @@ StorageSystemDTSegments::StorageSystemDTSegments(const std::string & name_)
         {"delta_persisted_column_files", std::make_shared<DataTypeUInt64>()},
         {"delta_persisted_delete_ranges", std::make_shared<DataTypeUInt64>()},
         {"delta_cache_size", std::make_shared<DataTypeUInt64>()},
+        {"delta_cache_alloc_size", std::make_shared<DataTypeUInt64>()},
         {"delta_index_size", std::make_shared<DataTypeUInt64>()},
 
         {"stable_page_id", std::make_shared<DataTypeUInt64>()},
@@ -140,6 +141,7 @@ BlockInputStreams StorageSystemDTSegments::read(
                 res_columns[j++]->insert(stat.delta_persisted_column_files);
                 res_columns[j++]->insert(stat.delta_persisted_delete_ranges);
                 res_columns[j++]->insert(stat.delta_cache_size);
+                res_columns[j++]->insert(stat.delta_cache_alloc_size);
                 res_columns[j++]->insert(stat.delta_index_size);
 
                 res_columns[j++]->insert(stat.stable_page_id);

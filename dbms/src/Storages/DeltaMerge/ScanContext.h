@@ -28,6 +28,8 @@
 
 namespace DB::DM
 {
+class PushDownFilter;
+using PushDownFilterPtr = std::shared_ptr<PushDownFilter>;
 /// ScanContext is used to record statistical information in table scan for current query.
 /// For each table scan(one executor id), there is only one ScanContext.
 /// ScanContext helps to collect the statistical information of the table scan to show in `EXPLAIN ANALYZE`.
@@ -85,6 +87,7 @@ public:
     std::atomic<uint64_t> build_bitmap_time_ns{0};
 
     const String resource_group_name;
+    PushDownFilterPtr pushdown_executor;
 
     explicit ScanContext(const String & name = "")
         : resource_group_name(name)

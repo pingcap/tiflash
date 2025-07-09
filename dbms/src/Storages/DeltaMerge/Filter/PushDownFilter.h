@@ -14,6 +14,12 @@
 
 #pragma once
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
+#include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 
@@ -29,14 +35,14 @@ class PushDownFilter : public std::enable_shared_from_this<PushDownFilter>
 public:
     PushDownFilter(
         const RSOperatorPtr & rs_operator_,
-        const ExpressionActionsPtr & beofre_where_,
+        const ExpressionActionsPtr & before_where_,
         const ExpressionActionsPtr & project_after_where_,
         const ColumnDefinesPtr & filter_columns_,
         const String filter_column_name_,
         const ExpressionActionsPtr & extra_cast_,
         const ColumnDefinesPtr & columns_after_cast_)
         : rs_operator(rs_operator_)
-        , before_where(beofre_where_)
+        , before_where(before_where_)
         , project_after_where(project_after_where_)
         , filter_column_name(std::move(filter_column_name_))
         , filter_columns(filter_columns_)
@@ -48,6 +54,16 @@ public:
         : rs_operator(rs_operator_)
     {}
 
+    Poco::JSON::Object::Ptr toJSONObject() const
+    {
+        Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+        if (rs_operator)
+        {
+            json->set("rs_operator", rs_operator->toJSONObject());
+        }
+        return json;
+    }
+
     // Rough set operator
     RSOperatorPtr rs_operator;
     // Filter expression actions and the name of the tmp filter column
@@ -55,7 +71,7 @@ public:
     const ExpressionActionsPtr before_where;
     // The projection after the filter, used to remove the tmp filter column
     // Used to construct the ExpressionBlockInputStream
-    // Note: ususally we will remove the tmp filter column in the LateMaterializationBlockInputStream, this only used for unexpected cases
+    // Note: usually we will remove the tmp filter column in the LateMaterializationBlockInputStream, this only used for unexpected cases
     const ExpressionActionsPtr project_after_where;
     const String filter_column_name;
     // The columns needed by the filter expression
