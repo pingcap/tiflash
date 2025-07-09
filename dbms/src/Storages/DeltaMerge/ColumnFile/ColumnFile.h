@@ -65,9 +65,9 @@ protected:
         : id(++MAX_COLUMN_FILE_ID)
     {}
 
+public:
     virtual ~ColumnFile() = default;
 
-public:
     enum Type : UInt32
     {
         DELETE_RANGE = 1,
@@ -96,8 +96,9 @@ public:
     UInt64 getId() const { return id; }
 
     virtual size_t getRows() const { return 0; }
-    virtual size_t getBytes() const { return 0; };
-    virtual size_t getDeletes() const { return 0; };
+    virtual size_t getBytes() const { return 0; }
+    virtual size_t getAllocateBytes() const { return 0; }
+    virtual size_t getDeletes() const { return 0; }
 
     virtual Type getType() const = 0;
 
@@ -132,14 +133,19 @@ public:
     virtual ColumnFileReaderPtr getReader(
         const DMContext & context,
         const IColumnFileDataProviderPtr & data_provider,
-        const ColumnDefinesPtr & col_defs) const
-        = 0;
+        const ColumnDefinesPtr & col_defs) const = 0;
 
     /// Note: Only ColumnFileInMemory can be appendable. Other ColumnFiles (i.e. ColumnFilePersisted) have
     /// been persisted in the disk and their data will be immutable.
     virtual bool isAppendable() const { return false; }
     virtual void disableAppend() {}
-    virtual bool append(
+
+    struct AppendResult
+    {
+        bool success = false; // whether the append is successful
+        size_t new_alloc_bytes = 0; // the new allocated bytes after append
+    };
+    virtual AppendResult append(
         const DMContext & /*dm_context*/,
         const Block & /*data*/,
         size_t /*offset*/,

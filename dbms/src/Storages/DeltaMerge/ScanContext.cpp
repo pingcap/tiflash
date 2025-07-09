@@ -17,7 +17,9 @@
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/JSON/Object.h>
 #pragma GCC diagnostic pop
+
 #include <Poco/UUIDGenerator.h>
+#include <Storages/DeltaMerge/Filter/PushDownFilter.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
 #include <magic_enum.hpp>
@@ -154,6 +156,11 @@ String ScanContext::toJson() const
         return arr;
     };
     json->set("region_num_of_instance", to_json_array(region_num_of_instance));
+
+    if (pushdown_executor)
+    {
+        json->set("pushdown", pushdown_executor->toJSONObject());
+    }
 
     std::stringstream buf;
     json->stringify(buf);

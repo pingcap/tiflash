@@ -48,6 +48,7 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
@@ -62,6 +63,10 @@
 #include <common/logger_useful.h>
 
 #include <random>
+namespace CurrentMetrics
+{
+extern const Metric DT_NumStorageDeltaMerge;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -89,6 +94,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     Context & global_context_)
     : IManageableStorage{columns_, tombstone}
     , data_path_contains_database_name(db_engine != "TiFlash")
+    , holder_counter(CurrentMetrics::DT_NumStorageDeltaMerge, 1)
     , store_inited(false)
     , max_column_id_used(0)
     , global_context(global_context_.getGlobalContext())
@@ -977,6 +983,7 @@ BlockInputStreams StorageDeltaMerge::read(
     auto runtime_filter_list = parseRuntimeFilterList(query_info, context);
 
     const auto & scan_context = mvcc_query_info.scan_context;
+    scan_context->pushdown_executor = filter;
 
     auto streams = store->read(
         context,
@@ -1071,6 +1078,7 @@ void StorageDeltaMerge::read(
     auto runtime_filter_list = parseRuntimeFilterList(query_info, context);
 
     const auto & scan_context = mvcc_query_info.scan_context;
+    scan_context->pushdown_executor = filter;
 
     store->read(
         exec_context_,
