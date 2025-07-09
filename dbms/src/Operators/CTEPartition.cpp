@@ -46,7 +46,14 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
     auto idx = this->getIdxInMemoryNoLock(cte_reader_id);
     block = this->blocks[idx];
     this->addIdxNoLock(cte_reader_id);
-    this->total_fetch_block_num++;
+    {
+        auto [iter, _] = this->total_fetch_block_nums.insert(std::make_pair(cte_reader_id, 0));
+        iter->second++;
+    }
+    {
+        auto [iter, _] = this->total_fetch_row_nums.insert(std::make_pair(cte_reader_id, 0));
+        iter->second += block.rows();
+    }
     return CTEOpStatus::OK;
 }
 
@@ -73,6 +80,7 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     std::lock_guard<std::mutex> lock(*this->mu);
 
     this->total_recv_block_num++;
+    this->total_recv_row_num += block.rows();
     this->total_byte_usage += block.bytes();
 
     this->memory_usage += block.bytes();
@@ -82,7 +90,6 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     if unlikely (this->exceedMemoryThresholdNoLock())
     {
         this->setCTEPartitionStatusNoLock(CTEPartitionStatus::NEED_SPILL);
-        LOG_INFO(this->spill_context->getLog(), "xzxdebug exceed memory, switch to NEED_spill");
         ret_status = CTEOpStatus::NEED_SPILL;
     }
     return ret_status;
@@ -132,6 +139,9 @@ CTEOpStatus CTEPartition::spillBlocks()
     auto total_block_in_memory_num = this->blocks.size();
     while (split_iter != split_idxs.end())
     {
+        if (split_iter->second == this->blocks.size())
+            break;
+
         auto next_iter = std::next(split_iter);
 
         Blocks spilled_blocks;
@@ -139,13 +149,18 @@ CTEOpStatus CTEPartition::spillBlocks()
             spilled_blocks.assign(blocks_begin_iter + split_iter->second, this->blocks.end());
         else
             spilled_blocks.assign(blocks_begin_iter + split_iter->second, blocks_begin_iter + next_iter->second);
+
+        RUNTIME_CHECK(!spilled_blocks.empty());
+
         this->total_block_in_disk_num += spilled_blocks.size();
+
         this->total_spill_block_num += spilled_blocks.size(); // TODO remove
 
         auto spiller = this->spill_context->getSpiller(this->partition_id, this->spillers.size());
         spiller->spillBlocks(std::move(spilled_blocks), this->partition_id);
         spiller->finishSpill();
         this->spillers.insert(std::make_pair(split_iter->first, std::move(spiller)));
+        split_iter++;
     }
 
     LOG_INFO(
@@ -181,32 +196,18 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
     RUNTIME_CHECK_MSG(this->isSpillTriggeredNoLock(), "Spill should be triggered");
     RUNTIME_CHECK_MSG(this->isBlockAvailableInDiskNoLock(cte_reader_id), "Requested block is not in disk");
 
-    auto * log = &Poco::Logger::get("LRUCache");
-    LOG_INFO(log, fmt::format("xzxdebug try to get block for {}", cte_reader_id));
     bool retry = false;
-    do
+    while (true)
     {
         auto [iter, _] = this->cte_reader_restore_streams.insert(std::make_pair(cte_reader_id, nullptr));
         if (iter->second == nullptr)
         {
             auto spiller_iter = this->spillers.find(this->fetch_block_idxs[cte_reader_id]);
             if (spiller_iter == this->spillers.end())
-            {
-                LOG_INFO(
-                    log,
-                    fmt::format(
-                        "xzxdebug fail to find restore stream {}, {}",
-                        cte_reader_id,
-                        this->fetch_block_idxs[cte_reader_id]));
+
                 // All blocks in disk have been consumed
                 return CTEOpStatus::OK;
-            }
-            LOG_INFO(
-                log,
-                fmt::format(
-                    "xzxdebug success to find restore stream {}, {}",
-                    cte_reader_id,
-                    this->fetch_block_idxs[cte_reader_id]));
+
             auto streams = spiller_iter->second->restoreBlocks(this->partition_id, 1);
             RUNTIME_CHECK(streams.size() == 1);
             iter->second = streams[0];
@@ -214,7 +215,6 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
         }
 
         block = iter->second->read();
-        LOG_INFO(log, fmt::format("xzxdebug read for {}, {}", cte_reader_id, this->fetch_block_idxs[cte_reader_id]));
         if (!block)
         {
             RUNTIME_CHECK(!retry);
@@ -222,14 +222,12 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
             iter->second->readSuffix();
             iter->second = nullptr;
             retry = true;
-            LOG_INFO(
-                log,
-                fmt::format("xzxdebug retry for {}, {}", cte_reader_id, this->fetch_block_idxs[cte_reader_id]));
             continue;
         }
 
         this->addIdxNoLock(cte_reader_id);
-    } while (retry);
+        break;
+    };
 
     return CTEOpStatus::OK;
 }

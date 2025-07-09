@@ -31,6 +31,6 @@ SpillerPtr CTESpillContext::getSpiller(size_t partition_id, size_t spill_id)
         this->spill_config.for_all_constant_max_streams,
         this->spill_config.for_all_constant_block_size);
 
-    return std::make_unique<Spiller>(config, false, this->partition_num, this->spill_block_schema, this->log);
+    return std::make_unique<Spiller>(config, false, this->partition_num, this->spill_block_schema, this->log, 1, false);
 }
 } // namespace DB

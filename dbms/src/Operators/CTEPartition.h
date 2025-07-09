@@ -54,15 +54,26 @@ struct CTEPartition
 
     void debugOutput()
     {
+        String info_block;
+        for (const auto & item : this->total_fetch_block_nums)
+            info_block = fmt::format("{} <{}: {}>", info_block, item.first, item.second);
+
+        String info_row;
+        for (const auto & item : this->total_fetch_row_nums)
+            info_row = fmt::format("{} <{}: {}>", info_row, item.first, item.second);
+
         auto * log = &Poco::Logger::get("LRUCache");
         LOG_INFO(
             log,
             fmt::format(
-                "xzxdebug CTEPartition total_recv_block_num: {}, total_spill_block_num: {}, total_fetch_block_num: {}, "
+                "xzxdebug CTEPartition total_recv_block_num: {}, row: {}, total_spill_block_num: {}, "
+                "total_fetch_block_num: {}, row num: {}, "
                 "total_byte_usage: {}",
                 total_recv_block_num,
+                total_recv_row_num,
                 total_spill_block_num,
-                total_fetch_block_num,
+                info_block,
+                info_row,
                 total_byte_usage));
     }
 
@@ -105,8 +116,10 @@ struct CTEPartition
     }
 
     size_t total_recv_block_num = 0;
+    size_t total_recv_row_num = 0;
     size_t total_spill_block_num = 0;
-    size_t total_fetch_block_num = 0;
+    std::map<size_t, size_t> total_fetch_block_nums;
+    std::map<size_t, size_t> total_fetch_row_nums;
     size_t total_byte_usage = 0;
 
     size_t partition_id;
