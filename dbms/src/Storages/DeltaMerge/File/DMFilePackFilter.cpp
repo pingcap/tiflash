@@ -14,24 +14,29 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Interpreters/Context.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilterResult.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
+#include <algorithm>
 #include <magic_enum.hpp>
 
 namespace DB::DM
 {
 
-void DMFilePackFilter::init(ReadTag read_tag)
+DMFilePackFilterResultPtr DMFilePackFilter::init(ReadTag read_tag)
 {
     Stopwatch watch;
     SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
-    size_t pack_count = dmfile->getPacks();
+    const size_t pack_count = dmfile->getPacks();
+    DMFilePackFilterResult result(index_cache, read_limiter, pack_count);
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
     {
-        tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
+        tryLoadIndex(result.param, EXTRA_HANDLE_COLUMN_ID);
         std::vector<RSOperatorPtr> handle_filters;
         for (auto & rowkey_range : rowkey_ranges)
             handle_filters.emplace_back(toFilter(rowkey_range));
@@ -64,16 +69,16 @@ void DMFilePackFilter::init(ReadTag read_tag)
 #endif
         for (size_t i = 0; i < pack_count; ++i)
         {
-            handle_res[i] = RSResult::None;
+            result.handle_res[i] = RSResult::None;
         }
         for (auto & handle_filter : handle_filters)
         {
-            auto res = handle_filter->roughCheck(0, pack_count, param);
+            auto res = handle_filter->roughCheck(0, pack_count, result.param);
             std::transform(
-                handle_res.begin(),
-                handle_res.end(),
+                result.handle_res.begin(),
+                result.handle_res.end(),
                 res.begin(),
-                handle_res.begin(),
+                result.handle_res.begin(),
                 [](RSResult a, RSResult b) { return a || b; });
         }
     }
@@ -81,18 +86,18 @@ void DMFilePackFilter::init(ReadTag read_tag)
     ProfileEvents::increment(ProfileEvents::DMFileFilterNoFilter, pack_count);
 
     /// Check packs by handle_res
-    pack_res = handle_res;
-    auto after_pk = countUsePack();
+    result.pack_res = result.handle_res;
+    auto after_pk = result.countUsePack();
 
     /// Check packs by read_packs
     if (read_packs)
     {
         for (size_t i = 0; i < pack_count; ++i)
         {
-            pack_res[i] = read_packs->contains(i) ? pack_res[i] : RSResult::None;
+            result.pack_res[i] = read_packs->contains(i) ? result.pack_res[i] : RSResult::None;
         }
     }
-    auto after_read_packs = countUsePack();
+    auto after_read_packs = result.countUsePack();
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftPKAndPackSet, after_read_packs);
 
     /// Check packs by filter in where clause
@@ -102,27 +107,27 @@ void DMFilePackFilter::init(ReadTag read_tag)
         ColIds ids = filter->getColumnIDs();
         for (const auto & id : ids)
         {
-            tryLoadIndex(id);
+            tryLoadIndex(result.param, id);
         }
 
-        const auto check_results = filter->roughCheck(0, pack_count, param);
+        const auto check_results = filter->roughCheck(0, pack_count, result.param);
         std::transform(
-            pack_res.cbegin(),
-            pack_res.cend(),
+            result.pack_res.cbegin(),
+            result.pack_res.cend(),
             check_results.cbegin(),
-            pack_res.begin(),
+            result.pack_res.begin(),
             [](RSResult a, RSResult b) { return a && b; });
     }
     else
     {
         // ColumnFileBig in DeltaValueSpace never pass a filter to DMFilePackFilter.
         // Assume its filter always return Some.
-        std::transform(pack_res.cbegin(), pack_res.cend(), pack_res.begin(), [](RSResult a) {
+        std::transform(result.pack_res.cbegin(), result.pack_res.cend(), result.pack_res.begin(), [](RSResult a) {
             return a && RSResult::Some;
         });
     }
 
-    auto [none_count, some_count, all_count, all_null_count] = countPackRes();
+    auto [none_count, some_count, all_count, all_null_count] = result.countPackRes();
     auto after_filter = some_count + all_count + all_null_count;
     ProfileEvents::increment(ProfileEvents::DMFileFilterAftRoughSet, after_filter);
     // In table scanning, DMFilePackFilter of a DMFile may be created several times:
@@ -162,31 +167,7 @@ void DMFilePackFilter::init(ReadTag read_tag)
         all_count,
         all_null_count,
         magic_enum::enum_name(read_tag));
-}
-
-std::tuple<UInt64, UInt64, UInt64, UInt64> DMFilePackFilter::countPackRes() const
-{
-    UInt64 none_count = 0;
-    UInt64 some_count = 0;
-    UInt64 all_count = 0;
-    UInt64 all_null_count = 0;
-    for (auto res : pack_res)
-    {
-        if (res == RSResult::None || res == RSResult::NoneNull)
-            ++none_count;
-        else if (res == RSResult::Some || res == RSResult::SomeNull)
-            ++some_count;
-        else if (res == RSResult::All)
-            ++all_count;
-        else if (res == RSResult::AllNull)
-            ++all_null_count;
-    }
-    return {none_count, some_count, all_count, all_null_count};
-}
-
-UInt64 DMFilePackFilter::countUsePack() const
-{
-    return std::count_if(pack_res.cbegin(), pack_res.cend(), [](RSResult res) { return res.isUse(); });
+    return std::make_shared<DMFilePackFilterResult>(std::move(result));
 }
 
 void DMFilePackFilter::loadIndex(
@@ -296,7 +277,7 @@ void DMFilePackFilter::loadIndex(
     indexes.emplace(col_id, RSIndex(type, minmax_index));
 }
 
-void DMFilePackFilter::tryLoadIndex(ColId col_id)
+void DMFilePackFilter::tryLoadIndex(RSCheckParam & param, ColId col_id)
 {
     if (param.indexes.count(col_id))
         return;
@@ -308,4 +289,149 @@ void DMFilePackFilter::tryLoadIndex(ColId col_id)
     loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
 }
 
+
+std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> //
+DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
+    const DMContext & dm_context,
+    const DMFiles & dmfiles,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    const DeltaIndexIterator & delta_index_begin,
+    const DeltaIndexIterator & delta_index_end)
+{
+    // Packs that all rows compliant with MVCC filter and RowKey filter requirements.
+    // For building bitmap filter, we don't need to read these packs,
+    // just set corresponding positions in the bitmap to true.
+    // So we record the offset and rows of these packs and merge continuous ranges.
+    std::vector<Range> skipped_ranges;
+    // Packs that some rows compliant with MVCC filter and RowKey filter requirements.
+    // We need to read these packs and do RowKey filter and MVCC filter for them.
+    DMFilePackFilterResults new_pack_filter_results;
+    new_pack_filter_results.reserve(dmfiles.size());
+    RUNTIME_CHECK(pack_filter_results.size() == dmfiles.size());
+
+    UInt64 current_offset = 0;
+    UInt64 prev_sid = 0;
+    UInt64 sid = 0;
+    UInt32 prev_delete_count = 0;
+
+    auto delta_index_it = delta_index_begin;
+    auto file_provider = dm_context.global_context.getFileProvider();
+    for (size_t i = 0; i < dmfiles.size(); ++i)
+    {
+        const auto & dmfile = dmfiles[i];
+        const auto & pack_filter = pack_filter_results[i];
+        const auto & pack_res = pack_filter->getPackRes();
+        const auto & handle_res = pack_filter->getHandleRes();
+        const auto & pack_stats = dmfile->getPackStats();
+        DMFilePackFilterResultPtr new_pack_filter;
+        for (size_t pack_id = 0; pack_id < pack_stats.size(); ++pack_id)
+        {
+            const auto & pack_stat = pack_stats[pack_id];
+            auto prev_offset = current_offset;
+            current_offset += pack_stat.rows;
+            if (!pack_res[pack_id].isUse())
+                continue;
+
+            // Find the first `delta_index_it` whose sid > prev_offset
+            auto new_it = std::upper_bound(
+                delta_index_it,
+                delta_index_end,
+                prev_offset,
+                [](UInt64 val, const DeltaIndexCompacted::Entry & e) { return val < e.getSid(); });
+            if (new_it != delta_index_it)
+            {
+                auto prev_it = std::prev(new_it);
+                prev_sid = prev_it->getSid();
+                prev_delete_count = prev_it->isDelete() ? prev_it->getCount() : 0;
+                delta_index_it = new_it;
+            }
+            sid = delta_index_it != delta_index_end ? delta_index_it->getSid() : std::numeric_limits<UInt64>::max();
+
+            // The sid range of the pack: (prev_offset, current_offset].
+            // The continuously sorted sid range in delta index: (prev_sid, sid].
+
+            // Since `delta_index_it` is the first element with sid > prev_offset,
+            // the preceding element’s sid (prev_sid) must be <= prev_offset.
+            RUNTIME_CHECK(prev_offset >= prev_sid);
+            if (prev_offset == prev_sid)
+            {
+                // If `prev_offset == prev_sid`, the RowKey of the delta row preceding `prev_sid` should not
+                // be the same as the RowKey of `prev_sid`. This is because for the same RowKey, the version
+                // in the delta data should be greater than the version in the stable data.
+                // However, this is not always the case and many situations need to be confirmed. For safety
+                // reasons, the pack will not be skipped in this situation.
+                // TODO: It might be possible to use a minmax index to compare the RowKey of the
+                // `prev_sid` row with the RowKey of the preceding delta row.
+                continue;
+            }
+
+            // Now check the right boundary of this pack(i.e. current_offset)
+            if (current_offset >= sid)
+            {
+                // If `current_offset > sid`, it means some data in pack exceeds the right boundary of
+                // (prev_sid, sid] so this pack can not be skipped.
+                //
+                // If `current_offset == sid`, the delta row following this sid row might have the same
+                // RowKey. The pack also can not be skipped because delta merge and MVCC filter is necessary.
+                // TODO: It might be possible to use a minmax index to compare the RowKey of the
+                // current sid row with the RowKey of the following delta row.
+                continue;
+            }
+
+            if (prev_delete_count > 0)
+            {
+                // The previous delta index iterator is a delete, we must check if the sid range of the
+                // pack intersects with the delete range.
+                // The sid range of the pack: (prev_offset, current_offset].
+                // The delete sid range: (prev_sid, prev_sid + prev_delete_count].
+                if (current_offset <= prev_sid + prev_delete_count)
+                {
+                    // The sid range of the pack is fully covered by the delete sid range, it means that
+                    // every row in this pack has been deleted. In this case, the pack can be safely skipped.
+                    if unlikely (!new_pack_filter)
+                        new_pack_filter = std::make_shared<DMFilePackFilterResult>(*pack_filter);
+
+                    new_pack_filter->pack_res[pack_id] = RSResult::None;
+                    continue;
+                }
+                if (prev_offset < prev_sid + prev_delete_count)
+                {
+                    // Some rows in the pack are deleted while others are not, it means the pack cannot
+                    // be skipped.
+                    continue;
+                }
+                // None of the rows in the pack have been deleted
+            }
+
+            // Check other conditions that may allow the pack to be skipped
+            if (handle_res[pack_id] == RSResult::Some || pack_stat.not_clean > 0
+                || pack_filter->getMaxVersion(dmfile, pack_id, file_provider, dm_context.scan_context) > start_ts)
+            {
+                // `not_clean > 0` means there are more than one version for some rowkeys in this pack
+                // `pack.max_version > start_ts` means some rows will be filtered by MVCC reading
+                // We need to read this pack to do delte merge, RowKey or MVCC filter.
+                continue;
+            }
+
+            if unlikely (!new_pack_filter)
+                new_pack_filter = std::make_shared<DMFilePackFilterResult>(*pack_filter);
+
+            // This pack is skipped by the skipped_range, do not need to read the rows from disk
+            new_pack_filter->pack_res[pack_id] = RSResult::None;
+            // When this pack is next to the previous skipped pack, we merge them.
+            if (!skipped_ranges.empty() && skipped_ranges.back().offset + skipped_ranges.back().rows == prev_offset)
+                skipped_ranges.back().rows += pack_stat.rows;
+            else
+                skipped_ranges.emplace_back(prev_offset, pack_stat.rows);
+        }
+
+        if (new_pack_filter)
+            new_pack_filter_results.emplace_back(std::move(new_pack_filter));
+        else
+            new_pack_filter_results.emplace_back(pack_filter);
+    }
+
+    return {skipped_ranges, new_pack_filter_results};
+}
 } // namespace DB::DM

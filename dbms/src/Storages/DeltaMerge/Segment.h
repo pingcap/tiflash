@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
@@ -694,6 +695,21 @@ public:
         ReadTag read_tag,
         UInt64 start_ts = std::numeric_limits<UInt64>::max(),
         bool need_row_id = false);
+
+    /// Create a stream which merged delta and stable streams together.
+    template <bool skippable_place = false>
+    static SkippableBlockInputStreamPtr getPlacedStreamWithPackFilterResult(
+        const DMContext & dm_context,
+        const ColumnDefines & read_columns,
+        const RowKeyRanges & rowkey_ranges,
+        const StableSnapshotPtr & stable_snap,
+        const DeltaValueReaderPtr & delta_reader,
+        const DeltaIndexIterator & delta_index_begin,
+        const DeltaIndexIterator & delta_index_end,
+        size_t expected_block_size,
+        ReadTag read_tag,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts);
 
     /// Make sure that all delta packs have been placed.
     /// Note that the index returned could be partial index, and cannot be updated to shared index.

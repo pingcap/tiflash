@@ -2763,6 +2763,50 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
     }
 }
 
+template <bool skippable_place>
+SkippableBlockInputStreamPtr Segment::getPlacedStreamWithPackFilterResult(
+    const DMContext & dm_context,
+    const ColumnDefines & read_columns,
+    const RowKeyRanges & rowkey_ranges,
+    const StableSnapshotPtr & stable_snap,
+    const DeltaValueReaderPtr & delta_reader,
+    const DeltaIndexIterator & delta_index_begin,
+    const DeltaIndexIterator & delta_index_end,
+    size_t expected_block_size,
+    ReadTag read_tag,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts)
+{
+    if (unlikely(rowkey_ranges.empty()))
+        throw Exception("rowkey ranges shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
+
+    SkippableBlockInputStreamPtr stable_input_stream = stable_snap->getInputStreamWithPackFilterResult(
+        dm_context,
+        read_columns,
+        rowkey_ranges,
+        start_ts,
+        expected_block_size,
+        read_tag,
+        pack_filter_results);
+    RowKeyRange rowkey_range = rowkey_ranges.size() == 1
+        ? rowkey_ranges[0]
+        : mergeRanges(rowkey_ranges, rowkey_ranges[0].is_common_handle, rowkey_ranges[0].rowkey_column_size);
+    constexpr bool need_row_id = true;
+    return std::make_shared<DeltaMergeBlockInputStream< //
+        DeltaValueReader,
+        DeltaIndexIterator,
+        skippable_place,
+        need_row_id>>(
+        stable_input_stream,
+        delta_reader,
+        delta_index_begin,
+        delta_index_end,
+        rowkey_range,
+        expected_block_size,
+        stable_snap->getDMFilesRows(),
+        dm_context.tracing_id);
+}
+
 std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     const DMContext & dm_context,
     const SegmentSnapshotPtr & segment_snap,
@@ -3079,15 +3123,66 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
         getExtraHandleColumnDefine(is_common_handle),
     };
     // Generate the bitmap according to the MVCC filter result
-    auto stream = getInputStreamModeNormal(
+    auto read_tag = ReadTag::MVCC;
+    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, start_ts);
+
+    const auto & dmfiles = segment_snap->stable->getDMFiles();
+    DMFilePackFilterResults pack_filter_results;
+    pack_filter_results.reserve(dmfiles.size());
+    for (const auto & dmfile : dmfiles)
+    {
+        DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
+            dmfile,
+            dm_context.global_context.getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ true,
+            read_ranges,
+            filter,
+            {},
+            dm_context.global_context.getFileProvider(),
+            dm_context.global_context.getReadLimiter(),
+            dm_context.scan_context,
+            dm_context.tracing_id,
+            read_tag);
+        pack_filter_results.emplace_back(pack_filter.getPackFilterResult());
+    }
+
+    auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
         dm_context,
-        columns_to_read,
-        segment_snap,
-        read_ranges,
-        filter,
+        dmfiles,
+        pack_filter_results,
         start_ts,
+        read_info.index_begin,
+        read_info.index_end);
+
+    BlockInputStreamPtr stream = getPlacedStreamWithPackFilterResult(
+        dm_context,
+        *read_info.read_columns,
+        read_ranges,
+        segment_snap->stable,
+        read_info.getDeltaReader(read_tag),
+        read_info.index_begin,
+        read_info.index_end,
         expected_block_size,
-        /*need_row_id*/ true);
+        read_tag,
+        new_pack_filter_results,
+        start_ts);
+
+    stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_ranges, 0);
+    stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
+        stream,
+        columns_to_read,
+        start_ts,
+        is_common_handle,
+        dm_context.tracing_id,
+        dm_context.scan_context);
+
+    LOG_TRACE(
+        segment_snap->log,
+        "Finish segment create input stream, start_ts={} range_size={} ranges={}",
+        start_ts,
+        read_ranges.size(),
+        DB::DM::toDebugString(read_ranges));
+
     // `total_rows` is the rows read for building bitmap
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);

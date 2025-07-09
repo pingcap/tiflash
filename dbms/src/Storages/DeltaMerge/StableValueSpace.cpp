@@ -527,6 +527,46 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
     }
 }
 
+SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStreamWithPackFilterResult(
+    const DMContext & dm_context,
+    const ColumnDefines & read_columns,
+    const RowKeyRanges & rowkey_ranges,
+    UInt64 max_data_version,
+    size_t expected_block_size,
+    ReadTag read_tag,
+    const DMFilePackFilterResults & pack_filter_results)
+{
+    LOG_DEBUG(log, "StableVS getInputStreamWithPackFilterResult start_ts={}", max_data_version);
+    SkippableBlockInputStreams streams;
+    std::vector<size_t> rows;
+    streams.reserve(stable->files.size());
+    rows.reserve(stable->files.size());
+
+    for (size_t i = 0; i < stable->files.size(); ++i)
+    {
+        DMFileBlockInputStreamBuilder builder(dm_context.global_context);
+        builder
+            .enableCleanRead(
+                /*enable_handle_clean_read*/ false,
+                /*is_fast_scan*/ false,
+                /*enable_del_clean_read*/ false,
+                max_data_version)
+            .enableColumnCacheLongTerm(dm_context.pk_col_id)
+            .setDMFilePackFilterResult(pack_filter_results.size() > i ? pack_filter_results[i] : nullptr)
+            .setColumnCache(column_caches[i])
+            .setTracingID(dm_context.tracing_id)
+            .setRowsThreshold(expected_block_size)
+            .setReadTag(read_tag);
+        streams.push_back(builder.build(stable->files[i], read_columns, rowkey_ranges, dm_context.scan_context));
+        rows.push_back(stable->files[i]->getRows());
+    }
+
+    return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ true>>(
+        streams,
+        std::move(rows),
+        dm_context.scan_context);
+}
+
 RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range)
     const
 {
