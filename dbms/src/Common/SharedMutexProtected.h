@@ -14,11 +14,12 @@
 
 #pragma once
 
+#include <Common/SharedLockGuard.h>
+#include <Common/SharedMutex.h>
 #include <Common/nocopyable.h>
 #include <common/defines.h>
 #include <common/types.h>
 
-#include <shared_mutex>
 
 namespace DB
 {
@@ -35,7 +36,7 @@ private:
         DISALLOW_COPY_AND_MOVE(Locked);
 
     public:
-        Locked(U & value_, std::shared_mutex & mutex_)
+        Locked(U & value_, SharedMutex & mutex_)
             : value(value_)
             , locker(mutex_)
         {}
@@ -69,10 +70,10 @@ private:
 public:
     // Return a locked object that can be used to shared access the protected value.
     // Please destroy the object ASAP to release the lock.
-    auto lockShared() const { return Locked<T const, std::shared_lock<std::shared_mutex>>(value, mutex); }
+    auto lockShared() const { return Locked<T const, SharedLockGuard<SharedMutex>>(value, mutex); }
     // Return a locked object that can be used to exclusive access the protected value.
     // Please destroy the object ASAP to release the lock.
-    auto lockExclusive() { return Locked<T, std::unique_lock<std::shared_mutex>>(value, mutex); }
+    auto lockExclusive() { return Locked<T, std::unique_lock<SharedMutex>>(value, mutex); }
 
     SharedMutexProtected() = default;
 
@@ -110,7 +111,7 @@ public:
 
 private:
     T value;
-    mutable std::shared_mutex mutex;
+    mutable SharedMutex mutex;
 };
 
 } // namespace DB
