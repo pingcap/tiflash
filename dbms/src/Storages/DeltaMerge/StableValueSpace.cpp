@@ -64,7 +64,7 @@ void StableValueSpace::setFiles(const DMFiles & files_, const RowKeyRange & rang
                 dm_context->scan_context,
                 dm_context->tracing_id,
                 ReadTag::Internal);
-            auto [file_valid_rows, file_valid_bytes] = pack_filter.validRowsAndBytes();
+            auto [file_valid_rows, file_valid_bytes] = pack_filter->validRowsAndBytes(file);
             rows += file_valid_rows;
             bytes += file_valid_bytes;
         }
@@ -388,12 +388,12 @@ void StableValueSpace::calculateStableProperty(
             context.scan_context,
             context.tracing_id,
             ReadTag::Internal);
-        const auto & pack_res = pack_filter.getPackResConst();
+        const auto & pack_res = pack_filter->getPackResConst();
         size_t new_pack_properties_index = 0;
         const bool use_new_pack_properties = pack_properties.property_size() == 0;
         if (use_new_pack_properties)
         {
-            const size_t use_packs_count = pack_filter.countUsePack();
+            const size_t use_packs_count = pack_filter->countUsePack();
 
             RUNTIME_CHECK_MSG(
                 static_cast<size_t>(new_pack_properties.property_size()) == use_packs_count,
@@ -595,7 +595,7 @@ RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext &
             context.tracing_id,
             ReadTag::Internal);
         const auto & pack_stats = f->getPackStats();
-        const auto & pack_res = filter.getPackResConst();
+        const auto & pack_res = filter->getPackResConst();
         for (size_t i = 0; i < pack_stats.size(); ++i)
         {
             if (pack_res[i].isUse())
@@ -640,7 +640,7 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
             context.scan_context,
             context.tracing_id,
             ReadTag::Internal);
-        const auto & handle_filter_result = filter.getHandleRes();
+        const auto & handle_filter_result = filter->getHandleRes();
         if (file_idx == 0)
         {
             // TODO: this check may not be correct when support multiple files in a stable, let's just keep it now for simplicity

@@ -46,7 +46,7 @@ class DMFilePackFilter
 
 public:
     // Empty `rowkey_ranges` means do not filter by rowkey_ranges
-    static DMFilePackFilter loadFrom(
+    static DMFilePackFilterResultPtr loadFrom(
         const DMFilePtr & dmfile,
         const MinMaxIndexCachePtr & index_cache,
         bool set_cache_if_miss,
@@ -59,7 +59,7 @@ public:
         const String & tracing_id,
         const ReadTag read_tag)
     {
-        return DMFilePackFilter(
+        auto f = DMFilePackFilter(
             dmfile,
             index_cache,
             set_cache_if_miss,
@@ -69,48 +69,8 @@ public:
             file_provider,
             read_limiter,
             scan_context,
-            tracing_id,
-            read_tag);
-    }
-
-    // For `Segment::buildBitmapFilterNormal`
-    DMFilePackFilterResultPtr getPackFilterResult() const { return pack_filter_result; }
-
-    const RSResults & getHandleRes() const { return pack_filter_result->handle_res; }
-    const RSResults & getPackResConst() const { return pack_filter_result->pack_res; }
-    RSResults & getPackRes() { return pack_filter_result->pack_res; }
-    UInt64 countUsePack() const { return pack_filter_result->countUsePack(); }
-
-    Handle getMinHandle(size_t pack_id)
-    {
-        return pack_filter_result->getMinHandle(dmfile, pack_id, file_provider, scan_context);
-    }
-
-    StringRef getMinStringHandle(size_t pack_id)
-    {
-        return pack_filter_result->getMinStringHandle(dmfile, pack_id, file_provider, scan_context);
-    }
-
-    UInt64 getMaxVersion(size_t pack_id)
-    {
-        return pack_filter_result->getMaxVersion(dmfile, pack_id, file_provider, scan_context);
-    }
-
-    // Get valid rows and bytes after filter invalid packs by handle_range and filter
-    std::pair<size_t, size_t> validRowsAndBytes()
-    {
-        size_t rows = 0;
-        size_t bytes = 0;
-        const auto & pack_stats = dmfile->getPackStats();
-        for (size_t i = 0; i < pack_stats.size(); ++i)
-        {
-            if (pack_filter_result->pack_res[i].isUse())
-            {
-                rows += pack_stats[i].rows;
-                bytes += pack_stats[i].bytes;
-            }
-        }
-        return {rows, bytes};
+            tracing_id);
+        return f.load(read_tag);
     }
 
     struct Range
@@ -155,8 +115,7 @@ private:
         const FileProviderPtr & file_provider_,
         const ReadLimiterPtr & read_limiter_,
         const ScanContextPtr & scan_context_,
-        const String & tracing_id,
-        const ReadTag read_tag)
+        const String & tracing_id)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
@@ -167,11 +126,9 @@ private:
         , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
-    {
-        pack_filter_result = init(read_tag);
-    }
+    {}
 
-    DMFilePackFilterResultPtr init(ReadTag read_tag);
+    DMFilePackFilterResultPtr load(ReadTag read_tag);
 
     static void loadIndex(
         ColumnIndexes & indexes,
@@ -185,9 +142,6 @@ private:
 
     void tryLoadIndex(RSCheckParam & param, ColId col_id);
 
-    // None+NoneNull, Some+SomeNull, All, AllNull
-    std::tuple<UInt64, UInt64, UInt64, UInt64> countPackRes() const { return pack_filter_result->countPackRes(); }
-
 private:
     DMFilePtr dmfile;
     MinMaxIndexCachePtr index_cache;
@@ -196,8 +150,6 @@ private:
     RSOperatorPtr filter;
     IdSetPtr read_packs;
     FileProviderPtr file_provider;
-
-    DMFilePackFilterResultPtr pack_filter_result;
 
     const ScanContextPtr scan_context;
 

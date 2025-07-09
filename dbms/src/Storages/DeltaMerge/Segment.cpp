@@ -3131,7 +3131,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     pack_filter_results.reserve(dmfiles.size());
     for (const auto & dmfile : dmfiles)
     {
-        DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
+        DMFilePackFilterResultPtr pack_filter = DMFilePackFilter::loadFrom(
             dmfile,
             dm_context.global_context.getMinMaxIndexCache(),
             /*set_cache_if_miss*/ true,
@@ -3143,7 +3143,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
             dm_context.scan_context,
             dm_context.tracing_id,
             read_tag);
-        pack_filter_results.emplace_back(pack_filter.getPackFilterResult());
+        pack_filter_results.emplace_back(pack_filter);
     }
 
     auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
@@ -3236,22 +3236,23 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
     size_t rows = 0;
     UInt32 preceded_rows = 0;
 
+    auto file_provider = dm_context.global_context.getFileProvider();
     for (const auto & dmfile : dmfiles)
     {
-        DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
+        DMFilePackFilterResultPtr pack_filter = DMFilePackFilter::loadFrom(
             dmfile,
             dm_context.global_context.getMinMaxIndexCache(),
             /*set_cache_if_miss*/ true,
             read_ranges,
             filter,
             /*read_pack*/ {},
-            dm_context.global_context.getFileProvider(),
+            file_provider,
             dm_context.global_context.getReadLimiter(),
             dm_context.scan_context,
             dm_context.tracing_id,
             ReadTag::MVCC);
-        const auto & pack_res = pack_filter.getPackResConst();
-        const auto & handle_res = pack_filter.getHandleRes();
+        const auto & pack_res = pack_filter->getPackResConst();
+        const auto & handle_res = pack_filter->getHandleRes();
         const auto & pack_stats = dmfile->getPackStats();
 
         auto some_packs_set = std::make_shared<IdSet>();
@@ -3266,7 +3267,12 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
             }
 
             if (handle_res[pack_id] == RSResult::Some || pack_stat.not_clean > 0
-                || pack_filter.getMaxVersion(pack_id) > start_ts)
+                || (pack_filter->getMaxVersion( //
+                        dmfile,
+                        pack_id,
+                        file_provider,
+                        dm_context.scan_context)
+                    > start_ts))
             {
                 // We need to read this pack to do RowKey or MVCC filter.
                 some_packs_set->insert(pack_id);

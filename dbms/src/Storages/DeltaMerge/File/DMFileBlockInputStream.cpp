@@ -60,7 +60,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
 
     if (!pack_filter)
     {
-        auto pack_filter_raw = DMFilePackFilter::loadFrom(
+        pack_filter = DMFilePackFilter::loadFrom(
             dmfile,
             index_cache,
             /*set_cache_if_miss*/ true,
@@ -72,7 +72,6 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
             scan_context,
             tracing_id,
             read_tag);
-        pack_filter = pack_filter_raw.getPackFilterResult();
     }
 
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
@@ -185,7 +184,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
 
     // All check passed. Let's read via vector index.
 
-    DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
+    DMFilePackFilterResultPtr pack_filter = DMFilePackFilter::loadFrom(
         dmfile,
         index_cache,
         /*set_cache_if_miss*/ true,
@@ -209,7 +208,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
         enable_del_clean_read,
         is_fast_scan,
         max_data_version,
-        pack_filter.getPackFilterResult(),
+        pack_filter,
         mark_cache,
         enable_column_cache,
         column_cache,

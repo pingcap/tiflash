@@ -27,7 +27,7 @@
 namespace DB::DM
 {
 
-DMFilePackFilterResultPtr DMFilePackFilter::init(ReadTag read_tag)
+DMFilePackFilterResultPtr DMFilePackFilter::load(ReadTag read_tag)
 {
     Stopwatch watch;
     SCOPE_EXIT({ scan_context->total_rs_pack_filter_check_time_ns += watch.elapsed(); });
@@ -410,7 +410,7 @@ DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
             {
                 // `not_clean > 0` means there are more than one version for some rowkeys in this pack
                 // `pack.max_version > start_ts` means some rows will be filtered by MVCC reading
-                // We need to read this pack to do delte merge, RowKey or MVCC filter.
+                // We need to read this pack to do delta merge, RowKey or MVCC filter.
                 continue;
             }
 

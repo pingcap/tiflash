@@ -80,6 +80,23 @@ public:
     // None+NoneNull, Some+SomeNull, All, AllNull
     std::tuple<UInt64, UInt64, UInt64, UInt64> countPackRes() const;
 
+    // Get valid rows and bytes after filter invalid packs by handle_range and filter
+    std::pair<size_t, size_t> validRowsAndBytes(const DMFilePtr & dmfile)
+    {
+        size_t rows = 0;
+        size_t bytes = 0;
+        const auto & pack_stats = dmfile->getPackStats();
+        for (size_t i = 0; i < pack_stats.size(); ++i)
+        {
+            if (pack_res[i].isUse())
+            {
+                rows += pack_stats[i].rows;
+                bytes += pack_stats[i].bytes;
+            }
+        }
+        return {rows, bytes};
+    }
+
 private:
     void tryLoadIndex(
         const DMFilePtr & dmfile,
