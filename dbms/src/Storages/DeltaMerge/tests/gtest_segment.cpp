@@ -665,9 +665,10 @@ TEST_F(SegmentOperationTest, TestMassiveSegment)
 try
 {
     const size_t level = 1;
+    const size_t segment_range_size = 500;
     for (size_t lvl = 0; lvl < level; ++lvl)
     {
-        size_t num_expected_segs = 500;
+        size_t num_expected_segs = 200;
         // size_t num_expected_segs = 10;
         size_t progress_interval = 100;
         const auto lvl_beg_seg_id = segments.rbegin()->first;
@@ -678,7 +679,7 @@ try
         auto next_split_seg_id = lvl_beg_seg_id;
         for (size_t i = 0; i < num_expected_segs; ++i)
         {
-            auto split_point = (lvl * num_expected_segs + 1 + i) * 500;
+            auto split_point = (lvl * num_expected_segs + 1 + i) * segment_range_size;
             auto n_seg_id = splitSegmentAt(next_split_seg_id, split_point, Segment::SplitMode::Logical);
             ASSERT_TRUE(n_seg_id.has_value()) << fmt::format("i={} sp={}", i, split_point);
             next_split_seg_id = *n_seg_id;
@@ -710,7 +711,8 @@ try
             if (seg_id < lvl_beg_seg_id)
                 continue; // skip segments created in previous levels
 
-            auto write_rows = 500;
+            size_t write_rows = 4;
+            size_t write_rows_sub = 2;
             if (round % progress_interval == 0)
             {
                 auto mu = get_process_mem_usage();
@@ -722,20 +724,25 @@ try
                     write_rows * round,
                     mu.resident_mb);
             }
-            writeToCache(
-                seg_id,
-                write_rows,
-                /* start_at */ lvl * num_expected_segs * write_rows + round * write_rows,
-                false,
-                std::nullopt);
-            LOG_INFO(
-                log,
-                "lvl={} round={} seg_id={} written_rows={} mem_tbl_bytes={}",
-                lvl,
-                round,
-                seg_id,
-                write_rows,
-                segments[seg_id]->getDelta()->getTotalCacheBytes());
+            for (size_t k = 0; k < 2; ++k)
+            {
+                writeToCache(
+                    seg_id,
+                    write_rows_sub,
+                    /* start_at */ lvl * num_expected_segs * segment_range_size + round * segment_range_size,
+                    false,
+                    std::nullopt);
+                LOG_INFO(
+                    log,
+                    "lvl={} round={} k={} seg_id={} written_rows={} mem_tbl_bytes={} mem_tbl_alloc_bytes={}",
+                    lvl,
+                    round,
+                    k,
+                    seg_id,
+                    write_rows,
+                    segments[seg_id]->getDelta()->getTotalCacheBytes(),
+                    segments[seg_id]->getDelta()->getTotalAllocatedBytes());
+            }
             round++;
         }
         {
@@ -743,8 +750,8 @@ try
             LOG_INFO(
                 log,
                 "TestMassiveSegment done, segments.size()={} lvl={} mem_resident_set={:.3f}MB",
-                lvl,
                 segments.size(),
+                lvl,
                 mu.resident_mb);
         }
     }

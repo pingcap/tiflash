@@ -123,6 +123,19 @@ ColumnFile::AppendResult ColumnFileInMemory::append(
         max_capacity,
         rows,
         bytes);
+    for (size_t i = 0; i < cache->block.columns(); ++i)
+    {
+        const auto & cache_col = *cache->block.getByPosition(i).column;
+        LOG_INFO(
+            Logger::get(""),
+            "col i={} name={} type={} rows={} bytes={} alloc_bytes={}",
+            i,
+            cache->block.getByPosition(i).name,
+            cache_col.getName(),
+            cache_col.size(),
+            cache_col.byteSize(),
+            cache_col.allocatedBytes());
+    }
     return AppendResult{true, new_alloc_block_bytes};
 }
 

@@ -302,8 +302,10 @@ void ColumnString::reserveWithStrategy(size_t n, IColumn::ReserveStrategy strate
         chars.reserve(n * APPROX_STRING_SIZE);
         break;
     case IColumn::ReserveStrategy::ScaleFactor1_5:
-        offsets.reserve_exact(n / 2 * 3);
-        chars.reserve_exact(n * APPROX_STRING_SIZE / 2 * 3);
+        // offsets.reserve_exact(n / 2 * 3);
+        // chars.reserve_exact(n * APPROX_STRING_SIZE / 2 * 3);
+        offsets.resize(n / 2 * 3);
+        chars.resize(n / 2 * APPROX_STRING_SIZE * 3);
         break;
     }
 }

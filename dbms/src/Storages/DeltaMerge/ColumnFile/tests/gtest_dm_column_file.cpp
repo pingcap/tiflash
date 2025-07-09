@@ -38,6 +38,8 @@
 #include <ext/scope_guard.h>
 #include <vector>
 
+#include "Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h"
+
 namespace DB::DM::tests
 {
 
@@ -225,6 +227,35 @@ try
     Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
     WriteBatches wbs(*dmContext().storage_pool);
     EXPECT_THROW(ColumnFileTiny::writeColumnFile(dmContext(), block, 0, num_rows_write, wbs), DB::Exception);
+}
+CATCH
+
+TEST_P(ColumnFileTest, CreateColumnFileInMemory)
+try
+{
+    size_t num_rows_write = 10;
+    Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+    for (Int64 i = 0; i < 1000; ++i)
+    {
+        auto null_col = ColumnNullable::create(ColumnString::create(), ColumnUInt8::create());
+        for (size_t j = 0; j < num_rows_write; ++j)
+        {
+            null_col->insertDefault();
+        }
+        block.insert(ColumnWithTypeAndName{
+            std::move(null_col),
+            std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>()),
+            fmt::format("field_{}", i),
+        });
+    }
+    // A 1000 columns empty block takes about 238KB
+    auto schema = ColumnFileSchema(block);
+    ColumnFileInMemoryPtr cf_in_mem = std::make_shared<ColumnFileInMemory>(std::make_shared<ColumnFileSchema>(schema));
+    LOG_INFO(
+        Logger::get(),
+        "ColumnFileInMemory, bytes={} alloc_bytes={}",
+        cf_in_mem->getBytes(),
+        cf_in_mem->getAllocateBytes());
 }
 CATCH
 

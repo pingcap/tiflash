@@ -370,7 +370,10 @@ MutableColumns Block::cloneEmptyColumns() const
     size_t num_columns = data.size();
     MutableColumns columns(num_columns);
     for (size_t i = 0; i < num_columns; ++i)
+    {
         columns[i] = data[i].column ? data[i].column->cloneEmpty() : data[i].type->createColumn();
+        columns[i]->reserveWithStrategy(0, IColumn::ReserveStrategy::ScaleFactor1_5);
+    }
     return columns;
 }
 
