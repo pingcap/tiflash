@@ -498,7 +498,10 @@ void HashJoin::workAfterBuildRowFinish()
     fiu_do_on(FailPoints::force_join_v2_probe_enable_lm, { late_materialization = true; });
     fiu_do_on(FailPoints::force_join_v2_probe_disable_lm, { late_materialization = false; });
 
-    join_probe_helper = std::make_unique<JoinProbeHelper>(this, late_materialization);
+    if (SemiJoinProbeHelper::isSupported(kind, has_other_condition))
+        semi_join_probe_helper = std::make_unique<SemiJoinProbeHelper>(this);
+    else
+        join_probe_helper = std::make_unique<JoinProbeHelper>(this, late_materialization);
 
     LOG_INFO(
         log,
@@ -626,6 +629,7 @@ Block HashJoin::probeBlock(JoinProbeContext & ctx, size_t stream_index)
         method,
         kind,
         has_other_condition,
+        !non_equal_conditions.other_eq_cond_from_in_name.empty(),
         key_names_left,
         non_equal_conditions.left_filter_column,
         probe_output_name_set,
@@ -636,7 +640,11 @@ Block HashJoin::probeBlock(JoinProbeContext & ctx, size_t stream_index)
     FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_join_prob_failpoint);
 
     auto & wd = probe_workers_data[stream_index];
-    Block res = join_probe_helper->probe(ctx, wd);
+    Block res;
+    if (semi_join_probe_helper)
+        res = semi_join_probe_helper->probe(ctx, wd);
+    else
+        res = join_probe_helper->probe(ctx, wd);
     if (ctx.isAllFinished())
         wd.probe_handle_rows += ctx.rows;
     return res;

@@ -23,6 +23,7 @@
 #include <Interpreters/JoinV2/HashJoinKey.h>
 #include <Interpreters/JoinV2/HashJoinPointerTable.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
+#include <Interpreters/JoinV2/SemiJoinProbeList.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <absl/base/optimization.h>
 
@@ -40,13 +41,19 @@ struct JoinProbeContext
     RowPtr current_build_row_ptr = nullptr;
     /// For left outer/(left outer) (anti) semi join without other conditions.
     bool current_row_is_matched = false;
-    /// For left outer/(left outer) (anti) semi join with other conditions.
+    /// For left outer with other conditions.
     IColumn::Filter rows_not_matched;
     /// < 0 means not_matched_offsets is not initialized.
     ssize_t not_matched_offsets_idx = -1;
     IColumn::Offsets not_matched_offsets;
     /// For left outer (anti) semi join.
     PaddedPODArray<Int8> left_semi_match_res;
+    /// For left outer (anti) semi join with other-eq-from-in conditions.
+    PaddedPODArray<UInt8> left_semi_match_null_res;
+    /// For (anti) semi join with other conditions.
+    IColumn::Offsets semi_selective_offsets;
+    /// For (left outer) (anti) semi join with other conditions.
+    std::unique_ptr<ISemiJoinProbeList> semi_join_probe_list;
 
     size_t prefetch_active_states = 0;
     size_t prefetch_iter = 0;
@@ -69,6 +76,7 @@ struct JoinProbeContext
         HashJoinKeyMethod method,
         ASTTableJoin::Kind kind,
         bool has_other_condition,
+        bool has_other_eq_cond_from_in,
         const Names & key_names,
         const String & filter_column,
         const NameSet & probe_output_name_set,
