@@ -19,9 +19,7 @@
 #include <Storages/Page/PageStorage.h>
 #include <tipb/executor.pb.h>
 
-namespace DB
-{
-namespace DM
+namespace DB::DM
 {
 
 StoreStats DeltaMergeStore::getStoreStats()
@@ -33,11 +31,13 @@ StoreStats DeltaMergeStore::getStoreStats()
 
     Int64 total_placed_rows = 0;
     Int64 total_delta_cache_rows = 0;
-    Float64 total_delta_cache_size = 0;
+    UInt64 total_delta_cache_size = 0;
+    UInt64 total_delta_cache_alloc_size = 0;
     Int64 total_delta_valid_cache_rows = 0;
     {
         std::shared_lock lock(read_write_mutex);
         stat.segment_count = segments.size();
+        stat.column_count = original_table_columns.size();
 
         for (const auto & [handle, segment] : segments)
         {
@@ -66,6 +66,7 @@ StoreStats DeltaMergeStore::getStoreStats()
 
                 total_delta_cache_rows += delta->getTotalCacheRows();
                 total_delta_cache_size += delta->getTotalCacheBytes();
+                total_delta_cache_alloc_size += delta->getTotalAllocatedBytes();
                 total_delta_valid_cache_rows += delta->getValidCacheRows();
             }
 
@@ -89,6 +90,7 @@ StoreStats DeltaMergeStore::getStoreStats()
 
     stat.delta_placed_rate = static_cast<Float64>(total_placed_rows) / stat.total_delta_rows;
     stat.delta_cache_size = total_delta_cache_size;
+    stat.delta_cache_alloc_size = total_delta_cache_alloc_size;
     stat.delta_cache_rate = static_cast<Float64>(total_delta_valid_cache_rows) / stat.total_delta_rows;
     stat.delta_cache_wasted_rate
         = static_cast<Float64>(total_delta_cache_rows - total_delta_valid_cache_rows) / total_delta_valid_cache_rows;
@@ -155,8 +157,6 @@ SegmentsStats DeltaMergeStore::getSegmentsStats()
 
         SegmentStats stat;
         const auto & delta = segment->getDelta();
-        const auto & delta_memtable = delta->getMemTableSet();
-        const auto & delta_persisted = delta->getPersistedFileSet();
         const auto & stable = segment->getStable();
 
         stat.segment_id = segment->segmentId();
@@ -166,16 +166,25 @@ SegmentsStats DeltaMergeStore::getSegmentsStats()
         stat.size = segment->getEstimatedBytes();
 
         stat.delta_rate = static_cast<Float64>(delta->getRows()) / stat.rows;
-        stat.delta_memtable_rows = delta_memtable->getRows();
-        stat.delta_memtable_size = delta_memtable->getBytes();
-        stat.delta_memtable_column_files = delta_memtable->getColumnFileCount();
-        stat.delta_memtable_delete_ranges = delta_memtable->getDeletes();
-        stat.delta_persisted_page_id = delta_persisted->getId();
-        stat.delta_persisted_rows = delta_persisted->getRows();
-        stat.delta_persisted_size = delta_persisted->getBytes();
-        stat.delta_persisted_column_files = delta_persisted->getColumnFileCount();
-        stat.delta_persisted_delete_ranges = delta_persisted->getDeletes();
-        stat.delta_cache_size = delta->getTotalCacheBytes();
+        {
+            // Keep a copy to the shared_ptr of MemTableSet
+            const auto delta_memtable = delta->getMemTableSet();
+            stat.delta_memtable_rows = delta_memtable->getRows();
+            stat.delta_memtable_size = delta_memtable->getBytes();
+            stat.delta_memtable_column_files = delta_memtable->getColumnFileCount();
+            stat.delta_memtable_delete_ranges = delta_memtable->getDeletes();
+            stat.delta_cache_size = delta_memtable->getBytes(); // FIXME: this is the same as delta_memtable_size
+            stat.delta_cache_alloc_size = delta_memtable->getAllocatedBytes();
+        }
+        {
+            // Keep a copy to the shared_ptr of PersistedFileSet
+            const auto delta_persisted = delta->getPersistedFileSet();
+            stat.delta_persisted_page_id = delta_persisted->getId();
+            stat.delta_persisted_rows = delta_persisted->getRows();
+            stat.delta_persisted_size = delta_persisted->getBytes();
+            stat.delta_persisted_column_files = delta_persisted->getColumnFileCount();
+            stat.delta_persisted_delete_ranges = delta_persisted->getDeletes();
+        }
         stat.delta_index_size = delta->getDeltaIndexBytes();
 
         stat.stable_page_id = stable->getId();
@@ -294,5 +303,4 @@ LocalIndexesStats DeltaMergeStore::getLocalIndexStats()
     return stats;
 }
 
-} // namespace DM
-} // namespace DB
+} // namespace DB::DM

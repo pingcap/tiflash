@@ -45,6 +45,15 @@ public:
             return "<empty_rs>";
     }
 
+    Poco::JSON::Object::Ptr toJSONObject() override
+    {
+        Poco::JSON::Object::Ptr obj = new Poco::JSON::Object();
+        if (child)
+            obj->set("child", child->toJSONObject());
+        obj->set("ann_query_info", ann_query_info->ShortDebugString());
+        return obj;
+    }
+
     ColIds getColumnIDs() override
     {
         if (child)

@@ -198,4 +198,15 @@ PushDownFilterPtr PushDownFilter::build(
         context,
         tracing_logger);
 }
+
+Poco::JSON::Object::Ptr PushDownFilter::toJSONObject() const
+{
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    if (rs_operator)
+    {
+        json->set("rs_operator", rs_operator->toJSONObject());
+    }
+    return json;
+}
+
 } // namespace DB::DM

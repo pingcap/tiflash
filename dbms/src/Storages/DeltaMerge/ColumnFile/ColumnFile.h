@@ -95,6 +95,7 @@ public:
 
     virtual size_t getRows() const { return 0; }
     virtual size_t getBytes() const { return 0; }
+    virtual size_t getAllocateBytes() const { return 0; }
     virtual size_t getDeletes() const { return 0; }
 
     virtual Type getType() const = 0;
@@ -138,7 +139,13 @@ public:
     /// been persisted in the disk and their data will be immutable.
     virtual bool isAppendable() const { return false; }
     virtual void disableAppend() {}
-    virtual bool append(
+
+    struct AppendResult
+    {
+        bool success = false; // whether the append is successful
+        size_t new_alloc_bytes = 0; // the new allocated bytes after append
+    };
+    virtual AppendResult append(
         const DMContext & /*dm_context*/,
         const Block & /*data*/,
         size_t /*offset*/,

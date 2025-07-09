@@ -800,6 +800,10 @@ private:
 #else
 public:
 #endif
+
+    // Keep track of the number of segments in memory.
+    CurrentMetrics::Increment holder_counter;
+
     /// The version of this segment. After split / merge / mergeDelta / replaceData, epoch got increased by 1.
     const UInt64 epoch;
 

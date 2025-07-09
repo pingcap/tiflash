@@ -66,6 +66,7 @@ public:
 
     size_t getRows() const override { return rows; }
     size_t getBytes() const override { return bytes; }
+    size_t getAllocateBytes() const override { return cache->block.allocatedBytes(); }
 
     CachePtr getCache() { return cache; }
 
@@ -81,9 +82,13 @@ public:
         ReadTag) const override;
 
     bool isAppendable() const override { return !disable_append; }
-    void disableAppend() override { disable_append = true; }
-    bool append(const DMContext & dm_context, const Block & data, size_t offset, size_t limit, size_t data_bytes)
-        override;
+    void disableAppend() override;
+    AppendResult append(
+        const DMContext & dm_context,
+        const Block & data,
+        size_t offset,
+        size_t limit,
+        size_t data_bytes) override;
 
     Block readDataForFlush() const;
 

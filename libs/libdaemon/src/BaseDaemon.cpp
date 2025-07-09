@@ -77,6 +77,7 @@
 #include <Poco/Util/MapConfiguration.h>
 #include <common/ErrorHandlers.h>
 #include <common/logger_useful.h>
+#include <common/logger_util.h>
 #include <daemon/OwnPatternFormatter.h>
 #include <fmt/format.h>
 #include <sys/resource.h>
@@ -668,21 +669,6 @@ static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path
     return false;
 }
 
-static std::string normalize(const std::string & log_level)
-{
-    std::string norm = Poco::toLower(log_level);
-    // normalize
-    // info -> information
-    // warn -> warning
-    if (norm == "info")
-        return "information";
-    else if (norm == "warn")
-        return "warning";
-    else
-        return norm;
-}
-
-
 void BaseDaemon::reloadConfiguration()
 {
     // when config-file is not specified and config.toml does not exist, we do not load config.
@@ -757,7 +743,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     // Split log, error log and tracing log.
     Poco::AutoPtr<Poco::ReloadableSplitterChannel> split = new Poco::ReloadableSplitterChannel;
 
-    auto log_level = normalize(config.getString("logger.level", "info"));
+    auto log_level = Utils::normalizeLogLevel(config.getString("logger.level", "info"));
     const auto log_path = config.getString("logger.log", "");
     if (!log_path.empty())
     {
