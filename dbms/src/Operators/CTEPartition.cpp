@@ -15,7 +15,6 @@
 #include <Common/Exception.h>
 #include <Operators/CTEPartition.h>
 
-#include <algorithm>
 #include <iterator>
 #include <mutex>
 #include <utility>
@@ -24,8 +23,7 @@ namespace DB
 {
 size_t CTEPartition::getIdxInMemoryNoLock(size_t cte_reader_id)
 {
-    if (this->total_block_in_disk_num >= this->fetch_block_idxs[cte_reader_id])
-        return this->fetch_block_idxs[cte_reader_id];
+    RUNTIME_CHECK(this->fetch_block_idxs[cte_reader_id] >= this->total_block_in_disk_num);
     return this->fetch_block_idxs[cte_reader_id] - this->total_block_in_disk_num;
 }
 
@@ -143,12 +141,31 @@ CTEOpStatus CTEPartition::spillBlocks()
             break;
 
         auto next_iter = std::next(split_iter);
+        auto * log = &Poco::Logger::get("LRUCache");
 
         Blocks spilled_blocks;
         if (next_iter == split_idxs.end() || next_iter->second >= total_block_in_memory_num)
+        {
+            LOG_INFO(
+                log,
+                fmt::format(
+                    "xzxdebug spill start logical: {}, {}~{}",
+                    split_iter->first,
+                    split_iter->second,
+                    this->blocks.size() - 1));
             spilled_blocks.assign(blocks_begin_iter + split_iter->second, this->blocks.end());
+        }
         else
+        {
+            LOG_INFO(
+                log,
+                fmt::format(
+                    "xzxdebug spill start logical: {}, {}~{}",
+                    split_iter->first,
+                    split_iter->second,
+                    next_iter->second - 1));
             spilled_blocks.assign(blocks_begin_iter + split_iter->second, blocks_begin_iter + next_iter->second);
+        }
 
         RUNTIME_CHECK(!spilled_blocks.empty());
 
@@ -204,7 +221,6 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
         {
             auto spiller_iter = this->spillers.find(this->fetch_block_idxs[cte_reader_id]);
             if (spiller_iter == this->spillers.end())
-
                 // All blocks in disk have been consumed
                 return CTEOpStatus::OK;
 
@@ -224,8 +240,19 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
             retry = true;
             continue;
         }
-
+        {
+            auto [iter, _] = this->fetch_idxs_disk.insert(std::make_pair(cte_reader_id, std::vector<size_t>{}));
+            iter->second.push_back(this->fetch_block_idxs[cte_reader_id]);
+        }
         this->addIdxNoLock(cte_reader_id);
+        {
+            auto [iter, _] = this->total_fetch_disk_block_nums.insert(std::make_pair(cte_reader_id, 0));
+            iter->second++;
+        }
+        {
+            auto [iter, _] = this->total_fetch_disk_row_nums.insert(std::make_pair(cte_reader_id, 0));
+            iter->second += block.rows();
+        }
         break;
     };
 
