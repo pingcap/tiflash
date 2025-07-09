@@ -92,8 +92,18 @@ void SegmentTestBasic::reloadWithOptions(SegmentTestOptions config)
     TiFlashStorageTestBasic::SetUp();
     options = config;
     table_columns = std::make_shared<ColumnDefines>();
+    ColumnDefinesPtr cols = DMTestEnv::getDefaultColumns();
+    for (Int64 i = 0; i < 1000; ++i)
+    {
+        // add a new column
+        cols->emplace_back(ColumnDefine{
+            i + 100,
+            fmt::format("field_{}", i),
+            DB::tests::typeFromString("Nullable(String)"),
+        });
+    }
 
-    root_segment = reload(config.is_common_handle, nullptr, std::move(config.db_settings));
+    root_segment = reload(config.is_common_handle, cols, std::move(config.db_settings));
     ASSERT_EQ(root_segment->segmentId(), DELTA_MERGE_FIRST_SEGMENT_ID);
     segments.clear();
     segments[DELTA_MERGE_FIRST_SEGMENT_ID] = root_segment;
@@ -543,6 +553,19 @@ Block SegmentTestBasic::prepareWriteBlockInSegmentRange(
         RUNTIME_CHECK(write_end_key_this_round <= segment_end_key);
         Block block
             = prepareWriteBlock(*write_start_key, write_end_key_this_round, is_deleted, including_right_boundary, ts);
+        for (Int64 i = 0; i < 1000; ++i)
+        {
+            auto null_col = ColumnNullable::create(ColumnString::create(), ColumnUInt8::create());
+            for (size_t j = 0; j < write_rows_this_round; ++j)
+            {
+                null_col->insertDefault();
+            }
+            block.insert(ColumnWithTypeAndName{
+                std::move(null_col),
+                std::make_shared<DataTypeNullable>(std::make_shared<DataTypeString>()),
+                fmt::format("field_{}", i),
+            });
+        }
         blocks.emplace_back(block);
         remaining_rows -= write_rows_this_round + including_right_boundary;
 

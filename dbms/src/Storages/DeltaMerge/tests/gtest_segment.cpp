@@ -15,6 +15,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/FailPoint.h>
 #include <Common/Logger.h>
+#include <Common/MemoryAllocTrace.h>
 #include <Common/PODArray.h>
 #include <Common/SyncPoint/Ctl.h>
 #include <DataStreams/OneBlockInputStream.h>
@@ -607,6 +608,102 @@ try
 }
 CATCH
 
+double get_process_resident_mb()
+{
+    auto mu = DB::get_process_mem_usage();
+    return mu.resident_bytes / 1024.0 / 1024;
+}
+
+TEST_F(SegmentOperationTest, TestMassiveSegment)
+try
+{
+    const size_t level = 1;
+    const size_t segment_range_size = 500;
+    for (size_t lvl = 0; lvl < level; ++lvl)
+    {
+        size_t num_expected_segs = 200;
+        // size_t num_expected_segs = 10;
+        size_t progress_interval = 100;
+        const auto lvl_beg_seg_id = segments.rbegin()->first;
+        {
+            auto seg = segments[lvl_beg_seg_id];
+            LOG_INFO(log, "lvl={} beg_seg_id={} rowkey={}", lvl, lvl_beg_seg_id, seg->getRowKeyRange().toString());
+        }
+        auto next_split_seg_id = lvl_beg_seg_id;
+        for (size_t i = 0; i < num_expected_segs; ++i)
+        {
+            auto split_point = (lvl * num_expected_segs + 1 + i) * segment_range_size;
+            auto n_seg_id = splitSegmentAt(next_split_seg_id, split_point, Segment::SplitMode::Logical);
+            ASSERT_TRUE(n_seg_id.has_value()) << fmt::format("i={} sp={}", i, split_point);
+            next_split_seg_id = *n_seg_id;
+            if (i % progress_interval == 0)
+            {
+                LOG_INFO(
+                    log,
+                    "lvl={} round={} split_point={} next_seg_id={} mem_resident_set={:.3f}MB)",
+                    lvl,
+                    i,
+                    split_point,
+                    *n_seg_id,
+                    get_process_resident_mb());
+            }
+        }
+        LOG_INFO(log, "lvl={} round={} mem_resident_set={:.3f}MB", lvl, num_expected_segs, get_process_resident_mb());
+
+        size_t round = 0;
+        for (auto && [seg_id, seg] : segments)
+        {
+            // next_split_seg_id is the last segment created in this level, skip it
+            if (seg_id == next_split_seg_id)
+                continue;
+
+            if (seg_id < lvl_beg_seg_id)
+                continue; // skip segments created in previous levels
+
+            size_t write_rows = 4;
+            size_t write_rows_sub = 2;
+            if (round % progress_interval == 0)
+            {
+                LOG_INFO(
+                    log,
+                    "lvl={} round={} written_rows={} mem_resident_set={:.3f}MB",
+                    lvl,
+                    round,
+                    write_rows * round,
+                    get_process_resident_mb());
+            }
+            for (size_t k = 0; k < 2; ++k)
+            {
+                writeToCache(
+                    seg_id,
+                    write_rows_sub,
+                    /* start_at */ lvl * num_expected_segs * segment_range_size + round * segment_range_size,
+                    false,
+                    std::nullopt);
+                LOG_INFO(
+                    log,
+                    "lvl={} round={} k={} seg_id={} written_rows={} mem_tbl_bytes={} mem_tbl_alloc_bytes={}",
+                    lvl,
+                    round,
+                    k,
+                    seg_id,
+                    write_rows,
+                    segments[seg_id]->getDelta()->getTotalCacheBytes(),
+                    segments[seg_id]->getDelta()->getTotalAllocatedBytes());
+            }
+            round++;
+        }
+        {
+            LOG_INFO(
+                log,
+                "TestMassiveSegment done, segments.size()={} lvl={} mem_resident_set={:.3f}MB",
+                segments.size(),
+                lvl,
+                get_process_resident_mb());
+        }
+    }
+}
+CATCH
 
 class SegmentEnableLogicalSplitTest : public SegmentOperationTest
 {
