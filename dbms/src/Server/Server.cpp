@@ -1166,8 +1166,6 @@ try
             }
         }
 
-        SCOPE_EXIT({ proxy_machine.stopProxy(tmt_context); });
-
         {
             // Report the unix timestamp, git hash, release version
             Poco::Timestamp ts;
@@ -1225,7 +1223,8 @@ try
         }
 
         /// startup grpc server to serve raft and/or flash services.
-        FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
+        auto flash_grpc_server_holder
+            = std::make_unique<FlashGrpcServerHolder>(this->context(), this->config(), raft_config, log);
 
         SCOPE_EXIT({
             // Stop LAC for AutoScaler managed CN before FlashGrpcServerHolder is destructed.
@@ -1237,8 +1236,6 @@ try
                 LocalAdmissionController::global_instance->safeStop();
         });
 
-        proxy_machine.runKVStore(tmt_context);
-
         try
         {
             // Bind CPU affinity after all threads started.
@@ -1249,8 +1246,24 @@ try
             LOG_ERROR(log, "CPUAffinityManager::bindThreadCPUAffinity throws exception.");
         }
 
+        // Ready to provide service
+        tmt_context.setStatusRunning();
+
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
+
+        LOG_INFO(log, "Set store context status Stopping");
+        tmt_context.setStatusStopping();
+
+        tmt_context.getMPPTaskManager()->getMPPTaskMonitor()->waitAllMPPTasksFinish(global_context);
+        proxy_machine.waitAllReadIndexTasksFinish(tmt_context);
+
+        LOG_INFO(log, "Set store context status Terminated");
+        tmt_context.setStatusTerminated();
+
+        // Stop grpc server before proxy_machine because it depends on a DiagnosticsService which will call proxy
+        flash_grpc_server_holder.reset();
+        proxy_machine.stopProxy(tmt_context);
 
         {
             // Set limiters stopping and wakeup threads in waitting queue.
