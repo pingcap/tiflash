@@ -3124,7 +3124,8 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     };
     // Generate the bitmap according to the MVCC filter result
     auto read_tag = ReadTag::MVCC;
-    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, start_ts);
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
+    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, real_ranges, read_tag, start_ts);
 
     const auto & dmfiles = segment_snap->stable->getDMFiles();
     DMFilePackFilterResults pack_filter_results;
@@ -3135,7 +3136,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
             dmfile,
             dm_context.global_context.getMinMaxIndexCache(),
             /*set_cache_if_miss*/ true,
-            read_ranges,
+            real_ranges,
             filter,
             {},
             dm_context.global_context.getFileProvider(),
@@ -3157,7 +3158,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     BlockInputStreamPtr stream = getPlacedStreamWithPackFilterResult(
         dm_context,
         *read_info.read_columns,
-        read_ranges,
+        real_ranges,
         segment_snap->stable,
         read_info.getDeltaReader(read_tag),
         read_info.index_begin,
@@ -3167,7 +3168,7 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
         new_pack_filter_results,
         start_ts);
 
-    stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_ranges, 0);
+    stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, real_ranges, 0);
     stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
         stream,
         columns_to_read,
