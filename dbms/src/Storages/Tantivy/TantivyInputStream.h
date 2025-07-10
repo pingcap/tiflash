@@ -38,7 +38,7 @@ public:
         LoggerPtr log_,
         Int64 table_id_,
         Int64 index_id_,
-        TableShardInfos query_shard_infos_,
+        ShardInfoList query_shard_infos_,
         NamesAndTypes query_columns_,
         NamesAndTypes return_columns_,
         String query_json_str_,
@@ -65,10 +65,16 @@ public:
         {
             return {};
         }
+        if (processed_shard >= query_shard_infos.size())
+        {
+            LOG_INFO(log, "empty shard info, returning empty block");
+            done = true;
+            return {};
+        }
 
         Block ret = readFromS3(processed_shard);
         processed_shard++;
-        done = processed_shard >= query_shard_infos.shard_info_list.size();
+        done = processed_shard >= query_shard_infos.size();
         return ret;
     }
 
@@ -77,16 +83,18 @@ protected:
     {
         auto query_fields = getFields(query_columns);
         auto return_fields = getFields(return_columns);
-        auto & shard_info = query_shard_infos.shard_info_list[processing];
+        auto & shard_info = query_shard_infos[processing];
         LOG_INFO(log, "Processing shard: {}, shard info: {}", processing, shard_info.toString());
-        auto shard_id = shard_info.shard_id;
         auto key_ranges = getKeyRanges(shard_info.key_ranges);
 
         auto search_param = SearchParam{static_cast<size_t>(limit)};
         rust::Vec<IdDocument> documents = search(
-            table_id,
-            index_id,
-            shard_id,
+            {
+                .table_id = table_id,
+                .index_id = index_id,
+                .shard_id = shard_info.shard_id,
+                .shard_epoch = shard_info.shard_epoch,
+            },
             key_ranges,
             query_fields,
             return_fields,
@@ -145,7 +153,7 @@ private:
     LoggerPtr log;
     Int64 table_id;
     Int64 index_id;
-    TableShardInfos query_shard_infos;
+    ShardInfoList query_shard_infos;
     NamesAndTypes query_columns;
     NamesAndTypes return_columns;
     String query_json_str;
