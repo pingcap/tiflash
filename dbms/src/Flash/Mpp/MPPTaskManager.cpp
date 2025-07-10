@@ -87,7 +87,11 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & glob
     auto start = std::chrono::steady_clock::now();
     // The maximum seconds TiFlash will wait for all current MPP tasks to finish before shutting down
     static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
-    auto graceful_wait_before_shutdown = global_context->getUsersConfig()->getUInt64(GRACEFUL_WIAT_BEFORE_SHUTDOWN, 60);
+    // The default value of flash.graceful_wait_before_shutdown
+    static constexpr UInt64 DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN = 600;
+    auto graceful_wait_before_shutdown = global_context->getUsersConfig()->getUInt64(
+        GRACEFUL_WIAT_BEFORE_SHUTDOWN,
+        DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
     auto max_wait_time = start + std::chrono::seconds(graceful_wait_before_shutdown);
     while (true)
     {

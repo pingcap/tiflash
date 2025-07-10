@@ -225,8 +225,8 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         // Wait all existed MPPTunnels done to prevent crash.
         // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
         constexpr int wait_step = 200;
-        // Maximum wait for 3 minute
-        constexpr int max_wait_cnt = 180 * 1000 / wait_step;
+        // Maximum wait for 1 minute
+        constexpr int max_wait_cnt = 60 * 1000 / wait_step;
         int wait_cnt = 0;
         while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
             std::this_thread::sleep_for(std::chrono::milliseconds(wait_step));
