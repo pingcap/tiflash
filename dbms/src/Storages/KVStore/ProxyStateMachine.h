@@ -367,28 +367,33 @@ struct ProxyStateMachine
         }
     }
 
-    /// Wait for all read index tasks to finish.
-    void waitAllReadIndexTasksFinish(TMTContext & tmt_context)
-    {
-        if (!proxy_conf.isProxyRunnable())
-            return;
-        if (tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
-        {
-            LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
-            exit(-1);
-        }
-        // Wait until there is no read-index task.
-        while (tmt_context.getKVStore()->getReadIndexEvent())
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
+    // Set KVStore to running, so that it could handle read index requests.
+    void runKVStore(TMTContext & tmt_context) const { tmt_context.setStatusRunning(); }
 
     /// Stop all services in TMTContext and ReadIndexWorkers.
     /// Then, inform proxy to stop by setting `tiflash_instance_wrap.status`.
     void stopProxy(TMTContext & tmt_context)
     {
         if (!proxy_conf.isProxyRunnable())
+        {
+            tmt_context.setStatusTerminated();
             return;
+        }
+        if (proxy_conf.isProxyRunnable() && tiflash_instance_wrap.status != EngineStoreServerStatus::Running)
+        {
+            LOG_ERROR(log, "Current status of engine-store is NOT Running, should not happen");
+            exit(-1);
+        }
+        LOG_INFO(log, "Set store context status Stopping");
+        tmt_context.setStatusStopping();
+        {
+            // Wait until there is no read-index task.
+            while (tmt_context.getKVStore()->getReadIndexEvent())
+                std::this_thread::sleep_for(std::chrono::milliseconds(200));
+        }
+        tmt_context.setStatusTerminated();
         tmt_context.getKVStore()->stopReadIndexWorkers();
+        LOG_INFO(log, "Set store context status Terminated");
         {
             // update status and let proxy stop all services except encryption.
             tiflash_instance_wrap.status = EngineStoreServerStatus::Stopping;
