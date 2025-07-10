@@ -1252,7 +1252,7 @@ try
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
 
-        LOG_INFO(log, "Set unavailble for MPPTask");
+        LOG_INFO(log, "Set unavailable for MPPTask");
         tmt_context.getMPPTaskManager()->setUnavailable();
         tmt_context.getMPPTaskManager()->getMPPTaskMonitor()->waitAllMPPTasksFinish(global_context);
 
