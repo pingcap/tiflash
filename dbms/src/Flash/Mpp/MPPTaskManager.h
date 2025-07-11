@@ -223,6 +223,8 @@ class MPPTaskManager : private boost::noncopyable
 
     std::shared_ptr<MPPTaskMonitor> monitor;
 
+    std::atomic<bool> is_available{true};
+
 public:
     explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
 
@@ -274,6 +276,9 @@ public:
     MPPQueryId getCurrentMinTSOQueryId(const String & resource_group_name);
 
     bool isTaskExists(const MPPTaskId & id);
+
+    void setUnavailable() { is_available = false; }
+    bool isAvailable() { return is_available; }
 
 private:
     MPPQueryPtr addMPPQuery(

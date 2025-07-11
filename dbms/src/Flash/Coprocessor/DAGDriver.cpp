@@ -29,7 +29,6 @@
 #include <Interpreters/ProcessList.h>
 #include <Storages/KVStore/Read/LockException.h>
 #include <Storages/KVStore/Read/RegionException.h>
-#include <Storages/KVStore/TMTContext.h>
 #include <pingcap/Exception.h>
 
 namespace DB
