@@ -1033,8 +1033,6 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     size_t expected_block_size,
     bool need_row_id)
 {
-    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
-
     LOG_TRACE(segment_snap->log, "Begin segment create input stream");
 
     auto read_tag = need_row_id ? ReadTag::MVCC : ReadTag::Query;
@@ -1118,8 +1116,6 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     UInt64 start_ts,
     size_t expected_block_size)
 {
-    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
-
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
     if (!segment_snap)
         return {};
@@ -3652,7 +3648,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     {
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
     }
-    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
+    sanitizeCheckReadRanges(__FUNCTION__, real_ranges, rowkey_range, log);
 
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
