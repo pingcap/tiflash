@@ -93,6 +93,7 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & glob
     auto graceful_wait_before_shutdown = global_context->getUsersConfig()->getUInt64(
         GRACEFUL_WIAT_BEFORE_SHUTDOWN,
         DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
+    LOG_INFO(log, "Start to wait all MPPTasks to finish, timeout={}s", graceful_wait_before_shutdown);
     auto max_wait_time = start + std::chrono::seconds(graceful_wait_before_shutdown);
     while (true)
     {
