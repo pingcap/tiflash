@@ -932,6 +932,30 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
         Logger::get(dm_context.tracing_id));
 }
 
+// The `read_ranges` must be included by `segment_rowkey_range`. Usually this step is
+// done in `Segment::getInputStream`. Apply the check only under debug mode.
+ALWAYS_INLINE void sanitizeCheckReadRanges(
+    [[maybe_unused]] const std::string_view whom,
+    [[maybe_unused]] const RowKeyRanges & read_ranges,
+    [[maybe_unused]] const RowKeyRange & segment_rowkey_range,
+    [[maybe_unused]] const LoggerPtr & log)
+{
+#ifndef NDEBUG
+    RUNTIME_CHECK_MSG(!read_ranges.empty(), "read_ranges should not be empty");
+    for (const auto & range : read_ranges)
+    {
+        RUNTIME_CHECK_MSG(
+            segment_rowkey_range.checkRangeIncluded(range),
+            "{} read_ranges contains range of out the segment_rowkey_range, "
+            "segment_rowkey_range={} read_range={} ident={}",
+            whom,
+            segment_rowkey_range.toString(),
+            range.toString(),
+            log->identifier());
+    }
+#endif
+}
+
 BlockInputStreamPtr Segment::getInputStream(
     const ReadMode & read_mode,
     const DMContext & dm_context,
@@ -1009,6 +1033,8 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     size_t expected_block_size,
     bool need_row_id)
 {
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
+
     LOG_TRACE(segment_snap->log, "Begin segment create input stream");
 
     auto read_tag = need_row_id ? ReadTag::MVCC : ReadTag::Query;
@@ -1092,6 +1118,8 @@ BlockInputStreamPtr Segment::getInputStreamModeNormal(
     UInt64 start_ts,
     size_t expected_block_size)
 {
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
+
     auto segment_snap = createSnapshot(dm_context, false, CurrentMetrics::DT_SnapshotOfRead);
     if (!segment_snap)
         return {};
@@ -3094,6 +3122,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     size_t expected_block_size)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
         return buildBitmapFilterStableOnly(
@@ -3623,6 +3652,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     {
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
     }
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
 
     auto bitmap_filter = buildBitmapFilter(
         dm_context,
