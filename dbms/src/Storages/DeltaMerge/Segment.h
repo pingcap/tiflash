@@ -761,6 +761,15 @@ public:
         const RSOperatorPtr & filter,
         UInt64 start_ts,
         size_t expected_block_size);
+    BitmapFilterPtr buildBitmapFilterNormalByFilterResult(
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read,
+        const Segment::ReadInfo & read_info,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & real_ranges,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts,
+        size_t expected_block_size);
     BitmapFilterPtr buildBitmapFilterStableOnly(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & segment_snap,

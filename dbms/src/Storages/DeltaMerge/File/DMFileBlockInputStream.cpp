@@ -184,7 +184,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
 
     // All check passed. Let's read via vector index.
 
-    if (!pack_filter)
+    // if (!pack_filter)
     {
         pack_filter = DMFilePackFilter::loadFrom(
             dmfile,

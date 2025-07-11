@@ -3122,9 +3122,8 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
     };
-    // Generate the bitmap according to the MVCC filter result
-    auto read_tag = ReadTag::MVCC;
     auto real_ranges = shrinkRowKeyRanges(read_ranges);
+    auto read_tag = ReadTag::MVCC;
     auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, real_ranges, read_tag, start_ts);
 
     const auto & dmfiles = segment_snap->stable->getDMFiles();
@@ -3147,6 +3146,39 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
         pack_filter_results.emplace_back(pack_filter);
     }
 
+    auto bitmap_filter = buildBitmapFilterNormalByFilterResult(
+        dm_context,
+        columns_to_read,
+        read_info,
+        segment_snap,
+        real_ranges,
+        pack_filter_results,
+        start_ts,
+        expected_block_size);
+
+    const auto elapse_ns = sw_total.elapsed();
+    dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
+    LOG_DEBUG(
+        segment_snap->log,
+        "buildBitmapFilterNormal total_rows={} cost={:.3f}ms",
+        bitmap_filter->size(),
+        elapse_ns / 1'000'000.0);
+    return bitmap_filter;
+}
+
+BitmapFilterPtr Segment::buildBitmapFilterNormalByFilterResult(
+    const DMContext & dm_context,
+    const ColumnDefines & columns_to_read,
+    const Segment::ReadInfo & read_info,
+    const SegmentSnapshotPtr & segment_snap,
+    const RowKeyRanges & real_ranges,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    size_t expected_block_size)
+{
+    auto read_tag = ReadTag::MVCC;
+    // Generate the bitmap according to the MVCC filter result
+    const auto & dmfiles = segment_snap->stable->getDMFiles();
     auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
         dm_context,
         dmfiles,
@@ -3181,22 +3213,17 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
         segment_snap->log,
         "Finish segment create input stream, start_ts={} range_size={} ranges={}",
         start_ts,
-        read_ranges.size(),
-        DB::DM::toDebugString(read_ranges));
+        real_ranges.size(),
+        DB::DM::toDebugString(real_ranges));
 
     // `total_rows` is the rows read for building bitmap
     auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
+    // Generate the bitmap according to the MVCC filter result
     bitmap_filter->set(stream);
+    for (const auto & range : skipped_ranges)
+        bitmap_filter->set(range.offset, range.rows);
     bitmap_filter->runOptimize();
-
-    const auto elapse_ns = sw_total.elapsed();
-    dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
-    LOG_DEBUG(
-        segment_snap->log,
-        "buildBitmapFilterNormal total_rows={} cost={:.3f}ms",
-        total_rows,
-        elapse_ns / 1'000'000.0);
     return bitmap_filter;
 }
 
