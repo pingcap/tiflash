@@ -336,6 +336,7 @@ public:
     friend class MarkLoader;
     friend class ColumnReadStream;
     friend class DMFilePackFilter;
+    friend class DMFilePackFilterResult;
     friend class DMFileBlockInputStreamBuilder;
     friend class DMFileWithVectorIndexBlockInputStream;
     friend class tests::DMFileTest;

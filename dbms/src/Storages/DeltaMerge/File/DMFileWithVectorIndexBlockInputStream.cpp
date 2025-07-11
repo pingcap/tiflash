@@ -136,7 +136,7 @@ std::tuple<Block, size_t> DMFileWithVectorIndexBlockInputStream::readByIndexRead
 {
     const auto & pack_stats = dmfile->getPackStats();
     size_t all_packs = pack_stats.size();
-    const auto & pack_res = reader.pack_filter.getPackResConst();
+    const auto & pack_res = reader.pack_filter->getPackResConst();
 
     RUNTIME_CHECK(pack_res.size() == all_packs);
 
@@ -241,7 +241,7 @@ void DMFileWithVectorIndexBlockInputStream::updateRSResult()
     // update the pack filter used by the DMFileReader to avoid reading
     // unnecessary data for other columns.
     const auto & pack_stats = dmfile->getPackStats();
-    auto & pack_res = reader.pack_filter.getPackRes();
+    auto & pack_res = reader.pack_filter->getPackRes();
 
     auto results_it = sorted_results.begin();
     UInt32 pack_start = 0;

@@ -46,7 +46,7 @@ static void readHeaderAndGetCodec(const char * compressed_buffer, CompressionCod
         throw Exception(
             ErrorCodes::CANNOT_DECOMPRESS,
             "Data compressed with different methods, given method "
-            "byte {#x}, previous method byte {#x}",
+            "byte {:#x}, previous method byte {:#x}",
             method_byte,
             codec->getMethodByte());
     }

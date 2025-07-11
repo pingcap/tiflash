@@ -46,7 +46,7 @@ DMFileReader::DMFileReader(
     bool is_fast_scan_,
     UInt64 max_read_version_,
     // filters
-    DMFilePackFilter && pack_filter_,
+    const DMFilePackFilterResultPtr & pack_filter_,
     // caches
     const MarkCachePtr & mark_cache_,
     bool enable_column_cache_,
@@ -110,7 +110,7 @@ DMFileReader::DMFileReader(
 bool DMFileReader::getSkippedRows(size_t & skip_rows)
 {
     skip_rows = 0;
-    const auto & pack_res = pack_filter.getPackResConst();
+    const auto & pack_res = pack_filter->getPackResConst();
     const auto & pack_stats = dmfile->getPackStats();
     for (; next_pack_id < pack_res.size() && !pack_res[next_pack_id].isUse(); ++next_pack_id)
     {
@@ -146,7 +146,7 @@ size_t DMFileReader::skipNextBlock()
 // Move forward next_pack_id and next_row_offset
 std::pair<size_t, RSResult> DMFileReader::getReadRows()
 {
-    const auto & pack_res = pack_filter.getPackResConst();
+    const auto & pack_res = pack_filter->getPackResConst();
     const size_t start_pack_id = next_pack_id;
     const size_t read_pack_limit = getReadPackLimit(start_pack_id);
     const auto & pack_stats = dmfile->getPackStats();
@@ -179,7 +179,7 @@ Block DMFileReader::readWithFilter(const IColumn::Filter & filter)
     /// 2. Mark pack_res[i] = None if all rows in the i-th pack are filtered out by filter.
 
     const auto & pack_stats = dmfile->getPackStats();
-    auto & pack_res = pack_filter.getPackRes();
+    auto & pack_res = pack_filter->getPackRes();
 
     size_t start_row_offset = next_row_offset;
     size_t start_pack_id = next_pack_id;
@@ -304,7 +304,7 @@ Block DMFileReader::read()
 
     const auto & pack_stats = dmfile->getPackStats();
     const auto & pack_properties = dmfile->getPackProperties();
-    const auto & handle_res = pack_filter.getHandleRes(); // alias of handle_res in pack_filter
+    const auto & handle_res = pack_filter->getHandleRes(); // alias of handle_res in pack_filter
     const size_t read_packs = next_pack_id - start_pack_id;
     std::vector<size_t> handle_column_clean_read_packs;
     std::vector<size_t> del_column_clean_read_packs;
@@ -356,7 +356,7 @@ Block DMFileReader::read()
             // If all handle in a pack are in the given range, no not_clean rows, and max version <= max_read_version,
             // we do not need to read handle column.
             if (handle_res[i] == RSResult::All && pack_stats[i].not_clean == 0
-                && pack_filter.getMaxVersion(i) <= max_read_version)
+                && pack_filter->getMaxVersion(dmfile, i, file_provider, scan_context) <= max_read_version)
             {
                 handle_column_clean_read_packs.push_back(i);
                 version_column_clean_read_packs.push_back(i);
@@ -418,12 +418,12 @@ ColumnPtr DMFileReader::cleanRead(
     {
         if (is_common_handle)
         {
-            StringRef min_handle = pack_filter.getMinStringHandle(range.first);
+            StringRef min_handle = pack_filter->getMinStringHandle(dmfile, range.first, file_provider, scan_context);
             return cd.type->createColumnConst(rows_count, Field(min_handle.data, min_handle.size));
         }
         else
         {
-            Handle min_handle = pack_filter.getMinHandle(range.first);
+            Handle min_handle = pack_filter->getMinHandle(dmfile, range.first, file_provider, scan_context);
             return cd.type->createColumnConst(rows_count, Field(min_handle));
         }
     }
@@ -730,7 +730,7 @@ void DMFileReader::addSkippedRows(UInt64 rows)
 
 void DMFileReader::initAllMatchBlockInfo()
 {
-    const auto & pack_res = pack_filter.getPackResConst();
+    const auto & pack_res = pack_filter->getPackResConst();
     const auto & pack_stats = dmfile->getPackStats();
 
     // Get continuous packs with RSResult::All
