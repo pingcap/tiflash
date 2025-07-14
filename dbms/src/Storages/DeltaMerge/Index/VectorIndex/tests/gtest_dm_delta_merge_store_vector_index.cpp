@@ -25,6 +25,7 @@
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/Types.h>
 #include <TestUtils/InputStreamTestUtils.h>
+#include <gtest/gtest.h>
 
 namespace DB::FailPoints
 {
@@ -941,32 +942,56 @@ try
 
     // compact delta [0, 2) + [2, 4) -> [0, 4)
     triggerCompactDelta();
+    LOG_INFO(Logger::get(), "Delta compact finished, now persisted file set has changed.");
 
     // Now persisted file set has changed.
-    // Resume
+    // Resume, the delta index is not applied to the persisted set.
     sp_delta_index_built.next();
+    LOG_INFO(Logger::get(), "Resume sp_delta_index_built, delta index is not applied to the persisted set.");
 
-    const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
-
-    // read from store
     {
-        readVec(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
+        SCOPED_TRACE("After delta-compact");
+        const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+        // read from store
+        {
+            readVec(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
+        }
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            // [0, 4) without vector index return all.
+            readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+        }
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({.vec = {1.1}, .top_k = 1});
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            // [0, 4) without vector index return all.
+            readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+        }
     }
 
-    // read with ANN query
-    {
-        const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-        // [0, 4) without vector index return all.
-        readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
-    }
+    // trigger FlushCache for all segments
+    LOG_INFO(Logger::get(), "Triggering FlushCache and ensure delta local index after delta-compact.");
+    sp_delta_index_built.disable();
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+    waitDeltaIndexReady();
 
-    // read with ANN query
     {
-        const auto ann_query_info = annQueryInfoTopK({.vec = {1.1}, .top_k = 1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-        // [0, 4) without vector index return all.
-        readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+        SCOPED_TRACE("After local index built on delta");
+        const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+        // read from store
+        {
+            readVec(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
+        }
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({.vec = {-127.0}, .top_k = 1});
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            // with vector index built on delta, top 1 return 1.0
+            readVec(range, filter, createVecFloat32Column<Array>({{0.0}}));
+        }
     }
 }
 CATCH
@@ -998,31 +1023,47 @@ try
     waitDeltaIndexReady();
 
     // Now persisted file set has been updated with delta local index.
-    // Resume
+    // Resume, the delta-compact should compact all three ColumnFile into one ColumnFile.
     sp_delta_compact_task_build.next();
     th_delta_compact.get();
+    sp_delta_compact_task_build.disable();
 
-    const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
-
-    // read from store
     {
-        readVec(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
+        const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+        // read from store
+        {
+            readVec(range, EMPTY_FILTER, colVecFloat32("[0, 10)", vec_column_name, vec_column_id));
+        }
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            // [0, 10) without vector index return all.
+            readVec(
+                range,
+                filter,
+                createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}, {4.0}, {5.0}, {6.0}, {7.0}, {8.0}, {9.0}}));
+        }
     }
 
-    // read with ANN query
-    {
-        const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-        // [0, 4) without vector index return all.
-        readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
-    }
+    // trigger FlushCache and build delta local index for all segments
+    LOG_INFO(Logger::get(), "Triggering FlushCache and ensure delta local index after delta-compact.");
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+    waitDeltaIndexReady();
 
-    // read with ANN query
     {
-        const auto ann_query_info = annQueryInfoTopK({.vec = {1.1}, .top_k = 1});
-        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
-        // [0, 4) without vector index return all.
-        readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+        const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+        // read from store
+        {
+            readVec(range, EMPTY_FILTER, colVecFloat32("[0, 10)", vec_column_name, vec_column_id));
+        }
+        // read with ANN query
+        {
+            const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
+            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            // with vector index built on delta, top 1 return 1.0
+            readVec(range, filter, createVecFloat32Column<Array>({{1.0}}));
+        }
     }
 }
 CATCH
