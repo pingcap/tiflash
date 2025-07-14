@@ -194,8 +194,6 @@ public:
         return monitored_tasks.find(task_unique_id) != monitored_tasks.end();
     }
 
-    void waitAllMPPTasksFinish(const std::unique_ptr<Context> & global_context);
-
     std::mutex mu;
     std::condition_variable cv;
     bool is_shutdown = false;
