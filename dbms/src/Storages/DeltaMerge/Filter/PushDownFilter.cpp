@@ -206,6 +206,14 @@ Poco::JSON::Object::Ptr PushDownFilter::toJSONObject() const
     {
         json->set("rs_operator", rs_operator->toJSONObject());
     }
+<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/Filter/PushDownFilter.cpp
+=======
+    // ann_query_info usually print too large body, do not print it by default
+    // if (ann_query_info)
+    // {
+    //     json->set("ann_query_info", ann_query_info->ShortDebugString());
+    // }
+>>>>>>> bc743c939f (Raft: Increase max retry times to avoid too large remote requests (#10301)):dbms/src/Storages/DeltaMerge/Filter/PushDownExecutor.cpp
     return json;
 }
 
