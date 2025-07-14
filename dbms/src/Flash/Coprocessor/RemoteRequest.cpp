@@ -112,8 +112,9 @@ RemoteRequest RemoteRequest::build(
     const TiCIScan & tici_scan,
     UInt64 connection_id,
     const String & connection_alias,
-    [[maybe_unused]] const LoggerPtr & log)
+    const LoggerPtr & log)
 {
+    LOG_INFO(log, "{}", printShards(shard_infos, tici_scan.getTableId(), tici_scan.getIndexId()));
     DAGSchema schema;
     tipb::DAGRequest dag_req;
     {
@@ -130,11 +131,6 @@ RemoteRequest RemoteRequest::build(
             const auto & col = return_columns[i];
             schema.emplace_back(std::make_pair(names_and_types[i].name, col));
             dag_req.add_output_offsets(i);
-            LOG_INFO(
-                log,
-                "TiCIScan return column: {}, type: {}",
-                names_and_types[i].name,
-                names_and_types[i].type->getName());
         }
         dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
         dag_req.set_force_encode_type(true);
@@ -192,5 +188,19 @@ std::string RemoteRequest::printRetryRegions(const RegionRetryList & retry_regio
     buffer.fmtAppend(") for table {}", table_id);
     return buffer.toString();
 }
+
+std::string RemoteRequest::printShards(const ShardInfoList & shards, Int64 table_id, Int64 index_id)
+{
+    FmtBuffer buffer;
+    buffer.fmtAppend("Start to build remote request for {} shards (", shards.size());
+    buffer.joinStr(
+        shards.cbegin(),
+        shards.cend(),
+        [](const auto & shard, FmtBuffer & fb) { fb.fmtAppend("{}", shard.getID()); },
+        ",");
+    buffer.fmtAppend(") for table {} and index {}", table_id, index_id);
+    return buffer.toString();
+}
+
 
 } // namespace DB

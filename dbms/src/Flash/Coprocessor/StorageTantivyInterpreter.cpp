@@ -74,7 +74,7 @@ void StorageTantivyIterpreter::buildRemoteExec(
     auto coprocessor_reader = buildCoprocessorReader(remote_requests);
     size_t concurrent_num = coprocessor_reader->enableCopStream() ? context.getSettingsRef().max_threads.get()
                                                                   : coprocessor_reader->getConcurrency();
-    /// TODO: support reading data from write nodes
+
     for (size_t i = 0; i < concurrent_num; ++i)
         group_builder.addConcurrency(
             std::make_unique<CoprocessorReaderSourceOp>(exec_context, log->identifier(), coprocessor_reader));

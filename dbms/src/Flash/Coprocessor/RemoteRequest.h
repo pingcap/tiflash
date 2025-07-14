@@ -72,6 +72,7 @@ struct RemoteRequest
     static std::vector<pingcap::coprocessor::KeyRange> buildKeyRanges(const RegionRetryList & retry_regions);
     static std::vector<pingcap::coprocessor::KeyRange> buildKeyRanges(const ShardInfoList & retry_shards);
     static std::string printRetryRegions(const RegionRetryList & retry_regions, TableID table_id);
+    static std::string printShards(const ShardInfoList & shards, Int64 table_id, Int64 index_id);
 
     tipb::DAGRequest dag_request;
     DAGSchema schema;
