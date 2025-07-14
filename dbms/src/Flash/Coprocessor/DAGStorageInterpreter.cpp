@@ -881,7 +881,6 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
 
             if (tmt.checkShuttingDown())
                 throw TiFlashException("TiFlash server is terminating", Errors::Coprocessor::Internal);
-
             // By now, RegionException will contain all region id of MvccQueryInfo, which is needed by CHSpark.
             // When meeting RegionException, we can let MakeRegionQueryInfos to check in next loop.
             force_retry.insert(e.unavailable_region.begin(), e.unavailable_region.end());
