@@ -237,10 +237,11 @@ Poco::JSON::Object::Ptr PushDownExecutor::toJSONObject() const
     {
         json->set("rs_operator", rs_operator->toJSONObject());
     }
-    if (ann_query_info)
-    {
-        json->set("ann_query_info", ann_query_info->ShortDebugString());
-    }
+    // ann_query_info usually print too large body, do not print it by default
+    // if (ann_query_info)
+    // {
+    //     json->set("ann_query_info", ann_query_info->ShortDebugString());
+    // }
     return json;
 }
 
