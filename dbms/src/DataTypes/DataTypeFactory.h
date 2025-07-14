@@ -15,7 +15,6 @@
 #pragma once
 
 #include <DataTypes/IDataType.h>
-#include <Parsers/IAST_fwd.h>
 
 #include <ext/singleton.h>
 #include <functional>
@@ -27,6 +26,9 @@ namespace DB
 {
 class IDataType;
 using DataTypePtr = std::shared_ptr<const IDataType>;
+
+class IAST;
+using ASTPtr = std::shared_ptr<IAST>;
 
 // When there are lots of tables created, the DataTypePtr could consume lots of
 // memory (tiflash#9947), or lots of CPU time to parse the string into IAST and
