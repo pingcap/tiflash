@@ -94,8 +94,7 @@ CoprocessorReaderPtr StorageTantivyIterpreter::buildCoprocessorReader(
     }
     const DAGSchema & schema = remote_requests[0].schema;
     pingcap::kv::Cluster * cluster = tmt.getKVCluster();
-    bool has_enforce_encode_type
-        = remote_requests[0].dag_request.has_force_encode_type() && remote_requests[0].dag_request.force_encode_type();
+    bool has_enforce_encode_type = true;
     pingcap::kv::LabelFilter tiflash_label_filter = pingcap::kv::labelFilterNoTiFlashWriteNode;
 
     size_t concurrent_num = std::min<size_t>(context.getSettingsRef().max_threads, all_tasks.size());
