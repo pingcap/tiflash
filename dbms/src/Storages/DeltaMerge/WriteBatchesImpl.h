@@ -198,6 +198,11 @@ struct WriteBatches : private boost::noncopyable
 
         written_log.clear();
         written_data.clear();
+
+        // The removed write batches should never be committed after a rollback.
+        // Clear them to avoid confusion.
+        removed_log.clear();
+        removed_data.clear();
     }
 
     void writeMeta()

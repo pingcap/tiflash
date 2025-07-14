@@ -118,7 +118,7 @@ public:
             col_defs,
             {range},
             /* num_streams= */ 1,
-            /* max_version= */ std::numeric_limits<UInt64>::max(),
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
             filter,
             std::vector<RuntimeFilterPtr>{},
             0,
@@ -1420,7 +1420,7 @@ try
     triggerFlushCache();
 
     {
-        // Add vecotr index
+        // Add vector index
         TiDB::TableInfo new_table_info_with_vector_index;
         TiDB::ColumnInfo column_info;
         column_info.name = VectorIndexTestUtils::vec_column_name;
@@ -1438,7 +1438,7 @@ try
             .distance_metric = tipb::VectorDistanceMetric::L2,
         });
         new_table_info_with_vector_index.index_infos.emplace_back(index);
-        // apply local index change, shuold
+        // apply local index change, should
         // - create the local index
         // - generate the background tasks for building index on stable
         store->applyLocalIndexChange(new_table_info_with_vector_index);
@@ -1480,7 +1480,7 @@ try
         column_info.name = VectorIndexTestUtils::vec_column_name;
         column_info.id = VectorIndexTestUtils::vec_column_id;
         new_table_info_with_vector_index.columns.emplace_back(column_info);
-        // apply local index change, shuold drop the local index
+        // apply local index change, should drop the local index
         store->applyLocalIndexChange(new_table_info_with_vector_index);
         ASSERT_EQ(store->local_index_infos->size(), 0);
     }
@@ -1594,7 +1594,7 @@ try
         column_info.name = VectorIndexTestUtils::vec_column_name;
         column_info.id = VectorIndexTestUtils::vec_column_id;
         new_table_info_with_vector_index.columns.emplace_back(column_info);
-        // apply local index change, shuold drop the local index
+        // apply local index change, should drop the local index
         store->applyLocalIndexChange(new_table_info_with_vector_index);
         ASSERT_EQ(store->local_index_infos->size(), 0);
     }
@@ -1618,7 +1618,7 @@ try
     triggerMergeDelta();
 
     IndexID index_id = 2;
-    // Add vecotr index
+    // Add vector index
     TiDB::TableInfo new_table_info_with_vector_index;
     TiDB::ColumnInfo column_info;
     column_info.name = VectorIndexTestUtils::vec_column_name;
@@ -1671,7 +1671,7 @@ try
     triggerMergeDelta();
 
     IndexID index_id = 2;
-    // Add vecotr index
+    // Add vector index
     TiDB::TableInfo new_table_info_with_vector_index;
     TiDB::ColumnInfo column_info;
     column_info.name = VectorIndexTestUtils::vec_column_name;

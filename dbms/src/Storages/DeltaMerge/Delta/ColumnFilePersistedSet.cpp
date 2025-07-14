@@ -316,6 +316,7 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
     minor_compaction_version += 1;
     LOG_DEBUG(log, "{}, before commit compaction, persisted column files: {}", info(), detailInfo());
     ColumnFilePersisteds new_persisted_files;
+    // Generate the new persisted files by the compaction results.
     for (const auto & task : compaction->getTasks())
     {
         if (task.is_trivial_move)
@@ -333,8 +334,8 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
                     || (file->getId() != (*old_persisted_files_iter)->getId())
                     || (file->getRows() != (*old_persisted_files_iter)->getRows())))
             {
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
+                LOG_ERROR(
+                    log,
                     "Compaction algorithm broken, "
                     "compaction={{{}}} persisted_files={} "
                     "task={} "
@@ -348,10 +349,12 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
                     old_persisted_files_iter == persisted_files.end() ? -1 : (*old_persisted_files_iter)->getId(),
                     file->getRows(),
                     old_persisted_files_iter == persisted_files.end() ? -1 : (*old_persisted_files_iter)->getRows());
+                return false;
             }
             old_persisted_files_iter++;
         }
     }
+    // The new persisted_files contains the files that appended during the minor compaction.
     while (old_persisted_files_iter != persisted_files.end())
     {
         new_persisted_files.emplace_back(*old_persisted_files_iter);
