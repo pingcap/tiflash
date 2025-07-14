@@ -71,13 +71,13 @@ struct CTEPartition
             disk_info_row = fmt::format("{} <{}: {}>", disk_info_row, item.first, item.second);
 
         String infos;
-        for (const auto & item : this->fetch_idxs_disk)
-        {
-            String nums;
-            for (auto idx : item.second)
-                nums = fmt::format("{} {}", nums, idx);
-            infos = fmt::format("{} <cte_reader_id: {}, idxs: {}>", infos, item.first, nums);
-        }
+        // for (const auto & item : this->fetch_idxs_disk)
+        // {
+        //     String nums;
+        //     for (auto idx : item.second)
+        //         nums = fmt::format("{} {}", nums, idx);
+        //     infos = fmt::format("{} <cte_reader_id: {}, idxs: {}>", infos, item.first, nums);
+        // }
 
         auto * log = &Poco::Logger::get("LRUCache");
         LOG_INFO(

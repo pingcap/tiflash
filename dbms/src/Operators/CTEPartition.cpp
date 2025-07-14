@@ -141,31 +141,12 @@ CTEOpStatus CTEPartition::spillBlocks()
             break;
 
         auto next_iter = std::next(split_iter);
-        auto * log = &Poco::Logger::get("LRUCache");
 
         Blocks spilled_blocks;
         if (next_iter == split_idxs.end() || next_iter->second >= total_block_in_memory_num)
-        {
-            LOG_INFO(
-                log,
-                fmt::format(
-                    "xzxdebug spill start logical: {}, {}~{}",
-                    split_iter->first,
-                    split_iter->second,
-                    this->blocks.size() - 1));
             spilled_blocks.assign(blocks_begin_iter + split_iter->second, this->blocks.end());
-        }
         else
-        {
-            LOG_INFO(
-                log,
-                fmt::format(
-                    "xzxdebug spill start logical: {}, {}~{}",
-                    split_iter->first,
-                    split_iter->second,
-                    next_iter->second - 1));
             spilled_blocks.assign(blocks_begin_iter + split_iter->second, blocks_begin_iter + next_iter->second);
-        }
 
         RUNTIME_CHECK(!spilled_blocks.empty());
 
@@ -179,14 +160,6 @@ CTEOpStatus CTEPartition::spillBlocks()
         this->spillers.insert(std::make_pair(split_iter->first, std::move(spiller)));
         split_iter++;
     }
-
-    LOG_INFO(
-        this->spill_context->getLog(),
-        fmt::format(
-            "Partition {} finishes cte spill for {}, spilled memory: {}",
-            this->partition_id,
-            this->spill_context->getQueryIdAndCTEId(),
-            this->memory_usage));
 
     this->blocks.clear();
     this->memory_usage = 0;
