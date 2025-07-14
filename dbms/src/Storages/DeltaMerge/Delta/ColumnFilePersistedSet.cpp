@@ -337,10 +337,12 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
                     ErrorCodes::LOGICAL_ERROR,
                     "Compaction algorithm broken, "
                     "compaction={{{}}} persisted_files={} "
+                    "task={} "
                     "old_persisted_files_iter.is_end={} "
                     "file->getId={} old_persist_files->getId={} file->getRows={} old_persist_files->getRows={}",
                     compaction->info(),
                     detailInfo(),
+                    task.toString(),
                     old_persisted_files_iter == persisted_files.end(),
                     file->getId(),
                     old_persisted_files_iter == persisted_files.end() ? -1 : (*old_persisted_files_iter)->getId(),

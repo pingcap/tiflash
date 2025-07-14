@@ -475,6 +475,8 @@ bool DeltaValueSpace::compact(DMContext & context)
             /*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
     }
 
+    SYNC_FOR("DeltaValueSpace::compact_after_compaction_task_build");
+
     WriteBatches wbs(*context.storage_pool, context.getWriteLimiter());
     {
         // do compaction task

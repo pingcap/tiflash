@@ -924,6 +924,7 @@ try
 {
     store = reload();
 
+    // pause after delta vector index built but not update to the delta->persisted_set.
     auto sp_delta_index_built
         = SyncPointCtl::enableInScope("DeltaMergeStore::segmentEnsureDeltaLocalIndex_after_build");
     // write [0, 2) to store
@@ -944,6 +945,62 @@ try
     // Now persisted file set has changed.
     // Resume
     sp_delta_index_built.next();
+
+    const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
+
+    // read from store
+    {
+        readVec(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
+    }
+
+    // read with ANN query
+    {
+        const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+        // [0, 4) without vector index return all.
+        readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+    }
+
+    // read with ANN query
+    {
+        const auto ann_query_info = annQueryInfoTopK({.vec = {1.1}, .top_k = 1});
+        auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+        // [0, 4) without vector index return all.
+        readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
+    }
+}
+CATCH
+
+TEST_F(DeltaMergeStoreVectorTest, TestBuildDeltaIndexBetweenCompactDelta)
+try
+{
+    store = reload();
+
+    // write [0, 2), [2, 4), [4, 10) to store
+    write(0, 2);
+    triggerFlushCache();
+    write(2, 4);
+    triggerFlushCache();
+    write(4, 10);
+    triggerFlushCache();
+
+    // start a task to build delta compaction task
+    auto sp_delta_compact_task_build
+        = SyncPointCtl::enableInScope("DeltaValueSpace::compact_after_compaction_task_build");
+    auto th_delta_compact = std::async([&]() {
+        // compact delta [0, 2) + [2, 4) -> [0, 4)
+        triggerCompactDelta();
+    });
+    sp_delta_compact_task_build.waitAndPause();
+
+    // trigger FlushCache and build delta local index for all segments
+    triggerFlushCacheAndEnsureDeltaLocalIndex();
+    waitDeltaIndexReady();
+
+    // Now persisted file set has been updated with delta local index.
+    // Resume
+    sp_delta_compact_task_build.next();
+    th_delta_compact.get();
 
     const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
 
