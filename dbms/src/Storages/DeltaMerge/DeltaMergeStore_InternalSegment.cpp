@@ -906,19 +906,19 @@ bool DeltaMergeStore::segmentEnsureDeltaLocalIndexAsync(const SegmentPtr & segme
     }
 
     auto store_weak_ptr = weak_from_this();
-    auto tracing_id = fmt::format("segmentEnsureDeltaLocalIndexAsync source_segment={}", segment->simpleInfo());
-    auto workload = [store_weak_ptr, delta_vs_build_info, segment, tracing_id]() -> void {
+    const auto source_segment_info = segment->simpleInfo();
+    auto workload = [store_weak_ptr, delta_vs_build_info, source_segment_info]() -> void {
         auto store = store_weak_ptr.lock();
         if (!store) // Store is destroyed before the task is executed.
             return;
         auto delta = delta_vs_build_info->delta_weak_ptr.lock();
         if (!delta) // Delta is destroyed before the task is executed.
             return;
+        auto tracing_id = fmt::format("segmentEnsureDeltaLocalIndexAsync source_segment={}", source_segment_info);
         auto dm_context = store->newDMContext( //
             store->global_context,
             store->global_context.getSettingsRef(),
             tracing_id);
-        const auto source_segment_info = segment->simpleInfo();
         store->segmentEnsureDeltaLocalIndex(
             *dm_context,
             delta_vs_build_info->build_info.indexes_to_build,
@@ -944,6 +944,7 @@ bool DeltaMergeStore::segmentEnsureDeltaLocalIndexAsync(const SegmentPtr & segme
             return true;
 
         segment->setIndexBuildError(delta_vs_build_info->build_info.index_ids, reason);
+        auto tracing_id = fmt::format("segmentEnsureDeltaLocalIndexAsync source_segment={}", source_segment_info);
         LOG_ERROR(
             log->getChild(tracing_id),
             "Failed to generate async segment stable index task, index_ids={} reason={}",
