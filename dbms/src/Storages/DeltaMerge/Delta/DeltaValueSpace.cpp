@@ -224,7 +224,7 @@ std::pair<ColumnFiles, ColumnFilePersisteds> DeltaValueSpace::cloneNewlyAppended
         snapshot_persisted_files.begin(),
         snapshot_persisted_files.end());
     // If there were flush since the snapshot, the flushed files should be behind the files in the snapshot.
-    // So let's place these "flused files" after the persisted files in snapshot.
+    // So let's place these "flushed files" after the persisted files in snapshot.
     head_persisted_files.insert(head_persisted_files.end(), flushed_mem_files.begin(), flushed_mem_files.end());
 
     auto new_persisted_files = persisted_file_set->diffColumnFiles(head_persisted_files);
@@ -354,9 +354,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     SCOPE_EXIT({
         bool v = true;
         if (!is_flushing.compare_exchange_strong(v, false))
-            throw Exception(
-                fmt::format("Delta is expected to be flushing, delta={}", simple_info),
-                ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delta is expected to be flushing, delta={}", simple_info);
     });
 
     LOG_DEBUG(log, "Flush start, delta={}", info());
