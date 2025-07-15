@@ -349,7 +349,19 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
                     || (file->getId() != (*old_persisted_files_iter)->getId())
                     || (file->getRows() != (*old_persisted_files_iter)->getRows())))
             {
-                throw Exception("Compaction algorithm broken", ErrorCodes::LOGICAL_ERROR);
+                throw Exception(
+                    ErrorCodes::LOGICAL_ERROR,
+                    "Compaction algorithm broken, "
+                    "compaction={{{}}} persisted_files={} "
+                    "old_persisted_files_iter.is_end={} "
+                    "file->getId={} old_persist_files->getId={} file->getRows={} old_persist_files->getRows={}",
+                    compaction->info(),
+                    detailInfo(),
+                    old_persisted_files_iter == persisted_files.end(),
+                    file->getId(),
+                    old_persisted_files_iter == persisted_files.end() ? -1 : (*old_persisted_files_iter)->getId(),
+                    file->getRows(),
+                    old_persisted_files_iter == persisted_files.end() ? -1 : (*old_persisted_files_iter)->getRows());
             }
             old_persisted_files_iter++;
         }
