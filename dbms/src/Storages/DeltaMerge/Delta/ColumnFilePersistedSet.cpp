@@ -75,7 +75,7 @@ void ColumnFilePersistedSet::checkColumnFiles(const ColumnFilePersisteds & new_c
 
     RUNTIME_CHECK_MSG(
         new_rows == rows && new_deletes == deletes,
-        "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}]. Current column "
+        "Rows and deletes check failed. Actual: rows={} deletes={} Expected: rows={} deletes={}. Current column "
         "files: {}, new column files: {}.", //
         new_rows,
         new_deletes,
@@ -334,11 +334,12 @@ bool ColumnFilePersistedSet::installCompactionResults(const MinorCompactionPtr &
                     || (file->getId() != (*old_persisted_files_iter)->getId())
                     || (file->getRows() != (*old_persisted_files_iter)->getRows())))
             {
-                LOG_ERROR(
+                // The ColumnFile in `to_compact` is not in the latest persisted files, skip
+                // the minor compaction.
+                LOG_WARNING(
                     log,
-                    "Compaction algorithm broken, "
-                    "compaction={{{}}} persisted_files={} "
-                    "task={} "
+                    "Minor Compaction is skipped, "
+                    "compaction={{{}}} persisted_files={} task={} "
                     "old_persisted_files_iter.is_end={} "
                     "file->getId={} old_persist_files->getId={} file->getRows={} old_persist_files->getRows={}",
                     compaction->info(),
@@ -392,7 +393,7 @@ ColumnFileSetSnapshotPtr ColumnFilePersistedSet::createSnapshot(const IColumnFil
     {
         LOG_ERROR(
             log,
-            "Rows and deletes check failed. Actual: rows[{}], deletes[{}]. Expected: rows[{}], deletes[{}].",
+            "Rows and deletes check failed. Actual: rows={} deletes={}. Expected: rows={} deletes={}",
             total_rows,
             total_deletes,
             rows.load(),
