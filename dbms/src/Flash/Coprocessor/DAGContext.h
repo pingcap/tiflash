@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <mutex>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -369,8 +370,17 @@ public:
         this->query_id_and_cte_id = query_id_and_cte_id;
     }
 
-    std::vector<std::shared_ptr<CTE>> getCTEs() const { return this->ctes; }
-    void addCTE(std::shared_ptr<CTE> & cte) { this->ctes.push_back(cte); }
+    std::vector<std::shared_ptr<CTE>> getCTEs()
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        return this->ctes;
+    }
+
+    void addCTE(std::shared_ptr<CTE> & cte)
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        this->ctes.push_back(cte);
+    }
 
 public:
     DAGRequest dag_request;
@@ -490,6 +500,8 @@ private:
     String connection_alias;
 
     String query_id_and_cte_id;
+
+    std::mutex cte_mu;
     std::vector<std::shared_ptr<CTE>> ctes;
 };
 

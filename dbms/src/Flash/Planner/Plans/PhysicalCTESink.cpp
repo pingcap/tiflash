@@ -52,6 +52,8 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     Context & context,
     size_t concurrency)
 {
+    throw Exception("xzx test error in PhysicalCTESink");
+    
     String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
     exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
 
@@ -60,6 +62,8 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
         concurrency,
         this->expected_sink_num,
         this->expected_source_num);
+
+    exec_context.addCTE(cte);
 
     RUNTIME_CHECK(group_builder.concurrency() <= concurrency);
 

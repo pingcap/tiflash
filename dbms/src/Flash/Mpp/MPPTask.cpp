@@ -194,6 +194,8 @@ void MPPTask::abortCTE(const String & message)
 {
     if (this->has_cte_sink.load())
     {
+        // auto * log = &Poco::Logger::get("LRUCache");
+
         auto ctes = this->dag_context->getCTEs();
 
         // CTESource may be waiting for the finish signal from cte sink
@@ -615,6 +617,9 @@ void MPPTask::runImpl()
 #endif
 
         auto result = query_executor_holder->execute();
+        if (this->has_cte_sink.load())
+            std::cout << "1";
+        
         auto log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
             log_level = Poco::Message::PRIO_INFORMATION;
@@ -669,7 +674,7 @@ void MPPTask::runImpl()
         err_msg = err_msg.empty() ? catch_err_msg : fmt::format("{}, {}", err_msg, catch_err_msg);
     }
 
-    if (this->has_cte_sink.load() && !this->notify_cte_finish)
+    if unlikely (this->has_cte_sink.load() && !this->notify_cte_finish)
     {
         tipb::SelectResponse resp;
         this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEID());
