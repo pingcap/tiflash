@@ -22,7 +22,6 @@
 #include <Operators/CTESourceOp.h>
 
 #include <memory>
-#include <string>
 
 namespace DB
 {
@@ -47,10 +46,7 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
         schema,
         fine_grained_shuffle,
         log->identifier(),
-        Block(schema),
-        cte_source.cte_id(),
-        cte_source.cte_sink_num(),
-        cte_source.cte_source_num());
+        Block(schema));
 }
 
 void PhysicalCTESource::buildPipelineExecGroupImpl(
@@ -59,23 +55,11 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
     Context & context,
     size_t concurrency)
 {
-    String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
-    exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
-
-    RUNTIME_CHECK(group_builder.concurrency() <= concurrency);
-
-    auto cte_reader = std::make_shared<CTEReader>(
-        query_id_and_cte_id,
-        concurrency,
-        context.getCTEManager(),
-        this->expected_sink_num,
-        this->expected_source_num);
-    exec_context.addCTE(cte_reader->getCTE());
+    const String & query_id_and_cte_id = context.getDAGContext()->getQueryIDAndCTEIDForSource();
+    auto cte_reader = std::make_shared<CTEReader>(context);
     for (size_t i = 0; i < concurrency; ++i)
-    {
         group_builder.addConcurrency(
-            std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, i, schema));
-    }
+            std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, i, schema, query_id_and_cte_id));
 
     context.getDAGContext()->addInboundIOProfileInfos(this->executor_id, group_builder.getCurIOProfileInfos());
 }

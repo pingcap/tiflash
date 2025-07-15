@@ -56,7 +56,6 @@ public:
 
     PipelineExecutorContext(
         const String & query_id_,
-        const String & query_id_for_cte_,
         const String & req_id,
         const MemoryTrackerPtr & mem_tracker_,
         DAGContext * dag_context_ = nullptr,
@@ -65,7 +64,6 @@ public:
         const KeyspaceID & keyspace_id_ = NullspaceID,
         const String & resource_group_name_ = "")
         : query_id(query_id_)
-        , query_id_for_cte(query_id_for_cte_)
         , log(Logger::get(req_id))
         , mem_tracker(mem_tracker_)
         , dag_context(dag_context_)
@@ -121,8 +119,6 @@ public:
 
     const String & getQueryId() const { return query_id; }
 
-    const String & getQueryIdForCTE() const { return this->query_id_for_cte; }
-
     const MemoryTrackerPtr & getMemoryTracker() const { return mem_tracker; }
 
     void triggerAutoSpill() const
@@ -150,13 +146,6 @@ public:
 
     void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
 
-    void setQueryIDAndCTEID(const String & query_id_and_cte_id)
-    {
-        this->dag_context->setQueryIDAndCTEID(query_id_and_cte_id);
-    }
-
-    void addCTE(std::shared_ptr<CTE> cte) { this->dag_context->addCTE(cte); }
-
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -175,8 +164,6 @@ private:
 
 private:
     const String query_id;
-
-    String query_id_for_cte;
 
     LoggerPtr log;
 

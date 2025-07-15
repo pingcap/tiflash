@@ -201,6 +201,7 @@ private:
     MPPReceiverSetPtr receiver_set;
 
     std::atomic<bool> has_cte_sink = false;
+    std::atomic<bool> has_cte_source = false;
     bool notify_cte_finish = false;
 
     int new_thread_count_of_mpp_receiver = 0;

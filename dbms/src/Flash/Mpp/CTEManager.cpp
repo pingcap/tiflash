@@ -31,7 +31,12 @@ void CTEManager::releaseCTEBySource(const String & query_id_and_cte_id)
 
     auto * log = &Poco::Logger::get("LRUCache");
     iter->second.sourceExit();
-    LOG_INFO(log, fmt::format("xzxdebug total exit: {}, expect exit: {}", iter->second.getTotalExitNum(), iter->second.getExpectedTotalNum()));
+    LOG_INFO(
+        log,
+        fmt::format(
+            "xzxdebug total exit: {}, expect exit: {}",
+            iter->second.getTotalExitNum(),
+            iter->second.getExpectedTotalNum()));
     if (iter->second.getTotalExitNum() == iter->second.getExpectedTotalNum())
     {
         LOG_INFO(log, fmt::format("xzxdebug cte {} is erased", query_id_and_cte_id));
@@ -51,7 +56,14 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
     cte_with_counter.getCTE()->addResp(resp);
     cte_with_counter.sinkExit();
     auto * log = &Poco::Logger::get("LRUCache");
-    LOG_INFO(log, fmt::format("xzxdebug sink: {}, expect sink: {} total exit: {}, expect exit: {}", cte_with_counter.getSinkExitNum(), cte_with_counter.getExpectedSinkNum(), cte_with_counter.getTotalExitNum(), cte_with_counter.getExpectedTotalNum()));
+    LOG_INFO(
+        log,
+        fmt::format(
+            "xzxdebug sink: {}, expect sink: {} total exit: {}, expect exit: {}",
+            cte_with_counter.getSinkExitNum(),
+            cte_with_counter.getExpectedSinkNum(),
+            cte_with_counter.getTotalExitNum(),
+            cte_with_counter.getExpectedTotalNum()));
     if (cte_with_counter.getSinkExitNum() == cte_with_counter.getExpectedSinkNum())
         cte_with_counter.getCTE()->notifyEOF();
     if (cte_with_counter.getTotalExitNum() == cte_with_counter.getExpectedTotalNum())
@@ -85,7 +97,10 @@ std::shared_ptr<CTE> CTEManager::getCTE(
     {
         this->ctes.insert(std::make_pair(
             query_id_and_cte_id,
-            CTEWithCounter(std::make_shared<CTE>(concurrency), expected_sink_num, expected_source_num)));
+            CTEWithCounter(
+                std::make_shared<CTE>(concurrency, expected_sink_num),
+                expected_sink_num,
+                expected_source_num)));
         auto * log = &Poco::Logger::get("LRUCache");
         LOG_INFO(log, fmt::format("xzxdebug create cte {}", query_id_and_cte_id));
     }

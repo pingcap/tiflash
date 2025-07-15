@@ -187,9 +187,13 @@ void PipelineExecutorContext::cancel()
             if (dag_context->tunnel_set)
                 dag_context->tunnel_set->close(getTrimmedErrMsg(), false);
 
-            auto ctes = dag_context->getCTEs();
-            if (!ctes.empty())
-                ctes[0]->notifyCancel(getTrimmedErrMsg());
+            auto cte = dag_context->getCTESink();
+            if (cte)
+                cte->notifyCancel(getTrimmedErrMsg());
+
+            cte = dag_context->getCTESource();
+            if (cte)
+                cte->notifyCancel(getTrimmedErrMsg());
 
             if (auto mpp_receiver_set = dag_context->getMPPReceiverSet(); mpp_receiver_set)
                 mpp_receiver_set->cancel();

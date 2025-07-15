@@ -39,6 +39,9 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
         DB::setNotifyFuture(&(this->notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;
+    case CTEOpStatus::SINK_NOT_REGISTERED:
+        this->sw.start();
+        return OperatorStatus::WAITING;
     default:
         throw Exception("Should not reach here");
     }

@@ -14,9 +14,11 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Interpreters/Context.h>
 #include <Operators/CTE.h>
 #include <tipb/select.pb.h>
 
@@ -28,17 +30,14 @@ namespace DB
 class CTEReader
 {
 public:
-    CTEReader(
-        const String & query_id_and_cte_id_,
-        size_t partition_num,
-        CTEManager * cte_manager_,
-        Int32 expected_sink_num_,
-        Int32 expected_source_num_)
-        : query_id_and_cte_id(query_id_and_cte_id_)
-        , cte_manager(cte_manager_)
-        , cte(cte_manager_->getCTE(query_id_and_cte_id_, partition_num, expected_sink_num_, expected_source_num_))
+    explicit CTEReader(Context & context)
+        : query_id_and_cte_id(context.getDAGContext()->getQueryIDAndCTEIDForSource())
+        , cte_manager(context.getCTEManager())
+        , cte(context.getDAGContext()->getCTESource())
         , cte_reader_id(this->cte->getCTEReaderID())
-    {}
+    {
+        RUNTIME_CHECK(cte);
+    }
 
     ~CTEReader()
     {
@@ -59,6 +58,8 @@ public:
 
     std::shared_ptr<CTE> getCTE() const { return this->cte; }
     size_t getID() const { return this->cte_reader_id; }
+
+    bool areAllSinksRegistered() { return this->cte->areAllSinksRegistered<true>(); }
 
 private:
     String query_id_and_cte_id;

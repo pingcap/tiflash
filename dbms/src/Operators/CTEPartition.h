@@ -26,7 +26,8 @@ enum class CTEOpStatus
     OK,
     BLOCK_NOT_AVAILABLE,
     END_OF_FILE,
-    CANCELLED
+    CANCELLED,
+    SINK_NOT_REGISTERED
 };
 
 struct CTEPartition
