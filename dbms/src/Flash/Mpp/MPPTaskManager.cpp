@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Mpp/MPPTask.h>
@@ -94,6 +95,7 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & glob
         DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
     LOG_INFO(log, "Start to wait all MPPTasks to finish, timeout={}s", graceful_wait_before_shutdown);
     auto max_wait_time = start + std::chrono::seconds(graceful_wait_before_shutdown);
+    Stopwatch watch;
     while (true)
     {
         // The first sleep before checking to reduce the chance of missing MPP tasks that are still in the process of being dispatched
@@ -101,12 +103,15 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & glob
         {
             std::unique_lock lock(mu);
             if (monitored_tasks.empty())
+            {
+                LOG_INFO(log, "All MPPTasks have finished after {}ms", watch.elapsedMilliseconds());
                 break;
+            }
         }
         auto current_time = std::chrono::steady_clock::now();
         if (current_time >= max_wait_time)
         {
-            LOG_WARNING(log, "Timed out waiting for MPP tasks to finish after {}s", graceful_wait_before_shutdown);
+            LOG_WARNING(log, "Timed out waiting for MPP tasks to finish after {}ms", watch.elapsedMilliseconds());
             break;
         }
     }
