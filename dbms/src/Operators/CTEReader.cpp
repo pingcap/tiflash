@@ -46,6 +46,10 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t partition_id, Block & block)
 
 CTEOpStatus CTEReader::fetchBlockFromDisk(size_t partition_id, Block & block)
 {
+    bool expected_bool = false;
+    if (this->is_first_log.compare_exchange_weak(expected_bool, true))
+        LOG_INFO(this->cte->getLog(), "Begin restore data from disk for cte.");
+
     return this->cte->getBlockFromDisk(this->cte_reader_id, partition_id, block);
 }
 } // namespace DB

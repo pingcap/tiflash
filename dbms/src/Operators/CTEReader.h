@@ -22,6 +22,7 @@
 #include <Operators/CTE.h>
 #include <tipb/select.pb.h>
 
+#include <atomic>
 #include <memory>
 #include <mutex>
 
@@ -71,5 +72,7 @@ private:
     std::mutex mu;
     bool resp_fetched = false;
     tipb::SelectResponse resp;
+
+    std::atomic_bool is_first_log = false;
 };
 } // namespace DB

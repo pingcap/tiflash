@@ -130,6 +130,8 @@ public:
         return this->registered_sink_num == this->expected_sink_num;
     }
 
+    LoggerPtr getLog() const { return this->cte_spill_context->getLog(); }
+
 private:
     void notifyImpl(bool is_eof, const String & msg)
     {
