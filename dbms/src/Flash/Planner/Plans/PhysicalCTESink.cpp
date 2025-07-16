@@ -75,7 +75,7 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
         spill_config,
         group_builder.getCurrentHeader(),
         settings.max_bytes_before_cte_spill,
-        query_id_and_cte_id);
+        context.getDAGContext()->getQueryIDAndCTEIDForSink());
 }
 
 void PhysicalCTESink::finalizeImpl(const Names & parent_require)
