@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <Common/MemoryTracker.h>
 #include <Core/AutoSpillTrigger.h>
+#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/ExecutionResult.h>
 #include <Flash/Executor/ResultHandler.h>
 #include <Flash/Executor/ResultQueue_fwd.h>
