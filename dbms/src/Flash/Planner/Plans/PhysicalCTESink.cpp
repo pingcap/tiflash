@@ -47,13 +47,12 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     Context & context,
     size_t concurrency)
 {
-    // throw Exception("xzxdebug test error in PhysicalCTESink"); // TODO remove it
-
     // Partition number in CTE is equal to concurrency, we need to ensure that `group_builder.concurrency() <= concurrency`
     // or some blocks in partition will not be fetched.
     RUNTIME_CHECK(group_builder.concurrency() <= concurrency);
 
-    std::shared_ptr<CTE> cte = context.getDAGContext()->getCTESource();
+    std::shared_ptr<CTE> cte = context.getDAGContext()->getCTESink();
+    RUNTIME_CHECK(cte);
 
     size_t id = 0;
     group_builder.transform([&](auto & builder) {
@@ -71,5 +70,4 @@ const Block & PhysicalCTESink::getSampleBlock() const
 {
     return child->getSampleBlock();
 }
-
 } // namespace DB

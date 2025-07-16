@@ -29,19 +29,9 @@ void CTEManager::releaseCTEBySource(const String & query_id_and_cte_id)
         // Maybe the task is cancelled and the cte has been released
         return;
 
-    auto * log = &Poco::Logger::get("LRUCache");
     iter->second.sourceExit();
-    LOG_INFO(
-        log,
-        fmt::format(
-            "xzxdebug total exit: {}, expect exit: {}",
-            iter->second.getTotalExitNum(),
-            iter->second.getExpectedTotalNum()));
     if (iter->second.getTotalExitNum() == iter->second.getExpectedTotalNum())
-    {
-        LOG_INFO(log, fmt::format("xzxdebug cte {} is erased", query_id_and_cte_id));
         this->ctes.erase(iter);
-    }
 }
 
 void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const String & query_id_and_cte_id)
@@ -55,22 +45,10 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
     CTEWithCounter & cte_with_counter = iter->second;
     cte_with_counter.getCTE()->addResp(resp);
     cte_with_counter.sinkExit();
-    auto * log = &Poco::Logger::get("LRUCache");
-    LOG_INFO(
-        log,
-        fmt::format(
-            "xzxdebug sink: {}, expect sink: {} total exit: {}, expect exit: {}",
-            cte_with_counter.getSinkExitNum(),
-            cte_with_counter.getExpectedSinkNum(),
-            cte_with_counter.getTotalExitNum(),
-            cte_with_counter.getExpectedTotalNum()));
     if (cte_with_counter.getSinkExitNum() == cte_with_counter.getExpectedSinkNum())
         cte_with_counter.getCTE()->notifyEOF();
     if (cte_with_counter.getTotalExitNum() == cte_with_counter.getExpectedTotalNum())
-    {
-        LOG_INFO(log, fmt::format("xzxdebug cte {} is erased", query_id_and_cte_id));
         this->ctes.erase(iter);
-    }
 }
 
 void CTEManager::releaseCTE(const String & query_id_and_cte_id)
@@ -78,11 +56,7 @@ void CTEManager::releaseCTE(const String & query_id_and_cte_id)
     std::lock_guard<std::mutex> lock(this->mu);
     auto iter = this->ctes.find(query_id_and_cte_id);
     if (iter != this->ctes.end())
-    {
-        auto * log = &Poco::Logger::get("LRUCache");
-        LOG_INFO(log, fmt::format("xzxdebug cte {} is erased", query_id_and_cte_id));
         this->ctes.erase(iter);
-    }
 }
 
 std::shared_ptr<CTE> CTEManager::getCTE(
@@ -94,16 +68,12 @@ std::shared_ptr<CTE> CTEManager::getCTE(
     std::lock_guard<std::mutex> lock(this->mu);
     auto iter = this->ctes.find(query_id_and_cte_id);
     if (iter == this->ctes.end())
-    {
         this->ctes.insert(std::make_pair(
             query_id_and_cte_id,
             CTEWithCounter(
                 std::make_shared<CTE>(concurrency, expected_sink_num),
                 expected_sink_num,
                 expected_source_num)));
-        auto * log = &Poco::Logger::get("LRUCache");
-        LOG_INFO(log, fmt::format("xzxdebug create cte {}", query_id_and_cte_id));
-    }
 
     auto cte = this->ctes.find(query_id_and_cte_id)->second.getCTE();
     cte->checkPartitionNum(concurrency);

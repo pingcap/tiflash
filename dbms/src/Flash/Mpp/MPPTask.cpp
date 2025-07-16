@@ -195,9 +195,6 @@ void MPPTask::abortQueryExecutor()
 // or the CTESource will hang
 void MPPTask::abortCTE(const String & message)
 {
-    auto * log = &Poco::Logger::get("LRUCache");
-    LOG_INFO(log, "xzxdebug enter cte abort, {} {}", this->has_cte_sink.load(), this->has_cte_source.load());
-
     if (this->has_cte_sink.load())
     {
         this->dag_context->getCTESink()->notifyCancel(message);
