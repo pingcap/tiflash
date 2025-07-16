@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
@@ -54,8 +55,10 @@ public:
         const String & req_id,
         std::shared_ptr<CTEReader> cte_reader_,
         size_t id_,
-        const NamesAndTypes & schema)
+        const NamesAndTypes & schema,
+        const String & query_id_and_cte_id_)
         : SourceOp(exec_context_, req_id)
+        , query_id_and_cte_id(query_id_and_cte_id_)
         , cte_reader(cte_reader_)
         , io_profile_info(IOProfileInfo::createForRemote(profile_info_ptr, 1))
         , id(id_)
@@ -74,6 +77,18 @@ protected:
     OperatorStatus readImpl(Block & block) override;
     OperatorStatus executeIOImpl() override;
 
+    OperatorStatus awaitImpl() override
+    {
+        if (this->cte_reader->areAllSinksRegistered())
+            return OperatorStatus::HAS_OUTPUT;
+
+        if (this->sw.elapsedSeconds() >= 10)
+            throw Exception(fmt::format(
+                "cte sink can't be registered for 10s, query_id_and_cte_id: {}",
+                this->query_id_and_cte_id));
+        return OperatorStatus::WAITING;
+    }
+
 private:
     String query_id_and_cte_id;
     Block block_from_disk;
@@ -86,5 +101,6 @@ private:
     size_t id;
     CTESourceNotifyFuture notifier;
     CTEIONotifier io_notifier;
+    Stopwatch sw;
 };
 } // namespace DB

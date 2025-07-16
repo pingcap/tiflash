@@ -36,11 +36,11 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <fmt/core.h>
+#include <tipb/executor.pb.h>
 
 #include <chrono>
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
-#include <map>
 
 namespace DB
 {
@@ -190,18 +190,21 @@ void MPPTask::abortQueryExecutor()
     }
 }
 
+// CTESource may be waiting for the finish signal from cte sink
+// We'd better to manually do notification in case of missing signal from cte sink
+// or the CTESource will hang
 void MPPTask::abortCTE(const String & message)
 {
     if (this->has_cte_sink.load())
     {
-        auto ctes = this->dag_context->getCTEs();
+        this->dag_context->getCTESink()->notifyCancel(message);
+        this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSink());
+    }
 
-        // CTESource may be waiting for the finish signal from cte sink
-        // We'd better to manually do notification in case of missing signal from cte sink
-        // or the CTESource will hang
-        for (auto & cte : ctes)
-            cte->notifyCancel(message);
-        this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEID());
+    if (this->has_cte_source.load())
+    {
+        this->dag_context->getCTESource()->notifyCancel(message);
+        this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSource());
     }
 }
 
@@ -216,7 +219,7 @@ void MPPTask::finishWrite()
         // The finish of pushing all blocks not means that cte sink job has been done.
         // Execution summary statistic also need to be sent. So we can release cte
         // only when execution sumary statistic has been sent.
-        this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEID());
+        this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEIDForSink());
         this->notify_cte_finish = true;
     }
     else
@@ -241,8 +244,19 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         RUNTIME_CHECK_MSG(
             dag_context->dag_request.rootExecutor().has_cte_sink(),
             "Task should has either exchange sender or cte sink");
-        // There is no need to register tunnel for cte sink
+
         this->has_cte_sink.store(true);
+        const auto & cte_sink = dag_context->dag_request.rootExecutor().cte_sink();
+        String query_id_and_cte_id
+            = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_sink.cte_id());
+        context->getDAGContext()->setQueryIDAndCTEIDForSink(query_id_and_cte_id);
+        auto cte = context->getCTEManager()->getCTE(
+            query_id_and_cte_id,
+            context->getMaxStreams(),
+            cte_sink.cte_sink_num(),
+            cte_sink.cte_source_num());
+        cte->registerSink();
+        context->getDAGContext()->setCTESink(cte);
         return;
     }
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
@@ -334,6 +348,20 @@ void MPPTask::initExchangeReceivers()
                 if (status != RUNNING)
                     throw Exception(
                         "exchange receiver map can not be initialized, because the task is not in running state");
+            }
+            else if (executor.tp() == tipb::ExecType::TypeCTESource)
+            {
+                this->has_cte_source.store(true);
+                const auto & cte_source = executor.cte_source();
+                String query_id_and_cte_id
+                    = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_source.cte_id());
+                context->getDAGContext()->setQueryIDAndCTEIDForSource(query_id_and_cte_id);
+                auto cte = context->getCTEManager()->getCTE(
+                    query_id_and_cte_id,
+                    context->getMaxStreams(),
+                    cte_source.cte_sink_num(),
+                    cte_source.cte_source_num());
+                context->getDAGContext()->setCTESource(cte);
             }
             return true;
         });
@@ -615,6 +643,9 @@ void MPPTask::runImpl()
 #endif
 
         auto result = query_executor_holder->execute();
+        if (this->has_cte_sink.load())
+            std::cout << "1";
+
         auto log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
             log_level = Poco::Message::PRIO_INFORMATION;
@@ -669,10 +700,10 @@ void MPPTask::runImpl()
         err_msg = err_msg.empty() ? catch_err_msg : fmt::format("{}, {}", err_msg, catch_err_msg);
     }
 
-    if (this->has_cte_sink.load() && !this->notify_cte_finish)
+    if unlikely (this->has_cte_sink.load() && !this->notify_cte_finish)
     {
         tipb::SelectResponse resp;
-        this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEID());
+        this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEIDForSink());
         this->notify_cte_finish = true;
     }
 

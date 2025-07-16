@@ -40,7 +40,8 @@ enum class CTEOpStatus
     IO_IN,
     NEED_SPILL,
     END_OF_FILE,
-    CANCELLED
+    CANCELLED,
+    SINK_NOT_REGISTERED
 };
 
 struct CTEPartition

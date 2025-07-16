@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <mutex>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -361,16 +362,59 @@ public:
 
     MPPReceiverSetPtr getMPPReceiverSet() const { return mpp_receiver_set; }
 
-    String getQueryIDAndCTEID() const noexcept { return this->query_id_and_cte_id; }
-    void setQueryIDAndCTEID(const String & query_id_and_cte_id)
+    String getQueryIDAndCTEIDForSink()
     {
-        // MPP Task has only one CTESink, it's impossible to set query_id_and_cte_id twice
-        RUNTIME_CHECK(this->query_id_and_cte_id.empty(), this->query_id_and_cte_id);
-        this->query_id_and_cte_id = query_id_and_cte_id;
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        return this->query_id_and_cte_id_for_sink;
     }
 
-    std::vector<std::shared_ptr<CTE>> getCTEs() const { return this->ctes; }
-    void addCTE(std::shared_ptr<CTE> & cte) { this->ctes.push_back(cte); }
+    String getQueryIDAndCTEIDForSource()
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        return this->query_id_and_cte_id_for_source;
+    }
+
+    void setQueryIDAndCTEIDForSink(const String & query_id_and_cte_id)
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+
+        // MPP Task has only one CTESink, it's impossible to set query_id_and_cte_id_for_sink twice
+        RUNTIME_CHECK(this->query_id_and_cte_id_for_sink.empty(), this->query_id_and_cte_id_for_sink);
+        this->query_id_and_cte_id_for_sink = query_id_and_cte_id;
+    }
+
+    void setQueryIDAndCTEIDForSource(const String & query_id_and_cte_id)
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+
+        // MPP Task has only one CTESource, it's impossible to set query_id_and_cte_id_for_source twice
+        RUNTIME_CHECK(this->query_id_and_cte_id_for_source.empty(), this->query_id_and_cte_id_for_source);
+        this->query_id_and_cte_id_for_source = query_id_and_cte_id;
+    }
+
+    std::shared_ptr<CTE> getCTESink()
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        return this->sink_cte;
+    }
+
+    std::shared_ptr<CTE> getCTESource()
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        return this->source_cte;
+    }
+
+    void setCTESink(std::shared_ptr<CTE> & cte)
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        this->sink_cte = cte;
+    }
+
+    void setCTESource(std::shared_ptr<CTE> & cte)
+    {
+        std::lock_guard<std::mutex> lock(this->cte_mu);
+        this->source_cte = cte;
+    }
 
 public:
     DAGRequest dag_request;
@@ -489,8 +533,12 @@ private:
     // It's the session alias between mysql client and tidb
     String connection_alias;
 
-    String query_id_and_cte_id;
-    std::vector<std::shared_ptr<CTE>> ctes;
+    String query_id_and_cte_id_for_sink;
+    String query_id_and_cte_id_for_source;
+
+    std::mutex cte_mu;
+    std::shared_ptr<CTE> sink_cte;
+    std::shared_ptr<CTE> source_cte;
 };
 
 } // namespace DB

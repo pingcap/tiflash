@@ -50,6 +50,9 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
     if unlikely (this->is_cancelled)
         return CTEOpStatus::CANCELLED;
 
+    if unlikely (!this->areAllSinksRegistered<false>())
+        return CTEOpStatus::SINK_NOT_REGISTERED;
+
     auto status = this->partitions[partition_id].tryGetBlock(cte_reader_id, block);
     switch (status)
     {

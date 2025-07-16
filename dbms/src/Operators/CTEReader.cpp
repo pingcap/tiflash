@@ -13,11 +13,10 @@
 // limitations under the License.
 
 #include <Operators/CTE.h>
+#include <Operators/CTEPartition.h>
 #include <Operators/CTEReader.h>
 
 #include <mutex>
-
-#include "Operators/CTEPartition.h"
 
 namespace DB
 {
@@ -35,6 +34,7 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t partition_id, Block & block)
     case CTEOpStatus::WAIT_SPILL:
     case CTEOpStatus::NEED_SPILL:
     case CTEOpStatus::IO_IN:
+    case CTEOpStatus::SINK_NOT_REGISTERED:
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
     case CTEOpStatus::OK:
         return ret;

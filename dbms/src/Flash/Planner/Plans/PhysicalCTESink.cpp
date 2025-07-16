@@ -27,8 +27,7 @@ PhysicalPlanNodePtr PhysicalCTESink::build(
     const String & executor_id,
     const LoggerPtr & log,
     const FineGrainedShuffle & fine_grained_shuffle,
-    const PhysicalPlanNodePtr & child,
-    const ::tipb::CTESink & cte_sink)
+    const PhysicalPlanNodePtr & child)
 {
     RUNTIME_CHECK(child);
 
@@ -37,10 +36,7 @@ PhysicalPlanNodePtr PhysicalCTESink::build(
         child->getSchema(),
         fine_grained_shuffle,
         log->identifier(),
-        child,
-        cte_sink.cte_id(),
-        cte_sink.cte_sink_num(),
-        cte_sink.cte_source_num());
+        child);
     physical_cte_sink->disableRestoreConcurrency();
     return physical_cte_sink;
 }
@@ -51,16 +47,12 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     Context & context,
     size_t concurrency)
 {
-    String query_id_and_cte_id = fmt::format("{}_{}", exec_context.getQueryIdForCTE(), this->cte_id);
-    exec_context.setQueryIDAndCTEID(query_id_and_cte_id);
-
-    std::shared_ptr<CTE> cte = context.getCTEManager()->getCTE(
-        query_id_and_cte_id,
-        concurrency,
-        this->expected_sink_num,
-        this->expected_source_num);
-
+    // Partition number in CTE is equal to concurrency, we need to ensure that `group_builder.concurrency() <= concurrency`
+    // or some blocks in partition will not be fetched.
     RUNTIME_CHECK(group_builder.concurrency() <= concurrency);
+
+    std::shared_ptr<CTE> cte = context.getDAGContext()->getCTESink();
+    RUNTIME_CHECK(cte);
 
     size_t id = 0;
     group_builder.transform([&](auto & builder) {
@@ -95,5 +87,4 @@ const Block & PhysicalCTESink::getSampleBlock() const
 {
     return child->getSampleBlock();
 }
-
 } // namespace DB

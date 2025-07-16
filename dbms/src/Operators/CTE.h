@@ -31,8 +31,9 @@ namespace DB
 class CTE
 {
 public:
-    explicit CTE(size_t partition_num_)
+    explicit CTE(size_t partition_num_, size_t expected_sink_num_)
         : partition_num(partition_num_)
+        , expected_sink_num(expected_sink_num_)
     {
         RUNTIME_CHECK(this->partition_num > 0);
         for (size_t i = 0; i < this->partition_num; i++)
@@ -114,6 +115,21 @@ public:
         }
     }
 
+    void registerSink()
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        this->registered_sink_num++;
+    }
+
+    template <bool need_lock>
+    bool areAllSinksRegistered()
+    {
+        std::shared_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
+        if constexpr (need_lock)
+            lock.lock();
+        return this->registered_sink_num == this->expected_sink_num;
+    }
+
 private:
     void notifyImpl(bool is_eof, const String & msg)
     {
@@ -142,6 +158,9 @@ private:
 
     bool get_resp = false;
     tipb::SelectResponse resp;
+
+    const size_t expected_sink_num;
+    size_t registered_sink_num = 0;
 
     String err_msg;
     std::shared_ptr<CTESpillContext> cte_spill_context;
