@@ -22,6 +22,7 @@
 #include <Operators/CTE.h>
 #include <Operators/CTEReader.h>
 #include <Operators/Operator.h>
+#include <Common/Stopwatch.h>
 
 #include <memory>
 
