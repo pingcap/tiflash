@@ -78,6 +78,7 @@
 #include <Poco/Util/XMLConfiguration.h>
 #include <common/ErrorHandlers.h>
 #include <common/logger_useful.h>
+#include <common/logger_util.h>
 #include <daemon/OwnPatternFormatter.h>
 #include <fmt/format.h>
 #include <sys/resource.h>
@@ -619,7 +620,8 @@ static void terminate_handler()
             log << "what(): " << e.what() << std::endl;
         }
         catch (...)
-        {}
+        {
+        }
 
         log << "Stack trace:\n\n" << StackTrace().toString() << std::endl;
     }
@@ -668,21 +670,6 @@ static bool tryCreateDirectories(Poco::Logger * logger, const std::string & path
     }
     return false;
 }
-
-static std::string normalize(const std::string & log_level)
-{
-    std::string norm = Poco::toLower(log_level);
-    // normalize
-    // info -> information
-    // warn -> warning
-    if (norm == "info")
-        return "information";
-    else if (norm == "warn")
-        return "warning";
-    else
-        return norm;
-}
-
 
 void BaseDaemon::reloadConfiguration()
 {
@@ -758,7 +745,7 @@ void BaseDaemon::buildLoggers(Poco::Util::AbstractConfiguration & config)
     // Split log, error log and tracing log.
     Poco::AutoPtr<Poco::ReloadableSplitterChannel> split = new Poco::ReloadableSplitterChannel;
 
-    auto log_level = normalize(config.getString("logger.level", "info"));
+    auto log_level = Utils::normalizeLogLevel(config.getString("logger.level", "info"));
     const auto log_path = config.getString("logger.log", "");
     if (!log_path.empty())
     {
