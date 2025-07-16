@@ -643,8 +643,6 @@ void MPPTask::runImpl()
 #endif
 
         auto result = query_executor_holder->execute();
-        if (this->has_cte_sink.load())
-            std::cout << "1";
 
         auto log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
