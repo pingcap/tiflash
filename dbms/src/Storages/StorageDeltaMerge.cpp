@@ -118,7 +118,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
 {
     const ColumnsDescription & columns = getColumns();
 
-    LOG_INFO(
+    LOG_DEBUG(
         log,
         "updateTableColumnInfo, table_name={} ordinary=\"{}\" materialized=\"{}\"",
         table_column_info->table_name,
@@ -223,6 +223,7 @@ void StorageDeltaMerge::updateTableColumnInfo()
         }
         table_column_defines.push_back(col_def);
     }
+    table_column_defines.shrink_to_fit();
 
     if (!new_columns.materialized.contains(VERSION_COLUMN_NAME))
     {
