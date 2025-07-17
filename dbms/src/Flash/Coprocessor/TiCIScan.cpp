@@ -35,4 +35,10 @@ TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id
 {
     RUNTIME_ASSERT(tici_scan->idx_scan().fts_query_info().query_func() == tipb::ScalarFuncSig::FTSMatchWord);
 }
+
+void TiCIScan::constructTiCIScanForRemoteRead(tipb::IndexScan * tipb_index_scan) const
+{
+    assert(tipb_index_scan != nullptr);
+    *tipb_index_scan = tici_scan->idx_scan();
+} // namespace DB
 } // namespace DB

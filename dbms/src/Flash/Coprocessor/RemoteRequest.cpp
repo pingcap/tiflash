@@ -16,7 +16,10 @@
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <Flash/Coprocessor/ChunkCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Coprocessor/ShardInfo.h>
+#include <Flash/Coprocessor/TiCIScan.h>
 #include <Storages/MutableSupport.h>
 #include <common/logger_useful.h>
 
@@ -103,6 +106,52 @@ RemoteRequest RemoteRequest::build(
     return {std::move(dag_req), std::move(schema), std::move(key_ranges), connection_id, connection_alias};
 }
 
+RemoteRequest RemoteRequest::build(
+    const ShardInfoList & shard_infos,
+    DAGContext & dag_context,
+    const TiCIScan & tici_scan,
+    UInt64 connection_id,
+    const String & connection_alias,
+    const LoggerPtr & log)
+{
+    LOG_INFO(log, "{}", printShards(shard_infos, tici_scan.getTableId(), tici_scan.getIndexId()));
+    DAGSchema schema;
+    tipb::DAGRequest dag_req;
+    {
+        tipb::Executor * ts_exec = dag_req.mutable_root_executor();
+        ts_exec->set_tp(tipb::ExecType::TypeIndexScan);
+        ts_exec->set_executor_id(tici_scan.getTiCIScan()->executor_id());
+        auto * mutable_tici_scan = ts_exec->mutable_idx_scan();
+        tici_scan.constructTiCIScanForRemoteRead(mutable_tici_scan);
+
+        const auto & return_columns = tici_scan.getReturnColumns();
+        auto names_and_types = genNamesAndTypesForTiCI(return_columns, "column");
+        for (size_t i = 0; i < return_columns.size(); ++i)
+        {
+            const auto & col = return_columns[i];
+            schema.emplace_back(std::make_pair(names_and_types[i].name, col));
+            dag_req.add_output_offsets(i);
+        }
+        dag_req.set_encode_type(tipb::EncodeType::TypeCHBlock);
+        dag_req.set_force_encode_type(true);
+    }
+    /// do not collect execution summaries because in this case because the execution summaries
+    /// will be collected by CoprocessorBlockInputStream.
+    /// Otherwise rows in execution summary of table scan will be double.
+    dag_req.set_collect_execution_summaries(false);
+    dag_req.set_flags(dag_context.getFlags());
+    dag_req.set_sql_mode(dag_context.getSQLMode());
+    dag_req.set_div_precision_increment(dag_context.getDivPrecisionIncrement());
+    const auto & original_dag_req = *dag_context.dag_request;
+    if (original_dag_req.has_time_zone_name() && !original_dag_req.time_zone_name().empty())
+        dag_req.set_time_zone_name(original_dag_req.time_zone_name());
+    if (original_dag_req.has_time_zone_offset())
+        dag_req.set_time_zone_offset(original_dag_req.time_zone_offset());
+
+    std::vector<pingcap::coprocessor::KeyRange> key_ranges = buildKeyRanges(shard_infos);
+    return {std::move(dag_req), std::move(schema), std::move(key_ranges), connection_id, connection_alias};
+}
+
 std::vector<pingcap::coprocessor::KeyRange> RemoteRequest::buildKeyRanges(const RegionRetryList & retry_regions)
 {
     std::vector<pingcap::coprocessor::KeyRange> key_ranges;
@@ -110,6 +159,18 @@ std::vector<pingcap::coprocessor::KeyRange> RemoteRequest::buildKeyRanges(const 
     {
         for (const auto & range : region.get().key_ranges)
             key_ranges.emplace_back(*range.first, *range.second);
+    }
+    sort(key_ranges.begin(), key_ranges.end());
+    return key_ranges;
+}
+
+std::vector<pingcap::coprocessor::KeyRange> RemoteRequest::buildKeyRanges(const ShardInfoList & retry_shards)
+{
+    std::vector<pingcap::coprocessor::KeyRange> key_ranges;
+    for (const auto & shard : retry_shards)
+    {
+        for (const auto & range : shard.key_ranges)
+            key_ranges.emplace_back(range.start(), range.end());
     }
     sort(key_ranges.begin(), key_ranges.end());
     return key_ranges;
@@ -127,5 +188,19 @@ std::string RemoteRequest::printRetryRegions(const RegionRetryList & retry_regio
     buffer.fmtAppend(") for table {}", table_id);
     return buffer.toString();
 }
+
+std::string RemoteRequest::printShards(const ShardInfoList & shards, Int64 table_id, Int64 index_id)
+{
+    FmtBuffer buffer;
+    buffer.fmtAppend("Start to build remote request for {} shards (", shards.size());
+    buffer.joinStr(
+        shards.cbegin(),
+        shards.cend(),
+        [](const auto & shard, FmtBuffer & fb) { fb.fmtAppend("{}", shard.getID()); },
+        ",");
+    buffer.fmtAppend(") for table {} and index {}", table_id, index_id);
+    return buffer.toString();
+}
+
 
 } // namespace DB

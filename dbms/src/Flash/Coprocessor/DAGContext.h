@@ -389,6 +389,7 @@ public:
     // part of regions_for_local_read + regions_for_remote_read, only used for batch-cop
     RegionInfoList retry_regions;
     QueryShardInfos query_shard_infos;
+    ShardInfoList retry_shards;
 
     LoggerPtr log;
 

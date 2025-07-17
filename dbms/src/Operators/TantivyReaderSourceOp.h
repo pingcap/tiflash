@@ -33,7 +33,7 @@ public:
         const String & req_id,
         const Int64 & table_id,
         const Int64 & index_id,
-        const TableShardInfos & query_shard_infos,
+        const ShardInfoList & query_shard_infos,
         const NamesAndTypes & query_columns,
         const NamesAndTypes & return_columns,
         const String & query_json_str,

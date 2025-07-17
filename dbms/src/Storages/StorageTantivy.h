@@ -22,6 +22,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Coprocessor/ShardInfo.h>
 #include <Flash/Coprocessor/TiCIScan.h>
 #include <IO/WriteHelpers.h>
 #include <Interpreters/Context.h>
@@ -70,9 +71,15 @@ public:
     // Members will be transferred to DAGQueryBlockInterpreter after execute
     std::unique_ptr<DAGExpressionAnalyzer> analyzer;
 
+    void splitRemoteReadAndLocalRead();
+    ShardInfoList getRemoteShardInfos() const { return remote_read; }
+
 private:
     const TiCIScan tici_scan;
     [[maybe_unused]] Context & context;
     LoggerPtr log;
+
+    ShardInfoList remote_read;
+    ShardInfoList local_read;
 };
 } // namespace DB
