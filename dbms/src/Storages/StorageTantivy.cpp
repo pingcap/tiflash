@@ -109,7 +109,7 @@ void StorageTantivy::splitRemoteReadAndLocalRead()
     for (size_t i = 0; i < result.size(); ++i)
     {
         const auto & is_local = result[i];
-        if (is_local && (rand() % 2 == 0))
+        if (is_local)
         {
             local_shard_infos.push_back(all[i]);
         }
