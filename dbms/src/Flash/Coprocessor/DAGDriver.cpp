@@ -219,6 +219,18 @@ try
             batch_cop_writer->Write(response);
         }
 
+        if (!dag_context.retry_shards.empty())
+        {
+            coprocessor::BatchResponse response;
+            for (const auto & shard : dag_context.retry_shards)
+            {
+                auto * retry_shard = response.add_retry_shards();
+                retry_shard->set_shard_id(shard.shard_id);
+                retry_shard->set_shard_epoch(shard.shard_epoch);
+            }
+            batch_cop_writer->Write(response);
+        }
+
         auto streaming_writer = std::make_shared<BatchCopStreamWriter>(batch_cop_writer);
         TiDB::TiDBCollators collators;
         auto response_writer = std::make_unique<StreamingDAGResponseWriter<BatchCopStreamWriterPtr>>(

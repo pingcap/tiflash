@@ -42,9 +42,14 @@ void StorageTantivyIterpreter::execute(PipelineExecutorContext & exec_context, P
     storage->read(exec_context, group_builder, Names(), SelectQueryInfo(), context, 0, max_streams);
     // remote_read
     auto remote_shard_infos = storage->getRemoteShardInfos();
-    if (!remote_shard_infos.empty() && context.getDAGContext()->isCop())
+    if (!remote_shard_infos.empty())
     {
-        throw RegionException({}, RegionException::RegionReadStatus::NOT_FOUND, "shard not found");
+        if (context.getDAGContext()->isCop())
+            throw RegionException({}, RegionException::RegionReadStatus::NOT_FOUND, "shard not found");
+        context.getDAGContext()->retry_shards.insert(
+            context.getDAGContext()->retry_shards.end(),
+            remote_shard_infos.begin(),
+            remote_shard_infos.end());
     }
 
     auto remote_request = buildRemoteRequests(remote_shard_infos);
