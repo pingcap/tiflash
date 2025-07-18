@@ -17,6 +17,7 @@
 #include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Interpreters/CTESpillContext.h>
+#include <Interpreters/Context.h>
 #include <Operators/CTE.h>
 #include <Operators/CTEPartition.h>
 
@@ -28,20 +29,22 @@
 namespace DB
 {
 void CTE::initCTESpillContext(
-    const SpillConfig & spill_config_,
-    const Block & spill_block_schema_,
-    UInt64 operator_spill_threshold_,
-    const String & query_id_and_cte_id)
+    const SpillConfig & spill_config,
+    const Block & spill_block_schema,
+    UInt64 operator_spill_threshold,
+    Context & context)
 {
     std::unique_lock<std::shared_mutex> lock(this->rw_lock);
     this->cte_spill_context = std::make_shared<CTESpillContext>(
+        operator_spill_threshold,
         this->partition_num,
-        spill_config_,
-        spill_block_schema_,
-        query_id_and_cte_id);
-    size_t memory_threoshold = operator_spill_threshold_ / this->partition_num;
+        spill_config,
+        spill_block_schema,
+        context.getDAGContext()->getQueryIDAndCTEIDForSink());
     for (auto & item : this->partitions)
-        item.init(this->cte_spill_context, memory_threoshold);
+        item.init(this->cte_spill_context);
+
+    context.getDAGContext()->registerOperatorSpillContext(this->cte_spill_context);
 }
 
 CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block)
@@ -106,8 +109,8 @@ void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_
         return;
     }
 
-    std::lock_guard<std::mutex> aux_lock(*(this->partitions[partition_id].aux_lock));
-    if (this->partitions[partition_id].status == CTEPartitionStatus::IN_SPILLING)
+    std::lock_guard<std::mutex> aux_lock(*(this->partitions[partition_id].getAuxMutex()));
+    if (this->partitions[partition_id].getStatusNoLock() == CTEPartitionStatus::IN_SPILLING)
     {
         this->notifyTaskDirectly(partition_id, std::move(task));
         return;
@@ -129,8 +132,8 @@ void CTE::checkInSpillingAndRegisterTask(TaskPtr && task, size_t partition_id)
         return;
     }
 
-    std::lock_guard<std::mutex> aux_lock(*(this->partitions[partition_id].aux_lock));
-    if (this->partitions[partition_id].status == CTEPartitionStatus::IN_SPILLING)
+    std::lock_guard<std::mutex> aux_lock(*(this->partitions[partition_id].getAuxMutex()));
+    if (this->partitions[partition_id].getStatusNoLock() == CTEPartitionStatus::IN_SPILLING)
         this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE);
     else
         this->notifyTaskDirectly(partition_id, std::move(task));

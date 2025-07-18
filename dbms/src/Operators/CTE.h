@@ -47,10 +47,10 @@ public:
     }
 
     void initCTESpillContext(
-        const SpillConfig & spill_config_,
-        const Block & spill_block_schema_,
-        UInt64 operator_spill_threshold_,
-        const String & query_id_and_cte_id);
+        const SpillConfig & spill_config,
+        const Block & spill_block_schema,
+        UInt64 operator_spill_threshold,
+        Context & context);
 
     void checkPartitionNum(size_t partition_num) const
     {

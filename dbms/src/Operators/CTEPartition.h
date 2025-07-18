@@ -25,13 +25,6 @@
 
 namespace DB
 {
-enum CTEPartitionStatus
-{
-    NORMAL = 0,
-    NEED_SPILL,
-    IN_SPILLING,
-};
-
 enum class CTEOpStatus
 {
     OK,
@@ -50,7 +43,6 @@ struct CTEPartition
         : partition_id(partition_id_)
         , mu(std::make_unique<std::mutex>())
         , pipe_cv(std::make_unique<PipeConditionVariable>())
-        , aux_lock(std::make_unique<std::mutex>())
     {}
 
     void debugOutput()
@@ -99,11 +91,7 @@ struct CTEPartition
                 infos));
     }
 
-    void init(std::shared_ptr<CTESpillContext> spill_context_, size_t memory_threoshold_)
-    {
-        this->spill_context = spill_context_;
-        this->memory_threoshold = memory_threoshold_;
-    }
+    void init(std::shared_ptr<CTESpillContext> spill_context_) { this->spill_context = spill_context_; }
 
     size_t getIdxInMemoryNoLock(size_t cte_reader_id);
     bool isBlockAvailableInDiskNoLock(size_t cte_reader_id)
@@ -114,15 +102,13 @@ struct CTEPartition
     {
         return this->getIdxInMemoryNoLock(cte_reader_id) < this->blocks.size();
     }
-    void setCTEPartitionStatusNoLock(CTEPartitionStatus status) { this->status = status; }
+    void setCTEPartitionStatusNoLock(CTEPartitionStatus status) const
+    {
+        this->spill_context->setPartitionStatusNoLock(this->partition_id, status);
+    }
     bool isSpillTriggeredNoLock() const { return this->total_block_in_disk_num > 0; }
     void addIdxNoLock(size_t cte_reader_id) { this->fetch_block_idxs[cte_reader_id]++; }
-    bool exceedMemoryThresholdNoLock() const
-    {
-        if (this->memory_threoshold == 0)
-            return false;
-        return this->memory_usage > this->memory_threoshold;
-    }
+    bool exceedMemoryThresholdNoLock() const { return this->spill_context->exceedMemoryThreshold(this->partition_id); }
 
     CTEOpStatus pushBlock(const Block & block);
     CTEOpStatus tryGetBlock(size_t cte_reader_id, Block & block);
@@ -136,6 +122,16 @@ struct CTEPartition
 
         return this->isBlockAvailableInMemoryNoLock(cte_reader_id);
     }
+
+    std::mutex * getAuxMutex() const { return this->spill_context->getPartitionAuxMutex(this->partition_id); }
+    CTEPartitionStatus getStatusNoLock() const
+    {
+        return this->spill_context->getPartitionStatusNoLock(this->partition_id);
+    }
+    void pushTmpBlock(const Block & block) const { this->spill_context->pushTmpBlock(this->partition_id, block); }
+    Blocks & getTmpBlocks() const { return this->spill_context->getTmpBlocks(this->partition_id); }
+    void addMemoryUsage(size_t delta) const { this->spill_context->addMemoryUsage(this->partition_id, delta); }
+    void clearMemoryUsage() const { this->spill_context->clearMemoryUsage(this->partition_id); }
 
     size_t total_recv_block_num = 0;
     size_t total_recv_row_num = 0;
@@ -152,14 +148,7 @@ struct CTEPartition
     std::unique_ptr<std::mutex> mu;
     Blocks blocks;
     std::unordered_map<size_t, size_t> fetch_block_idxs;
-    size_t memory_usage = 0;
-    size_t memory_threoshold = 0;
     std::unique_ptr<PipeConditionVariable> pipe_cv;
-
-    // Protecting cte_status and tmp_blocks
-    std::unique_ptr<std::mutex> aux_lock;
-    CTEPartitionStatus status = CTEPartitionStatus::NORMAL;
-    Blocks tmp_blocks;
 
     std::vector<UInt64> block_in_disk_nums;
     std::unordered_map<size_t, SpillerPtr> spillers;
