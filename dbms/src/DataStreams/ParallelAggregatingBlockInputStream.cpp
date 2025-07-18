@@ -42,7 +42,8 @@ ParallelAggregatingBlockInputStream::ParallelAggregatingBlockInputStream(
           max_threads,
           register_operator_spill_context,
           /*is_auto_pass_through=*/false,
-          params.use_magic_hash)
+          params.use_magic_hash,
+          params.use_phmap)
     , final(final_)
     , max_buffered_bytes(max_buffered_bytes_)
     , temporary_data_merge_threads(temporary_data_merge_threads_)
