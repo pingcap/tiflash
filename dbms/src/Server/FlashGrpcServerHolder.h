@@ -44,6 +44,8 @@ public:
 
     std::unique_ptr<FlashService> & flashService();
 
+    void setMaxWaitDuringGRPCShutdown(UInt64 max_wait) { grpc_shutdown_max_wait = max_wait; }
+
 private:
     const LoggerPtr & log;
     std::shared_ptr<std::atomic<bool>> is_shutdown;
@@ -56,6 +58,7 @@ private:
     std::vector<std::thread> cq_workers;
     std::vector<std::thread> notify_cq_workers;
     CollectProcInfoBackgroundTask background_task;
+    UInt64 grpc_shutdown_max_wait = 600;
 };
 
 } // namespace DB

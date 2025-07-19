@@ -220,7 +220,8 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     {
         /// Shut down grpc server.
         LOG_INFO(log, "Begin to shut down flash grpc server");
-        flash_grpc_server->Shutdown();
+        auto deadline = std::chrono::system_clock::now() + std::chrono::seconds(grpc_shutdown_max_wait);
+        flash_grpc_server->Shutdown(deadline);
         *is_shutdown = true;
 
         for (auto & cq : cqs)
