@@ -2055,6 +2055,17 @@ const std::unordered_set<uint64_t> * Context::getStoreIdBlockList() const
     return &shared->store_id_blocklist;
 }
 
+UInt64 Context::getGracefulWaitBeforeShutdown()
+{
+    // The maximum seconds TiFlash will wait for all current MPP tasks to finish before shutting down
+    static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
+    // The default value of flash.graceful_wait_before_shutdown
+    static constexpr UInt64 DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN = 600;
+    return global_context->getUsersConfig()->getUInt64(
+        GRACEFUL_WIAT_BEFORE_SHUTDOWN,
+        DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
+}
+
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 bool Context::initializeStoreIdBlockList(const String & comma_sep_string)
 {

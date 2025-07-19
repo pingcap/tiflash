@@ -1257,6 +1257,7 @@ try
         LOG_INFO(log, "Set unavailable for MPPTask");
         tmt_context.getMPPTaskManager()->setUnavailable();
         tmt_context.getMPPTaskManager()->getMPPTaskMonitor()->waitAllMPPTasksFinish(global_context);
+        flash_grpc_server_holder.setMaxWaitDuringGRPCShutdown(global_context->getGracefulWaitBeforeShutdown());
 
         {
             // Set limiters stopping and wakeup threads in waitting queue.
