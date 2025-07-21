@@ -15,13 +15,13 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/Stopwatch.h>
 #include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Operators/CTE.h>
 #include <Operators/CTEReader.h>
 #include <Operators/Operator.h>
-#include <Common/Stopwatch.h>
 
 #include <memory>
 
