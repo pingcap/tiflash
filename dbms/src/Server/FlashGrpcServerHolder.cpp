@@ -55,7 +55,7 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
             // tells us whether there is any kind of event or cq is shutting down.
             if (!curcq->Next(&tag, &ok))
             {
-                LOG_INFO(log, "CQ is fully drained and shut down");
+                LOG_DEBUG(log, "CQ is fully drained and shut down");
                 break;
             }
             GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
