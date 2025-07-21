@@ -236,12 +236,12 @@ CATCH
 TEST_F(TestMLFQTaskQueue, cancel)
 try
 {
-    PipelineExecutorContext context1("id1", "id1", "", nullptr);
+    PipelineExecutorContext context1("id1", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
     context1.incActiveRefCount();
     SCOPE_EXIT({ context1.decActiveRefCount(); });
 
-    PipelineExecutorContext context2("id2", "id2", "", nullptr);
+    PipelineExecutorContext context2("id2", "", nullptr);
     // To avoid the active ref count being returned to 0 in advance.
     context2.incActiveRefCount();
     SCOPE_EXIT({ context2.decActiveRefCount(); });
