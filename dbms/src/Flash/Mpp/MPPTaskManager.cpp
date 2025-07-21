@@ -112,7 +112,7 @@ UInt64 MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & gl
         }
         if (elapsed_ms >= graceful_wait_before_shutdown_ms)
         {
-            LOG_WARNING(log, "Timed out waiting for MPP tasks to finish after {}ms", elapsed_ms);
+            LOG_WARNING(log, "Timed out waiting for all MPP tasks to finish after {}ms", elapsed_ms);
             return 0;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
