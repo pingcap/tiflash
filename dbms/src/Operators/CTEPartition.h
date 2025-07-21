@@ -14,9 +14,9 @@
 
 #pragma once
 
+#include <Core/SpillConfig.h>
 #include <Core/Spiller.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
-#include <Interpreters/CTESpillContext.h>
 
 #include <cstddef>
 #include <memory>
@@ -25,6 +25,13 @@
 
 namespace DB
 {
+enum CTEPartitionStatus
+{
+    NORMAL = 0,
+    NEED_SPILL,
+    IN_SPILLING,
+};
+
 enum class CTEOpStatus
 {
     OK,
@@ -37,10 +44,59 @@ enum class CTEOpStatus
     SINK_NOT_REGISTERED
 };
 
+struct CTEPartitionSharedConfig
+{
+    CTEPartitionSharedConfig(
+        size_t memory_threshold_,
+        SpillConfig spill_config_,
+        Block spill_block_schema_,
+        String query_id_and_cte_id_,
+        LoggerPtr log_,
+        size_t partition_num_)
+        : memory_threshold(memory_threshold_)
+        , spill_config(spill_config_)
+        , spill_block_schema(spill_block_schema_)
+        , query_id_and_cte_id(query_id_and_cte_id_)
+        , log(log_)
+        , partition_num(partition_num_)
+    {}
+
+    SpillerPtr getSpiller(size_t partition_id, size_t spill_id)
+    {
+        SpillConfig config(
+            this->spill_config.spill_dir,
+            fmt::format("cte_spill_{}_{}", partition_id, spill_id),
+            this->spill_config.max_cached_data_bytes_in_spiller,
+            this->spill_config.max_spilled_rows_per_file,
+            this->spill_config.max_spilled_bytes_per_file,
+            this->spill_config.file_provider,
+            this->spill_config.for_all_constant_max_streams,
+            this->spill_config.for_all_constant_block_size);
+
+        return std::make_unique<Spiller>(
+            config,
+            false,
+            this->partition_num,
+            this->spill_block_schema,
+            this->log,
+            1,
+            false);
+    }
+
+    size_t memory_threshold;
+    SpillConfig spill_config;
+    Block spill_block_schema;
+    String query_id_and_cte_id;
+    LoggerPtr log;
+    size_t partition_num;
+};
+
 struct CTEPartition
 {
     explicit CTEPartition(size_t partition_id_)
         : partition_id(partition_id_)
+        , aux_lock(std::make_unique<std::mutex>())
+        , status(CTEPartitionStatus::NORMAL)
         , mu(std::make_unique<std::mutex>())
         , pipe_cv(std::make_unique<PipeConditionVariable>())
     {}
@@ -91,7 +147,7 @@ struct CTEPartition
                 infos));
     }
 
-    void init(std::shared_ptr<CTESpillContext> spill_context_) { this->spill_context = spill_context_; }
+    void setSharedConfig(std::shared_ptr<CTEPartitionSharedConfig> config) { this->config = config; }
 
     size_t getIdxInMemoryNoLock(size_t cte_reader_id);
     bool isBlockAvailableInDiskNoLock(size_t cte_reader_id)
@@ -102,13 +158,10 @@ struct CTEPartition
     {
         return this->getIdxInMemoryNoLock(cte_reader_id) < this->blocks.size();
     }
-    void setCTEPartitionStatusNoLock(CTEPartitionStatus status) const
-    {
-        this->spill_context->setPartitionStatusNoLock(this->partition_id, status);
-    }
+
     bool isSpillTriggeredNoLock() const { return this->total_block_in_disk_num > 0; }
     void addIdxNoLock(size_t cte_reader_id) { this->fetch_block_idxs[cte_reader_id]++; }
-    bool exceedMemoryThresholdNoLock() const { return this->spill_context->exceedMemoryThreshold(this->partition_id); }
+    bool exceedMemoryThresholdNoLock() const { return this->memory_usage >= this->config->memory_threshold; }
 
     CTEOpStatus pushBlock(const Block & block);
     CTEOpStatus tryGetBlock(size_t cte_reader_id, Block & block);
@@ -123,16 +176,6 @@ struct CTEPartition
         return this->isBlockAvailableInMemoryNoLock(cte_reader_id);
     }
 
-    std::mutex * getAuxMutex() const { return this->spill_context->getPartitionAuxMutex(this->partition_id); }
-    CTEPartitionStatus getStatusNoLock() const
-    {
-        return this->spill_context->getPartitionStatusNoLock(this->partition_id);
-    }
-    void pushTmpBlock(const Block & block) const { this->spill_context->pushTmpBlock(this->partition_id, block); }
-    Blocks & getTmpBlocks() const { return this->spill_context->getTmpBlocks(this->partition_id); }
-    void addMemoryUsage(size_t delta) const { this->spill_context->addMemoryUsage(this->partition_id, delta); }
-    void clearMemoryUsage() const { this->spill_context->clearMemoryUsage(this->partition_id); }
-
     size_t total_recv_block_num = 0;
     size_t total_recv_row_num = 0;
     size_t total_spill_block_num = 0;
@@ -145,16 +188,22 @@ struct CTEPartition
 
     size_t partition_id;
 
+    std::unique_ptr<std::mutex> aux_lock;
+    CTEPartitionStatus status;
+    Blocks tmp_blocks;
+
     std::unique_ptr<std::mutex> mu;
     Blocks blocks;
     std::unordered_map<size_t, size_t> fetch_block_idxs;
     std::unique_ptr<PipeConditionVariable> pipe_cv;
+
+    size_t memory_usage = 0;
 
     std::vector<UInt64> block_in_disk_nums;
     std::unordered_map<size_t, SpillerPtr> spillers;
     std::unordered_map<size_t, BlockInputStreamPtr> cte_reader_restore_streams;
     UInt64 total_block_in_disk_num = 0;
 
-    std::shared_ptr<CTESpillContext> spill_context;
+    std::shared_ptr<CTEPartitionSharedConfig> config;
 };
 } // namespace DB

@@ -29,8 +29,8 @@ size_t CTEPartition::getIdxInMemoryNoLock(size_t cte_reader_id)
 
 CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
 {
-    std::lock_guard<std::mutex> aux_lock(*(this->getAuxMutex()));
-    if (this->getStatusNoLock() == CTEPartitionStatus::IN_SPILLING)
+    std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
+    if (this->status == CTEPartitionStatus::IN_SPILLING)
         return CTEOpStatus::WAIT_SPILL;
 
     std::lock_guard<std::mutex> lock(*this->mu);
@@ -57,9 +57,9 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
 
 CTEOpStatus CTEPartition::pushBlock(const Block & block)
 {
-    std::unique_lock<std::mutex> aux_lock(*(this->getAuxMutex()));
+    std::unique_lock<std::mutex> aux_lock(*(this->aux_lock));
     CTEOpStatus ret_status = CTEOpStatus::OK;
-    switch (this->getStatusNoLock())
+    switch (this->status)
     {
     case CTEPartitionStatus::NEED_SPILL:
         ret_status = CTEOpStatus::NEED_SPILL;
@@ -67,7 +67,7 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
         ret_status = CTEOpStatus::WAIT_SPILL;
         if likely (block.rows() != 0)
             // Block memory usage will be calculated after the finish of spill
-            this->pushTmpBlock(block);
+            this->tmp_blocks.push_back(block);
         return ret_status;
     case CTEPartitionStatus::NORMAL:
         break;
@@ -81,13 +81,13 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     this->total_recv_row_num += block.rows();
     this->total_byte_usage += block.bytes();
 
-    this->addMemoryUsage(block.bytes());
+    this->memory_usage += block.bytes();
     this->blocks.push_back(block);
     this->pipe_cv->notifyOne();
 
     if unlikely (this->exceedMemoryThresholdNoLock())
     {
-        this->setCTEPartitionStatusNoLock(CTEPartitionStatus::NEED_SPILL);
+        this->status = CTEPartitionStatus::NEED_SPILL;
         ret_status = CTEOpStatus::NEED_SPILL;
     }
     return ret_status;
@@ -96,30 +96,26 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
 CTEOpStatus CTEPartition::spillBlocks()
 {
     LOG_INFO(
-        this->spill_context->getLog(),
-        fmt::format(
-            "Partition {} starts cte spill for {}",
-            this->partition_id,
-            this->spill_context->getQueryIdAndCTEId()));
+        this->config->log,
+        fmt::format("Partition {} starts cte spill for {}", this->partition_id, this->config->query_id_and_cte_id));
     std::unique_lock<std::mutex> lock(*(this->mu), std::defer_lock);
     {
-        std::lock_guard<std::mutex> aux_lock(*(this->getAuxMutex()));
-        switch (this->getStatusNoLock())
+        std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
+        switch (this->status)
         {
         case CTEPartitionStatus::NORMAL:
             return CTEOpStatus::OK;
         case CTEPartitionStatus::IN_SPILLING:
             return CTEOpStatus::WAIT_SPILL;
         case CTEPartitionStatus::NEED_SPILL:
-            this->setCTEPartitionStatusNoLock(CTEPartitionStatus::IN_SPILLING);
+            this->status = CTEPartitionStatus::IN_SPILLING;
             break;
         }
 
         lock.lock();
-        Blocks & tmp_blocks = this->getTmpBlocks();
-        for (const auto & block : tmp_blocks)
+        for (const auto & block : this->tmp_blocks)
         {
-            this->addMemoryUsage(block.bytes());
+            this->memory_usage += block.bytes();
             this->blocks.push_back(block);
         }
         tmp_blocks.clear();
@@ -155,7 +151,7 @@ CTEOpStatus CTEPartition::spillBlocks()
 
         this->total_spill_block_num += spilled_blocks.size(); // TODO remove
 
-        auto spiller = this->spill_context->getSpiller(this->partition_id, this->spillers.size());
+        auto spiller = this->config->getSpiller(this->partition_id, this->spillers.size());
         spiller->spillBlocks(std::move(spilled_blocks), this->partition_id);
         spiller->finishSpill();
         this->spillers.insert(std::make_pair(split_iter->first, std::move(spiller)));
@@ -163,10 +159,10 @@ CTEOpStatus CTEPartition::spillBlocks()
     }
 
     this->blocks.clear();
-    this->clearMemoryUsage();
+    this->memory_usage = 0;
 
-    std::lock_guard<std::mutex> aux_lock(*(this->getAuxMutex()));
-    this->setCTEPartitionStatusNoLock(CTEPartitionStatus::NORMAL);
+    std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
+    this->status = CTEPartitionStatus::NORMAL;
 
     // Many tasks may be waiting for the finish of spill
     this->pipe_cv->notifyAll();
@@ -177,8 +173,8 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
 {
     std::unique_lock<std::mutex> lock(*(this->mu), std::defer_lock);
     {
-        std::lock_guard<std::mutex> aux_lock(*(this->getAuxMutex()));
-        if (this->getStatusNoLock() == CTEPartitionStatus::IN_SPILLING)
+        std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
+        if (this->status == CTEPartitionStatus::IN_SPILLING)
             return CTEOpStatus::WAIT_SPILL;
 
         lock.lock();

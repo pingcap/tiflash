@@ -19,6 +19,7 @@
 #include <Core/Block.h>
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
+#include <Interpreters/CTESpillContext.h>
 #include <Operators/CTEPartition.h>
 #include <tipb/select.pb.h>
 
@@ -37,16 +38,16 @@ public:
     {
         RUNTIME_CHECK(this->partition_num > 0);
         for (size_t i = 0; i < this->partition_num; i++)
-            this->partitions.push_back(CTEPartition(i));
+            this->partitions.push_back(std::make_shared<CTEPartition>(i));
     }
 
     ~CTE()
     {
         for (auto & p : this->partitions)
-            p.debugOutput();
+            p->debugOutput();
     }
 
-    void initCTESpillContext(
+    void initCTESpillContextAndPartitionConfig(
         const SpillConfig & spill_config,
         const Block & spill_block_schema,
         UInt64 operator_spill_threshold,
@@ -67,7 +68,7 @@ public:
         auto cte_reader_id = this->next_cte_reader_id;
         this->next_cte_reader_id++;
         for (auto & item : this->partitions)
-            item.fetch_block_idxs.insert(std::make_pair(cte_reader_id, 0));
+            item->fetch_block_idxs.insert(std::make_pair(cte_reader_id, 0));
         return cte_reader_id;
     }
 
@@ -91,12 +92,12 @@ public:
     void registerTask(size_t partition_id, TaskPtr && task, NotifyType type)
     {
         task->setNotifyType(type);
-        this->partitions[partition_id].pipe_cv->registerTask(std::move(task));
+        this->partitions[partition_id]->pipe_cv->registerTask(std::move(task));
     }
 
     void notifyTaskDirectly(size_t partition_id, TaskPtr && task)
     {
-        this->partitions[partition_id].pipe_cv->notifyTaskDirectly(std::move(task));
+        this->partitions[partition_id]->pipe_cv->notifyTaskDirectly(std::move(task));
     }
 
     void addResp(const tipb::SelectResponse & resp)
@@ -130,7 +131,7 @@ public:
         return this->registered_sink_num == this->expected_sink_num;
     }
 
-    LoggerPtr getLog() const { return this->cte_spill_context->getLog(); }
+    LoggerPtr getLog() const { return this->partition_config->log; }
 
 private:
     void notifyImpl(bool is_eof, const String & msg)
@@ -146,13 +147,13 @@ private:
         }
 
         for (auto & partition : this->partitions)
-            partition.pipe_cv->notifyAll();
+            partition->pipe_cv->notifyAll();
     }
 
     size_t next_cte_reader_id = 0;
 
     size_t partition_num;
-    std::vector<CTEPartition> partitions;
+    std::vector<std::shared_ptr<CTEPartition>> partitions;
 
     std::shared_mutex rw_lock;
     bool is_eof = false;
@@ -166,6 +167,7 @@ private:
 
     String err_msg;
     std::shared_ptr<CTESpillContext> cte_spill_context;
+    std::shared_ptr<CTEPartitionSharedConfig> partition_config;
 };
 
 class CTEIONotifier : public NotifyFuture

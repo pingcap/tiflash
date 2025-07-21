@@ -71,7 +71,7 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
         settings.max_threads,
         settings.max_block_size);
 
-    cte->initCTESpillContext(
+    cte->initCTESpillContextAndPartitionConfig(
         spill_config,
         group_builder.getCurrentHeader(),
         settings.max_bytes_before_cte_spill,
