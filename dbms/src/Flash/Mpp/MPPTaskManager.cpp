@@ -84,7 +84,7 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
     return ptr;
 }
 
-void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & global_context)
+UInt64 MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & global_context)
 {
     // The maximum seconds TiFlash will wait for all current MPP tasks to finish before shutting down
     static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
@@ -94,6 +94,7 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & glob
         GRACEFUL_WIAT_BEFORE_SHUTDOWN,
         DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
     LOG_INFO(log, "Start to wait all MPPTasks to finish, timeout={}s", graceful_wait_before_shutdown);
+    UInt64 graceful_wait_before_shutdown_ms = graceful_wait_before_shutdown * 1000;
     Stopwatch watch;
     // The first sleep before checking to reduce the chance of missing MPP tasks that are still in the process of being dispatched
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -105,13 +106,14 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & glob
             if (monitored_tasks.empty())
             {
                 LOG_INFO(log, "All MPPTasks have finished after {}ms", elapsed_ms);
-                break;
+                return graceful_wait_before_shutdown_ms > elapsed_ms ? graceful_wait_before_shutdown_ms - elapsed_ms
+                                                                     : 0;
             }
         }
-        if (elapsed_ms >= graceful_wait_before_shutdown * 1000)
+        if (elapsed_ms >= graceful_wait_before_shutdown_ms)
         {
             LOG_WARNING(log, "Timed out waiting for MPP tasks to finish after {}ms", elapsed_ms);
-            break;
+            return 0;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }

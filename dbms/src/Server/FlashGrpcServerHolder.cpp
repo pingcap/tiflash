@@ -18,6 +18,8 @@
 #include <Interpreters/Context.h>
 #include <Server/FlashGrpcServerHolder.h>
 
+#include <chrono>
+
 // In order to include grpc::SecureServerCredentials which used in
 // sslServerCredentialsWithFetcher()
 // We implement sslServerCredentialsWithFetcher() to set config fetcher
@@ -220,7 +222,9 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     {
         /// Shut down grpc server.
         LOG_INFO(log, "Begin to shut down flash grpc server");
-        flash_grpc_server->Shutdown();
+        Stopwatch watch;
+        auto deadline = std::chrono::system_clock::now() + std::chrono::milliseconds(grpc_shutdown_max_wait_ms);
+        flash_grpc_server->Shutdown(deadline);
         *is_shutdown = true;
 
         for (auto & cq : cqs)
@@ -239,7 +243,7 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
             GRPCCompletionQueuePool::global_instance->markShutdown();
 
         GRPCCompletionQueuePool::global_instance = nullptr;
-        LOG_INFO(log, "Shut down flash grpc server");
+        LOG_INFO(log, "Shut down flash grpc server after {}ms", watch.elapsedMilliseconds());
 
         /// Close flash service.
         LOG_INFO(log, "Begin to shut down flash service");
