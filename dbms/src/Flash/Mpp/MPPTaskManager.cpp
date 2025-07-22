@@ -84,7 +84,7 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
     return ptr;
 }
 
-UInt64 MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & context)
+void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & context)
 {
     // The maximum seconds TiFlash will wait for all current MPP tasks to finish before shutting down
     static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
@@ -97,6 +97,7 @@ UInt64 MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & co
     Stopwatch watch;
     // The first sleep before checking to reduce the chance of missing MPP tasks that are still in the process of being dispatched
     std::this_thread::sleep_for(std::chrono::seconds(1));
+    UInt64 remaining_wait_ms = 0;
     while (true)
     {
         auto elapsed_ms = watch.elapsedMilliseconds();
@@ -105,14 +106,33 @@ UInt64 MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & co
             if (monitored_tasks.empty())
             {
                 LOG_INFO(log, "All MPPTasks have finished after {}ms", elapsed_ms);
-                return graceful_wait_before_shutdown_ms > elapsed_ms ? graceful_wait_before_shutdown_ms - elapsed_ms
-                                                                     : 0;
+                remaining_wait_ms
+                    = graceful_wait_before_shutdown_ms > elapsed_ms ? graceful_wait_before_shutdown_ms - elapsed_ms : 0;
+                break;
             }
         }
         if (elapsed_ms >= graceful_wait_before_shutdown_ms)
         {
             LOG_WARNING(log, "Timed out waiting for all MPP tasks to finish after {}ms", elapsed_ms);
-            return 0;
+            remaining_wait_ms = 0;
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
+    UInt64 connection_wait_ms = std::max(remaining_wait_ms, 10 * 1000);
+    watch.restart();
+    while (true)
+    {
+        auto elapsed_ms = watch.elapsedMilliseconds();
+        if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
+        {
+            LOG_INFO(log, "All MPP grpc connections have finished after {}ms", elapsed_ms);
+            break;
+        }
+        if (elapsed_ms >= connection_wait_ms)
+        {
+            LOG_WARNING(log, "Timed out waiting for MPP grpc connections to finish after {}ms", elapsed_ms);
+            break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }

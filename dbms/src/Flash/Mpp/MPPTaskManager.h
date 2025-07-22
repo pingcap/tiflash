@@ -194,9 +194,7 @@ public:
         return monitored_tasks.find(task_unique_id) != monitored_tasks.end();
     }
 
-    /// Waits for all MPP tasks to finish, up to `flash.graceful_wait_before_shutdown` (default 600s).
-    /// Returns remaining wait time in milliseconds, or 0 if timed out.
-    UInt64 waitAllMPPTasksFinish(const std::unique_ptr<Context> & context);
+    void waitAllMPPTasksFinish(const std::unique_ptr<Context> & context);
 
     std::mutex mu;
     std::condition_variable cv;

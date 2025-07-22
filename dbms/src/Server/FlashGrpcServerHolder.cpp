@@ -26,6 +26,7 @@
 // We implement sslServerCredentialsWithFetcher() to set config fetcher
 // to auto reload sslServerCredentials
 #include "../../contrib/grpc/src/cpp/server/secure_server_credentials.h"
+#include "Common/Stopwatch.h"
 
 namespace DB
 {
@@ -224,22 +225,6 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
         /// Shut down grpc server.
         LOG_INFO(log, "Begin to shut down flash grpc server");
         Stopwatch watch;
-        while (true)
-        {
-            auto elapsed_ms = watch.elapsedMilliseconds();
-            if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
-            {
-                LOG_INFO(log, "All grpc connections have finished after {}ms", elapsed_ms);
-                break;
-            }
-            if (elapsed_ms >= grpc_shutdown_max_wait_ms)
-            {
-                LOG_WARNING(log, "Timed out waiting for grpc connections to finish after {}ms", elapsed_ms);
-                break;
-            }
-            std::this_thread::sleep_for(std::chrono::milliseconds(200));
-        }
-
         *is_shutdown = true;
         flash_grpc_server->Shutdown();
 

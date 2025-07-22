@@ -1256,9 +1256,7 @@ try
         // Otherwise, read index requests may fail, which can prevent TiFlash from shutting down gracefully.
         LOG_INFO(log, "Set unavailable for MPPTask");
         tmt_context.getMPPTaskManager()->setUnavailable();
-        UInt64 remaining_wait_time
-            = tmt_context.getMPPTaskManager()->getMPPTaskMonitor()->waitAllMPPTasksFinish(global_context);
-        flash_grpc_server_holder.setMaxWaitMsDuringGRPCShutdown(remaining_wait_time);
+        tmt_context.getMPPTaskManager()->getMPPTaskMonitor()->waitAllMPPTasksFinish(global_context);
 
         {
             // Set limiters stopping and wakeup threads in waitting queue.
