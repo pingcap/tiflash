@@ -119,6 +119,7 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & cont
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
+    // Also waits for all MPP gRPC connections to finish, with a minimum wait of 10 seconds
     UInt64 connection_wait_ms = std::max(remaining_wait_ms, 10 * 1000);
     watch.restart();
     while (true)
@@ -126,12 +127,12 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & cont
         auto elapsed_ms = watch.elapsedMilliseconds();
         if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
         {
-            LOG_INFO(log, "All MPP grpc connections have finished after {}ms", elapsed_ms);
+            LOG_INFO(log, "All MPP gRPC connections have finished after {}ms", elapsed_ms);
             break;
         }
         if (elapsed_ms >= connection_wait_ms)
         {
-            LOG_WARNING(log, "Timed out waiting for MPP grpc connections to finish after {}ms", elapsed_ms);
+            LOG_WARNING(log, "Timed out waiting for MPP gRPC connections to finish after {}ms", elapsed_ms);
             break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
