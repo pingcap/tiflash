@@ -97,42 +97,28 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & cont
     Stopwatch watch;
     // The first sleep before checking to reduce the chance of missing MPP tasks that are still in the process of being dispatched
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    UInt64 remaining_wait_ms = 0;
+    bool all_tasks_finished = false;
     while (true)
     {
         auto elapsed_ms = watch.elapsedMilliseconds();
+        if (!all_tasks_finished)
         {
             std::unique_lock lock(mu);
             if (monitored_tasks.empty())
+                all_tasks_finished = true;
+        }
+        if (all_tasks_finished)
+        {
+            // Also needs to check if all MPP gRPC connections are finished
+            if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
             {
                 LOG_INFO(log, "All MPPTasks have finished after {}ms", elapsed_ms);
-                remaining_wait_ms
-                    = graceful_wait_before_shutdown_ms > elapsed_ms ? graceful_wait_before_shutdown_ms - elapsed_ms : 0;
                 break;
             }
         }
         if (elapsed_ms >= graceful_wait_before_shutdown_ms)
         {
             LOG_WARNING(log, "Timed out waiting for all MPP tasks to finish after {}ms", elapsed_ms);
-            remaining_wait_ms = 0;
-            break;
-        }
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-    // Also waits for all MPP gRPC connections to finish, with a minimum wait of 10 seconds
-    UInt64 connection_wait_ms = std::max(remaining_wait_ms, 10 * 1000);
-    watch.restart();
-    while (true)
-    {
-        auto elapsed_ms = watch.elapsedMilliseconds();
-        if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
-        {
-            LOG_INFO(log, "All MPP gRPC connections have finished after {}ms", elapsed_ms);
-            break;
-        }
-        if (elapsed_ms >= connection_wait_ms)
-        {
-            LOG_WARNING(log, "Timed out waiting for MPP gRPC connections to finish after {}ms", elapsed_ms);
             break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
