@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <fmt/core.h>
 #include <tipb/select.pb.h>
@@ -29,20 +30,9 @@ void CTEManager::releaseCTEBySource(const String & query_id_and_cte_id)
         // Maybe the task is cancelled and the cte has been released
         return;
 
-    auto * log = &Poco::Logger::get("LRUCache");
-
     iter->second.sourceExit();
-    LOG_INFO(
-        log,
-        fmt::format(
-            "xzxdebug total exit: {}, expect: {}",
-            iter->second.getTotalExitNum(),
-            iter->second.getExpectedTotalNum()));
     if (iter->second.getTotalExitNum() == iter->second.getExpectedTotalNum())
-    {
-        LOG_INFO(log, "xzxdebug erase");
         this->ctes.erase(iter);
-    }
 }
 
 void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const String & query_id_and_cte_id)
@@ -52,26 +42,14 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
     if unlikely (iter == this->ctes.end())
         // Maybe the task is cancelled and the cte has been released
         return;
-    auto * log = &Poco::Logger::get("LRUCache");
 
     CTEWithCounter & cte_with_counter = iter->second;
     cte_with_counter.getCTE()->addResp(resp);
     cte_with_counter.sinkExit();
-    LOG_INFO(
-        log,
-        fmt::format(
-            "xzxdebug total sink: {}, expect sink: {}, total exit: {}, expect: {}",
-            cte_with_counter.getSinkExitNum(),
-            cte_with_counter.getExpectedSinkNum(),
-            cte_with_counter.getTotalExitNum(),
-            cte_with_counter.getExpectedTotalNum()));
     if (cte_with_counter.getSinkExitNum() == cte_with_counter.getExpectedSinkNum())
         cte_with_counter.getCTE()->notifyEOF();
     if (cte_with_counter.getTotalExitNum() == cte_with_counter.getExpectedTotalNum())
-    {
-        LOG_INFO(log, "xzxdebug erase");
         this->ctes.erase(iter);
-    }
 }
 
 void CTEManager::releaseCTE(const String & query_id_and_cte_id)
@@ -88,6 +66,8 @@ std::shared_ptr<CTE> CTEManager::getCTE(
     Int32 expected_sink_num,
     Int32 expected_source_num)
 {
+    RUNTIME_CHECK(concurrency > 0);
+
     std::lock_guard<std::mutex> lock(this->mu);
     auto iter = this->ctes.find(query_id_and_cte_id);
     if (iter == this->ctes.end())

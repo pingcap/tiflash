@@ -613,6 +613,14 @@ void MPPTask::runImpl()
 
         scheduleOrWait();
 
+        auto sink = dag_context->getCTESink();
+        auto source = dag_context->getCTESource();
+        if (sink && source)
+        {
+            auto * log = &Poco::Logger::get("LRUCache");
+            LOG_INFO(log, "xzxdebug both sink and source are set in the same mpp task");
+        }
+
         auto time_cost_in_schedule_ns = stopwatch.elapsed() - time_cost_in_preprocess_ns;
         dag_context->minTSO_wait_time_ns = time_cost_in_schedule_ns;
         auto time_cost_in_schedule_ms = time_cost_in_schedule_ns / MILLISECOND_TO_NANO;

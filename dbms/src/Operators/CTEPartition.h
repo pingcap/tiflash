@@ -59,7 +59,10 @@ struct CTEPartitionSharedConfig
         , query_id_and_cte_id(query_id_and_cte_id_)
         , log(log_)
         , partition_num(partition_num_)
-    {}
+    {
+        auto * log = &Poco::Logger::get("LRUCache");
+        LOG_INFO(log, fmt::format("xzxdebug memory threshold is set for {}", this->memory_threshold));
+    }
 
     SpillerPtr getSpiller(size_t partition_id, size_t spill_id)
     {
@@ -103,23 +106,23 @@ struct CTEPartition
 
     void debugOutput()
     {
-        String info_block;
-        for (const auto & item : this->total_fetch_block_nums)
-            info_block = fmt::format("{} <{}: {}>", info_block, item.first, item.second);
+        // String info_block;
+        // for (const auto & item : this->total_fetch_block_nums)
+        //     info_block = fmt::format("{} <{}: {}>", info_block, item.first, item.second);
 
-        String info_row;
-        for (const auto & item : this->total_fetch_row_nums)
-            info_row = fmt::format("{} <{}: {}>", info_row, item.first, item.second);
+        // String info_row;
+        // for (const auto & item : this->total_fetch_row_nums)
+        //     info_row = fmt::format("{} <{}: {}>", info_row, item.first, item.second);
 
-        String disk_info_block;
-        for (const auto & item : this->total_fetch_disk_block_nums)
-            disk_info_block = fmt::format("{} <{}: {}>", disk_info_block, item.first, item.second);
+        // String disk_info_block;
+        // for (const auto & item : this->total_fetch_disk_block_nums)
+        //     disk_info_block = fmt::format("{} <{}: {}>", disk_info_block, item.first, item.second);
 
-        String disk_info_row;
-        for (const auto & item : this->total_fetch_disk_row_nums)
-            disk_info_row = fmt::format("{} <{}: {}>", disk_info_row, item.first, item.second);
+        // String disk_info_row;
+        // for (const auto & item : this->total_fetch_disk_row_nums)
+        //     disk_info_row = fmt::format("{} <{}: {}>", disk_info_row, item.first, item.second);
 
-        String infos;
+        // String infos;
         // for (const auto & item : this->fetch_idxs_disk)
         // {
         //     String nums;
@@ -128,23 +131,23 @@ struct CTEPartition
         //     infos = fmt::format("{} <cte_reader_id: {}, idxs: {}>", infos, item.first, nums);
         // }
 
-        auto * log = &Poco::Logger::get("LRUCache");
-        LOG_INFO(
-            log,
-            fmt::format(
-                "xzxdebug CTEPartition total_recv_block_num: {}, row: {}, total_spill_block_num: {}, "
-                "total_fetch_block_num: {}, row num: {}, "
-                "disk: {}, {}"
-                "total_byte_usage: {}, idxs_disk: {}",
-                total_recv_block_num,
-                total_recv_row_num,
-                total_spill_block_num,
-                info_block,
-                info_row,
-                disk_info_block,
-                disk_info_row,
-                total_byte_usage,
-                infos));
+        // auto * log = &Poco::Logger::get("LRUCache");
+        // LOG_INFO(
+        //     log,
+        //     fmt::format(
+        //         "xzxdebug CTEPartition total_recv_block_num: {}, row: {}, total_spill_block_num: {}, "
+        //         "total_fetch_block_num: {}, row num: {}, "
+        //         "disk: {}, {}"
+        //         "total_byte_usage: {}, idxs_disk: {}",
+        //         total_recv_block_num,
+        //         total_recv_row_num,
+        //         total_spill_block_num,
+        //         info_block,
+        //         info_row,
+        //         disk_info_block,
+        //         disk_info_row,
+        //         total_byte_usage,
+        //         infos));
     }
 
     void setSharedConfig(std::shared_ptr<CTEPartitionSharedConfig> config) { this->config = config; }
