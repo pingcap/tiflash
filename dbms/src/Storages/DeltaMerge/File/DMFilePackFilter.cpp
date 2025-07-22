@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
+#include <DataTypes/IDataType.h>
 #include <IO/FileProvider/ChecksumReadBufferBuilder.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
@@ -198,6 +199,138 @@ void DMFilePackFilter::loadIndex(
     indexes.emplace(col_id, RSIndex(type, minmax_index));
 }
 
+class MinMaxIndexLoader
+{
+public:
+    // Make the instance of `MinMaxIndexLoader` as a callable object that is used in
+    // `index_cache->getOrSet(...)`.
+    MinMaxIndexPtr operator()()
+    {
+        const auto & type = dmfile.getColumnStat(col_id).type;
+        auto index_file_size = dmfile.colIndexSize(col_id);
+        if (index_file_size == 0)
+            return std::make_shared<MinMaxIndex>(*type);
+
+        auto index_guard = S3::S3RandomAccessFile::setReadFileInfo({
+            .size = dmfile.getReadFileSize(col_id, colIndexFileName(file_name_base)),
+            .scan_context = scan_context,
+        });
+
+        if (likely(dmfile.useMetaV2()))
+        {
+            // the min-max index is merged into metav2
+            return loadMinMaxIndexFromMetav2(type, index_file_size);
+        }
+        else if (unlikely(!dmfile.getConfiguration()))
+        {
+            // without checksum, simply load the raw bytes from file
+            return loadRawMinMaxIndex(type, index_file_size);
+        }
+        else
+        {
+            // checksum is enabled but not merged into meta v2
+            return loadMinMaxIndexWithChecksum(type, index_file_size);
+        }
+    }
+
+public:
+    MinMaxIndexLoader(
+        const DMFile & dmfile_,
+        const FileProviderPtr & file_provider_,
+        ColId col_id_,
+        const ReadLimiterPtr & read_limiter_,
+        const ScanContextPtr & scan_context_)
+        : dmfile(dmfile_)
+        , file_name_base(DMFile::getFileNameBase(col_id_))
+        , col_id(col_id_)
+        , file_provider(file_provider_)
+        , read_limiter(read_limiter_)
+        , scan_context(scan_context_)
+    {}
+
+    const DMFile & dmfile;
+    const FileNameBase file_name_base;
+    ColId col_id;
+    FileProviderPtr file_provider;
+    ReadLimiterPtr read_limiter;
+    ScanContextPtr scan_context;
+
+private:
+    MinMaxIndexPtr loadRawMinMaxIndex(const DataTypePtr & type, size_t index_file_size) const
+    {
+        auto index_buf = ReadBufferFromRandomAccessFileBuilder::build(
+            file_provider,
+            dmfile.colIndexPath(file_name_base),
+            dmfile.encryptionIndexPath(file_name_base),
+            std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
+            read_limiter);
+        return MinMaxIndex::read(*type, index_buf, index_file_size);
+    }
+
+    MinMaxIndexPtr loadMinMaxIndexWithChecksum(const DataTypePtr & type, size_t index_file_size) const
+    {
+        auto index_buf = ChecksumReadBufferBuilder::build(
+            file_provider,
+            dmfile.colIndexPath(file_name_base),
+            dmfile.encryptionIndexPath(file_name_base),
+            index_file_size,
+            read_limiter,
+            dmfile.getConfiguration()->getChecksumAlgorithm(),
+            dmfile.getConfiguration()->getChecksumFrameLength());
+        auto header_size = dmfile.getConfiguration()->getChecksumHeaderLength();
+        auto frame_total_size = dmfile.getConfiguration()->getChecksumFrameLength() + header_size;
+        auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
+        return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count);
+    }
+
+    MinMaxIndexPtr loadMinMaxIndexFromMetav2(const DataTypePtr & type, size_t index_file_size) const
+    {
+        const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dmfile.meta.get());
+        assert(dmfile_meta != nullptr);
+        const auto col_index_fname = colIndexFileName(file_name_base);
+        auto info_iter = dmfile_meta->merged_sub_file_infos.find(col_index_fname);
+        RUNTIME_CHECK_MSG(
+            info_iter != dmfile_meta->merged_sub_file_infos.end(),
+            "Unknown index file, dmfile_path={} index_fname={}",
+            dmfile.parentPath(),
+            col_index_fname);
+
+        const auto & merged_file_info = info_iter->second;
+        auto file_path = dmfile.meta->mergedPath(merged_file_info.number);
+        auto encrypt_path = dmfile_meta->encryptionMergedPath(merged_file_info.number);
+        auto offset = merged_file_info.offset;
+        auto data_size = merged_file_info.size;
+
+        // First, read from merged file to get the raw data(contains the header)
+        // Note that we directly use `data_size` as the size of buffer size in order
+        // to minimize read amplification in the merged file.
+        auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
+            file_provider,
+            file_path,
+            encrypt_path,
+            data_size,
+            read_limiter);
+        buffer.seek(offset);
+
+        String raw_data;
+        raw_data.resize(data_size);
+        buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
+
+        auto buf = ChecksumReadBufferBuilder::build(
+            std::move(raw_data),
+            file_path,
+            dmfile.getConfiguration()->getChecksumFrameLength(),
+            dmfile.getConfiguration()->getChecksumAlgorithm(),
+            dmfile.getConfiguration()->getChecksumFrameLength());
+
+        auto header_size = dmfile.getConfiguration()->getChecksumHeaderLength();
+        auto frame_total_size = dmfile.getConfiguration()->getChecksumFrameLength() + header_size;
+        auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
+
+        return MinMaxIndex::read(*type, *buf, index_file_size - header_size * frame_count);
+    }
+};
+
 std::pair<DataTypePtr, MinMaxIndexPtr> DMFilePackFilter::loadIndex(
     const DMFile & dmfile,
     const FileProviderPtr & file_provider,
@@ -210,90 +343,11 @@ std::pair<DataTypePtr, MinMaxIndexPtr> DMFilePackFilter::loadIndex(
     const auto & type = dmfile.getColumnStat(col_id).type;
     const auto file_name_base = DMFile::getFileNameBase(col_id);
 
-    auto load = [&]() {
-        auto index_file_size = dmfile.colIndexSize(col_id);
-        if (index_file_size == 0)
-            return std::make_shared<MinMaxIndex>(*type);
-        auto index_guard = S3::S3RandomAccessFile::setReadFileInfo({
-            .size = dmfile.getReadFileSize(col_id, colIndexFileName(file_name_base)),
-            .scan_context = scan_context,
-        });
-        if (!dmfile.getConfiguration()) // v1
-        {
-            auto index_buf = ReadBufferFromRandomAccessFileBuilder::build(
-                file_provider,
-                dmfile.colIndexPath(file_name_base),
-                dmfile.encryptionIndexPath(file_name_base),
-                std::min(static_cast<size_t>(DBMS_DEFAULT_BUFFER_SIZE), index_file_size),
-                read_limiter);
-            return MinMaxIndex::read(*type, index_buf, index_file_size);
-        }
-        else if (dmfile.useMetaV2()) // v3
-        {
-            const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(dmfile.meta.get());
-            assert(dmfile_meta != nullptr);
-            auto info = dmfile_meta->merged_sub_file_infos.find(colIndexFileName(file_name_base));
-            if (info == dmfile_meta->merged_sub_file_infos.end())
-            {
-                throw Exception(
-                    ErrorCodes::LOGICAL_ERROR,
-                    "Unknown index file {}",
-                    dmfile.colIndexPath(file_name_base));
-            }
-
-            auto file_path = dmfile.meta->mergedPath(info->second.number);
-            auto encrypt_path = dmfile_meta->encryptionMergedPath(info->second.number);
-            auto offset = info->second.offset;
-            auto data_size = info->second.size;
-
-            // First, read from merged file to get the raw data(contains the header)
-            // Note that we directly use `data_size` as the size of buffer size in order
-            // to minimize read amplification in the merged file.
-            auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
-                file_provider,
-                file_path,
-                encrypt_path,
-                data_size,
-                read_limiter);
-            buffer.seek(offset);
-
-            String raw_data;
-            raw_data.resize(data_size);
-            buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
-
-            auto buf = ChecksumReadBufferBuilder::build(
-                std::move(raw_data),
-                file_path, // just for debug, the buffer is part of the merged file
-                dmfile.getConfiguration()->getChecksumFrameLength(),
-                dmfile.getConfiguration()->getChecksumAlgorithm(),
-                dmfile.getConfiguration()->getChecksumFrameLength());
-
-            auto header_size = dmfile.getConfiguration()->getChecksumHeaderLength();
-            auto frame_total_size = dmfile.getConfiguration()->getChecksumFrameLength() + header_size;
-            auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
-
-            return MinMaxIndex::read(*type, *buf, index_file_size - header_size * frame_count);
-        }
-        else
-        { // v2
-            auto index_buf = ChecksumReadBufferBuilder::build(
-                file_provider,
-                dmfile.colIndexPath(file_name_base),
-                dmfile.encryptionIndexPath(file_name_base),
-                index_file_size,
-                read_limiter,
-                dmfile.getConfiguration()->getChecksumAlgorithm(),
-                dmfile.getConfiguration()->getChecksumFrameLength());
-            auto header_size = dmfile.getConfiguration()->getChecksumHeaderLength();
-            auto frame_total_size = dmfile.getConfiguration()->getChecksumFrameLength() + header_size;
-            auto frame_count = index_file_size / frame_total_size + (index_file_size % frame_total_size != 0);
-            return MinMaxIndex::read(*type, *index_buf, index_file_size - header_size * frame_count);
-        }
-    };
     MinMaxIndexPtr minmax_index;
     if (index_cache && set_cache_if_miss)
     {
-        minmax_index = index_cache->getOrSet(dmfile.colIndexCacheKey(file_name_base), load);
+        auto loader = MinMaxIndexLoader(dmfile, file_provider, col_id, read_limiter, scan_context);
+        minmax_index = index_cache->getOrSet(dmfile.colIndexCacheKey(file_name_base), loader);
     }
     else
     {
@@ -301,7 +355,7 @@ std::pair<DataTypePtr, MinMaxIndexPtr> DMFilePackFilter::loadIndex(
         if (index_cache)
             minmax_index = index_cache->get(dmfile.colIndexCacheKey(file_name_base));
         if (minmax_index == nullptr)
-            minmax_index = load();
+            minmax_index = MinMaxIndexLoader(dmfile, file_provider, col_id, read_limiter, scan_context)();
     }
     return {type, minmax_index};
 }
