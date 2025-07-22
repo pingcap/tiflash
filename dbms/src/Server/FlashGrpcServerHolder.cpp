@@ -17,6 +17,7 @@
 #include <Flash/EstablishCall.h>
 #include <Interpreters/Context.h>
 #include <Server/FlashGrpcServerHolder.h>
+#include <common/logger_useful.h>
 
 #include <chrono>
 
@@ -25,7 +26,6 @@
 // We implement sslServerCredentialsWithFetcher() to set config fetcher
 // to auto reload sslServerCredentials
 #include "../../contrib/grpc/src/cpp/server/secure_server_credentials.h"
-#include "common/logger_useful.h"
 
 namespace DB
 {

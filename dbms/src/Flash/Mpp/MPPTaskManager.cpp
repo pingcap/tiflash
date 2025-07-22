@@ -84,13 +84,13 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
     return ptr;
 }
 
-UInt64 MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & global_context)
+UInt64 MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & context)
 {
     // The maximum seconds TiFlash will wait for all current MPP tasks to finish before shutting down
     static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
     // The default value of flash.graceful_wait_before_shutdown
     static constexpr UInt64 DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN = 600;
-    auto graceful_wait_before_shutdown = global_context->getUsersConfig()->getUInt64(
+    auto graceful_wait_before_shutdown = context->getUsersConfig()->getUInt64(
         GRACEFUL_WIAT_BEFORE_SHUTDOWN,
         DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
     LOG_INFO(log, "Start to wait all MPPTasks to finish, timeout={}s", graceful_wait_before_shutdown);
