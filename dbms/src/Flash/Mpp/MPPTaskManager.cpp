@@ -112,7 +112,7 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & cont
             // Also needs to check if all MPP gRPC connections are finished
             if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
             {
-                LOG_INFO(log, "All MPPTasks have finished after {}ms", elapsed_ms);
+                LOG_INFO(log, "All MPP tasks have finished after {}ms", elapsed_ms);
                 break;
             }
         }
