@@ -90,9 +90,8 @@ UInt64 MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & co
     static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
     // The default value of flash.graceful_wait_before_shutdown
     static constexpr UInt64 DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN = 600;
-    auto graceful_wait_before_shutdown = context->getUsersConfig()->getUInt64(
-        GRACEFUL_WIAT_BEFORE_SHUTDOWN,
-        DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
+    auto graceful_wait_before_shutdown
+        = context->getUsersConfig()->getUInt64(GRACEFUL_WIAT_BEFORE_SHUTDOWN, DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
     LOG_INFO(log, "Start to wait all MPPTasks to finish, timeout={}s", graceful_wait_before_shutdown);
     UInt64 graceful_wait_before_shutdown_ms = graceful_wait_before_shutdown * 1000;
     Stopwatch watch;
