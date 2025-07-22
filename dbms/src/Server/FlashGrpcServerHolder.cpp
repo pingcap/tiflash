@@ -49,7 +49,7 @@ void handleRpcs(grpc::ServerCompletionQueue * curcq, const LoggerPtr & log)
             // tells us whether there is any kind of event or cq is shutting down.
             if (!curcq->Next(&tag, &ok))
             {
-                LOG_INFO(log, "CQ is fully drained and shut down");
+                LOG_DEBUG(log, "CQ is fully drained and shut down");
                 break;
             }
             GET_METRIC(tiflash_thread_count, type_active_rpc_async_worker).Increment();
@@ -217,21 +217,9 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
     {
         /// Shut down grpc server.
         LOG_INFO(log, "Begin to shut down flash grpc server");
-        flash_grpc_server->Shutdown();
+        Stopwatch watch;
         *is_shutdown = true;
-        // Wait all existed MPPTunnels done to prevent crash.
-        // If all existed MPPTunnels are done, almost in all cases it means all existed MPPTasks and ExchangeReceivers are also done.
-        const int max_wait_cnt = 300;
-        int wait_cnt = 0;
-        while (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1 && (wait_cnt++ < max_wait_cnt))
-            std::this_thread::sleep_for(std::chrono::seconds(1));
-        if (GET_METRIC(tiflash_object_count, type_count_of_mpptunnel).Value() >= 1)
-            LOG_WARNING(
-                log,
-                "Wait {} seconds for mpp tunnels shutdown, still some mpp tunnels are alive, potential resource leak",
-                wait_cnt);
-        else
-            LOG_INFO(log, "Wait {} seconds for mpp tunnels shutdown, all finished", wait_cnt);
+        flash_grpc_server->Shutdown();
 
         for (auto & cq : cqs)
             cq->Shutdown();
@@ -249,7 +237,7 @@ FlashGrpcServerHolder::~FlashGrpcServerHolder()
             GRPCCompletionQueuePool::global_instance->markShutdown();
 
         GRPCCompletionQueuePool::global_instance = nullptr;
-        LOG_INFO(log, "Shut down flash grpc server");
+        LOG_INFO(log, "Shut down flash grpc server after {}ms", watch.elapsedMilliseconds());
 
         /// Close flash service.
         LOG_INFO(log, "Begin to shut down flash service");
