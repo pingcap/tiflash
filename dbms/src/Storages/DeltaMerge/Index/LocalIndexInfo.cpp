@@ -182,6 +182,8 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
                 // create a new index
                 if (idx.columnarIndexKind() == TiDB::ColumnarIndexKind::Vector)
                     new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.vector_index));
+                else if (idx.columnarIndexKind() == TiDB::ColumnarIndexKind::FullText)
+                    new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.full_text_index));
                 else if (idx.columnarIndexKind() == TiDB::ColumnarIndexKind::Inverted)
                     new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.inverted_index));
                 newly_added.emplace_back(idx.id);

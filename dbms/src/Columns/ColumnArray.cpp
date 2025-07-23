@@ -219,17 +219,22 @@ const char * ColumnArray::deserializeAndInsertFromArena(const char * pos, const 
     return pos;
 }
 
+size_t ColumnArray::serializeByteSize() const
+{
+    return getData().serializeByteSize() + getOffsets().size() * sizeof(UInt32);
+}
+
+void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
+{
+    countSerializeByteSizeImpl<false>(byte_size, nullptr, nullptr);
+}
+
 void ColumnArray::countSerializeByteSizeForCmp(
     PaddedPODArray<size_t> & byte_size,
     const NullMap * nullmap,
     const TiDB::TiDBCollatorPtr & collator) const
 {
     countSerializeByteSizeImpl<true>(byte_size, nullmap, collator);
-}
-
-void ColumnArray::countSerializeByteSize(PaddedPODArray<size_t> & byte_size) const
-{
-    countSerializeByteSizeImpl<false>(byte_size, nullptr, nullptr);
 }
 
 template <bool compare_semantics>

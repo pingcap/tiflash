@@ -34,7 +34,7 @@ public:
 
     ssize_t write(char * buf, size_t size) override;
 
-    ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
+    ssize_t pwrite(char * buf, size_t size, off_t offset) override;
 
     off_t seek(off_t offset, int whence) const override;
 
@@ -52,7 +52,7 @@ public:
 
     int ftruncate(off_t length) override { return file->ftruncate(length); }
 
-    void hardLink(const std::string & existing_file) override { file->hardLink(existing_file); };
+    void hardLink(const std::string & existing_file) override { file->hardLink(existing_file); }
 
 private:
     WritableFilePtr file;

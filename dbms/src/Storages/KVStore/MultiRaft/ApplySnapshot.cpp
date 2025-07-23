@@ -230,14 +230,16 @@ void KVStore::onSnapshot(
                     new_region_wrap->getRange(),
                     table_id,
                     storage->isCommonHandle(),
-                    storage->getRowKeyColumnSize());
+                    storage->getRowKeyColumnSize(),
+                    fmt::format("new_region_id={} KVStore::onSnapshot", region_id));
                 if (old_region)
                 {
                     auto old_key_range = DM::RowKeyRange::fromRegionRange(
                         old_region->getRange(),
                         table_id,
                         storage->isCommonHandle(),
-                        storage->getRowKeyColumnSize());
+                        storage->getRowKeyColumnSize(),
+                        fmt::format("old_region_id={} KVStore::onSnapshot", region_id));
                     if (old_key_range != new_key_range)
                     {
                         LOG_INFO(

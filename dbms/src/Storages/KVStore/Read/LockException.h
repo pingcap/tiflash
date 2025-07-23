@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Storages/KVStore/Read/RegionLockInfo.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVKeyValue.h>
 #include <pingcap/kv/RegionCache.h>
@@ -35,7 +36,7 @@ public:
         , locks(std::move(locks_))
     {
         std::set<RegionID> locked_regions;
-#if SERVERLESS_PROXY == 0
+#if ENABLE_NEXT_GEN == 0
         for (const auto & lock : locks)
             locked_regions.insert(lock.first);
 

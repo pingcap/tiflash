@@ -14,9 +14,15 @@
 
 #pragma once
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#pragma GCC diagnostic pop
+
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Interpreters/ExpressionActions.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader_fwd.h>
 
 namespace DB
@@ -37,7 +43,8 @@ public:
     PushDownExecutor(
         const RSOperatorPtr & rs_operator_,
         const ANNQueryInfoPtr & ann_query_info_,
-        const ExpressionActionsPtr & beofre_where_,
+        const FTSQueryInfoPtr & fts_query_info_,
+        const ExpressionActionsPtr & before_where_,
         const ExpressionActionsPtr & project_after_where_,
         const ColumnDefinesPtr & filter_columns_,
         const String filter_column_name_,
@@ -45,22 +52,25 @@ public:
         const ColumnDefinesPtr & columns_after_cast_,
         const ColumnRangePtr & column_range_)
         : rs_operator(rs_operator_)
-        , before_where(beofre_where_)
+        , before_where(before_where_)
         , project_after_where(project_after_where_)
         , filter_column_name(std::move(filter_column_name_))
         , filter_columns(filter_columns_)
         , extra_cast(extra_cast_)
         , columns_after_cast(columns_after_cast_)
         , ann_query_info(ann_query_info_)
+        , fts_query_info(fts_query_info_)
         , column_range(column_range_)
     {}
 
     explicit PushDownExecutor(
         const RSOperatorPtr & rs_operator_,
         const ANNQueryInfoPtr & ann_query_info_ = nullptr,
+        const FTSQueryInfoPtr & fts_query_info_ = nullptr,
         const ColumnRangePtr & column_range_ = nullptr)
         : rs_operator(rs_operator_)
         , ann_query_info(ann_query_info_)
+        , fts_query_info(fts_query_info_)
         , column_range(column_range_)
     {}
 
@@ -68,10 +78,17 @@ public:
         : ann_query_info(ann_query_info_)
     {}
 
+    explicit PushDownExecutor(const FTSQueryInfoPtr & fts_query_info_)
+        : fts_query_info(fts_query_info_)
+    {}
+
+    Poco::JSON::Object::Ptr toJSONObject() const;
+
     // Use by StorageDisaggregated.
     static PushDownExecutorPtr build(
         const DM::RSOperatorPtr & rs_operator,
         const ANNQueryInfoPtr & ann_query_info,
+        const FTSQueryInfoPtr & fts_query_info,
         const TiDB::ColumnInfos & table_scan_column_info,
         const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
         const ColumnDefines & columns_to_read,
@@ -95,7 +112,7 @@ public:
     const ExpressionActionsPtr before_where;
     // The projection after the filter, used to remove the tmp filter column
     // Used to construct the ExpressionBlockInputStream
-    // Note: ususally we will remove the tmp filter column in the LateMaterializationBlockInputStream, this only used for unexpected cases
+    // Note: usually we will remove the tmp filter column in the LateMaterializationBlockInputStream, this only used for unexpected cases
     const ExpressionActionsPtr project_after_where;
     const String filter_column_name;
     // The columns needed by the filter expression
@@ -106,6 +123,8 @@ public:
     const ColumnDefinesPtr columns_after_cast;
     // The ann_query_info contains the information of the ANN index
     const ANNQueryInfoPtr ann_query_info;
+    // The FTSQueryInfo contains the information of the FTS index
+    const FTSQueryInfoPtr fts_query_info;
     // The column_range contains the column values of the pushed down filters
     const ColumnRangePtr column_range;
 };

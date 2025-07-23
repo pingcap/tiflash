@@ -169,10 +169,10 @@ try
 
     struct Operation
     {
-        Block block;
         int start_key;
         int end_key;
         bool use_write;
+        std::shared_ptr<std::mutex> mtx; // Operations with intersecting ranges should be synchronized.
     };
 
     auto ops = std::vector<Operation>();
@@ -197,12 +197,16 @@ try
 
             filled_n_raw += (end_key - start_key);
 
-            auto block = fillBlock({.range = {start_key, end_key}});
+            // Find the first operation that intersects with the current operation.
+            // The interval is left close and right open: [start_key, end_key)
+            auto it = std::find_if(ops.begin(), ops.end(), [&](const auto & op) {
+                return op.start_key < end_key && start_key < op.end_key;
+            });
             ops.emplace_back(Operation{
-                .block = block,
                 .start_key = start_key,
                 .end_key = end_key,
                 .use_write = use_write,
+                .mtx = it != ops.end() ? it->mtx : std::make_shared<std::mutex>(),
             });
 
             // Also mark whether row is set in the filled_bitmap. This is used to
@@ -224,7 +228,7 @@ try
             {
                 LOG_INFO(log, "{} to [{}, {})", op.use_write ? "write" : "ingest", op.start_key, op.end_key);
 
-                ingestFiles({.range = {op.start_key, op.end_key}, .blocks = {op.block}, .clear = false});
+                ingestFiles({.range = {op.start_key, op.end_key}, .blocks = {}, .clear = false, .mtx = op.mtx});
             }
             CATCH
         });

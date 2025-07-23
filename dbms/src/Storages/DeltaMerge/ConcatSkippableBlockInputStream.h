@@ -59,7 +59,7 @@ public:
 
 private:
     friend class VectorIndexInputStream;
-    ColumnPtr createSegmentRowIdCol(UInt64 start, UInt64 limit);
+    friend class FullTextIndexInputStream;
 
     void addReadBytes(UInt64 bytes);
 

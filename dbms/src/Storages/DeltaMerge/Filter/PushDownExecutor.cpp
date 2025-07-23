@@ -27,6 +27,7 @@ namespace DB::DM
 PushDownExecutorPtr PushDownExecutor::build(
     const RSOperatorPtr & rs_operator,
     const ANNQueryInfoPtr & ann_query_info,
+    const FTSQueryInfoPtr & fts_query_info,
     const TiDB::ColumnInfos & table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
     const ColumnDefines & columns_to_read,
@@ -35,22 +36,15 @@ PushDownExecutorPtr PushDownExecutor::build(
     const LoggerPtr & tracing_logger)
 {
     // check if the ann_query_info is valid
-    auto valid_ann_query_info = ann_query_info;
     if (ann_query_info)
     {
-        bool is_valid_ann_query = ann_query_info->top_k() != std::numeric_limits<UInt32>::max();
-        bool is_matching_ann_query = std::any_of(
-            columns_to_read.begin(),
-            columns_to_read.end(),
-            [cid = ann_query_info->deprecated_column_id()](const ColumnDefine & cd) -> bool { return cd.id == cid; });
-        if (!is_valid_ann_query || !is_matching_ann_query)
-            valid_ann_query_info = nullptr;
+        RUNTIME_CHECK(ann_query_info->top_k() != std::numeric_limits<UInt32>::max());
     }
 
     if (pushed_down_filters.empty())
     {
         LOG_DEBUG(tracing_logger, "Push down filter is empty");
-        return std::make_shared<PushDownExecutor>(rs_operator, valid_ann_query_info, column_range);
+        return std::make_shared<PushDownExecutor>(rs_operator, ann_query_info, fts_query_info, column_range);
     }
     std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
     for (const auto & column : columns_to_read)
@@ -165,7 +159,8 @@ PushDownExecutorPtr PushDownExecutor::build(
 
     return std::make_shared<PushDownExecutor>(
         rs_operator,
-        valid_ann_query_info,
+        ann_query_info,
+        fts_query_info,
         before_where,
         project_after_where,
         filter_columns,
@@ -201,6 +196,9 @@ PushDownExecutorPtr PushDownExecutor::build(
     ANNQueryInfoPtr ann_query_info = nullptr;
     if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)
         ann_query_info = std::make_shared<tipb::ANNQueryInfo>(dag_query->ann_query_info);
+    FTSQueryInfoPtr fts_query_info = nullptr;
+    if (dag_query->fts_query_info.query_type() != tipb::FTSQueryType::FTSQueryTypeInvalid)
+        fts_query_info = std::make_shared<tipb::FTSQueryInfo>(dag_query->fts_query_info);
     // build push down filter
     const auto & pushed_down_filters = dag_query->pushed_down_filters;
     if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan) && !dag_query->filters.empty())
@@ -212,6 +210,7 @@ PushDownExecutorPtr PushDownExecutor::build(
         return PushDownExecutor::build(
             rs_operator,
             ann_query_info,
+            fts_query_info,
             columns_to_read_info,
             merged_filters,
             columns_to_read,
@@ -222,6 +221,7 @@ PushDownExecutorPtr PushDownExecutor::build(
     return PushDownExecutor::build(
         rs_operator,
         ann_query_info,
+        fts_query_info,
         columns_to_read_info,
         pushed_down_filters,
         columns_to_read,
@@ -229,4 +229,20 @@ PushDownExecutorPtr PushDownExecutor::build(
         context,
         tracing_logger);
 }
+
+Poco::JSON::Object::Ptr PushDownExecutor::toJSONObject() const
+{
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    if (rs_operator)
+    {
+        json->set("rs_operator", rs_operator->toJSONObject());
+    }
+    // ann_query_info usually print too large body, do not print it by default
+    // if (ann_query_info)
+    // {
+    //     json->set("ann_query_info", ann_query_info->ShortDebugString());
+    // }
+    return json;
+}
+
 } // namespace DB::DM

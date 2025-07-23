@@ -211,7 +211,7 @@ try
              2.0,
              0.0,
              2.0,
-             std::nullopt}),
+             0}),
         executeFunction(
             "tidbRoundWithFrac",
             executeFunction(

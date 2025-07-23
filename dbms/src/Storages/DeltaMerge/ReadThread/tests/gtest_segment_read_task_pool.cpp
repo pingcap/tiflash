@@ -105,6 +105,7 @@ protected:
             /*tracing_id_*/ String{},
             /*enable_read_thread_*/ true,
             /*num_streams_*/ 1,
+            /*keyspace_id_*/ NullspaceID,
             /*res_group_name_*/ String{});
     }
 
