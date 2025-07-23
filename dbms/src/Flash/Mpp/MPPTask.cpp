@@ -23,6 +23,7 @@
 #include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGUtils.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <Flash/Mpp/ExchangeReceiver.h>
 #include <Flash/Mpp/GRPCReceiverContext.h>
 #include <Flash/Mpp/MPPTask.h>
@@ -35,11 +36,11 @@
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <fmt/core.h>
+#include <tipb/executor.pb.h>
 
 #include <chrono>
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
-#include <map>
 
 namespace DB
 {
@@ -189,13 +190,46 @@ void MPPTask::abortQueryExecutor()
     }
 }
 
+// CTESource may be waiting for the finish signal from cte sink
+// We'd better to manually do notification in case of missing signal from cte sink
+// or the CTESource will hang
+void MPPTask::abortCTE(const String & message)
+{
+    if (this->has_cte_sink.load())
+    {
+        this->dag_context->getCTESink()->notifyCancel(message);
+        this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSink());
+    }
+
+    if (this->has_cte_source.load())
+    {
+        this->dag_context->getCTESource()->notifyCancel(message);
+        this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSource());
+    }
+}
+
 void MPPTask::finishWrite()
 {
-    RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
-    if (dag_context->collect_execution_summaries
-        && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
-        tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
-    tunnel_set->finishWrite();
+    if (this->has_cte_sink.load())
+    {
+        tipb::SelectResponse resp;
+        if (dag_context->collect_execution_summaries)
+            resp = mpp_task_statistics.genExecutionSummaryResponse();
+
+        // The finish of pushing all blocks not means that cte sink job has been done.
+        // Execution summary statistic also need to be sent. So we can release cte
+        // only when execution sumary statistic has been sent.
+        this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEIDForSink());
+        this->notify_cte_finish = true;
+    }
+    else
+    {
+        RUNTIME_ASSERT(tunnel_set != nullptr, log, "mpp task without tunnel set");
+        if (dag_context->collect_execution_summaries
+            && !ReportExecutionSummaryToCoordinator(meta.mpp_version(), meta.report_execution_summary()))
+            tunnel_set->sendExecutionSummary(mpp_task_statistics.genExecutionSummaryResponse());
+        tunnel_set->finishWrite();
+    }
 }
 
 void MPPTask::run()
@@ -205,6 +239,26 @@ void MPPTask::run()
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
+    if unlikely (!dag_context->dag_request.rootExecutor().has_exchange_sender())
+    {
+        RUNTIME_CHECK_MSG(
+            dag_context->dag_request.rootExecutor().has_cte_sink(),
+            "Task should has either exchange sender or cte sink");
+
+        this->has_cte_sink.store(true);
+        const auto & cte_sink = dag_context->dag_request.rootExecutor().cte_sink();
+        String query_id_and_cte_id
+            = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_sink.cte_id());
+        context->getDAGContext()->setQueryIDAndCTEIDForSink(query_id_and_cte_id);
+        auto cte = context->getCTEManager()->getCTE(
+            query_id_and_cte_id,
+            context->getMaxStreams(),
+            cte_sink.cte_sink_num(),
+            cte_sink.cte_source_num());
+        cte->registerSink();
+        context->getDAGContext()->setCTESink(cte);
+        return;
+    }
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();
@@ -294,6 +348,20 @@ void MPPTask::initExchangeReceivers()
                 if (status != RUNNING)
                     throw Exception(
                         "exchange receiver map can not be initialized, because the task is not in running state");
+            }
+            else if (executor.tp() == tipb::ExecType::TypeCTESource)
+            {
+                this->has_cte_source.store(true);
+                const auto & cte_source = executor.cte_source();
+                String query_id_and_cte_id
+                    = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_source.cte_id());
+                context->getDAGContext()->setQueryIDAndCTEIDForSource(query_id_and_cte_id);
+                auto cte = context->getCTEManager()->getCTE(
+                    query_id_and_cte_id,
+                    context->getMaxStreams(),
+                    cte_source.cte_sink_num(),
+                    cte_source.cte_source_num());
+                context->getDAGContext()->setCTESource(cte);
             }
             return true;
         });
@@ -533,12 +601,15 @@ void MPPTask::runImpl()
         auto time_cost_in_preprocess_ms = time_cost_in_preprocess_ns / MILLISECOND_TO_NANO;
         LOG_DEBUG(log, "task preprocess done");
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
-        LOG_DEBUG(
-            log,
-            "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}",
-            schedule_entry.getNeededThreads(),
-            dag_context->tunnel_set->getExternalThreadCnt(),
-            new_thread_count_of_mpp_receiver);
+
+        // tunnel_set may be nullptr when we get cte sink
+        if (dag_context->tunnel_set != nullptr)
+            LOG_DEBUG(
+                log,
+                "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}",
+                schedule_entry.getNeededThreads(),
+                dag_context->tunnel_set->getExternalThreadCnt(),
+                new_thread_count_of_mpp_receiver);
 
         scheduleOrWait();
 
@@ -572,6 +643,7 @@ void MPPTask::runImpl()
 #endif
 
         auto result = query_executor_holder->execute();
+
         auto log_level = Poco::Message::PRIO_DEBUG;
         if (!result.is_success || status != RUNNING)
             log_level = Poco::Message::PRIO_INFORMATION;
@@ -614,6 +686,7 @@ void MPPTask::runImpl()
 
             // finish MPPTunnel
             finishWrite();
+
             // finish receiver
             receiver_set->close();
         }
@@ -623,6 +696,13 @@ void MPPTask::runImpl()
     {
         auto catch_err_msg = getCurrentExceptionMessage(true, true);
         err_msg = err_msg.empty() ? catch_err_msg : fmt::format("{}, {}", err_msg, catch_err_msg);
+    }
+
+    if unlikely (this->has_cte_sink.load() && !this->notify_cte_finish)
+    {
+        tipb::SelectResponse resp;
+        this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEIDForSink());
+        this->notify_cte_finish = true;
     }
 
     if (err_msg.empty())
@@ -766,6 +846,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             /// if the task is in initializing state, mpp task can return error to TiDB directly,
             /// so just close all tunnels here
             abortTunnels("", false);
+            abortCTE(message);
             LOG_WARNING(log, "Finish abort task from uninitialized");
             break;
         }
@@ -778,6 +859,7 @@ void MPPTask::abort(const String & message, AbortType abort_type)
             abortTunnels(message, false);
             abortReceivers();
             abortQueryExecutor();
+            abortCTE(message);
             scheduleThisTask(ScheduleState::FAILED);
             /// runImpl is running, leave remaining work to runImpl
             LOG_WARNING(log, "Finish abort task from running");
@@ -809,14 +891,17 @@ int MPPTask::estimateCountOfNewThreads()
 {
     auto query_executor = query_executor_holder.tryGet();
     RUNTIME_CHECK_MSG(
-        query_executor && dag_context->tunnel_set != nullptr,
+        query_executor
+            && (dag_context->tunnel_set != nullptr || dag_context->dag_request->root_executor().has_cte_sink()),
         "It should not estimate the threads for the uninitialized task {}",
         id.toString());
 
     // Estimated count of new threads from query executor, MppTunnels, mpp_receivers.
     assert(query_executor.value());
-    return (*query_executor)->estimateNewThreadCount() + 1 + dag_context->tunnel_set->getExternalThreadCnt()
-        + new_thread_count_of_mpp_receiver;
+    int external_thread_count = 0;
+    if likely (dag_context->tunnel_set != nullptr)
+        external_thread_count = dag_context->tunnel_set->getExternalThreadCnt();
+    return (*query_executor)->estimateNewThreadCount() + 1 + external_thread_count + new_thread_count_of_mpp_receiver;
 }
 
 } // namespace DB
