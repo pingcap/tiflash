@@ -16,7 +16,37 @@
 
 namespace DB
 {
+namespace ErrorCodes
+{
+extern const int CANNOT_ALLOCATE_MEMORY;
+}
+
 /// Used for left padding of PODArray when empty
 const char EmptyPODArray[EmptyPODArraySize]{};
 
+namespace PODArrayDetails
+{
+
+ALWAYS_INLINE size_t byte_size(size_t num_elements, size_t element_size)
+{
+    size_t amount;
+    if (__builtin_mul_overflow(num_elements, element_size, &amount))
+        throw Exception(
+            ErrorCodes::CANNOT_ALLOCATE_MEMORY,
+            "Amount of memory requested to allocate is more than allowed");
+    return amount;
+}
+
+ALWAYS_INLINE size_t
+minimum_memory_for_elements(size_t num_elements, size_t element_size, size_t pad_left, size_t pad_right)
+{
+    size_t amount;
+    if (__builtin_add_overflow(byte_size(num_elements, element_size), pad_left + pad_right, &amount))
+        throw Exception(
+            ErrorCodes::CANNOT_ALLOCATE_MEMORY,
+            "Amount of memory requested to allocate is more than allowed");
+    return amount;
+}
+
+} // namespace PODArrayDetails
 } // namespace DB
