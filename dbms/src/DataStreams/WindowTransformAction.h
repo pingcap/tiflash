@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Interpreters/WindowDescription.h>
 #include <WindowFunctions/WindowUtils.h>
@@ -204,7 +205,19 @@ private:
             if (ws.cached_block_number != block_number)
             {
                 for (size_t i = 0; i < ws.arguments.size(); ++i)
-                    ws.argument_columns[i] = block.input_columns[ws.arguments[i]].get();
+                {
+                    const IColumn * col = block.input_columns[ws.arguments[i]].get();
+                    if unlikely (col->isColumnConst())
+                    {
+                        ColumnPtr converted = col->convertToFullColumnIfConst();
+
+                        // Put column pointer into materialized_columns to avoid the release of pointer
+                        ws.materialized_columns.push_back(converted);
+                        col = ws.materialized_columns.back().get();
+                    }
+
+                    ws.argument_columns[i] = col;
+                }
                 ws.cached_block_number = block_number;
             }
 
@@ -223,6 +236,8 @@ private:
                     agg_func->decrease(buf, columns, row, arena.get());
             }
         }
+
+        ws.materialized_columns.resize(0);
     }
 
     // Use decrease interface only when add row number is larger than decrease row number
