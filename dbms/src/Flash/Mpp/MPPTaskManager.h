@@ -193,6 +193,11 @@ public:
         return monitored_tasks.find(task_unique_id) != monitored_tasks.end();
     }
 
+<<<<<<< HEAD
+=======
+    void waitAllMPPTasksFinish(const std::unique_ptr<Context> & context);
+
+>>>>>>> 86c363cf7d (Remove unnecessary wait for MPP tunnel destruction before shutdown (#10313))
     std::mutex mu;
     std::condition_variable cv;
     bool is_shutdown = false;
