@@ -18,6 +18,7 @@
 #include <Core/Spiller.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 
+#include <atomic>
 #include <cstddef>
 #include <memory>
 #include <mutex>
@@ -104,50 +105,32 @@ struct CTEPartition
         , pipe_cv(std::make_unique<PipeConditionVariable>())
     {}
 
+    // TODO remove it
     void debugOutput()
     {
-        // String info_block;
-        // for (const auto & item : this->total_fetch_block_nums)
-        //     info_block = fmt::format("{} <{}: {}>", info_block, item.first, item.second);
-
-        // String info_row;
-        // for (const auto & item : this->total_fetch_row_nums)
-        //     info_row = fmt::format("{} <{}: {}>", info_row, item.first, item.second);
-
-        // String disk_info_block;
-        // for (const auto & item : this->total_fetch_disk_block_nums)
-        //     disk_info_block = fmt::format("{} <{}: {}>", disk_info_block, item.first, item.second);
-
-        // String disk_info_row;
-        // for (const auto & item : this->total_fetch_disk_row_nums)
-        //     disk_info_row = fmt::format("{} <{}: {}>", disk_info_row, item.first, item.second);
-
-        // String infos;
-        // for (const auto & item : this->fetch_idxs_disk)
+        // String total_info = fmt::format("total_blocks: {}, total_spill_blocks: {}", total_blocks, total_spill_blocks);
+        // String spill_ranges_info = "spill_ranges: ";
+        // for (auto & range : this->spill_ranges)
+        //     spill_ranges_info = fmt::format("{}, ({} - {})", spill_ranges_info, range.first, range.second);
+        // String fetch_in_mem_idxs_info = "fetch_in_mem_idxs: ";
+        // for (const auto & v : this->fetch_in_mem_idxs)
         // {
-        //     String nums;
-        //     for (auto idx : item.second)
-        //         nums = fmt::format("{} {}", nums, idx);
-        //     infos = fmt::format("{} <cte_reader_id: {}, idxs: {}>", infos, item.first, nums);
+        //     String tmp_info;
+        //     for (auto idx : v.second)
+        //         tmp_info = fmt::format("{}, {}", tmp_info, idx);
+        //     fetch_in_mem_idxs_info = fmt::format("{} <{}: {}>", fetch_in_mem_idxs_info, v.first, tmp_info);
+        // }
+        // String fetch_in_disk_idxs_info = "fetch_in_disk_idxs: ";
+        // for (const auto & v : this->fetch_in_disk_idxs)
+        // {
+        //     String tmp_info;
+        //     for (auto idx : v.second)
+        //         tmp_info = fmt::format("{}, {}", tmp_info, idx);
+        //     fetch_in_disk_idxs_info = fmt::format("{} <{}: {}>", fetch_in_disk_idxs_info, v.first, tmp_info);
         // }
 
         // auto * log = &Poco::Logger::get("LRUCache");
-        // LOG_INFO(
-        //     log,
-        //     fmt::format(
-        //         "xzxdebug CTEPartition total_recv_block_num: {}, row: {}, total_spill_block_num: {}, "
-        //         "total_fetch_block_num: {}, row num: {}, "
-        //         "disk: {}, {}"
-        //         "total_byte_usage: {}, idxs_disk: {}",
-        //         total_recv_block_num,
-        //         total_recv_row_num,
-        //         total_spill_block_num,
-        //         info_block,
-        //         info_row,
-        //         disk_info_block,
-        //         disk_info_row,
-        //         total_byte_usage,
-        //         infos));
+        // LOG_INFO(log, fmt::format("xzxdebug | {} | {} | {} | {}", total_info, spill_ranges_info, fetch_in_mem_idxs_info, fetch_in_disk_idxs_info));
     }
 
     void setSharedConfig(std::shared_ptr<CTEPartitionSharedConfig> config) { this->config = config; }
@@ -164,11 +147,16 @@ struct CTEPartition
 
     bool isSpillTriggeredNoLock() const { return this->total_block_in_disk_num > 0; }
     void addIdxNoLock(size_t cte_reader_id) { this->fetch_block_idxs[cte_reader_id]++; }
-    bool exceedMemoryThresholdNoLock() const { return this->memory_usage >= this->config->memory_threshold; }
+    bool exceedMemoryThresholdNoLock() const
+    {
+        if (this->config->memory_threshold == 0)
+            return false;
+        return this->memory_usage >= this->config->memory_threshold;
+    }
 
     CTEOpStatus pushBlock(const Block & block);
     CTEOpStatus tryGetBlock(size_t cte_reader_id, Block & block);
-    CTEOpStatus spillBlocks();
+    CTEOpStatus spillBlocks(std::atomic_size_t & block_num, std::atomic_size_t & row_num);
     CTEOpStatus getBlockFromDisk(size_t cte_reader_id, Block & block);
 
     bool isBlockAvailableNoLock(size_t cte_reader_id)
@@ -179,14 +167,24 @@ struct CTEPartition
         return this->isBlockAvailableInMemoryNoLock(cte_reader_id);
     }
 
-    size_t total_recv_block_num = 0;
-    size_t total_recv_row_num = 0;
-    size_t total_spill_block_num = 0;
-    std::map<size_t, size_t> total_fetch_block_nums;
-    std::map<size_t, size_t> total_fetch_row_nums;
-    std::map<size_t, size_t> total_fetch_disk_block_nums;
-    std::map<size_t, size_t> total_fetch_disk_row_nums;
-    std::map<size_t, std::vector<size_t>> fetch_idxs_disk;
+    // Need aux_lock and mu
+    void putTmpBlocksIntoBlocksNoLock()
+    {
+        for (const auto & block : this->tmp_blocks)
+        {
+            this->memory_usage += block.bytes();
+            this->blocks.push_back(block);
+        }
+        tmp_blocks.clear();
+    }
+
+    std::atomic_size_t total_blocks = 0;
+    std::atomic_size_t total_spill_blocks = 0;
+
+    std::vector<std::pair<size_t, size_t>> spill_ranges;
+    std::map<size_t, std::vector<size_t>> fetch_in_mem_idxs;
+    std::map<size_t, std::vector<size_t>> fetch_in_disk_idxs;
+
     size_t total_byte_usage = 0;
 
     size_t partition_id;

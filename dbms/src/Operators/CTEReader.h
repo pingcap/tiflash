@@ -40,10 +40,21 @@ public:
         RUNTIME_CHECK(cte);
     }
 
+    std::atomic_size_t total_fetch_blocks = 0;
+    std::atomic_size_t total_fetch_rows = 0;
+
     ~CTEReader()
     {
         this->cte.reset();
         this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id);
+
+        auto * log = &Poco::Logger::get("LRUCache");
+        LOG_INFO(
+            log,
+            fmt::format(
+                "xzxdebug CTEReader fb: {} fr: {}",
+                this->total_fetch_blocks.load(),
+                this->total_fetch_rows.load()));
     }
 
     CTEOpStatus fetchNextBlock(size_t partition_id, Block & block);

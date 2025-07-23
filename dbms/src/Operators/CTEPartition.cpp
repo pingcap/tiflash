@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Operators/CTEPartition.h>
 
+#include <atomic>
 #include <iterator>
 #include <mutex>
 #include <utility>
@@ -35,6 +36,8 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
 
     std::lock_guard<std::mutex> lock(*this->mu);
 
+    this->putTmpBlocksIntoBlocksNoLock();
+
     if (this->isBlockAvailableInDiskNoLock(cte_reader_id))
         return CTEOpStatus::IO_IN;
 
@@ -43,21 +46,18 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
 
     auto idx = this->getIdxInMemoryNoLock(cte_reader_id);
     block = this->blocks[idx];
+    {
+        auto [iter, _] = this->fetch_in_mem_idxs.insert(std::make_pair(cte_reader_id, 0));
+        iter->second.push_back(this->fetch_block_idxs[cte_reader_id]);
+    }
     this->addIdxNoLock(cte_reader_id);
-    {
-        auto [iter, _] = this->total_fetch_block_nums.insert(std::make_pair(cte_reader_id, 0));
-        iter->second++;
-    }
-    {
-        auto [iter, _] = this->total_fetch_row_nums.insert(std::make_pair(cte_reader_id, 0));
-        iter->second += block.rows();
-    }
     return CTEOpStatus::OK;
 }
 
 CTEOpStatus CTEPartition::pushBlock(const Block & block)
 {
     std::unique_lock<std::mutex> aux_lock(*(this->aux_lock));
+    this->total_blocks.fetch_add(1);
     CTEOpStatus ret_status = CTEOpStatus::OK;
     switch (this->status)
     {
@@ -77,10 +77,6 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     // Blocked in cpu pool is very bad.
     std::lock_guard<std::mutex> lock(*this->mu);
 
-    this->total_recv_block_num++;
-    this->total_recv_row_num += block.rows();
-    this->total_byte_usage += block.bytes();
-
     this->memory_usage += block.bytes();
     this->blocks.push_back(block);
     this->pipe_cv->notifyOne();
@@ -93,7 +89,7 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     return ret_status;
 }
 
-CTEOpStatus CTEPartition::spillBlocks()
+CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomic_size_t & row_num)
 {
     LOG_INFO(
         this->config->log,
@@ -113,12 +109,7 @@ CTEOpStatus CTEPartition::spillBlocks()
         }
 
         lock.lock();
-        for (const auto & block : this->tmp_blocks)
-        {
-            this->memory_usage += block.bytes();
-            this->blocks.push_back(block);
-        }
-        tmp_blocks.clear();
+        this->putTmpBlocksIntoBlocksNoLock();
     }
 
     // Key represents logical index
@@ -141,17 +132,26 @@ CTEOpStatus CTEPartition::spillBlocks()
 
         Blocks spilled_blocks;
         if (next_iter == split_idxs.end() || next_iter->second >= total_block_in_memory_num)
+        {
+            this->spill_ranges.push_back(
+                std::make_pair(split_iter->first, this->blocks.size() - split_iter->second + split_iter->first));
             spilled_blocks.assign(blocks_begin_iter + split_iter->second, this->blocks.end());
+        }
         else
+        {
+            this->spill_ranges.push_back(std::make_pair(split_iter->first, next_iter->first));
             spilled_blocks.assign(blocks_begin_iter + split_iter->second, blocks_begin_iter + next_iter->second);
+        }
 
         RUNTIME_CHECK(!spilled_blocks.empty());
 
         this->total_block_in_disk_num += spilled_blocks.size();
 
-        this->total_spill_block_num += spilled_blocks.size(); // TODO remove
-
         auto spiller = this->config->getSpiller(this->partition_id, this->spillers.size());
+        this->total_spill_blocks.fetch_add(spilled_blocks.size());
+        block_num.fetch_add(spilled_blocks.size());
+        for (auto & block : spilled_blocks)
+            row_num.fetch_add(block.rows());
         spiller->spillBlocks(std::move(spilled_blocks), this->partition_id);
         spiller->finishSpill();
         this->spillers.insert(std::make_pair(split_iter->first, std::move(spiller)));
@@ -210,19 +210,12 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
             retry = true;
             continue;
         }
+
         {
-            auto [iter, _] = this->fetch_idxs_disk.insert(std::make_pair(cte_reader_id, std::vector<size_t>{}));
+            auto [iter, _] = this->fetch_in_disk_idxs.insert(std::make_pair(cte_reader_id, 0));
             iter->second.push_back(this->fetch_block_idxs[cte_reader_id]);
         }
         this->addIdxNoLock(cte_reader_id);
-        {
-            auto [iter, _] = this->total_fetch_disk_block_nums.insert(std::make_pair(cte_reader_id, 0));
-            iter->second++;
-        }
-        {
-            auto [iter, _] = this->total_fetch_disk_row_nums.insert(std::make_pair(cte_reader_id, 0));
-            iter->second += block.rows();
-        }
         break;
     };
 

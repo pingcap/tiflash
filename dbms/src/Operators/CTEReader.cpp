@@ -36,7 +36,10 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t partition_id, Block & block)
     case CTEOpStatus::IO_IN:
     case CTEOpStatus::SINK_NOT_REGISTERED:
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
+        return ret;
     case CTEOpStatus::OK:
+        this->total_fetch_blocks.fetch_add(1);
+        this->total_fetch_rows.fetch_add(block.rows());
         return ret;
     case CTEOpStatus::CANCELLED:
         throw Exception(this->cte->getError());

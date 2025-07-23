@@ -23,12 +23,22 @@
 #include <Operators/CTEPartition.h>
 #include <tipb/select.pb.h>
 
+#include <atomic>
 #include <mutex>
 #include <shared_mutex>
 #include <utility>
 
 namespace DB
 {
+
+inline String genInfo(const String & name, const std::map<size_t, std::atomic_size_t> & data)
+{
+    String info = fmt::format("{}: ", name);
+    for (const auto & item : data)
+        info = fmt::format("{}, <{}, {}>", info, item.first, item.second.load());
+    return info;
+}
+
 class CTE
 {
 public:
@@ -41,8 +51,35 @@ public:
             this->partitions.push_back(std::make_shared<CTEPartition>(i));
     }
 
+    std::atomic_size_t total_recv_blocks = 0;
+    std::atomic_size_t total_recv_rows = 0;
+
+    std::atomic_size_t total_spilled_blocks = 0;
+    std::atomic_size_t total_spilled_rows = 0;
+
+    std::map<size_t, std::atomic_size_t> total_fetch_blocks;
+    std::map<size_t, std::atomic_size_t> total_fetch_rows;
+
+    std::map<size_t, std::atomic_size_t> total_fetch_blocks_in_disk;
+    std::map<size_t, std::atomic_size_t> total_fetch_rows_in_disk;
+
     ~CTE()
     {
+        String info;
+        info = fmt::format(
+            "total_recv_blocks: {}, total_recv_rows: {}, total_spilled_blocks: {}, total_spilled_rows: {}, ",
+            total_recv_blocks.load(),
+            total_recv_rows.load(),
+            total_spilled_blocks.load(),
+            total_spilled_rows.load());
+        info = fmt::format("{} | {}", info, genInfo("total_fetch_blocks", this->total_fetch_blocks));
+        info = fmt::format("{} | {}", info, genInfo("total_fetch_rows", this->total_fetch_rows));
+        info = fmt::format("{} | {}", info, genInfo("total_fetch_blocks_in_disk", this->total_fetch_blocks_in_disk));
+        info = fmt::format("{} | {}", info, genInfo("total_fetch_rows_in_disk", this->total_fetch_rows_in_disk));
+
+        auto * log = &Poco::Logger::get("LRUCache");
+        LOG_INFO(log, fmt::format("xzxdebug CTE {}", info));
+
         for (auto & p : this->partitions)
             p->debugOutput();
     }
