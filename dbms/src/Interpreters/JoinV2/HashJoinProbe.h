@@ -23,6 +23,7 @@
 #include <Interpreters/JoinV2/HashJoinKey.h>
 #include <Interpreters/JoinV2/HashJoinPointerTable.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
+#include <Interpreters/JoinV2/SemiJoinProbeList.h>
 #include <Parsers/ASTTablesInSelectQuery.h>
 #include <absl/base/optimization.h>
 
@@ -40,13 +41,19 @@ struct JoinProbeContext
     RowPtr current_build_row_ptr = nullptr;
     /// For left outer/(left outer) (anti) semi join without other conditions.
     bool current_row_is_matched = false;
-    /// For left outer/(left outer) (anti) semi join with other conditions.
+    /// For left outer with other conditions.
     IColumn::Filter rows_not_matched;
     /// < 0 means not_matched_offsets is not initialized.
     ssize_t not_matched_offsets_idx = -1;
     IColumn::Offsets not_matched_offsets;
     /// For left outer (anti) semi join.
     PaddedPODArray<Int8> left_semi_match_res;
+    /// For left outer (anti) semi join with other-eq-from-in conditions.
+    PaddedPODArray<UInt8> left_semi_match_null_res;
+    /// For (anti) semi join with other conditions.
+    IColumn::Offsets semi_selective_offsets;
+    /// For (left outer) (anti) semi join with other conditions.
+    std::unique_ptr<ISemiJoinProbeList> semi_join_probe_list;
 
     size_t prefetch_active_states = 0;
     size_t prefetch_iter = 0;
@@ -69,6 +76,7 @@ struct JoinProbeContext
         HashJoinKeyMethod method,
         ASTTableJoin::Kind kind,
         bool has_other_condition,
+        bool has_other_eq_cond_from_in,
         const Names & key_names,
         const String & filter_column,
         const NameSet & probe_output_name_set,
@@ -92,11 +100,21 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     /// For late materialization
     RowPtrs row_ptrs_for_lm;
     RowPtrs filter_row_ptrs_for_lm;
+    /// For right outer/semi/anti join with other conditions
+    RowPtrs right_join_row_ptrs;
 
     /// Schema: HashJoin::all_sample_block_pruned
     Block result_block;
     /// Schema: HashJoin::output_block_after_finalize
     Block result_block_for_other_condition;
+
+    /// Scan build side
+    ssize_t current_scan_table_index = -1;
+    RowContainer * current_container = nullptr;
+    size_t current_container_index = 0;
+    /// Schema: HashJoin::output_block_after_finalize
+    Block scan_result_block;
+    bool is_scan_end = false;
 
     /// Metrics
     size_t probe_handle_rows = 0;
@@ -105,6 +123,7 @@ struct alignas(CPU_CACHE_LINE_SIZE) JoinProbeWorkerData
     size_t replicate_time = 0;
     size_t other_condition_time = 0;
     size_t collision = 0;
+    size_t scan_build_side_time = 0;
 };
 
 class JoinProbeHelperUtil
@@ -132,18 +151,17 @@ protected:
         return key_getter.joinKeyIsEqual(key1, key2);
     }
 
-    template <bool late_materialization>
+    template <bool late_materialization, bool is_right_semi_join>
     void ALWAYS_INLINE insertRowToBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns, RowPtr row_ptr) const
     {
         wd.insert_batch.push_back(row_ptr);
         if unlikely (wd.insert_batch.size() >= settings.probe_insert_batch_size)
-            flushInsertBatch<late_materialization, false>(wd, added_columns);
+            flushInsertBatch<late_materialization, is_right_semi_join, false>(wd, added_columns);
     }
 
-    template <bool late_materialization, bool last_flush>
+    template <bool late_materialization, bool is_right_semi_join, bool last_flush>
     void flushInsertBatch(JoinProbeWorkerData & wd, MutableColumns & added_columns) const;
 
-    template <bool late_materialization>
     void fillNullMapWithZero(MutableColumns & added_columns) const;
 
 protected:
