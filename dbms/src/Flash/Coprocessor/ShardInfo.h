@@ -54,6 +54,8 @@ struct ShardInfo
         }
         return sb.str();
     }
+
+    UInt64 getID() const { return shard_id; }
 };
 
 using ShardInfoMap = std::unordered_map<UInt64, ShardInfo>;

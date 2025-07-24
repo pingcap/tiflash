@@ -34,7 +34,10 @@
 #include <Storages/Tantivy/TantivyInputStream.h>
 #include <common/defines.h>
 #include <common/logger_useful.h>
+#include <tici-search-lib/src/lib.rs.h>
 
+#include <cstddef>
+#include <cstdlib>
 #include <memory>
 
 namespace DB
@@ -70,17 +73,53 @@ void StorageTantivy::read(
     auto query_columns = genNamesAndTypesForTiCI(tici_scan.getQueryColumns(), "column");
     auto return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
 
+    // local read
     group_builder.addConcurrency(std::make_unique<TantivyReaderSourceOp>(
         exec_status,
         log->identifier(),
         tici_scan.getTableId(),
         tici_scan.getIndexId(),
-        tici_scan.getShardInfos(),
+        local_read,
         query_columns,
         return_columns,
         tici_scan.getQuery(),
         tici_scan.getLimit(),
         /*read_ts*/ 0)); // TODO: currently, info.mvcc_query_info is null.
+}
+
+void StorageTantivy::splitRemoteReadAndLocalRead()
+{
+    const auto & all = tici_scan.getShardInfos().shard_info_list;
+    ShardInfoList local_shard_infos;
+    ShardInfoList remote_shard_infos;
+    ::rust::Vec<::Shard> shards;
+    auto index_id = tici_scan.getIndexId();
+    auto table_id = tici_scan.getTableId();
+    for (const auto & shard_info : all)
+    {
+        shards.push_back(::Shard{
+            .table_id = table_id,
+            .index_id = index_id,
+            .shard_id = shard_info.shard_id,
+            .shard_epoch = shard_info.shard_epoch,
+        });
+    }
+
+    auto result = check_shards(shards);
+    for (size_t i = 0; i < result.size(); ++i)
+    {
+        const auto & is_local = result[i];
+        if (is_local)
+        {
+            local_shard_infos.push_back(all[i]);
+        }
+        else
+        {
+            remote_shard_infos.push_back(all[i]);
+        }
+    }
+    remote_read = remote_shard_infos;
+    local_read = local_shard_infos;
 }
 
 } // namespace DB

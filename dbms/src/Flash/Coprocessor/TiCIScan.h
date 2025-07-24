@@ -34,6 +34,9 @@ public:
     const int & getIndexId() const { return index_id; }
     const std::string & getQuery() const { return query_json_str; }
     const int & getLimit() const { return limit; }
+    const tipb::Executor * getTiCIScan() const { return tici_scan; }
+
+    void constructTiCIScanForRemoteRead(tipb::IndexScan * tipb_index_scan) const;
 
 private:
     const tipb::Executor * tici_scan;
