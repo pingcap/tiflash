@@ -21,8 +21,6 @@
 #include <common/likely.h>
 #include <common/logger_useful.h>
 
-#include <iomanip>
-
 namespace CurrentMetrics
 {
 extern const Metric MemoryTrackingQueryStorageTask;

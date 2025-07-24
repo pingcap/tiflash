@@ -1084,6 +1084,7 @@ BlockInputStreams DeltaMergeStore::readRaw(
         req_info,
         enable_read_thread,
         final_num_stream,
+        dm_context->scan_context->keyspace_id,
         dm_context->scan_context->resource_group_name);
 
     BlockInputStreams res;
@@ -1188,6 +1189,7 @@ void DeltaMergeStore::readRaw(
         req_info,
         enable_read_thread,
         final_num_stream,
+        dm_context->scan_context->keyspace_id,
         dm_context->scan_context->resource_group_name);
 
     if (enable_read_thread)
@@ -1233,6 +1235,12 @@ static ReadMode getReadModeImpl(const Context & db_context, bool is_fast_scan, b
 {
     if (is_fast_scan)
     {
+        RUNTIME_CHECK_MSG(!keep_order, "Fast scan cannot keep order, but keep_order is set to true");
+        RUNTIME_CHECK_MSG(
+            db_context.getSettingsRef().dt_enable_bitmap_filter,
+            "Running fast scan but bitmap filter is disabled, please set the config "
+            "`profiles.default.dt_enable_bitmap_filter` of TiFlash to true,"
+            "or disable fast scan by setting tidb variable `tiflash_fastscan` to OFF.");
         return ReadMode::Fast;
     }
     if (db_context.getSettingsRef().dt_enable_bitmap_filter && !keep_order)
@@ -1250,7 +1258,7 @@ ReadMode DeltaMergeStore::getReadMode(
 {
     auto read_mode = getReadModeImpl(db_context, is_fast_scan, keep_order);
     RUNTIME_CHECK_MSG(
-        !executor || !executor->before_where || read_mode == ReadMode::Bitmap,
+        !executor || !executor->before_where || (read_mode == ReadMode::Bitmap || read_mode == ReadMode::Fast),
         "Push down executor needs bitmap, push down executor is empty: {}, read mode: {}",
         executor == nullptr || executor->before_where == nullptr,
         magic_enum::enum_name(read_mode));
@@ -1314,6 +1322,7 @@ BlockInputStreams DeltaMergeStore::read(
         log_tracing_id,
         enable_read_thread,
         final_num_stream,
+        dm_context->scan_context->keyspace_id,
         dm_context->scan_context->resource_group_name);
     dm_context->scan_context->read_mode = read_mode;
 
@@ -1426,6 +1435,7 @@ void DeltaMergeStore::read(
         log_tracing_id,
         enable_read_thread,
         final_num_stream,
+        dm_context->scan_context->keyspace_id,
         dm_context->scan_context->resource_group_name);
     dm_context->scan_context->read_mode = read_mode;
 

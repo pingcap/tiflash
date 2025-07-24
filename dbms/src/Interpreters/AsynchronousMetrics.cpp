@@ -312,6 +312,11 @@ void AsynchronousMetrics::update()
         {
             GET_METRIC(tiflash_storage_s3_gc_status, type_owner).Set(1.0);
         }
+        else
+        {
+            // If the current node is not the owner, we reset the metric to 0
+            GET_METRIC(tiflash_storage_s3_gc_status, type_owner).Set(0.0);
+        }
     }
 
 #if USE_MIMALLOC

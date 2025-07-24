@@ -27,6 +27,14 @@ PATH=$PATH:/root/.cargo/bin
 NPROC=${NPROC:-$(sysctl -n hw.physicalcpu || grep -c ^processor /proc/cpuinfo)}
 CMAKE_BUILD_TYPE="RELWITHDEBINFO"
 
+: "${ENABLE_NEXT_GEN:=0}"
+if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
+  CMAKE_ENABLE_NEXT_GEN="ON"
+  echo "Building TiFlash with next-gen features enabled"
+else
+  CMAKE_ENABLE_NEXT_GEN="OFF"
+fi
+
 install_dir="$SRCPATH/release-darwin/tiflash"
 if [ -d "$install_dir" ]; then rm -rf "${install_dir:?}"/*; else mkdir -p "$install_dir"; fi
 build_dir="$SRCPATH/release-darwin/build-release"
@@ -40,6 +48,7 @@ export CXX="$(brew --prefix)/opt/llvm@17/bin/clang++"
 cmake "$SRCPATH" \
       -GNinja \
       -DCMAKE_BUILD_TYPE=$CMAKE_BUILD_TYPE \
+      -DENABLE_NEXT_GEN=${CMAKE_ENABLE_NEXT_GEN} \
       -DUSE_INTERNAL_SSL_LIBRARY=ON \
       -Wno-dev \
       -DNO_WERROR=ON

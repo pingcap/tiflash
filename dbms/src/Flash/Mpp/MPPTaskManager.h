@@ -194,6 +194,8 @@ public:
         return monitored_tasks.find(task_unique_id) != monitored_tasks.end();
     }
 
+    void waitAllMPPTasksFinish(const std::unique_ptr<Context> & context);
+
     std::mutex mu;
     std::condition_variable cv;
     bool is_shutdown = false;
@@ -220,6 +222,8 @@ class MPPTaskManager : private boost::noncopyable
     std::condition_variable cv;
 
     std::shared_ptr<MPPTaskMonitor> monitor;
+
+    std::atomic<bool> is_available{true};
 
 public:
     explicit MPPTaskManager(MPPTaskSchedulerPtr scheduler);
@@ -272,6 +276,9 @@ public:
     MPPQueryId getCurrentMinTSOQueryId(const String & resource_group_name);
 
     bool isTaskExists(const MPPTaskId & id);
+
+    void setUnavailable() { is_available = false; }
+    bool isAvailable() { return is_available; }
 
 private:
     MPPQueryPtr addMPPQuery(

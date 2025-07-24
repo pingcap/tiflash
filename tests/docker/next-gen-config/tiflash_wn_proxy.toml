@@ -1,4 +1,4 @@
-# Copyright 2023 PingCAP, Inc.
+# Copyright 2025 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,17 +12,22 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-path = "/tmp/tiflash/data"
-capacity = "107374182400" # 100GB
-tcp_port = 9000
+log-file = "/log/tiflash_tikv.log"
 
-[logger]
-count = 10
-log = "/tmp/tiflash/log/tiflash.log"
-errorlog = "/tmp/tiflash/log/tiflash_error.log"
-size = "1000M"
-level = "trace"
+[storage]
+# Enable keyspace and ttl for next-gen
+api-version = 2
+enable-ttl = true
+# No space is reserved at all for testing
+reserve-space = "0"
 
-[profiles]
-[profiles.default]
-enable_resource_control = 0
+[raftstore]
+capacity = "100GB"
+
+[dfs]
+prefix = "tikv"
+s3-endpoint = "http://minio0:9000"
+s3-key-id = "minioadmin"
+s3-secret-key = "minioadmin"
+s3-bucket = "tiflash-test"
+s3-region = "local"

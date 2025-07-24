@@ -144,6 +144,7 @@
     M(S3PutDMFile)                             \
     M(S3PutDMFileRetry)                        \
     M(S3WriteDMFileBytes)                      \
+    M(S3PageReaderRead)                        \
     M(DTDeltaIndexError)
 
 namespace ProfileEvents

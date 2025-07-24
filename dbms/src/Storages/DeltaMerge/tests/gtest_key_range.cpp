@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/RandomData.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+#include <Storages/KVStore/MultiRaft/RegionRangeKeys.h>
+#include <Storages/KVStore/Types.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
+
+#include <limits>
+#include <random>
 
 namespace DB::DM::tests
 {
@@ -111,37 +117,96 @@ TEST(HandleRangeTest, RedactRangeFromCommonHandle)
 
 TEST(RowKey, ToNextKeyIntHandle)
 {
-    const auto key = RowKeyValue::fromHandle(20);
+    const TableID table_id = 1;
+    const auto key = RowKeyValue::fromIntHandle(20);
     const auto next = key.toNext();
     EXPECT_EQ("21", next.toDebugString());
 
     {
-        const auto expected_next_int = RowKeyValue::fromHandle(21);
+        const auto expected_next_int = RowKeyValue::fromIntHandle(21);
         EXPECT_EQ(next.toRowKeyValueRef(), expected_next_int.toRowKeyValueRef());
     }
     {
-        const auto range_keys
-            = std::make_shared<RegionRangeKeys>(RecordKVFormat::genKey(1, 0), RecordKVFormat::genKey(1, 21));
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genKey(table_id, 0),
+            RecordKVFormat::genKey(table_id, 21));
         const auto range = RowKeyRange::fromRegionRange(
             range_keys,
-            /* table_id */ 1,
+            /* table_id */ table_id,
             /* is_common_handle */ false,
             /* row_key_column_size */ 1);
         EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
+        EXPECT_EQ(range.getEnd().toDebugString(), "21");
     }
+
+    // The whole key range of a specified table_id
+    {
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genTableRecordStartKey(table_id),
+            RecordKVFormat::genTableRecordEndKey(table_id));
+        const auto range = RowKeyRange::fromRegionRange(
+            range_keys,
+            /* table_id */ table_id,
+            /* is_common_handle */ false,
+            /* row_key_column_size */ 1);
+        EXPECT_EQ(range.toDebugString(), "[-9223372036854775808,9223372036854775807)");
+    }
+
+    // tiflash#7762
     // Note: {20,00} will be regarded as Key=21 in RowKeyRange::fromRegionRange.
     {
-        auto key_end = RecordKVFormat::genRawKey(1, 20);
-        key_end.push_back(0);
-        auto tikv_key_end = RecordKVFormat::encodeAsTiKVKey(key_end);
-        const auto range_keys
-            = std::make_shared<RegionRangeKeys>(RecordKVFormat::genKey(1, 0), std::move(tikv_key_end));
+        auto key_end = RecordKVFormat::genRawKey(table_id, 20);
+        key_end.push_back('\x00');
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genKey(table_id, 0),
+            RecordKVFormat::encodeAsTiKVKey(key_end));
         const auto range = RowKeyRange::fromRegionRange(
             range_keys,
-            /* table_id */ 1,
+            /* table_id */ table_id,
             /* is_common_handle */ false,
             /* row_key_column_size */ 1);
         EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
+        EXPECT_EQ(range.getEnd().toDebugString(), "21");
+    }
+    // tiflash#10147
+    // Note: {20,01} will be regarded as Key=21 in RowKeyRange::fromRegionRange.
+    {
+        auto key_end = RecordKVFormat::genRawKey(table_id, 20);
+        key_end.push_back('\x01');
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genKey(table_id, 0),
+            RecordKVFormat::encodeAsTiKVKey(key_end));
+        const auto range = RowKeyRange::fromRegionRange(
+            range_keys,
+            /* table_id */ table_id,
+            /* is_common_handle */ false,
+            /* row_key_column_size */ 1);
+        EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
+        EXPECT_EQ(range.getEnd().toDebugString(), "21");
+    }
+    // any non-empty suffix will be regarded as Key=21 in RowKeyRange::fromRegionRange.
+    {
+        auto key_end = RecordKVFormat::genRawKey(table_id, 20);
+        std::mt19937_64 rand_gen(std::random_device{}());
+        size_t rand_length = std::min(1, rand_gen() % 255); // ensure rand_length is at least 1
+        auto rand_suffix = DB::random::randomString(rand_length);
+        key_end.insert(key_end.end(), rand_suffix.begin(), rand_suffix.end());
+        LOG_INFO(
+            Logger::get(),
+            "key_end={} rand_suffix={}",
+            key_end.toDebugString(),
+            Redact::keyToDebugString(rand_suffix.data(), rand_length));
+
+        const auto range_keys = std::make_shared<RegionRangeKeys>(
+            RecordKVFormat::genKey(table_id, 0),
+            RecordKVFormat::encodeAsTiKVKey(key_end));
+        const auto range = RowKeyRange::fromRegionRange(
+            range_keys,
+            /* table_id */ table_id,
+            /* is_common_handle */ false,
+            /* row_key_column_size */ 1);
+        EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
+        EXPECT_EQ(range.getEnd().toDebugString(), "21");
     }
 }
 
@@ -160,7 +225,7 @@ TEST(RowKey, ToNextKeyCommonHandle)
 TEST(RowKey, NextIntHandleCompare)
 {
     auto int_max = RowKeyValue::INT_HANDLE_MAX_KEY;
-    auto int_max_i64 = RowKeyValue::fromHandle(static_cast<Handle>(std::numeric_limits<HandleID>::max()));
+    auto int_max_i64 = RowKeyValue::fromIntHandle(static_cast<Handle>(std::numeric_limits<HandleID>::max()));
 
     EXPECT_GT(int_max.toRowKeyValueRef(), int_max_i64.toRowKeyValueRef());
 
@@ -177,9 +242,9 @@ TEST(RowKey, NextIntHandleCompare)
 
 TEST(RowKey, NextIntHandleMinMax)
 {
-    auto v0 = RowKeyValue::fromHandle(static_cast<Handle>(1178400));
+    auto v0 = RowKeyValue::fromIntHandle(static_cast<Handle>(1178400));
     auto v0_next = v0.toNext();
-    auto v1 = RowKeyValue::fromHandle(static_cast<Handle>(1178401));
+    auto v1 = RowKeyValue::fromIntHandle(static_cast<Handle>(1178401));
 
     EXPECT_EQ(v0, std::min(v0, v1));
     EXPECT_EQ(v0, std::min(v0, v0_next));

@@ -34,7 +34,7 @@ function get_elapse_s()
 	# end_nanos > start_nanos?
 	# Another way, the time part may start with 0, which means
 	# it will be regarded as oct format, use "10#" to ensure
-	# calculateing with decimal
+	# calculating with decimal
 	if [ "$end_nanos" = "N" -a "N" = "$start_nanos" ];then
 		# MacOS does not support '%N' output_fmt in date...
 		end_nanos=0

@@ -490,7 +490,7 @@ void TiFlashStorageConfig::parseTempConfig(const String & content)
         temp_capacity = *temp_capacity_opt;
 }
 
-// Seperate this function from TiFlashStorageConfig::parseTempConfig() because need to create temp_path first.
+// Separate this function from TiFlashStorageConfig::parseTempConfig() because need to create temp_path first.
 void TiFlashStorageConfig::checkTempCapacity(UInt64 global_capacity_quota, const LoggerPtr & log) const
 {
     // global_capacity_quota and storage.main/latest.capacity cannot take effects at the same time.

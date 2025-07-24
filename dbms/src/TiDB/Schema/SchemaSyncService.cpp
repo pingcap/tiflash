@@ -29,6 +29,11 @@
 
 #include <optional>
 
+namespace CurrentMetrics
+{
+extern const Metric NumKeyspace;
+} // namespace CurrentMetrics
+
 namespace DB
 {
 namespace ErrorCodes
@@ -73,6 +78,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
     std::unique_lock<std::shared_mutex> lock(keyspace_map_mutex);
     for (auto const & iter : keyspaces)
     {
+        // Already exist
         auto keyspace = iter.first;
         if (keyspace_handle_map.contains(keyspace))
             continue;
@@ -126,6 +132,7 @@ void SchemaSyncService::addKeyspaceGCTasks()
 
         keyspace_handle_map.emplace(keyspace, task_handle);
         num_add_tasks += 1;
+        CurrentMetrics::add(CurrentMetrics::NumKeyspace, 1);
     }
 
     auto log_level = num_add_tasks > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
@@ -158,6 +165,7 @@ void SchemaSyncService::removeKeyspaceGCTasks()
         PDClientHelper::removeKeyspaceGCSafepoint(keyspace);
         keyspace_gc_context.erase(keyspace); // clear the last gc safepoint
         num_remove_tasks += 1;
+        CurrentMetrics::sub(CurrentMetrics::NumKeyspace, 1);
     }
 
     auto log_level = num_remove_tasks > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;

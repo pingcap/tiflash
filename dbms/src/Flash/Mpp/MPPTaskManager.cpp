@@ -14,6 +14,7 @@
 
 #include <Common/FailPoint.h>
 #include <Common/FmtUtils.h>
+#include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/EstablishCall.h>
@@ -81,6 +82,47 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
     auto ptr = std::make_shared<MPPGatherTaskSet>();
     mpp_gathers.insert({gather_id, ptr});
     return ptr;
+}
+
+void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & context)
+{
+    // The maximum seconds TiFlash will wait for all current MPP tasks to finish before shutting down
+    static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
+    // The default value of flash.graceful_wait_before_shutdown
+    static constexpr UInt64 DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN = 600;
+    auto graceful_wait_before_shutdown
+        = context->getUsersConfig()->getUInt64(GRACEFUL_WIAT_BEFORE_SHUTDOWN, DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
+    LOG_INFO(log, "Start to wait all MPPTasks to finish, timeout={}s", graceful_wait_before_shutdown);
+    UInt64 graceful_wait_before_shutdown_ms = graceful_wait_before_shutdown * 1000;
+    Stopwatch watch;
+    // The first sleep before checking to reduce the chance of missing MPP tasks that are still in the process of being dispatched
+    std::this_thread::sleep_for(std::chrono::seconds(1));
+    bool all_tasks_finished = false;
+    while (true)
+    {
+        auto elapsed_ms = watch.elapsedMilliseconds();
+        if (!all_tasks_finished)
+        {
+            std::unique_lock lock(mu);
+            if (monitored_tasks.empty())
+                all_tasks_finished = true;
+        }
+        if (all_tasks_finished)
+        {
+            // Also needs to check if all MPP gRPC connections are finished
+            if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
+            {
+                LOG_INFO(log, "All MPP tasks have finished after {}ms", elapsed_ms);
+                break;
+            }
+        }
+        if (elapsed_ms >= graceful_wait_before_shutdown_ms)
+        {
+            LOG_WARNING(log, "Timed out waiting for all MPP tasks to finish after {}ms", elapsed_ms);
+            break;
+        }
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    }
 }
 
 MPPTaskManager::MPPTaskManager(MPPTaskSchedulerPtr scheduler_)

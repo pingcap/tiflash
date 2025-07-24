@@ -34,6 +34,8 @@ public:
 
     Block getHeader() const override { return action.getHeader(); }
 
+    std::vector<ConnectionProfileInfo> getConnectionProfileInfos() const { return connection_profile_infos; }
+
 protected:
     Block readImpl() override
     {
@@ -56,7 +58,11 @@ public:
         : log(Logger::get(options.debug_tag))
         , workers(options.workers)
         , action(options.columns_to_read, options.extra_table_id_index)
-    {}
+    {
+        connection_profile_infos.resize(2);
+        connection_profile_infos[INTER_ZONE_INDEX] = ConnectionProfileInfo::createForInterZone();
+        connection_profile_infos[INNER_ZONE_INDEX] = ConnectionProfileInfo::createForInnerZone();
+    }
 
     static BlockInputStreamPtr create(const Options & options)
     {
@@ -74,6 +80,10 @@ private:
 
     double duration_wait_ready_task_sec = 0;
     double duration_read_sec = 0;
+
+    static constexpr size_t INTER_ZONE_INDEX = 0;
+    static constexpr size_t INNER_ZONE_INDEX = 1;
+    std::vector<ConnectionProfileInfo> connection_profile_infos;
 };
 
 } // namespace DB::DM::Remote
