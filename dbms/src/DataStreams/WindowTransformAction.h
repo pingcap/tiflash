@@ -235,9 +235,8 @@ private:
                 for (auto row = start_row; row < end_row; ++row)
                     agg_func->decrease(buf, columns, row, arena.get());
             }
+            ws.materialized_columns.resize(0);
         }
-
-        ws.materialized_columns.resize(0);
     }
 
     // Use decrease interface only when add row number is larger than decrease row number
