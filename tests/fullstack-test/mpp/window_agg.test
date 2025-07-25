@@ -1733,3 +1733,61 @@ mysql> use test; set tidb_enforce_mpp=1; select p, o, v, sum(v) over w as "sum",
 |    6 |    3 |    3 |    9 |     3 |    2 |    4 |
 |    6 |    3 |    4 |    9 |     3 |    2 |    4 |
 +------+------+------+------+-------+------+------+
+
+# Test issue 10270
+mysql> drop table if exists test.t10270;
+mysql> create table test.t10270(id INT auto_increment primary key , c0 datetime);
+mysql> alter table test.t10270 SET TIFLASH REPLICA 1;
+mysql> alter table test.t10270 modify c0 bool;
+mysql> insert into test.t10270(c0) VALUES (true);
+mysql> insert into test.t10270(c0) VALUES (true);
+mysql> insert into test.t10270(c0) VALUES (true);
+mysql> alter table test.t10270 set tiflash replica 1;
+
+func> wait_table test t10270
+
+mysql> use test; set tidb_enforce_mpp=1; select /*+ read_from_storage(tiflash[t10270]) */ min('518:57:14') over (partition by ('-1674028007') between (true) and ('2037-04-25 03:56:51'), (case t10270.c0 when t10270.id then t10270.id when t10270.c0 then t10270.c0 else t10270.id end)) AS wf_0 from t10270;
++-----------+
+| wf_0      |
++-----------+
+| 518:57:14 |
+| 518:57:14 |
+| 518:57:14 |
++-----------+
+
+mysql> use test; set tidb_enforce_mpp=1; select /*+ read_from_storage(tiflash[t10270]) */ max('518:57:14') over (partition by ('-1674028007') between (true) and ('2037-04-25 03:56:51'), (case t10270.c0 when t10270.id then t10270.id when t10270.c0 then t10270.c0 else t10270.id end)) AS wf_0 from t10270;
++-----------+
+| wf_0      |
++-----------+
+| 518:57:14 |
+| 518:57:14 |
+| 518:57:14 |
++-----------+
+
+mysql> use test; set tidb_enforce_mpp=1; select /*+ read_from_storage(tiflash[t10270]) */ count('518:57:14') over (partition by ('-1674028007') between (true) and ('2037-04-25 03:56:51'), (case t10270.c0 when t10270.id then t10270.id when t10270.c0 then t10270.c0 else t10270.id end)) AS wf_0 from t10270;
++------+
+| wf_0 |
++------+
+|    3 |
+|    3 |
+|    3 |
++------+
+
+mysql> use test; set tidb_enforce_mpp=1; select /*+ read_from_storage(tiflash[t10270]) */ sum(2) over (partition by ('-1674028007') between (true) and ('2037-04-25 03:56:51'), (case t10270.c0 when t10270.id then t10270.id when t10270.c0 then t10270.c0 else t10270.id end)) AS wf_0 from t10270;
++------+
+| wf_0 |
++------+
+|    6 |
+|    6 |
+|    6 |
++------+
+
+mysql> use test; set tidb_enforce_mpp=1; select /*+ read_from_storage(tiflash[t10270]) */ avg(3) over (partition by ('-1674028007') between (true) and ('2037-04-25 03:56:51'), (case t10270.c0 when t10270.id then t10270.id when t10270.c0 then t10270.c0 else t10270.id end)) AS wf_0 from t10270;
++--------+
+| wf_0   |
++--------+
+| 3.0000 |
+| 3.0000 |
+| 3.0000 |
++--------+
+
