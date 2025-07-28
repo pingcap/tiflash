@@ -213,7 +213,8 @@ private:
 
                         // Put column pointer into materialized_columns to avoid the release of pointer
                         ws.materialized_columns.push_back(converted);
-                        col = ws.materialized_columns.back().get();
+                        ws.materialized_columns[i] = converted;
+                        col = converted.get();
                     }
 
                     ws.argument_columns[i] = col;
@@ -235,7 +236,6 @@ private:
                 for (auto row = start_row; row < end_row; ++row)
                     agg_func->decrease(buf, columns, row, arena.get());
             }
-            ws.materialized_columns.resize(0);
         }
     }
 
