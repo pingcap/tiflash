@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Columns/IColumn.h>
 #include <Core/Block.h>
 #include <Interpreters/WindowDescription.h>
 #include <WindowFunctions/WindowUtils.h>
@@ -204,7 +205,19 @@ private:
             if (ws.cached_block_number != block_number)
             {
                 for (size_t i = 0; i < ws.arguments.size(); ++i)
-                    ws.argument_columns[i] = block.input_columns[ws.arguments[i]].get();
+                {
+                    const IColumn * col = block.input_columns[ws.arguments[i]].get();
+                    if unlikely (col->isColumnConst())
+                    {
+                        ColumnPtr converted = col->convertToFullColumnIfConst();
+
+                        // Put column pointer into materialized_columns to avoid the release of pointer
+                        ws.materialized_columns[i] = converted;
+                        col = converted.get();
+                    }
+
+                    ws.argument_columns[i] = col;
+                }
                 ws.cached_block_number = block_number;
             }
 
