@@ -59,16 +59,16 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     std::unique_lock<std::mutex> aux_lock(*(this->aux_lock));
     this->total_blocks.fetch_add(1);
     CTEOpStatus ret_status = CTEOpStatus::OK;
+    if unlikely (this->status != CTEPartitionStatus::NORMAL && block.rows() != 0)
+        // Block memory usage will be calculated after the finish of spill
+        this->tmp_blocks.push_back(block);
+
     switch (this->status)
     {
     case CTEPartitionStatus::NEED_SPILL:
-        ret_status = CTEOpStatus::NEED_SPILL;
+        return CTEOpStatus::NEED_SPILL;
     case CTEPartitionStatus::IN_SPILLING:
-        ret_status = CTEOpStatus::WAIT_SPILL;
-        if likely (block.rows() != 0)
-            // Block memory usage will be calculated after the finish of spill
-            this->tmp_blocks.push_back(block);
-        return ret_status;
+        return CTEOpStatus::WAIT_SPILL;
     case CTEPartitionStatus::NORMAL:
         break;
     }
@@ -91,9 +91,10 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
 
 CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomic_size_t & row_num)
 {
+    // TODO remove xzxdebug
     LOG_INFO(
         this->config->log,
-        fmt::format("Partition {} starts cte spill for {}", this->partition_id, this->config->query_id_and_cte_id));
+        fmt::format("xzxdebug Partition {} starts cte spill for {}", this->partition_id, this->config->query_id_and_cte_id));
     std::unique_lock<std::mutex> lock(*(this->mu), std::defer_lock);
     {
         std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
