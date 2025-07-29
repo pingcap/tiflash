@@ -212,6 +212,7 @@ private:
                         ColumnPtr converted = col->convertToFullColumnIfConst();
 
                         // Put column pointer into materialized_columns to avoid the release of pointer
+                        ws.materialized_columns.push_back(converted);
                         ws.materialized_columns[i] = converted;
                         col = converted.get();
                     }
