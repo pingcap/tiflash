@@ -14,7 +14,9 @@
 
 #pragma once
 
+#include <cstddef>
 #include <mutex>
+#include <unordered_map>
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #ifdef __clang__
@@ -368,10 +370,10 @@ public:
         return this->query_id_and_cte_id_for_sink;
     }
 
-    String getQueryIDAndCTEIDForSource()
+    String getQueryIDAndCTEIDForSource(size_t cte_id)
     {
         std::lock_guard<std::mutex> lock(this->cte_mu);
-        return this->query_id_and_cte_id_for_source;
+        return this->query_id_and_cte_id_for_sources[cte_id];
     }
 
     void setQueryIDAndCTEIDForSink(const String & query_id_and_cte_id)
@@ -383,13 +385,10 @@ public:
         this->query_id_and_cte_id_for_sink = query_id_and_cte_id;
     }
 
-    void setQueryIDAndCTEIDForSource(const String & query_id_and_cte_id)
+    void addQueryIDAndCTEIDForSource(size_t cte_id, const String & query_id_and_cte_id)
     {
         std::lock_guard<std::mutex> lock(this->cte_mu);
-
-        // MPP Task has only one CTESource, it's impossible to set query_id_and_cte_id_for_source twice
-        RUNTIME_CHECK(this->query_id_and_cte_id_for_source.empty(), this->query_id_and_cte_id_for_source);
-        this->query_id_and_cte_id_for_source = query_id_and_cte_id;
+        this->query_id_and_cte_id_for_sources.insert(std::make_pair(cte_id, query_id_and_cte_id));
     }
 
     std::shared_ptr<CTE> getCTESink()
@@ -398,22 +397,23 @@ public:
         return this->sink_cte;
     }
 
-    std::shared_ptr<CTE> getCTESource()
+    std::unordered_map<size_t, std::shared_ptr<CTE>> getCTESource()
     {
         std::lock_guard<std::mutex> lock(this->cte_mu);
-        return this->source_cte;
+        return this->source_ctes;
     }
 
     void setCTESink(std::shared_ptr<CTE> & cte)
     {
         std::lock_guard<std::mutex> lock(this->cte_mu);
+        RUNTIME_CHECK(!this->sink_cte);
         this->sink_cte = cte;
     }
 
-    void setCTESource(std::shared_ptr<CTE> & cte)
+    void addCTESource(size_t cte_id, std::shared_ptr<CTE> & cte)
     {
         std::lock_guard<std::mutex> lock(this->cte_mu);
-        this->source_cte = cte;
+        this->source_ctes.insert(std::make_pair(cte_id, cte));
     }
 
 public:
@@ -534,11 +534,11 @@ private:
     String connection_alias;
 
     String query_id_and_cte_id_for_sink;
-    String query_id_and_cte_id_for_source;
+    std::unordered_map<size_t, String> query_id_and_cte_id_for_sources;
 
     std::mutex cte_mu;
     std::shared_ptr<CTE> sink_cte;
-    std::shared_ptr<CTE> source_cte;
+    std::unordered_map<size_t, std::shared_ptr<CTE>> source_ctes;
 };
 
 } // namespace DB

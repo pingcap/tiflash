@@ -203,8 +203,11 @@ void MPPTask::abortCTE(const String & message)
 
     if (this->has_cte_source.load())
     {
-        this->dag_context->getCTESource()->notifyCancel(message);
-        this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSource());
+        for (auto & p : this->dag_context->getCTESource())
+        {
+            p.second->notifyCancel(message);
+            this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSource(p.first));
+        }
     }
 }
 
@@ -355,13 +358,13 @@ void MPPTask::initExchangeReceivers()
                 const auto & cte_source = executor.cte_source();
                 String query_id_and_cte_id
                     = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_source.cte_id());
-                context->getDAGContext()->setQueryIDAndCTEIDForSource(query_id_and_cte_id);
+                context->getDAGContext()->addQueryIDAndCTEIDForSource(cte_source.cte_id(), query_id_and_cte_id);
                 auto cte = context->getCTEManager()->getCTE(
                     query_id_and_cte_id,
                     context->getMaxStreams(),
                     cte_source.cte_sink_num(),
                     cte_source.cte_source_num());
-                context->getDAGContext()->setCTESource(cte);
+                context->getDAGContext()->addCTESource(cte_source.cte_id(), cte);
             }
             return true;
         });

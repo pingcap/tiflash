@@ -46,7 +46,8 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
         schema,
         fine_grained_shuffle,
         log->identifier(),
-        Block(schema));
+        Block(schema),
+        cte_source.cte_id());
 }
 
 void PhysicalCTESource::buildPipelineExecGroupImpl(
@@ -55,8 +56,8 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
     Context & context,
     size_t concurrency)
 {
-    const String & query_id_and_cte_id = context.getDAGContext()->getQueryIDAndCTEIDForSource();
-    auto cte_reader = std::make_shared<CTEReader>(context);
+    const String & query_id_and_cte_id = context.getDAGContext()->getQueryIDAndCTEIDForSource(this->cte_id);
+    auto cte_reader = std::make_shared<CTEReader>(context, this->cte_id);
     for (size_t i = 0; i < concurrency; ++i)
         group_builder.addConcurrency(
             std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, i, schema, query_id_and_cte_id));
