@@ -86,13 +86,13 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
 void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & context)
 {
     // The maximum seconds TiFlash will wait for all current MPP tasks to finish before shutting down
-    static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
-    // The default value of flash.graceful_wait_before_shutdown
-    static constexpr UInt64 DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN = 600;
-    auto graceful_wait_before_shutdown
-        = context->getUsersConfig()->getUInt64(GRACEFUL_WIAT_BEFORE_SHUTDOWN, DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
-    LOG_INFO(log, "Start to wait all MPP tasks to finish, timeout={}s", graceful_wait_before_shutdown);
-    UInt64 graceful_wait_before_shutdown_ms = graceful_wait_before_shutdown * 1000;
+    static constexpr const char * GRACEFUL_WAIT_SHUTDOWN_TIMEOUT = "flash.graceful_wait_shutdown_timeout";
+    // The default value of flash.graceful_wait_shutdown_timeout
+    static constexpr UInt64 DEFAULT_GRACEFUL_WAIT_SHUTDOWN_TIMEOUT = 600;
+    auto graceful_wait_shutdown_timeout
+        = context->getUsersConfig()->getUInt64(GRACEFUL_WAIT_SHUTDOWN_TIMEOUT, DEFAULT_GRACEFUL_WAIT_SHUTDOWN_TIMEOUT);
+    LOG_INFO(log, "Start to wait all MPP tasks to finish, timeout={}s", graceful_wait_shutdown_timeout);
+    UInt64 graceful_wait_shutdown_timeout_ms = graceful_wait_shutdown_timeout * 1000;
     Stopwatch watch;
     // The first sleep before checking to reduce the chance of missing MPP tasks that are still in the process of being dispatched
     std::this_thread::sleep_for(std::chrono::seconds(1));
@@ -115,7 +115,7 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & cont
                 break;
             }
         }
-        if (elapsed_ms >= graceful_wait_before_shutdown_ms)
+        if (elapsed_ms >= graceful_wait_shutdown_timeout_ms)
         {
             LOG_WARNING(log, "Timed out waiting for all MPP tasks to finish after {}ms", elapsed_ms);
             break;
