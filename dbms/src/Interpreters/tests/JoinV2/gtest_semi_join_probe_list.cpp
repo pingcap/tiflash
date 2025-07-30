@@ -37,7 +37,7 @@ try
     std::mt19937 g(rd());
     std::uniform_int_distribution dist;
 
-    size_t n = dist(g) % 1000 + 1000;
+    size_t n = dist(g) % 100000 + 100000;
 
     list.reset(n);
     EXPECT_EQ(list.slotCapacity(), n);
@@ -45,10 +45,18 @@ try
     std::unordered_set<size_t> s1, s2;
     for (size_t i = 0; i < n; ++i)
         s1.insert(i);
-    while (!s1.empty() && !s2.empty())
+    size_t active_slots = 0;
+    while (!s1.empty() || !s2.empty())
     {
-        EXPECT_EQ(list.activeSlots(), s1.size());
-        bool is_append = !s1.empty() && dist(g) % 2 == 0;
+        EXPECT_EQ(list.activeSlots(), active_slots);
+
+        bool is_append;
+        if (s1.empty())
+            is_append = false;
+        else if (s2.empty())
+            is_append = true;
+        else
+            is_append = dist(g) % 2 == 0;
         if (is_append)
         {
             size_t append_idx = *s1.begin();
@@ -56,12 +64,14 @@ try
             s1.erase(append_idx);
             s2.insert(append_idx);
             list.append(append_idx);
+            ++active_slots;
             continue;
         }
         size_t remove_idx = *s2.begin();
         EXPECT_TRUE(list.contains(remove_idx));
         s2.erase(remove_idx);
         list.remove(remove_idx);
+        --active_slots;
     }
     EXPECT_EQ(list.slotCapacity(), n);
     EXPECT_EQ(list.activeSlots(), 0);
