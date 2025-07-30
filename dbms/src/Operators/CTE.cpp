@@ -64,6 +64,7 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
         return CTEOpStatus::SINK_NOT_REGISTERED;
 
     auto status = this->partitions[partition_id]->tryGetBlock(cte_reader_id, block);
+    std::lock_guard<std::mutex> lock(this->mu_test);
     switch (status)
     {
     case CTEOpStatus::OK:
@@ -106,6 +107,7 @@ CTEOpStatus CTE::getBlockFromDisk(size_t cte_reader_id, size_t partition_id, Blo
     }
 
     auto ret = this->partitions[partition_id]->getBlockFromDisk(cte_reader_id, block);
+    std::lock_guard<std::mutex> lock(this->mu_test);
     if (ret == CTEOpStatus::OK && block)
     {
         {

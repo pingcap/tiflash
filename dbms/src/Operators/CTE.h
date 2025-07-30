@@ -51,15 +51,14 @@ public:
             this->partitions.push_back(std::make_shared<CTEPartition>(i));
     }
 
+    // TODO remove, for test
+    std::mutex mu_test;
     std::atomic_size_t total_recv_blocks = 0;
     std::atomic_size_t total_recv_rows = 0;
-
     std::atomic_size_t total_spilled_blocks = 0;
     std::atomic_size_t total_spilled_rows = 0;
-
     std::map<size_t, std::atomic_size_t> total_fetch_blocks;
     std::map<size_t, std::atomic_size_t> total_fetch_rows;
-
     std::map<size_t, std::atomic_size_t> total_fetch_blocks_in_disk;
     std::map<size_t, std::atomic_size_t> total_fetch_rows_in_disk;
 
