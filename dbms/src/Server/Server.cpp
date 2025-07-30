@@ -1021,7 +1021,6 @@ try
 
     if (config().getBool("tici.enable", false))
     {
-        auto config_path = config().getString("tici.config_path", "reader.toml");
         start_reader_server(config_path);
     }
     else
