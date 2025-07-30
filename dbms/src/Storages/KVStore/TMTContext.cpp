@@ -155,6 +155,22 @@ TMTContext::TMTContext(
 {
     startMonitorMPPTaskThread(mpp_task_manager);
     etcd_client = Etcd::Client::create(cluster->pd_client, cluster_config);
+
+    auto [kv, status] = etcd_client.get()->leader("/tici/metaservice/election");
+    if (!status.ok())
+    {
+        LOG_WARNING(
+            Logger::get(),
+            "Failed to get tici meta service leader from etcd, code={} msg={}",
+            magic_enum::enum_name(status.error_code()),
+            status.error_message());
+    }
+    else
+    {
+        LOG_INFO(Logger::get(), "Get tici meta service leader from etcd: {}", kv.value());
+        cluster->shard_cache
+            = std::make_unique<pingcap::kv::ShardCache>(kv.value()); // Use the leader address as shard cache address
+    }
 }
 
 void TMTContext::initS3GCManager(const TiFlashRaftProxyHelper * proxy_helper)
