@@ -14,6 +14,7 @@
 
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/PipelineExecutor.h>
+#include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Pipeline.h>
 #include <Flash/Pipeline/Schedule/Events/Event.h>
 #include <Flash/Planner/PhysicalPlan.h>

@@ -102,20 +102,25 @@ struct MPPGatherId
         : gather_id(gather_id_)
         , query_id(query_ts, local_query_id, server_id, start_ts, resource_group_name, connection_id, connection_alias)
     {}
+
     explicit MPPGatherId(const mpp::TaskMeta & task_meta)
         : gather_id(task_meta.gather_id())
         , query_id(task_meta)
     {}
-    String toString() const
+
+    inline String toStringForQueryID() const
     {
         return fmt::format(
-            "gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}",
-            gather_id,
+            "query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, gather_id: {}",
             query_id.query_ts,
             query_id.local_query_id,
             query_id.server_id,
-            query_id.start_ts);
+            query_id.start_ts,
+            this->gather_id);
     }
+
+    inline String toString() const { return fmt::format("gather_id:{}, {}", gather_id, this->toStringForQueryID()); }
+
     bool hasMeaningfulGatherId() const { return gather_id > 0; }
     bool operator==(const MPPGatherId & rid) const;
 };
@@ -164,6 +169,7 @@ struct MPPTaskId
 
     bool isUnknown() const { return task_id == unknown_task_id; }
 
+    inline String getQueryID() const { return isUnknown() ? "" : gather_id.toStringForQueryID(); }
     String toString() const;
     static const MPPTaskId unknown_mpp_task_id;
     static const MPPQueryId Max_Query_Id;

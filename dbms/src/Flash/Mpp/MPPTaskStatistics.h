@@ -25,7 +25,6 @@
 #include <tipb/select.pb.h>
 
 #include <chrono>
-#include <map>
 
 namespace DB
 {
