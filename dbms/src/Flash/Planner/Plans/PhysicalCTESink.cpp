@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/Plans/PhysicalCTESink.h>
