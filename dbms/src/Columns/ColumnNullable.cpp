@@ -632,10 +632,23 @@ void ColumnNullable::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
-void ColumnNullable::reserve(size_t n)
+size_t ColumnNullable::capacity() const
 {
-    getNestedColumn().reserve(n);
-    getNullMapData().reserve(n);
+    return getNestedColumn().capacity();
+}
+
+void ColumnNullable::reserveWithStrategy(size_t n, IColumn::ReserveStrategy strategy)
+{
+    getNestedColumn().reserveWithStrategy(n, strategy);
+    switch (strategy)
+    {
+    case ReserveStrategy::Default:
+        getNullMapData().reserve(n);
+        break;
+    case ReserveStrategy::ScaleFactor1_5:
+        getNullMapData().reserve_exact(n / 2 * 3);
+        break;
+    }
 }
 
 void ColumnNullable::reserveAlign(size_t n, size_t alignment)
