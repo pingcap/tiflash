@@ -120,24 +120,6 @@ String eliminateTailing(String str)
     if (point_idx == -1)
         return str;
 
-    bool is_all_zero = true;
-    for (int i = 0; i < point_idx + 3; i++)
-    {
-        if (isdigit(str[i]))
-        {
-            if (str[i] == '0')
-                continue;
-            is_all_zero = false;
-            break;
-        }
-    }
-
-    if unlikely (is_all_zero)
-    {
-        if (point_idx == 2)
-            return String(str.c_str() + 1, 4); // Convert -0.00 to 0.00
-    }
-
     if (static_cast<int>(size) > point_idx + 3)
         return String(str.c_str(), point_idx + 3);
     return str;
