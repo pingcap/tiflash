@@ -955,5 +955,49 @@ try
 }
 CATCH
 
+TEST_F(ExecutorWindowAgg, issue10045)
+try
+{
+    Arena arena;
+    auto context = TiFlashTestEnv::getContext();
+
+    auto agg_func = AggregateFunctionFactory::instance().getForWindow(
+        *context,
+        "avg",
+        {std::make_shared<DataTypeNullable>(std::make_shared<DataTypeDecimal32>(5, 0))},
+        {},
+        true);
+    auto return_type = agg_func->getReturnType();
+    AlignedBuffer agg_state;
+    agg_state.reset(agg_func->sizeOfData(), agg_func->alignOfData());
+    agg_func->create(agg_state.data());
+    auto res_col = return_type->createColumn();
+
+    size_t row_num = 10000;
+    String row_value = "10000";
+    std::vector<String> input_vec;
+    std::vector<Int32> null_map;
+    input_vec.reserve(row_num);
+    null_map.reserve(row_num);
+    for (size_t i = 0; i < row_num; i++)
+    {
+        input_vec.push_back(row_value);
+        null_map.push_back(0);
+    }
+    auto col = createNullableColumn<Decimal32>(std::make_tuple(5, 0), input_vec, null_map).column;
+    const IColumn * input_col = &(*col);
+
+    for (size_t row_idx = 0; row_idx < row_num; row_idx++)
+        agg_func->add(agg_state.data(), &input_col, row_idx, &arena);
+
+    agg_func->insertResultInto(agg_state.data(), *res_col, &arena);
+    Field res_field;
+    res_col->get(0, res_field);
+    agg_func->destroy(agg_state.data());
+
+    ASSERT_EQ(res_field.toString(), "Decimal128_10000.0000");
+}
+CATCH
+
 } // namespace tests
 } // namespace DB
