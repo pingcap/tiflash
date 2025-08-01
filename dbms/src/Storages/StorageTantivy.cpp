@@ -84,7 +84,8 @@ void StorageTantivy::read(
         return_columns,
         tici_scan.getQuery(),
         tici_scan.getLimit(),
-        /*read_ts*/ 0)); // TODO: currently, info.mvcc_query_info is null.
+        /*read_ts*/ 0,
+        tici_scan.getMatchExpr()));
 }
 
 void StorageTantivy::splitRemoteReadAndLocalRead()

@@ -32,7 +32,8 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
     const NamesAndTypes & return_columns,
     const String & query_json_str,
     const UInt64 & limit,
-    const UInt64 & read_ts)
+    const UInt64 & read_ts,
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & expr)
     : SourceOp(exec_context_, req_id)
 {
     setHeader(Block(return_columns));
@@ -46,7 +47,8 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
         return_columns,
         query_json_str,
         limit,
-        read_ts);
+        read_ts,
+        expr);
 }
 
 String TantivyReaderSourceOp::getName() const

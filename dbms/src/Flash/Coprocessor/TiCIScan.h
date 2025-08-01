@@ -38,6 +38,11 @@ public:
 
     void constructTiCIScanForRemoteRead(tipb::IndexScan * tipb_index_scan) const;
 
+    const ::google::protobuf::RepeatedPtrField<::tipb::Expr> & getMatchExpr() const
+    {
+        return tici_scan->idx_scan().fts_query_info().match_expr();
+    }
+
 private:
     const tipb::Executor * tici_scan;
     [[maybe_unused]] String executor_id;
