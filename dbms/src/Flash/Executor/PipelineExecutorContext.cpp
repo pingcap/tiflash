@@ -190,7 +190,10 @@ void PipelineExecutorContext::cancel()
         }
         cancelResultQueueIfNeed();
         if likely (TaskScheduler::instance && !query_id.empty())
-            TaskScheduler::instance->cancel(query_id, resource_group_name);
+            TaskScheduler::instance->cancel(TaskCancelInfo{
+                .query_id = query_id,
+                .keyspace_id = getKeyspaceID(),
+                .resource_group_name = resource_group_name});
     }
 }
 

@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
@@ -56,6 +57,7 @@ struct ExtraRemoteSegmentInfo
     DisaggTaskId snapshot_id;
     std::vector<UInt64> remote_page_ids;
     std::vector<size_t> remote_page_sizes;
+    ConnectionProfileInfo connection_profile_info;
 };
 
 struct SegmentReadTask
@@ -87,7 +89,9 @@ public:
         const String & store_address,
         KeyspaceID keyspace_id,
         TableID physical_table_id,
-        ColumnID pk_col_id);
+        ColumnID pk_col_id,
+        bool is_same_zone,
+        size_t establish_disagg_task_resp_size);
 
     ~SegmentReadTask();
 

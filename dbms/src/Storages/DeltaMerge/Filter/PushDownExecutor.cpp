@@ -229,4 +229,20 @@ PushDownExecutorPtr PushDownExecutor::build(
         context,
         tracing_logger);
 }
+
+Poco::JSON::Object::Ptr PushDownExecutor::toJSONObject() const
+{
+    Poco::JSON::Object::Ptr json = new Poco::JSON::Object();
+    if (rs_operator)
+    {
+        json->set("rs_operator", rs_operator->toJSONObject());
+    }
+    // ann_query_info usually print too large body, do not print it by default
+    // if (ann_query_info)
+    // {
+    //     json->set("ann_query_info", ann_query_info->ShortDebugString());
+    // }
+    return json;
+}
+
 } // namespace DB::DM

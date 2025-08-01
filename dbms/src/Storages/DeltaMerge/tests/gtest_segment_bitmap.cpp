@@ -1691,4 +1691,26 @@ TEST_P(SegmentBitmapFilterTest, Big_NoIntersection_Tiny)
         .expected_bitmap = String(30, '1'),
     });
 }
+
+TEST_P(SegmentBitmapFilterTest, MultiVersionWithDeleteMark)
+{
+    writeSegmentGeneric("d_mem:[0, 100):ts_1|d_mem_del:[0, 100):ts_10|merge_delta:pack_size_10");
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    ASSERT_EQ(snap->delta->getColumnFileCount(), 0);
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 1,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 5,
+    });
+    checkBitmap(CheckBitmapOptions{
+        .seg_id = SEG_ID,
+        .caller_line = __LINE__,
+        .read_ts = 10,
+    });
+}
 } // namespace DB::DM::tests

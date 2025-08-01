@@ -607,6 +607,7 @@ try
 }
 CATCH
 
+
 class SegmentEnableLogicalSplitTest : public SegmentOperationTest
 {
 protected:

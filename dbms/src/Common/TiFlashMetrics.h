@@ -353,6 +353,13 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_fg_write_alloc_bytes, {"type", "fg_write_alloc_bytes"}),                                                               \
       F(type_bg_write_req_bytes, {"type", "bg_write_req_bytes"}),                                                                   \
       F(type_bg_write_alloc_bytes, {"type", "bg_write_alloc_bytes"}))                                                               \
+    M(tiflash_storage_io_limiter_curr,                                                                                              \
+      "Current limit bytes per second of Storage I/O limiter",                                                                      \
+      Gauge,                                                                                                                        \
+      F(type_fg_read_bytes, {"type", "fg_read_bytes"}),                                                                             \
+      F(type_bg_read_bytes, {"type", "bg_read_bytes"}),                                                                             \
+      F(type_fg_write_bytes, {"type", "fg_write_bytes"}),                                                                           \
+      F(type_bg_write_bytes, {"type", "bg_write_bytes"}))                                                                           \
     M(tiflash_storage_rough_set_filter_rate,                                                                                        \
       "Bucketed histogram of rough set filter rate",                                                                                \
       Histogram,                                                                                                                    \
@@ -405,6 +412,7 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_failed_repeated, {{"type", "failed_repeated"}}),                                                                       \
       F(type_failed_build_chkpt, {{"type", "failed_build_chkpt"}}),                                                                 \
       F(type_reuse_chkpt_cache, {{"type", "reuse_chkpt_cache"}}),                                                                   \
+      F(type_failed_query_state, {{"type", "failed_query_state"}}),                                                                 \
       F(type_restore, {{"type", "restore"}}),                                                                                       \
       F(type_succeed, {{"type", "succeed"}}))                                                                                       \
     M(tiflash_fap_task_state,                                                                                                       \
@@ -850,6 +858,9 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_remaining_tokens, {"type", "remaining_tokens"}),                                                                       \
       F(type_avg_speed, {"type", "avg_speed"}),                                                                                     \
       F(type_total_consumption, {"type", "total_consumption"}),                                                                     \
+      F(type_low_token_threshold, {"type", "low_token_threshold"}),                                                                 \
+      F(type_request_gac_count, {"type", "request_gac_count"}),                                                                     \
+      F(type_enter_degrade_mode, {"type", "enter_degrade_mode"}),                                                                   \
       F(type_bucket_fill_rate, {"type", "bucket_fill_rate"}),                                                                       \
       F(type_bucket_capacity, {"type", "bucket_capacity"}),                                                                         \
       F(type_compute_ru_consumption, {"type", "compute_ru_consumption"}),                                                           \

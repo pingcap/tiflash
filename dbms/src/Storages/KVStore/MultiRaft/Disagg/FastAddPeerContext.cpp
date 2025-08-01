@@ -158,17 +158,43 @@ void FastAddPeerContext::cleanTask(
     bool in_memory = false;
     // TODO(fap) We use a dedicated queue and thread to clean, if this costs much.
     // However, we have to make sure the clean task will not override if a new fap snapshot of the same region comes later.
+    CheckpointIngestInfoPtr maybe_checkpoint = nullptr;
     {
         std::scoped_lock<std::mutex> lock(ingest_info_mu);
         auto iter = checkpoint_ingest_info_map.find(region_id);
         if (iter != checkpoint_ingest_info_map.end())
         {
             in_memory = true;
+            maybe_checkpoint = iter->second;
             checkpoint_ingest_info_map.erase(iter);
         }
     }
+    LOG_INFO(log, "clear FAP task region_id={} reason={}", region_id, magic_enum::enum_name(reason));
     if (reason == CheckpointIngestInfo::CleanReason::Success)
-        CheckpointIngestInfo::cleanOnSuccess(tmt, region_id);
+    {
+        try
+        {
+            if (!maybe_checkpoint)
+            {
+                RUNTIME_CHECK(proxy_helper != nullptr);
+                maybe_checkpoint = CheckpointIngestInfo::restore(tmt, proxy_helper, region_id, 0);
+            }
+            if (maybe_checkpoint)
+            {
+                maybe_checkpoint->cleanOnSuccess(tmt, region_id);
+            }
+            else
+            {
+                // The snapshot is already applied, it is consistent if we can't read any CheckpointIngestInfo.
+                LOG_INFO(log, "Can't restore CheckpointIngestInfo when cleanOnSuccess region_id={}", region_id);
+            }
+        }
+        catch (...)
+        {
+            // We neglect the exception here to prevent crash at FFI boundary.
+            tryLogCurrentException(log, __PRETTY_FUNCTION__);
+        }
+    }
     else
     {
         RUNTIME_CHECK(proxy_helper != nullptr);

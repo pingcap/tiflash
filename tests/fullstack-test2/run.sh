@@ -21,29 +21,36 @@ set_branch
 set -xe
 
 check_env
+check_docker_compose
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
+    echo "Skip this fullstack test on next-gen TiFlash"
+    exit 0
+fi
+
+# classic TiFlash
+echo "Running fullstack test on classic TiFlash"
+
+# clean up previous docker instances, data and log
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
 # FIXME: now vector does not support run with encryption-at-rest enabled
-docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml up -d
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml up -d
 wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test-index'
-
-docker-compose -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml down
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test-index'
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-encrypt.yaml down
 clean_data_log
 
 
-docker-compose -f cluster.yaml -f tiflash-dt.yaml up -d
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml up -d
 wait_env
-docker-compose -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test2 true && ./run-test.sh fullstack-test-dt'
-
-docker-compose -f cluster.yaml -f tiflash-dt.yaml down
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test2 true'
+${COMPOSE} -f cluster.yaml -f tiflash-dt.yaml down
 clean_data_log
 
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml up -d
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml up -d
 wait_env
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
-
-docker-compose -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml exec -T tiflash0 bash -c 'cd /tests ; ./run-test.sh fullstack-test/mpp'
+${COMPOSE} -f cluster.yaml -f tiflash-dt-disable-local-tunnel.yaml down
 clean_data_log

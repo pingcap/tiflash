@@ -14,6 +14,7 @@
 
 #include <Common/BackgroundTask.h>
 #include <Common/MemoryAllocTrace.h>
+#include <Common/MemoryTracker.h>
 
 #include <fstream>
 
@@ -63,7 +64,11 @@ void CollectProcInfoBackgroundTask::memCheckJob()
     {
         while (!end_syn)
         {
-            std::tie(real_rss, proc_num_threads, proc_virt_size) = process_mem_usage();
+            // Update the memory usage of the current process. Defined in Common/MemoryTracker.cpp
+            auto res = get_process_mem_usage();
+            real_rss = res.resident_bytes;
+            proc_num_threads = res.cur_proc_num_threads;
+            proc_virt_size = res.cur_virt_bytes;
             baseline_of_query_mem_tracker = root_of_query_mem_trackers->get();
             usleep(100000); // sleep 100ms
         }

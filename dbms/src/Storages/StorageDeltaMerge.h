@@ -140,6 +140,8 @@ public:
         const CheckpointIngestInfoPtr & checkpoint_info,
         const Settings & settings);
 
+    UInt64 removeSegmentsFromCheckpointInfo(const CheckpointIngestInfo & checkpoint_info, const Settings & settings);
+
     UInt64 onSyncGc(Int64, const DM::GCOptions &) override;
 
     void rename(
@@ -273,6 +275,9 @@ private:
         DM::ColumnDefine handle_column_define;
     };
 
+    // Keep track of the number of StorageDeltaMerge in memory.
+    CurrentMetrics::Increment holder_counter;
+
     mutable std::mutex store_mutex;
 
     std::unique_ptr<TableColumnInfo> table_column_info; // After create DeltaMergeStore object, it is deprecated.
@@ -301,12 +306,11 @@ private:
     // Used to allocate new column-id when this table is NOT synced from TiDB
     ColumnID max_column_id_used;
 
-    std::atomic<bool> shutdown_called{false};
-
     // TODO: remove the following two members, which are only used for debug from ch-client.
     Strings pk_column_names;
     std::atomic<UInt64> next_version = 1;
 
+    std::atomic<bool> shutdown_called{false};
     bool is_common_handle = false;
     bool pk_is_handle = false;
 

@@ -1,4 +1,4 @@
-# Copyright 2023 PingCAP, Inc.
+# Copyright 2025 PingCAP, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -12,21 +12,21 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-version: '2.3'
+[storage]
+# No space is reserved at all for testing
+reserve-space = "0"
+# Enable keyspace and ttl for next-gen
+api-version = 2
+enable-ttl = true
 
-services:
-  # tics0 container is for tests under delta-merge-test directory
-  tics0:
-    image: hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028
-    volumes:
-      - ./config/tics_dt.toml:/config.toml:ro
-      - ./data/tiflash:/tmp/tiflash/data
-      - ./log/tiflash:/tmp/tiflash/log
-      - ..:/tests
-      - ../docker/_env.sh:/tests/_env.sh
-      - ../.build/tiflash:/tiflash
-    entrypoint:
-      - /tiflash/tiflash
-      - server
-      - --config-file
-      - /config.toml
+[raftstore]
+capacity = "100GB"
+
+# object storage for next-gen
+[dfs]
+prefix = "tikv"
+s3-endpoint = "http://minio0:9000"
+s3-key-id = "minioadmin"
+s3-secret-key = "minioadmin"
+s3-bucket = "tiflash-test"
+s3-region = "local"
