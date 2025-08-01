@@ -28,9 +28,7 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
     const Int64 & table_id,
     const Int64 & index_id,
     const ShardInfoList & query_shard_infos,
-    const NamesAndTypes & query_columns,
     const NamesAndTypes & return_columns,
-    const String & query_json_str,
     const UInt64 & limit,
     const UInt64 & read_ts,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & expr)
@@ -38,17 +36,8 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
 {
     setHeader(Block(return_columns));
 
-    input = std::make_shared<TS::TantivyInputStream>(
-        log,
-        table_id,
-        index_id,
-        query_shard_infos,
-        query_columns,
-        return_columns,
-        query_json_str,
-        limit,
-        read_ts,
-        expr);
+    input = std::make_shared<
+        TS::TantivyInputStream>(log, table_id, index_id, query_shard_infos, return_columns, limit, read_ts, expr);
 }
 
 String TantivyReaderSourceOp::getName() const

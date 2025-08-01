@@ -27,12 +27,10 @@ public:
     TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id_, const DAGContext & dag_context);
     explicit TiCIScan(const tipb::Executor * tici_scan_);
 
-    const TiDB::ColumnInfos & getQueryColumns() const { return query_columns; }
     const TiDB::ColumnInfos & getReturnColumns() const { return return_columns; }
     const TableShardInfos & getShardInfos() const { return shard_infos; }
     const int & getTableId() const { return table_id; }
     const int & getIndexId() const { return index_id; }
-    const std::string & getQuery() const { return query_json_str; }
     const int & getLimit() const { return limit; }
     const tipb::Executor * getTiCIScan() const { return tici_scan; }
 
@@ -49,10 +47,8 @@ private:
     const int table_id;
     const int index_id;
     TiDB::ColumnInfos return_columns;
-    TiDB::ColumnInfos query_columns;
     [[maybe_unused]] tipb::FTSQueryType query_type;
     const TableShardInfos shard_infos;
-    std::string query_json_str;
     const int limit;
 };
 } // namespace DB

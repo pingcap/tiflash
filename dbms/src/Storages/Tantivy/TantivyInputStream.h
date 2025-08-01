@@ -40,9 +40,7 @@ public:
         Int64 table_id_,
         Int64 index_id_,
         ShardInfoList query_shard_infos_,
-        NamesAndTypes query_columns_,
         NamesAndTypes return_columns_,
-        String query_json_str_,
         UInt64 limit_,
         UInt64 read_ts_,
         google::protobuf::RepeatedPtrField<tipb::Expr> match_expr_)
@@ -50,9 +48,7 @@ public:
         , table_id(table_id_)
         , index_id(index_id_)
         , query_shard_infos(query_shard_infos_)
-        , query_columns(query_columns_)
         , return_columns(return_columns_)
-        , query_json_str(query_json_str_)
         , limit(limit_)
         , read_ts(read_ts_)
         , match_expr(match_expr_)
@@ -84,7 +80,6 @@ public:
 protected:
     Block readFromS3(size_t processing)
     {
-        auto query_fields = getFields(query_columns);
         auto return_fields = getFields(return_columns);
         auto & shard_info = query_shard_infos[processing];
         LOG_INFO(log, "Processing shard: {}, shard info: {}", processing, shard_info.toString());
@@ -100,7 +95,6 @@ protected:
                 .shard_epoch = shard_info.shard_epoch,
             },
             key_ranges,
-            query_fields,
             return_fields,
             expr,
             search_param,
@@ -158,9 +152,7 @@ private:
     Int64 table_id;
     Int64 index_id;
     ShardInfoList query_shard_infos;
-    NamesAndTypes query_columns;
     NamesAndTypes return_columns;
-    String query_json_str;
     UInt64 limit;
     UInt64 read_ts;
     const google::protobuf::RepeatedPtrField<tipb::Expr> match_expr;
