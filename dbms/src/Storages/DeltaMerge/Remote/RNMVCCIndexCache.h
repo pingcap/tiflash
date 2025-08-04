@@ -19,6 +19,7 @@
 #include <Storages/DeltaMerge/VersionChain/VersionChain_fwd.h>
 #include <Storages/KVStore/Types.h>
 #include <common/types.h>
+#include <fmt/format.h>
 
 #include <boost/noncopyable.hpp>
 
@@ -56,6 +57,20 @@ public:
             return store_id == other.store_id && keyspace_id == other.keyspace_id && table_id == other.table_id
                 && segment_id == other.segment_id && segment_epoch == other.segment_epoch
                 && delta_index_epoch == other.delta_index_epoch && is_version_chain == other.is_version_chain;
+        }
+
+        String toString() const
+        {
+            return fmt::format(
+                "<store_id={}, table_id={}, segment_id={}, segment_epoch={}, "
+                "delta_index_epoch={}, keyspace={}, is_version_chain={}>",
+                store_id,
+                table_id,
+                segment_id,
+                segment_epoch,
+                delta_index_epoch,
+                keyspace_id,
+                is_version_chain);
         }
     };
 
