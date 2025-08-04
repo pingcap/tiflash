@@ -224,7 +224,6 @@ target_link_libraries (dbms
     absl::synchronization
     tiflash_contrib::aws_s3
     tiflash_vector_search
-    clara_shared
 
     etcdpb
     tiflash_parsers
@@ -239,6 +238,10 @@ target_link_libraries (dbms
     PSCheckpointProto
     kvstore
 )
+
+if (ENABLE_CLARA)
+    target_link_libraries(dbms clara_shared)
+endif ()
 
 # always add GmSSL include dir to the include path for static analysis
 target_include_directories(dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
@@ -374,7 +377,7 @@ if (ENABLE_TESTS)
                 DESTINATION ".")
     endif ()
 
-    if (USE_INTERNAL_LIBCLARA)
+    if (ENABLE_CLARA AND USE_INTERNAL_LIBCLARA)
         install (TARGETS clara_shared
                 COMPONENT tiflash-gtest
                 DESTINATION ".")
@@ -383,7 +386,9 @@ if (ENABLE_TESTS)
     set_target_properties(gtests_dbms PROPERTIES BUILD_RPATH "$ORIGIN/")
     set_target_properties(gtests_dbms PROPERTIES INSTALL_RPATH "$ORIGIN/")
 
-    install (SCRIPT ${TiFlash_SOURCE_DIR}/libs/libclara-cmake/linux_post_install.cmake COMPONENT tiflash-gtest)
+    if (ENABLE_CLARA)
+        install (SCRIPT ${TiFlash_SOURCE_DIR}/libs/libclara-cmake/linux_post_install.cmake COMPONENT tiflash-gtest)
+    endif ()
 
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)

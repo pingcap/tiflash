@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <Common/config.h>
+
+#if ENABLE_CLARA
 #include <Storages/DeltaMerge/Index/FullTextIndex/Perf_fwd.h>
 #include <common/types.h>
 
@@ -61,3 +64,4 @@ struct FullTextIndexPerf
 };
 
 } // namespace DB::DM
+#endif

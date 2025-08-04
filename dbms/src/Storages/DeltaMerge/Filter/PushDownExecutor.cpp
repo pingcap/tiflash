@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -21,13 +23,16 @@
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/SelectQueryInfo.h>
 #include <TiDB/Decode/TypeMapping.h>
+#include <tipb/executor.pb.h>
 
 namespace DB::DM
 {
 PushDownExecutorPtr PushDownExecutor::build(
     const RSOperatorPtr & rs_operator,
     const ANNQueryInfoPtr & ann_query_info,
+#if ENABLE_CLARA
     const FTSQueryInfoPtr & fts_query_info,
+#endif
     const TiDB::ColumnInfos & table_scan_column_info,
     const google::protobuf::RepeatedPtrField<tipb::Expr> & pushed_down_filters,
     const ColumnDefines & columns_to_read,
@@ -44,7 +49,13 @@ PushDownExecutorPtr PushDownExecutor::build(
     if (pushed_down_filters.empty())
     {
         LOG_DEBUG(tracing_logger, "Push down filter is empty");
-        return std::make_shared<PushDownExecutor>(rs_operator, ann_query_info, fts_query_info, column_range);
+        return std::make_shared<PushDownExecutor>(
+            rs_operator,
+            ann_query_info,
+#if ENABLE_CLARA
+            fts_query_info,
+#endif
+            column_range);
     }
     std::unordered_map<ColumnID, ColumnDefine> columns_to_read_map;
     for (const auto & column : columns_to_read)
@@ -160,7 +171,9 @@ PushDownExecutorPtr PushDownExecutor::build(
     return std::make_shared<PushDownExecutor>(
         rs_operator,
         ann_query_info,
+#if ENABLE_CLARA
         fts_query_info,
+#endif
         before_where,
         project_after_where,
         filter_columns,
@@ -196,9 +209,14 @@ PushDownExecutorPtr PushDownExecutor::build(
     ANNQueryInfoPtr ann_query_info = nullptr;
     if (dag_query->ann_query_info.query_type() != tipb::ANNQueryType::InvalidQueryType)
         ann_query_info = std::make_shared<tipb::ANNQueryInfo>(dag_query->ann_query_info);
+#if ENABLE_CLARA
     FTSQueryInfoPtr fts_query_info = nullptr;
     if (dag_query->fts_query_info.query_type() != tipb::FTSQueryType::FTSQueryTypeInvalid)
         fts_query_info = std::make_shared<tipb::FTSQueryInfo>(dag_query->fts_query_info);
+#else
+    if (dag_query->fts_query_info.query_type() != tipb::FTSQueryType::FTSQueryTypeInvalid)
+        throw Exception("FTS query is not supported", ErrorCodes::NOT_IMPLEMENTED);
+#endif
     // build push down filter
     const auto & pushed_down_filters = dag_query->pushed_down_filters;
     if (unlikely(context.getSettingsRef().force_push_down_all_filters_to_scan) && !dag_query->filters.empty())
@@ -210,7 +228,9 @@ PushDownExecutorPtr PushDownExecutor::build(
         return PushDownExecutor::build(
             rs_operator,
             ann_query_info,
+#if ENABLE_CLARA
             fts_query_info,
+#endif
             columns_to_read_info,
             merged_filters,
             columns_to_read,
@@ -221,7 +241,9 @@ PushDownExecutorPtr PushDownExecutor::build(
     return PushDownExecutor::build(
         rs_operator,
         ann_query_info,
+#if ENABLE_CLARA
         fts_query_info,
+#endif
         columns_to_read_info,
         pushed_down_filters,
         columns_to_read,
