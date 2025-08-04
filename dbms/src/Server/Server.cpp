@@ -879,6 +879,7 @@ try
             settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity));
     }
 
+    
     /// Initialize main config reloader.
     auto main_config_reloader = std::make_unique<ConfigReloader>(
         config_path,
