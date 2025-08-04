@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Interpreters/Context_fwd.h>
 #include <Interpreters/Settings.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -122,11 +123,13 @@ public:
         return *this;
     }
 
+#if ENABLE_CLARA
     DMFileBlockInputStreamBuilder & setFtsIndexQuery(const FullTextIndexStreamCtxPtr & ctx)
     {
         fts_index_ctx = ctx;
         return *this;
     }
+#endif
 
     DMFileBlockInputStreamBuilder & setReadPacks(const IdSetPtr & read_packs_)
     {
@@ -201,12 +204,14 @@ private:
         const RowKeyRanges & rowkey_ranges,
         const ScanContextPtr & scan_context);
 
+#if ENABLE_CLARA
     /// The returned stream should be plugged into a FullTextIndexInputStream. Plug to somewhere else will not work.
     SkippableBlockInputStreamPtr buildForFullTextIndex(
         const DMFilePtr & dmfile,
         const ColumnDefines & read_columns,
         const RowKeyRanges & rowkey_ranges,
         const ScanContextPtr & scan_context);
+#endif
 
 private:
     // These methods are called by the ctor
@@ -253,7 +258,9 @@ private:
     /// If set, will *try* to build a VectorIndexDMFileInputStream
     /// instead of a normal DMFileBlockInputStream.
     VectorIndexStreamCtxPtr vec_index_ctx = nullptr;
+#if ENABLE_CLARA
     FullTextIndexStreamCtxPtr fts_index_ctx = nullptr;
+#endif
 
     // Note: column_cache_long_term is currently only filled when performing Vector Search.
     ColumnCacheLongTermPtr column_cache_long_term = nullptr;

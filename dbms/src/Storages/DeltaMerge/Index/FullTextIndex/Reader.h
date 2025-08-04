@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <Common/config.h>
+
+#if ENABLE_CLARA
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilterView.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Perf_fwd.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
@@ -60,3 +63,4 @@ private:
 };
 
 } // namespace DB::DM
+#endif

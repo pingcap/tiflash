@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
@@ -776,6 +777,7 @@ public:
         UInt64 start_ts,
         size_t expected_block_size,
         ReadTag read_tag);
+#if ENABLE_CLARA
     static BlockInputStreamPtr getConcatFullTextIndexBlockInputStream(
         BitmapFilterPtr bitmap_filter,
         const SegmentSnapshotPtr & segment_snap,
@@ -787,6 +789,7 @@ public:
         UInt64 start_ts,
         size_t expected_block_size,
         ReadTag read_tag);
+#endif
     SkippableBlockInputStreamPtr getConcatSkippableBlockInputStream(
         const SegmentSnapshotPtr & segment_snap,
         const DMContext & dm_context,
