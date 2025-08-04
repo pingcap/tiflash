@@ -62,17 +62,9 @@
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
-<<<<<<< HEAD
-=======
 #if ENABLE_CLARA
 #include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
 #endif
-
-namespace CurrentMetrics
-{
-extern const Metric DT_NumStorageDeltaMerge;
-} // namespace CurrentMetrics
->>>>>>> fc932c9f0d (Storages: Deprecated libclara for normal build (#10325))
 
 namespace DB
 {
