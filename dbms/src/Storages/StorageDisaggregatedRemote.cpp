@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -552,14 +553,18 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     DM::ANNQueryInfoPtr ann_query_info = nullptr;
     if (table_scan.getANNQueryInfo().query_type() != tipb::ANNQueryType::InvalidQueryType)
         ann_query_info = std::make_shared<tipb::ANNQueryInfo>(table_scan.getANNQueryInfo());
+#if ENABLE_CLARA
     DM::FTSQueryInfoPtr fts_query_info = nullptr;
     if (table_scan.getFTSQueryInfo().query_type() != tipb::FTSQueryType::FTSQueryTypeInvalid)
         fts_query_info = std::make_shared<tipb::FTSQueryInfo>(table_scan.getFTSQueryInfo());
+#endif
     // build push down executor
     auto push_down_executor = DM::PushDownExecutor::build(
         rs_operator,
         ann_query_info,
+#if ENABLE_CLARA
         fts_query_info,
+#endif
         table_scan.getColumns(),
         table_scan.getPushedDownFilters(),
         *column_defines,

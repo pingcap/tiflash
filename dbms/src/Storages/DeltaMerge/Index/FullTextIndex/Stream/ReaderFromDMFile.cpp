@@ -11,7 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Common/config.h>
 
+#if ENABLE_CLARA
 #include <Common/Exception.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -118,3 +120,4 @@ FullTextIndexReaderPtr FullTextIndexReaderFromDMFile::load(
 }
 
 } // namespace DB::DM
+#endif

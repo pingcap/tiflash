@@ -44,6 +44,8 @@ include (cmake/utils.cmake)
 
 option(ENABLE_PCH "Enable `Precompiled header`" OFF)
 
+option(ENABLE_CLARA "Enable `Clara` library" OFF)
+
 include (cmake/find_ccache.cmake)
 
 # Write compile_commands.json
@@ -312,7 +314,9 @@ include (cmake/find_tipb.cmake)
 include (cmake/find_curl.cmake)
 include (cmake/find_prometheus.cmake)
 include (cmake/find_tiflash_proxy.cmake)
-include (cmake/find_libclara.cmake)
+if (ENABLE_CLARA)
+    include (cmake/find_libclara.cmake)
+endif ()
 include (cmake/find_xxhash.cmake)
 
 if (OS_LINUX AND ARCH_AMD64 AND TIFLASH_ENABLE_AVX512_SUPPORT)
