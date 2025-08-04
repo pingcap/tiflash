@@ -63,7 +63,7 @@ public:
         {
             return fmt::format(
                 "<store_id={}, table_id={}, segment_id={}, segment_epoch={}, "
-                "delta_index_epoch={}, keyspace_id={}, is_version_chain={}>",
+                "delta_index_epoch={}, keyspace={}, is_version_chain={}>",
                 store_id,
                 table_id,
                 segment_id,
