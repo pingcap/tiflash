@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Common/nocopyable.h>
 #include <Core/Block.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
@@ -22,7 +23,6 @@
 #include <Storages/DeltaMerge/DeltaIndex/DeltaTree.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader_fwd.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
@@ -32,6 +32,11 @@
 #include <Storages/DeltaMerge/VersionChain/VersionChain.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointInfo.h>
 #include <Storages/KVStore/MultiRaft/Disagg/fast_add_peer.pb.h>
+
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
+#endif
+
 namespace DB
 {
 struct GeneralCancelHandle;
@@ -776,6 +781,7 @@ public:
         UInt64 start_ts,
         size_t expected_block_size,
         ReadTag read_tag);
+#if ENABLE_CLARA
     static BlockInputStreamPtr getConcatFullTextIndexBlockInputStream(
         BitmapFilterPtr bitmap_filter,
         const SegmentSnapshotPtr & segment_snap,
@@ -787,6 +793,7 @@ public:
         UInt64 start_ts,
         size_t expected_block_size,
         ReadTag read_tag);
+#endif
     SkippableBlockInputStreamPtr getConcatSkippableBlockInputStream(
         const SegmentSnapshotPtr & segment_snap,
         const DMContext & dm_context,
