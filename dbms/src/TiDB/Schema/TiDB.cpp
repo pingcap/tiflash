@@ -15,7 +15,7 @@
 #include <Common/Decimal.h>
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
-#include <Common/config.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Core/Types.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/FieldToDataType.h>
