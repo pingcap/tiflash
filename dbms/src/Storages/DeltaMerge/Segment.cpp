@@ -39,9 +39,6 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/ColumnFileInputStream.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/InputStream.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromSegment.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/ColumnFileInputStream.h>
@@ -81,6 +78,11 @@
 #include <ext/scope_guard.h>
 #include <memory>
 
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/ColumnFileInputStream.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/InputStream.h>
+#endif
 
 namespace ProfileEvents
 {

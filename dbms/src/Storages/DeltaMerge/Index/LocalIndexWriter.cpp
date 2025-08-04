@@ -14,13 +14,15 @@
 
 #include <Common/config.h> // For ENABLE_CLARA
 #include <Poco/File.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Writer.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Writer.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/LocalIndexWriter.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Writer.h>
 #include <TiDB/Schema/TiDB.h>
 
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Writer.h>
+#endif
 
 namespace DB::DM
 {

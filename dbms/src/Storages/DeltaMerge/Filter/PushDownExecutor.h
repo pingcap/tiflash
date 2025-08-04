@@ -27,6 +27,7 @@
 #if ENABLE_CLARA
 #include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
 #endif
+
 namespace DB
 {
 struct SelectQueryInfo;

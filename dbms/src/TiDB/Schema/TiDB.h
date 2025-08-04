@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Core/Field.h>
 #include <Core/Types.h>
 #include <IO/ReadHelpers.h>
@@ -277,7 +278,9 @@ struct IndexInfo
 
     VectorIndexDefinitionPtr vector_index = nullptr;
     InvertedIndexDefinitionPtr inverted_index = nullptr;
+#if ENABLE_CLARA
     FullTextIndexDefinitionPtr full_text_index = nullptr;
+#endif
 
     ColumnarIndexKind columnarIndexKind() const
     {
@@ -285,12 +288,21 @@ struct IndexInfo
             return ColumnarIndexKind::Vector;
         if (inverted_index)
             return ColumnarIndexKind::Inverted;
+#if ENABLE_CLARA
         if (full_text_index)
             return ColumnarIndexKind::FullText;
+#endif
         RUNTIME_CHECK(false);
     }
 
-    bool isColumnarIndex() const { return vector_index || inverted_index || full_text_index; }
+    bool isColumnarIndex() const
+    {
+        return vector_index || inverted_index
+#if ENABLE_CLARA
+            || full_text_index
+#endif
+            ;
+    }
 };
 
 struct TableInfo

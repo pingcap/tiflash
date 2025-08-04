@@ -15,11 +15,6 @@
 #include <Common/config.h> // For ENABLE_CLARA
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Perf.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Reader.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/BruteScoreInputStream.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/DMFileInputStream.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
@@ -28,6 +23,13 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Perf.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Reader.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/BruteScoreInputStream.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/DMFileInputStream.h>
+#endif
 namespace DB::DM
 {
 

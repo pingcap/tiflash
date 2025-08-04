@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/Types.h>
@@ -182,8 +183,10 @@ LocalIndexInfosChangeset generateLocalIndexInfos(
                 // create a new index
                 if (idx.columnarIndexKind() == TiDB::ColumnarIndexKind::Vector)
                     new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.vector_index));
+#if ENABLE_CLARA
                 else if (idx.columnarIndexKind() == TiDB::ColumnarIndexKind::FullText)
                     new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.full_text_index));
+#endif
                 else if (idx.columnarIndexKind() == TiDB::ColumnarIndexKind::Inverted)
                     new_index_infos->emplace_back(LocalIndexInfo(idx.id, column_id, idx.inverted_index));
                 newly_added.emplace_back(idx.id);

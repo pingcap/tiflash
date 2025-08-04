@@ -14,10 +14,13 @@
 
 #include <Common/config.h> // For ENABLE_CLARA
 #include <Storages/DeltaMerge/File/ReadBlockInfo.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/IProvideFullTextIndex.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/IProvideVectorIndex.h>
 
 #include <span>
+
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/IProvideFullTextIndex.h>
+#endif
 
 namespace DB::DM
 {
