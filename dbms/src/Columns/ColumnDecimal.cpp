@@ -765,6 +765,20 @@ MutableColumnPtr ColumnDecimal<T>::cloneResized(size_t size) const
 }
 
 template <typename T>
+void ColumnDecimal<T>::reserveWithStrategy(size_t n, IColumn::ReserveStrategy strategy)
+{
+    switch (strategy)
+    {
+    case IColumn::ReserveStrategy::Default:
+        data.reserve(n);
+        break;
+    case IColumn::ReserveStrategy::ScaleFactor1_5:
+        data.reserve_exact(n / 2 * 3);
+        break;
+    }
+}
+
+template <typename T>
 void ColumnDecimal<T>::insertData(const char * src [[maybe_unused]], size_t /*length*/)
 {
     if constexpr (is_Decimal256)

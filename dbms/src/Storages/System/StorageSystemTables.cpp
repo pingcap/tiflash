@@ -14,7 +14,6 @@
 
 #include <Columns/ColumnString.h>
 #include <Columns/ColumnsNumber.h>
-#include <Columns/VirtualColumnUtils.h>
 #include <Common/typeid_cast.h>
 #include <DataStreams/OneBlockInputStream.h>
 #include <DataTypes/DataTypeDateTime.h>
@@ -29,6 +28,7 @@
 #include <Storages/KVStore/Types.h>
 #include <Storages/MutableSupport.h>
 #include <Storages/System/StorageSystemTables.h>
+#include <Storages/System/VirtualColumnUtils.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
 
