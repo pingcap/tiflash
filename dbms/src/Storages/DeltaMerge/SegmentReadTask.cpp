@@ -871,8 +871,24 @@ void SegmentReadTask::updateMVCCIndexSize(ReadMode read_mode, size_t initial_ind
 
     auto & cache = dm_context->global_context.getSharedContextDisagg()->rn_mvcc_index_cache;
     assert(cache != nullptr);
-    if (cache_key->is_version_chain && getVersionChainBytes(*(segment->getVersionChain())) != initial_index_bytes)
-        cache->setVersionChain(*cache_key, segment->getVersionChain());
+    static constexpr size_t LOGGING_INDEX_BYTES_THRESHOLD = 1024 * 1024;
+    if (cache_key->is_version_chain)
+    {
+        auto current_index_bytes = getVersionChainBytes(*(segment->getVersionChain()));
+        if (current_index_bytes >= LOGGING_INDEX_BYTES_THRESHOLD)
+        {
+            LOG_INFO(
+                read_snapshot->log,
+                "Version chain index size is {}, cache key is {}, initial_index_bytes is {}",
+                current_index_bytes,
+                cache_key->toString(),
+                initial_index_bytes);
+        }
+        if (current_index_bytes != initial_index_bytes)
+        {
+            cache->setVersionChain(*cache_key, segment->getVersionChain());
+        }
+    }
     else if (
         !cache_key->is_version_chain && read_snapshot->delta->getSharedDeltaIndex()->getBytes() != initial_index_bytes)
         cache->setDeltaIndex(*cache_key, read_snapshot->delta->getSharedDeltaIndex());
