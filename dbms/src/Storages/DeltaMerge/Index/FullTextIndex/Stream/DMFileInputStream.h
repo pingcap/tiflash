@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <Common/config.h>
+
+#if ENABLE_CLARA
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Reader_fwd.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx_fwd.h>
@@ -76,3 +79,4 @@ private:
 };
 
 } // namespace DB::DM
+#endif

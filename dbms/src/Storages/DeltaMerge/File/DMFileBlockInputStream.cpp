@@ -12,13 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Perf.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Reader.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/BruteScoreInputStream.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/DMFileInputStream.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Perf.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Reader.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
@@ -27,6 +23,13 @@
 #include <Storages/DeltaMerge/ReadThread/SegmentReader.h>
 #include <Storages/DeltaMerge/ScanContext.h>
 
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Perf.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Reader.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/BruteScoreInputStream.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/DMFileInputStream.h>
+#endif
 namespace DB::DM
 {
 
@@ -145,10 +148,12 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
     const RowKeyRanges & rowkey_ranges,
     const ScanContextPtr & scan_context)
 {
+    // Note: this file may not have index built
     {
-        // Note: this file may not have index built
+#if ENABLE_CLARA
         if (fts_index_ctx)
             return buildForFullTextIndex(dmfile, read_columns, rowkey_ranges, scan_context);
+#endif
         if (vec_index_ctx)
             return buildForVectorIndex(dmfile, read_columns, rowkey_ranges, scan_context);
     }
@@ -241,6 +246,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildForVectorIndex(
         std::move(rest_columns_reader));
 }
 
+#if ENABLE_CLARA
 SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildForFullTextIndex(
     const DMFilePtr & dmfile,
     const ColumnDefines & read_columns,
@@ -327,5 +333,6 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildForFullTextInde
         dmfile,
         std::move(rest_columns_reader));
 }
+#endif
 
 } // namespace DB::DM

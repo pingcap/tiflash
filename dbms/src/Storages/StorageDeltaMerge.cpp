@@ -17,6 +17,7 @@
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
@@ -44,7 +45,6 @@
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
@@ -62,6 +62,10 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
+
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#endif
 
 namespace CurrentMetrics
 {
@@ -692,10 +696,12 @@ void setColumnsToRead(
             col_define.id = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id;
             col_define.type = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.type;
         }
+#if ENABLE_CLARA
         else if (column_names[i] == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name)
         {
             col_define = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD;
         }
+#endif
         else
         {
             auto & column = header->getByName(column_names[i]);
