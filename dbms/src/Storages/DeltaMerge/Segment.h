@@ -839,6 +839,16 @@ public:
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
 
+    template <ExtraHandleType HandleType>
+    void checkMVCCBitmap(
+        const DMContext & dm_context,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & read_ranges,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts,
+        size_t expected_block_size,
+        const BitmapFilter & bitmap_filter);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
