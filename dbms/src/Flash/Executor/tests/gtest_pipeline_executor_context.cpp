@@ -16,14 +16,39 @@
 #include <Common/ThreadManager.h>
 #include <Flash/Executor/PipelineExecutorContext.h>
 #include <Flash/Executor/ResultQueue.h>
+#include <TestUtils/ExecutorTestUtils.h>
+#include <TestUtils/FailPointUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <gtest/gtest.h>
 
 namespace DB::tests
 {
-class PipelineExecutorContextTestRunner : public ::testing::Test
+class PipelineExecutorContextTestRunner : public ExecutorTest
 {
+public:
+    ~PipelineExecutorContextTestRunner() override = default;
 };
+
+TEST_F(PipelineExecutorContextTestRunner, suffixExceptionTest)
+try
+{
+    context.addMockTable(
+        "simple_test",
+        "t1",
+        {{"a", TiDB::TP::TypeString}, {"b", TiDB::TP::TypeString}},
+        {toNullableVec<String>("a", {"1"}), toNullableVec<String>("b", {"3"})});
+
+    auto req = context.scan("simple_test", "t1").aggregation({Count(col("a"))}, {col("a")}).build(context);
+
+    String failpoint = "random_pipeline_model_execute_suffix_failpoint-1";
+    auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
+    initRandomFailPoint(config_str);
+
+    enablePipeline(true);
+    // Expect this case can finish instead of stuck.
+    executeStreams(req, 1);
+}
+CATCH
 
 TEST_F(PipelineExecutorContextTestRunner, waitTimeout)
 try

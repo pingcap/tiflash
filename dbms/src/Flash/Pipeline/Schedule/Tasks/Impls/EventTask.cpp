@@ -37,7 +37,14 @@ EventTask::EventTask(
 
 void EventTask::finalizeImpl()
 {
-    doFinalizeImpl();
+    try
+    {
+        doFinalizeImpl();
+    }
+    catch (...)
+    {
+        LOG_ERROR(log, getCurrentExceptionMessage(false, false));
+    }
     event->onTaskFinish(profile_info);
     event.reset();
 }
