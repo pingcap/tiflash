@@ -703,6 +703,9 @@ void MPPTask::runImpl()
 
     if unlikely (this->has_cte_sink.load() && !this->notify_cte_finish)
     {
+        if (!err_msg.empty())
+            this->dag_context->getCTESink()->notifyCancel(err_msg);
+
         tipb::SelectResponse resp;
         this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEIDForSink());
         this->notify_cte_finish = true;
