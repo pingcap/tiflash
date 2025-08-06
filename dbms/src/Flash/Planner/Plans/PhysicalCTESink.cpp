@@ -45,14 +45,12 @@ void PhysicalCTESink::buildPipelineExecGroupImpl(
     PipelineExecutorContext & exec_context,
     PipelineExecGroupBuilder & group_builder,
     Context & context,
-    size_t concurrency)
+    size_t)
 {
-    // Partition number in CTE is equal to concurrency, we need to ensure that `group_builder.concurrency() <= concurrency`
-    // or some blocks in partition will not be fetched.
-    RUNTIME_CHECK(group_builder.concurrency() <= concurrency);
-
     std::shared_ptr<CTE> cte = context.getDAGContext()->getCTESink();
     RUNTIME_CHECK(cte);
+
+    cte->checkSinkConcurrency(group_builder.concurrency());
 
     size_t id = 0;
     group_builder.transform([&](auto & builder) {

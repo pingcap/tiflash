@@ -20,6 +20,8 @@
 #include <Operators/CTEPartition.h>
 #include <tipb/select.pb.h>
 
+#include <algorithm>
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -112,7 +114,32 @@ public:
         return this->registered_sink_num == this->expected_sink_num;
     }
 
+    void checkSourceConcurrency(size_t concurrency)
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        this->source_min_concurrency = std::min(this->source_min_concurrency, concurrency);
+        if (this->sink_max_concurrency != std::numeric_limits<size_t>::min())
+            this->checkConcurrencyImplNoLock();
+    }
+
+    void checkSinkConcurrency(size_t concurrency)
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        this->sink_max_concurrency = std::max(this->sink_max_concurrency, concurrency);
+        if (this->source_min_concurrency != std::numeric_limits<size_t>::max())
+            this->checkConcurrencyImplNoLock();
+    }
+
 private:
+    void checkConcurrencyImplNoLock() const
+    {
+        RUNTIME_CHECK_MSG(
+            this->sink_max_concurrency <= this->source_min_concurrency,
+            "sink_max_concurrency: {}, source_min_concurrency: {}",
+            this->sink_max_concurrency,
+            this->source_min_concurrency);
+    }
+
     CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id)
     {
         if unlikely (this->is_cancelled)
@@ -156,5 +183,8 @@ private:
 
     const size_t expected_sink_num;
     size_t registered_sink_num = 0;
+
+    size_t source_min_concurrency = std::numeric_limits<size_t>::max();
+    size_t sink_max_concurrency = std::numeric_limits<size_t>::min();
 };
 } // namespace DB

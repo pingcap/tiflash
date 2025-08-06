@@ -30,10 +30,10 @@ namespace DB
 class CTEReader
 {
 public:
-    explicit CTEReader(Context & context, size_t cte_id)
-        : query_id_and_cte_id(context.getDAGContext()->getQueryIDAndCTEIDForSource(cte_id))
+    explicit CTEReader(Context & context, const String & query_id_and_cte_id_, std::shared_ptr<CTE> cte_)
+        : query_id_and_cte_id(query_id_and_cte_id_)
         , cte_manager(context.getCTEManager())
-        , cte(context.getDAGContext()->getCTESource()[cte_id])
+        , cte(cte_)
         , cte_reader_id(this->cte->getCTEReaderID())
     {
         RUNTIME_CHECK(cte);
