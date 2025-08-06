@@ -142,7 +142,7 @@ double ResourceGroup::getAcquireRUNumWithoutLock(double speed, uint32_t n_sec, d
         acquire_num = DEFAULT_BUFFER_TOKENS;
 
     // The purpose of subtracting remaining_ru is try to ensure that the number of local tokens
-    // always stays smae with the amount consumed.
+    // always stays same with the amount consumed.
     acquire_num -= remaining_ru;
     acquire_num = (acquire_num > 0.0 ? acquire_num : 0.0);
     return acquire_num;
@@ -570,7 +570,6 @@ void LocalAdmissionController::doRequestGAC()
             std::vector<std::pair<KeyspaceID, std::string>> not_found;
             // not_found includes resource group names that appears in gac_req but not found in resp.
             // This can happen when the resource group has been deleted.
-            // Normally delete event will be watched
             if unlikely (handled.size() != req_rg_names.size())
             {
                 for (const auto & req_rg_name : req_rg_names)
