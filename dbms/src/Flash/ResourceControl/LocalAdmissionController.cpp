@@ -545,7 +545,6 @@ void LocalAdmissionController::doRequestGAC()
         {
             std::unique_lock<std::mutex> lock(gac_requests_mu);
             gac_requests_cv.wait(lock, [this]() { return stopped.load() || !gac_requests.empty(); });
-            // gjt todo: still report if stop?
             if unlikely (stopped.load())
                 return;
             local_gac_requests = gac_requests;
@@ -647,7 +646,7 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
 
         const String err_msg = fmt::format("handle acquire token resp failed: rg: {}(keyspace={})", name, keyspace_id);
         // It's possible for one_resp.granted_r_u_tokens() to be empty
-        // when the acquire_token_req is only for report RU consumption.
+        // when the acquire_token_req is only for report RU consumption or GAC got error(like nan token).
         if (one_resp.granted_r_u_tokens().empty())
         {
             resource_group->endRequest();
@@ -704,7 +703,6 @@ std::vector<std::pair<KeyspaceID, std::string>> LocalAdmissionController::handle
         auto trickle_left_tokens = resource_group->getTrickleLeftTokens(now);
         if unlikely (!std::isfinite(trickle_left_tokens) || trickle_left_tokens < 0.0)
         {
-            // gjt todo: output trickle_deadline and tp and fillrate.
             LOG_ERROR(
                 log,
                 "{} invalid trickle_left_tokens: {} one_resp: {}, reset to zero",
