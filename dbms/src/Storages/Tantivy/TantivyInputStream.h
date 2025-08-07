@@ -20,6 +20,7 @@
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
+#include <Flash/Coprocessor/DAGCodec.h>
 #include <Flash/Coprocessor/ShardInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -39,20 +40,18 @@ public:
         Int64 table_id_,
         Int64 index_id_,
         ShardInfoList query_shard_infos_,
-        NamesAndTypes query_columns_,
         NamesAndTypes return_columns_,
-        String query_json_str_,
         UInt64 limit_,
-        UInt64 read_ts_)
+        UInt64 read_ts_,
+        google::protobuf::RepeatedPtrField<tipb::Expr> match_expr_)
         : log(log_)
         , table_id(table_id_)
         , index_id(index_id_)
         , query_shard_infos(query_shard_infos_)
-        , query_columns(query_columns_)
         , return_columns(return_columns_)
-        , query_json_str(query_json_str_)
         , limit(limit_)
         , read_ts(read_ts_)
+        , match_expr(match_expr_)
     {}
 
     String getName() const override { return NAME; }
@@ -81,13 +80,13 @@ public:
 protected:
     Block readFromS3(size_t processing)
     {
-        auto query_fields = getFields(query_columns);
         auto return_fields = getFields(return_columns);
         auto & shard_info = query_shard_infos[processing];
         LOG_INFO(log, "Processing shard: {}, shard info: {}", processing, shard_info.toString());
         auto key_ranges = getKeyRanges(shard_info.key_ranges);
 
         auto search_param = SearchParam{static_cast<size_t>(limit)};
+        auto expr = tipbToTiCIExpr(match_expr);
         rust::Vec<IdDocument> documents = search(
             {
                 .table_id = table_id,
@@ -96,9 +95,8 @@ protected:
                 .shard_epoch = shard_info.shard_epoch,
             },
             key_ranges,
-            query_fields,
             return_fields,
-            query_json_str,
+            expr,
             search_param,
             read_ts);
 
@@ -154,11 +152,10 @@ private:
     Int64 table_id;
     Int64 index_id;
     ShardInfoList query_shard_infos;
-    NamesAndTypes query_columns;
     NamesAndTypes return_columns;
-    String query_json_str;
     UInt64 limit;
     UInt64 read_ts;
+    const google::protobuf::RepeatedPtrField<tipb::Expr> match_expr;
 
     size_t processed_shard = 0;
 
@@ -190,6 +187,70 @@ private:
             });
         }
         return res;
+    }
+
+    ::Expr tipbToTiCIExpr(google::protobuf::RepeatedPtrField<tipb::Expr> exprs)
+    {
+        if (exprs.empty())
+        {
+            throw std::runtime_error("Empty match expression");
+        }
+        ::Expr ret = tipbToTiCIExpr(exprs[0]);
+        for (auto i = 1; i < exprs.size(); ++i)
+        {
+            auto child = tipbToTiCIExpr(exprs[i]);
+            ret = {
+                .tp = tipb::ExprType::ScalarFunc,
+                .children = {ret, child},
+                .sig = tipb::ScalarFuncSig::LogicalAnd,
+            };
+        }
+        return ret;
+    }
+
+    ::Expr tipbToTiCIExpr(const tipb::Expr & expr)
+    {
+        ::Expr ret;
+        switch (expr.tp())
+        {
+        case tipb::ExprType::ScalarFunc:
+        {
+            ret.tp = tipb::ExprType::ScalarFunc;
+            for (const auto & child : expr.children())
+            {
+                ret.children.push_back(tipbToTiCIExpr(child));
+            }
+            switch (expr.sig())
+            {
+            case tipb::ScalarFuncSig::FTSMatchWord:
+            case tipb::ScalarFuncSig::FTSMatchPrefix:
+            case tipb::ScalarFuncSig::LogicalAnd:
+            case tipb::ScalarFuncSig::LogicalOr:
+                ret.sig = expr.sig();
+                break;
+            default:
+                throw std::runtime_error("Unsupported expression sig");
+            }
+
+            return ret;
+        }
+        case tipb::ExprType::ColumnRef:
+        {
+            ret.tp = tipb::ExprType::ColumnRef;
+            auto id = decodeDAGInt64(expr.val());
+            LOG_INFO(log, "column_{}", std::to_string(id));
+            ret.val = "column_" + std::to_string(id);
+            return ret;
+        }
+        case tipb::ExprType::String:
+        {
+            ret.tp = tipb::ExprType::String;
+            ret.val = expr.val();
+            return ret;
+        }
+        default:
+            throw std::runtime_error("Unsupported expression type");
+        }
     }
 };
 

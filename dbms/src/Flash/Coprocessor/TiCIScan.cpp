@@ -27,18 +27,15 @@ TiCIScan::TiCIScan(const tipb::Executor * tici_scan_, const String & executor_id
     , table_id(tici_scan->idx_scan().table_id())
     , index_id(tici_scan->idx_scan().index_id())
     , return_columns(TiDB::toTiDBColumnInfos(tici_scan->idx_scan().columns()))
-    , query_columns(TiDB::toTiDBColumnInfos(tici_scan->idx_scan().fts_query_info().columns()))
     , query_type(tici_scan->idx_scan().fts_query_info().query_type())
     , shard_infos(dag_context.query_shard_infos.getTableShardInfosByExecutorID(tici_scan_->executor_id()))
-    , query_json_str(tici_scan->idx_scan().fts_query_info().query_text())
     , limit(tici_scan->idx_scan().fts_query_info().top_k())
-{
-    RUNTIME_ASSERT(tici_scan->idx_scan().fts_query_info().query_func() == tipb::ScalarFuncSig::FTSMatchWord);
-}
+{}
 
 void TiCIScan::constructTiCIScanForRemoteRead(tipb::IndexScan * tipb_index_scan) const
 {
     assert(tipb_index_scan != nullptr);
     *tipb_index_scan = tici_scan->idx_scan();
-} // namespace DB
+}
+
 } // namespace DB

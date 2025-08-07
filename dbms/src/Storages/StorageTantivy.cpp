@@ -70,7 +70,6 @@ void StorageTantivy::read(
     [[maybe_unused]] size_t max_block_size,
     [[maybe_unused]] unsigned num_streams)
 {
-    auto query_columns = genNamesAndTypesForTiCI(tici_scan.getQueryColumns(), "column");
     auto return_columns = genNamesAndTypesForTiCI(tici_scan.getReturnColumns(), "column");
 
     // local read
@@ -80,11 +79,10 @@ void StorageTantivy::read(
         tici_scan.getTableId(),
         tici_scan.getIndexId(),
         local_read,
-        query_columns,
         return_columns,
-        tici_scan.getQuery(),
         tici_scan.getLimit(),
-        /*read_ts*/ 0)); // TODO: currently, info.mvcc_query_info is null.
+        /*read_ts*/ 0,
+        tici_scan.getMatchExpr()));
 }
 
 void StorageTantivy::splitRemoteReadAndLocalRead()
