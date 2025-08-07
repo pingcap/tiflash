@@ -403,11 +403,9 @@ bool MPPTask::initExchangeReceivers()
 
 void MPPTask::initCTESources()
 {
-    bool find_cte_source = false;
     dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
         if (executor.tp() == tipb::ExecType::TypeCTESource)
         {
-            find_cte_source = true;
             this->has_cte_source.store(true);
             const auto & cte_source = executor.cte_source();
             String query_id_and_cte_id
@@ -422,7 +420,6 @@ void MPPTask::initCTESources()
         }
         return true;
     });
-    RUNTIME_CHECK(find_cte_source);
 }
 
 std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConnectionRequest * request)
@@ -601,9 +598,12 @@ void MPPTask::preprocess()
         std::unique_lock lock(mtx);
         if (status != RUNNING)
             throw Exception("task not in running state, may be cancelled");
-        for (auto & r : dag_context->getCoprocessorReaders())
-            receiver_set->addCoprocessorReader(r);
-        new_thread_count_of_mpp_receiver += receiver_set->getExternalThreadCnt();
+        if likely (receiver_set)
+        {
+            for (auto & r : dag_context->getCoprocessorReaders())
+                receiver_set->addCoprocessorReader(r);
+            new_thread_count_of_mpp_receiver += receiver_set->getExternalThreadCnt();
+        }
     }
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
@@ -737,7 +737,8 @@ void MPPTask::runImpl()
             finishWrite();
 
             // finish receiver
-            receiver_set->close();
+            if likely (receiver_set)
+                receiver_set->close();
         }
         result.verify();
     }
