@@ -48,7 +48,8 @@ public:
         const std::vector<Int32> & output_offsets,
         const String & column_prefix,
         bool keep_session_timezone_info,
-        const PhysicalPlanNodePtr & child);
+        const PhysicalPlanNodePtr & child,
+        bool is_cte = false);
 
     PhysicalProjection(
         const String & executor_id_,

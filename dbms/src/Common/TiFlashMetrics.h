@@ -95,6 +95,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_exchange_receiver, {"type", "exchange_receiver"}),                                                                     \
       F(type_projection, {"type", "projection"}),                                                                                   \
       F(type_partition_ts, {"type", "partition_table_scan"}),                                                                       \
+      F(type_cte_sink, {"type", "cte_sink"}),                                                                                       \
+      F(type_cte_source, {"type", "cte_source"}),                                                                                   \
       F(type_window, {"type", "window"}),                                                                                           \
       F(type_window_sort, {"type", "window_sort"}),                                                                                 \
       F(type_expand, {"type", "expand"}))                                                                                           \
@@ -775,7 +777,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_wait_on_tunnel_sender_write, {"type", "wait_on_tunnel_sender_write"}),                                                 \
       F(type_wait_on_join_build, {"type", "wait_on_join_build"}),                                                                   \
       F(type_wait_on_join_probe, {"type", "wait_on_join_probe"}),                                                                   \
-      F(type_wait_on_result_queue_write, {"type", "wait_on_result_queue_write"}))                                                   \
+      F(type_wait_on_result_queue_write, {"type", "wait_on_result_queue_write"}),                                                   \
+      F(type_type_wait_on_cte_read, {"type", "type_wait_on_cte_read"}))                                                             \
     M(tiflash_pipeline_task_duration_seconds,                                                                                       \
       "Bucketed histogram of pipeline task duration in seconds",                                                                    \
       Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */ \
