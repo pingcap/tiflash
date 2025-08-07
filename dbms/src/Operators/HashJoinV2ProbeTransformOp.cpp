@@ -75,7 +75,7 @@ OperatorStatus HashJoinV2ProbeTransformOp::onOutput(Block & block)
             }
             return OperatorStatus::WAIT_FOR_NOTIFY;
         case ProbeStatus::SCAN_BUILD_SIDE:
-            block = join_ptr->probeScanBuildSide(op_index);
+            block = join_ptr->scanBuildSideAfterProbe(op_index);
             scan_hash_map_rows += block.rows();
             if unlikely (!block)
                 status = ProbeStatus::FINISHED;

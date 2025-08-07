@@ -426,7 +426,7 @@ void HashJoin::initProbe(const Block & sample_block, size_t probe_concurrency_)
     probe_workers_data.resize(probe_concurrency);
 
     if (needProbeScanBuildSide())
-        join_probe_build_scanner = std::make_unique<JoinProbeBuildScanner>(this);
+        join_build_scanner_after_probe = std::make_unique<JoinBuildScannerAfterProbe>(this);
 
     probe_initialized = true;
 }
@@ -697,12 +697,12 @@ bool HashJoin::needProbeScanBuildSide() const
     return isRightOuterJoin(kind) || isRightSemiFamily(kind);
 }
 
-Block HashJoin::probeScanBuildSide(size_t stream_index)
+Block HashJoin::scanBuildSideAfterProbe(size_t stream_index)
 {
     auto & wd = probe_workers_data[stream_index];
     Stopwatch all_watch;
     SCOPE_EXIT({ probe_workers_data[stream_index].scan_build_side_time += all_watch.elapsedFromLastTime(); });
-    return join_probe_build_scanner->scan(wd);
+    return join_build_scanner_after_probe->scan(wd);
 }
 
 void HashJoin::removeUselessColumn(Block & block) const

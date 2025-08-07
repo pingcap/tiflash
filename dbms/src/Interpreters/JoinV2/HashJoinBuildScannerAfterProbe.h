@@ -20,10 +20,10 @@ namespace DB
 {
 
 class HashJoin;
-class JoinProbeBuildScanner
+class JoinBuildScannerAfterProbe
 {
 public:
-    explicit JoinProbeBuildScanner(HashJoin * join);
+    explicit JoinBuildScannerAfterProbe(HashJoin * join);
 
     Block scan(JoinProbeWorkerData & wd);
 
@@ -53,7 +53,7 @@ private:
     void fillNullMapWithZero(JoinProbeWorkerData & wd) const;
 
 private:
-    using FuncType = Block (JoinProbeBuildScanner::*)(JoinProbeWorkerData &);
+    using FuncType = Block (JoinBuildScannerAfterProbe::*)(JoinProbeWorkerData &);
     FuncType scan_func_ptr = nullptr;
 
     HashJoin * join;

@@ -23,10 +23,10 @@
 #include <Interpreters/ExpressionActions.h>
 #include <Interpreters/JoinUtils.h>
 #include <Interpreters/JoinV2/HashJoinBuild.h>
+#include <Interpreters/JoinV2/HashJoinBuildScannerAfterProbe.h>
 #include <Interpreters/JoinV2/HashJoinKey.h>
 #include <Interpreters/JoinV2/HashJoinPointerTable.h>
 #include <Interpreters/JoinV2/HashJoinProbe.h>
-#include <Interpreters/JoinV2/HashJoinProbeBuildScanner.h>
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
 #include <Interpreters/JoinV2/SemiJoinProbe.h>
@@ -67,7 +67,7 @@ public:
     Block probeLastResultBlock(size_t stream_index);
 
     bool needProbeScanBuildSide() const;
-    Block probeScanBuildSide(size_t stream_index);
+    Block scanBuildSideAfterProbe(size_t stream_index);
 
     void removeUselessColumn(Block & block) const;
     /// Block's schema must be all_sample_block_pruned.
@@ -102,7 +102,7 @@ private:
     friend JoinBuildHelper;
     friend JoinProbeHelper;
     friend SemiJoinProbeHelper;
-    friend JoinProbeBuildScanner;
+    friend JoinBuildScannerAfterProbe;
 
     static const DataTypePtr match_helper_type;
 
@@ -177,7 +177,7 @@ private:
     std::unique_ptr<JoinProbeHelper> join_probe_helper;
     std::unique_ptr<SemiJoinProbeHelper> semi_join_probe_helper;
     /// Probe scan build side
-    std::unique_ptr<JoinProbeBuildScanner> join_probe_build_scanner;
+    std::unique_ptr<JoinBuildScannerAfterProbe> join_build_scanner_after_probe;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 

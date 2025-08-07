@@ -114,7 +114,7 @@ check_then_add_sources_compile_flag (
     src/Interpreters/JoinV2/HashJoinBuild.cpp
     src/Interpreters/JoinV2/HashJoinProbe.cpp
     src/Interpreters/JoinV2/SemiJoinProbe.cpp
-    src/Interpreters/JoinV2/HashJoinProbeBuildScanner.cpp
+    src/Interpreters/JoinV2/HashJoinBuildScannerAfterProbe.cpp
     src/IO/Compression/EncodingUtil.cpp
     src/Storages/DeltaMerge/BitmapFilter/BitmapFilter.cpp
     src/Storages/DeltaMerge/DMVersionFilterBlockInputStream.cpp
