@@ -207,18 +207,16 @@ Block JoinProbeBuildScanner::scanImpl(JoinProbeWorkerData & wd)
                 container = multi_row_containers[wd.current_scan_table_index]->getScanNext();
             if (container == nullptr)
             {
+                std::unique_lock lock(scan_build_lock);
+                for (size_t i = 0; i < JOIN_BUILD_PARTITION_COUNT; ++i)
                 {
-                    std::unique_lock lock(scan_build_lock);
-                    for (size_t i = 0; i < JOIN_BUILD_PARTITION_COUNT; ++i)
+                    scan_build_index = (scan_build_index + i) % JOIN_BUILD_PARTITION_COUNT;
+                    container = multi_row_containers[scan_build_index]->getScanNext();
+                    if (container != nullptr)
                     {
-                        scan_build_index = (scan_build_index + i) % JOIN_BUILD_PARTITION_COUNT;
-                        container = multi_row_containers[scan_build_index]->getScanNext();
-                        if (container != nullptr)
-                        {
-                            wd.current_scan_table_index = scan_build_index;
-                            scan_build_index = (scan_build_index + 1) % JOIN_BUILD_PARTITION_COUNT;
-                            break;
-                        }
+                        wd.current_scan_table_index = scan_build_index;
+                        scan_build_index = (scan_build_index + 1) % JOIN_BUILD_PARTITION_COUNT;
+                        break;
                     }
                 }
             }
@@ -229,6 +227,7 @@ Block JoinProbeBuildScanner::scanImpl(JoinProbeWorkerData & wd)
             }
         }
         size_t rows = container->size();
+        size_t original_index = index;
         while (index < rows)
         {
             RowPtr ptr = container->getRowPtr(index);
@@ -281,7 +280,7 @@ Block JoinProbeBuildScanner::scanImpl(JoinProbeWorkerData & wd)
             wd.selective_offsets.clear();
         }
 
-        scan_size += rows - index;
+        scan_size += index - original_index;
 
         if (index >= rows)
         {
