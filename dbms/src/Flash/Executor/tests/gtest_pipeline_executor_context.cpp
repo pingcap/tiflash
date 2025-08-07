@@ -43,10 +43,10 @@ try
     String failpoint = "random_pipeline_model_execute_suffix_failpoint-1";
     auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
     initRandomFailPoint(config_str);
-
     enablePipeline(true);
     // Expect this case can finish instead of stuck.
     executeStreams(req, 1);
+    disableRandomFailPoint(config_str);
 }
 CATCH
 
