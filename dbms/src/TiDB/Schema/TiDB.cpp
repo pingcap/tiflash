@@ -15,6 +15,7 @@
 #include <Common/Decimal.h>
 #include <Common/Exception.h>
 #include <Common/MyTime.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Core/Types.h>
 #include <DataTypes/DataTypeDecimal.h>
 #include <DataTypes/FieldToDataType.h>
@@ -33,7 +34,6 @@
 #include <TiDB/Schema/SchemaNameMapper.h>
 #include <TiDB/Schema/TiDB.h>
 #include <TiDB/Schema/VectorIndex.h>
-#include <clara_fts/src/tokenizer/mod.rs.h>
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 #include <tipb/executor.pb.h>
@@ -42,6 +42,10 @@
 #include <cmath>
 #include <magic_enum.hpp>
 #include <string>
+
+#if ENABLE_CLARA
+#include <clara_fts/src/tokenizer/mod.rs.h>
+#endif
 
 namespace DB
 {
@@ -129,6 +133,7 @@ enum class IndexType
     // HNSW = 7,
 };
 
+#if ENABLE_CLARA
 FullTextIndexDefinitionPtr parseFullTextIndexFromJSON(const Poco::JSON::Object::Ptr & json)
 {
     RUNTIME_CHECK(json); // not nullptr
@@ -154,6 +159,7 @@ Poco::JSON::Object::Ptr fullTextIndexToJSON(const FullTextIndexDefinitionPtr & f
     json->set("parser_type", full_text_index->parser_type);
     return json;
 }
+#endif
 
 VectorIndexDefinitionPtr parseVectorIndexFromJSON(const Poco::JSON::Object::Ptr & json)
 {
@@ -935,10 +941,12 @@ try
     {
         json->set("inverted_index", invertedIndexToJSON(inverted_index));
     }
+#if ENABLE_CLARA
     else if (full_text_index)
     {
         json->set("full_text_index", fullTextIndexToJSON(full_text_index));
     }
+#endif
 
 #ifndef NDEBUG
     std::stringstream str;
@@ -990,10 +998,12 @@ try
     {
         inverted_index = parseInvertedIndexFromJSON(static_cast<IndexType>(index_type), inverted_index_json);
     }
+#if ENABLE_CLARA
     if (auto full_text_index_json = json->getObject("full_text_index"); full_text_index_json)
     {
         full_text_index = parseFullTextIndexFromJSON(full_text_index_json);
     }
+#endif
 }
 catch (const Poco::Exception & e)
 {

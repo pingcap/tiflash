@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Columns/countBytesInFilter.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Common/typeid_cast.h>
 #include <Debug/dbgQueryCompiler.h>
 #include <Flash/Coprocessor/DAGQueryInfo.h>
@@ -128,7 +129,9 @@ DM::PushDownExecutorPtr generatePushDownExecutor(
     auto push_down_executor = DM::PushDownExecutor::build(
         rs_operator,
         std::make_shared<tipb::ANNQueryInfo>(dag_query->ann_query_info),
+#if ENABLE_CLARA
         std::make_shared<tipb::FTSQueryInfo>(dag_query->fts_query_info),
+#endif
         table_info.columns,
         pushed_down_filters,
         columns_to_read,

@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
+
+#if ENABLE_CLARA
 #include <Columns/countBytesInFilter.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Perf.h>
@@ -207,3 +210,4 @@ FullTextIndexInputStream::FullTextIndexInputStream(
 }
 
 } // namespace DB::DM
+#endif

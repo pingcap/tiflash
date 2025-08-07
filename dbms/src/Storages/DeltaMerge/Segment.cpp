@@ -17,6 +17,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <DataStreams/ConcatBlockInputStream.h>
 #include <DataStreams/EmptyBlockInputStream.h>
 #include <DataStreams/ExpressionBlockInputStream.h>
@@ -38,9 +39,6 @@
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFileBlockOutputStream.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/ColumnFileInputStream.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/InputStream.h>
 #include <Storages/DeltaMerge/Index/InvertedIndex/Reader/ReaderFromSegment.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/ColumnFileInputStream.h>
@@ -80,6 +78,11 @@
 #include <ext/scope_guard.h>
 #include <memory>
 
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/ColumnFileInputStream.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/InputStream.h>
+#endif
 
 namespace ProfileEvents
 {
@@ -1303,7 +1306,7 @@ StableValueSpacePtr Segment::prepareMergeDelta(
         segment_snap,
         rowkey_range,
         dm_context.stable_pack_rows,
-        /*reorginize_block*/ true);
+        /*reorganize_block*/ true);
 
     auto new_stable = createNewStable(dm_context, schema_snap, data_stream, segment_snap->stable->getId(), wbs);
 
@@ -3432,6 +3435,7 @@ BlockInputStreamPtr Segment::getConcatVectorIndexBlockInputStream(
     return stream3;
 }
 
+#if ENABLE_CLARA
 BlockInputStreamPtr Segment::getConcatFullTextIndexBlockInputStream(
     BitmapFilterPtr bitmap_filter,
     const SegmentSnapshotPtr & segment_snap,
@@ -3493,6 +3497,7 @@ BlockInputStreamPtr Segment::getConcatFullTextIndexBlockInputStream(
 
     return stream3;
 }
+#endif
 
 BlockInputStreamPtr Segment::getLateMaterializationStream(
     BitmapFilterPtr & bitmap_filter,
@@ -3733,6 +3738,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     }
 
     BlockInputStreamPtr stream;
+#if ENABLE_CLARA
     if (executor && executor->fts_query_info)
     {
         return getConcatFullTextIndexBlockInputStream(
@@ -3747,6 +3753,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
             read_data_block_rows,
             ReadTag::Query);
     }
+#endif
     if (executor && executor->ann_query_info)
     {
         // For ANN query, try to use vector index to accelerate.

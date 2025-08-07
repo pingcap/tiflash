@@ -7,3 +7,4 @@
 #cmakedefine01 USE_GM_SSL
 #cmakedefine01 USE_QPL
 #cmakedefine01 ENABLE_NEXT_GEN
+#cmakedefine01 ENABLE_CLARA
