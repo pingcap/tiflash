@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
+
+#if ENABLE_CLARA
+
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Perf.h>
@@ -64,3 +68,4 @@ void FullTextIndexReader::searchScored(
     return inner->search_scored(query, filter, results);
 }
 } // namespace DB::DM
+#endif

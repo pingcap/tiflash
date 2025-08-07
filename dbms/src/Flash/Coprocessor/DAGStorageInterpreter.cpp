@@ -18,6 +18,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
@@ -41,7 +42,6 @@
 #include <Operators/NullSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
@@ -61,6 +61,10 @@
 #include <common/logger_useful.h>
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
+
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#endif
 
 namespace DB
 {
@@ -1610,8 +1614,10 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
             name = MutSup::extra_table_id_column_name;
         else if (cid == DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id)
             name = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.name;
+#if ENABLE_CLARA
         else if (cid == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.id)
             name = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name;
+#endif
         else
             name = storage_for_logical_table->getTableInfo().getColumnName(cid);
         required_columns_tmp.emplace_back(std::move(name));
