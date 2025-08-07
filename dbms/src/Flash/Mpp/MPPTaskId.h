@@ -111,12 +111,12 @@ struct MPPGatherId
     inline String toStringForQueryID() const
     {
         return fmt::format(
-            "query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}, gather_id: {}",
+            "gather_id:{}, query_ts:{}, local_query_id:{}, server_id:{}, start_ts:{}",
+            this->gather_id,
             query_id.query_ts,
             query_id.local_query_id,
             query_id.server_id,
-            query_id.start_ts,
-            this->gather_id);
+            query_id.start_ts);
     }
 
     inline String toString() const { return fmt::format("gather_id:{}, {}", gather_id, this->toStringForQueryID()); }

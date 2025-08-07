@@ -35,6 +35,8 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
 
     auto idx = this->partitions[partition_id].fetch_block_idxs[cte_reader_id]++;
     block = this->partitions[partition_id].blocks[idx];
+
+    this->partitions[partition_id].tryToDeleteBlockNoLock(idx);
     return status;
 }
 

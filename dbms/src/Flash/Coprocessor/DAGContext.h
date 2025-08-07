@@ -388,6 +388,12 @@ public:
     void addQueryIDAndCTEIDForSource(size_t cte_id, const String & query_id_and_cte_id)
     {
         std::lock_guard<std::mutex> lock(this->cte_mu);
+        auto iter = this->query_id_and_cte_id_for_sources.find(cte_id);
+        if (iter != this->query_id_and_cte_id_for_sources.end())
+        {
+            RUNTIME_CHECK_MSG(iter->second == query_id_and_cte_id, "{} vs {}", iter->second, query_id_and_cte_id);
+            return;
+        }
         this->query_id_and_cte_id_for_sources.insert(std::make_pair(cte_id, query_id_and_cte_id));
     }
 
@@ -413,6 +419,12 @@ public:
     void addCTESource(size_t cte_id, std::shared_ptr<CTE> & cte)
     {
         std::lock_guard<std::mutex> lock(this->cte_mu);
+        auto iter = this->source_ctes.find(cte_id);
+        if (iter != this->source_ctes.end())
+        {
+            RUNTIME_CHECK(iter->second.get() == cte.get());
+            return;
+        }
         this->source_ctes.insert(std::make_pair(cte_id, cte));
     }
 

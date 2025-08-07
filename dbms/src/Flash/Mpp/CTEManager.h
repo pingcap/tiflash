@@ -25,7 +25,7 @@ namespace DB
 class CTEWithCounter
 {
 public:
-    explicit CTEWithCounter(std::shared_ptr<CTE> cte_, Int32 expected_total_sink_num_, Int32 expected_total_source_num_)
+    CTEWithCounter(std::shared_ptr<CTE> cte_, Int32 expected_total_sink_num_, Int32 expected_total_source_num_)
         : cte(cte_)
         , expected_sink_num(expected_total_sink_num_)
         , expected_source_num(expected_total_source_num_)
@@ -55,7 +55,7 @@ private:
 class CTEManager
 {
 public:
-    std::shared_ptr<CTE> getCTE(
+    std::shared_ptr<CTE> getOrCreateCTE(
         const String & query_id_and_cte_id,
         Int32 concurrency,
         Int32 expected_sink_num,

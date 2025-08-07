@@ -58,7 +58,7 @@ public:
             GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_shared_queue_write).Increment(change);
             break;
         case NotifyType::WAIT_ON_CTE:
-            GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_wait_on_cte).Increment(change);
+            GET_METRIC(tiflash_pipeline_wait_on_notify_tasks, type_type_wait_on_cte_read).Increment(change);
             break;
         case NotifyType::WAIT_ON_NOTHING:
             throw Exception("task notify type should be set before register or notify");

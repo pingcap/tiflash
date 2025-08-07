@@ -57,7 +57,7 @@ void CTEManager::releaseCTE(const String & query_id_and_cte_id)
     this->ctes.erase(query_id_and_cte_id);
 }
 
-std::shared_ptr<CTE> CTEManager::getCTE(
+std::shared_ptr<CTE> CTEManager::getOrCreateCTE(
     const String & query_id_and_cte_id,
     Int32 concurrency,
     Int32 expected_sink_num,
@@ -65,15 +65,18 @@ std::shared_ptr<CTE> CTEManager::getCTE(
 {
     std::lock_guard<std::mutex> lock(this->mu);
     auto iter = this->ctes.find(query_id_and_cte_id);
+    std::shared_ptr<CTE> cte;
     if (iter == this->ctes.end())
-        this->ctes.insert(std::make_pair(
-            query_id_and_cte_id,
-            CTEWithCounter(
-                std::make_shared<CTE>(concurrency, expected_sink_num),
-                expected_sink_num,
-                expected_source_num)));
+    {
+        cte = std::make_shared<CTE>(concurrency, expected_sink_num, expected_source_num);
+        this->ctes.insert(
+            std::make_pair(query_id_and_cte_id, CTEWithCounter(cte, expected_sink_num, expected_source_num)));
+    }
+    else
+    {
+        cte = iter->second.getCTE();
+    }
 
-    auto cte = this->ctes.find(query_id_and_cte_id)->second.getCTE();
     cte->checkPartitionNum(concurrency);
     return cte;
 }

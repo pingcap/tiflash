@@ -137,13 +137,17 @@ private:
     int estimateCountOfNewThreads();
 
     void registerTunnels(const mpp::DispatchTaskRequest & task_request);
+    void registerCTESink();
 
     void initProcessListEntry(const std::shared_ptr<ProcessListEntry> & query_process_list_entry);
 
     void initQueryOperatorSpillContexts(
         const std::shared_ptr<QueryOperatorSpillContexts> & mpp_query_operator_spill_contexts);
 
-    void initExchangeReceivers();
+    // return false if we can't find exchange receiver
+    bool initExchangeReceivers();
+
+    void initCTESources();
 
     String getErrString() const;
     void setErrString(const String & message);
@@ -202,7 +206,7 @@ private:
 
     std::atomic<bool> has_cte_sink = false;
     std::atomic<bool> has_cte_source = false;
-    bool notify_cte_finish = false;
+    bool notify_cte_sink_finish = false;
 
     int new_thread_count_of_mpp_receiver = 0;
 
