@@ -68,9 +68,10 @@ JoinBuildScannerAfterProbe::JoinBuildScannerAfterProbe(HashJoin * join)
         RUNTIME_CHECK(need_row_data || need_other_block_data);
     }
 
-#define SET_FUNC_PTR(KeyGetter, JoinType, need_row_data, need_other_block_data)                                      \
-    {                                                                                                                \
-        scan_func_ptr = &JoinBuildScannerAfterProbe::scanImpl<KeyGetter, JoinType, need_row_data, need_other_block_data>; \
+#define SET_FUNC_PTR(KeyGetter, JoinType, need_row_data, need_other_block_data)                                 \
+    {                                                                                                           \
+        scan_func_ptr                                                                                           \
+            = &JoinBuildScannerAfterProbe::scanImpl<KeyGetter, JoinType, need_row_data, need_other_block_data>; \
     }
 
 #define CALL2(KeyGetter, JoinType)                         \
