@@ -87,8 +87,6 @@ inline bool hasRowPtrMatchedFlag(RowPtr ptr)
 
 inline void setRowPtrMatchedFlag(RowPtr ptr)
 {
-    if (hasRowPtrMatchedFlag(ptr))
-        return;
     reinterpret_cast<std::atomic<uintptr_t> *>(ptr)->fetch_or(0x01, std::memory_order_relaxed);
 }
 
@@ -99,8 +97,6 @@ inline bool hasRowPtrNullFlag(RowPtr ptr)
 
 inline void setRowPtrNullFlag(RowPtr ptr)
 {
-    if (hasRowPtrNullFlag(ptr))
-        return;
     reinterpret_cast<std::atomic<uintptr_t> *>(ptr)->fetch_or(0x10, std::memory_order_relaxed);
 }
 

@@ -839,10 +839,18 @@ void JoinProbeHelper::probeFillColumns(JoinProbeContext & ctx, JoinProbeWorkerDa
             const auto & key2 = key_getter.deserializeJoinKey(ptr + key_offset);
             bool key_is_equal = joinKeyIsEqual(key_getter, key, key2, hash, ptr);
             collision += !key_is_equal;
+            if constexpr (Adder::need_not_matched)
+                is_matched |= key_is_equal;
             if (key_is_equal)
             {
-                if constexpr (Adder::need_not_matched)
-                    is_matched = true;
+                if constexpr ((kind == RightSemi || kind == RightAnti) && !has_other_condition)
+                {
+                    if (hasRowPtrMatchedFlag(ptr))
+                    {
+                        ptr = nullptr;
+                        break;
+                    }
+                }
 
                 if constexpr (Adder::need_matched)
                 {
@@ -988,6 +996,14 @@ void JoinProbeHelper::probeFillColumnsPrefetch(
             collision += !key_is_equal;
             if constexpr (Adder::need_not_matched)
                 state->is_matched |= key_is_equal;
+            if constexpr ((kind == RightSemi || kind == RightAnti) && !has_other_condition)
+            {
+                if (key_is_equal && hasRowPtrMatchedFlag(ptr))
+                {
+                    next_ptr = nullptr;
+                    key_is_equal = false;
+                }
+            }
             if (key_is_equal)
             {
                 if constexpr (Adder::need_matched)
