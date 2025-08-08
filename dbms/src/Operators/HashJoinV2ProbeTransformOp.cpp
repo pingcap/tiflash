@@ -93,7 +93,7 @@ OperatorStatus HashJoinV2ProbeTransformOp::transformImpl(Block & block)
     assert(probe_context.isAllFinished());
     if likely (block)
     {
-        if (block.rows() == 0)
+        if unlikely (block.rows() == 0)
             return OperatorStatus::NEED_INPUT;
         probe_context.resetBlock(block);
     }
