@@ -36,7 +36,6 @@
 #include <daemon/BaseDaemon.h>
 #include <fmt/core.h>
 #include <prometheus/collectable.h>
-#include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
 #include <prometheus/text_serializer.h>
 #include <tici-search-lib/src/lib.rs.h>
