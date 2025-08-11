@@ -39,6 +39,7 @@
 #include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
 #include <prometheus/text_serializer.h>
+#include <tici-search-lib/src/lib.rs.h>
 
 namespace DB
 {
@@ -98,11 +99,31 @@ public:
     {
         auto metrics = collectMetrics();
         auto serializer = std::unique_ptr<prometheus::Serializer>{new prometheus::TextSerializer()};
-        String body = serializer->Serialize(metrics);
+        auto body = concatTextMetrics(serializer->Serialize(metrics), gather_prometheus_metrics());
         response.sendBuffer(body.data(), body.size());
     }
 
 private:
+    String concatTextMetrics(String && tiflash_metrics, ::rust::Vec<::std::uint8_t> && tici_metrics)
+    {
+        if (tiflash_metrics.empty())
+            return tici_metrics;
+        if (tici_metrics.empty())
+            return tiflash_metrics;
+        
+        if (tiflash_metrics.back() != '\n')
+            tiflash_metrics.push_back('\n');
+
+        tiflash_metrics.insert(tiflash_metrics.end(), tici_metrics.begin(), tici_metrics.end());
+
+        if (tiflash_metrics.back() != '\n')
+            tiflash_metrics.push_back('\n');
+
+        LOG_INFO(Logger::get("MetricsPrometheus"), "{}", tiflash_metrics);
+
+        return tiflash_metrics;
+    }
+
     std::vector<prometheus::MetricFamily> collectMetrics() const
     {
         auto collected_metrics = std::vector<prometheus::MetricFamily>{};
