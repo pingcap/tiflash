@@ -106,11 +106,12 @@ public:
 private:
     String concatTextMetrics(String && tiflash_metrics, ::rust::Vec<::std::uint8_t> && tici_metrics)
     {
+        LOG_INFO(Logger::get(""), "tici_metrics: {}", String{tici_metrics.begin(), tici_metrics.end()});
         if (tiflash_metrics.empty())
-            return tici_metrics;
+            return String{tici_metrics.begin(), tici_metrics.end()};
         if (tici_metrics.empty())
             return tiflash_metrics;
-        
+
         if (tiflash_metrics.back() != '\n')
             tiflash_metrics.push_back('\n');
 
@@ -118,8 +119,6 @@ private:
 
         if (tiflash_metrics.back() != '\n')
             tiflash_metrics.push_back('\n');
-
-        LOG_INFO(Logger::get("MetricsPrometheus"), "{}", tiflash_metrics);
 
         return tiflash_metrics;
     }
@@ -173,7 +172,7 @@ private:
     std::vector<std::weak_ptr<prometheus::Collectable>> collectables;
 };
 
-std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
+std::shared_ptr<Poco::Net::HTTPServer> getSecureHTTPServer(
     Context & global_context,
     std::vector<std::weak_ptr<prometheus::Collectable>> collectables,
     const String & address)
@@ -203,6 +202,19 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
 #endif
     Poco::Net::SecureServerSocket socket(context);
 
+    Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
+    Poco::Net::SocketAddress addr = Poco::Net::SocketAddress(address);
+    socket.bind(addr, true);
+    socket.listen();
+    auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectables), socket, http_params);
+    return server;
+}
+
+std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
+    std::vector<std::weak_ptr<prometheus::Collectable>> collectables,
+    const String & address)
+{
+    Poco::Net::ServerSocket socket;
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
     Poco::Net::SocketAddress addr = Poco::Net::SocketAddress(address);
     socket.bind(addr, true);
@@ -299,7 +311,7 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
             std::vector<std::weak_ptr<prometheus::Collectable>> collectables{
                 tiflash_metrics.registry,
                 tiflash_metrics.process_collector};
-            server = getHTTPServer(context, collectables, addr);
+            server = getSecureHTTPServer(context, collectables, addr);
             server->start();
             LOG_INFO(
                 log,
@@ -309,9 +321,11 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
         }
         else
         {
-            exposer = std::make_shared<prometheus::Exposer>(addr);
-            exposer->RegisterCollectable(tiflash_metrics.registry);
-            exposer->RegisterCollectable(tiflash_metrics.process_collector);
+            std::vector<std::weak_ptr<prometheus::Collectable>> collectables{
+                tiflash_metrics.registry,
+                tiflash_metrics.process_collector};
+            server = getHTTPServer(collectables, addr);
+            server->start();
             LOG_INFO(
                 log,
                 "Enable prometheus pull mode; Listen Host = {}, Metrics Port = {}",
