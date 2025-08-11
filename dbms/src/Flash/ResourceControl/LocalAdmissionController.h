@@ -614,9 +614,10 @@ private:
         std::string & err_msg);
     void updateMaxRUPerSecAfterDeleteWithoutLock(uint64_t deleted_user_ru_per_sec);
 
-    void clearCPUTimeWithoutLock(const SteadyClock::time_point & now)
+    void clearCPUTime(const SteadyClock::time_point & now)
     {
         static_assert(CLEAR_CPU_TIME_DURATION > ResourceGroup::COMPUTE_RU_CONSUMPTION_SPEED_INTERVAL);
+        std::lock_guard lock(mu);
         if (now - last_clear_cpu_time >= CLEAR_CPU_TIME_DURATION)
         {
             for (auto & ele : keyspace_resource_groups)
