@@ -104,7 +104,7 @@ public:
     }
 
 private:
-    String concatTextMetrics(String && tiflash_metrics, ::rust::Vec<::std::uint8_t> && tici_metrics)
+    static String concatTextMetrics(String && tiflash_metrics, ::rust::Vec<::std::uint8_t> && tici_metrics)
     {
         if (tiflash_metrics.empty())
             return String{tici_metrics.begin(), tici_metrics.end()};
