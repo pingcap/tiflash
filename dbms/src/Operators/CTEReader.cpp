@@ -32,11 +32,9 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
     }
     case CTEOpStatus::SINK_NOT_REGISTERED:
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
+    case CTEOpStatus::CANCELLED:
     case CTEOpStatus::OK:
         return ret;
-    case CTEOpStatus::CANCELLED:
-        throw Exception(this->cte->getError());
     }
-    throw Exception("Should not reach here");
 }
 } // namespace DB

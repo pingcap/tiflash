@@ -14,6 +14,7 @@
 
 #include <Flash/Pipeline/Schedule/Tasks/NotifyFuture.h>
 #include <Operators/CTE.h>
+#include <Operators/CTEPartition.h>
 #include <Operators/CTESourceOp.h>
 #include <Operators/Operator.h>
 
@@ -42,8 +43,8 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
     case CTEOpStatus::SINK_NOT_REGISTERED:
         this->sw.start();
         return OperatorStatus::WAITING;
-    default:
-        throw Exception("Should not reach here");
+    case CTEOpStatus::CANCELLED:
+        throw Exception(this->cte_reader->getCTE()->getError());
     }
 }
 } // namespace DB

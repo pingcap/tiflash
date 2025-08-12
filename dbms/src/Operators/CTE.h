@@ -112,10 +112,15 @@ public:
     template <bool need_lock>
     bool areAllSinksRegistered()
     {
-        std::shared_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
         if constexpr (need_lock)
-            lock.lock();
-        return this->registered_sink_num == this->expected_sink_num;
+        {
+            std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+            return this->registered_sink_num == this->expected_sink_num;
+        }
+        else
+        {
+            return this->registered_sink_num == this->expected_sink_num;
+        }
     }
 
     void checkSourceConcurrency(size_t concurrency) const

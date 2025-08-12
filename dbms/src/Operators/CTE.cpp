@@ -24,10 +24,11 @@ namespace DB
 CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block)
 {
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
-    std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
 
     if unlikely (!this->areAllSinksRegistered<false>())
         return CTEOpStatus::SINK_NOT_REGISTERED;
+
+    std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
 
     auto status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
     if (status != CTEOpStatus::OK)
