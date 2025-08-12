@@ -243,17 +243,15 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     }
     case tipb::ExecType::TypeCTESource:
     {
-        auto fine_grained_shuffle = FineGrainedShuffle(executor);
         GET_METRIC(tiflash_coprocessor_executor_count, type_cte_source).Increment();
-        pushBack(PhysicalCTESource::build(context, executor_id, log, fine_grained_shuffle, executor->cte_source()));
+        pushBack(PhysicalCTESource::build(context, executor_id, log, executor->cte_source()));
         break;
     }
     case tipb::ExecType::TypeCTESink:
     {
         buildFinalProjectionForCTE(executor->cte_sink());
-        auto fine_grained_shuffle = FineGrainedShuffle(executor);
         GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
-        pushBack(PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack()));
+        pushBack(PhysicalCTESink::build(executor_id, log, popBack()));
         break;
     }
     default:

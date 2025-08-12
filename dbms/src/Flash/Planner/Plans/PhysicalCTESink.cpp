@@ -26,17 +26,12 @@ namespace DB
 PhysicalPlanNodePtr PhysicalCTESink::build(
     const String & executor_id,
     const LoggerPtr & log,
-    const FineGrainedShuffle & fine_grained_shuffle,
     const PhysicalPlanNodePtr & child)
 {
     RUNTIME_CHECK(child);
 
-    auto physical_cte_sink = std::make_shared<PhysicalCTESink>(
-        executor_id,
-        child->getSchema(),
-        fine_grained_shuffle,
-        log->identifier(),
-        child);
+    auto physical_cte_sink
+        = std::make_shared<PhysicalCTESink>(executor_id, child->getSchema(), log->identifier(), child);
     physical_cte_sink->disableRestoreConcurrency();
     return physical_cte_sink;
 }

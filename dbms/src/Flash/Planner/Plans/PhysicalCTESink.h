@@ -27,16 +27,14 @@ public:
     static PhysicalPlanNodePtr build(
         const String & executor_id,
         const LoggerPtr & log,
-        const FineGrainedShuffle & fine_grained_shuffle,
         const PhysicalPlanNodePtr & child);
 
     PhysicalCTESink(
         const String & executor_id_,
         const NamesAndTypes & schema_,
-        const FineGrainedShuffle & fine_grained_shuffle_,
         const String & req_id,
         const PhysicalPlanNodePtr & child_)
-        : PhysicalUnary(executor_id_, PlanType::CTESink, schema_, fine_grained_shuffle_, req_id, child_)
+        : PhysicalUnary(executor_id_, PlanType::CTESink, schema_, FineGrainedShuffle(), req_id, child_)
     {}
 
     void finalizeImpl(const Names & parent_require) override;

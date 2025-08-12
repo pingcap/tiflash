@@ -28,17 +28,15 @@ public:
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const FineGrainedShuffle & fine_grained_shuffle,
         const tipb::CTESource & cte_source);
 
     PhysicalCTESource(
         const String & executor_id_,
         const NamesAndTypes & schema_,
-        const FineGrainedShuffle & fine_grained_shuffle,
         const String & req_id,
         const Block & sample_block_,
         size_t cte_id_)
-        : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, fine_grained_shuffle, req_id)
+        : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, FineGrainedShuffle(), req_id)
         , sample_block(sample_block_)
         , cte_id(cte_id_)
     {}

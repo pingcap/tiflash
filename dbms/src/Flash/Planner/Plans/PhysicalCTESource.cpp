@@ -29,7 +29,6 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     const Context & /*context*/,
     const String & executor_id,
     const LoggerPtr & log,
-    const FineGrainedShuffle & fine_grained_shuffle,
     const tipb::CTESource & cte_source)
 {
     DAGSchema dag_schema;
@@ -44,7 +43,6 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     return std::make_shared<PhysicalCTESource>(
         executor_id,
         schema,
-        fine_grained_shuffle,
         log->identifier(),
         Block(schema),
         cte_source.cte_id());
