@@ -36,9 +36,9 @@
 #include <daemon/BaseDaemon.h>
 #include <fmt/core.h>
 #include <prometheus/collectable.h>
-#include <prometheus/exposer.h>
 #include <prometheus/gauge.h>
 #include <prometheus/text_serializer.h>
+#include <tici-search-lib/src/lib.rs.h>
 
 namespace DB
 {
@@ -98,11 +98,29 @@ public:
     {
         auto metrics = collectMetrics();
         auto serializer = std::unique_ptr<prometheus::Serializer>{new prometheus::TextSerializer()};
-        String body = serializer->Serialize(metrics);
+        auto body = concatTextMetrics(serializer->Serialize(metrics), gather_prometheus_metrics());
         response.sendBuffer(body.data(), body.size());
     }
 
 private:
+    static String concatTextMetrics(String && tiflash_metrics, ::rust::Vec<::std::uint8_t> && tici_metrics)
+    {
+        if (tiflash_metrics.empty())
+            return String{tici_metrics.begin(), tici_metrics.end()};
+        if (tici_metrics.empty())
+            return tiflash_metrics;
+
+        if (tiflash_metrics.back() != '\n')
+            tiflash_metrics.push_back('\n');
+
+        tiflash_metrics.insert(tiflash_metrics.end(), tici_metrics.begin(), tici_metrics.end());
+
+        if (tiflash_metrics.back() != '\n')
+            tiflash_metrics.push_back('\n');
+
+        return tiflash_metrics;
+    }
+
     std::vector<prometheus::MetricFamily> collectMetrics() const
     {
         auto collected_metrics = std::vector<prometheus::MetricFamily>{};
@@ -152,7 +170,7 @@ private:
     std::vector<std::weak_ptr<prometheus::Collectable>> collectables;
 };
 
-std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
+std::shared_ptr<Poco::Net::HTTPServer> getSecureHTTPServer(
     Context & global_context,
     std::vector<std::weak_ptr<prometheus::Collectable>> collectables,
     const String & address)
@@ -182,6 +200,19 @@ std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
 #endif
     Poco::Net::SecureServerSocket socket(context);
 
+    Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
+    Poco::Net::SocketAddress addr = Poco::Net::SocketAddress(address);
+    socket.bind(addr, true);
+    socket.listen();
+    auto server = std::make_shared<Poco::Net::HTTPServer>(new MetricHandlerFactory(collectables), socket, http_params);
+    return server;
+}
+
+std::shared_ptr<Poco::Net::HTTPServer> getHTTPServer(
+    std::vector<std::weak_ptr<prometheus::Collectable>> collectables,
+    const String & address)
+{
+    Poco::Net::ServerSocket socket;
     Poco::Net::HTTPServerParams::Ptr http_params = new Poco::Net::HTTPServerParams;
     Poco::Net::SocketAddress addr = Poco::Net::SocketAddress(address);
     socket.bind(addr, true);
@@ -278,7 +309,7 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
             std::vector<std::weak_ptr<prometheus::Collectable>> collectables{
                 tiflash_metrics.registry,
                 tiflash_metrics.process_collector};
-            server = getHTTPServer(context, collectables, addr);
+            server = getSecureHTTPServer(context, collectables, addr);
             server->start();
             LOG_INFO(
                 log,
@@ -288,9 +319,11 @@ MetricsPrometheus::MetricsPrometheus(Context & context, const AsynchronousMetric
         }
         else
         {
-            exposer = std::make_shared<prometheus::Exposer>(addr);
-            exposer->RegisterCollectable(tiflash_metrics.registry);
-            exposer->RegisterCollectable(tiflash_metrics.process_collector);
+            std::vector<std::weak_ptr<prometheus::Collectable>> collectables{
+                tiflash_metrics.registry,
+                tiflash_metrics.process_collector};
+            server = getHTTPServer(collectables, addr);
+            server->start();
             LOG_INFO(
                 log,
                 "Enable prometheus pull mode; Listen Host = {}, Metrics Port = {}",
