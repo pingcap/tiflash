@@ -28,28 +28,22 @@ enum class CTEOpStatus
     SINK_NOT_REGISTERED
 };
 
+struct BlockWithCounter
+{
+    BlockWithCounter(const Block & block_, Int16 counter_)
+        : block(block_)
+        , counter(counter_)
+    {}
+    Block block;
+    Int16 counter;
+};
+
 struct CTEPartition
 {
     std::unique_ptr<std::mutex> mu;
-    Blocks blocks;
+    std::vector<BlockWithCounter> blocks;
     std::vector<size_t> fetch_block_idxs;
     size_t memory_usages = 0;
     std::unique_ptr<PipeConditionVariable> pipe_cv;
-
-    void tryToDeleteBlockNoLock(size_t idx)
-    {
-        bool need_delete = true;
-        for (auto item : this->fetch_block_idxs)
-        {
-            if (item <= idx)
-            {
-                need_delete = false;
-                break;
-            }
-        }
-
-        if (need_delete)
-            this->blocks[idx].clear();
-    }
 };
 } // namespace DB

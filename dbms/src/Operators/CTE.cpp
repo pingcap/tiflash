@@ -35,9 +35,9 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
         return status;
 
     auto idx = this->partitions[partition_id].fetch_block_idxs[cte_reader_id]++;
-    block = this->partitions[partition_id].blocks[idx];
-
-    this->partitions[partition_id].tryToDeleteBlockNoLock(idx);
+    block = this->partitions[partition_id].blocks[idx].block;
+    if ((--this->partitions[partition_id].blocks[idx].counter) == 0)
+        this->partitions[partition_id].blocks[idx].block.clear();
     return status;
 }
 
@@ -54,8 +54,9 @@ bool CTE::pushBlock(size_t partition_id, const Block & block)
 
     std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
     this->partitions[partition_id].memory_usages += block.bytes();
-    this->partitions[partition_id].blocks.push_back(block);
-    this->partitions[partition_id].pipe_cv->notifyOne();
+    this->partitions[partition_id].blocks.push_back(
+        BlockWithCounter(block, static_cast<Int16>(this->expected_source_num)));
+    this->partitions[partition_id].pipe_cv->notifyAll();
     return true;
 }
 
