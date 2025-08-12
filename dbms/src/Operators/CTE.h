@@ -60,8 +60,8 @@ public:
     CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block);
 
     bool pushBlock(size_t partition_id, const Block & block);
-    void notifyEOF() { this->notifyImpl(true, ""); }
-    void notifyCancel(const String & msg) { this->notifyImpl(false, msg); }
+    void notifyEOF() { this->notifyImpl<false>(true, ""); }
+    void notifyCancel(const String & msg) { this->notifyImpl<true>(false, msg); }
 
     String getError()
     {
@@ -131,10 +131,32 @@ public:
             this->partition_num);
     }
 
+    void sinkExit()
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        this->sink_exit_num++;
+        if (this->getSinkExitNumNoLock() == this->getExpectedSinkNum())
+            this->notifyEOF();
+    }
+
+    void sourceExit()
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        this->source_exit_num++;
+    }
+
+    bool allExit()
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        return this->getTotalExitNumNoLock() == this->getExpectedTotalNum();
+    }
+
+private:
+    Int32 getTotalExitNumNoLock() const noexcept { return this->sink_exit_num + this->source_exit_num; }
+    Int32 getSinkExitNumNoLock() const noexcept { return this->sink_exit_num; }
     Int32 getExpectedSinkNum() const noexcept { return this->expected_sink_num; }
     Int32 getExpectedTotalNum() const noexcept { return this->getExpectedSinkNum() + this->expected_source_num; }
 
-private:
     CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id)
     {
         if unlikely (this->is_cancelled)
@@ -147,9 +169,12 @@ private:
         return CTEOpStatus::OK;
     }
 
+    template<bool need_lock>
     void notifyImpl(bool is_eof, const String & msg)
     {
-        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
+        if constexpr (need_lock)
+            lock.lock();
 
         if likely (is_eof)
             this->is_eof = true;
@@ -179,5 +204,8 @@ private:
     const size_t expected_sink_num;
     const size_t expected_source_num;
     size_t registered_sink_num = 0;
+
+    Int32 sink_exit_num = 0;
+    Int32 source_exit_num = 0;
 };
 } // namespace DB

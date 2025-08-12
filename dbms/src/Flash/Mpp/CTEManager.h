@@ -21,30 +21,6 @@
 
 namespace DB
 {
-// Data race is prevented by the lock in CTEManager
-class CTEWithCounter
-{
-public:
-    explicit CTEWithCounter(std::shared_ptr<CTE> cte_)
-        : cte(cte_)
-    {}
-
-    void sinkExit() { this->sink_exit_num++; }
-    void sourceExit() { this->source_exit_num++; }
-
-    Int32 getSinkExitNum() const { return this->sink_exit_num; }
-    Int32 getSourceExitNum() const { return this->source_exit_num; }
-    Int32 getTotalExitNum() const { return this->getSinkExitNum() + this->getSourceExitNum(); }
-
-    std::shared_ptr<CTE> getCTE() const { return this->cte; }
-
-private:
-    std::shared_ptr<CTE> cte;
-
-    Int32 sink_exit_num = 0;
-    Int32 source_exit_num = 0;
-};
-
 class CTEManager
 {
 public:
@@ -59,6 +35,6 @@ public:
 
 private:
     std::mutex mu;
-    std::unordered_map<String, CTEWithCounter> ctes;
+    std::unordered_map<String, std::shared_ptr<CTE>> ctes;
 };
 } // namespace DB

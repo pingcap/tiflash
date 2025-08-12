@@ -29,8 +29,8 @@ void CTEManager::releaseCTEBySource(const String & query_id_and_cte_id)
         // Maybe the task is cancelled and the cte has been released
         return;
 
-    iter->second.sourceExit();
-    if (iter->second.getTotalExitNum() == iter->second.getCTE()->getExpectedTotalNum())
+    iter->second->sourceExit();
+    if (iter->second->allExit())
         this->ctes.erase(iter);
 }
 
@@ -42,12 +42,10 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
         // Maybe the task is cancelled and the cte has been released
         return;
 
-    CTEWithCounter & cte_with_counter = iter->second;
-    cte_with_counter.getCTE()->addResp(resp);
-    cte_with_counter.sinkExit();
-    if (cte_with_counter.getSinkExitNum() == cte_with_counter.getCTE()->getExpectedSinkNum())
-        cte_with_counter.getCTE()->notifyEOF();
-    if (cte_with_counter.getTotalExitNum() == cte_with_counter.getCTE()->getExpectedTotalNum())
+    std::shared_ptr<CTE> cte = iter->second;
+    cte->addResp(resp);
+    cte->sinkExit();
+    if (cte->allExit())
         this->ctes.erase(iter);
 }
 
@@ -69,11 +67,11 @@ std::shared_ptr<CTE> CTEManager::getOrCreateCTE(
     if (iter == this->ctes.end())
     {
         cte = std::make_shared<CTE>(concurrency, expected_sink_num, expected_source_num);
-        this->ctes.insert(std::make_pair(query_id_and_cte_id, CTEWithCounter(cte)));
+        this->ctes.insert(std::make_pair(query_id_and_cte_id, cte));
     }
     else
     {
-        cte = iter->second.getCTE();
+        cte = iter->second;
     }
 
     return cte;
