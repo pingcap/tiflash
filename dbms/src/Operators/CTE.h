@@ -45,15 +45,6 @@ public:
         }
     }
 
-    void checkPartitionNum(size_t partition_num) const
-    {
-        RUNTIME_CHECK_MSG(
-            this->partition_num == partition_num,
-            "expect partition num: {}, actual: {}",
-            this->partition_num,
-            partition_num);
-    }
-
     size_t getCTEReaderID()
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);

@@ -77,7 +77,6 @@ std::shared_ptr<CTE> CTEManager::getOrCreateCTE(
         cte = iter->second.getCTE();
     }
 
-    cte->checkPartitionNum(concurrency);
     return cte;
 }
 } // namespace DB
