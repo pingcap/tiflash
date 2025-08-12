@@ -58,6 +58,8 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
 {
     const String & query_id_and_cte_id = context.getDAGContext()->getQueryIDAndCTEIDForSource(this->cte_id);
     auto cte = context.getDAGContext()->getCTESource()[this->cte_id];
+    RUNTIME_CHECK(cte);
+
     cte->checkSourceConcurrency(concurrency);
 
     auto cte_reader = std::make_shared<CTEReader>(context, query_id_and_cte_id, cte);

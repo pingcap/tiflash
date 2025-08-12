@@ -144,7 +144,7 @@ private:
     void initQueryOperatorSpillContexts(
         const std::shared_ptr<QueryOperatorSpillContexts> & mpp_query_operator_spill_contexts);
 
-    // return false if we can't find exchange receiver
+    // return true if we find cte source executor
     bool initExchangeReceivers();
 
     void initCTESources();

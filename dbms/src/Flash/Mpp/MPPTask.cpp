@@ -344,7 +344,7 @@ void MPPTask::registerCTESink()
 
 bool MPPTask::initExchangeReceivers()
 {
-    bool find_exchange_receiver = false;
+    bool find_cte_source = false;
     auto receiver_set_local = std::make_shared<MPPReceiverSet>(log->identifier());
     try
     {
@@ -352,7 +352,6 @@ bool MPPTask::initExchangeReceivers()
             if (executor.tp() == tipb::ExecType::TypeExchangeReceiver)
             {
                 assert(executor.has_executor_id());
-                find_exchange_receiver = true;
                 const auto & executor_id = executor.executor_id();
                 // In order to distinguish different exchange receivers.
                 auto exchange_receiver = std::make_shared<ExchangeReceiver>(
@@ -376,6 +375,11 @@ bool MPPTask::initExchangeReceivers()
                     throw Exception(
                         "exchange receiver map can not be initialized, because the task is not in running state");
             }
+            else if (executor.tp() == tipb::ExecType::TypeCTESource)
+            {
+                find_cte_source = true;
+            }
+
             return true;
         });
     }
@@ -388,9 +392,6 @@ bool MPPTask::initExchangeReceivers()
         throw;
     }
 
-    if unlikely (!find_exchange_receiver)
-        return false;
-
     {
         std::lock_guard lock(mtx);
         if (status != RUNNING)
@@ -398,7 +399,7 @@ bool MPPTask::initExchangeReceivers()
         receiver_set = std::move(receiver_set_local);
     }
     dag_context->setMPPReceiverSet(receiver_set);
-    return true;
+    return find_cte_source;
 }
 
 void MPPTask::initCTESources()
@@ -589,7 +590,7 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
-    if unlikely (!initExchangeReceivers())
+    if unlikely (initExchangeReceivers())
         initCTESources();
     LOG_DEBUG(log, "init exchange receiver done");
     query_executor_holder.set(queryExecute(*context));
