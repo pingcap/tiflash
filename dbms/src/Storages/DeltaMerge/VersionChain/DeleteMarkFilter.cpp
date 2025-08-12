@@ -63,7 +63,8 @@ UInt32 buildDeleteMarkFilterDMFile(
     const UInt32 start_pack_id,
     const RSResults & rs_results,
     const ssize_t start_row_id,
-    BitmapFilter & filter)
+    BitmapFilter & filter,
+    const LoggerPtr & log)
 {
     auto need_read_packs = std::make_shared<IdSet>();
     std::unordered_map<UInt32, UInt32> start_row_id_of_need_read_packs; // pack_id -> start_row_id
@@ -81,12 +82,15 @@ UInt32 buildDeleteMarkFilterDMFile(
         if (!rs_results[i].isUse())
             continue;
 
+        LOG_DEBUG(log, "pack_id: {}, deleted_rows: {}", pack_id, pack_properties.property(pack_id).deleted_rows());
         if (pack_properties.property(pack_id).deleted_rows() > 0)
         {
             need_read_packs->insert(pack_id);
             start_row_id_of_need_read_packs.emplace(pack_id, pack_start_row_id);
         }
     }
+
+    LOG_DEBUG(log, "need_read_packs: {}", *need_read_packs);
 
     if (need_read_packs->empty())
         return 0;
@@ -119,7 +123,8 @@ UInt32 buildDeleteMarkFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const ssize_t start_row_id,
-    BitmapFilter & filter)
+    BitmapFilter & filter,
+    const LoggerPtr & log)
 {
     auto [valid_handle_res, valid_start_pack_id]
         = getClippedRSResultsByRange(dm_context, cf_big.getFile(), cf_big.getRange());
@@ -131,14 +136,16 @@ UInt32 buildDeleteMarkFilterColumnFileBig(
         valid_start_pack_id,
         valid_handle_res,
         start_row_id,
-        filter);
+        filter,
+        log);
 }
 
 UInt32 buildDeleteMarkFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter)
+    BitmapFilter & filter,
+    const LoggerPtr & log)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
@@ -148,7 +155,8 @@ UInt32 buildDeleteMarkFilterStable(
         /*start_pack_id*/ 0,
         stable_filter_res->getPackRes(),
         /*start_row_id*/ 0,
-        filter);
+        filter,
+        log);
 }
 
 UInt32 buildDeleteMarkFilter(
@@ -164,7 +172,7 @@ UInt32 buildDeleteMarkFilter(
     const auto cfs = snapshot.delta->getColumnFiles();
     const auto & data_provider = snapshot.delta->getDataProvider();
 
-    auto filtered_out_rows = buildDeleteMarkFilterStable(dm_context, stable, stable_filter_res, filter);
+    auto filtered_out_rows = buildDeleteMarkFilterStable(dm_context, stable, stable_filter_res, filter, snapshot.log);
     auto read_rows = stable_rows;
     for (const auto & cf : cfs)
     {
@@ -184,7 +192,8 @@ UInt32 buildDeleteMarkFilter(
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            filtered_out_rows += buildDeleteMarkFilterColumnFileBig(dm_context, *cf_big, start_row_id, filter);
+            filtered_out_rows
+                += buildDeleteMarkFilterColumnFileBig(dm_context, *cf_big, start_row_id, filter, snapshot.log);
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
