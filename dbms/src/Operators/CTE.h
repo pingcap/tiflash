@@ -20,7 +20,6 @@
 #include <Operators/CTEPartition.h>
 #include <tipb/select.pb.h>
 
-#include <algorithm>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -131,6 +130,9 @@ public:
             concurrency,
             this->partition_num);
     }
+
+    Int32 getExpectedSinkNum() const noexcept { return this->expected_sink_num; }
+    Int32 getExpectedTotalNum() const noexcept { return this->getExpectedSinkNum() + this->expected_source_num; }
 
 private:
     CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id)
