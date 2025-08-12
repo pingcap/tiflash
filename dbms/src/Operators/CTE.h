@@ -169,7 +169,7 @@ private:
         return CTEOpStatus::OK;
     }
 
-    template<bool need_lock>
+    template <bool need_lock>
     void notifyImpl(bool is_eof, const String & msg)
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
