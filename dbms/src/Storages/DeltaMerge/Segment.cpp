@@ -3032,13 +3032,25 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilter(
     {
         if (enable_version_chain)
         {
-            return ::DB::DM::buildMVCCBitmapFilter(
+            auto bitmap_filter = ::DB::DM::buildMVCCBitmapFilter(
                 dm_context,
                 *segment_snap,
                 read_ranges,
                 pack_filter_results,
                 start_ts,
                 *version_chain);
+            if (dm_context.isVersionChainForTestEnabled())
+            {
+                checkMVCCBitmap(
+                    dm_context,
+                    segment_snap,
+                    read_ranges,
+                    pack_filter_results,
+                    start_ts,
+                    expected_block_size,
+                    *bitmap_filter);
+            }
+            return bitmap_filter;
         }
     }
 
