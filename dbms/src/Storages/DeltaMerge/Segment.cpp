@@ -3041,14 +3041,24 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilter(
                 *version_chain);
             if (dm_context.isVersionChainForTestEnabled())
             {
-                checkMVCCBitmap(
-                    dm_context,
-                    segment_snap,
-                    read_ranges,
-                    pack_filter_results,
-                    start_ts,
-                    expected_block_size,
-                    *bitmap_filter);
+                if (is_common_handle)
+                    checkMVCCBitmap<String>(
+                        dm_context,
+                        segment_snap,
+                        read_ranges,
+                        pack_filter_results,
+                        start_ts,
+                        expected_block_size,
+                        *bitmap_filter);
+                else
+                    checkMVCCBitmap<Int64>(
+                        dm_context,
+                        segment_snap,
+                        read_ranges,
+                        pack_filter_results,
+                        start_ts,
+                        expected_block_size,
+                        *bitmap_filter);
             }
             return bitmap_filter;
         }
