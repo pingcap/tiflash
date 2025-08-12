@@ -244,9 +244,6 @@ void MPPTask::run()
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
-    if unlikely (!dag_context->dag_request.rootExecutor().has_exchange_sender())
-        return;
-
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();
