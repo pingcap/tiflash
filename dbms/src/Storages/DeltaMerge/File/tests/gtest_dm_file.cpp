@@ -41,6 +41,8 @@
 #include <algorithm>
 #include <magic_enum.hpp>
 #include <vector>
+
+#include "Columns/ColumnArray.h"
 namespace DB
 {
 namespace ErrorCodes
@@ -930,6 +932,176 @@ try
                 createColumn<Int64>(createNumbers<Int64>(num_rows_write / 3, num_rows_write)),
                 createVecFloat32Column<Array>(partial_expect_arr_values),
             }));
+    }
+}
+CATCH
+
+TEST_F(DMFileMetaV2Test, WriteReadNullableVectorColumn)
+try
+{
+    // Verify that compression and checksum settings are configured correctly
+    ASSERT_EQ(dbContext().getSettingsRef().dt_compression_method.get(), CompressionMethod::LZ4);
+    ASSERT_EQ(dbContext().getSettingsRef().dt_checksum_algorithm.get(), ChecksumAlgo::XXH3);
+    ASSERT_TRUE(dm_file->getConfiguration().has_value());
+    ASSERT_EQ(dm_file->getConfiguration()->getChecksumAlgorithm(), ChecksumAlgo::XXH3);
+
+    // Define columns: ID (Int64, not null) and embedding (Array(Float32), nullable)
+    auto cols = std::make_shared<ColumnDefines>();
+
+    // ID column (not null)
+    ColumnDefine id_cd(1, "id", std::make_shared<DataTypeInt64>());
+    cols->emplace_back(id_cd);
+
+    // Embedding column (nullable vector with 1536 dimensions)
+    ColumnDefine embedding_cd(
+        2,
+        "embedding",
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeArray>(std::make_shared<DataTypeFloat32>())));
+    cols->emplace_back(embedding_cd);
+
+    const size_t total_rows = 1000;
+    const size_t filled_embedding_rows = 100;
+    const size_t embedding_dimensions = 1536;
+
+    // Prepare data in batches to avoid memory issues
+    const size_t batch_size = 50;
+    const size_t num_batches = total_rows / batch_size;
+
+    {
+        auto stream = std::make_shared<DMFileBlockOutputStream>(dbContext(), dm_file, *cols);
+        stream->writePrefix();
+
+        for (size_t batch = 0; batch < num_batches; ++batch)
+        {
+            size_t batch_start = batch * batch_size;
+            size_t batch_end = (batch + 1) * batch_size;
+
+            Block block;
+
+            // Create ID column data (fully filled)
+            std::vector<Int64> id_data;
+            id_data.reserve(batch_size);
+            for (size_t i = batch_start; i < batch_end; ++i)
+            {
+                id_data.push_back(static_cast<Int64>(i));
+            }
+            block.insert(DB::tests::createColumn<Int64>(id_data, id_cd.name, id_cd.id));
+
+            // Create embedding column data (nullable, only first 100 rows filled)
+            // Use a simpler approach similar to existing tests
+            std::vector<std::optional<Array>> embedding_data;
+            embedding_data.reserve(batch_size);
+
+            for (size_t i = batch_start; i < batch_end; ++i)
+            {
+                if (i < filled_embedding_rows)
+                {
+                    // Create a 1536-dimension vector with values based on row index
+                    Array vec;
+                    vec.reserve(embedding_dimensions);
+                    for (size_t dim = 0; dim < embedding_dimensions; ++dim)
+                    {
+                        // Use a simple pattern: row_id + dimension_index * 0.001
+                        vec.push_back(static_cast<Float64>(i + dim * 0.001));
+                    }
+                    embedding_data.push_back(vec);
+                }
+                else
+                {
+                    // Null value for rows beyond the first 100
+                    embedding_data.push_back(std::nullopt);
+                }
+            }
+
+            // Create nullable array column using the tuple approach
+            auto embedding_col = DB::tests::createColumn<Nullable<Array>>(
+                std::make_tuple(std::make_shared<DataTypeFloat32>()),
+                embedding_data);
+            embedding_col.name = embedding_cd.name;
+            embedding_col.column_id = embedding_cd.id;
+            block.insert(embedding_col);
+
+            stream->write(block, DMFileBlockOutputStream::BlockProperty{0, 0, 0, 0});
+        }
+
+        stream->writeSuffix();
+    }
+
+    // Read back and verify the data
+    {
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        builder.setRowsThreshold(100);
+        auto stream = builder.build(
+            dm_file,
+            *cols,
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
+            std::make_shared<ScanContext>());
+
+        size_t total_rows_read = 0;
+        size_t non_null_embedding_count = 0;
+        size_t null_embedding_count = 0;
+
+        while (Block block = stream->read())
+        {
+            if (!block)
+                break;
+
+            ASSERT_EQ(block.columns(), 2);
+
+            auto id_column = block.getByName("id").column;
+            auto embedding_column = block.getByName("embedding").column;
+
+            // Verify column types
+            ASSERT_TRUE(id_column->isNumeric());
+            ASSERT_TRUE(embedding_column->isColumnNullable());
+
+            const auto * nullable_embedding = static_cast<const ColumnNullable *>(embedding_column.get());
+            auto nested_column = nullable_embedding->getNestedColumnPtr();
+            auto null_map = nullable_embedding->getNullMapColumnPtr();
+
+            // Check if nested column is array type
+            ASSERT_TRUE(typeid_cast<const ColumnArray *>(nested_column.get()) != nullptr);
+
+            for (size_t i = 0; i < block.rows(); ++i)
+            {
+                // Verify ID values
+                Int64 id_value = id_column->getInt(i);
+                ASSERT_EQ(id_value, static_cast<Int64>(total_rows_read + i));
+
+                // Verify embedding values
+                bool is_null = null_map->getUInt(i) != 0;
+                if (total_rows_read + i < filled_embedding_rows)
+                {
+                    // Should not be null for first 100 rows
+                    ASSERT_FALSE(is_null) << "Row " << (total_rows_read + i) << " should not be null";
+
+                    if (!is_null)
+                    {
+                        const auto * array_column = static_cast<const ColumnArray *>(nested_column.get());
+
+                        // Verify array size (should be 1536 dimensions)
+                        size_t array_size = array_column->sizeAt(non_null_embedding_count);
+                        ASSERT_EQ(array_size, embedding_dimensions)
+                            << "Row " << (total_rows_read + i) << " has wrong embedding dimension";
+
+                        non_null_embedding_count++;
+                    }
+                }
+                else
+                {
+                    // Should be null for rows beyond first 100
+                    ASSERT_TRUE(is_null) << "Row " << (total_rows_read + i) << " should be null";
+                    null_embedding_count++;
+                }
+            }
+
+            total_rows_read += block.rows();
+        }
+
+        // Final verification for first DMFile
+        ASSERT_EQ(total_rows_read, total_rows);
+        ASSERT_EQ(non_null_embedding_count, filled_embedding_rows);
+        ASSERT_EQ(null_embedding_count, total_rows - filled_embedding_rows);
     }
 }
 CATCH
@@ -1923,7 +2095,6 @@ try
     }
 }
 CATCH
-
 
 INSTANTIATE_TEST_CASE_P(
     DTFileMode, //
