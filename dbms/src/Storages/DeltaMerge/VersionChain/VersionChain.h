@@ -142,7 +142,7 @@ private:
     friend class tests::NewHandleIndexTest;
     friend class tests::VersionChainTest;
 
-    std::mutex mtx;
+    mutable std::mutex mtx;
     UInt32 replayed_rows_and_deletes = 0; // delta.getRows() + delta.getDeletes()
     // After replaySnapshot, base_versions->size() == delta.getRows().
     // The records in delta correspond one-to-one with base_versions.

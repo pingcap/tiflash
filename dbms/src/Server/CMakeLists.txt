@@ -124,7 +124,7 @@ if (OS_LINUX)
                 DESTINATION ".")
     endif()
 
-    if (USE_INTERNAL_LIBCLARA)
+    if (ENABLE_CLARA AND USE_INTERNAL_LIBCLARA)
         install (TARGETS clara_shared
                 COMPONENT tiflash-release
                 DESTINATION ".")
@@ -134,12 +134,14 @@ if (OS_LINUX)
         install (SCRIPT ${TiFlash_SOURCE_DIR}/cmake/tiflash_linux_post_install.cmake COMPONENT tiflash-release)
     endif()
     install (SCRIPT ${TiFlash_SOURCE_DIR}/contrib/tiflash-proxy-cmake/tiflash_proxy_linux_post_install.cmake COMPONENT tiflash-release)
-    install (SCRIPT ${TiFlash_SOURCE_DIR}/libs/libclara-cmake/linux_post_install.cmake COMPONENT tiflash-release)
+    if (ENABLE_CLARA)
+        install (SCRIPT ${TiFlash_SOURCE_DIR}/libs/libclara-cmake/linux_post_install.cmake COMPONENT tiflash-release)
+    endif()
 elseif(APPLE)
     # set build rpaths, so that executables can be directly called in build tree (easy to debug)
     set_target_properties(tiflash PROPERTIES BUILD_RPATH "@executable_path/;@executable_path/${TIFLASH_PROXY_LIB_RPATH}/")
     set_target_properties(tiflash PROPERTIES INSTALL_RPATH "@executable_path/")
-    if (USE_INTERNAL_LIBCLARA)
+    if (ENABLE_CLARA AND USE_INTERNAL_LIBCLARA)
         install (TARGETS clara_shared
                 COMPONENT tiflash-release
                 DESTINATION ".")

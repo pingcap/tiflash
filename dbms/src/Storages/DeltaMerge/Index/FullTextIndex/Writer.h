@@ -13,7 +13,9 @@
 // limitations under the License.
 
 #pragma once
+#include <Common/config.h>
 
+#if ENABLE_CLARA
 #include <Columns/ColumnVector.h>
 #include <Columns/IColumn.h>
 #include <IO/Buffer/WriteBuffer.h>
@@ -101,3 +103,4 @@ private:
 };
 
 } // namespace DB::DM
+#endif
