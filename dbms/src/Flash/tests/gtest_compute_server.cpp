@@ -1318,7 +1318,7 @@ TEST_F(ComputeServerRunner, randomFailpointForPipeline)
 try
 {
     enablePipeline(true);
-    startServers(1);
+    startServers(3);
     std::vector<String> failpoints{
         "random_pipeline_model_task_run_failpoint-0.8",
         "random_pipeline_model_task_construct_failpoint-1.0",
