@@ -70,7 +70,7 @@ constexpr int S3StreamError = -2;
 
 bool isRetryableError(int ret, int err)
 {
-    return ret == S3StreamError || err == ECONNRESET || err == EAGAIN;
+    return ret == S3StreamError || err == ECONNRESET || err == EAGAIN || err == EINPROGRESS;
 }
 } // namespace
 
@@ -170,6 +170,8 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     if (offset_ < cur_offset)
     {
         cur_offset = offset_;
+        cur_retry = 0;
+
         if (!initialize())
         {
             return S3StreamError;
