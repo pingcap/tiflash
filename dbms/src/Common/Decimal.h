@@ -163,10 +163,11 @@ struct SumDecimalInferer
 
 struct AvgDecimalInferer
 {
+    static constexpr PrecType decimal_longlong_digits = 22;
     static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, ScaleType div_precincrement)
     {
         return {
-            std::min(left_prec + div_precincrement, decimal_max_prec),
+            std::min(left_prec + div_precincrement + decimal_longlong_digits, decimal_max_prec),
             std::min(left_scale + div_precincrement, decimal_max_scale)};
     }
 };
