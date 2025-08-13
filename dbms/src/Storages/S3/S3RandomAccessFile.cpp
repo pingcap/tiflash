@@ -70,7 +70,7 @@ constexpr int S3StreamError = -2;
 
 bool isRetryableError(int ret, int err)
 {
-    return ret == S3StreamError || err == ECONNRESET || err == EAGAIN;
+    return ret == S3StreamError || err == ECONNRESET || err == EAGAIN || err == EINPROGRESS;
 }
 } // namespace
 
@@ -156,7 +156,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
 {
     RUNTIME_CHECK_MSG(whence == SEEK_SET, "Only SEEK_SET mode is allowed, but {} is received", whence);
     RUNTIME_CHECK_MSG(
-        offset_ >= cur_offset && offset_ <= content_length,
+        offset_ >= 0 && offset_ <= content_length,
         "Seek position is out of bounds: offset={}, cur_offset={}, content_length={}",
         offset_,
         cur_offset,
@@ -166,6 +166,20 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     {
         return cur_offset;
     }
+
+    if (offset_ < cur_offset)
+    {
+        cur_offset = offset_;
+        cur_retry = 0;
+
+        if (!initialize())
+        {
+            return S3StreamError;
+        }
+        return cur_offset;
+    }
+
+    // Forward seek
     Stopwatch sw;
     ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
     auto & istr = read_result.GetBody();
