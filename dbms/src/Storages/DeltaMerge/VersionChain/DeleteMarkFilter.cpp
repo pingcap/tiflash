@@ -82,8 +82,9 @@ UInt32 buildDeleteMarkFilterDMFile(
         if (!rs_results[i].isUse())
             continue;
 
-        LOG_DEBUG(log, "pack_id: {}, deleted_rows: {}", pack_id, pack_properties.property(pack_id).deleted_rows());
-        //if (pack_properties.property(pack_id).deleted_rows() > 0)
+        if (static_cast<UInt32>(pack_properties.property_size()) <= pack_id
+            || !pack_properties.property(pack_id).has_deleted_rows()
+            || pack_properties.property(pack_id).deleted_rows() > 0)
         {
             need_read_packs->insert(pack_id);
             start_row_id_of_need_read_packs.emplace(pack_id, pack_start_row_id);
