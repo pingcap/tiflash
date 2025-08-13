@@ -419,29 +419,17 @@ std::optional<resource_manager::TokenBucketsRequest> LocalAdmissionController::b
     }
     else
     {
-<<<<<<< HEAD
         std::unordered_set<std::string> local_low_token_resource_groups;
+        std::unordered_map<std::string, ResourceGroupPtr> local_resource_groups;
         {
             std::lock_guard lock(mu);
             local_low_token_resource_groups = low_token_resource_groups;
             low_token_resource_groups.clear();
+
+            local_resource_groups = resource_groups;
         }
 
-        for (const auto & iter : resource_groups)
-=======
-        std::unordered_set<std::pair<KeyspaceID, std::string>, LACPairHash> local_keyspace_low_token_resource_groups;
-        std::unordered_map<std::pair<KeyspaceID, std::string>, ResourceGroupPtr, LACPairHash>
-            local_keyspace_resource_groups;
-        {
-            std::lock_guard lock(mu);
-            local_keyspace_low_token_resource_groups = keyspace_low_token_resource_groups;
-            keyspace_low_token_resource_groups.clear();
-
-            local_keyspace_resource_groups = keyspace_resource_groups;
-        }
-
-        for (const auto & ele : local_keyspace_resource_groups)
->>>>>>> dce9588b05 (fix data race of LocalAdmissionController (#10332))
+        for (const auto & iter : local_resource_groups)
         {
             const auto rg_name = iter.first;
             const bool need_fetch_token = local_low_token_resource_groups.contains(rg_name);
@@ -849,11 +837,7 @@ bool LocalAdmissionController::handleDeleteEvent(const mvccpb::KeyValue & kv, st
             updateMaxRUPerSecAfterDeleteWithoutLock(deleted_user_ru_per_sec);
         }
     }
-<<<<<<< HEAD
-    LOG_DEBUG(log, "delete resource group {}, erase_num: {}", name, erase_num);
-=======
-    LOG_INFO(log, "delete resource group {}(keyspace={}), erase_num: {}", name, keyspace_id, erase_num);
->>>>>>> dce9588b05 (fix data race of LocalAdmissionController (#10332))
+    LOG_INFO(log, "delete resource group {}, erase_num: {}", name, erase_num);
     return true;
 }
 
@@ -888,11 +872,7 @@ bool LocalAdmissionController::handlePutEvent(const mvccpb::KeyValue & kv, std::
             updateMaxRUPerSecAfterDeleteWithoutLock(deleted_user_ru_per_sec);
         }
     }
-<<<<<<< HEAD
-    LOG_DEBUG(log, "modify resource group to: {}", group_pb.ShortDebugString());
-=======
-    LOG_INFO(log, "modify resource group {}(keyspace={}) to: {}", name, keyspace_id, group_pb.ShortDebugString());
->>>>>>> dce9588b05 (fix data race of LocalAdmissionController (#10332))
+    LOG_INFO(log, "modify resource group to: {}", group_pb.ShortDebugString());
     return true;
 }
 
