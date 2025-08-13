@@ -1332,6 +1332,9 @@ try
     auto log = Logger::get();
     for (const auto & failpoint : failpoints)
     {
+        // Cancel test will make MockTableScanBlockInputStream output infinite blocks,
+        // but suffix failpoint will have to be triggered when table scan finish.
+        // So for suffix related failpoint, make it non cancel test.
         const bool is_cancel_test = !failpoint.contains("suffix");
         LOG_DEBUG(log, "running failpoint: {}, is_cancel_test: {}", failpoint, is_cancel_test);
         auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
@@ -1347,9 +1350,6 @@ try
             "");
         try
         {
-            // Cancel test will make MockTableScanBlockInputStream output infinite blocks,
-            // but suffix failpoint will have to be triggered when table scan finish.
-            // So for suffix related failpoint, make it non cancel test.
             BlockInputStreamPtr tmp = prepareMPPStreams(
                 context.scan("test_db", "l_table")
                     .join(context.scan("test_db", "r_table"), tipb::JoinType::TypeLeftOuterJoin, {col("join_c")})
