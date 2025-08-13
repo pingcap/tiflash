@@ -297,7 +297,7 @@ void PhysicalPlan::buildFinalProjectionForCTE(const tipb::CTESink & sink)
         "",
         dagContext().keep_session_timezone_info,
         popBack(),
-        true);
+        sink.cte_id());
     pushBack(final_projection);
 }
 
