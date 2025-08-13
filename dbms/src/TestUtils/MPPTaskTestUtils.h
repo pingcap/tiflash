@@ -76,10 +76,17 @@ public:
     static size_t serverNum();
 
     // run mpp tasks which are ready to cancel, the return value is the start_ts of query.
-    BlockInputStreamPtr prepareMPPStreams(DAGRequestBuilder builder, const DAGProperties & properties);
+    // if is_cancel_test is true, mock table scan will be infinite.
+    BlockInputStreamPtr prepareMPPStreams(
+        DAGRequestBuilder builder,
+        const DAGProperties & properties,
+        bool is_cancel_test = true);
 
     // prepareMPPTasks is not thread safe, the builder's executor_index(which is ref to context's index) is updated during this process
-    std::vector<QueryTask> prepareMPPTasks(DAGRequestBuilder builder, const DAGProperties & properties);
+    std::vector<QueryTask> prepareMPPTasks(
+        DAGRequestBuilder builder,
+        const DAGProperties & properties,
+        bool is_cancel_test = true);
 
     // prepareMPPTasks is thread safe
     std::vector<QueryTask> prepareMPPTasks(
