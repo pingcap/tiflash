@@ -81,7 +81,12 @@ UInt32 buildDeleteMarkFilterDMFile(
         if (!rs_results[i].isUse())
             continue;
 
-        if (pack_properties.property(pack_id).deleted_rows() > 0)
+        // deleted_rows is added after v6.1.
+        // For compatibility purposes, if either pack_properties is missing or deleted_rows is unavailable,
+        // the delmark data must be read and used for filtering.
+        if (static_cast<UInt32>(pack_properties.property_size()) <= pack_id
+            || !pack_properties.property(pack_id).has_deleted_rows()
+            || pack_properties.property(pack_id).deleted_rows() > 0)
         {
             need_read_packs->insert(pack_id);
             start_row_id_of_need_read_packs.emplace(pack_id, pack_start_row_id);
