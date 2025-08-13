@@ -103,7 +103,7 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     const String & column_prefix,
     bool keep_session_timezone_info,
     const PhysicalPlanNodePtr & child,
-    bool is_cte)
+    Int32 cte_id)
 {
     RUNTIME_CHECK(child);
 
@@ -119,9 +119,9 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
 
     RUNTIME_CHECK(final_project_aliases.size() == output_offsets.size());
 
-    if unlikely (is_cte)
+    if unlikely (cte_id >= 0)
         for (size_t i = 0; i < final_project_aliases.size(); i++)
-            final_project_aliases[i].second = genNameForCTESource(i);
+            final_project_aliases[i].second = genNameForCTESource(cte_id, i);
 
     project_actions->add(ExpressionAction::project(final_project_aliases));
 

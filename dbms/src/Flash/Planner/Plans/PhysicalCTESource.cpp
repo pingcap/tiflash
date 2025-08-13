@@ -34,7 +34,7 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     DAGSchema dag_schema;
     for (int i = 0; i < cte_source.field_types_size(); ++i)
     {
-        String name = genNameForCTESource(i);
+        String name = genNameForCTESource(static_cast<Int32>(cte_source.cte_id()), i);
         TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(cte_source.field_types(i));
         dag_schema.emplace_back(std::move(name), std::move(info));
     }

@@ -49,7 +49,7 @@ public:
         const String & column_prefix,
         bool keep_session_timezone_info,
         const PhysicalPlanNodePtr & child,
-        bool is_cte = false);
+        Int32 cte_id = -1);
 
     PhysicalProjection(
         const String & executor_id_,
