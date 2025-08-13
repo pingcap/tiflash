@@ -45,7 +45,7 @@ try
     initRandomFailPoint(config_str);
     enablePipeline(true);
     // Expect this case can finish instead of stuck.
-    executeStreams(req, 1);
+    ASSERT_THROW(executeStreams(req, 1), Exception);
     disableRandomFailPoint(config_str);
 }
 CATCH

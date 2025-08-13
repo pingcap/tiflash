@@ -37,16 +37,12 @@ EventTask::EventTask(
 
 void EventTask::finalizeImpl()
 {
-    try
-    {
-        doFinalizeImpl();
-    }
-    catch (...)
-    {
-        LOG_ERROR(log, getCurrentExceptionMessage(false, false));
-    }
-    event->onTaskFinish(profile_info);
-    event.reset();
+    SCOPE_EXIT({
+        event->onTaskFinish(profile_info);
+        event.reset();
+    });
+
+    doFinalizeImpl();
 }
 
 UInt64 EventTask::getScheduleDuration() const
