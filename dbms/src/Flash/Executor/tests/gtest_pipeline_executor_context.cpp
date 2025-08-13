@@ -40,13 +40,19 @@ try
 
     auto req = context.scan("simple_test", "t1").aggregation({Count(col("a"))}, {col("a")}).build(context);
 
-    String failpoint = "random_pipeline_model_execute_suffix_failpoint-1";
-    auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", failpoint);
-    initRandomFailPoint(config_str);
-    enablePipeline(true);
-    // Expect this case can finish instead of stuck.
-    ASSERT_THROW(executeStreams(req, 1), Exception);
-    disableRandomFailPoint(config_str);
+    const auto failpoints = std::vector{
+        "random_pipeline_model_execute_suffix_failpoint-1",
+        "random_pipeline_model_execute_prefix_failpoint-1"};
+
+    for (const auto & fp : failpoints)
+    {
+        auto config_str = fmt::format("[flash]\nrandom_fail_points = \"{}\"", fp);
+        initRandomFailPoint(config_str);
+        enablePipeline(true);
+        // Expect this case throw failpoint instead of stuck.
+        ASSERT_THROW(executeStreams(req, 1), Exception);
+        disableRandomFailPoint(config_str);
+    }
 }
 CATCH
 
