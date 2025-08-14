@@ -26,7 +26,8 @@ UnorderedSourceOp::UnorderedSourceOp(
     int extra_table_id_index_,
     const String & req_id,
     const RuntimeFilteList & runtime_filter_list_,
-    int max_wait_time_ms_)
+    int max_wait_time_ms_,
+    bool is_disagg_)
     : SourceOp(exec_context_, req_id)
     , task_pool(task_pool_)
     , ref_no(0)
@@ -35,6 +36,17 @@ UnorderedSourceOp::UnorderedSourceOp(
 {
     setHeader(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_));
     ref_no = task_pool->increaseUnorderedInputStreamRefCount();
+
+    if (is_disagg_)
+    {
+        // One connection for inter zone, the other one for inner zone.
+        const size_t connections = 2;
+        io_profile_info = IOProfileInfo::createForRemote(profile_info_ptr, connections);
+    }
+    else
+    {
+        io_profile_info = IOProfileInfo::createForLocal(profile_info_ptr);
+    }
 }
 
 OperatorStatus UnorderedSourceOp::readImpl(Block & block)
@@ -97,5 +109,30 @@ void UnorderedSourceOp::operatePrefixImpl()
             }
         }
     });
+}
+
+void UnorderedSourceOp::operateSuffixImpl()
+{
+    // If io_profile_info is local, it means this table scan only read local data.
+    // So no need to update connection info, because connection info indicate it's a remote table scan,
+    // like CoprocessorReader or read delta data from WN.
+    if (!io_profile_info->is_local)
+    {
+        std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
+            auto pool_connection_info_opt = task_pool->getRemoteConnectionInfo();
+            RUNTIME_CHECK(
+                pool_connection_info_opt.has_value() || (task_pool->getTotalReadTasks() == 0),
+                pool_connection_info_opt.has_value(),
+                task_pool->getTotalReadTasks());
+            if (pool_connection_info_opt)
+            {
+                auto & connection_infos = io_profile_info->connection_profile_infos;
+                RUNTIME_CHECK(connection_infos.size() == 2, connection_infos.size());
+
+                connection_infos[0] = pool_connection_info_opt->first;
+                connection_infos[1] = pool_connection_info_opt->second;
+            }
+        });
+    }
 }
 } // namespace DB

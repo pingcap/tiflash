@@ -390,6 +390,14 @@ DeltaValueReader VersionChain<HandleType>::createDeltaValueReader(
         ReadTag::MVCC};
 }
 
+template <ExtraHandleType HandleType>
+size_t VersionChain<HandleType>::getBytes() const
+{
+    std::lock_guard lock(mtx);
+    // Ignore the size of `dmfile_or_delete_range_list` because it is small.
+    return base_versions->capacity() * sizeof(RowID) + new_handle_to_row_ids.getBytes();
+}
+
 template class VersionChain<Int64>;
 template class VersionChain<String>;
 

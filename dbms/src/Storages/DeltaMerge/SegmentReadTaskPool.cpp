@@ -88,11 +88,12 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     MemoryTrackerSetter setter(true, mem_tracker.get());
 
     t->fetchPages();
+    recordRemoteConnectionInfoIfNecessary(t);
 
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {
         auto bytes = t->read_snapshot->estimatedBytesOfInternalColumns();
-        LocalAdmissionController::global_instance->consumeBytesResource(res_group_name, bytesToRU(bytes));
+        LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
     }
     t->initInputStream(
         columns_to_read,
@@ -126,6 +127,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     const String & tracing_id,
     bool enable_read_thread_,
     Int64 num_streams_,
+    const KeyspaceID & keyspace_id_,
     const String & res_group_name_)
     : pool_id(nextPoolId())
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
@@ -135,6 +137,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , start_ts(start_ts_)
     , expected_block_size(expected_block_size_)
     , read_mode(read_mode_)
+    , total_read_tasks(tasks_.size())
     , tasks_wrapper(enable_read_thread_, std::move(tasks_))
     , after_segment_read(after_segment_read_)
     , log(Logger::get(tracing_id))
@@ -148,6 +151,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
     // situations where the computation may be faster and the storage layer may not be able to keep up.
     , active_segment_limit(std::max(num_streams_, 2))
+    , keyspace_id(keyspace_id_)
     , res_group_name(res_group_name_)
 {
     if (tasks_wrapper.empty())
@@ -188,10 +192,35 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
     return t;
 }
 
-const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks()
+const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & SegmentReadTaskPool::getTasks() const
 {
     std::lock_guard lock(mutex);
     return tasks_wrapper.getTasks();
+}
+
+std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> SegmentReadTaskPool::getRemoteConnectionInfo()
+    const
+{
+    std::lock_guard lock(connection_info_mu);
+    if (remote_connection_infos.empty())
+        return {};
+
+    static constexpr auto inter_type = ConnectionProfileInfo::ConnectionType::InterZoneRemote;
+    static constexpr auto inner_type = ConnectionProfileInfo::ConnectionType::InnerZoneRemote;
+    ConnectionProfileInfo inter_zone_info(inter_type);
+    ConnectionProfileInfo inner_zone_info(inner_type);
+
+    for (const auto & connection_info : remote_connection_infos)
+    {
+        RUNTIME_CHECK(
+            connection_info.type == inter_type || connection_info.type == inner_type,
+            connection_info.getTypeString());
+        if (connection_info.type == inter_type)
+            inter_zone_info.merge(connection_info);
+        else if (connection_info.type == inner_type)
+            inner_zone_info.merge(connection_info);
+    }
+    return {{inter_zone_info, inner_zone_info}};
 }
 
 // Choose a segment to read.
@@ -343,9 +372,9 @@ static Int64 currentMS()
         .count();
 }
 
-static bool checkIsRUExhausted(const String & res_group_name)
+static bool checkIsRUExhausted(const KeyspaceID & keyspace_id, const String & res_group_name)
 {
-    auto priority = LocalAdmissionController::global_instance->getPriority(res_group_name);
+    auto priority = LocalAdmissionController::global_instance->getPriority(keyspace_id, res_group_name);
     if (unlikely(!priority.has_value()))
     {
         return false;
@@ -391,7 +420,7 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
 
     // Check and reset everything.
     read_bytes_after_last_check = 0;
-    ru_is_exhausted = checkIsRUExhausted(res_group_name);
+    ru_is_exhausted = checkIsRUExhausted(keyspace_id, res_group_name);
     last_time_check_ru = ms;
     return ru_is_exhausted;
 }

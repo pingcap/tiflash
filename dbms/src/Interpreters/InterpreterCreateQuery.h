@@ -64,7 +64,7 @@ private:
 
     ASTPtr query_ptr;
     Context & context;
-    std::string_view log_suffix;
+    std::string log_suffix;
 
     /// Using while loading database.
     ThreadPool * thread_pool = nullptr;

@@ -113,6 +113,7 @@ check_then_add_sources_compile_flag (
     src/Interpreters/JoinV2/HashJoin.cpp
     src/Interpreters/JoinV2/HashJoinBuild.cpp
     src/Interpreters/JoinV2/HashJoinProbe.cpp
+    src/Interpreters/JoinV2/SemiJoinProbe.cpp
     src/IO/Compression/EncodingUtil.cpp
     src/Storages/DeltaMerge/BitmapFilter/BitmapFilter.cpp
     src/Storages/DeltaMerge/DMVersionFilterBlockInputStream.cpp
@@ -239,6 +240,10 @@ target_link_libraries (dbms
     PSCheckpointProto
     kvstore
 )
+
+if (ENABLE_CLARA)
+    target_link_libraries(dbms clara_shared)
+endif ()
 
 # always add GmSSL include dir to the include path for static analysis
 target_include_directories(dbms PRIVATE ${TiFlash_SOURCE_DIR}/contrib/GmSSL/include)
@@ -378,6 +383,19 @@ if (ENABLE_TESTS)
             COMPONENT tiflash-gtest
             DESTINATION ".")
 
+    if (ENABLE_CLARA AND USE_INTERNAL_LIBCLARA)
+        install (TARGETS clara_shared
+                COMPONENT tiflash-gtest
+                DESTINATION ".")
+    endif()
+
+    set_target_properties(gtests_dbms PROPERTIES BUILD_RPATH "$ORIGIN/")
+    set_target_properties(gtests_dbms PROPERTIES INSTALL_RPATH "$ORIGIN/")
+
+    if (ENABLE_CLARA)
+        install (SCRIPT ${TiFlash_SOURCE_DIR}/libs/libclara-cmake/linux_post_install.cmake COMPONENT tiflash-gtest)
+    endif ()
+
     target_compile_options(gtests_dbms PRIVATE -Wno-unknown-pragmas -Wno-deprecated-copy)
     add_check(gtests_dbms)
 
@@ -390,12 +408,13 @@ if (ENABLE_TESTS)
         ${TiFlash_SOURCE_DIR}/dbms/src/Server/RaftConfigParser.cpp
         ${TiFlash_SOURCE_DIR}/dbms/src/AggregateFunctions/AggregateFunctionSum.cpp
         )
+    set_target_properties(bench_dbms PROPERTIES BUILD_RPATH "$ORIGIN/")
     target_include_directories(bench_dbms BEFORE PRIVATE ${SPARCEHASH_INCLUDE_DIR} ${benchmark_SOURCE_DIR}/include)
     target_compile_definitions(bench_dbms PUBLIC DBMS_PUBLIC_GTEST)
     target_link_libraries(bench_dbms
         gtest
         benchmark
-    
+
         dbms
         test_util_bench_main
         tiflash_functions

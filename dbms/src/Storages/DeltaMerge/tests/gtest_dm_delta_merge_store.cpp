@@ -18,6 +18,7 @@
 #include <Common/SyncPoint/SyncPoint.h>
 #include <Core/Defines.h>
 #include <DataTypes/DataTypeMyDateTime.h>
+#include <DataTypes/DataTypesNumber.h>
 #include <Debug/TiFlashTestEnv.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
@@ -951,13 +952,15 @@ CATCH
 TEST_P(DeltaMergeStoreRWTest, WriteMultipleBlock)
 try
 {
-    const size_t num_write_rows = 32;
+    constexpr size_t num_write_rows = 32;
+    constexpr UInt64 tso1 = 1;
+    constexpr UInt64 tso2 = 100;
 
     // Test write multi blocks without overlap
     {
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false);
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false);
-        Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso1);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso1);
+        Block block3 = DMTestEnv::prepareSimpleWriteBlock(2 * num_write_rows, 3 * num_write_rows, false, tso2);
         switch (mode)
         {
         case TestMode::PageStorageV2_MemoryOnly:
@@ -1029,10 +1032,8 @@ try
 
     // Test write multi blocks with overlap
     {
-        UInt64 tso1 = 1;
-        UInt64 tso2 = 100;
-        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso1);
-        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso1);
+        Block block1 = DMTestEnv::prepareSimpleWriteBlock(0, 1 * num_write_rows, false, tso2);
+        Block block2 = DMTestEnv::prepareSimpleWriteBlock(1 * num_write_rows, 2 * num_write_rows, false, tso2);
         Block block3
             = DMTestEnv::prepareSimpleWriteBlock(num_write_rows / 2, num_write_rows / 2 + num_write_rows, false, tso2);
 
@@ -2473,6 +2474,84 @@ try
 }
 CATCH
 
+TEST_P(DeltaMergeStoreRWTest, DDLAddColumnInvalidExpressionIndex)
+try
+{
+    // const String col_name_to_add = "_v$_idx_name_0";
+    // const DataTypePtr col_type_to_add = DataTypeFactory::instance().getOrSet("Int8");
+
+    // write some rows before DDL
+    size_t num_rows_write = 1;
+    {
+        Block block = DMTestEnv::prepareSimpleWriteBlock(0, num_rows_write, false);
+        store->write(*db_context, db_context->getSettingsRef(), block);
+    }
+
+    // DDL add column for invalid expression index
+    // actual ddl is like: ADD COLUMN `_v$_idx_name_0` Nullable(Int8)
+    {
+        TiDB::TableInfo new_table_info;
+        static const String json_table_info = R"(
+    {"cols":[{"id":1,"name":{"L":"id","O":"id"},"offset":0,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":0,"Flen":11,"Tp":3}},{"id":2,"name":{"L":"_v$_idx_name_0","O":"_v$_idx_name_0"},"offset":1,"state":5,"type":{"Charset":"binary","Collate":"binary","Decimal":0,"Flag":136,"Flen":0,"Tp":6}}],"id":1145,"index_info":[],"is_common_handle":false,"keyspace_id":4294967295,"name":{"L":"t","O":"t"},"pk_is_handle":false,"schema_version":-1,"state":5,"tiflash_replica":{"Available":false,"Count":1},"update_timestamp":456163970651521027}
+            )";
+        new_table_info.deserialize(json_table_info);
+        store->applySchemaChanges(new_table_info);
+    }
+
+    // try read
+    {
+        ColumnDefines cols_to_read;
+        bool has_v_index = false;
+        bool has_id = false;
+        for (const auto & col : store->getTableColumns())
+        {
+            if (col.name == DMTestEnv::pk_name)
+            {
+                cols_to_read.emplace_back(col);
+            }
+            else if (col.name == "id")
+            {
+                cols_to_read.emplace_back(col);
+                has_id = true;
+            }
+            else if (col.name == "_v$_idx_name_0")
+            {
+                // we check the type of this column, but not read from it
+                ASSERT_EQ(col.type->getName(), "Nullable(Int8)") << store->getHeader()->dumpJsonStructure();
+                has_v_index = true;
+            }
+        }
+        ASSERT_TRUE(has_id) << store->getHeader()->dumpJsonStructure();
+        ASSERT_TRUE(has_v_index) << store->getHeader()->dumpJsonStructure();
+
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            cols_to_read,
+            {RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize())},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            EMPTY_FILTER,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /* keep_order= */ false,
+            /* is_fast_scan= */ false,
+            /* expected_block_size= */ 1024)[0];
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
+            in,
+            Strings({DMTestEnv::pk_name, "id"}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+                // all "id" are NULL
+                createNullableColumn<Int32>(
+                    std::vector<Int64>(num_rows_write, 0),
+                    std::vector<Int32>(num_rows_write, 1)),
+            }));
+    }
+}
+CATCH
+
 TEST_P(DeltaMergeStoreRWTest, DDLRenameColumn)
 try
 {
@@ -3150,6 +3229,8 @@ try
 {
     const size_t num_write_rows = 32;
     const size_t rowkey_column_size = 2;
+    constexpr UInt64 tso1 = 1;
+    constexpr UInt64 tso2 = 100;
     auto table_column_defines = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::CommonHandle);
 
     {
@@ -3163,7 +3244,7 @@ try
             0,
             1 * num_write_rows,
             false,
-            2,
+            tso1,
             MutSup::extra_handle_column_name,
             MutSup::extra_handle_id,
             MutSup::getExtraHandleColumnStringType(),
@@ -3173,7 +3254,7 @@ try
             1 * num_write_rows,
             2 * num_write_rows,
             false,
-            2,
+            tso1,
             MutSup::extra_handle_column_name,
             MutSup::extra_handle_id,
             MutSup::getExtraHandleColumnStringType(),
@@ -3183,7 +3264,7 @@ try
             2 * num_write_rows,
             3 * num_write_rows,
             false,
-            2,
+            tso2,
             MutSup::extra_handle_column_name,
             MutSup::extra_handle_id,
             MutSup::getExtraHandleColumnStringType(),
@@ -3234,13 +3315,11 @@ try
 
     // Test write multi blocks with overlap
     {
-        UInt64 tso1 = 1;
-        UInt64 tso2 = 100;
         Block block1 = DMTestEnv::prepareSimpleWriteBlock(
             0,
             1 * num_write_rows,
             false,
-            tso1,
+            tso2,
             MutSup::extra_handle_column_name,
             MutSup::extra_handle_id,
             MutSup::getExtraHandleColumnStringType(),
@@ -3250,7 +3329,7 @@ try
             1 * num_write_rows,
             2 * num_write_rows,
             false,
-            tso1,
+            tso2,
             MutSup::extra_handle_column_name,
             MutSup::extra_handle_id,
             MutSup::getExtraHandleColumnStringType(),
@@ -3407,9 +3486,7 @@ try
     // Delete range [0, 64)
     const size_t num_deleted_rows = 64;
     {
-        RowKeyValue start(true, std::make_shared<String>(genMockCommonHandle(0, rowkey_column_size)));
-        RowKeyValue end(true, std::make_shared<String>(genMockCommonHandle(num_deleted_rows, rowkey_column_size)));
-        RowKeyRange range(start, end, true, rowkey_column_size);
+        auto range = DMTestEnv::getRowKeyRangeForClusteredIndex(0, num_deleted_rows, rowkey_column_size);
         store->deleteRange(*db_context, db_context->getSettingsRef(), range);
     }
     // Read after deletion
@@ -4016,6 +4093,9 @@ CATCH
 
 void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
 {
+    // This test case is design for delta index. Always use delta index in this case.
+    auto guard = disableVersionChainTemporary(db_context->getGlobalContext().getSettingsRef());
+
     auto table_column_defines = DMTestEnv::getDefaultColumns();
     store = reload(table_column_defines);
 

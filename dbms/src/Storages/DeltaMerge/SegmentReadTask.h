@@ -14,10 +14,12 @@
 
 #pragma once
 
+#include <Flash/Statistics/ConnectionProfileInfo.h>
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/RNLocalPageCache.h>
+#include <Storages/DeltaMerge/Remote/RNMVCCIndexCache.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/KVStore/Types.h>
@@ -55,6 +57,7 @@ struct ExtraRemoteSegmentInfo
     DisaggTaskId snapshot_id;
     std::vector<UInt64> remote_page_ids;
     std::vector<size_t> remote_page_sizes;
+    ConnectionProfileInfo connection_profile_info;
 };
 
 struct SegmentReadTask
@@ -86,7 +89,9 @@ public:
         const String & store_address,
         KeyspaceID keyspace_id,
         TableID physical_table_id,
-        ColumnID pk_col_id);
+        ColumnID pk_col_id,
+        bool is_same_zone,
+        size_t establish_disagg_task_resp_size);
 
     ~SegmentReadTask();
 
@@ -120,6 +125,10 @@ public:
     String toString() const;
 
 private:
+    std::optional<Remote::RNMVCCIndexCache::CacheKey> getRNMVCCIndexCacheKey(ReadMode read_mode) const;
+    size_t prepareMVCCIndex(ReadMode read_mode);
+    void updateMVCCIndexSize(ReadMode read_mode, size_t initial_index_bytes);
+
     std::vector<Remote::PageOID> buildRemotePageOID() const;
 
     Remote::RNLocalPageCache::OccupySpaceResult blockingOccupySpaceForTask() const;

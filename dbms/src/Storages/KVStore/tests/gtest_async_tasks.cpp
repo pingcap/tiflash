@@ -107,8 +107,8 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     LOG_INFO(log, "Cancel in queue");
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
-        bool finished = false;
-        bool canceled = false;
+        std::atomic_bool finished = false;
+        std::atomic_bool canceled = false;
         std::mutex mtx;
         std::unique_lock<std::mutex> cl(mtx);
 
@@ -145,10 +145,10 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
     LOG_INFO(log, "Block cancel");
     {
         auto async_tasks = std::make_unique<TestAsyncTasks>(2, 2, 10);
-        int total = 9;
-        int finished = 0;
-        std::vector<char> f(total, false);
-        for (int i = 0; i < total; i++)
+        constexpr size_t total = 9;
+        std::atomic_size_t finished = 0;
+        std::array<std::atomic_bool, total> f = {false};
+        for (size_t i = 0; i < total; i++)
         {
             auto res = async_tasks->addTask(i, [i, &async_tasks, &finished, log]() {
                 auto cancel_handle = async_tasks->getCancelHandleFromExecutor(i);
@@ -171,7 +171,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
         while (finished < total)
         {
             std::this_thread::sleep_for(100ms);
-            for (int i = 0; i < total; i++)
+            for (size_t i = 0; i < total; i++)
             {
                 if (f[i])
                     continue;
@@ -185,7 +185,7 @@ TEST(AsyncTasksTest, AsyncTasksNormal)
             }
         }
 
-        for (int i = 0; i < total; i++)
+        for (size_t i = 0; i < total; i++)
         {
             ASSERT_TRUE(f[i]);
         }
@@ -253,16 +253,16 @@ try
     using TestAsyncTasks = AsyncTasks<uint64_t, std::function<int()>, int>;
     auto async_tasks = std::make_unique<TestAsyncTasks>(1, 1, 2);
 
-    int total = 5;
+    constexpr size_t total = 5;
     int max_steps = 15;
     int current_step = 0;
-    std::vector<char> f(total, false);
-    std::vector<char> s(total, false);
+    std::array<std::atomic_bool, total> f = {false};
+    std::array<std::atomic_bool, total> s = {false};
     bool initial_loop = true;
     while (true)
     {
         ASSERT(current_step < max_steps);
-        auto count = std::accumulate(f.begin(), f.end(), 0, [&](int a, bool b) -> int { return a + int(b); });
+        size_t count = std::accumulate(f.begin(), f.end(), 0, [&](int a, bool b) -> int { return a + int(b); });
         if (count >= total)
         {
             break;
@@ -285,7 +285,7 @@ try
         }
 
         // Add tasks
-        for (int i = 0; i < total; ++i)
+        for (size_t i = 0; i < total; ++i)
         {
             if (!s[i])
             {
@@ -319,7 +319,7 @@ try
         }
 
         // Fetch result
-        for (int i = 0; i < total; ++i)
+        for (size_t i = 0; i < total; ++i)
         {
             if (!f[i])
             {

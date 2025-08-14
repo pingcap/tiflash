@@ -15,6 +15,8 @@
 #include <Columns/countBytesInFilter.h>
 #include <Storages/DeltaMerge/ConcatSkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/SegmentRowID.h>
+#include <Storages/KVStore/Types.h>
 
 namespace DB::DM
 {
@@ -27,7 +29,9 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     : rows(std::move(rows_))
     , precede_stream_rows(0)
     , scan_context(scan_context_)
-    , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
+    , lac_bytes_collector(
+          scan_context_ ? scan_context_->keyspace_id : NullspaceID,
+          scan_context_ ? scan_context_->resource_group_name : "")
 {
     assert(rows.size() == inputs_.size());
     children.insert(children.end(), inputs_.begin(), inputs_.end());
@@ -143,19 +147,6 @@ Block ConcatSkippableBlockInputStream<need_row_id>::read()
     }
 
     return res;
-}
-
-template <bool need_row_id>
-ColumnPtr ConcatSkippableBlockInputStream<need_row_id>::createSegmentRowIdCol(UInt64 start, UInt64 limit)
-{
-    auto seg_row_id_col = ColumnUInt32::create();
-    ColumnUInt32::Container & res = seg_row_id_col->getData();
-    res.resize(limit);
-    for (UInt64 i = 0; i < limit; ++i)
-    {
-        res[i] = i + start;
-    }
-    return seg_row_id_col;
 }
 
 template <bool need_row_id>

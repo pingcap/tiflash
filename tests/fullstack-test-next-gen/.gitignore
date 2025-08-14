@@ -1,0 +1,3 @@
+# Refer to https://gist.github.com/JaySon-Huang/c5fd4aaabbfed73d0bc216ff49e04ba2#build-the-docker-image-for-running-ci-on-rockylinux-9
+Dockerfile-tiflash-ci-base-20250529
+*.rocky9.yaml

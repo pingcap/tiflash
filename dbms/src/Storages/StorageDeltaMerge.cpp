@@ -17,6 +17,7 @@
 #include <Common/FmtUtils.h>
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Common/formatReadable.h>
 #include <Common/typeid_cast.h>
 #include <Core/Defines.h>
@@ -45,7 +46,9 @@
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
 #include <Storages/DeltaMerge/Index/LocalIndexInfo.h>
+#include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/KVStore/Region.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/KVStore/TiKVHelpers/TiKVRecordFormat.h>
@@ -60,6 +63,14 @@
 #include <TiDB/Schema/TiDB.h>
 #include <common/logger_useful.h>
 
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#endif
+
+namespace CurrentMetrics
+{
+extern const Metric DT_NumStorageDeltaMerge;
+} // namespace CurrentMetrics
 
 namespace DB
 {
@@ -86,6 +97,7 @@ StorageDeltaMerge::StorageDeltaMerge(
     Timestamp tombstone,
     Context & global_context_)
     : IManageableStorage{columns_, tombstone}
+    , holder_counter(CurrentMetrics::DT_NumStorageDeltaMerge, 1)
     , store_inited(false)
     , max_column_id_used(0)
     , data_path_contains_database_name(db_engine != "TiFlash")
@@ -678,6 +690,18 @@ void setColumnsToRead(
             extra_table_id_index = i;
             continue;
         }
+        else if (column_names[i] == DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.name)
+        {
+            col_define.name = column_names[i];
+            col_define.id = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id;
+            col_define.type = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.type;
+        }
+#if ENABLE_CLARA
+        else if (column_names[i] == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name)
+        {
+            col_define = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD;
+        }
+#endif
         else
         {
             auto & column = header->getByName(column_names[i]);
@@ -846,7 +870,7 @@ BlockInputStreams StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter = PushDownExecutor::build(
+    auto pushdown_executor = PushDownExecutor::build(
         query_info,
         columns_to_read,
         store->getTableColumns(),
@@ -858,6 +882,7 @@ BlockInputStreams StorageDeltaMerge::read(
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
+    scan_context->pushdown_executor = pushdown_executor;
 
     auto streams = store->read(
         context,
@@ -866,7 +891,7 @@ BlockInputStreams StorageDeltaMerge::read(
         ranges,
         num_streams,
         /*start_ts=*/mvcc_query_info.start_ts,
-        filter,
+        pushdown_executor,
         runtime_filter_list,
         query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
@@ -936,7 +961,7 @@ void StorageDeltaMerge::read(
         query_info.req_id,
         tracing_logger);
 
-    auto filter = PushDownExecutor::build(
+    auto pushdown_executor = PushDownExecutor::build(
         query_info,
         columns_to_read,
         store->getTableColumns(),
@@ -948,6 +973,7 @@ void StorageDeltaMerge::read(
     auto runtime_filter_list = parseRuntimeFilterList(query_info, store->getTableColumns(), context, tracing_logger);
 
     const auto & scan_context = mvcc_query_info.scan_context;
+    scan_context->pushdown_executor = pushdown_executor;
 
     store->read(
         exec_context_,
@@ -958,7 +984,7 @@ void StorageDeltaMerge::read(
         ranges,
         num_streams,
         /*start_ts=*/mvcc_query_info.start_ts,
-        filter,
+        pushdown_executor,
         runtime_filter_list,
         query_info.dag_query ? query_info.dag_query->rf_max_wait_time_ms : 0,
         query_info.req_id,
@@ -1090,6 +1116,13 @@ UInt64 StorageDeltaMerge::ingestSegmentsFromCheckpointInfo(
 {
     GET_METRIC(tiflash_storage_command_count, type_ingest_checkpoint).Increment();
     return getAndMaybeInitStore()->ingestSegmentsFromCheckpointInfo(global_context, settings, range, checkpoint_info);
+}
+
+UInt64 StorageDeltaMerge::removeSegmentsFromCheckpointInfo(
+    const CheckpointIngestInfo & checkpoint_info,
+    const Settings & settings)
+{
+    return getAndMaybeInitStore()->removeSegmentsFromCheckpointInfo(global_context, settings, checkpoint_info);
 }
 
 UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)

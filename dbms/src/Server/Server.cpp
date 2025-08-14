@@ -16,11 +16,13 @@
 #include <Common/CPUAffinityManager.h>
 #include <Common/Config/ConfigReloader.h>
 #include <Common/CurrentMetrics.h>
+#include <Common/DiskSize.h>
 #include <Common/DynamicThreadPool.h>
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/MemoryAllocTrace.h>
 #include <Common/RedactHelpers.h>
+#include <Common/SpillLimiter.h>
 #include <Common/StringUtils/StringUtils.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashBuildInfo.h>
@@ -28,6 +30,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/UniThreadPool.h>
 #include <Common/assert_cast.h>
+#include <Common/config.h> // for ENABLE_NEXT_GEN
 #include <Common/config.h>
 #include <Common/escapeForFileName.h>
 #include <Common/formatReadable.h>
@@ -417,66 +420,63 @@ void loadBlockList(
     Context & global_context,
     [[maybe_unused]] const LoggerPtr & log)
 {
-#if SERVERLESS_PROXY != 1
+#if ENABLE_NEXT_GEN == 0
     // We do not support blocking store by id in OP mode currently.
     global_context.initializeStoreIdBlockList("");
 #else
     global_context.initializeStoreIdBlockList(global_context.getSettingsRef().disagg_blocklist_wn_store_id);
 
-    /// Load keyspace blacklist json file
-    LOG_INFO(log, "Loading blacklist file.");
-    auto blacklist_file_path = config.getString("blacklist_file", "");
-    if (blacklist_file_path.length() == 0)
+    /// Load keyspace blocklist json file
+    LOG_INFO(log, "Loading blocklist file.");
+    auto blocklist_file_path = config.getString("blacklist_file", "");
+    if (blocklist_file_path.length() == 0)
     {
         LOG_INFO(log, "blocklist file not enabled, ignore it.");
+        return;
     }
-    else
+    auto blacklist_file = Poco::File(blocklist_file_path);
+    if (!(blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead()))
     {
-        auto blacklist_file = Poco::File(blacklist_file_path);
-        if (blacklist_file.exists() && blacklist_file.isFile() && blacklist_file.canRead())
-        {
-            // Read the json file
-            std::ifstream ifs(blacklist_file_path);
-            std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
-            Poco::JSON::Parser parser;
-            Poco::Dynamic::Var json_var = parser.parse(json_content);
-            const auto & json_obj = json_var.extract<Poco::JSON::Object::Ptr>();
-
-            // load keyspace list
-            auto keyspace_arr = json_obj->getArray("keyspace_ids");
-            if (!keyspace_arr.isNull())
-            {
-                std::unordered_set<KeyspaceID> keyspace_blocklist;
-                for (size_t i = 0; i < keyspace_arr->size(); i++)
-                {
-                    keyspace_blocklist.emplace(keyspace_arr->getElement<KeyspaceID>(i));
-                }
-                global_context.initKeyspaceBlocklist(keyspace_blocklist);
-            }
-
-            // load region list
-            auto region_arr = json_obj->getArray("region_ids");
-            if (!region_arr.isNull())
-            {
-                std::unordered_set<RegionID> region_blocklist;
-                for (size_t i = 0; i < region_arr->size(); i++)
-                {
-                    region_blocklist.emplace(region_arr->getElement<RegionID>(i));
-                }
-                global_context.initRegionBlocklist(region_blocklist);
-            }
-
-            LOG_INFO(
-                log,
-                "Load blocklist file done, total {} keyspaces and {} regions in blacklist.",
-                keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
-                region_arr.isNull() ? 0 : region_arr->size());
-        }
-        else
-        {
-            LOG_INFO(log, "blocklist file not exists or non-readble, ignore it.");
-        }
+        LOG_INFO(log, "blocklist file not exists or non-readble, ignore it, path={}", blocklist_file_path);
+        return;
     }
+
+    // Read the json file
+    std::ifstream ifs(blocklist_file_path);
+    std::string json_content((std::istreambuf_iterator<char>(ifs)), std::istreambuf_iterator<char>());
+    Poco::JSON::Parser parser;
+    Poco::Dynamic::Var json_var = parser.parse(json_content);
+    const auto & json_obj = json_var.extract<Poco::JSON::Object::Ptr>();
+
+    // load keyspace list
+    auto keyspace_arr = json_obj->getArray("keyspace_ids");
+    if (!keyspace_arr.isNull())
+    {
+        std::unordered_set<KeyspaceID> keyspace_blocklist;
+        for (size_t i = 0; i < keyspace_arr->size(); i++)
+        {
+            keyspace_blocklist.emplace(keyspace_arr->getElement<KeyspaceID>(i));
+        }
+        global_context.initKeyspaceBlocklist(keyspace_blocklist);
+    }
+
+    // load region list
+    auto region_arr = json_obj->getArray("region_ids");
+    if (!region_arr.isNull())
+    {
+        std::unordered_set<RegionID> region_blocklist;
+        for (size_t i = 0; i < region_arr->size(); i++)
+        {
+            region_blocklist.emplace(region_arr->getElement<RegionID>(i));
+        }
+        global_context.initRegionBlocklist(region_blocklist);
+    }
+
+    LOG_INFO(
+        log,
+        "Load blocklist file done, total {} keyspaces and {} regions in blocklist.",
+        keyspace_arr.isNull() ? 0 : keyspace_arr->size(),
+        region_arr.isNull() ? 0 : region_arr->size());
 #endif
 }
 
@@ -742,20 +742,21 @@ try
 
     /// Directory with temporary data for processing of heavy queries.
     {
-        std::string tmp_path = config().getString("tmp_path", path + "tmp/");
-        global_context->setTemporaryPath(tmp_path);
-        Poco::File(tmp_path).createDirectories();
+        const std::string & temp_path = storage_config.temp_path;
+        RUNTIME_CHECK(!temp_path.empty());
+        Poco::File(temp_path).createDirectories();
 
-        /// Clearing old temporary files.
         Poco::DirectoryIterator dir_end;
-        for (Poco::DirectoryIterator it(tmp_path); it != dir_end; ++it)
+        for (Poco::DirectoryIterator it(temp_path); it != dir_end; ++it)
         {
             if (it->isFile() && startsWith(it.name(), "tmp"))
-            {
-                LOG_DEBUG(log, "Removing old temporary file {}", it->path());
                 global_context->getFileProvider()->deleteRegularFile(it->path(), EncryptionPath(it->path(), ""));
-            }
         }
+        LOG_INFO(log, "temp files in temp directory({}) removed", temp_path);
+
+        storage_config.checkTempCapacity(global_capacity_quota, log);
+        global_context->setTemporaryPath(temp_path);
+        SpillLimiter::instance->setMaxSpilledBytes(storage_config.temp_capacity);
     }
 
     /** Directory with 'flags': files indicating temporary settings for the server set by system administrator.
@@ -955,8 +956,8 @@ try
         size_t n = config().getUInt64("delta_index_cache_size", default_delta_index_cache_size);
         LOG_INFO(log, "delta_index_cache_size={}", n);
         // In disaggregated compute node, we will not use DeltaIndexManager to cache the delta index.
-        // Instead, we use RNDeltaIndexCache.
-        global_context->getSharedContextDisagg()->initReadNodeDeltaIndexCache(n);
+        // Instead, we use RNMVCCIndexCache.
+        global_context->getSharedContextDisagg()->initReadNodeMVCCIndexCache(n);
     }
     else
     {
@@ -980,9 +981,8 @@ try
 
         // Must be executed before restore data.
         // Get the memory usage of tranquil time.
-        auto [resident_set, cur_proc_num_threads, cur_virt_size] = process_mem_usage();
-        UNUSED(cur_proc_num_threads);
-        tranquil_time_rss = static_cast<Int64>(resident_set);
+        auto mem_res = get_process_mem_usage();
+        tranquil_time_rss = static_cast<Int64>(mem_res.resident_bytes);
 
         auto kvs_watermark = settings.max_memory_usage_for_all_queries.getActualBytes(server_info.memory_info.capacity);
         if (kvs_watermark == 0)
@@ -992,7 +992,7 @@ try
             "Global memory status: kvstore_high_watermark={} tranquil_time_rss={} cur_virt_size={} capacity={}",
             kvs_watermark,
             tranquil_time_rss,
-            cur_virt_size,
+            mem_res.cur_virt_bytes,
             server_info.memory_info.capacity);
 
         proxy_machine.initKVStore(global_context->getTMTContext(), store_ident, kvs_watermark);
@@ -1193,8 +1193,11 @@ try
 #ifdef DBMS_PUBLIC_GTEST
             LocalAdmissionController::global_instance = std::make_unique<MockLocalAdmissionController>();
 #else
-            LocalAdmissionController::global_instance
-                = std::make_unique<LocalAdmissionController>(tmt_context.getKVCluster(), tmt_context.getEtcdClient());
+            const bool with_keyspace = (storage_config.api_version == 2);
+            LocalAdmissionController::global_instance = std::make_unique<LocalAdmissionController>(
+                tmt_context.getKVCluster(),
+                tmt_context.getEtcdClient(),
+                with_keyspace);
 #endif
 
             auto get_pool_size = [](const auto & setting) {
@@ -1228,7 +1231,7 @@ try
         {
             auto size = settings.grpc_completion_queue_pool_size;
             if (size == 0)
-                size = std::thread::hardware_concurrency();
+                size = getNumberOfLogicalCPUCores();
             GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         }
 
@@ -1259,6 +1262,12 @@ try
 
         LOG_INFO(log, "Start to wait for terminal signal");
         waitForTerminationRequest();
+
+        // Note: `waitAllMPPTasksFinish` must be called before stopping the proxy.
+        // Otherwise, read index requests may fail, which can prevent TiFlash from shutting down gracefully.
+        LOG_INFO(log, "Set unavailable for MPPTask");
+        tmt_context.getMPPTaskManager()->setUnavailable();
+        tmt_context.getMPPTaskManager()->getMPPTaskMonitor()->waitAllMPPTasksFinish(global_context);
 
         {
             // Set limiters stopping and wakeup threads in waitting queue.

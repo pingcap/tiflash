@@ -1,0 +1,94 @@
+# Copyright 2025 PingCAP, Inc.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Preparation.
+mysql> drop table if exists test.t;
+
+# Build inverted index on empty table, it should return quickly
+mysql> CREATE TABLE test.t (`i` int(11) DEFAULT NULL);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+mysql> ALTER TABLE test.t ADD COLUMNAR INDEX idx_i (i) USING INVERTED;
+mysql> drop table if exists test.t;
+
+# Build inverted index on table with data on the stable layer
+mysql> CREATE TABLE test.t (`i` int(11) DEFAULT NULL);
+mysql> INSERT INTO test.t VALUES (-2), (-1), (0), (1), (2);
+mysql> alter table test.t set tiflash replica 1;
+func> wait_table test t
+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i = 1;
++------+
+| i    |
++------+
+|    1 |
++------+
+mysql> ALTER TABLE test.t ADD COLUMNAR INDEX idx_i (i) USING INVERTED;
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i = 1;
++------+
+| i    |
++------+
+|    1 |
++------+
+
+mysql> alter table test.t compact tiflash replica;
+#Disable unstable query
+#mysql> select index_name,rows_stable_indexed,rows_stable_not_indexed from information_schema.tiflash_indexes where TIDB_DATABASE = 'test' AND TIDB_TABLE = 't';
+#+------------+---------------------+-------------------------+
+#| index_name | rows_stable_indexed | rows_stable_not_indexed |
+#+------------+---------------------+-------------------------+
+#| idx_i      |                   5 |                       0 |
+#+------------+---------------------+-------------------------+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i = 1;
++------+
+| i    |
++------+
+|    1 |
++------+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i = -2;
++------+
+| i    |
++------+
+|   -2 |
++------+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i > 10;
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i > 1;
++------+
+| i    |
++------+
+|    2 |
++------+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i < 10 order by i;
++------+
+| i    |
++------+
+|   -2 |
+|   -1 |
+|    0 |
+|    1 |
+|    2 |
++------+
+mysql> set tidb_isolation_read_engines='tiflash'; SELECT * FROM test.t WHERE i < -1 order by i;
++------+
+| i    |
++------+
+|   -2 |
++------+
+
+# Drop index
+mysql> ALTER TABLE test.t DROP INDEX idx_i;
+mysql> select index_name,rows_stable_indexed,rows_stable_not_indexed from information_schema.tiflash_indexes where TIDB_DATABASE = 'test' AND TIDB_TABLE = 't';
+
+# Cleanup
+mysql> drop table if exists test.t;

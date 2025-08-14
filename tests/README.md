@@ -1,6 +1,6 @@
 ## How to run test cases in local
 
-For running integration test cases (defined in `./fullstack-test`, `./fullstack-test-dt`, `./new_collation_fullstack`), you should define a TiDB cluster with TiFlash node (1 PD, 1 TiKV, 1 TiDB, 1 TiFlash at least).
+For running integration test cases (defined in `./fullstack-test`, `./fullstack-test2` etc), you should define a TiDB cluster with TiFlash node (1 PD, 1 TiKV, 1 TiDB, 1 TiFlash at least).
 
 1. Build your own TiFlash binary using debug profile:
 
@@ -48,3 +48,60 @@ export TIFLASH_PORT=9000
 ./tiflash server -- --path /tmp/tiflash/data --tcp_port ${TIFLASH_PORT}
 storage_port=${TIFLASH_PORT} verbose=true ./run-test.sh delta-merge-test
 ```
+
+## How to run test cases in `fullstack-test-next-gen`
+
+For running next-gen integration test cases, you should define a TiDB cluster with disaggregated arch TiFlash node
+
+* 1 minio-server for providing object storage API
+* 1 PD
+* 1 next-gen TiKV
+* 1 TiDB
+* 1 TiFlash compute node
+* 1 TiFlash write node
+
+Notice: The pd, next-gen TiKV, tidb now is only available from pingcap internal dockerhub. Make sure you can access the dockerhub before running the tests.
+
+1. Build your own TiFlash binary using debug profile:
+
+    ```bash
+    # In the TiFlash repository root:
+    mkdir cmake-build-ng
+    cd cmake-build-ng
+    cmake -GNinja -DCMAKE_BUILD_TYPE=DEBUG -DENABLE_NEXT_GEN=ON ..
+    ninja tiflash -j32
+
+    # Copy the TiFlash binary to test directory
+    cmake --install . --component=tiflash-release --prefix "/path/to/your/tiflash/tests/.build/tiflash"
+    ```
+
+2. Run the tests using `docker compose`
+
+    ```bash
+    # In the TiFlash repository root:
+    cd tests/fullstack-test-next-gen
+
+    # Ensure `docker` or `podman` or `docker-compose` is installed in your env.
+    # This script will start a minimal next-gen cluster for running the tests.
+    # The next-gen TiKV, TiDB, PD, minio image will be pulled from pingcap internal
+    # dockerhub. Make sure you can access the dockerhub before running the tests.
+    ENABLE_NEXT_GEN=true ./run.sh
+
+    # If you want a more verbose running log
+    verbose=true ENABLE_NEXT_GEN=true ./run.sh
+    ```
+
+    If you want to do some manual testing, you can start a cluster as follow
+
+    ```bash
+    # start a cluster
+    docker compose -f next-gen-cluster.yaml -f disagg_tiflash.yaml up -d
+
+    # enter the tiflash wn pod
+    docker exec -ti fullstack-test-next-gen-tiflash-wn0-1 bash
+    # connect to the mysql from tiflash wn pod
+    mysql --host tidb0 --port 4000 -u root -D test
+
+    # Do NOT forget to release the cluster when you finish the debugging
+    docker compose -f next-gen-cluster.yaml -f disagg_tiflash.yaml down
+    ```

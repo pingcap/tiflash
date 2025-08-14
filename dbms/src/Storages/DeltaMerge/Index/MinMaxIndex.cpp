@@ -36,6 +36,7 @@ static constexpr size_t NONE_EXIST = std::numeric_limits<size_t>::max();
 
 namespace details
 {
+// Calculate the min max value only for the **not deleted** values in the column.
 inline std::pair<size_t, size_t> minmax(
     const IColumn & column,
     const ColumnVector<UInt8> * del_mark,
@@ -62,7 +63,7 @@ inline std::pair<size_t, size_t> minmax(
     return {batch_min_idx, batch_max_idx};
 }
 
-// Calculate the min max value only for the not null values and not deleted values in the nullable column.
+// Calculate the min max value only for the **not null** values and **not deleted** values in the nullable column.
 inline std::pair<size_t, size_t> minmax(
     const IColumn & column,
     const ColumnVector<UInt8> * del_mark,
@@ -194,9 +195,10 @@ MinMaxIndexPtr MinMaxIndex::read(const IDataType & type, ReadBuffer & buf, size_
     if (unlikely(bytes_read != bytes_limit))
     {
         throw DB::TiFlashException(
-            "Bad file format: expected read index content size: " + std::to_string(bytes_limit)
-                + " vs. actual: " + std::to_string(bytes_read),
-            Errors::DeltaTree::Internal);
+            Errors::DeltaTree::Internal,
+            "Bad file format: expected read index content size: {} vs. actual: {}",
+            bytes_limit,
+            bytes_read);
     }
     return std::make_shared<MinMaxIndex>(std::move(has_null_marks), std::move(has_value_marks), std::move(minmaxes));
 }

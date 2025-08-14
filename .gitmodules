@@ -155,3 +155,6 @@
 [submodule "contrib/tici"]
 	path = contrib/tici
 	url = git@github.com:pingcap-inc/tici.git
+[submodule "contrib/tiflash-proxy-next-gen"]
+	path = contrib/tiflash-proxy-next-gen
+	url = git@github.com:tidbcloud/cloud-storage-engine.git
