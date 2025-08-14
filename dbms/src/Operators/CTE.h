@@ -30,7 +30,7 @@ namespace DB
 class CTE
 {
 public:
-    explicit CTE(size_t partition_num_, size_t expected_sink_num_, size_t expected_source_num_)
+    CTE(size_t partition_num_, size_t expected_sink_num_, size_t expected_source_num_)
         : partition_num(partition_num_)
         , expected_sink_num(expected_sink_num_)
         , expected_source_num(expected_source_num_)

@@ -35,6 +35,8 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
     case CTEOpStatus::CANCELLED:
     case CTEOpStatus::OK:
         return ret;
+    default:
+        return ret;
     }
 }
 } // namespace DB

@@ -74,7 +74,7 @@ void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_
 
     if (status == CTEOpStatus::BLOCK_NOT_AVAILABLE)
     {
-        this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE);
+        this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE_READ);
         return;
     }
 

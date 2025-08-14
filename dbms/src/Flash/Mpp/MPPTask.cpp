@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
@@ -42,7 +43,6 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 
-#include "Common/Exception.h"
 
 namespace DB
 {

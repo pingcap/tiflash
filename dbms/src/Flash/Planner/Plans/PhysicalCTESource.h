@@ -55,7 +55,5 @@ private:
 private:
     Block sample_block;
     size_t cte_id;
-    std::vector<Int64> partition_col_ids;
-    TiDB::TiDBCollators partition_col_collators;
 };
 } // namespace DB
