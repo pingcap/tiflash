@@ -144,6 +144,10 @@ elseif(APPLE)
             COMPONENT tiflash-release
             DESTINATION "."
             PRE_INCLUDE_REGEXES ".*proxy.*")
+
+    install (TARGETS tici_search_lib
+            COMPONENT tiflash-release
+            DESTINATION ".")
 endif ()
 
 include(CMakePrintHelpers)
