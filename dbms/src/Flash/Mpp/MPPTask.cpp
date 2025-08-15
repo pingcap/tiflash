@@ -579,12 +579,9 @@ void MPPTask::preprocess()
         std::unique_lock lock(mtx);
         if (status != RUNNING)
             throw Exception("task not in running state, may be cancelled");
-        if likely (receiver_set)
-        {
-            for (auto & r : dag_context->getCoprocessorReaders())
-                receiver_set->addCoprocessorReader(r);
-            new_thread_count_of_mpp_receiver += receiver_set->getExternalThreadCnt();
-        }
+        for (auto & r : dag_context->getCoprocessorReaders())
+            receiver_set->addCoprocessorReader(r);
+        new_thread_count_of_mpp_receiver += receiver_set->getExternalThreadCnt();
     }
     auto end_time = Clock::now();
     dag_context->compile_time_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end_time - start_time).count();
@@ -718,8 +715,7 @@ void MPPTask::runImpl()
             finishWrite();
 
             // finish receiver
-            if likely (receiver_set)
-                receiver_set->close();
+            receiver_set->close();
         }
         result.verify();
     }
