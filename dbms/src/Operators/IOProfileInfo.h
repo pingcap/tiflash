@@ -63,7 +63,7 @@ struct IOProfileInfo
     OperatorProfileInfoPtr operator_info;
 
     const bool is_local;
-    std::vector<ConnectionProfileInfo> connection_profile_infos{};
+    std::vector<ConnectionProfileInfo> connection_profile_infos;
     RemoteExecutionSummary remote_execution_summary{};
 };
 } // namespace DB

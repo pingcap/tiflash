@@ -58,6 +58,7 @@ enum class NotifyType
     WAIT_ON_JOIN_BUILD_FINISH,
     WAIT_ON_JOIN_PROBE_FINISH,
     WAIT_ON_RESULT_QUEUE_WRITE,
+    WAIT_ON_CTE_READ,
     WAIT_ON_NOTHING,
 };
 
@@ -121,7 +122,7 @@ public:
 
     const PipelineExecutorContext & getQueryExecContext() { return exec_context; }
 
-    void onErrorOccurred(const String & err_msg) { exec_context.onErrorOccurred(err_msg); }
+    void onErrorOccurred(const String & err_msg);
 
     void setNotifyType(NotifyType type) { notify_type = type; }
     NotifyType getNotifyType() const { return notify_type; }
