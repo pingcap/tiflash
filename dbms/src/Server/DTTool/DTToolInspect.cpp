@@ -146,6 +146,35 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         }
     }
 
+    {
+        const auto all_cols = dmfile->getColumnDefines();
+        LOG_INFO(logger, "Dumping column defines, num_columns={}", all_cols.size());
+        for (const auto & col : all_cols)
+        {
+            LOG_INFO(logger, "col_id={} col_name={} col_type={}", col.id, col.name, col.type->getName());
+        }
+    }
+    {
+        const auto & pack_stats = dmfile->getPackStats();
+        const auto & pack_prop = dmfile->getPackProperties();
+        LOG_INFO(
+            logger,
+            "Dumping pack stats, num_packs={} num_properties={}",
+            pack_stats.size(),
+            pack_prop.property_size());
+        for (size_t i = 0; i < pack_stats.size(); ++i)
+        {
+            const auto & pack_stat = pack_stats[i];
+            String prop_str = "(no property)";
+            if (pack_prop.property_size() > static_cast<Int64>(i))
+            {
+                const auto & prop = pack_prop.property(i);
+                prop_str = fmt::format("{}", prop.ShortDebugString());
+            }
+            LOG_INFO(logger, "pack_id={} pack_stat={} prop={}", i, pack_stat.toDebugString(), prop_str);
+        }
+    }
+
     if (args.check)
     {
         // for directory mode file, we can consume each file to check its integrity.
@@ -203,7 +232,12 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         const DB::DM::ColumnDefines cols_to_dump = getColumnsToDump(dmfile, args.col_ids, args.dump_all_columns);
         for (const auto & col : cols_to_dump)
         {
-            LOG_INFO(logger, "dump minmax for column: column_id={} name={} type={}", col.id, col.name, col.type->getName());
+            LOG_INFO(
+                logger,
+                "dump minmax for column: column_id={} name={} type={}",
+                col.id,
+                col.name,
+                col.type->getName());
         }
         for (const auto & c : cols_to_dump)
         {
@@ -258,7 +292,12 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         const DB::DM::ColumnDefines cols_to_dump = getColumnsToDump(dmfile, args.col_ids, args.dump_all_columns);
         for (const auto & col : cols_to_dump)
         {
-            LOG_INFO(logger, "dump value for column: column_id={} name={} type={}", col.id, col.name, col.type->getName());
+            LOG_INFO(
+                logger,
+                "dump value for column: column_id={} name={} type={}",
+                col.id,
+                col.name,
+                col.type->getName());
         }
 
         auto stream = DB::DM::createSimpleBlockInputStream(context, dmfile, cols_to_dump);
