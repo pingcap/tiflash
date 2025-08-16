@@ -79,6 +79,8 @@ public:
 
     RSResults checkIsNull(size_t start_pack, size_t pack_count);
 
+    size_t size() const { return has_value_marks.size(); }
+
 private:
     template <typename Op, typename T>
     RSResults checkCmpImpl(size_t start_pack, size_t pack_count, const Field & value, const DataTypePtr & type);
