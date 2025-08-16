@@ -80,6 +80,17 @@ public:
     RSResults checkIsNull(size_t start_pack, size_t pack_count);
 
     size_t size() const { return has_value_marks.size(); }
+    struct Cell
+    {
+        Field min;
+        Field max;
+        bool has_null = false;
+        bool has_value = false;
+    };
+    // Debug method to get the cell data.
+    // Do not use this in performance critical path
+    // because `Field` has a lot of overhead
+    Cell getCell(size_t pack_index) const;
 
 private:
     template <typename Op, typename T>
