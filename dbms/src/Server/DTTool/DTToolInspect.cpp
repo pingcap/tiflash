@@ -85,6 +85,24 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         }
     }
 
+    {
+        const auto all_cols = dmfile->getColumnDefines();
+        LOG_INFO(logger, "Dumping column defines, num_columns={}", all_cols.size());
+        for (const auto & col : all_cols)
+        {
+            LOG_INFO(logger, "col_id={} col_name={} col_type={}", col.id, col.name, col.type->getName());
+        }
+    }
+    {
+        const auto & pack_stats = dmfile->getPackStats();
+        LOG_INFO(logger, "Dumping pack stats, num_packs={}", pack_stats.size());
+        for (size_t i = 0; i < pack_stats.size(); ++i)
+        {
+            const auto & pack_stat = pack_stats[i];
+            LOG_INFO(logger, "pack_id={} pack_stat={}", i, pack_stat.toDebugString());
+        }
+    }
+
     if (args.check)
     {
         // for directory mode file, we can consume each file to check its integrity.
