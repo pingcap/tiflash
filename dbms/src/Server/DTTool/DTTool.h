@@ -56,8 +56,10 @@ struct InspectArgs
     bool check;
     bool dump_columns;
     bool dump_all_columns;
+    bool dump_minmax;
     size_t file_id;
     std::string workdir;
+    std::vector<DB::ColumnID> col_ids;
 };
 int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_function);
 } // namespace DTTool::Inspect
@@ -127,7 +129,13 @@ class ImitativeEnv
     static void setupLogger()
     {
         Poco::AutoPtr<Poco::ConsoleChannel> channel = new Poco::ConsoleChannel(std::cout);
-        Poco::AutoPtr<Poco::Formatter> formatter(new UnifiedLogFormatter<true>());
+        // only enable colors when the output is a terminal
+        bool enable_colors = isatty(STDOUT_FILENO) && isatty(STDERR_FILENO);
+        Poco::AutoPtr<Poco::Formatter> formatter;
+        if (enable_colors)
+            formatter = new UnifiedLogFormatter<true>();
+        else
+            formatter = new UnifiedLogFormatter<false>();
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Poco::Logger::root().setChannel(formatting_channel);
         Poco::Logger::root().setLevel("trace");
