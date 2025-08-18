@@ -61,7 +61,7 @@ public:
             ", ");
         auto [expr, cids] = tipbToTiCIExpr(match_expr_);
         match_expr = std::move(expr);
-        LOG_INFO(log, "columns: [{}], match columns", buf.toString(), cids);
+        LOG_INFO(log, "columns: [{}], match columns: {}", buf.toString(), cids);
     }
 
     String getName() const override { return NAME; }
