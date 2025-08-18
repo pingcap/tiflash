@@ -21,6 +21,7 @@
 #include <DataStreams/IProfilingBlockInputStream.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Flash/Coprocessor/DAGCodec.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ShardInfo.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -51,8 +52,17 @@ public:
         , return_columns(return_columns_)
         , limit(limit_)
         , read_ts(read_ts_)
-        , match_expr(match_expr_)
-    {}
+    {
+        FmtBuffer buf;
+        buf.joinStr(
+            return_columns.begin(),
+            return_columns.end(),
+            [](const auto & nt, FmtBuffer & fb) { fb.fmtAppend("{}:{}", nt.name, nt.type->getName()); },
+            ", ");
+        auto [expr, cids] = tipbToTiCIExpr(match_expr_);
+        match_expr = std::move(expr);
+        LOG_INFO(log, "columns: [{}], match columns", buf.toString(), cids);
+    }
 
     String getName() const override { return NAME; }
 
@@ -86,7 +96,6 @@ protected:
         auto key_ranges = getKeyRanges(shard_info.key_ranges);
 
         auto search_param = SearchParam{static_cast<size_t>(limit)};
-        auto expr = tipbToTiCIExpr(match_expr);
         rust::Vec<IdDocument> documents = search(
             {
                 .table_id = table_id,
@@ -96,7 +105,7 @@ protected:
             },
             key_ranges,
             return_fields,
-            expr,
+            match_expr,
             search_param,
             read_ts);
 
@@ -155,16 +164,15 @@ private:
     NamesAndTypes return_columns;
     UInt64 limit;
     UInt64 read_ts;
-    const google::protobuf::RepeatedPtrField<tipb::Expr> match_expr;
+    ::Expr match_expr;
 
     size_t processed_shard = 0;
 
-    rust::Vec<rust::String> getFields(NamesAndTypes & columns)
+    static rust::Vec<rust::String> getFields(NamesAndTypes & columns)
     {
         rust::Vec<rust::String> fields;
         for (auto & name_and_type : columns)
         {
-            LOG_INFO(log, "name: {}, type: {}", name_and_type.name, name_and_type.type->getName());
             fields.push_back(name_and_type.name);
         }
         return fields;
@@ -189,36 +197,40 @@ private:
         return res;
     }
 
-    ::Expr tipbToTiCIExpr(google::protobuf::RepeatedPtrField<tipb::Expr> exprs)
+    std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(google::protobuf::RepeatedPtrField<tipb::Expr> exprs)
     {
         if (exprs.empty())
         {
             throw std::runtime_error("Empty match expression");
         }
-        ::Expr ret = tipbToTiCIExpr(exprs[0]);
+        auto [ret, cids] = tipbToTiCIExpr(exprs[0]);
         for (auto i = 1; i < exprs.size(); ++i)
         {
-            auto child = tipbToTiCIExpr(exprs[i]);
+            auto [child_expr, child_cids] = tipbToTiCIExpr(exprs[i]);
             ret = {
                 .tp = tipb::ExprType::ScalarFunc,
-                .children = {ret, child},
+                .children = {ret, child_expr},
                 .sig = tipb::ScalarFuncSig::LogicalAnd,
             };
+            cids.insert(cids.end(), child_cids.begin(), child_cids.end());
         }
-        return ret;
+        return {ret, cids};
     }
 
-    ::Expr tipbToTiCIExpr(const tipb::Expr & expr)
+    std::tuple<::Expr, std::vector<ColumnID>> tipbToTiCIExpr(const tipb::Expr & expr)
     {
         ::Expr ret;
         switch (expr.tp())
         {
         case tipb::ExprType::ScalarFunc:
         {
+            std::vector<ColumnID> children_cids;
             ret.tp = tipb::ExprType::ScalarFunc;
             for (const auto & child : expr.children())
             {
-                ret.children.push_back(tipbToTiCIExpr(child));
+                auto [child_expr, child_cids] = tipbToTiCIExpr(child);
+                ret.children.push_back(child_expr);
+                children_cids.insert(children_cids.end(), child_cids.begin(), child_cids.end());
             }
             switch (expr.sig())
             {
@@ -232,21 +244,20 @@ private:
                 throw std::runtime_error("Unsupported expression sig");
             }
 
-            return ret;
+            return {ret, children_cids};
         }
         case tipb::ExprType::ColumnRef:
         {
             ret.tp = tipb::ExprType::ColumnRef;
             auto id = decodeDAGInt64(expr.val());
-            LOG_INFO(log, "column_{}", std::to_string(id));
-            ret.val = "column_" + std::to_string(id);
-            return ret;
+            ret.val = fmt::format("column_{}", id);
+            return {ret, {id}};
         }
         case tipb::ExprType::String:
         {
             ret.tp = tipb::ExprType::String;
             ret.val = expr.val();
-            return ret;
+            return {ret, {}};
         }
         default:
             throw std::runtime_error("Unsupported expression type");
