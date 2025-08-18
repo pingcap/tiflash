@@ -24,7 +24,7 @@ namespace DB::DM
 
 struct MergedSubFileInfo
 {
-    String fname; // Sub filemame
+    String fname; // Sub filename
     UInt64 number = 0; // Merged file number
     UInt64 offset = 0; // Offset in merged file
     UInt64 size = 0; // Size of sub file
