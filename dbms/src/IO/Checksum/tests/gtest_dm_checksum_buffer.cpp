@@ -472,10 +472,10 @@ void runCompressedSeekableReaderBufferTest()
     }
 }
 
-#define TEST_COMPRESSEDSEEKABLE(ALGO)                \
-    TEST(DMChecksumBuffer##ALGO, CompressedSeekable) \
-    {                                                \
-        runStackingTest<ChecksumAlgo::ALGO>();       \
+#define TEST_COMPRESSEDSEEKABLE(ALGO)                                \
+    TEST(DMChecksumBuffer##ALGO, CompressedSeekable)                 \
+    {                                                                \
+        runCompressedSeekableReaderBufferTest<ChecksumAlgo::ALGO>(); \
     } // NOLINT(cert-err58-cpp)
 
 TEST_COMPRESSEDSEEKABLE(None)
