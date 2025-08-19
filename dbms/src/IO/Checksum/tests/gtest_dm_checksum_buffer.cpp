@@ -466,12 +466,14 @@ try
         ASSERT_EQ(read_data, test_blocks[i]) << "Block " << i << " data mismatch";
     }
 
-    // 2. Seek to block 2 again
+    // Seek in inverse order to test seek again
+    for (size_t i = 0; i < test_blocks.size(); ++i)
     {
-        const size_t target_block = 2;
+        assert(i + 1 <= test_blocks.size());
+        const size_t target_block = test_blocks.size() - i - 1;
         compressed_in->seek(block_compressed_offsets[target_block], 0);
         std::string read_data;
-        read_data.resize(100);
+        read_data.resize(block_decompressed_sizes[target_block]);
         size_t num_read = compressed_in->readBig(read_data.data(), test_blocks[target_block].size());
         ASSERT_EQ(num_read, test_blocks[target_block].size());
         read_data.resize(num_read);
