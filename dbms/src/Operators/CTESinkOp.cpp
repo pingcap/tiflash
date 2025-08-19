@@ -28,7 +28,7 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
         return OperatorStatus::FINISHED;
 
     this->total_rows += block.rows();
-    if (this->cte->pushBlock(this->id, block))
+    if (this->cte->pushBlock<false>(this->id, block))
         return OperatorStatus::NEED_INPUT;
     return OperatorStatus::CANCELLED;
 }

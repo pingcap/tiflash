@@ -199,7 +199,7 @@ void MPPTask::abortCTE(const String & message)
 {
     if (this->has_cte_sink.load())
     {
-        this->dag_context->getCTESink()->notifyCancel(message);
+        this->dag_context->getCTESink()->notifyCancel<false>(message);
         this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSink());
     }
 
@@ -207,7 +207,7 @@ void MPPTask::abortCTE(const String & message)
     {
         for (auto & p : this->dag_context->getCTESource())
         {
-            p.second->notifyCancel(message);
+            p.second->notifyCancel<false>(message);
             this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSource(p.first));
         }
     }
@@ -728,7 +728,7 @@ void MPPTask::runImpl()
     if unlikely (this->has_cte_sink.load() && !this->notify_cte_sink_finish)
     {
         if (!err_msg.empty())
-            this->dag_context->getCTESink()->notifyCancel(err_msg);
+            this->dag_context->getCTESink()->notifyCancel<false>(err_msg);
 
         tipb::SelectResponse resp;
         this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEIDForSink());

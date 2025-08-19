@@ -33,6 +33,8 @@ public:
     void releaseCTEBySink(const tipb::SelectResponse & resp, const String & query_id_and_cte_id);
     void releaseCTE(const String & query_id_and_cte_id);
 
+    bool hasCTEForTest(const String & query_id_and_cte_id);
+
 private:
     std::mutex mu;
     std::unordered_map<String, std::shared_ptr<CTE>> ctes;

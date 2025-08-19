@@ -41,6 +41,7 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
     return status;
 }
 
+template <bool for_test>
 bool CTE::pushBlock(size_t partition_id, const Block & block)
 {
     {
@@ -56,7 +57,10 @@ bool CTE::pushBlock(size_t partition_id, const Block & block)
     this->partitions[partition_id].memory_usages += block.bytes();
     this->partitions[partition_id].blocks.push_back(
         BlockWithCounter(block, static_cast<Int16>(this->expected_source_num)));
-    this->partitions[partition_id].pipe_cv->notifyAll();
+    if constexpr (for_test)
+        this->partitions[partition_id].cv_for_test->notify_all();
+    else
+        this->partitions[partition_id].pipe_cv->notifyAll();
     return true;
 }
 
@@ -80,4 +84,14 @@ void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_
 
     this->notifyTaskDirectly(partition_id, std::move(task));
 }
+
+CTEOpStatus CTE::checkBlockAvailableForTest(size_t cte_reader_id, size_t partition_id)
+{
+    std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
+    std::lock_guard<std::mutex> lock(*this->partitions[partition_id].mu);
+    return this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
+}
+
+template bool CTE::pushBlock<true>(size_t, const Block &);
+template bool CTE::pushBlock<false>(size_t, const Block &);
 } // namespace DB

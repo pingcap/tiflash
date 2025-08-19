@@ -44,7 +44,7 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
 
     std::shared_ptr<CTE> cte = iter->second;
     cte->addResp(resp);
-    cte->sinkExit();
+    cte->sinkExit<false>();
     if (cte->allExit())
         this->ctes.erase(iter);
 }
@@ -75,5 +75,11 @@ std::shared_ptr<CTE> CTEManager::getOrCreateCTE(
     }
 
     return cte;
+}
+
+bool CTEManager::hasCTEForTest(const String & query_id_and_cte_id)
+{
+    std::lock_guard<std::mutex> lock(this->mu);
+    return !(this->ctes.find(query_id_and_cte_id) == this->ctes.end());
 }
 } // namespace DB

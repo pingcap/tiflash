@@ -17,6 +17,9 @@
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 #include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
+#include <condition_variable>
+#include <memory>
+
 namespace DB
 {
 enum class CTEOpStatus
@@ -45,5 +48,8 @@ struct CTEPartition
     std::vector<size_t> fetch_block_idxs;
     size_t memory_usages = 0;
     std::unique_ptr<PipeConditionVariable> pipe_cv;
+
+    std::unique_ptr<std::mutex> mu_for_test;
+    std::unique_ptr<std::condition_variable> cv_for_test;
 };
 } // namespace DB

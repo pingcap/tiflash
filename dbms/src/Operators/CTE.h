@@ -20,6 +20,7 @@
 #include <Operators/CTEPartition.h>
 #include <tipb/select.pb.h>
 
+#include <condition_variable>
 #include <memory>
 #include <mutex>
 #include <shared_mutex>
@@ -44,6 +45,15 @@ public:
         }
     }
 
+    void initForTest()
+    {
+        for (size_t i = 0; i < this->partition_num; i++)
+        {
+            this->partitions[i].mu_for_test = std::make_unique<std::mutex>();
+            this->partitions[i].cv_for_test = std::make_unique<std::condition_variable>();
+        }
+    }
+
     size_t getCTEReaderID()
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
@@ -59,9 +69,18 @@ public:
 
     CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block);
 
+    template <bool for_test>
     bool pushBlock(size_t partition_id, const Block & block);
-    void notifyEOF() { this->notifyImpl<false>(true, ""); }
-    void notifyCancel(const String & msg) { this->notifyImpl<true>(false, msg); }
+    template <bool for_test>
+    void notifyEOF()
+    {
+        this->notifyImpl<false, for_test>(true, "");
+    }
+    template <bool for_test>
+    void notifyCancel(const String & msg)
+    {
+        this->notifyImpl<true, for_test>(false, msg);
+    }
 
     String getError()
     {
@@ -70,6 +89,7 @@ public:
     }
 
     void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id);
+    CTEOpStatus checkBlockAvailableForTest(size_t cte_reader_id, size_t partition_id);
 
     void registerTask(size_t partition_id, TaskPtr && task, NotifyType type);
     void notifyTaskDirectly(size_t partition_id, TaskPtr && task)
@@ -131,12 +151,13 @@ public:
             this->partition_num);
     }
 
+    template <bool for_test>
     void sinkExit()
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
         this->sink_exit_num++;
         if (this->getSinkExitNumNoLock() == this->getExpectedSinkNum())
-            this->notifyEOF();
+            this->notifyEOF<for_test>();
     }
 
     void sourceExit()
@@ -151,14 +172,31 @@ public:
         return this->getTotalExitNumNoLock() == this->getExpectedTotalNum();
     }
 
-private:
-    Int32 getTotalExitNumNoLock() const noexcept { return this->sink_exit_num + this->source_exit_num; }
-    Int32 getSinkExitNumNoLock() const noexcept { return this->sink_exit_num; }
-    Int32 getExpectedSinkNum() const noexcept { return this->expected_sink_num; }
-    Int32 getExpectedTotalNum() const noexcept { return this->getExpectedSinkNum() + this->expected_source_num; }
+    CTEOpStatus checkBlockAvailable(size_t cte_reader_id, size_t partition_id)
+    {
+        return this->checkBlockAvailableImpl<true>(cte_reader_id, partition_id);
+    }
 
     CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id)
     {
+        return this->checkBlockAvailableImpl<false>(cte_reader_id, partition_id);
+    }
+
+    CTEPartition & getPartitionForTest(size_t partition_idx) { return this->partitions[partition_idx]; }
+
+private:
+    template <bool need_lock>
+    CTEOpStatus checkBlockAvailableImpl(size_t cte_reader_id, size_t partition_id)
+    {
+        std::shared_lock<std::shared_mutex> cte_lock(this->rw_lock, std::defer_lock);
+        std::unique_lock<std::mutex> partition_lock(*(this->partitions[partition_id].mu), std::defer_lock);
+
+        if constexpr (need_lock)
+        {
+            cte_lock.lock();
+            partition_lock.lock();
+        }
+
         if unlikely (this->is_cancelled)
             return CTEOpStatus::CANCELLED;
 
@@ -169,7 +207,12 @@ private:
         return CTEOpStatus::OK;
     }
 
-    template <bool need_lock>
+    Int32 getTotalExitNumNoLock() const noexcept { return this->sink_exit_num + this->source_exit_num; }
+    Int32 getSinkExitNumNoLock() const noexcept { return this->sink_exit_num; }
+    Int32 getExpectedSinkNum() const noexcept { return this->expected_sink_num; }
+    Int32 getExpectedTotalNum() const noexcept { return this->getExpectedSinkNum() + this->expected_source_num; }
+
+    template <bool need_lock, bool for_test>
     void notifyImpl(bool is_eof, const String & msg)
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
@@ -185,7 +228,12 @@ private:
         }
 
         for (auto & partition : this->partitions)
-            partition.pipe_cv->notifyAll();
+        {
+            if constexpr (for_test)
+                partition.cv_for_test->notify_all();
+            else
+                partition.pipe_cv->notifyAll();
+        }
     }
 
     const size_t partition_num;

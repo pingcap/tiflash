@@ -189,10 +189,10 @@ void PipelineExecutorContext::cancel()
 
             auto cte = dag_context->getCTESink();
             if (cte)
-                cte->notifyCancel(getTrimmedErrMsg());
+                cte->notifyCancel<false>(getTrimmedErrMsg());
 
             for (auto & p : dag_context->getCTESource())
-                p.second->notifyCancel(getTrimmedErrMsg());
+                p.second->notifyCancel<false>(getTrimmedErrMsg());
 
             if (auto mpp_receiver_set = dag_context->getMPPReceiverSet(); mpp_receiver_set)
                 mpp_receiver_set->cancel();

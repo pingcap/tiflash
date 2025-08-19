@@ -30,7 +30,7 @@ namespace DB
 class CTEReader
 {
 public:
-    explicit CTEReader(Context & context, const String & query_id_and_cte_id_, std::shared_ptr<CTE> cte_)
+    CTEReader(Context & context, const String & query_id_and_cte_id_, std::shared_ptr<CTE> cte_)
         : query_id_and_cte_id(query_id_and_cte_id_)
         , cte_manager(context.getCTEManager())
         , cte(cte_)
@@ -38,6 +38,14 @@ public:
     {
         RUNTIME_CHECK(cte);
     }
+
+    // For Test
+    CTEReader(const String & query_id_and_cte_id_, CTEManager * cte_manager_, std::shared_ptr<CTE> cte_)
+        : query_id_and_cte_id(query_id_and_cte_id_)
+        , cte_manager(cte_manager_)
+        , cte(cte_)
+        , cte_reader_id(this->cte->getCTEReaderID())
+    {}
 
     ~CTEReader()
     {
@@ -60,6 +68,8 @@ public:
     size_t getID() const { return this->cte_reader_id; }
 
     bool areAllSinksRegistered() { return this->cte->areAllSinksRegistered<true>(); }
+
+    CTEOpStatus waitForBlockAvailableForTest(size_t partition_idx);
 
 private:
     String query_id_and_cte_id;
