@@ -46,51 +46,50 @@ off_t FramedChecksumReadBuffer<Backend>::doSeek(off_t offset, int whence)
             pos = working_buffer.begin() + target_offset;
         return offset;
     }
-    else
+
+    // Seek according to `target_frame` and `target_offset`
+    // read the header and the body
+    auto header_offset = target_frame * (sizeof(ChecksumFrame<Backend>) + frame_size);
+    auto result = in->seek(static_cast<off_t>(header_offset), SEEK_SET);
+    if (result == -1)
     {
-        // read the header and the body
-        auto header_offset = target_frame * (sizeof(ChecksumFrame<Backend>) + frame_size);
-        auto result = in->seek(static_cast<off_t>(header_offset), SEEK_SET);
-        if (result == -1)
-        {
-            throw TiFlashException(
-                Errors::Checksum::IOFailure,
-                "checksum framed file {} is not seekable",
-                in->getFileName());
-        }
-        auto length = expectRead(
-            working_buffer.begin() - sizeof(ChecksumFrame<Backend>),
-            sizeof(ChecksumFrame<Backend>) + frame_size);
-        if (length == 0)
-        {
-            current_frame = target_frame;
-            pos = working_buffer.begin();
-            working_buffer.resize(0);
-            return offset; // EOF
-        }
-        if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
-        {
-            throw TiFlashException(
-                Errors::Checksum::DataCorruption,
-                "frame length (header = {}, body = {}, read = {}) mismatch for {}",
-                sizeof(ChecksumFrame<Backend>),
-                frame.bytes,
-                length,
-                in->getFileName());
-        }
-
-        // body checksum examination
-        checkBody();
-
-        // update statistics
-        current_frame = target_frame;
-        if (unlikely(target_offset > working_buffer.size()))
-            pos = working_buffer.end();
-        else
-            pos = working_buffer.begin() + target_offset;
-
-        return offset;
+        throw TiFlashException(
+            Errors::Checksum::IOFailure,
+            "checksum framed file {} is not seekable",
+            in->getFileName());
     }
+    auto length = expectRead(
+        working_buffer.begin() - sizeof(ChecksumFrame<Backend>),
+        sizeof(ChecksumFrame<Backend>) + frame_size);
+    if (length == 0)
+    {
+        current_frame = target_frame;
+        pos = working_buffer.begin();
+        working_buffer.resize(0);
+        return offset; // EOF
+    }
+    if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
+    {
+        throw TiFlashException(
+            Errors::Checksum::DataCorruption,
+            "frame length (header = {}, body = {}, read = {}) mismatch for {}",
+            sizeof(ChecksumFrame<Backend>),
+            frame.bytes,
+            length,
+            in->getFileName());
+    }
+
+    // body checksum examination
+    checkBody();
+
+    // update statistics
+    current_frame = target_frame;
+    if (unlikely(target_offset > working_buffer.size()))
+        pos = working_buffer.end();
+    else
+        pos = working_buffer.begin() + target_offset;
+
+    return offset;
 }
 
 template class FramedChecksumReadBuffer<None>;

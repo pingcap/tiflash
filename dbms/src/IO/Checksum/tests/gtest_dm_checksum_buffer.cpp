@@ -12,11 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wsign-compare"
-#include <gtest/gtest.h>
-#pragma GCC diagnostic pop
-
+#include <Common/Logger.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/BaseFile/RateLimiter.h>
@@ -29,6 +25,7 @@
 #include <Poco/File.h>
 #include <Storages/DeltaMerge/DMChecksumConfig.h>
 #include <Storages/Page/PageUtil.h>
+#include <TestUtils/TiFlashTestBasic.h>
 #include <fmt/format.h>
 
 #include <ext/scope_guard.h>
@@ -376,7 +373,9 @@ TEST_STACKED_SEEKING(XXH3)
 
 template <ChecksumAlgo D>
 void runCompressedSeekableReaderBufferTest()
+try
 {
+    auto log = Logger::get();
     // Create a temporary file for testing
     const std::string temp_file_path = "/tmp/tiflash_compressed_seek_test.dat";
     SCOPE_EXIT({
@@ -430,11 +429,15 @@ void runCompressedSeekableReaderBufferTest()
         }
     }
 
-    std::cout << "Created compressed file with " << test_blocks.size() << " blocks" << std::endl;
+    LOG_INFO(log, "Created compressed file with {} blocks", test_blocks.size());
     for (size_t i = 0; i < block_compressed_offsets.size(); ++i)
     {
-        std::cout << "Block " << i << ": compressed_offset=" << block_compressed_offsets[i]
-                  << ", decompressed_size=" << block_decompressed_sizes[i] << std::endl;
+        LOG_INFO(
+            log,
+            "Block {}: compressed_offset={}, decompressed_size={}",
+            i,
+            block_compressed_offsets[i],
+            block_decompressed_sizes[i]);
     }
 
 
@@ -451,6 +454,7 @@ void runCompressedSeekableReaderBufferTest()
     for (size_t i = 0; i < test_blocks.size(); ++i)
     {
         // Seek to the start of each block
+        LOG_INFO(log, "Seeking to block {} at offset {}", i, block_compressed_offsets[i]);
         compressed_in->seek(block_compressed_offsets[i], 0);
 
         // Read the data
@@ -468,9 +472,14 @@ void runCompressedSeekableReaderBufferTest()
         compressed_in->seek(block_compressed_offsets[target_block], 0);
         std::string read_data;
         read_data.resize(100);
-        compressed_in->readBig(read_data.data(), 0);
+        size_t num_read = compressed_in->readBig(read_data.data(), test_blocks[target_block].size());
+        ASSERT_EQ(num_read, test_blocks[target_block].size());
+        read_data.resize(num_read);
+        ASSERT_EQ(read_data, test_blocks[target_block])
+            << "Block " << target_block << " data mismatch after seek again";
     }
 }
+CATCH
 
 #define TEST_COMPRESSEDSEEKABLE(ALGO)                                \
     TEST(DMChecksumBuffer##ALGO, CompressedSeekable)                 \
