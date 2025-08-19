@@ -934,6 +934,7 @@ CATCH
 TEST_F(DMFileMetaV2Test, WriteReadNullableVectorColumn)
 try
 {
+    auto log = Logger::get();
     // Verify that compression and checksum settings are configured correctly
     ASSERT_EQ(dbContext().getSettingsRef().dt_compression_method.get(), CompressionMethod::LZ4);
     ASSERT_EQ(dbContext().getSettingsRef().dt_checksum_algorithm.get(), ChecksumAlgo::XXH3);
@@ -1026,6 +1027,7 @@ try
     {
         DMFileBlockInputStreamBuilder builder(dbContext());
         builder.setRowsThreshold(100);
+        LOG_INFO(log, "Begin to verify reading blocks from DMFile");
         auto stream = builder.build(
             dm_file,
             *cols,
