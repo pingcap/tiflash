@@ -16,7 +16,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
- 
+
 #include <algorithm>
 #include <chrono>
 #include <memory>
@@ -29,7 +29,9 @@ namespace DB
 {
 namespace tests
 {
-class TestCTEManager : public testing::Test {};
+class TestCTEManager : public testing::Test
+{
+};
 
 TEST_F(TestCTEManager, Basic)
 try
@@ -54,7 +56,7 @@ try
     ASSERT_TRUE(manager.hasCTEForTest(query_id_and_cte_id));
     manager.releaseCTE(query_id_and_cte_id);
     ASSERT_FALSE(manager.hasCTEForTest(query_id_and_cte_id));
- 
+
     // Release with no error
     manager.releaseCTE(query_id_and_cte_id);
     manager.releaseCTEBySink(resp, query_id_and_cte_id);
@@ -69,8 +71,9 @@ try
     struct Meta
     {
         Meta(bool is_source_, String query_id_and_cte_id_)
-        : is_source(is_source_)
-        , query_id_and_cte_id(query_id_and_cte_id_) {}
+            : is_source(is_source_)
+            , query_id_and_cte_id(query_id_and_cte_id_)
+        {}
 
         bool is_source;
         String query_id_and_cte_id;
@@ -84,14 +87,14 @@ try
     constexpr Int32 expected_sink_num = 2;
     constexpr Int32 expected_source_num = 2;
 
-    auto working_func = [&](const Meta & meta){
+    auto working_func = [&](const Meta & meta) {
         std::random_device r;
         std::default_random_engine dre(r());
         std::uniform_int_distribution<uint64_t> di(1, 10);
 
         // Mock time elapsed before mpp task is received
-        std::this_thread::sleep_for(std::chrono::microseconds(di(dre)* 100));
-        
+        std::this_thread::sleep_for(std::chrono::microseconds(di(dre) * 100));
+
         const auto & query_id_and_cte_id = meta.query_id_and_cte_id;
         {
             std::lock_guard<std::mutex> lock(mu);
@@ -99,7 +102,8 @@ try
             // We will not keep testing if the cte has been cancelled
             if (cancelled_ctes.find(query_id_and_cte_id) == cancelled_ctes.end())
             {
-                auto cte = manager.getOrCreateCTE(query_id_and_cte_id, concurrency, expected_sink_num, expected_source_num);
+                auto cte
+                    = manager.getOrCreateCTE(query_id_and_cte_id, concurrency, expected_sink_num, expected_source_num);
                 auto iter = ctes.find(query_id_and_cte_id);
                 if (iter == ctes.end())
                 {
@@ -115,7 +119,7 @@ try
 
         // Mock working time
         std::this_thread::sleep_for(std::chrono::milliseconds(di(dre)));
-        
+
         {
             std::lock_guard<std::mutex> lock(mu);
             auto iter = cancelled_ctes.find(query_id_and_cte_id);
@@ -134,7 +138,7 @@ try
         }
     };
 
-    auto cancel_func = [&] () {
+    auto cancel_func = [&]() {
         std::random_device r;
         std::default_random_engine dre(r());
         std::uniform_int_distribution<uint64_t> di(1, 10);

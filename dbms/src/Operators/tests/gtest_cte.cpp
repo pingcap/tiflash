@@ -12,17 +12,18 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnVector.h>
+#include <DataTypes/DataTypesNumber.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <Operators/CTE.h>
+#include <Operators/CTEPartition.h>
+#include <Operators/CTEReader.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/types.h>
 #include <gtest/gtest.h>
-#include <DataTypes/DataTypesNumber.h>
-#include <Columns/ColumnVector.h>
-#include <Flash/Mpp/CTEManager.h>
-#include <Operators/CTEPartition.h>
-#include <Operators/CTEReader.h>
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <memory>
 #include <mutex>
@@ -37,13 +38,15 @@ constexpr size_t PARTITION_NUM = 3;
 constexpr size_t EXPECTED_SINK_NUM = 2;
 constexpr size_t EXPECTED_SOURCE_NUM = 2;
 
-class TestCTE : public testing::Test {};
+class TestCTE : public testing::Test
+{
+};
 
 Blocks generateBlocks(size_t start_i, size_t row_num)
 {
     Blocks blocks;
-    blocks.reserve(row_num/MAX_BLOCK_ROW_NUM);
-    
+    blocks.reserve(row_num / MAX_BLOCK_ROW_NUM);
+
     auto data_type = std::make_shared<DataTypeInt32>();
     size_t i = start_i;
     while (i < start_i + row_num)
@@ -107,7 +110,7 @@ try
         }
 
         ASSERT_EQ(received_blocks.size(), sink_blocks.size());
-        
+
         for (const auto & item : received_blocks)
         {
             const auto * col = static_cast<const ColumnVector<Int32> *>(item.getByPosition(0).column.get());
@@ -124,8 +127,7 @@ try
 }
 CATCH
 
-TEST_F(TestCTE, Concurrent)
-try
+void concurrentTest()
 {
     std::random_device r;
     std::default_random_engine dre(r());
@@ -171,7 +173,7 @@ try
     std::vector<std::thread> threads;
     threads.reserve(thread_num);
 
-    auto source_func = [&] (size_t source_idx, size_t partition_idx) {
+    auto source_func = [&](size_t source_idx, size_t partition_idx) {
         auto * reader = readers[source_idx].get();
         Block block;
         bool exit = false;
@@ -202,13 +204,13 @@ try
                 auto status = reader->waitForBlockAvailableForTest(partition_idx);
                 switch (status)
                 {
-                    case CTEOpStatus::CANCELLED:
-                    case CTEOpStatus::END_OF_FILE:
-                        exit = true;
-                    case CTEOpStatus::OK:
-                        break;
-                    default:
-                        throw Exception("Should not reach here");
+                case CTEOpStatus::CANCELLED:
+                case CTEOpStatus::END_OF_FILE:
+                    exit = true;
+                case CTEOpStatus::OK:
+                    break;
+                default:
+                    throw Exception("Should not reach here");
                 }
                 break;
             }
@@ -223,16 +225,16 @@ try
             cte->sourceExit();
     };
 
-    auto sink_func = [&] (size_t sink_idx, size_t partition_idx) {
+    auto sink_func = [&](size_t sink_idx, size_t partition_idx) {
         std::uniform_int_distribution<size_t> di1(1, 10);
         std::uniform_int_distribution<size_t> di2(10, 50);
-        
+
         std::this_thread::sleep_for(std::chrono::milliseconds(di2(dre)));
 
         if (partition_idx == 0)
             cte->registerSink();
 
-        while (true)    
+        while (true)
         {
             size_t next_sink_idx;
             {
@@ -252,23 +254,36 @@ try
         }
     };
 
+    std::atomic_bool cancelled = false;
+    auto cancel_func = [&]() {
+        std::uniform_int_distribution<size_t> di(1, 200);
+        auto random_val = di(dre);
+        std::this_thread::sleep_for(std::chrono::milliseconds(random_val));
+        if (random_val % 10 == 0)
+        {
+            cancelled.exchange(true);
+            cte->notifyCancel<true>("");
+        }
+    };
+
     for (size_t i = 0; i < EXPECTED_SOURCE_NUM; i++)
-    {
         for (size_t j = 0; j < PARTITION_NUM; j++)
             threads.push_back(std::thread(source_func, i, j));
-    }
 
     for (size_t i = 0; i < EXPECTED_SINK_NUM; i++)
-    {
         for (size_t j = 0; j < PARTITION_NUM; j++)
             threads.push_back(std::thread(sink_func, i, j));
-    }
 
+    threads.push_back(std::thread(cancel_func));
 
     for (auto & thd : threads)
         thd.join();
 
     ASSERT_TRUE(cte->allExit());
+
+    if unlikely (cancelled.load())
+        return;
+
     for (const auto & blocks : received_blocks)
         ASSERT_EQ(blocks.size(), total_block_num);
 
@@ -291,6 +306,13 @@ try
     for (const auto & results : received_results)
         for (size_t i = 0; i < total_row_num; i++)
             ASSERT_EQ(results[i], i);
+}
+
+TEST_F(TestCTE, Concurrent)
+try
+{
+    for (size_t i = 0; i < 5; i++)
+        concurrentTest();
 }
 CATCH
 
