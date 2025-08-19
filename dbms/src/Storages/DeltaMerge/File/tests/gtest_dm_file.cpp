@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Columns/ColumnArray.h>
 #include <Common/FailPoint.h>
 #include <Core/ColumnWithTypeAndName.h>
 #include <IO/BaseFile/PosixRandomAccessFile.h>
@@ -41,8 +42,6 @@
 #include <algorithm>
 #include <magic_enum.hpp>
 #include <vector>
-
-#include "Columns/ColumnArray.h"
 namespace DB
 {
 namespace ErrorCodes

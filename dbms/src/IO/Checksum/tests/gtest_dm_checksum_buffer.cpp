@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "ext/scope_guard.h"
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wsign-compare"
 #include <gtest/gtest.h>
 #pragma GCC diagnostic pop
+
 #include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <IO/BaseFile/PosixWritableFile.h>
 #include <IO/BaseFile/RateLimiter.h>
@@ -31,6 +31,7 @@
 #include <Storages/Page/PageUtil.h>
 #include <fmt/format.h>
 
+#include <ext/scope_guard.h>
 #include <random>
 
 namespace DB::tests

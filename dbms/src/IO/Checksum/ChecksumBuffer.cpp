@@ -54,8 +54,9 @@ off_t FramedChecksumReadBuffer<Backend>::doSeek(off_t offset, int whence)
         if (result == -1)
         {
             throw TiFlashException(
-                "checksum framed file " + in->getFileName() + " is not seekable",
-                Errors::Checksum::IOFailure);
+                Errors::Checksum::IOFailure,
+                "checksum framed file {} is not seekable",
+                in->getFileName());
         }
         auto length = expectRead(
             working_buffer.begin() - sizeof(ChecksumFrame<Backend>),
@@ -70,13 +71,12 @@ off_t FramedChecksumReadBuffer<Backend>::doSeek(off_t offset, int whence)
         if (unlikely(length != sizeof(ChecksumFrame<Backend>) + frame.bytes))
         {
             throw TiFlashException(
-                fmt::format(
-                    "frame length (header = {}, body = {}, read = {}) mismatch for {}",
-                    sizeof(ChecksumFrame<Backend>),
-                    frame.bytes,
-                    length,
-                    in->getFileName()),
-                Errors::Checksum::DataCorruption);
+                Errors::Checksum::DataCorruption,
+                "frame length (header = {}, body = {}, read = {}) mismatch for {}",
+                sizeof(ChecksumFrame<Backend>),
+                frame.bytes,
+                length,
+                in->getFileName());
         }
 
         // body checksum examination
