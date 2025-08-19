@@ -34,6 +34,7 @@ extern const Event S3ReadBytes;
 extern const Event S3GetObjectRetry;
 extern const Event S3IORead;
 extern const Event S3IOSeek;
+extern const Event S3IOSeekBackward;
 } // namespace ProfileEvents
 
 namespace DB::S3
@@ -99,15 +100,14 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     istr.read(buf, size);
     size_t gcount = istr.gcount();
     // Theoretically, `istr.eof()` is equivalent to `cur_offset + gcount != static_cast<size_t>(content_length)`.
-    // It's just a double check for more safty.
+    // It's just a double check for more safety.
     if (gcount < size && (!istr.eof() || cur_offset + gcount != static_cast<size_t>(content_length)))
     {
         auto state = istr.rdstate();
         LOG_ERROR(
             log,
             "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} errno={} "
-            "errmsg={} "
-            "cost={}ns",
+            "errmsg={} cost={}ns",
             size,
             gcount,
             state,
@@ -169,6 +169,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
 
     if (offset_ < cur_offset)
     {
+        ProfileEvents::increment(ProfileEvents::S3IOSeekBackward, 1);
         cur_offset = offset_;
         cur_retry = 0;
 
