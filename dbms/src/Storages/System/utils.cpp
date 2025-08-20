@@ -26,6 +26,8 @@ KeyspaceID parseKeyspaceIDFromSelectQueryInfo(const SelectQueryInfo & query_info
 {
     const auto & select = typeid_cast<const ASTSelectQuery &>(*query_info.query);
     const auto & where_expression = select.where_expression;
+    if (!where_expression)
+        return NullspaceID;
     const auto * func = typeid_cast<const ASTFunction *>(where_expression.get());
     // TODO: support other functions.
     if (!func || func->name != "equals" || func->arguments->children.size() != 2)
