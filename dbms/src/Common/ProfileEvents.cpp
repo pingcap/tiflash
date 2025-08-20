@@ -132,6 +132,12 @@
     M(S3CopyObject)                            \
     M(S3GetObjectRetry)                        \
     M(S3PutObjectRetry)                        \
+<<<<<<< HEAD
+=======
+    M(S3IORead)                                \
+    M(S3IOSeek)                                \
+    M(S3IOSeekBackward)                        \
+>>>>>>> 28e47db635 (io: Fix checksum seek at end (#10341))
     M(FileCacheHit)                            \
     M(FileCacheMiss)                           \
     M(FileCacheEvict)                          \
