@@ -27,6 +27,7 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <random>
 #include <thread>
 
 namespace DB
