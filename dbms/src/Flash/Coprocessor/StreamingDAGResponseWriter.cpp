@@ -35,12 +35,15 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     StreamWriterPtr writer_,
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
+    UInt64 max_buffered_bytes_,
     DAGContext & dag_context_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
-    , batch_send_min_limit(batch_send_min_limit_)
+    , max_buffered_rows(batch_send_min_limit_)
+    , max_buffered_bytes(max_buffered_bytes_)
     , writer(writer_)
 {
     rows_in_blocks = 0;
+    bytes_in_blocks = 0;
     switch (dag_context.encode_type)
     {
     case tipb::EncodeType::TypeDefault:
@@ -56,8 +59,8 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
         throw TiFlashException("Unsupported EncodeType", Errors::Coprocessor::Internal);
     }
     /// For other encode types, we will use records_per_chunk to control the batch size sent.
-    batch_send_min_limit
-        = dag_context.encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit : (records_per_chunk - 1);
+    max_buffered_rows
+        = dag_context.encode_type == tipb::EncodeType::TypeCHBlock ? max_buffered_rows : (records_per_chunk - 1);
 }
 
 template <class StreamWriterPtr>
@@ -97,10 +100,11 @@ WriteResult StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & blo
     if (rows > 0)
     {
         rows_in_blocks += rows;
+        bytes_in_blocks += block.allocatedBytes();
         blocks.push_back(block);
     }
 
-    if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+    if (static_cast<Int64>(rows_in_blocks) > max_buffered_rows || bytes_in_blocks > max_buffered_bytes)
     {
         return flush();
     }
@@ -158,6 +162,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
 
     assert(blocks.empty());
     rows_in_blocks = 0;
+    bytes_in_blocks = 0;
     writer->write(response.getResponse());
 }
 

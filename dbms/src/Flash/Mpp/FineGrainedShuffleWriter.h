@@ -34,6 +34,7 @@ public:
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
         DAGContext & dag_context_,
+        UInt64 max_buffered_bytes_,
         UInt64 fine_grained_shuffle_stream_count_,
         UInt64 fine_grained_shuffle_batch_size,
         MPPDataPacketVersion data_codec_version_,
@@ -55,14 +56,15 @@ private:
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks = 0;
+    size_t bytes_in_blocks = 0;
     uint16_t partition_num;
     UInt64 fine_grained_shuffle_stream_count;
     UInt64 fine_grained_shuffle_batch_size;
 
     Block header;
     bool prepared = false;
-    size_t num_columns = 0, num_bucket = 0,
-           batch_send_row_limit
+    size_t num_columns = 0, num_bucket = 0, max_buffered_rows = 0,
+           max_buffered_bytes
         = 0; // Assign they initial values to pass clang-tidy check, they will be initialized in prepare method
     std::vector<String> partition_key_containers_for_reuse;
     WeakHash32 hash;

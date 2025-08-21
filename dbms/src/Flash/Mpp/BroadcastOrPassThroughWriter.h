@@ -31,7 +31,8 @@ class BroadcastOrPassThroughWriter : public DAGResponseWriter
 public:
     BroadcastOrPassThroughWriter(
         ExchangeWriterPtr writer_,
-        Int64 batch_send_min_limit_,
+        Int64 max_buffered_rows_,
+        UInt64 max_buffered_bytes_,
         DAGContext & dag_context_,
         MPPDataPacketVersion data_codec_version_,
         tipb::CompressionMode compression_mode_,
@@ -44,10 +45,12 @@ private:
     void writeBlocks();
 
 private:
-    Int64 batch_send_min_limit;
+    Int64 max_buffered_rows;
+    UInt64 max_buffered_bytes;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     size_t rows_in_blocks;
+    size_t bytes_in_blocks;
     const tipb::ExchangeType exchange_type;
 
     // support data compression

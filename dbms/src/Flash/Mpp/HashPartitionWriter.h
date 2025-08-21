@@ -33,7 +33,8 @@ public:
         ExchangeWriterPtr writer_,
         std::vector<Int64> partition_col_ids_,
         TiDB::TiDBCollators collators_,
-        Int64 batch_send_min_limit_,
+        Int64 max_buffered_rows_,
+        UInt64 max_buffered_bytes_,
         DAGContext & dag_context_,
         MPPDataPacketVersion data_codec_version_,
         tipb::CompressionMode compression_mode_);
@@ -46,15 +47,15 @@ private:
     void partitionAndWriteBlocksV1();
 
 private:
-    Int64 batch_send_min_limit;
+    Int64 max_buffered_rows;
+    UInt64 max_buffered_bytes;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
     size_t rows_in_blocks;
+    size_t bytes_in_blocks;
     uint16_t partition_num;
-    // support data compression
-    int64_t mem_size_in_blocks{};
     DataTypes expected_types;
     MPPDataPacketVersion data_codec_version;
     CompressionMethod compression_method{};

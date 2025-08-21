@@ -32,6 +32,7 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
     DAGContext & dag_context_,
+    UInt64 max_buffered_bytes_,
     uint64_t fine_grained_shuffle_stream_count_,
     UInt64 fine_grained_shuffle_batch_size_,
     MPPDataPacketVersion data_codec_version_,
@@ -42,12 +43,12 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     , collators(std::move(collators_))
     , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     , fine_grained_shuffle_batch_size(fine_grained_shuffle_batch_size_)
-    , batch_send_row_limit(fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
+    , max_buffered_rows(fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
+    , max_buffered_bytes(max_buffered_bytes_)
     , hash(0)
     , data_codec_version(data_codec_version_)
     , compression_method(ToInternalCompressionMethod(compression_mode_))
 {
-    rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
@@ -133,11 +134,12 @@ WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & blo
     if (rows > 0)
     {
         rows_in_blocks += rows;
+        bytes_in_blocks += block.allocatedBytes();
         blocks.push_back(block);
     }
 
-    if (blocks.size() == fine_grained_shuffle_stream_count
-        || static_cast<UInt64>(rows_in_blocks) >= batch_send_row_limit)
+    if (blocks.size() == fine_grained_shuffle_stream_count || rows_in_blocks >= max_buffered_rows
+        || bytes_in_blocks >= max_buffered_bytes)
     {
         return flush();
     }
@@ -156,7 +158,11 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::initScatterColumns()
         for (size_t chunk_id = 0; chunk_id < num_bucket; ++chunk_id)
         {
             scattered[col_id].emplace_back(column->cloneEmpty());
-            scattered[col_id][chunk_id]->reserve(1024);
+            if (scattered[col_id][chunk_id]->valuesHaveFixedSize())
+            {
+                // Reserve space for each chunk to avoid frequent memory allocation.
+                scattered[col_id][chunk_id]->reserve(1024);
+            }
         }
     }
 }
@@ -221,6 +227,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffleIm
                 compression_method);
         }
         rows_in_blocks = 0;
+        bytes_in_blocks = 0;
     }
 }
 
