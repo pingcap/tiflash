@@ -55,13 +55,14 @@ public:
 
     CTEOpStatus fetchNextBlock(size_t source_id, Block & block);
 
-    void getResp(tipb::SelectResponse & resp)
+    bool getResp(tipb::SelectResponse & resp)
     {
         std::lock_guard<std::mutex> lock(this->mu);
         if (this->resp_fetched)
-            return;
+            return false;
         this->resp_fetched = true;
         resp.CopyFrom(this->resp);
+        return true;
     }
 
     std::shared_ptr<CTE> getCTE() const { return this->cte; }
