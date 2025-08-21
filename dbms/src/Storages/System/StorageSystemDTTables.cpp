@@ -25,6 +25,7 @@
 #include <Storages/MutableSupport.h>
 #include <Storages/StorageDeltaMerge.h>
 #include <Storages/System/StorageSystemDTTables.h>
+#include <Storages/System/utils.h>
 #include <TiDB/Schema/SchemaNameMapper.h>
 
 namespace DB
@@ -112,7 +113,7 @@ StorageSystemDTTables::StorageSystemDTTables(const std::string & name_)
 
 BlockInputStreams StorageSystemDTTables::read(
     const Names & column_names,
-    const SelectQueryInfo &,
+    const SelectQueryInfo & query_info,
     const Context & context,
     QueryProcessingStage::Enum & processed_stage,
     const size_t /*max_block_size*/,
@@ -126,11 +127,18 @@ BlockInputStreams StorageSystemDTTables::read(
     SchemaNameMapper mapper;
 
     auto databases = context.getDatabases();
+    const auto parsed_keyspace_id = parseKeyspaceIDFromSelectQueryInfo(query_info);
     for (const auto & d : databases)
     {
         String database_name = d.first;
         const auto & database = d.second;
         const DatabaseTiFlash * db_tiflash = typeid_cast<DatabaseTiFlash *>(database.get());
+        if (!db_tiflash)
+            continue;
+
+        const auto keyspace_id = db_tiflash->getDatabaseInfo().keyspace_id;
+        if (parsed_keyspace_id != NullspaceID && keyspace_id != parsed_keyspace_id)
+            continue;
 
         auto it = database->getIterator(context);
         for (; it->isValid(); it->next())
@@ -151,13 +159,7 @@ BlockInputStreams StorageSystemDTTables::read(
             res_columns[j++]->insert(database_name);
             res_columns[j++]->insert(table_name);
 
-            String tidb_db_name;
-            KeyspaceID keyspace_id = NullspaceID;
-            if (db_tiflash)
-            {
-                tidb_db_name = db_tiflash->getDatabaseInfo().name;
-                keyspace_id = db_tiflash->getDatabaseInfo().keyspace_id;
-            }
+            String tidb_db_name = db_tiflash->getDatabaseInfo().name;
             res_columns[j++]->insert(tidb_db_name);
             String tidb_table_name = table_info.name;
             res_columns[j++]->insert(tidb_table_name);
