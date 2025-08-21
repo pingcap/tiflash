@@ -57,6 +57,7 @@ struct InspectArgs
     bool dump_columns;
     bool dump_all_columns;
     bool dump_minmax;
+    bool dump_merged_files;
     size_t file_id;
     std::string workdir;
     std::vector<DB::ColumnID> col_ids;

@@ -175,6 +175,37 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
         }
     }
 
+    if (args.dump_merged_files)
+    {
+        if (!dmfile->useMetaV2())
+        {
+            LOG_INFO(logger, "Merged files are not supported in this DMFile version.");
+        }
+        else
+        {
+            auto * dmfile_meta = typeid_cast<DB::DM::DMFileMetaV2 *>(dmfile->getMeta().get());
+            assert(dmfile_meta != nullptr);
+            LOG_INFO(logger, "Dumping merged files: ");
+            for (const auto & [_, sub_file] : dmfile_meta->merged_sub_file_infos)
+            {
+                LOG_INFO(
+                    logger,
+                    "filename={} merged_file_id={} offset={} size={}",
+                    sub_file.fname,
+                    sub_file.number,
+                    sub_file.offset,
+                    sub_file.size);
+            }
+            LOG_INFO(logger, "total merged sub files num={}", dmfile_meta->merged_sub_file_infos.size());
+
+            for (const auto & merged_file : dmfile_meta->merged_files)
+            {
+                LOG_INFO(logger, "merged_file_id={} size={}", merged_file.number, merged_file.size);
+            }
+            LOG_INFO(logger, "total merged files num={}", dmfile_meta->merged_files.size());
+        }
+    }
+
     if (args.check)
     {
         // for directory mode file, we can consume each file to check its integrity.
@@ -387,6 +418,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
     bool dump_columns = false;
     bool dump_all_columns = false;
     bool dump_minmax = false;
+    bool dump_merged_files = false;
 
     bpo::variables_map vm;
     bpo::options_description options{"Delta Merge Inspect"};
@@ -395,6 +427,9 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
         ("check", bpo::bool_switch(&check), "Check integrity for the delta-tree file.") //
         ("dump", bpo::bool_switch(&dump_columns), "Dump the handle, pk, tag column values.") //
         ("dump-all", bpo::bool_switch(&dump_all_columns), "Dump all column values.") //
+        ("dump-merged-files",
+         bpo::bool_switch(&dump_merged_files),
+         "Dump the merged files in the delta-tree file.") //
         ("minmax", bpo::bool_switch(&dump_minmax), "Dump the minmax values") //
         ("col-ids",
          bpo::value<std::string>()->default_value(""),
@@ -454,6 +489,7 @@ int inspectEntry(const std::vector<std::string> & opts, RaftStoreFFIFunc ffi_fun
             dump_columns,
             dump_all_columns,
             dump_minmax,
+            dump_merged_files,
             file_id,
             workdir,
             col_ids.value(),
