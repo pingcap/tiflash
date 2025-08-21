@@ -26,6 +26,7 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
     DAGContext & dag_context_,
+    UInt64 max_buffered_bytes_,
     uint64_t fine_grained_shuffle_stream_count_,
     UInt64 fine_grained_shuffle_batch_size_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
@@ -34,10 +35,10 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     , collators(std::move(collators_))
     , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     , fine_grained_shuffle_batch_size(fine_grained_shuffle_batch_size_)
-    , batch_send_row_limit(fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
     , hash(0)
 {
-    rows_in_blocks = 0;
+    max_buffered_rows = fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count;
+    max_buffered_bytes = max_buffered_bytes_;
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
@@ -66,7 +67,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::prepare(const Block & sample_b
 template <class ExchangeWriterPtr>
 void FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
 {
-    if (rows_in_blocks > 0)
+    if (buffered_rows > 0)
         batchWriteFineGrainedShuffle();
 }
 
@@ -81,11 +82,12 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
     size_t rows = block.rows();
     if (rows > 0)
     {
-        rows_in_blocks += rows;
+        buffered_rows += rows;
+        buffered_bytes += block.allocatedBytes();
         blocks.push_back(block);
     }
 
-    if (blocks.size() == fine_grained_shuffle_stream_count || static_cast<UInt64>(rows_in_blocks) >= batch_send_row_limit)
+    if (blocks.size() == fine_grained_shuffle_stream_count || needFlush())
         batchWriteFineGrainedShuffle();
 }
 
@@ -112,7 +114,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
     auto tracked_packets = HashBaseWriterHelper::createPackets(partition_num);
     if (likely(!blocks.empty()))
     {
-        assert(rows_in_blocks > 0);
+        assert(buffered_rows > 0);
         assert(fine_grained_shuffle_stream_count <= 1024);
 
         HashBaseWriterHelper::materializeBlocks(blocks);
@@ -151,7 +153,8 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffle()
                 }
             }
         }
-        rows_in_blocks = 0;
+        buffered_rows = 0;
+        buffered_bytes = 0;
     }
 
     writePackets(tracked_packets);

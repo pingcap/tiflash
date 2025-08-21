@@ -19,6 +19,7 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGBlockOutputStream.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/ExecutionSummaryCollector.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
@@ -138,6 +139,7 @@ try
             streaming_writer,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
+            getMaxBufferedBytesInResponseWriter(context.getSettingsRef().max_buffered_bytes_in_executor, 1),
             dag_context);
         dag_output_stream = std::make_shared<DAGBlockOutputStream>(streams.in->getHeader(), std::move(response_writer));
         copyData(*streams.in, *dag_output_stream);

@@ -34,12 +34,11 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     StreamWriterPtr writer_,
     Int64 records_per_chunk_,
     Int64 batch_send_min_limit_,
+    UInt64 max_buffered_bytes_,
     DAGContext & dag_context_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
-    , batch_send_min_limit(batch_send_min_limit_)
     , writer(writer_)
 {
-    rows_in_blocks = 0;
     switch (dag_context.encode_type)
     {
     case tipb::EncodeType::TypeDefault:
@@ -55,15 +54,17 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
         throw TiFlashException("Unsupported EncodeType", Errors::Coprocessor::Internal);
     }
     /// For other encode types, we will use records_per_chunk to control the batch size sent.
-    batch_send_min_limit = dag_context.encode_type == tipb::EncodeType::TypeCHBlock
-        ? batch_send_min_limit
+    const auto batch_send_min_limit = dag_context.encode_type == tipb::EncodeType::TypeCHBlock
+        ? batch_send_min_limit_
         : (records_per_chunk - 1);
+    max_buffered_rows = batch_send_min_limit <= 0 ? 1 : static_cast<UInt64>(batch_send_min_limit);
+    max_buffered_bytes = max_buffered_bytes_;
 }
 
 template <class StreamWriterPtr>
 void StreamingDAGResponseWriter<StreamWriterPtr>::flush()
 {
-    if (rows_in_blocks > 0)
+    if (buffered_rows > 0)
         encodeThenWriteBlocks();
 }
 
@@ -76,11 +77,12 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     size_t rows = block.rows();
     if (rows > 0)
     {
-        rows_in_blocks += rows;
+        buffered_rows += rows;
+        buffered_bytes += block.allocatedBytes();
         blocks.push_back(block);
     }
 
-    if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+    if (needFlush())
         encodeThenWriteBlocks();
 }
 
@@ -135,7 +137,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
     }
 
     assert(blocks.empty());
-    rows_in_blocks = 0;
+    buffered_rows = 0;
+    buffered_bytes = 0;
     writer->write(response.getResponse());
 }
 
