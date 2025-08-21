@@ -29,6 +29,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
     const tipb::ExchangeType & exchange_type,
     Int64 records_per_chunk,
     Int64 batch_send_min_limit,
+    UInt64 max_buffered_bytes,
     DAGContext & dag_context,
     bool enable_fine_grained_shuffle,
     UInt64 fine_grained_shuffle_stream_count,
@@ -43,6 +44,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
             writer,
             records_per_chunk,
             batch_send_min_limit,
+            max_buffered_bytes,
             dag_context);
     }
     else
@@ -56,6 +58,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
                     partition_col_ids,
                     partition_col_collators,
                     dag_context,
+                    max_buffered_bytes,
                     fine_grained_shuffle_stream_count,
                     fine_grained_shuffle_batch_size);
             }
@@ -66,6 +69,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
                     partition_col_ids,
                     partition_col_collators,
                     batch_send_min_limit,
+                    max_buffered_bytes,
                     dag_context);
             }
         }
@@ -75,6 +79,7 @@ std::unique_ptr<DAGResponseWriter> newMPPExchangeWriter(
             return std::make_unique<BroadcastOrPassThroughWriter<ExchangeWriterPtr>>(
                 writer,
                 batch_send_min_limit,
+                max_buffered_bytes,
                 dag_context);
         }
     }

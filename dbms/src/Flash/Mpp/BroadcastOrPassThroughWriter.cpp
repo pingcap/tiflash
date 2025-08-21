@@ -23,12 +23,13 @@ template <class ExchangeWriterPtr>
 BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
     ExchangeWriterPtr writer_,
     Int64 batch_send_min_limit_,
+    UInt64 max_buffered_bytes_,
     DAGContext & dag_context_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
-    , batch_send_min_limit(batch_send_min_limit_)
     , writer(writer_)
 {
-    rows_in_blocks = 0;
+    max_buffered_rows = batch_send_min_limit_ <= 0 ? 1 : static_cast<UInt64>(batch_send_min_limit_);
+    max_buffered_bytes = max_buffered_bytes_;
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
     chunk_codec_stream = std::make_unique<CHBlockChunkCodec>()->newCodecStream(dag_context.result_field_types);
 }
@@ -36,7 +37,7 @@ BroadcastOrPassThroughWriter<ExchangeWriterPtr>::BroadcastOrPassThroughWriter(
 template <class ExchangeWriterPtr>
 void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::flush()
 {
-    if (rows_in_blocks > 0)
+    if (buffered_rows > 0)
         encodeThenWriteBlocks();
 }
 
@@ -49,11 +50,12 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
     size_t rows = block.rows();
     if (rows > 0)
     {
-        rows_in_blocks += rows;
+        buffered_rows += rows;
+        buffered_bytes += block.allocatedBytes();
         blocks.push_back(block);
     }
 
-    if (static_cast<Int64>(rows_in_blocks) > batch_send_min_limit)
+    if (needFlush())
         encodeThenWriteBlocks();
 }
 
@@ -73,7 +75,8 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::encodeThenWriteBlocks()
         chunk_codec_stream->clear();
     }
     assert(blocks.empty());
-    rows_in_blocks = 0;
+    buffered_rows = 0;
+    buffered_bytes = 0;
     writer->broadcastOrPassThroughWrite(std::move(tracked_packet));
 }
 

@@ -34,8 +34,14 @@ public:
     const DAGContext & dagContext() const { return dag_context; }
 
 protected:
+    bool needFlush() const { return buffered_bytes >= max_buffered_bytes || buffered_rows >= max_buffered_rows; }
+
     Int64 records_per_chunk;
     DAGContext & dag_context;
+    UInt64 max_buffered_bytes = 0;
+    UInt64 max_buffered_rows = 0;
+    UInt64 buffered_bytes = 0;
+    UInt64 buffered_rows = 0;
 };
 
 } // namespace DB
