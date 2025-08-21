@@ -138,7 +138,7 @@ class ImitativeEnv
             formatter = new UnifiedLogFormatter<false>();
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Poco::Logger::root().setChannel(formatting_channel);
-        Poco::Logger::root().setLevel("trace");
+        Poco::Logger::root().setLevel("debug");
     }
 
     ContextPtr global_context{};
