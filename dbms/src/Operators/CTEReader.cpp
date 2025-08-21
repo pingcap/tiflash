@@ -31,11 +31,6 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
     }
-    case CTEOpStatus::SINK_NOT_REGISTERED:
-    case CTEOpStatus::BLOCK_NOT_AVAILABLE:
-    case CTEOpStatus::CANCELLED:
-    case CTEOpStatus::OK:
-        return ret;
     default:
         return ret;
     }
