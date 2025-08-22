@@ -53,7 +53,7 @@ void ColumnFileBig::calculateStat(const DMContext & dm_context)
         /*tracing_id*/ dm_context.tracing_id,
         ReadTag::Internal);
 
-    std::tie(valid_rows, valid_bytes) = pack_filter.validRowsAndBytes();
+    std::tie(valid_rows, valid_bytes) = pack_filter->validRowsAndBytes(file);
 }
 
 void ColumnFileBig::removeData(WriteBatches & wbs) const

@@ -31,6 +31,8 @@
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
 
+#include <ranges>
+
 namespace DB::DM
 {
 extern DMFilePtr writeIntoNewDMFile(
@@ -203,7 +205,29 @@ public:
 
     std::pair<RowKeyRange, std::vector<ExternalDTFileInfo>> genDMFile(DMContext & context, const Block & block)
     {
-        auto input_stream = std::make_shared<OneBlockInputStream>(block);
+        Blocks blocks{block};
+        return genDMFileByBlocks(context, blocks);
+    }
+
+    std::pair<RowKeyRange, std::vector<ExternalDTFileInfo>> genDMFileByBlocks(
+        DMContext & context,
+        const Blocks & blocks)
+    {
+        BlocksList block_list;
+
+        Int64 min_pk = std::numeric_limits<Int64>::max();
+        Int64 max_pk = std::numeric_limits<Int64>::min();
+        // for (const auto & b : std::ranges::reverse_view(blocks))
+        for (auto iter = blocks.rbegin(); iter != blocks.rend(); ++iter)
+        {
+            const auto & b = *iter;
+            const auto & pk_column = b.getByPosition(0).column;
+            min_pk = std::min(min_pk, pk_column->getInt(0));
+            max_pk = std::max(max_pk, pk_column->getInt(b.rows() - 1));
+            block_list.push_front(b);
+        }
+
+        auto input_stream = std::make_shared<BlocksListBlockInputStream>(std::move(block_list));
         auto [store_path, file_id] = store->preAllocateIngestFile();
 
         auto dmfile = writeIntoNewDMFile(
@@ -215,15 +239,10 @@ public:
 
         store->preIngestFile(store_path, file_id, dmfile->getBytesOnDisk());
 
-        const auto & pk_column = block.getByPosition(0).column;
-        auto min_pk = pk_column->getInt(0);
-        auto max_pk = pk_column->getInt(block.rows() - 1);
-        HandleRange range(min_pk, max_pk + 1);
-        auto handle_range = RowKeyRange::fromHandleRange(range);
+        auto handle_range = RowKeyRange::fromHandleRange(HandleRange(min_pk, max_pk + 1));
         auto external_file = ExternalDTFileInfo{.id = file_id, .range = handle_range};
-        return {
-            handle_range,
-            {external_file}}; // There are some duplicated info. This is to minimize the change to our test code.
+        // There are some duplicated info. This is to minimize the change to our test code.
+        return {handle_range, {external_file}};
     }
 
 protected:

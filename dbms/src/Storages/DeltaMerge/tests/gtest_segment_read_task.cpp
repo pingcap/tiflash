@@ -88,6 +88,7 @@ protected:
             first_snap->delta->getSharedDeltaIndex()->getRNCacheKey());
         first_snap->delta->shared_delta_index = broken_delta_index;
 
+        // read the left segment after split
         auto task = std::make_shared<DM::SegmentReadTask>(
             first,
             first_snap,
@@ -119,20 +120,18 @@ protected:
             ASSERT_EQ(e.code(), ErrorCodes::DT_DELTA_INDEX_ERROR);
         }
 
-        task->initInputStream(column_defines, 0, nullptr, ReadMode::Bitmap, DEFAULT_BLOCK_SIZE, true);
+        task->initInputStream(
+            column_defines,
+            std::numeric_limits<UInt64>::max(),
+            nullptr,
+            ReadMode::Bitmap,
+            DEFAULT_BLOCK_SIZE,
+            true);
         auto stream = task->getInputStream();
-        ASSERT_NE(stream, nullptr);
-        std::vector<Block> blks;
-        for (auto blk = stream->read(); blk; blk = stream->read())
-        {
-            blks.push_back(blk);
-        }
-        auto handle_col1 = vstackBlocks(std::move(blks)).getByName(EXTRA_HANDLE_COLUMN_NAME).column;
-        auto handle_col2 = getSegmentHandle(task->segment->segmentId(), {task->segment->getRowKeyRange()});
-        ASSERT_TRUE(sequenceEqual(
-            toColumnVectorDataPtr<Int64>(handle_col2)->data(),
-            toColumnVectorDataPtr<Int64>(handle_col1)->data(),
-            handle_col1->size()));
+        ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({createColumn<Int64>(createNumbers<Int64>(0, 5000))}));
     }
 };
 
