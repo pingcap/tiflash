@@ -14,7 +14,6 @@
 
 #pragma once
 
-#include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Core/Block.h>
 #include <IO/WriteHelpers.h>
