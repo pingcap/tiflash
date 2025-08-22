@@ -28,7 +28,7 @@ class WeakHash32
 public:
     using Container = PaddedPODArray<UInt32>;
 
-    static constexpr UInt32 initial_hash = ~UInt32(0);
+    static constexpr UInt32 initial_hash = ~static_cast<UInt32>(0);
 
     explicit WeakHash32(size_t size)
         : data(size, initial_hash)

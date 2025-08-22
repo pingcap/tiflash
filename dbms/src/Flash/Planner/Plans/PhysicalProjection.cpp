@@ -17,12 +17,15 @@
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGExpressionAnalyzer.h>
 #include <Flash/Coprocessor/DAGPipeline.h>
+#include <Flash/Coprocessor/GenSchemaAndColumn.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Flash/Planner/FinalizeHelper.h>
 #include <Flash/Planner/PhysicalPlanHelper.h>
 #include <Flash/Planner/Plans/PhysicalProjection.h>
 #include <Interpreters/Context.h>
+
+#include <utility>
 
 namespace DB
 {
@@ -99,7 +102,8 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     const std::vector<Int32> & output_offsets,
     const String & column_prefix,
     bool keep_session_timezone_info,
-    const PhysicalPlanNodePtr & child)
+    const PhysicalPlanNodePtr & child,
+    Int32 cte_id)
 {
     RUNTIME_CHECK(child);
 
@@ -113,9 +117,14 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
         column_prefix,
         keep_session_timezone_info);
 
+    RUNTIME_CHECK(final_project_aliases.size() == output_offsets.size());
+
+    if unlikely (cte_id >= 0)
+        for (size_t i = 0; i < final_project_aliases.size(); i++)
+            final_project_aliases[i].second = genNameForCTESource(cte_id, i);
+
     project_actions->add(ExpressionAction::project(final_project_aliases));
 
-    RUNTIME_CHECK(final_project_aliases.size() == output_offsets.size());
     NamesAndTypes schema;
     for (size_t i = 0; i < final_project_aliases.size(); ++i)
     {
