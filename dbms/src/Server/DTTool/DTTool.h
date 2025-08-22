@@ -57,6 +57,7 @@ struct InspectArgs
     bool dump_columns;
     bool dump_all_columns;
     bool dump_minmax;
+    bool dump_merged_files;
     size_t file_id;
     std::string workdir;
     std::vector<DB::ColumnID> col_ids;
@@ -138,7 +139,7 @@ class ImitativeEnv
             formatter = new UnifiedLogFormatter<false>();
         Poco::AutoPtr<Poco::FormattingChannel> formatting_channel(new Poco::FormattingChannel(formatter, channel));
         Poco::Logger::root().setChannel(formatting_channel);
-        Poco::Logger::root().setLevel("trace");
+        Poco::Logger::root().setLevel("debug");
     }
 
     ContextPtr global_context{};

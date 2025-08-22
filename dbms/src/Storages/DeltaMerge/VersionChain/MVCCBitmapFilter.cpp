@@ -71,7 +71,7 @@ BitmapFilterPtr buildMVCCBitmapFilter(
     GET_METRIC(tiflash_storage_version_chain_ms, type_total)
         .Observe(replay_ms + build_version_filter_ms + build_rowkey_filter_ms + build_delete_filter_ms);
 
-    LOG_INFO(
+    LOG_DEBUG(
         snapshot.log,
         "filtered_out_rows: version={}, rowkey={}, delete={} "
         "cost_ms: replay={}, version={}, rowkey={}, delete={}",
