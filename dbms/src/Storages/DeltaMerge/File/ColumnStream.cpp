@@ -115,11 +115,13 @@ private:
             return res;
 
         // First, read from merged file to get the raw data(contains the header)
+        // Note that we directly use `data_size` as the size of buffer size in order
+        // to minimize read amplification in the merged file.
         auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
             reader.file_provider,
             file_path,
             encrypt_path,
-            reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+            data_size,
             read_limiter);
         buffer.seek(offset);
 
@@ -234,9 +236,10 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
 {
     const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(reader.dmfile->meta.get());
     assert(dmfile_meta != nullptr);
-    const auto & info = dmfile_meta->merged_sub_file_infos.find(colDataFileName(file_name_base));
-    if (info == dmfile_meta->merged_sub_file_infos.end())
+    const auto & info_iter = dmfile_meta->merged_sub_file_infos.find(colDataFileName(file_name_base));
+    if (info_iter == dmfile_meta->merged_sub_file_infos.end())
     {
+        // Not merged into merged file, read from the original data file.
         return CompressedReadBufferFromFileBuilder::build(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),
@@ -247,26 +250,28 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
             reader.dmfile->getConfiguration()->getChecksumFrameLength());
     }
 
-    assert(info != dmfile_meta->merged_sub_file_infos.end());
-    auto file_path = dmfile_meta->mergedPath(info->second.number);
-    auto encrypt_path = dmfile_meta->encryptionMergedPath(info->second.number);
-    auto offset = info->second.offset;
-    auto size = info->second.size;
+    assert(info_iter != dmfile_meta->merged_sub_file_infos.end());
+    auto file_path = dmfile_meta->mergedPath(info_iter->second.number);
+    auto encrypt_path = dmfile_meta->encryptionMergedPath(info_iter->second.number);
+    auto offset = info_iter->second.offset;
+    auto data_size = info_iter->second.size;
 
     // First, read from merged file to get the raw data(contains the header)
+    // Note that we directly use `data_size` as the size of buffer size in order
+    // to minimize read amplification in the merged file.
     auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
         reader.file_provider,
         file_path,
         encrypt_path,
-        reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+        data_size,
         read_limiter);
     buffer.seek(offset);
 
     // Read the raw data into memory. It is OK because the mark merged into
     // merged_file is small enough.
     String raw_data;
-    raw_data.resize(size);
-    buffer.read(reinterpret_cast<char *>(raw_data.data()), size);
+    raw_data.resize(data_size);
+    buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
     // Then read from the buffer based on the raw data
     return CompressedReadBufferFromFileBuilder::build(

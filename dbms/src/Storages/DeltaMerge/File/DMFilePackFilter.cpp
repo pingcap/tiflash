@@ -246,17 +246,19 @@ std::pair<DataTypePtr, MinMaxIndexPtr> DMFilePackFilter::loadIndex(
             auto offset = info->second.offset;
             auto data_size = info->second.size;
 
+            // First, read from merged file to get the raw data(contains the header)
+            // Note that we directly use `data_size` as the size of buffer size in order
+            // to minimize read amplification in the merged file.
             auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
                 file_provider,
                 file_path,
                 encrypt_path,
-                dmfile.getConfiguration()->getChecksumFrameLength(),
+                data_size,
                 read_limiter);
             buffer.seek(offset);
 
             String raw_data;
             raw_data.resize(data_size);
-
             buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
             auto buf = ChecksumReadBufferBuilder::build(
@@ -502,7 +504,7 @@ std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFileP
             {
                 // `not_clean > 0` means there are more than one version for some rowkeys in this pack
                 // `pack.max_version > start_ts` means some rows will be filtered by MVCC reading
-                // We need to read this pack to do delte merge, RowKey or MVCC filter.
+                // We need to read this pack to do delta merge, RowKey or MVCC filter.
                 continue;
             }
 
