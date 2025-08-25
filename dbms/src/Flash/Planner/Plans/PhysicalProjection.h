@@ -51,13 +51,6 @@ public:
         const PhysicalPlanNodePtr & child,
         Int32 cte_id = -1);
 
-    static PhysicalPlanNodePtr buildRootFinalForCTE(
-        const Context & context,
-        const LoggerPtr & log,
-        const PhysicalPlanNodePtr & child,
-        const tipb::CTESink & sink,
-        bool keep_session_timezone_info);
-
     PhysicalProjection(
         const String & executor_id_,
         const NamesAndTypes & schema_,

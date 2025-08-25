@@ -16,8 +16,8 @@
 
 #include <Core/SpillConfig.h>
 #include <Core/Spiller.h>
-#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 
 #include <atomic>
 #include <cstddef>
@@ -108,7 +108,7 @@ struct BlockWithCounter
 
 struct CTEPartition
 {
-    explicit CTEPartition(size_t partition_id_, size_t expected_source_num_)
+    CTEPartition(size_t partition_id_, size_t expected_source_num_)
         : partition_id(partition_id_)
         , aux_lock(std::make_unique<std::mutex>())
         , status(CTEPartitionStatus::NORMAL)

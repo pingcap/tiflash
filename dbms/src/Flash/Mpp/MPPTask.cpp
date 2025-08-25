@@ -42,10 +42,6 @@
 #include <chrono>
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
-<<<<<<< HEAD
-=======
-
->>>>>>> master
 
 namespace DB
 {
@@ -258,7 +254,7 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
         String query_id_and_cte_id
             = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_sink.cte_id());
         context->getDAGContext()->setQueryIDAndCTEIDForSink(query_id_and_cte_id);
-        auto cte = context->getCTEManager()->getCTE(
+        auto cte = context->getCTEManager()->getOrCreateCTE(
             query_id_and_cte_id,
             context->getMaxStreams(),
             cte_sink.cte_sink_num(),

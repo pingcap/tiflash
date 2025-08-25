@@ -36,23 +36,22 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
     case CTEOpStatus::IO_IN:
     case CTEOpStatus::SINK_NOT_REGISTERED:
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
+    case CTEOpStatus::CANCELLED:
         return ret;
     case CTEOpStatus::OK:
         this->total_fetch_blocks.fetch_add(1);
         this->total_fetch_rows.fetch_add(block.rows());
         return ret;
-    case CTEOpStatus::CANCELLED:
-        throw Exception(this->cte->getError()); // TODO cancel should not throw exception
     }
     throw Exception("Should not reach here");
 }
 
-CTEOpStatus CTEReader::fetchBlockFromDisk(size_t partition_id, Block & block)
+CTEOpStatus CTEReader::fetchBlockFromDisk(size_t source_id, Block & block)
 {
     bool expected_bool = false;
     if (this->is_first_log.compare_exchange_weak(expected_bool, true))
         LOG_INFO(this->cte->getLog(), "Begin restore data from disk for cte.");
 
-    return this->cte->getBlockFromDisk(this->cte_reader_id, partition_id, block);
+    return this->cte->getBlockFromDisk(this->cte_reader_id, source_id, block);
 }
 } // namespace DB

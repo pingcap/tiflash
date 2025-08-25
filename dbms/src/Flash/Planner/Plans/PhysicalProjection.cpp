@@ -147,62 +147,6 @@ PhysicalPlanNodePtr PhysicalProjection::buildRootFinal(
     return physical_projection;
 }
 
-PhysicalPlanNodePtr PhysicalProjection::buildRootFinalForCTE(
-    const Context & context,
-    const LoggerPtr & log,
-    const PhysicalPlanNodePtr & child,
-    const tipb::CTESink & sink,
-    bool keep_session_timezone_info)
-{
-    RUNTIME_CHECK(child);
-
-    const NamesAndTypes & child_schema = child->getSchema();
-    DAGExpressionAnalyzer analyzer{child_schema, context};
-    ExpressionActionsPtr project_actions = PhysicalPlanHelper::newActions(child->getSampleBlock());
-
-    auto required_schema_size = sink.field_types_size();
-    std::vector<tipb::FieldType> required_schema;
-    required_schema.reserve(required_schema_size);
-    std::vector<Int32> output_offsets;
-    output_offsets.reserve(required_schema_size);
-    for (int i = 0; i < required_schema_size; i++)
-    {
-        required_schema.push_back(sink.field_types(i));
-        output_offsets.push_back(i);
-    }
-
-    NamesWithAliases project_aliases
-        = analyzer
-              .buildFinalProjection(project_actions, required_schema, output_offsets, "", keep_session_timezone_info);
-    NamesWithAliases final_project_aliases;
-    auto col_num = child_schema.size();
-    RUNTIME_CHECK(required_schema_size == static_cast<int>(col_num));
-    for (size_t i = 0; i < col_num; i++)
-        final_project_aliases.push_back(std::make_pair(project_aliases[i].first, genNameForCTESource(i)));
-
-    project_actions->add(ExpressionAction::project(final_project_aliases));
-    NamesAndTypes schema;
-    for (size_t i = 0; i < final_project_aliases.size(); ++i)
-    {
-        const auto & alias = final_project_aliases[i].second;
-        RUNTIME_CHECK(!alias.empty());
-        const auto & type = analyzer.getCurrentInputColumns()[i].type;
-        schema.emplace_back(alias, type);
-    }
-
-    auto physical_projection = std::make_shared<PhysicalProjection>(
-        child->execId(),
-        schema,
-        child->getFineGrainedShuffle(),
-        log->identifier(),
-        child,
-        "final projection",
-        project_actions);
-    // Final Projection is not a tidb operator, so no need to record profile streams.
-    physical_projection->notTiDBOperator();
-    return physical_projection;
-}
-
 void PhysicalProjection::buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams)
 {
     child->buildBlockInputStream(pipeline, context, max_streams);

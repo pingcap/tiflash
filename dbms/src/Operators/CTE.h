@@ -50,7 +50,7 @@ public:
     {
         for (size_t i = 0; i < this->partition_num; i++)
         {
-            this->partitions.push_back(std::make_shared<CTEPartition>(i));
+            this->partitions.push_back(std::make_shared<CTEPartition>(i, expected_source_num_));
             this->partitions.back()->mu = std::make_unique<std::mutex>();
             this->partitions.back()->pipe_cv = std::make_unique<PipeConditionVariable>();
         }
@@ -131,9 +131,15 @@ public:
     template <bool for_test>
     CTEOpStatus pushBlock(size_t partition_id, const Block & block);
     template <bool for_test>
-    void notifyEOF() { this->notifyImpl<false, for_test>(true, ""); }
+    void notifyEOF()
+    {
+        this->notifyImpl<false, for_test>(true, "");
+    }
     template <bool for_test>
-    void notifyCancel(const String & msg) { this->notifyImpl<true, for_test>(false, msg); }
+    void notifyCancel(const String & msg)
+    {
+        this->notifyImpl<true, for_test>(false, msg);
+    }
 
     String getError()
     {
@@ -247,7 +253,10 @@ public:
         return this->checkBlockAvailableImpl<false>(cte_reader_id, partition_id);
     }
 
-    std::shared_ptr<CTEPartition> & getPartitionForTest(size_t partition_idx) { return this->partitions[partition_idx]; }
+    std::shared_ptr<CTEPartition> & getPartitionForTest(size_t partition_idx)
+    {
+        return this->partitions[partition_idx];
+    }
 
 private:
     template <bool need_lock>

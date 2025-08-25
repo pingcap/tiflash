@@ -44,8 +44,6 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
     if (!this->isBlockAvailableInMemoryNoLock(cte_reader_id))
         return CTEOpStatus::BLOCK_NOT_AVAILABLE;
 
-    // TODO blocks that have been cleared should not be spilled into disk
-    // TODO add a variable that records the max idx block that has been cleared
     auto idx = this->getIdxInMemoryNoLock(cte_reader_id);
     block = this->blocks[idx].block;
     if ((--this->blocks[idx].counter) == 0)
@@ -103,7 +101,10 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
     // TODO remove xzxdebug
     LOG_INFO(
         this->config->log,
-        fmt::format("xzxdebug Partition {} starts cte spill for {}", this->partition_id, this->config->query_id_and_cte_id));
+        fmt::format(
+            "xzxdebug Partition {} starts cte spill for {}",
+            this->partition_id,
+            this->config->query_id_and_cte_id));
     std::unique_lock<std::mutex> lock(*(this->mu), std::defer_lock);
     {
         std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
@@ -157,11 +158,16 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
 
         while (iter != end_iter)
         {
-            spilled_blocks.push_back(iter->block);
+            if (iter->counter != 0)
+                spilled_blocks.push_back(iter->block);
             ++iter;
         }
 
-        RUNTIME_CHECK(!spilled_blocks.empty());
+        if unlikely (spilled_blocks.size() == 0)
+        {
+            ++split_iter;
+            continue;
+        }
 
         this->total_block_in_disk_num += spilled_blocks.size();
 
@@ -173,7 +179,7 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
         spiller->spillBlocks(std::move(spilled_blocks), this->partition_id);
         spiller->finishSpill();
         this->spillers.insert(std::make_pair(split_iter->first, std::move(spiller)));
-        split_iter++;
+        ++split_iter;
     }
 
     this->blocks.clear();
