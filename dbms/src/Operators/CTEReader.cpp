@@ -20,9 +20,9 @@
 
 namespace DB
 {
-CTEOpStatus CTEReader::fetchNextBlock(size_t partition_id, Block & block)
+CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
 {
-    auto ret = this->cte->tryGetBlockAt(this->cte_reader_id, partition_id, block);
+    auto ret = this->cte->tryGetBlockAt(this->cte_reader_id, source_id, block);
     switch (ret)
     {
     case CTEOpStatus::END_OF_FILE:
@@ -42,7 +42,7 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t partition_id, Block & block)
         this->total_fetch_rows.fetch_add(block.rows());
         return ret;
     case CTEOpStatus::CANCELLED:
-        throw Exception(this->cte->getError());
+        throw Exception(this->cte->getError()); // TODO cancel should not throw exception
     }
     throw Exception("Should not reach here");
 }

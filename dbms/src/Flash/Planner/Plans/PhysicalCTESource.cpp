@@ -29,13 +29,12 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     const Context & /*context*/,
     const String & executor_id,
     const LoggerPtr & log,
-    const FineGrainedShuffle & fine_grained_shuffle,
     const tipb::CTESource & cte_source)
 {
     DAGSchema dag_schema;
     for (int i = 0; i < cte_source.field_types_size(); ++i)
     {
-        String name = genNameForCTESource(i);
+        String name = genNameForCTESource(static_cast<Int32>(cte_source.cte_id()), i);
         TiDB::ColumnInfo info = TiDB::fieldTypeToColumnInfo(cte_source.field_types(i));
         dag_schema.emplace_back(std::move(name), std::move(info));
     }
@@ -44,9 +43,9 @@ PhysicalPlanNodePtr PhysicalCTESource::build(
     return std::make_shared<PhysicalCTESource>(
         executor_id,
         schema,
-        fine_grained_shuffle,
         log->identifier(),
-        Block(schema));
+        Block(schema),
+        cte_source.cte_id());
 }
 
 void PhysicalCTESource::buildPipelineExecGroupImpl(
@@ -55,8 +54,13 @@ void PhysicalCTESource::buildPipelineExecGroupImpl(
     Context & context,
     size_t concurrency)
 {
-    const String & query_id_and_cte_id = context.getDAGContext()->getQueryIDAndCTEIDForSource();
-    auto cte_reader = std::make_shared<CTEReader>(context);
+    const String & query_id_and_cte_id = context.getDAGContext()->getQueryIDAndCTEIDForSource(this->cte_id);
+    auto cte = context.getDAGContext()->getCTESource()[this->cte_id];
+    RUNTIME_CHECK(cte);
+
+    cte->checkSourceConcurrency(concurrency);
+
+    auto cte_reader = std::make_shared<CTEReader>(context, query_id_and_cte_id, cte);
     for (size_t i = 0; i < concurrency; ++i)
         group_builder.addConcurrency(
             std::make_unique<CTESourceOp>(exec_context, log->identifier(), cte_reader, i, schema, query_id_and_cte_id));

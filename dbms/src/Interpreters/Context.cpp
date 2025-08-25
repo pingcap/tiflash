@@ -578,7 +578,7 @@ PathPool & Context::getPathPool() const
 CTEManager * Context::getCTEManager() const
 {
     auto lock = getLock();
-    return this->shared->cte_manager.get();
+    return this->shared->tmt_context->getCTEManager();
 }
 
 void Context::setPath(const String & path)

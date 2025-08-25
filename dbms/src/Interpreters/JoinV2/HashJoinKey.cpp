@@ -79,8 +79,7 @@ std::unique_ptr<void, std::function<void(void *)>> createHashJoinKeyGetter(
         using KeyGetterType##METHOD = typename HashJoinKeyGetterForType<HashJoinKeyMethod::METHOD>::Type; \
         return std::unique_ptr<void, std::function<void(void *)>>(                                        \
             static_cast<void *>(new KeyGetterType##METHOD(collators)),                                    \
-            [](void * ptr) { delete reinterpret_cast<KeyGetterType##METHOD *>(ptr); });                   \
-        break;
+            [](void * ptr) { delete reinterpret_cast<KeyGetterType##METHOD *>(ptr); });
         APPLY_FOR_HASH_JOIN_VARIANTS(M)
 #undef M
 

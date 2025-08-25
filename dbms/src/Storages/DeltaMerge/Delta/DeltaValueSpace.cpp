@@ -224,7 +224,7 @@ std::pair<ColumnFiles, ColumnFilePersisteds> DeltaValueSpace::cloneNewlyAppended
         snapshot_persisted_files.begin(),
         snapshot_persisted_files.end());
     // If there were flush since the snapshot, the flushed files should be behind the files in the snapshot.
-    // So let's place these "flused files" after the persisted files in snapshot.
+    // So let's place these "flushed files" after the persisted files in snapshot.
     head_persisted_files.insert(head_persisted_files.end(), flushed_mem_files.begin(), flushed_mem_files.end());
 
     auto new_persisted_files = persisted_file_set->diffColumnFiles(head_persisted_files);
@@ -277,8 +277,15 @@ size_t DeltaValueSpace::getTotalCacheBytes() const
     return mem_table_set->getBytes();
 }
 
+size_t DeltaValueSpace::getTotalAllocatedBytes() const
+{
+    std::scoped_lock lock(mutex);
+    return mem_table_set->getAllocatedBytes();
+}
+
 size_t DeltaValueSpace::getValidCacheRows() const
 {
+    // FIXME: Seems that this function is the same as getTotalCacheRows().
     std::scoped_lock lock(mutex);
     return mem_table_set->getRows();
 }
@@ -347,9 +354,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     SCOPE_EXIT({
         bool v = true;
         if (!is_flushing.compare_exchange_strong(v, false))
-            throw Exception(
-                fmt::format("Delta is expected to be flushing, delta={}", simple_info),
-                ErrorCodes::LOGICAL_ERROR);
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delta is expected to be flushing, delta={}", simple_info);
     });
 
     LOG_DEBUG(log, "Flush start, delta={}", info());
@@ -468,6 +473,8 @@ bool DeltaValueSpace::compact(DMContext & context)
             /*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
     }
 
+    SYNC_FOR("DeltaValueSpace::compact_after_compaction_task_build");
+
     WriteBatches wbs(*context.storage_pool, context.getWriteLimiter());
     {
         // do compaction task
@@ -493,9 +500,11 @@ bool DeltaValueSpace::compact(DMContext & context)
         }
         if (!compaction_task->commit(persisted_file_set, wbs))
         {
-            LOG_WARNING(log, "Structure has been updated during compact, delta={}", simpleInfo());
+            LOG_DEBUG(
+                log,
+                "Structure has been updated during compact, delta compaction is stopped, delta={}",
+                simpleInfo());
             wbs.rollbackWrittenLogAndData();
-            LOG_DEBUG(log, "Compact stop because structure got updated, delta={}", simpleInfo());
             return false;
         }
         // Reset to the index of first file that can be compacted if the minor compaction succeed,

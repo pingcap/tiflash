@@ -21,41 +21,10 @@
 
 namespace DB
 {
-// Data race is prevented by the lock in CTEManager
-class CTEWithCounter
-{
-public:
-    explicit CTEWithCounter(std::shared_ptr<CTE> cte_, Int32 expected_total_sink_num_, Int32 expected_total_source_num_)
-        : cte(cte_)
-        , expected_sink_num(expected_total_sink_num_)
-        , expected_source_num(expected_total_source_num_)
-    {}
-
-    void sinkExit() { this->sink_exit_num++; }
-    void sourceExit() { this->source_exit_num++; }
-
-    Int32 getSinkExitNum() const { return this->sink_exit_num; }
-    Int32 getSourceExitNum() const { return this->source_exit_num; }
-    Int32 getTotalExitNum() const { return this->getSinkExitNum() + this->getSourceExitNum(); }
-
-    Int32 getExpectedSinkNum() const { return this->expected_sink_num; }
-    Int32 getExpectedTotalNum() const { return this->getExpectedSinkNum() + this->expected_source_num; }
-
-    std::shared_ptr<CTE> getCTE() const { return this->cte; }
-
-private:
-    std::shared_ptr<CTE> cte;
-
-    Int32 sink_exit_num = 0;
-    Int32 source_exit_num = 0;
-    Int32 expected_sink_num;
-    Int32 expected_source_num;
-};
-
 class CTEManager
 {
 public:
-    std::shared_ptr<CTE> getCTE(
+    std::shared_ptr<CTE> getOrCreateCTE(
         const String & query_id_and_cte_id,
         Int32 concurrency,
         Int32 expected_sink_num,
@@ -64,8 +33,10 @@ public:
     void releaseCTEBySink(const tipb::SelectResponse & resp, const String & query_id_and_cte_id);
     void releaseCTE(const String & query_id_and_cte_id);
 
+    bool hasCTEForTest(const String & query_id_and_cte_id);
+
 private:
     std::mutex mu;
-    std::unordered_map<String, CTEWithCounter> ctes;
+    std::unordered_map<String, std::shared_ptr<CTE>> ctes;
 };
 } // namespace DB

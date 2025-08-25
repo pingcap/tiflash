@@ -27,7 +27,7 @@ namespace DB
 NamesAndTypes genNamesAndTypesForExchangeReceiver(const TiDBTableScan & table_scan);
 NamesAndTypes genNamesAndTypesForTableScan(const TiDBTableScan & table_scan);
 String genNameForExchangeReceiver(Int32 col_index);
-String genNameForCTESource(Int32 col_index);
+String genNameForCTESource(Int32 cte_id, Int32 col_index);
 
 NamesAndTypes genNamesAndTypes(const TiDBTableScan & table_scan, const StringRef & column_prefix);
 NamesAndTypes genNamesAndTypes(const TiDB::ColumnInfos & column_infos, const StringRef & column_prefix);

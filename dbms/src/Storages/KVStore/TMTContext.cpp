@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Flash/Disaggregated/S3LockClient.h>
+#include <Flash/Mpp/CTEManager.h>
 #include <Flash/Mpp/MPPHandler.h>
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Flash/Mpp/MinTSOScheduler.h>
@@ -36,7 +37,6 @@
 #include <pingcap/pd/MockPDClient.h>
 
 #include <magic_enum.hpp>
-#include <memory>
 
 namespace DB
 {
@@ -151,6 +151,7 @@ TMTContext::TMTContext(
           context.getSettingsRef().task_scheduler_thread_soft_limit,
           context.getSettingsRef().task_scheduler_thread_hard_limit,
           context.getSettingsRef().task_scheduler_active_set_soft_limit)))
+    , cte_manager(std::make_unique<CTEManager>())
     , raftproxy_config(raft_config)
 {
     startMonitorMPPTaskThread(mpp_task_manager);
@@ -390,6 +391,11 @@ const OwnerManagerPtr & TMTContext::getS3GCOwnerManager() const
 MPPTaskManagerPtr TMTContext::getMPPTaskManager()
 {
     return mpp_task_manager;
+}
+
+CTEManager * TMTContext::getCTEManager()
+{
+    return this->cte_manager.get();
 }
 
 const std::unordered_set<std::string> & TMTContext::getIgnoreDatabases() const

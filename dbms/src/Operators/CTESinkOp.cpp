@@ -33,7 +33,7 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
         return OperatorStatus::FINISHED;
 
     this->total_rows += block.rows();
-    auto status = this->cte->pushBlock(this->id, block);
+    auto status = this->cte->pushBlock<false>(this->id, block);
     switch (status)
     {
     case CTEOpStatus::WAIT_SPILL:

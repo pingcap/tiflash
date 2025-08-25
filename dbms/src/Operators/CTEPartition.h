@@ -16,6 +16,7 @@
 
 #include <Core/SpillConfig.h>
 #include <Core/Spiller.h>
+#include <Flash/Pipeline/Schedule/Tasks/Task.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
 
 #include <atomic>
@@ -95,14 +96,25 @@ struct CTEPartitionSharedConfig
     size_t partition_num;
 };
 
+struct BlockWithCounter
+{
+    BlockWithCounter(const Block & block_, Int16 counter_)
+        : block(block_)
+        , counter(counter_)
+    {}
+    Block block;
+    Int16 counter;
+};
+
 struct CTEPartition
 {
-    explicit CTEPartition(size_t partition_id_)
+    explicit CTEPartition(size_t partition_id_, size_t expected_source_num_)
         : partition_id(partition_id_)
         , aux_lock(std::make_unique<std::mutex>())
         , status(CTEPartitionStatus::NORMAL)
         , mu(std::make_unique<std::mutex>())
         , pipe_cv(std::make_unique<PipeConditionVariable>())
+        , expected_source_num(expected_source_num_)
     {}
 
     // TODO remove it
@@ -154,6 +166,7 @@ struct CTEPartition
         return this->memory_usage >= this->config->memory_threshold;
     }
 
+    template <bool for_test>
     CTEOpStatus pushBlock(const Block & block);
     CTEOpStatus tryGetBlock(size_t cte_reader_id, Block & block);
     CTEOpStatus spillBlocks(std::atomic_size_t & block_num, std::atomic_size_t & row_num);
@@ -173,7 +186,7 @@ struct CTEPartition
         for (const auto & block : this->tmp_blocks)
         {
             this->memory_usage += block.bytes();
-            this->blocks.push_back(block);
+            this->blocks.push_back(BlockWithCounter(block, static_cast<Int16>(this->expected_source_num)));
         }
         tmp_blocks.clear();
     }
@@ -194,11 +207,12 @@ struct CTEPartition
     Blocks tmp_blocks;
 
     std::unique_ptr<std::mutex> mu;
-    Blocks blocks;
+    std::vector<BlockWithCounter> blocks;
     std::unordered_map<size_t, size_t> fetch_block_idxs;
     std::unique_ptr<PipeConditionVariable> pipe_cv;
 
     size_t memory_usage = 0;
+    const size_t expected_source_num;
 
     std::vector<UInt64> block_in_disk_nums;
     std::unordered_map<size_t, SpillerPtr> spillers;
@@ -206,5 +220,8 @@ struct CTEPartition
     UInt64 total_block_in_disk_num = 0;
 
     std::shared_ptr<CTEPartitionSharedConfig> config;
+
+    std::unique_ptr<std::mutex> mu_for_test;
+    std::unique_ptr<std::condition_variable> cv_for_test;
 };
 } // namespace DB

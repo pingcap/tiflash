@@ -24,13 +24,14 @@
 #include <tipb/select.pb.h>
 
 #include <atomic>
+#include <condition_variable>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
 #include <utility>
 
 namespace DB
 {
-
 inline String genInfo(const String & name, const std::map<size_t, std::atomic_size_t> & data)
 {
     String info = fmt::format("{}: ", name);
@@ -42,13 +43,26 @@ inline String genInfo(const String & name, const std::map<size_t, std::atomic_si
 class CTE
 {
 public:
-    explicit CTE(size_t partition_num_, size_t expected_sink_num_)
+    CTE(size_t partition_num_, size_t expected_sink_num_, size_t expected_source_num_)
         : partition_num(partition_num_)
         , expected_sink_num(expected_sink_num_)
+        , expected_source_num(expected_source_num_)
     {
-        RUNTIME_CHECK(this->partition_num > 0);
         for (size_t i = 0; i < this->partition_num; i++)
+        {
             this->partitions.push_back(std::make_shared<CTEPartition>(i));
+            this->partitions.back()->mu = std::make_unique<std::mutex>();
+            this->partitions.back()->pipe_cv = std::make_unique<PipeConditionVariable>();
+        }
+    }
+
+    void initForTest()
+    {
+        for (size_t i = 0; i < this->partition_num; i++)
+        {
+            this->partitions[i]->mu_for_test = std::make_unique<std::mutex>();
+            this->partitions[i]->cv_for_test = std::make_unique<std::condition_variable>();
+        }
     }
 
     // TODO remove, for test
@@ -101,6 +115,11 @@ public:
     size_t getCTEReaderID()
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        RUNTIME_CHECK_MSG(
+            this->next_cte_reader_id < this->expected_source_num,
+            "next_cte_reader_id: {}, expected_source_num: {}",
+            this->next_cte_reader_id,
+            this->expected_source_num);
         auto cte_reader_id = this->next_cte_reader_id;
         this->next_cte_reader_id++;
         for (auto & item : this->partitions)
@@ -109,15 +128,20 @@ public:
     }
 
     CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block);
+    template <bool for_test>
     CTEOpStatus pushBlock(size_t partition_id, const Block & block);
-    void notifyEOF() { this->notifyImpl(true, ""); }
-    void notifyCancel(const String & msg) { this->notifyImpl(false, msg); }
+    template <bool for_test>
+    void notifyEOF() { this->notifyImpl<false, for_test>(true, ""); }
+    template <bool for_test>
+    void notifyCancel(const String & msg) { this->notifyImpl<true, for_test>(false, msg); }
 
     String getError()
     {
         std::shared_lock<std::shared_mutex> lock(this->rw_lock);
         return this->err_msg;
     }
+
+    CTEOpStatus checkBlockAvailableForTest(size_t cte_reader_id, size_t partition_id);
 
     void checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_id, size_t partition_id);
     void checkInSpillingAndRegisterTask(TaskPtr && task, size_t partition_id);
@@ -161,18 +185,104 @@ public:
     template <bool need_lock>
     bool areAllSinksRegistered()
     {
-        std::shared_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
         if constexpr (need_lock)
-            lock.lock();
-        return this->registered_sink_num == this->expected_sink_num;
+        {
+            std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+            return this->registered_sink_num == this->expected_sink_num;
+        }
+        else
+        {
+            return this->registered_sink_num == this->expected_sink_num;
+        }
     }
 
     LoggerPtr getLog() const { return this->partition_config->log; }
 
-private:
-    void notifyImpl(bool is_eof, const String & msg)
+    void checkSourceConcurrency(size_t concurrency) const
+    {
+        RUNTIME_CHECK_MSG(
+            concurrency == this->partition_num,
+            "concurrency: {}, partition_num: {}",
+            concurrency,
+            this->partition_num);
+    }
+
+    void checkSinkConcurrency(size_t concurrency) const
+    {
+        RUNTIME_CHECK_MSG(
+            concurrency <= this->partition_num,
+            "concurrency: {}, partition_num: {}",
+            concurrency,
+            this->partition_num);
+    }
+
+    template <bool for_test>
+    void sinkExit()
     {
         std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        this->sink_exit_num++;
+        if (this->getSinkExitNumNoLock() == this->getExpectedSinkNum())
+            this->notifyEOF<for_test>();
+    }
+
+    void sourceExit()
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        this->source_exit_num++;
+    }
+
+    bool allExit()
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
+        return this->getTotalExitNumNoLock() == this->getExpectedTotalNum();
+    }
+
+    CTEOpStatus checkBlockAvailable(size_t cte_reader_id, size_t partition_id)
+    {
+        return this->checkBlockAvailableImpl<true>(cte_reader_id, partition_id);
+    }
+
+    CTEOpStatus checkBlockAvailableNoLock(size_t cte_reader_id, size_t partition_id)
+    {
+        return this->checkBlockAvailableImpl<false>(cte_reader_id, partition_id);
+    }
+
+    std::shared_ptr<CTEPartition> & getPartitionForTest(size_t partition_idx) { return this->partitions[partition_idx]; }
+
+private:
+    template <bool need_lock>
+    CTEOpStatus checkBlockAvailableImpl(size_t cte_reader_id, size_t partition_id)
+    {
+        std::shared_lock<std::shared_mutex> cte_lock(this->rw_lock, std::defer_lock);
+        std::unique_lock<std::mutex> partition_lock(*(this->partitions[partition_id]->mu), std::defer_lock);
+
+        if constexpr (need_lock)
+        {
+            cte_lock.lock();
+            partition_lock.lock();
+        }
+
+        if unlikely (this->is_cancelled)
+            return CTEOpStatus::CANCELLED;
+
+        if (this->partitions[partition_id]->blocks.size()
+            <= this->partitions[partition_id]->fetch_block_idxs[cte_reader_id])
+            return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;
+
+        return CTEOpStatus::OK;
+    }
+
+    Int32 getTotalExitNumNoLock() const noexcept { return this->sink_exit_num + this->source_exit_num; }
+    Int32 getSinkExitNumNoLock() const noexcept { return this->sink_exit_num; }
+    Int32 getExpectedSinkNum() const noexcept { return this->expected_sink_num; }
+    Int32 getExpectedTotalNum() const noexcept { return this->getExpectedSinkNum() + this->expected_source_num; }
+
+    template <bool need_lock, bool for_test>
+    void notifyImpl(bool is_eof, const String & msg)
+    {
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock, std::defer_lock);
+        if constexpr (need_lock)
+            lock.lock();
 
         if likely (is_eof)
             this->is_eof = true;
@@ -183,25 +293,34 @@ private:
         }
 
         for (auto & partition : this->partitions)
-            partition->pipe_cv->notifyAll();
+        {
+            if constexpr (for_test)
+                partition->cv_for_test->notify_all();
+            else
+                partition->pipe_cv->notifyAll();
+        }
     }
 
-    size_t next_cte_reader_id = 0;
-
-    size_t partition_num;
+    const size_t partition_num;
     std::vector<std::shared_ptr<CTEPartition>> partitions;
 
     std::shared_mutex rw_lock;
+    size_t next_cte_reader_id = 0;
     bool is_eof = false;
     bool is_cancelled = false;
 
     bool get_resp = false;
     tipb::SelectResponse resp;
 
+    String err_msg;
+
     const size_t expected_sink_num;
+    const size_t expected_source_num;
     size_t registered_sink_num = 0;
 
-    String err_msg;
+    Int32 sink_exit_num = 0;
+    Int32 source_exit_num = 0;
+
     std::shared_ptr<CTESpillContext> cte_spill_context;
     std::shared_ptr<CTEPartitionSharedConfig> partition_config;
 };

@@ -242,14 +242,14 @@ std::pair<DataTypePtr, MinMaxIndexPtr> DMFilePackFilter::loadIndex(
             }
 
             auto file_path = dmfile.meta->mergedPath(info->second.number);
-            auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
+            auto encrypt_path = dmfile_meta->encryptionMergedPath(info->second.number);
             auto offset = info->second.offset;
             auto data_size = info->second.size;
 
             auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
                 file_provider,
                 file_path,
-                encryp_path,
+                encrypt_path,
                 dmfile.getConfiguration()->getChecksumFrameLength(),
                 read_limiter);
             buffer.seek(offset);
@@ -261,7 +261,7 @@ std::pair<DataTypePtr, MinMaxIndexPtr> DMFilePackFilter::loadIndex(
 
             auto buf = ChecksumReadBufferBuilder::build(
                 std::move(raw_data),
-                dmfile.colIndexPath(file_name_base), // just for debug
+                file_path, // just for debug, the buffer is part of the merged file
                 dmfile.getConfiguration()->getChecksumFrameLength(),
                 dmfile.getConfiguration()->getChecksumAlgorithm(),
                 dmfile.getConfiguration()->getChecksumFrameLength());

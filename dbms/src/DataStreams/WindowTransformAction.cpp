@@ -316,6 +316,7 @@ void WindowTransformAction::initialAggregateFunction(
     has_agg = true;
 
     workspace.argument_columns.assign(workspace.arguments.size(), nullptr);
+    workspace.materialized_columns.assign(workspace.arguments.size(), nullptr);
     workspace.aggregate_function = window_function_description.aggregate_function;
     const auto & aggregate_function = workspace.aggregate_function;
     if (!arena)

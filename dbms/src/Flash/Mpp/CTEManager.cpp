@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include <Common/Exception.h>
 #include <Flash/Mpp/CTEManager.h>
 #include <fmt/core.h>
 #include <tipb/select.pb.h>
@@ -30,8 +29,8 @@ void CTEManager::releaseCTEBySource(const String & query_id_and_cte_id)
         // Maybe the task is cancelled and the cte has been released
         return;
 
-    iter->second.sourceExit();
-    if (iter->second.getTotalExitNum() == iter->second.getExpectedTotalNum())
+    iter->second->sourceExit();
+    if (iter->second->allExit())
         this->ctes.erase(iter);
 }
 
@@ -43,43 +42,44 @@ void CTEManager::releaseCTEBySink(const tipb::SelectResponse & resp, const Strin
         // Maybe the task is cancelled and the cte has been released
         return;
 
-    CTEWithCounter & cte_with_counter = iter->second;
-    cte_with_counter.getCTE()->addResp(resp);
-    cte_with_counter.sinkExit();
-    if (cte_with_counter.getSinkExitNum() == cte_with_counter.getExpectedSinkNum())
-        cte_with_counter.getCTE()->notifyEOF();
-    if (cte_with_counter.getTotalExitNum() == cte_with_counter.getExpectedTotalNum())
+    std::shared_ptr<CTE> cte = iter->second;
+    cte->addResp(resp);
+    cte->sinkExit<false>();
+    if (cte->allExit())
         this->ctes.erase(iter);
 }
 
 void CTEManager::releaseCTE(const String & query_id_and_cte_id)
 {
     std::lock_guard<std::mutex> lock(this->mu);
-    auto iter = this->ctes.find(query_id_and_cte_id);
-    if (iter != this->ctes.end())
-        this->ctes.erase(iter);
+    this->ctes.erase(query_id_and_cte_id);
 }
 
-std::shared_ptr<CTE> CTEManager::getCTE(
+std::shared_ptr<CTE> CTEManager::getOrCreateCTE(
     const String & query_id_and_cte_id,
     Int32 concurrency,
     Int32 expected_sink_num,
     Int32 expected_source_num)
 {
-    RUNTIME_CHECK(concurrency > 0);
-
     std::lock_guard<std::mutex> lock(this->mu);
     auto iter = this->ctes.find(query_id_and_cte_id);
+    std::shared_ptr<CTE> cte;
     if (iter == this->ctes.end())
-        this->ctes.insert(std::make_pair(
-            query_id_and_cte_id,
-            CTEWithCounter(
-                std::make_shared<CTE>(concurrency, expected_sink_num),
-                expected_sink_num,
-                expected_source_num)));
+    {
+        cte = std::make_shared<CTE>(concurrency, expected_sink_num, expected_source_num);
+        this->ctes.insert(std::make_pair(query_id_and_cte_id, cte));
+    }
+    else
+    {
+        cte = iter->second;
+    }
 
-    auto cte = this->ctes.find(query_id_and_cte_id)->second.getCTE();
-    cte->checkPartitionNum(concurrency);
     return cte;
+}
+
+bool CTEManager::hasCTEForTest(const String & query_id_and_cte_id)
+{
+    std::lock_guard<std::mutex> lock(this->mu);
+    return !(this->ctes.find(query_id_and_cte_id) == this->ctes.end());
 }
 } // namespace DB

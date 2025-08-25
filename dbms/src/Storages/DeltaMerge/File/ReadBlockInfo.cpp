@@ -12,11 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Storages/DeltaMerge/File/ReadBlockInfo.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/IProvideFullTextIndex.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/IProvideVectorIndex.h>
 
 #include <span>
+
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/IProvideFullTextIndex.h>
+#endif
 
 namespace DB::DM
 {
@@ -140,11 +144,13 @@ template ReadBlockInfos ReadBlockInfo::createWithRowIDs<IProvideVectorIndex::Sea
     const DMFileMeta::PackStats & pack_stats,
     size_t rows_threshold_per_read);
 
+#if ENABLE_CLARA
 template ReadBlockInfos ReadBlockInfo::createWithRowIDs<IProvideFullTextIndex::SearchResult>(
     std::span<IProvideFullTextIndex::SearchResult> row_ids,
     const std::vector<size_t> & pack_offset,
     const RSResults & pack_res,
     const DMFileMeta::PackStats & pack_stats,
     size_t rows_threshold_per_read);
+#endif
 
 } // namespace DB::DM

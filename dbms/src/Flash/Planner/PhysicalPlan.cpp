@@ -243,17 +243,15 @@ void PhysicalPlan::build(const tipb::Executor * executor)
     }
     case tipb::ExecType::TypeCTESource:
     {
-        auto fine_grained_shuffle = FineGrainedShuffle(executor);
         GET_METRIC(tiflash_coprocessor_executor_count, type_cte_source).Increment();
-        pushBack(PhysicalCTESource::build(context, executor_id, log, fine_grained_shuffle, executor->cte_source()));
+        pushBack(PhysicalCTESource::build(context, executor_id, log, executor->cte_source()));
         break;
     }
     case tipb::ExecType::TypeCTESink:
     {
         buildFinalProjectionForCTE(executor->cte_sink());
-        auto fine_grained_shuffle = FineGrainedShuffle(executor);
         GET_METRIC(tiflash_coprocessor_executor_count, type_cte_sink).Increment();
-        pushBack(PhysicalCTESink::build(executor_id, log, fine_grained_shuffle, popBack()));
+        pushBack(PhysicalCTESink::build(executor_id, log, popBack()));
         break;
     }
     default:
@@ -280,12 +278,26 @@ void PhysicalPlan::buildFinalProjection(const String & column_prefix, bool is_ro
 
 void PhysicalPlan::buildFinalProjectionForCTE(const tipb::CTESink & sink)
 {
-    const auto & final_projection = PhysicalProjection::buildRootFinalForCTE(
+    auto required_schema_size = sink.field_types_size();
+    std::vector<tipb::FieldType> required_schema;
+    required_schema.reserve(required_schema_size);
+    std::vector<Int32> output_offsets;
+    output_offsets.reserve(required_schema_size);
+    for (int i = 0; i < required_schema_size; i++)
+    {
+        required_schema.push_back(sink.field_types(i));
+        output_offsets.push_back(i);
+    }
+
+    const auto & final_projection = PhysicalProjection::buildRootFinal(
         context,
         log,
+        required_schema,
+        output_offsets,
+        "",
+        dagContext().keep_session_timezone_info,
         popBack(),
-        sink,
-        dagContext().keep_session_timezone_info);
+        sink.cte_id());
     pushBack(final_projection);
 }
 

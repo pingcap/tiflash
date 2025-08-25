@@ -146,6 +146,11 @@ String getEnabledFeatures()
 #if ENABLE_NEXT_GEN
             "next-gen", 
 #endif
+
+// Clara
+#if ENABLE_CLARA
+            "clara",
+#endif
     };
     {
         auto f = DB::DM::VectorIndexHNSWSIMDFeatures::get();

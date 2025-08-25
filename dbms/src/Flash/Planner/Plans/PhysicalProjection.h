@@ -48,7 +48,8 @@ public:
         const std::vector<Int32> & output_offsets,
         const String & column_prefix,
         bool keep_session_timezone_info,
-        const PhysicalPlanNodePtr & child);
+        const PhysicalPlanNodePtr & child,
+        Int32 cte_id = -1);
 
     static PhysicalPlanNodePtr buildRootFinalForCTE(
         const Context & context,

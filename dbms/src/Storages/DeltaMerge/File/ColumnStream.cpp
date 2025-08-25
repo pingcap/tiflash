@@ -97,16 +97,19 @@ private:
     {
         const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(reader.dmfile->meta.get());
         assert(dmfile_meta != nullptr);
-        const auto & info = dmfile_meta->merged_sub_file_infos.find(colMarkFileName(file_name_base));
-        if (info == dmfile_meta->merged_sub_file_infos.end())
-        {
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown mark file {}", colMarkFileName(file_name_base));
-        }
+        const auto col_mark_fname = colMarkFileName(file_name_base);
+        const auto & info_iter = dmfile_meta->merged_sub_file_infos.find(col_mark_fname);
+        RUNTIME_CHECK_MSG(
+            info_iter != dmfile_meta->merged_sub_file_infos.end(),
+            "Unknown mark file, dmfile={} mark_fname={}",
+            reader.dmfile->parentPath(),
+            col_mark_fname);
 
-        auto file_path = dmfile_meta->mergedPath(info->second.number);
-        auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
-        auto offset = info->second.offset;
-        auto data_size = info->second.size;
+        const auto & merged_file_info = info_iter->second;
+        auto file_path = dmfile_meta->mergedPath(merged_file_info.number);
+        auto encrypt_path = dmfile_meta->encryptionMergedPath(merged_file_info.number);
+        auto offset = merged_file_info.offset;
+        auto data_size = merged_file_info.size;
 
         if (data_size == 0)
             return res;
@@ -115,7 +118,7 @@ private:
         auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
             reader.file_provider,
             file_path,
-            encryp_path,
+            encrypt_path,
             reader.dmfile->getConfiguration()->getChecksumFrameLength(),
             read_limiter);
         buffer.seek(offset);
@@ -129,7 +132,7 @@ private:
         // Then read from the buffer based on the raw data
         auto buf = ChecksumReadBufferBuilder::build(
             std::move(raw_data),
-            reader.dmfile->colDataPath(file_name_base),
+            file_path, // just for debug, the buffer is part of the merged file
             reader.dmfile->getConfiguration()->getChecksumFrameLength(),
             reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
             reader.dmfile->getConfiguration()->getChecksumFrameLength());
@@ -246,7 +249,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
 
     assert(info != dmfile_meta->merged_sub_file_infos.end());
     auto file_path = dmfile_meta->mergedPath(info->second.number);
-    auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
+    auto encrypt_path = dmfile_meta->encryptionMergedPath(info->second.number);
     auto offset = info->second.offset;
     auto size = info->second.size;
 
@@ -254,7 +257,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
         reader.file_provider,
         file_path,
-        encryp_path,
+        encrypt_path,
         reader.dmfile->getConfiguration()->getChecksumFrameLength(),
         read_limiter);
     buffer.seek(offset);

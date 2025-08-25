@@ -63,6 +63,9 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
     if unlikely (!this->areAllSinksRegistered<false>())
         return CTEOpStatus::SINK_NOT_REGISTERED;
 
+    if unlikely (block.rows() == 0)
+        return CTEOpStatus::OK;
+
     auto status = this->partitions[partition_id]->tryGetBlock(cte_reader_id, block);
     std::lock_guard<std::mutex> lock(this->mu_test);
     switch (status)
@@ -83,7 +86,7 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
         return status;
     }
 }
-
+template <bool for_test>
 CTEOpStatus CTE::pushBlock(size_t partition_id, const Block & block)
 {
     if unlikely (block.rows() == 0)
@@ -95,7 +98,7 @@ CTEOpStatus CTE::pushBlock(size_t partition_id, const Block & block)
 
     this->total_recv_blocks.fetch_add(1);
     this->total_recv_rows.fetch_add(block.rows());
-    return this->partitions[partition_id]->pushBlock(block);
+    return this->partitions[partition_id]->pushBlock<false>(block);
 }
 
 CTEOpStatus CTE::getBlockFromDisk(size_t cte_reader_id, size_t partition_id, Block & block)
@@ -150,10 +153,14 @@ void CTE::checkBlockAvailableAndRegisterTask(TaskPtr && task, size_t cte_reader_
     }
 
     std::lock_guard<std::mutex> lock(*(this->partitions[partition_id]->mu));
-    if (this->partitions[partition_id]->isBlockAvailableNoLock(cte_reader_id) || this->is_eof)
-        this->notifyTaskDirectly(partition_id, std::move(task));
-    else
-        this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE);
+    CTEOpStatus status = this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
+    if (status == CTEOpStatus::BLOCK_NOT_AVAILABLE)
+    {
+        this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE_READ);
+        return;
+    }
+
+    this->notifyTaskDirectly(partition_id, std::move(task));
 }
 
 void CTE::checkInSpillingAndRegisterTask(TaskPtr && task, size_t partition_id)
@@ -167,8 +174,18 @@ void CTE::checkInSpillingAndRegisterTask(TaskPtr && task, size_t partition_id)
 
     std::lock_guard<std::mutex> aux_lock(*(this->partitions[partition_id]->aux_lock));
     if (this->partitions[partition_id]->status == CTEPartitionStatus::IN_SPILLING)
-        this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE);
+        this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE_READ);
     else
         this->notifyTaskDirectly(partition_id, std::move(task));
 }
+
+CTEOpStatus CTE::checkBlockAvailableForTest(size_t cte_reader_id, size_t partition_id)
+{
+    std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
+    std::lock_guard<std::mutex> lock(*this->partitions[partition_id]->mu);
+    return this->checkBlockAvailableNoLock(cte_reader_id, partition_id);
+}
+
+template CTEOpStatus CTE::pushBlock<false>(size_t, const Block &);
+template CTEOpStatus CTE::pushBlock<true>(size_t, const Block &);
 } // namespace DB

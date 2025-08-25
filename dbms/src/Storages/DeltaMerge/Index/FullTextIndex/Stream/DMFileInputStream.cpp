@@ -11,7 +11,9 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
+#include <Common/config.h>
 
+#if ENABLE_CLARA
 #include <Common/Stopwatch.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Perf.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Reader.h>
@@ -170,3 +172,4 @@ Block DMFileInputStreamProvideFullTextIndex::getHeader() const
 
 
 } // namespace DB::DM
+#endif

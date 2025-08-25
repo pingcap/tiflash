@@ -31,23 +31,33 @@ namespace DB
 class CTEReader
 {
 public:
-    explicit CTEReader(Context & context)
-        : query_id_and_cte_id(context.getDAGContext()->getQueryIDAndCTEIDForSource())
+    CTEReader(Context & context, const String & query_id_and_cte_id_, std::shared_ptr<CTE> cte_)
+        : query_id_and_cte_id(query_id_and_cte_id_)
         , cte_manager(context.getCTEManager())
-        , cte(context.getDAGContext()->getCTESource())
+        , cte(cte_)
         , cte_reader_id(this->cte->getCTEReaderID())
     {
         RUNTIME_CHECK(cte);
     }
 
+    // TODO maybe remove it
     std::atomic_size_t total_fetch_blocks = 0;
     std::atomic_size_t total_fetch_rows = 0;
+
+    // For Test
+    CTEReader(const String & query_id_and_cte_id_, CTEManager * cte_manager_, std::shared_ptr<CTE> cte_)
+        : query_id_and_cte_id(query_id_and_cte_id_)
+        , cte_manager(cte_manager_)
+        , cte(cte_)
+        , cte_reader_id(this->cte->getCTEReaderID())
+    {}
 
     ~CTEReader()
     {
         this->cte.reset();
         this->cte_manager->releaseCTEBySource(this->query_id_and_cte_id);
 
+        // TODO remove it
         auto * log = &Poco::Logger::get("LRUCache");
         LOG_INFO(
             log,
@@ -57,22 +67,25 @@ public:
                 this->total_fetch_rows.load()));
     }
 
-    CTEOpStatus fetchNextBlock(size_t partition_id, Block & block);
-    CTEOpStatus fetchBlockFromDisk(size_t partition_id, Block & block);
+    CTEOpStatus fetchNextBlock(size_t source_id, Block & block);
+    CTEOpStatus fetchBlockFromDisk(size_t source_id, Block & block);
 
-    void getResp(tipb::SelectResponse & resp)
+    bool getResp(tipb::SelectResponse & resp)
     {
         std::lock_guard<std::mutex> lock(this->mu);
         if (this->resp_fetched)
-            return;
+            return false;
         this->resp_fetched = true;
         resp.CopyFrom(this->resp);
+        return true;
     }
 
     std::shared_ptr<CTE> getCTE() const { return this->cte; }
     size_t getID() const { return this->cte_reader_id; }
 
     bool areAllSinksRegistered() { return this->cte->areAllSinksRegistered<true>(); }
+
+    CTEOpStatus waitForBlockAvailableForTest(size_t partition_idx);
 
 private:
     String query_id_and_cte_id;

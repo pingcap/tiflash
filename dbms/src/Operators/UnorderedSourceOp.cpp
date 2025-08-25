@@ -119,9 +119,6 @@ void UnorderedSourceOp::operateSuffixImpl()
     if (!io_profile_info->is_local)
     {
         std::call_once(task_pool->getRemoteConnectionInfoFlag(), [&]() {
-            auto & connection_infos = io_profile_info->connection_profile_infos;
-            RUNTIME_CHECK(connection_infos.size() == 2, connection_infos.size());
-
             auto pool_connection_info_opt = task_pool->getRemoteConnectionInfo();
             RUNTIME_CHECK(
                 pool_connection_info_opt.has_value() || (task_pool->getTotalReadTasks() == 0),
@@ -129,6 +126,9 @@ void UnorderedSourceOp::operateSuffixImpl()
                 task_pool->getTotalReadTasks());
             if (pool_connection_info_opt)
             {
+                auto & connection_infos = io_profile_info->connection_profile_infos;
+                RUNTIME_CHECK(connection_infos.size() == 2, connection_infos.size());
+
                 connection_infos[0] = pool_connection_info_opt->first;
                 connection_infos[1] = pool_connection_info_opt->second;
             }

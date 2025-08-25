@@ -28,17 +28,17 @@ public:
         const Context & context,
         const String & executor_id,
         const LoggerPtr & log,
-        const FineGrainedShuffle & fine_grained_shuffle,
         const tipb::CTESource & cte_source);
 
     PhysicalCTESource(
         const String & executor_id_,
         const NamesAndTypes & schema_,
-        const FineGrainedShuffle & fine_grained_shuffle,
         const String & req_id,
-        const Block & sample_block_)
-        : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, fine_grained_shuffle, req_id)
+        const Block & sample_block_,
+        size_t cte_id_)
+        : PhysicalLeaf(executor_id_, PlanType::CTESource, schema_, FineGrainedShuffle(), req_id)
         , sample_block(sample_block_)
+        , cte_id(cte_id_)
     {}
 
     void finalizeImpl(const Names & parent_require) override;
@@ -54,8 +54,6 @@ private:
 
 private:
     Block sample_block;
-    String query_id_and_cte_id;
-    std::vector<Int64> partition_col_ids;
-    TiDB::TiDBCollators partition_col_collators;
+    size_t cte_id;
 };
 } // namespace DB

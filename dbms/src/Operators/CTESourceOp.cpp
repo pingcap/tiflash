@@ -39,8 +39,7 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
     switch (ret)
     {
     case CTEOpStatus::END_OF_FILE:
-        this->cte_reader->getResp(this->resp);
-        if (this->resp.execution_summaries_size() != 0)
+        if (this->cte_reader->getResp(this->resp))
             this->io_profile_info->remote_execution_summary.add(this->resp);
     case CTEOpStatus::OK:
         this->total_rows += block.rows();

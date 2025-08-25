@@ -44,8 +44,12 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
     if (!this->isBlockAvailableInMemoryNoLock(cte_reader_id))
         return CTEOpStatus::BLOCK_NOT_AVAILABLE;
 
+    // TODO blocks that have been cleared should not be spilled into disk
+    // TODO add a variable that records the max idx block that has been cleared
     auto idx = this->getIdxInMemoryNoLock(cte_reader_id);
-    block = this->blocks[idx];
+    block = this->blocks[idx].block;
+    if ((--this->blocks[idx].counter) == 0)
+        this->blocks[idx].block.clear();
     {
         auto [iter, _] = this->fetch_in_mem_idxs.insert(std::make_pair(cte_reader_id, 0));
         iter->second.push_back(this->fetch_block_idxs[cte_reader_id]);
@@ -54,6 +58,7 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
     return CTEOpStatus::OK;
 }
 
+template <bool for_test>
 CTEOpStatus CTEPartition::pushBlock(const Block & block)
 {
     std::unique_lock<std::mutex> aux_lock(*(this->aux_lock));
@@ -78,8 +83,12 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     std::lock_guard<std::mutex> lock(*this->mu);
 
     this->memory_usage += block.bytes();
-    this->blocks.push_back(block);
-    this->pipe_cv->notifyOne();
+    this->blocks.push_back(BlockWithCounter(block, static_cast<Int16>(this->expected_source_num)));
+    if constexpr (for_test)
+        this->cv_for_test->notify_all();
+    else
+        this->pipe_cv->notifyAll();
+
 
     if unlikely (this->exceedMemoryThresholdNoLock())
     {
@@ -132,16 +141,24 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
         auto next_iter = std::next(split_iter);
 
         Blocks spilled_blocks;
+        auto iter = blocks_begin_iter + split_iter->second;
+        decltype(iter) end_iter;
         if (next_iter == split_idxs.end() || next_iter->second >= total_block_in_memory_num)
         {
             this->spill_ranges.push_back(
                 std::make_pair(split_iter->first, this->blocks.size() - split_iter->second + split_iter->first));
-            spilled_blocks.assign(blocks_begin_iter + split_iter->second, this->blocks.end());
+            end_iter = this->blocks.end();
         }
         else
         {
             this->spill_ranges.push_back(std::make_pair(split_iter->first, next_iter->first));
-            spilled_blocks.assign(blocks_begin_iter + split_iter->second, blocks_begin_iter + next_iter->second);
+            end_iter = blocks_begin_iter + next_iter->second;
+        }
+
+        while (iter != end_iter)
+        {
+            spilled_blocks.push_back(iter->block);
+            ++iter;
         }
 
         RUNTIME_CHECK(!spilled_blocks.empty());
@@ -222,4 +239,7 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
 
     return CTEOpStatus::OK;
 }
+
+template CTEOpStatus CTEPartition::pushBlock<true>(const Block &);
+template CTEOpStatus CTEPartition::pushBlock<false>(const Block &);
 } // namespace DB

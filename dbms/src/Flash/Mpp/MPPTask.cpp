@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/CPUAffinityManager.h>
+#include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <Common/ThreadFactory.h>
 #include <Common/ThreadManager.h>
@@ -41,6 +42,10 @@
 #include <chrono>
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
+<<<<<<< HEAD
+=======
+
+>>>>>>> master
 
 namespace DB
 {
@@ -197,14 +202,17 @@ void MPPTask::abortCTE(const String & message)
 {
     if (this->has_cte_sink.load())
     {
-        this->dag_context->getCTESink()->notifyCancel(message);
+        this->dag_context->getCTESink()->notifyCancel<false>(message);
         this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSink());
     }
 
     if (this->has_cte_source.load())
     {
-        this->dag_context->getCTESource()->notifyCancel(message);
-        this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSource());
+        for (auto & p : this->dag_context->getCTESource())
+        {
+            p.second->notifyCancel<false>(message);
+            this->context->getCTEManager()->releaseCTE(this->dag_context->getQueryIDAndCTEIDForSource(p.first));
+        }
     }
 }
 
@@ -220,7 +228,7 @@ void MPPTask::finishWrite()
         // Execution summary statistic also need to be sent. So we can release cte
         // only when execution sumary statistic has been sent.
         this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEIDForSink());
-        this->notify_cte_finish = true;
+        this->notify_cte_sink_finish = true;
     }
     else
     {
@@ -317,8 +325,29 @@ void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
     dag_context->tunnel_set = tunnel_set;
 }
 
-void MPPTask::initExchangeReceivers()
+void MPPTask::registerCTESink()
 {
+    RUNTIME_CHECK_MSG(
+        dag_context->dag_request.rootExecutor().has_cte_sink(),
+        "Task should has either exchange sender or cte sink");
+
+    this->has_cte_sink.store(true);
+    const auto & cte_sink = dag_context->dag_request.rootExecutor().cte_sink();
+    String query_id_and_cte_id
+        = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_sink.cte_id());
+    context->getDAGContext()->setQueryIDAndCTEIDForSink(query_id_and_cte_id);
+    auto cte = context->getCTEManager()->getOrCreateCTE(
+        query_id_and_cte_id,
+        context->getMaxStreams(),
+        cte_sink.cte_sink_num(),
+        cte_sink.cte_source_num());
+    cte->registerSink();
+    context->getDAGContext()->setCTESink(cte);
+}
+
+bool MPPTask::initExchangeReceivers()
+{
+    bool find_cte_source = false;
     auto receiver_set_local = std::make_shared<MPPReceiverSet>(log->identifier());
     try
     {
@@ -351,18 +380,9 @@ void MPPTask::initExchangeReceivers()
             }
             else if (executor.tp() == tipb::ExecType::TypeCTESource)
             {
-                this->has_cte_source.store(true);
-                const auto & cte_source = executor.cte_source();
-                String query_id_and_cte_id
-                    = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_source.cte_id());
-                context->getDAGContext()->setQueryIDAndCTEIDForSource(query_id_and_cte_id);
-                auto cte = context->getCTEManager()->getCTE(
-                    query_id_and_cte_id,
-                    context->getMaxStreams(),
-                    cte_source.cte_sink_num(),
-                    cte_source.cte_source_num());
-                context->getDAGContext()->setCTESource(cte);
+                find_cte_source = true;
             }
+
             return true;
         });
     }
@@ -374,6 +394,7 @@ void MPPTask::initExchangeReceivers()
         receiver_set = std::move(receiver_set_local);
         throw;
     }
+
     {
         std::lock_guard lock(mtx);
         if (status != RUNNING)
@@ -381,6 +402,28 @@ void MPPTask::initExchangeReceivers()
         receiver_set = std::move(receiver_set_local);
     }
     dag_context->setMPPReceiverSet(receiver_set);
+    return find_cte_source;
+}
+
+void MPPTask::initCTESources()
+{
+    dag_context->dag_request.traverse([&](const tipb::Executor & executor) {
+        if (executor.tp() == tipb::ExecType::TypeCTESource)
+        {
+            this->has_cte_source.store(true);
+            const auto & cte_source = executor.cte_source();
+            String query_id_and_cte_id
+                = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_source.cte_id());
+            context->getDAGContext()->addQueryIDAndCTEIDForSource(cte_source.cte_id(), query_id_and_cte_id);
+            auto cte = context->getCTEManager()->getOrCreateCTE(
+                query_id_and_cte_id,
+                context->getMaxStreams(),
+                cte_source.cte_sink_num(),
+                cte_source.cte_source_num());
+            context->getDAGContext()->addCTESource(cte_source.cte_id(), cte);
+        }
+        return true;
+    });
 }
 
 std::pair<MPPTunnelPtr, String> MPPTask::getTunnel(const ::mpp::EstablishMPPConnectionRequest * request)
@@ -527,7 +570,10 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
     }
 
     injectFailPointBeforeRegisterTunnel(dag_context->isRootMPPTask());
-    registerTunnels(task_request);
+    if likely (dag_context->dag_request.rootExecutor().has_exchange_sender())
+        registerTunnels(task_request);
+    else
+        registerCTESink();
 
     LOG_DEBUG(log, "begin to make the task {} public", id.toString());
 
@@ -547,7 +593,8 @@ void MPPTask::prepare(const mpp::DispatchTaskRequest & task_request)
 void MPPTask::preprocess()
 {
     auto start_time = Clock::now();
-    initExchangeReceivers();
+    if unlikely (initExchangeReceivers())
+        initCTESources();
     LOG_DEBUG(log, "init exchange receiver done");
     query_executor_holder.set(queryExecute(*context));
     LOG_DEBUG(log, "init query executor done");
@@ -603,13 +650,16 @@ void MPPTask::runImpl()
         schedule_entry.setNeededThreads(estimateCountOfNewThreads());
 
         // tunnel_set may be nullptr when we get cte sink
+        int tunnel_thread = 0;
         if (dag_context->tunnel_set != nullptr)
-            LOG_DEBUG(
-                log,
-                "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}",
-                schedule_entry.getNeededThreads(),
-                dag_context->tunnel_set->getExternalThreadCnt(),
-                new_thread_count_of_mpp_receiver);
+            tunnel_thread = dag_context->tunnel_set->getExternalThreadCnt();
+
+        LOG_DEBUG(
+            log,
+            "Estimate new thread count of query: {} including tunnel_threads: {}, receiver_threads: {}",
+            schedule_entry.getNeededThreads(),
+            tunnel_thread,
+            new_thread_count_of_mpp_receiver);
 
         scheduleOrWait();
 
@@ -698,11 +748,14 @@ void MPPTask::runImpl()
         err_msg = err_msg.empty() ? catch_err_msg : fmt::format("{}, {}", err_msg, catch_err_msg);
     }
 
-    if unlikely (this->has_cte_sink.load() && !this->notify_cte_finish)
+    if unlikely (this->has_cte_sink.load() && !this->notify_cte_sink_finish)
     {
+        if (!err_msg.empty())
+            this->dag_context->getCTESink()->notifyCancel<false>(err_msg);
+
         tipb::SelectResponse resp;
         this->context->getCTEManager()->releaseCTEBySink(resp, this->dag_context->getQueryIDAndCTEIDForSink());
-        this->notify_cte_finish = true;
+        this->notify_cte_sink_finish = true;
     }
 
     if (err_msg.empty())
