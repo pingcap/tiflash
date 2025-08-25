@@ -63,9 +63,6 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
     if unlikely (!this->areAllSinksRegistered<false>())
         return CTEOpStatus::SINK_NOT_REGISTERED;
 
-    if unlikely (block.rows() == 0)
-        return CTEOpStatus::OK;
-
     auto status = this->partitions[partition_id]->tryGetBlock(cte_reader_id, block);
     std::lock_guard<std::mutex> lock(this->mu_test);
     switch (status)
@@ -110,6 +107,8 @@ CTEOpStatus CTE::getBlockFromDisk(size_t cte_reader_id, size_t partition_id, Blo
     }
 
     auto ret = this->partitions[partition_id]->getBlockFromDisk(cte_reader_id, block);
+    // ---------------------
+    // TODO delete it
     std::lock_guard<std::mutex> lock(this->mu_test);
     if (ret == CTEOpStatus::OK && block)
     {
@@ -122,6 +121,7 @@ CTEOpStatus CTE::getBlockFromDisk(size_t cte_reader_id, size_t partition_id, Blo
             iter->second.fetch_add(block.rows());
         }
     }
+    // ---------------------
     return ret;
 }
 
@@ -174,7 +174,7 @@ void CTE::checkInSpillingAndRegisterTask(TaskPtr && task, size_t partition_id)
 
     std::lock_guard<std::mutex> aux_lock(*(this->partitions[partition_id]->aux_lock));
     if (this->partitions[partition_id]->status == CTEPartitionStatus::IN_SPILLING)
-        this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE_READ);
+        this->registerTask(partition_id, std::move(task), NotifyType::WAIT_ON_CTE_IO);
     else
         this->notifyTaskDirectly(partition_id, std::move(task));
 }

@@ -65,6 +65,7 @@ public:
         }
     }
 
+    // ------------------------
     // TODO remove, for test
     std::mutex mu_test;
     std::atomic_size_t total_recv_blocks = 0;
@@ -75,6 +76,7 @@ public:
     std::map<size_t, std::atomic_size_t> total_fetch_rows;
     std::map<size_t, std::atomic_size_t> total_fetch_blocks_in_disk;
     std::map<size_t, std::atomic_size_t> total_fetch_rows_in_disk;
+    // ------------------------
 
     ~CTE()
     {
@@ -274,11 +276,10 @@ private:
         if unlikely (this->is_cancelled)
             return CTEOpStatus::CANCELLED;
 
-        if (this->partitions[partition_id]->blocks.size()
-            <= this->partitions[partition_id]->fetch_block_idxs[cte_reader_id])
-            return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;
+        if (this->partitions[partition_id]->isBlockAvailableInMemoryNoLock(cte_reader_id))
+            return CTEOpStatus::OK;
 
-        return CTEOpStatus::OK;
+        return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;
     }
 
     Int32 getTotalExitNumNoLock() const noexcept { return this->sink_exit_num + this->source_exit_num; }

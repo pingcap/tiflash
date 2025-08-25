@@ -28,7 +28,7 @@ void CTESourceOp::operateSuffixImpl()
 
 OperatorStatus CTESourceOp::readImpl(Block & block)
 {
-    if (this->block_from_disk)
+    if unlikely (this->block_from_disk)
     {
         block = this->block_from_disk;
         this->block_from_disk.clear();

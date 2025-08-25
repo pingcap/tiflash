@@ -46,9 +46,12 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
 
     auto idx = this->getIdxInMemoryNoLock(cte_reader_id);
     block = this->blocks[idx].block;
+    assert(this->blocks[idx].counter > 0);
+
     if ((--this->blocks[idx].counter) == 0)
         this->blocks[idx].block.clear();
     {
+        // TODO delete it
         auto [iter, _] = this->fetch_in_mem_idxs.insert(std::make_pair(cte_reader_id, 0));
         iter->second.push_back(this->fetch_block_idxs[cte_reader_id]);
     }
@@ -78,7 +81,7 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
 
     // mu must be held after aux_lock so that we will not be blocked by spill.
     // Blocked in cpu pool is very bad.
-    std::lock_guard<std::mutex> lock(*this->mu);
+    std::lock_guard<std::mutex> lock(*(this->mu));
 
     this->memory_usage += block.bytes();
     this->blocks.push_back(BlockWithCounter(block, static_cast<Int16>(this->expected_source_num)));
@@ -124,11 +127,10 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
     }
 
     // Key represents logical index
-    // Value represents physical index at `this->blocks`
+    // Value represents physical index in `this->blocks`
     std::map<size_t, size_t> split_idxs;
-    split_idxs.insert(std::make_pair(this->total_block_in_disk_num, 0));
     for (const auto & [_, logical_idx] : this->fetch_block_idxs)
-        if (logical_idx > this->total_block_in_disk_num)
+        if (logical_idx >= this->total_block_in_disk_num)
             split_idxs.insert(std::make_pair(logical_idx, logical_idx - this->total_block_in_disk_num));
 
     auto blocks_begin_iter = this->blocks.begin();
@@ -163,19 +165,18 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
             ++iter;
         }
 
-        if unlikely (spilled_blocks.size() == 0)
-        {
-            ++split_iter;
-            continue;
-        }
+        RUNTIME_CHECK(spilled_blocks.size() == 0);
 
         this->total_block_in_disk_num += spilled_blocks.size();
 
         auto spiller = this->config->getSpiller(this->partition_id, this->spillers.size());
+        // -----------------
+        // TODO delete it
         this->total_spill_blocks.fetch_add(spilled_blocks.size());
         block_num.fetch_add(spilled_blocks.size());
         for (auto & block : spilled_blocks)
             row_num.fetch_add(block.rows());
+        // -----------------
         spiller->spillBlocks(std::move(spilled_blocks), this->partition_id);
         spiller->finishSpill();
         this->spillers.insert(std::make_pair(split_iter->first, std::move(spiller)));

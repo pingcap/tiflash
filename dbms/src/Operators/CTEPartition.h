@@ -191,17 +191,21 @@ struct CTEPartition
         tmp_blocks.clear();
     }
 
+    // -----------
+    // TODO delete them
     std::atomic_size_t total_blocks = 0;
     std::atomic_size_t total_spill_blocks = 0;
 
     std::vector<std::pair<size_t, size_t>> spill_ranges;
     std::map<size_t, std::vector<size_t>> fetch_in_mem_idxs;
     std::map<size_t, std::vector<size_t>> fetch_in_disk_idxs;
+    // -----------
 
     size_t total_byte_usage = 0;
 
     size_t partition_id;
 
+    // Protect `status` and `tmp_blocks` variables
     std::unique_ptr<std::mutex> aux_lock;
     CTEPartitionStatus status;
     Blocks tmp_blocks;
