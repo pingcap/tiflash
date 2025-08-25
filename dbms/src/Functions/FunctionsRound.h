@@ -199,77 +199,6 @@ enum class RoundingMode
 #endif
 };
 
-/** Rounding functions for decimal values
- */
-
-template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode, typename OutputType>
-struct DecimalRoundingComputation
-{
-    static_assert(IsDecimal<T>);
-    static const size_t data_count = 1;
-    static size_t prepare(size_t scale) { return scale; }
-    // compute need decimal_scale to interpret decimals
-    static inline void compute(
-        const T * __restrict in,
-        size_t scale,
-        OutputType * __restrict out,
-        ScaleType decimal_scale)
-    {
-        static_assert(std::is_same_v<T, OutputType> || std::is_same_v<OutputType, Int64>);
-        Float64 val = in->template toFloat<Float64>(decimal_scale);
-
-        if constexpr (scale_mode == ScaleMode::Positive)
-        {
-            val = val * scale;
-        }
-        else if constexpr (scale_mode == ScaleMode::Negative)
-        {
-            val = val / scale;
-        }
-
-        if constexpr (rounding_mode == RoundingMode::Round)
-        {
-            val = round(val);
-        }
-        else if constexpr (rounding_mode == RoundingMode::Floor)
-        {
-            val = floor(val);
-        }
-        else if constexpr (rounding_mode == RoundingMode::Ceil)
-        {
-            val = ceil(val);
-        }
-        else if constexpr (rounding_mode == RoundingMode::Trunc)
-        {
-            val = trunc(val);
-        }
-
-
-        if constexpr (scale_mode == ScaleMode::Positive)
-        {
-            val = val / scale;
-        }
-        else if constexpr (scale_mode == ScaleMode::Negative)
-        {
-            val = val * scale;
-        }
-
-        if constexpr (std::is_same_v<T, OutputType>)
-        {
-            *out = ToDecimal<Float64, T>(val, decimal_scale);
-        }
-        else if constexpr (std::is_same_v<OutputType, Int64>)
-        {
-            *out = static_cast<Int64>(val);
-        }
-        else
-        {
-            ; // never arrived here
-        }
-    }
-};
-
-
 /** Rounding functions for integer values.
   */
 template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode>
@@ -333,6 +262,88 @@ struct IntegerRoundingComputation
     }
 };
 
+/** Rounding functions for decimal values
+ */
+
+template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode, typename OutputType>
+struct DecimalRoundingComputation
+{
+    static_assert(IsDecimal<T>);
+    static const size_t data_count = 1;
+    static size_t prepare(size_t scale) { return scale; }
+    // compute need decimal_scale to interpret decimals
+    static inline void compute(
+        const T * __restrict in,
+        size_t scale,
+        OutputType * __restrict out,
+        ScaleType decimal_scale)
+    {
+        static_assert(std::is_same_v<T, OutputType> || std::is_same_v<OutputType, Int64>);
+
+        using NativeType = T::NativeType;
+        using Op = IntegerRoundingComputation<NativeType, rounding_mode, ScaleMode::Negative>;
+        size_t scale_factor = pow(10, decimal_scale);
+
+        if constexpr (scale_mode == ScaleMode::Zero)
+        {
+            if (scale != 1)
+            {
+                throw Exception(
+                    "Logical error: unexpected 'scale' parameter passed to DecimalRoundingComputation",
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+
+            if constexpr (std::is_same_v<T, OutputType>)
+            {
+                Op::compute(&in->value, scale_factor, &out->value);
+            }
+            else if constexpr (std::is_same_v<OutputType, Int64>)
+            {
+                if constexpr (!std::is_same_v<T, Decimal256>)
+                {
+                    if constexpr (rounding_mode == RoundingMode::Floor)
+                    {
+                        auto x = in->value;
+                        if (x < 0)
+                            x -= scale_factor - 1;
+                        *out = x / scale_factor;
+                    }
+                    else if constexpr (rounding_mode == RoundingMode::Ceil)
+                    {
+                        auto x = in->value;
+                        if (x >= 0)
+                            x += scale_factor - 1;
+                        *out = x / scale_factor;
+                    }
+                    else
+                    {
+                        throw Exception(
+                            "Logical error: unexpected 'rounding_mode' parameter passed to DecimalRoundingComputation",
+                            ErrorCodes::LOGICAL_ERROR);
+                    }
+                }
+                else
+                {
+                    throw Exception(
+                        "Logical error: unexpected Type of DecimalRoundingComputation for INT result",
+                        ErrorCodes::LOGICAL_ERROR);
+                }
+            }
+            else
+            {
+                throw Exception(
+                    "Logical error: unexpected OutputType of DecimalRoundingComputation",
+                    ErrorCodes::LOGICAL_ERROR);
+            }
+        }
+        else
+        {
+            throw Exception(
+                "Logical error: unexpected 'scale_mode' parameter passed to DecimalRoundingComputation",
+                ErrorCodes::LOGICAL_ERROR);
+        }
+    }
+};
 
 #if __SSE4_1__
 
