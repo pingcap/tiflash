@@ -56,7 +56,7 @@ services:
     volumes:
       - ./next-gen-config/tidb.toml:/tidb.toml:ro
       - ./log/tidb0:/log
-    command: --store=tikv --path=pd0:2379 --config=/tidb.toml --log-file=/log/tidb.log --advertise-address=tidb0
+    command: --store=tikv --path=pd0:2379 --config=/tidb.toml --log-file=/log/tidb.log --advertise-address=tidb0 --tidb-service-scope dxf_service
     depends_on:
       - "tikv0"
     restart: on-failure
