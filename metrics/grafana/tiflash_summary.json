@@ -685,7 +685,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}[1m])",
+              "expr": "rate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"}[1m])",
               "format": "time_series",
               "hide": false,
               "intervalFactor": 2,
@@ -806,6 +806,20 @@
           "steppedLine": false,
           "targets": [
             {
+              "expr": "tiflash_proxy_process_resident_memory_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"}",
+              "format": "time_series",
+              "intervalFactor": 1,
+              "legendFormat": "{{instance}}",
+              "refId": "K"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_MemoryCapacity{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "hide": false,
+              "legendFormat": "limit-{{instance}}",
+              "refId": "L"
+            },
+            {
               "expr": "sum(tiflash_system_asynchronous_metric_jemalloc_retained{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"})",
               "format": "time_series",
               "hide": true,
@@ -862,7 +876,7 @@
               "refId": "G"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_rss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_rss{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -870,7 +884,7 @@
               "refId": "H"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_commit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_mimalloc_current_commit{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
@@ -878,26 +892,12 @@
               "refId": "I"
             },
             {
-              "expr": "sum(tiflash_system_asynchronous_metric_mmap_alive{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"})",
+              "expr": "sum(tiflash_system_asynchronous_metric_mmap_alive{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"})",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
               "legendFormat": "mmap",
               "refId": "J"
-            },
-            {
-              "expr": "tiflash_proxy_process_resident_memory_bytes{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}",
-              "format": "time_series",
-              "intervalFactor": 1,
-              "legendFormat": "{{instance}}",
-              "refId": "K"
-            },
-            {
-              "exemplar": true,
-              "expr": "sum(tiflash_system_current_metric_MemoryCapacity{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "hide": false,
-              "legendFormat": "limit-{{instance}}",
-              "refId": "L"
             }
           ],
           "thresholds": [],
@@ -998,7 +998,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "sum by (instance) (irate(tiflash_proxy_threads_io_bytes_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}[1m]))",
+              "expr": "sum by (instance) (irate(tiflash_proxy_threads_io_bytes_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"}[1m]))",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -6586,7 +6586,7 @@
           "targets": [
             {
               "exemplar": true,
-              "expr": "irate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}[1m])",
+              "expr": "irate(tiflash_proxy_process_cpu_seconds_total{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"}[1m])",
               "format": "time_series",
               "hide": false,
               "interval": "",
@@ -9172,7 +9172,7 @@
           "steppedLine": false,
           "targets": [
             {
-              "expr": "tiflash_proxy_process_open_fds{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=\"tiflash\"}",
+              "expr": "tiflash_proxy_process_open_fds{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", job=~\".*tiflash\"}",
               "format": "time_series",
               "hide": true,
               "intervalFactor": 1,
