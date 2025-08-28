@@ -296,10 +296,9 @@ private:
             col_index_fname);
 
         const auto & merged_file_info = info_iter->second;
-        auto file_path = dmfile.meta->mergedPath(merged_file_info.number);
-        auto encrypt_path = dmfile_meta->encryptionMergedPath(merged_file_info.number);
-        auto offset = merged_file_info.offset;
-        auto data_size = merged_file_info.size;
+        const auto file_path = dmfile.meta->mergedPath(merged_file_info.number);
+        const auto offset = merged_file_info.offset;
+        const auto data_size = merged_file_info.size;
 
         // First, read from merged file to get the raw data(contains the header)
         // Note that we directly use `data_size` as the size of buffer size in order
@@ -307,19 +306,18 @@ private:
         auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
             file_provider,
             file_path,
-            encrypt_path,
+            dmfile_meta->encryptionMergedPath(merged_file_info.number),
             data_size,
             read_limiter);
         buffer.seek(offset);
 
-        String raw_data;
-        raw_data.resize(data_size);
+        String raw_data(data_size, '\0');
         buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
         auto buf = ChecksumReadBufferBuilder::build(
             std::move(raw_data),
             file_path,
-            dmfile.getConfiguration()->getChecksumFrameLength(),
+            data_size, // reduce the allocated buffer size and overhead
             dmfile.getConfiguration()->getChecksumAlgorithm(),
             dmfile.getConfiguration()->getChecksumFrameLength());
 
