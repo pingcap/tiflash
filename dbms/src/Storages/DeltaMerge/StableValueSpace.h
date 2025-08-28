@@ -257,6 +257,17 @@ public:
          */
         AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & dm_context, const RowKeyRange & range) const;
 
+        DMFilePackFilterResults loadDMFilePackFilters(
+            const DMContext & dm_context,
+            const RowKeyRanges & real_ranges,
+            const RSOperatorPtr & rs_operator) const;
+        UInt64 estimatedReadRows(
+            const DMContext & dm_context,
+            const RowKeyRanges & real_ranges,
+            const RSOperatorPtr & rs_operator,
+            UInt64 start_ts,
+            bool use_delta_index) const;
+
     private:
         LoggerPtr log;
     };

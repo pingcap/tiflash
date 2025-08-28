@@ -979,19 +979,10 @@ BlockInputStreamPtr Segment::getInputStream(
 
     // load DMilePackFilterResult for each DMFile
     // Note that the ranges must be shrunk by the segment key-range
-    DMFilePackFilterResults pack_filter_results;
-    pack_filter_results.reserve(segment_snap->stable->getDMFiles().size());
-    for (const auto & dmfile : segment_snap->stable->getDMFiles())
-    {
-        auto result = DMFilePackFilter::loadFrom(
-            dm_context,
-            dmfile,
-            /*set_cache_if_miss*/ true,
-            real_ranges,
-            executor ? executor->rs_operator : EMPTY_RS_OPERATOR,
-            /*read_pack*/ {});
-        pack_filter_results.push_back(result);
-    }
+    auto pack_filter_results = segment_snap->stable->loadDMFilePackFilters(
+        dm_context,
+        real_ranges,
+        executor ? executor->rs_operator : EMPTY_RS_OPERATOR);
 
     switch (read_mode)
     {

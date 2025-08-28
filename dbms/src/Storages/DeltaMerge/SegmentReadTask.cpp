@@ -893,4 +893,26 @@ void SegmentReadTask::updateMVCCIndexSize(ReadMode read_mode, size_t initial_ind
         !cache_key->is_version_chain && read_snapshot->delta->getSharedDeltaIndex()->getBytes() != initial_index_bytes)
         cache->setDeltaIndex(*cache_key, read_snapshot->delta->getSharedDeltaIndex());
 }
+
+UInt64 SegmentReadTask::estimatedBytesOfInternalColumns(const RSOperatorPtr & rs_operator, UInt64 start_ts) const
+{
+    auto real_ranges = segment->shrinkRowKeyRanges(ranges);
+    // stable->getDMFiles() at least return one DMFile.
+    const auto handle_size
+        = read_snapshot->stable->getDMFiles().front()->getColumnStat(MutSup::extra_handle_id).avg_size;
+    constexpr auto version_size = sizeof(UInt64);
+    constexpr auto delmark_size = sizeof(UInt8);
+
+    // For delta, rs_filter does not filter rows, so we need to read all rows.
+    const auto delta_read_rows = read_snapshot->delta->getRows();
+    // For Stable, rs_filter may filter rows.
+    const auto stable_read_rows = read_snapshot->stable->estimatedReadRows(
+        *dm_context,
+        real_ranges,
+        rs_operator,
+        start_ts,
+        /*use_delta_index*/ delta_read_rows != 0 && !dm_context->isVersionChainEnabled());
+    return (handle_size + version_size + delmark_size) * (delta_read_rows + stable_read_rows);
+}
+
 } // namespace DB::DM
