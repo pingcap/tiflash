@@ -459,6 +459,7 @@ try
             .expected_handle = "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"},
         __LINE__);
 
+    // Delta + Stable
     auto t1 = createSegmentReadTask({}, /*enable_version_chain*/ 0);
     auto bytes = t1.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, std::numeric_limits<UInt64>::max());
     ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
