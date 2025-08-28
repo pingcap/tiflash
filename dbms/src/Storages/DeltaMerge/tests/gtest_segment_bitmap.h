@@ -108,5 +108,7 @@ protected:
     };
 
     void checkBitmap(const CheckBitmapOptions & opt);
+
+    SegmentReadTask createSegmentReadTask(RowKeyRanges read_ranges = {}, Int64 enable_version_chain = 1);
 };
 } // namespace DB::DM::tests

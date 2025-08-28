@@ -227,6 +227,29 @@ void SegmentBitmapFilterTest::checkBitmap(const CheckBitmapOptions & opt)
 
 INSTANTIATE_TEST_CASE_P(MVCC, SegmentBitmapFilterTest, /* is_common_handle */ ::testing::Bool());
 
+SegmentReadTask SegmentBitmapFilterTest::createSegmentReadTask(RowKeyRanges read_ranges, Int64 enable_version_chain)
+{
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+
+    auto & settings = db_context->getGlobalContext().getSettingsRef();
+    settings.set("enable_version_chain", std::to_string(enable_version_chain));
+
+    auto dm_context_ptr = DMContext::create(
+        db_context->getGlobalContext(),
+        dm_context->path_pool,
+        dm_context->storage_pool,
+        dm_context->min_version,
+        dm_context->keyspace_id,
+        dm_context->physical_table_id,
+        dm_context->pk_col_id,
+        dm_context->is_common_handle,
+        dm_context->rowkey_column_size,
+        settings,
+        dm_context->scan_context,
+        dm_context->tracing_id);
+    return SegmentReadTask{seg, snap, dm_context_ptr, read_ranges};
+}
+
 TEST_P(SegmentBitmapFilterTest, InMemory1)
 try
 {
@@ -237,6 +260,13 @@ try
             .expected_row_id = "[0, 1000)",
             .expected_handle = "[0, 1000)"},
         __LINE__);
+
+    // Delta only
+    auto t = createSegmentReadTask();
+    auto bytes = t.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, std::numeric_limits<UInt64>::max());
+    ASSERT_EQ(bytes, 17 * 1000);
+    bytes = t.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, 0);
+    ASSERT_EQ(bytes, 17 * 1000);
 }
 CATCH
 
@@ -380,6 +410,14 @@ try
             .expected_row_id = "[0, 1024)",
             .expected_handle = "[0, 1024)"},
         __LINE__);
+
+    // Stable only
+    auto t = createSegmentReadTask();
+    auto bytes = t.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, std::numeric_limits<UInt64>::max());
+    ASSERT_EQ(bytes, 0);
+
+    bytes = t.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, 0);
+    ASSERT_GE(bytes, 17 * 1024);
 }
 CATCH
 
@@ -420,6 +458,17 @@ try
             .expected_row_id = "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
             .expected_handle = "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"},
         __LINE__);
+
+    auto t1 = createSegmentReadTask({}, /*enable_version_chain*/ 0);
+    auto bytes = t1.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, std::numeric_limits<UInt64>::max());
+    ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
+
+    auto t2 = createSegmentReadTask({}, /*enable_version_chain*/ 1);
+    bytes = t2.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, std::numeric_limits<UInt64>::max());
+    ASSERT_GE(bytes, 17 * (10 + 55 + 7));
+    ASSERT_LT(bytes, 17 * (1024 + 10 + 55 + 7));
+    bytes = t2.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, 0);
+    ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
 }
 CATCH
 

@@ -898,9 +898,9 @@ UInt64 SegmentReadTask::estimatedBytesOfInternalColumns(const RSOperatorPtr & rs
 {
     auto real_ranges = segment->shrinkRowKeyRanges(ranges);
     // stable->getDMFiles() at least return one DMFile.
-    const auto handle_size = std::max(
-        sizeof(UInt64),
-        read_snapshot->stable->getDMFiles().front()->getColumnStat(MutSup::extra_handle_id).avg_size);
+    auto handle_size = read_snapshot->stable->getDMFiles().front()->getColumnStat(MutSup::extra_handle_id).avg_size;
+    if (handle_size == 0)
+        handle_size = sizeof(UInt64);
     constexpr auto version_size = sizeof(UInt64);
     constexpr auto delmark_size = sizeof(UInt8);
 
