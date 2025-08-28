@@ -21,7 +21,7 @@
 #include <DataStreams/SelectionByColumnIdTransformAction.h>
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-#include <Storages/DeltaMerge/ScanContext_fwd.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <common/logger_useful.h>
 
 namespace DB::DM
@@ -147,6 +147,8 @@ private:
         }
         else
         {
+            if (raw_block.segmentRowIdCol() != nullptr && scan_context != nullptr)
+                ScanContext::recordBuildMVCCBitmapReadBytes(scan_context, raw_block.bytes());
             rowkey_column = std::make_unique<RowKeyColumnContainer>(
                 raw_block.getByPosition(handle_col_pos).column,
                 is_common_handle);
