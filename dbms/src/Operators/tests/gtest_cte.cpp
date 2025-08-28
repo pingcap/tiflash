@@ -226,6 +226,9 @@ void concurrentTest()
             cte->sourceExit();
     };
 
+    std::vector<size_t> exit_num_for_each_partition;
+    exit_num_for_each_partition.resize(EXPECTED_SINK_NUM, 0);
+
     auto sink_func = [&](size_t sink_idx, size_t partition_idx) {
         std::uniform_int_distribution<size_t> di1(1, 10);
         std::uniform_int_distribution<size_t> di2(10, 50);
@@ -243,7 +246,8 @@ void concurrentTest()
                 next_sink_idx = next_sink_idxs[sink_idx]++;
                 if unlikely (next_sink_idx >= sink_blocks[sink_idx].size())
                 {
-                    if (partition_idx == 0)
+                    ++exit_num_for_each_partition[sink_idx];
+                    if (exit_num_for_each_partition[sink_idx] == PARTITION_NUM)
                         cte->sinkExit<true>();
                     break;
                 }
@@ -312,7 +316,7 @@ void concurrentTest()
 TEST_F(TestCTE, Concurrent)
 try
 {
-    for (size_t i = 0; i < 5; i++)
+    for (size_t i = 0; i < 10; i++)
         concurrentTest();
 }
 CATCH
