@@ -166,14 +166,7 @@ DMFilePackFilterResults SegmentBitmapFilterTest::loadPackFilterResults(
     const SegmentSnapshotPtr & snap,
     const RowKeyRanges & ranges)
 {
-    DMFilePackFilterResults results;
-    results.reserve(snap->stable->getDMFiles().size());
-    for (const auto & file : snap->stable->getDMFiles())
-    {
-        auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
-        results.push_back(pack_filter);
-    }
-    return results;
+    return snap->stable->loadDMFilePackFilters(*dm_context, ranges, EMPTY_RS_OPERATOR);
 }
 
 void SegmentBitmapFilterTest::checkHandle(PageIdU64 seg_id, std::string_view seq_ranges, int caller_line)
