@@ -301,19 +301,20 @@ private:
         const auto data_size = merged_file_info.size;
 
         // First, read from merged file to get the raw data(contains the header)
-        // Note that we directly use `data_size` as the size of buffer size in order
+        // Note that we use min(`data_size`, checksum_frame_size) as the size of buffer size in order
         // to minimize read amplification in the merged file.
         auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
             file_provider,
             file_path,
             dmfile_meta->encryptionMergedPath(merged_file_info.number),
-            data_size,
+            std::min(data_size, dmfile.getConfiguration()->getChecksumFrameLength()),
             read_limiter);
         buffer.seek(offset);
 
         String raw_data(data_size, '\0');
         buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
+        // Then read from the buffer based on the raw data. The buffer size is min(estimated_size, checksum_frame_size)
         auto buf = ChecksumReadBufferBuilder::build(
             std::move(raw_data),
             file_path,
