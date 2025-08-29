@@ -31,30 +31,27 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
         if (this->resp.execution_summaries_size() == 0)
             this->cte->tryToGetResp(this->resp);
     }
-    default:
+    case CTEOpStatus::WAIT_SPILL:
+    case CTEOpStatus::NEED_SPILL:
+    case CTEOpStatus::IO_IN:
+    case CTEOpStatus::SINK_NOT_REGISTERED:
+    case CTEOpStatus::BLOCK_NOT_AVAILABLE:
+    case CTEOpStatus::CANCELLED:
+        return ret;
+    case CTEOpStatus::OK:
+        this->total_fetch_blocks.fetch_add(1);
+        this->total_fetch_rows.fetch_add(block.rows());
         return ret;
     }
+    throw Exception("Should not reach here");
 }
 
-CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
+CTEOpStatus CTEReader::fetchBlockFromDisk(size_t source_id, Block & block)
 {
-    auto & partition = this->cte->getPartitionForTest(partition_idx);
-    std::unique_lock<std::mutex> lock(*(partition.mu_for_test));
-    while (true)
-    {
-        partition.cv_for_test->wait(lock);
-        auto status = this->cte->checkBlockAvailable(this->cte_reader_id, partition_idx);
-        switch (status)
-        {
-        case CTEOpStatus::BLOCK_NOT_AVAILABLE:
-            break;
-        case CTEOpStatus::OK:
-        case CTEOpStatus::CANCELLED:
-        case CTEOpStatus::END_OF_FILE:
-            return status;
-        default:
-            throw Exception("Should not reach here");
-        }
-    }
+    bool expected_bool = false;
+    if (this->is_first_log.compare_exchange_weak(expected_bool, true))
+        LOG_INFO(this->cte->getLog(), "Begin restore data from disk for cte.");
+
+    return this->cte->getBlockFromDisk(this->cte_reader_id, source_id, block);
 }
 } // namespace DB
