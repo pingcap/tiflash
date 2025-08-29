@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Common/RandomData.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/Checksum/ChecksumBuffer.h>
@@ -30,9 +32,12 @@
 #include <Storages/FormatVersion.h>
 #include <Storages/KVStore/TMTContext.h>
 #include <Storages/PathPool.h>
+#include <boost_wrapper/program_options.h>
+#include <common/defines.h>
 #include <pingcap/Config.h>
 
-#include <boost/program_options.hpp>
+#include <boost/program_options/errors.hpp>
+#include <boost/throw_exception.hpp>
 #include <chrono>
 #include <iostream>
 #include <random>
@@ -41,22 +46,6 @@ namespace bpo = boost::program_options;
 
 namespace DTTool::Bench
 {
-// clang-format off
-static constexpr char BENCH_HELP[] =
-    "Usage: bench [args]\n"
-    "Available Arguments:\n"
-    "  --help        Print help message and exit.\n"
-    "  --version     DTFile version. [default: 2] [available: 1, 2]\n"
-    "  --algorithm   Checksum algorithm. [default: xxh3] [available: xxh3, city128, crc32, crc64, none]\n"
-    "  --frame       Checksum frame length. [default: " TO_STRING(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE) "]\n"
-    "  --column      Column number. [default: 100]\n"
-    "  --size        Column size.   [default: 1000]\n"
-    "  --field       Field length limit. [default: 1024]\n"
-    "  --random      Random seed. (optional)\n"
-    "  --encryption  Enable encryption.\n"
-    "  --repeat      Repeat times. [default: 5]\n"
-    "  --workdir     Directory to create temporary data storage. [default: /tmp/test]";
-// clang-format on
 
 using namespace DB::DM;
 using namespace DB;
@@ -65,10 +54,11 @@ std::unique_ptr<Context> global_context = nullptr;
 ColumnDefinesPtr getDefaultColumns()
 {
     // Return [handle, ver, del] column defines
-    ColumnDefinesPtr columns = std::make_shared<ColumnDefines>();
-    columns->emplace_back(getExtraHandleColumnDefine(/*is_common_handle=*/false));
-    columns->emplace_back(getVersionColumnDefine());
-    columns->emplace_back(getTagColumnDefine());
+    ColumnDefinesPtr columns = std::make_shared<ColumnDefines>(ColumnDefines{
+        getExtraHandleColumnDefine(/*is_common_handle=*/false),
+        getVersionColumnDefine(),
+        getTagColumnDefine(),
+    });
     return columns;
 }
 
@@ -89,7 +79,7 @@ ColumnDefinesPtr createColumnDefines(size_t column_number)
         primitive->emplace_back(ColumnDefine{
             static_cast<ColId>(3 + int_num + i),
             fmt::format("str_{}", i),
-            DB::DataTypeFactory::instance().get("String")});
+            DB::DataTypeFactory::instance().get("Nullable(String)")});
     }
     return primitive;
 }
@@ -99,8 +89,10 @@ DB::Block createBlock(
     size_t start,
     size_t row_number,
     std::size_t limit,
+    double sparse_ratio,
     std::mt19937_64 & eng,
-    size_t & acc)
+    size_t & acc,
+    const LoggerPtr & logger)
 {
     using namespace DB;
     auto int_num = column_number / 2;
@@ -148,7 +140,7 @@ DB::Block createBlock(
         block.insert(std::move(tag_col));
     }
 
-    std::uniform_int_distribution<Int64> dist;
+    std::uniform_int_distribution<Int64> int_dist;
     for (size_t i = 0; i < int_num; ++i)
     {
         ColumnWithTypeAndName int_col(
@@ -161,31 +153,99 @@ DB::Block createBlock(
         column_data.resize(row_number);
         for (size_t j = 0; j < row_number; ++j)
         {
-            column_data[j] = dist(eng);
+            column_data[j] = int_dist(eng);
             acc += 8;
         }
         int_col.column = std::move(m_col);
         block.insert(std::move(int_col));
     }
 
+    std::uniform_real_distribution<> real_dist(0.0, 1.0);
     for (size_t i = 0; i < str_num; ++i)
     {
+        String col_name = fmt::format("str_{}", i);
         ColumnWithTypeAndName str_col(
             nullptr,
-            DB::DataTypeFactory::instance().get("String"),
-            fmt::format("str_{}", i),
+            DB::DataTypeFactory::instance().get("Nullable(String)"),
+            col_name,
             static_cast<ColId>(3 + int_num + i));
         IColumn::MutablePtr m_col = str_col.type->createColumn();
+        size_t num_null = 0;
         for (size_t j = 0; j < row_number; j++)
         {
-            Field field = DB::random::randomString(limit);
-            m_col->insert(field);
+            bool is_null = false;
+            if (sparse_ratio > 0.0 && real_dist(eng) < sparse_ratio)
+                is_null = true;
+            if (is_null)
+            {
+                m_col->insertDefault();
+                num_null++;
+            }
+            else
+            {
+                Field field = DB::random::randomString(limit);
+                m_col->insert(field);
+            }
         }
         str_col.column = std::move(m_col);
         block.insert(std::move(str_col));
+        if (sparse_ratio > 0.0)
+        {
+            LOG_TRACE(
+                logger,
+                "Sparse_ratio={} column_name={} num_null={} num_rows={}",
+                sparse_ratio,
+                col_name,
+                num_null,
+                row_number);
+        }
     }
 
     return block;
+}
+
+std::tuple<std::vector<DB::Block>, std::vector<DB::DM::DMFileBlockOutputStream::BlockProperty>, size_t> //
+genBlocks(
+    size_t random,
+    const size_t num_rows,
+    const size_t num_column,
+    size_t field,
+    double sparse_ratio,
+    const LoggerPtr & logger)
+{
+    std::vector<DB::Block> blocks;
+    std::vector<DB::DM::DMFileBlockOutputStream::BlockProperty> properties;
+    size_t effective_size = 0;
+
+    auto engine = std::mt19937_64{random};
+    auto num_blocks = static_cast<size_t>(std::round(1.0 * num_rows / DEFAULT_MERGE_BLOCK_SIZE));
+    for (size_t i = 0, count = 1, start_handle = 0; i < num_blocks; ++i)
+    {
+        auto block_size = DEFAULT_MERGE_BLOCK_SIZE;
+        LOG_INFO(logger, "generating block with size: {}", block_size);
+        blocks.push_back(DTTool::Bench::createBlock(
+            num_column,
+            start_handle,
+            block_size,
+            field,
+            sparse_ratio,
+            engine,
+            effective_size,
+            logger));
+        start_handle += block_size;
+        DB::DM::DMFileBlockOutputStream::BlockProperty property{};
+        property.gc_hint_version = count;
+        property.effective_num_rows = block_size;
+        properties.push_back(property);
+    }
+    LOG_INFO(
+        logger,
+        "Blocks generated, num_rows={} num_blocks={} num_column={} effective_size={}",
+        num_rows,
+        num_blocks,
+        num_column,
+        effective_size);
+    return {std::move(blocks), std::move(properties), effective_size};
 }
 
 
@@ -197,42 +257,50 @@ int benchEntry(const std::vector<std::string> & opts)
     bool encryption;
     // clang-format off
     options.add_options()
-        ("help", "show help")
-        ("version", bpo::value<size_t>()->default_value(2))
-        ("algorithm", bpo::value<std::string>()->default_value("xxh3"))
-        ("frame", bpo::value<size_t>()->default_value(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE))
-        ("column", bpo::value<size_t>()->default_value(100))
-        ("size", bpo::value<size_t>()->default_value(1000))
-        ("field", bpo::value<size_t>()->default_value(1024))
-        ("random", bpo::value<size_t>())
-        ("repeat", bpo::value<size_t>()->default_value(5))
-        ("encryption", bpo::bool_switch(&encryption))
-        ("workdir", bpo::value<String>()->default_value("/tmp"));
+        ("help", "Print help message and exit.")
+        ("version", bpo::value<size_t>()->default_value(2), "DTFile version. [available: 1, 2, 3]")
+        ("algorithm", bpo::value<std::string>()->default_value("xxh3"), "Checksum algorithm. [available: xxh3, city128, crc32, crc64, none]")
+        ("frame", bpo::value<size_t>()->default_value(TIFLASH_DEFAULT_CHECKSUM_FRAME_SIZE), "Checksum frame length.")
+        ("rows", bpo::value<size_t>()->default_value(131072), "Row number.")
+        ("columns", bpo::value<size_t>()->default_value(100), "Column number.")
+        ("sparse-ratio", bpo::value<double>()->default_value(0.0), "Sparse ratio. Null ratio for string columns.")
+        ("field", bpo::value<size_t>()->default_value(1024), "Field length limit.")
+        ("repeat", bpo::value<size_t>()->default_value(5), "Repeat times.")
+        ("write-repeat", bpo::value<size_t>()->default_value(5), "Write repeat times, 0 means no write operation.")
+        ("random", bpo::value<size_t>(), "Random seed. If not set, a random seed will be generated.")
+        ("encryption", bpo::bool_switch(&encryption), "Enable encryption.")
+        ("workdir", bpo::value<String>()->default_value("/tmp/test"), "Directory to create temporary data storage.")
+        ("clean", bpo::bool_switch(), "Clean up the workdir after the bench is done. If false, the workdir will not be cleaned up, please clean it manually if needed.");
+    ;
     // clang-format on
 
-    bpo::store(
-        bpo::command_line_parser(opts)
-            .options(options)
-            .style(bpo::command_line_style::unix_style | bpo::command_line_style::allow_long_disguise)
-            .run(),
-        vm);
+    try
+    {
+        bpo::store(
+            bpo::command_line_parser(opts)
+                .options(options)
+                .style(bpo::command_line_style::unix_style | bpo::command_line_style::allow_long_disguise)
+                .run(),
+            vm);
 
-    bpo::notify(vm);
+        bpo::notify(vm);
+    }
+    catch (const boost::wrapexcept<boost::program_options::unknown_option> & e)
+    {
+        std::cerr << e.what() << std::endl;
+        options.print(std::cerr);
+        return -EINVAL;
+    }
 
     if (vm.count("help") != 0)
     {
-        std::cout << BENCH_HELP << std::endl;
+        options.print(std::cerr);
         return 0;
     }
 
     try
     {
         auto version = vm["version"].as<size_t>();
-        if (version < 1 || version > 2)
-        {
-            std::cerr << "invalid dtfile version: " << version << std::endl;
-            return -EINVAL;
-        }
         auto algorithm_config = vm["algorithm"].as<std::string>();
         DB::ChecksumAlgo algorithm;
         if (algorithm_config == "xxh3")
@@ -261,50 +329,68 @@ int benchEntry(const std::vector<std::string> & opts)
             return -EINVAL;
         }
         auto frame = vm["frame"].as<size_t>();
-        auto column = vm["column"].as<size_t>();
-        auto size = vm["size"].as<size_t>();
+        auto num_rows = vm["rows"].as<size_t>();
+        auto num_cols = vm["columns"].as<size_t>();
+        auto sparse_ratio = vm["sparse-ratio"].as<double>();
         auto field = vm["field"].as<size_t>();
         auto repeat = vm["repeat"].as<size_t>();
-        size_t random;
+        auto write_repeat = vm["write-repeat"].as<size_t>();
+        size_t random_seed;
         if (vm.count("random"))
         {
-            random = vm["random"].as<size_t>();
+            random_seed = vm["random"].as<size_t>();
         }
         else
         {
-            random = std::random_device{}();
+            random_seed = std::random_device{}();
         }
         auto workdir = vm["workdir"].as<std::string>() + "/.tmp";
+        bool clean = vm["clean"].as<bool>();
+        if (write_repeat == 0)
+            clean = false;
         auto env = detail::ImitativeEnv{workdir, encryption};
+
         // env is up, use logger from now on
+        auto logger = Logger::get();
         SCOPE_EXIT({
-            if (Poco::File file(workdir); file.exists())
+            // Cleanup the workdir after the bench is done
+            if (clean)
             {
-                file.remove(true);
+                if (Poco::File file(workdir); file.exists())
+                {
+                    file.remove(true);
+                }
+            }
+            else
+            {
+                LOG_INFO(logger, "Workdir {} is not cleaned up, please clean it manually if needed", workdir);
             }
         });
-        static constexpr char SUMMARY_TEMPLATE_V1[] = "version:    {}\n"
-                                                      "column:     {}\n"
-                                                      "size:       {}\n"
-                                                      "field:      {}\n"
-                                                      "random:     {}\n"
-                                                      "encryption: {}\n"
-                                                      "workdir:    {}";
 
-        static constexpr char SUMMARY_TEMPLATE_V2[] = "version:    {}\n"
-                                                      "column:     {}\n"
-                                                      "size:       {}\n"
-                                                      "field:      {}\n"
-                                                      "random:     {}\n"
-                                                      "workdir:    {}\n"
-                                                      "frame:      {}\n"
-                                                      "encryption: {}\n"
-                                                      "algorithm:  {}";
+        static constexpr char SUMMARY_TEMPLATE_V2[] = "version: {} "
+                                                      "column: {} "
+                                                      "num_rows: {} "
+                                                      "field: {} "
+                                                      "random: {} "
+                                                      "encryption: {} "
+                                                      "workdir: {} "
+                                                      "frame: {} "
+                                                      "algorithm: {} ";
         DB::DM::DMConfigurationOpt opt = std::nullopt;
-        auto * logger = &Poco::Logger::get("DTTool::Bench");
         if (version == 1)
         {
-            LOG_INFO(logger, SUMMARY_TEMPLATE_V1, version, column, size, field, random, encryption, workdir);
+            LOG_INFO(
+                logger,
+                SUMMARY_TEMPLATE_V2,
+                version,
+                num_cols,
+                num_rows,
+                field,
+                random_seed,
+                encryption,
+                workdir,
+                "none",
+                "none");
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V2;
         }
         else
@@ -313,18 +399,15 @@ int benchEntry(const std::vector<std::string> & opts)
                 logger,
                 SUMMARY_TEMPLATE_V2,
                 version,
-                column,
-                size,
+                num_cols,
+                num_rows,
                 field,
-                random,
+                random_seed,
+                encryption,
                 workdir,
                 frame,
-                encryption,
                 algorithm_config);
             opt.emplace(std::map<std::string, std::string>{}, frame, algorithm);
-<<<<<<< HEAD
-            DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
-=======
             if (version == 2)
             {
                 // frame checksum
@@ -340,34 +423,20 @@ int benchEntry(const std::vector<std::string> & opts)
                 std::cerr << "invalid dtfile version: " << version << std::endl;
                 return -EINVAL;
             }
->>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
         }
 
         // start initialization
         size_t effective_size = 0;
-        auto engine = std::mt19937_64{random};
-        auto defines = DTTool::Bench::createColumnDefines(column);
+        auto defines = DTTool::Bench::createColumnDefines(num_cols);
         std::vector<DB::Block> blocks;
         std::vector<DB::DM::DMFileBlockOutputStream::BlockProperty> properties;
-        for (size_t i = 0, count = 1; i < size; count++)
+        if (write_repeat > 0)
         {
-            auto block_size = engine() % (size - i) + 1;
-            LOG_INFO(logger, "generating block with size: {}", block_size);
-            blocks.push_back(DTTool::Bench::createBlock(column, i, block_size, field, engine, effective_size));
-            i += block_size;
-            DB::DM::DMFileBlockOutputStream::BlockProperty property{};
-            property.gc_hint_version = count;
-            property.effective_num_rows = block_size;
-            properties.push_back(property);
+            std::tie(blocks, properties, effective_size)
+                = genBlocks(random_seed, num_rows, num_cols, field, sparse_ratio, logger);
         }
-<<<<<<< HEAD
-        LOG_INFO(logger, "effective_size: {}", effective_size);
-        LOG_INFO(logger, "start writing");
-        size_t write_records = 0;
-=======
 
         TableID table_id = 1;
->>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
         auto settings = DB::Settings();
         auto db_context = env.getContext();
         auto path_pool
@@ -388,33 +457,32 @@ int benchEntry(const std::vector<std::string> & opts)
             db_context->getSettingsRef());
         DB::DM::DMFilePtr dmfile = nullptr;
 
+        UInt64 file_id = 1;
+
         // Write
-        for (size_t i = 0; i < repeat; ++i)
+        if (write_repeat > 0)
         {
-<<<<<<< HEAD
-            using namespace std::chrono;
-            dmfile = DB::DM::DMFile::create(1, workdir, opt);
-            auto start = high_resolution_clock::now();
-=======
             size_t write_cost_ms = 0;
             LOG_INFO(logger, "start writing");
             for (size_t i = 0; i < write_repeat; ++i)
->>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
             {
-                auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfile, *defines);
-                stream.writePrefix();
-                for (size_t j = 0; j < blocks.size(); ++j)
+                using namespace std::chrono;
+                dmfile = DB::DM::DMFile::create(file_id, workdir, opt);
+                auto start = high_resolution_clock::now();
                 {
-                    stream.write(blocks[j], properties[j]);
+                    auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfile, *defines);
+                    stream.writePrefix();
+                    for (size_t j = 0; j < blocks.size(); ++j)
+                    {
+                        stream.write(blocks[j], properties[j]);
+                    }
+                    stream.writeSuffix();
                 }
-                stream.writeSuffix();
+                auto end = high_resolution_clock::now();
+                auto duration = duration_cast<milliseconds>(end - start).count();
+                write_cost_ms += duration;
+                LOG_INFO(logger, "attempt {} finished in {} ms", i, duration);
             }
-<<<<<<< HEAD
-            auto end = high_resolution_clock::now();
-            auto duration = duration_cast<nanoseconds>(end - start).count();
-            write_records += duration;
-            LOG_INFO(logger, "attemp {} finished in {} ns", i, duration);
-=======
             size_t effective_size_on_disk = dmfile->getBytesOnDisk();
             LOG_INFO(
                 logger,
@@ -426,22 +494,25 @@ int benchEntry(const std::vector<std::string> & opts)
                 " write throughput by compressed size: {:.3f}MiB/s",
                 (effective_size * 1'000.0 * repeat / write_cost_ms / 1024 / 1024),
                 (effective_size_on_disk * 1'000.0 * repeat / write_cost_ms / 1024 / 1024));
->>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
         }
 
-        LOG_INFO(
-            logger,
-            "average write time: {} ns",
-            (static_cast<double>(write_records) / static_cast<double>(repeat)));
-        LOG_INFO(
-            logger,
-            "throughput (MB/s): {}",
-            (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat)
-             / static_cast<double>(write_records) / 1024 / 1024));
-
         // Read
-        LOG_INFO(logger, "start reading");
-        size_t read_records = 0;
+        dmfile
+            = DB::DM::DMFile::restore(db_context->getFileProvider(), file_id, 0, workdir, DMFileMeta::ReadMode::all());
+        if (!dmfile)
+        {
+            LOG_ERROR(logger, "Failed to restore DMFile with file_id={}", file_id);
+            return -ENOENT;
+        }
+
+        size_t effective_size_read = dmfile->getBytes();
+        size_t effective_size_on_disk = dmfile->getBytesOnDisk();
+        LOG_INFO(
+            logger,
+            "start reading, effective_size={}, effective_size_on_disk={}",
+            effective_size_read,
+            effective_size_on_disk);
+        size_t read_cost_ms = 0;
         for (size_t i = 0; i < repeat; ++i)
         {
             using namespace std::chrono;
@@ -455,36 +526,38 @@ int benchEntry(const std::vector<std::string> & opts)
                                       *defines,
                                       {DB::DM::RowKeyRange::newAll(false, 1)},
                                       std::make_shared<ScanContext>());
-                for (size_t j = 0; j < blocks.size(); ++j)
+                while (true)
                 {
-                    TIFLASH_NO_OPTIMIZE(stream->read());
+                    auto block = stream->read();
+                    if (!block)
+                        break;
+                    TIFLASH_NO_OPTIMIZE(block);
                 }
                 stream->readSuffix();
             }
             auto end = high_resolution_clock::now();
-            auto duration = duration_cast<nanoseconds>(end - start).count();
-            read_records += duration;
-            LOG_INFO(logger, "attemp {} finished in {} ns", i, duration);
+            auto duration = duration_cast<milliseconds>(end - start).count();
+            read_cost_ms += duration;
+            LOG_INFO(logger, "attempt {} finished in {} ms", i, duration);
         }
 
-        LOG_INFO(logger, "average read time: {} ns", (static_cast<double>(read_records) / static_cast<double>(repeat)));
+        LOG_INFO(logger, "average read time: {} ms", (static_cast<double>(read_cost_ms) / static_cast<double>(repeat)));
         LOG_INFO(
             logger,
-<<<<<<< HEAD
-            "throughput (MB/s): {}",
-            (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat)
-             / static_cast<double>(read_records) / 1024 / 1024));
-=======
             "read throughput by uncompressed bytes: {:.3f}MiB/s;"
             " read throughput by compressed bytes: {:.3f}MiB/s",
             (effective_size_read * 1'000.0 * repeat / read_cost_ms / 1024 / 1024),
             (effective_size_on_disk * 1'000.0 * repeat / read_cost_ms / 1024 / 1024));
->>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
     }
     catch (const boost::wrapexcept<boost::bad_any_cast> & e)
     {
-        std::cerr << BENCH_HELP << std::endl; // no env available here
+        std::cerr << "invalid argument: " << e.what() << std::endl;
+        options.print(std::cerr); // no env available here
         return -EINVAL;
+    }
+    catch (...)
+    {
+        tryLogCurrentException(Logger::get(), "DTToolBench");
     }
 
     return 0;

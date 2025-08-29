@@ -189,6 +189,21 @@ UInt64 DMFilePackFilter::countUsePack() const
     return std::count_if(pack_res.cbegin(), pack_res.cend(), [](RSResult res) { return res.isUse(); });
 }
 
+void DMFilePackFilter::loadIndex(
+    ColumnIndexes & indexes,
+    const DMFilePtr & dmfile,
+    const FileProviderPtr & file_provider,
+    const MinMaxIndexCachePtr & index_cache,
+    bool set_cache_if_miss,
+    ColId col_id,
+    const ReadLimiterPtr & read_limiter,
+    const ScanContextPtr & scan_context)
+{
+    auto [type, minmax_index]
+        = loadIndex(*dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
+    indexes.emplace(col_id, RSIndex(type, minmax_index));
+}
+
 class MinMaxIndexLoader
 {
 public:
@@ -319,9 +334,8 @@ private:
     }
 };
 
-void DMFilePackFilter::loadIndex(
-    ColumnIndexes & indexes,
-    const DMFilePtr & dmfile,
+std::pair<DataTypePtr, MinMaxIndexPtr> DMFilePackFilter::loadIndex(
+    const DMFile & dmfile,
     const FileProviderPtr & file_provider,
     const MinMaxIndexCachePtr & index_cache,
     bool set_cache_if_miss,
@@ -329,24 +343,24 @@ void DMFilePackFilter::loadIndex(
     const ReadLimiterPtr & read_limiter,
     const ScanContextPtr & scan_context)
 {
-    const auto & type = dmfile->getColumnStat(col_id).type;
+    const auto & type = dmfile.getColumnStat(col_id).type;
     const auto file_name_base = DMFile::getFileNameBase(col_id);
 
     MinMaxIndexPtr minmax_index;
     if (index_cache && set_cache_if_miss)
     {
-        auto loader = MinMaxIndexLoader(*dmfile, file_provider, col_id, read_limiter, scan_context);
-        minmax_index = index_cache->getOrSet(dmfile->colIndexCacheKey(file_name_base), loader);
+        auto loader = MinMaxIndexLoader(dmfile, file_provider, col_id, read_limiter, scan_context);
+        minmax_index = index_cache->getOrSet(dmfile.colIndexCacheKey(file_name_base), loader);
     }
     else
     {
         // try load from the cache first
         if (index_cache)
-            minmax_index = index_cache->get(dmfile->colIndexCacheKey(file_name_base));
+            minmax_index = index_cache->get(dmfile.colIndexCacheKey(file_name_base));
         if (minmax_index == nullptr)
-            minmax_index = MinMaxIndexLoader(*dmfile, file_provider, col_id, read_limiter, scan_context)();
+            minmax_index = MinMaxIndexLoader(dmfile, file_provider, col_id, read_limiter, scan_context)();
     }
-    indexes.emplace(col_id, RSIndex(type, minmax_index));
+    return {type, minmax_index};
 }
 
 void DMFilePackFilter::tryLoadIndex(ColId col_id)

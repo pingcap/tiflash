@@ -40,8 +40,10 @@ Block createBlock(
     size_t start,
     size_t row_number,
     std::size_t limit,
+    double sparse_ratio,
     std::mt19937_64 & eng,
-    size_t & acc);
+    size_t & acc,
+    const LoggerPtr & logger);
 } // namespace DTTool::Bench
 
 namespace DTTool::Inspect
@@ -72,7 +74,8 @@ struct DTToolTest : public DB::base::TiFlashStorageTestBasic
         for (size_t i = 0, count = 1; i < size; count++)
         {
             auto block_size = engine() % (size - i) + 1;
-            blocks.push_back(DTTool::Bench::createBlock(column, i, block_size, field, engine, effective_size));
+            blocks.push_back(
+                DTTool::Bench::createBlock(column, i, block_size, field, 0.0, engine, effective_size, Logger::get()));
             i += block_size;
             DB::DM::DMFileBlockOutputStream::BlockProperty property{};
             property.gc_hint_version = count;
