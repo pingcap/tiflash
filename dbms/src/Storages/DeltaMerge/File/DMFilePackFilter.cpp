@@ -314,11 +314,10 @@ private:
         String raw_data(data_size, '\0');
         buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
-        // Then read from the buffer based on the raw data. The buffer size is min(estimated_size, checksum_frame_size)
+        // Then read from the buffer based on the raw data. The buffer size is min(data.size(), checksum_frame_size)
         auto buf = ChecksumReadBufferBuilder::build(
             std::move(raw_data),
             file_path,
-            data_size, // reduce the allocated buffer size and overhead
             dmfile.getConfiguration()->getChecksumAlgorithm(),
             dmfile.getConfiguration()->getChecksumFrameLength());
 
