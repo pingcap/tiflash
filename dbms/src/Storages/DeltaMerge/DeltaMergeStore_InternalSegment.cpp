@@ -857,7 +857,7 @@ namespace
 {
 struct LocalIndexOnDeltaVSBuildInfo
 {
-    ColumnFileTinyLocalIndexWriter::LocalIndexBuildInfo build_info;
+    ColumnFileTinyVectorIndexWriter::LocalIndexBuildInfo build_info;
     std::weak_ptr<DeltaValueSpace> delta_weak_ptr;
 };
 std::optional<LocalIndexOnDeltaVSBuildInfo> //
@@ -876,7 +876,7 @@ genBuildInfoFromDeltaVS(const SegmentPtr & segment, const LocalIndexInfosSnapsho
     if (!column_file_persisted_set)
         return std::nullopt;
     auto build_info
-        = ColumnFileTinyLocalIndexWriter::getLocalIndexBuildInfo(local_index_infos, column_file_persisted_set);
+        = ColumnFileTinyVectorIndexWriter::getLocalIndexBuildInfo(local_index_infos, column_file_persisted_set);
     if (!build_info.indexes_to_build || build_info.indexes_to_build->empty())
         return std::nullopt;
 
@@ -895,26 +895,6 @@ bool DeltaMergeStore::segmentEnsureDeltaLocalIndexAsync(const SegmentPtr & segme
     if (!local_index_infos_snap)
         return false;
 
-<<<<<<< HEAD
-    // Acquire a lock to make sure delta is not changed during the process.
-    auto lock = segment->getUpdateLock();
-    if (!lock)
-        return false;
-    auto column_file_persisted_set = segment->getDelta()->getPersistedFileSet();
-    if (!column_file_persisted_set)
-        return false;
-    auto build_info
-        = ColumnFileTinyVectorIndexWriter::getLocalIndexBuildInfo(local_index_infos_snap, column_file_persisted_set);
-    if (!build_info.indexes_to_build || build_info.indexes_to_build->empty())
-        return false;
-    // Use weak_ptr to avoid blocking gc.
-    auto delta_weak_ptr = std::weak_ptr<DeltaValueSpace>(segment->getDelta());
-    lock->unlock();
-
-    auto store_weak_ptr = weak_from_this();
-    auto tracing_id = fmt::format("segmentEnsureDeltaLocalIndexAsync<{}>", log->identifier());
-    auto workload = [store_weak_ptr, build_info, delta_weak_ptr, segment, tracing_id]() -> void {
-=======
     auto delta_vs_build_info = genBuildInfoFromDeltaVS(segment, local_index_infos_snap);
     if (!delta_vs_build_info)
     {
@@ -929,7 +909,6 @@ bool DeltaMergeStore::segmentEnsureDeltaLocalIndexAsync(const SegmentPtr & segme
     auto store_weak_ptr = weak_from_this();
     const auto source_segment_info = segment->simpleInfo();
     auto workload = [store_weak_ptr, delta_vs_build_info, source_segment_info]() -> void {
->>>>>>> 76a4ec4e27 (vector: Fix building vector index on DeltaVS may lead to delta compact failure (#10311))
         auto store = store_weak_ptr.lock();
         if (!store) // Store is destroyed before the task is executed.
             return;
@@ -995,20 +974,6 @@ bool DeltaMergeStore::segmentWaitDeltaLocalIndexReady(const SegmentPtr & segment
     if (!local_index_infos_snap)
         return true;
 
-<<<<<<< HEAD
-    // Acquire a lock to make sure delta is not changed during the process.
-    auto lock = segment->mustGetUpdateLock();
-    auto column_file_persisted_set = segment->getDelta()->getPersistedFileSet();
-    if (!column_file_persisted_set)
-        return false;
-    auto build_info
-        = ColumnFileTinyVectorIndexWriter::getLocalIndexBuildInfo(local_index_infos, column_file_persisted_set);
-    // Use weak_ptr to avoid blocking gc.
-    auto delta_weak_ptr = std::weak_ptr<DeltaValueSpace>(segment->getDelta());
-    lock.unlock();
-    if (!build_info.indexes_to_build || build_info.indexes_to_build->empty())
-        return false;
-=======
     auto delta_vs_build_info = genBuildInfoFromDeltaVS(segment, local_index_infos_snap);
     if (!delta_vs_build_info)
     {
@@ -1018,7 +983,6 @@ bool DeltaMergeStore::segmentWaitDeltaLocalIndexReady(const SegmentPtr & segment
             segment->simpleInfo());
         return true;
     }
->>>>>>> 76a4ec4e27 (vector: Fix building vector index on DeltaVS may lead to delta compact failure (#10311))
 
     auto segment_id = segment->segmentId();
     static constexpr size_t MAX_CHECK_TIME_SECONDS = 60; // 60s

@@ -351,13 +351,7 @@ bool DeltaValueSpace::flush(DMContext & context)
     SCOPE_EXIT({
         bool v = true;
         if (!is_flushing.compare_exchange_strong(v, false))
-<<<<<<< HEAD
-            throw Exception(
-                fmt::format("Delta is expected to be flushing, delta={}", simpleInfo()),
-                ErrorCodes::LOGICAL_ERROR);
-=======
-            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delta is expected to be flushing, delta={}", simple_info);
->>>>>>> 76a4ec4e27 (vector: Fix building vector index on DeltaVS may lead to delta compact failure (#10311))
+            throw Exception(ErrorCodes::LOGICAL_ERROR, "Delta is expected to be flushing, delta={}", simpleInfo());
     });
 
     LOG_DEBUG(log, "Flush start, delta={}", info());

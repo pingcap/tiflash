@@ -121,6 +121,38 @@ public:
             }));
     }
 
+    /// Only read one vector column.
+    void readVec(const RowKeyRange & range, const PushDownFilterPtr & filter, const ColumnWithTypeAndName & out)
+    {
+        readColumns(range, filter, {cdVec()}, {out});
+    }
+
+    void readColumns(
+        const RowKeyRange & range,
+        const PushDownFilterPtr & filter,
+        const ColumnDefines col_defs,
+        const ColumnsWithTypeAndName & out)
+    {
+        auto in = store->read(
+            *db_context,
+            db_context->getSettingsRef(),
+            col_defs,
+            {range},
+            /* num_streams= */ 1,
+            /* start_ts= */ std::numeric_limits<UInt64>::max(),
+            filter,
+            std::vector<RuntimeFilterPtr>{},
+            0,
+            TRACING_NAME,
+            /*keep_order=*/false)[0];
+        Strings cols_name;
+        for (const auto & cd : col_defs)
+        {
+            cols_name.push_back(cd.name);
+        }
+        ASSERT_INPUTSTREAM_COLS_UR(in, cols_name, out);
+    }
+
     void triggerMergeDelta() const
     {
         std::vector<SegmentPtr> all_segments;
@@ -415,9 +447,6 @@ try
     LOG_INFO(Logger::get(), "Resume sp_delta_index_built, delta index is not applied to the persisted set.");
 
     {
-<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_vector_index.cpp
-        read(range, EMPTY_FILTER, colVecFloat32("[0, 4)", vec_column_name, vec_column_id));
-=======
         SCOPED_TRACE("After delta-compact");
         const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
         // read from store
@@ -427,18 +456,17 @@ try
         // read with ANN query
         {
             const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
-            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
             // [0, 4) without vector index return all.
             readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
         }
         // read with ANN query
         {
             const auto ann_query_info = annQueryInfoTopK({.vec = {1.1}, .top_k = 1});
-            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
             // [0, 4) without vector index return all.
             readVec(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
         }
->>>>>>> 76a4ec4e27 (vector: Fix building vector index on DeltaVS may lead to delta compact failure (#10311)):dbms/src/Storages/DeltaMerge/Index/VectorIndex/tests/gtest_dm_delta_merge_store_vector_index.cpp
     }
 
     // trigger FlushCache for all segments
@@ -448,12 +476,6 @@ try
     waitDeltaIndexReady();
 
     {
-<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_vector_index.cpp
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {1.0});
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-        // [0, 4) without vector index return all.
-        read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
-=======
         SCOPED_TRACE("After local index built on delta");
         const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
         // read from store
@@ -463,7 +485,7 @@ try
         // read with ANN query
         {
             const auto ann_query_info = annQueryInfoTopK({.vec = {-127.0}, .top_k = 1});
-            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
             // with vector index built on delta, top 1 return 1.0
             readVec(range, filter, createVecFloat32Column<Array>({{0.0}}));
         }
@@ -512,14 +534,13 @@ try
         // read with ANN query
         {
             const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
-            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
             // [0, 10) without vector index return all.
             readVec(
                 range,
                 filter,
                 createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}, {4.0}, {5.0}, {6.0}, {7.0}, {8.0}, {9.0}}));
         }
->>>>>>> 76a4ec4e27 (vector: Fix building vector index on DeltaVS may lead to delta compact failure (#10311)):dbms/src/Storages/DeltaMerge/Index/VectorIndex/tests/gtest_dm_delta_merge_store_vector_index.cpp
     }
 
     // trigger FlushCache and build delta local index for all segments
@@ -528,12 +549,6 @@ try
     waitDeltaIndexReady();
 
     {
-<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/tests/gtest_dm_delta_merge_store_vector_index.cpp
-        const auto ann_query_info = createANNQueryInfo(vec_column_id, tipb::VectorDistanceMetric::L2, 1, {1.1});
-        auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
-        // [0, 4) without vector index return all.
-        read(range, filter, createVecFloat32Column<Array>({{0.0}, {1.0}, {2.0}, {3.0}}));
-=======
         const auto range = RowKeyRange::newAll(store->is_common_handle, store->rowkey_column_size);
         // read from store
         {
@@ -542,11 +557,10 @@ try
         // read with ANN query
         {
             const auto ann_query_info = annQueryInfoTopK({.vec = {1.0}, .top_k = 1});
-            auto filter = std::make_shared<PushDownExecutor>(ann_query_info);
+            auto filter = std::make_shared<PushDownFilter>(wrapWithANNQueryInfo(nullptr, ann_query_info));
             // with vector index built on delta, top 1 return 1.0
             readVec(range, filter, createVecFloat32Column<Array>({{1.0}}));
         }
->>>>>>> 76a4ec4e27 (vector: Fix building vector index on DeltaVS may lead to delta compact failure (#10311)):dbms/src/Storages/DeltaMerge/Index/VectorIndex/tests/gtest_dm_delta_merge_store_vector_index.cpp
     }
 }
 CATCH
