@@ -662,6 +662,7 @@ public:
     void setVersionChain(const GenericVersionChainPtr & version_chain_) { version_chain = version_chain_; }
     const GenericVersionChainPtr & getVersionChain() const { return version_chain; }
 
+    // Shrink the read_ranges by the segment real rowkey_range
     RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const;
 
 #ifndef DBMS_PUBLIC_GTEST
