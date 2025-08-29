@@ -963,7 +963,9 @@ UInt64 Segment::estimatedBytesOfInternalColumns(
     UInt64 start_ts)
 {
     // stable->getDMFiles() at least return one DMFile.
-    auto handle_size = read_snap->stable->getDMFiles().front()->getColumnStat(MutSup::extra_handle_id).avg_size;
+    const auto & dmfiles = read_snap->stable->getDMFiles();
+    RUNTIME_CHECK(!dmfiles.empty());
+    auto handle_size = dmfiles.front()->getColumnStat(MutSup::extra_handle_id).avg_size;
     if (handle_size == 0)
         handle_size = sizeof(UInt64);
     constexpr auto version_size = sizeof(UInt64);
@@ -1016,6 +1018,12 @@ BlockInputStreamPtr Segment::getInputStream(
             /*read_pack*/ {});
         pack_filter_results.push_back(result);
     }
+
+    // Building MVCC bitmap can be a resource-intensive operation that cannot be paused midway.
+    // To prevent scenarios where multiple segments concurrently build MVCC bitmaps but exhaust
+    // RU during execution and causing RU consumption to exceed limitations, we need to first
+    // estimate the cost of building the MVCC bitmap, pre-consume the corresponding RU,
+    // and then proceed with the building task.
     const auto & res_group_name = dm_context.scan_context->resource_group_name;
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {
