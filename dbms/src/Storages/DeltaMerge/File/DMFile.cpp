@@ -209,7 +209,7 @@ bool DMFile::isColIndexExist(const ColId & col_id) const
     }
 }
 
-size_t DMFile::colIndexSize(ColId id)
+size_t DMFile::colIndexSize(ColId id) const
 {
     if (useMetaV2())
     {

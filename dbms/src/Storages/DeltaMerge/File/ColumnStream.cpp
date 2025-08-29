@@ -96,23 +96,16 @@ private:
     {
         const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(reader.dmfile->meta.get());
         assert(dmfile_meta != nullptr);
-        const auto & info = dmfile_meta->merged_sub_file_infos.find(colMarkFileName(file_name_base));
-        if (info == dmfile_meta->merged_sub_file_infos.end())
+        const auto & info_iter = dmfile_meta->merged_sub_file_infos.find(colMarkFileName(file_name_base));
+        if (info_iter == dmfile_meta->merged_sub_file_infos.end())
         {
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown mark file {}", colMarkFileName(file_name_base));
         }
 
-<<<<<<< HEAD
-        auto file_path = dmfile_meta->mergedPath(info->second.number);
-        auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
-        auto offset = info->second.offset;
-        auto data_size = info->second.size;
-=======
         const auto & merged_file_info = info_iter->second;
         const auto file_path = dmfile_meta->mergedPath(merged_file_info.number);
         const auto offset = merged_file_info.offset;
         const auto data_size = merged_file_info.size;
->>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
 
         if (data_size == 0)
             return res;
@@ -123,13 +116,8 @@ private:
         auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
             reader.file_provider,
             file_path,
-<<<<<<< HEAD
-            encryp_path,
-            reader.dmfile->getConfiguration()->getChecksumFrameLength(),
-=======
             dmfile_meta->encryptionMergedPath(merged_file_info.number),
             std::min(data_size, reader.dmfile->getConfiguration()->getChecksumFrameLength()),
->>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
             read_limiter);
         buffer.seek(offset);
 
@@ -141,12 +129,7 @@ private:
         // Then read from the buffer based on the raw data. The buffer size is min(data.size(), checksum_frame_size)
         auto buf = ChecksumReadBufferBuilder::build(
             std::move(raw_data),
-<<<<<<< HEAD
-            reader.dmfile->colDataPath(file_name_base),
-            reader.dmfile->getConfiguration()->getChecksumFrameLength(),
-=======
             file_path, // just for debug, the buffer is part of the merged file
->>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
             reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
             reader.dmfile->getConfiguration()->getChecksumFrameLength());
         buf->readBig(reinterpret_cast<char *>(res->data()), bytes_size);
@@ -261,18 +244,10 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
             reader.dmfile->getConfiguration()->getChecksumFrameLength());
     }
 
-<<<<<<< HEAD
-    assert(info != dmfile_meta->merged_sub_file_infos.end());
-    auto file_path = dmfile_meta->mergedPath(info->second.number);
-    auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
-    auto offset = info->second.offset;
-    auto size = info->second.size;
-=======
     assert(info_iter != dmfile_meta->merged_sub_file_infos.end());
     auto file_path = dmfile_meta->mergedPath(info_iter->second.number);
     const auto offset = info_iter->second.offset;
     const auto data_size = info_iter->second.size;
->>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
 
     // First, read from merged file to get the raw data(contains the header)
     // Note that we use min(`data_size`, checksum_frame_size) as the size of buffer size in order
@@ -280,13 +255,8 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
     auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
         reader.file_provider,
         file_path,
-<<<<<<< HEAD
-        encryp_path,
-        reader.dmfile->getConfiguration()->getChecksumFrameLength(),
-=======
         dmfile_meta->encryptionMergedPath(info_iter->second.number),
         std::min(data_size, reader.dmfile->getConfiguration()->getChecksumFrameLength()),
->>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
         read_limiter);
     buffer.seek(offset);
 

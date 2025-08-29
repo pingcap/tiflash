@@ -121,7 +121,7 @@ public:
     size_t getBytesOnDisk() const
     {
         // This include column data & its index bytes in disk.
-        // Not counting DMFile's meta and pack stat, they are usally small enough to ignore.
+        // Not counting DMFile's meta and pack stat, they are usually small enough to ignore.
         size_t bytes = 0;
         for (const auto & c : meta->column_stats)
             bytes += c.second.serialized_bytes;
@@ -208,6 +208,9 @@ public:
     std::vector<String> listFilesForUpload() const;
     void switchToRemote(const S3::DMFileOID & oid) const;
 
+    // Be careful when using this function, it only return the reference to the meta.
+    const DMFileMetaPtr & getMeta() const { return meta; }
+
     UInt32 metaVersion() const { return meta->metaVersion(); }
 
 private:
@@ -267,7 +270,7 @@ private:
     {
         return Poco::File(colDataPath(file_name_base)).getSize();
     }
-    size_t colIndexSize(ColId id);
+    size_t colIndexSize(ColId id) const;
     enum class ColDataType
     {
         Elements,
