@@ -124,8 +124,6 @@ public:
 
     String toString() const;
 
-    UInt64 estimatedBytesOfInternalColumns(const RSOperatorPtr & rs_operator, UInt64 start_ts) const;
-
 private:
     std::optional<Remote::RNMVCCIndexCache::CacheKey> getRNMVCCIndexCacheKey(ReadMode read_mode) const;
     size_t prepareMVCCIndex(ReadMode read_mode);

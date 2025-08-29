@@ -166,7 +166,14 @@ DMFilePackFilterResults SegmentBitmapFilterTest::loadPackFilterResults(
     const SegmentSnapshotPtr & snap,
     const RowKeyRanges & ranges)
 {
-    return snap->stable->loadDMFilePackFilters(*dm_context, ranges, EMPTY_RS_OPERATOR);
+    DMFilePackFilterResults results;
+    results.reserve(snap->stable->getDMFiles().size());
+    for (const auto & file : snap->stable->getDMFiles())
+    {
+        auto pack_filter = DMFilePackFilter::loadFrom(*dm_context, file, true, ranges, EMPTY_RS_OPERATOR, {});
+        results.push_back(pack_filter);
+    }
+    return results;
 }
 
 void SegmentBitmapFilterTest::checkHandle(PageIdU64 seg_id, std::string_view seq_ranges, int caller_line)
@@ -227,15 +234,15 @@ void SegmentBitmapFilterTest::checkBitmap(const CheckBitmapOptions & opt)
 
 INSTANTIATE_TEST_CASE_P(MVCC, SegmentBitmapFilterTest, /* is_common_handle */ ::testing::Bool());
 
-SegmentReadTask SegmentBitmapFilterTest::createSegmentReadTask(RowKeyRanges read_ranges, Int64 enable_version_chain)
+UInt64 SegmentBitmapFilterTest::estimatedBytesOfInternalColumns(UInt64 start_ts, Int64 enable_version_chain)
 {
-    auto [seg, snap] = getSegmentForRead(SEG_ID);
-
-    auto & settings = db_context->getGlobalContext().getSettingsRef();
+    auto & ctx = db_context->getGlobalContext();
+    auto & settings = ctx.getSettingsRef();
+    Int64 original_enable_version_chain = settings.enable_version_chain;
     settings.set("enable_version_chain", std::to_string(enable_version_chain));
-
-    auto dm_context_ptr = DMContext::create(
-        db_context->getGlobalContext(),
+    SCOPE_EXIT({ settings.set("enable_version_chain", std::to_string(original_enable_version_chain)); });
+    auto dm_ctx = DMContext::create(
+        ctx,
         dm_context->path_pool,
         dm_context->storage_pool,
         dm_context->min_version,
@@ -244,10 +251,12 @@ SegmentReadTask SegmentBitmapFilterTest::createSegmentReadTask(RowKeyRanges read
         dm_context->pk_col_id,
         dm_context->is_common_handle,
         dm_context->rowkey_column_size,
-        settings,
+        ctx.getSettingsRef(),
         dm_context->scan_context,
         dm_context->tracing_id);
-    return SegmentReadTask{seg, snap, dm_context_ptr, read_ranges};
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto pack_filter_results = loadPackFilterResults(snap, {});
+    return Segment::estimatedBytesOfInternalColumns(*dm_ctx, snap, pack_filter_results, start_ts);
 }
 
 TEST_P(SegmentBitmapFilterTest, InMemory1)
@@ -262,10 +271,13 @@ try
         __LINE__);
 
     // Delta only
-    auto t = createSegmentReadTask();
-    auto bytes = t.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, std::numeric_limits<UInt64>::max());
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 1);
     ASSERT_EQ(bytes, 17 * 1000);
-    bytes = t.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, 0);
+    bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 0);
+    ASSERT_EQ(bytes, 17 * 1000);
+    bytes = estimatedBytesOfInternalColumns(0, 1);
+    ASSERT_EQ(bytes, 17 * 1000);
+    bytes = estimatedBytesOfInternalColumns(0, 0);
     ASSERT_EQ(bytes, 17 * 1000);
 }
 CATCH
@@ -412,11 +424,13 @@ try
         __LINE__);
 
     // Stable only
-    auto t = createSegmentReadTask();
-    auto bytes = t.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, std::numeric_limits<UInt64>::max());
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 0);
     ASSERT_EQ(bytes, 0);
-
-    bytes = t.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, 0);
+    bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 1);
+    ASSERT_EQ(bytes, 0);
+    bytes = estimatedBytesOfInternalColumns(0, 0);
+    ASSERT_GE(bytes, 17 * 1024);
+    bytes = estimatedBytesOfInternalColumns(0, 1);
     ASSERT_GE(bytes, 17 * 1024);
 }
 CATCH
@@ -460,15 +474,15 @@ try
         __LINE__);
 
     // Delta + Stable
-    auto t1 = createSegmentReadTask({}, /*enable_version_chain*/ 0);
-    auto bytes = t1.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, std::numeric_limits<UInt64>::max());
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 0);
     ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
-
-    auto t2 = createSegmentReadTask({}, /*enable_version_chain*/ 1);
-    bytes = t2.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, std::numeric_limits<UInt64>::max());
+    bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 1);
     ASSERT_GE(bytes, 17 * (10 + 55 + 7));
     ASSERT_LT(bytes, 17 * (1024 + 10 + 55 + 7));
-    bytes = t2.estimatedBytesOfInternalColumns(EMPTY_RS_OPERATOR, 0);
+
+    bytes = estimatedBytesOfInternalColumns(0, 0);
+    ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
+    bytes = estimatedBytesOfInternalColumns(0, 1);
     ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
 }
 CATCH

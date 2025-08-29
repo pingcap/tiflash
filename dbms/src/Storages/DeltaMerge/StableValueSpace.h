@@ -257,14 +257,9 @@ public:
          */
         AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & dm_context, const RowKeyRange & range) const;
 
-        DMFilePackFilterResults loadDMFilePackFilters(
-            const DMContext & dm_context,
-            const RowKeyRanges & real_ranges,
-            const RSOperatorPtr & rs_operator) const;
         UInt64 estimatedReadRows(
             const DMContext & dm_context,
-            const RowKeyRanges & real_ranges,
-            const RSOperatorPtr & rs_operator,
+            const DMFilePackFilterResults & pack_filter_results,
             UInt64 start_ts,
             bool use_delta_index) const;
 

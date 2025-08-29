@@ -662,9 +662,6 @@ public:
     void setVersionChain(const GenericVersionChainPtr & version_chain_) { version_chain = version_chain_; }
     const GenericVersionChainPtr & getVersionChain() const { return version_chain; }
 
-    // Shrink the read_ranges by the segment real rowkey_range
-    RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const;
-
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -731,6 +728,8 @@ public:
         bool relevant_place) const;
 
     static bool useCleanRead(const SegmentSnapshotPtr & segment_snap, const ColumnDefines & columns_to_read);
+    // Shrink the read_ranges by the segment real rowkey_range
+    RowKeyRanges shrinkRowKeyRanges(const RowKeyRanges & read_ranges) const;
     template <bool is_fast_scan>
     BitmapFilterPtr buildBitmapFilter(
         const DMContext & dm_context,
@@ -833,6 +832,12 @@ public:
         size_t expected_block_rows,
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
+
+    static UInt64 estimatedBytesOfInternalColumns(
+        const DMContext & dm_context,
+        const SegmentSnapshotPtr & read_snap,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:

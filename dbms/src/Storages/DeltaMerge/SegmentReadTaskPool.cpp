@@ -90,11 +90,6 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
     t->fetchPages();
     recordRemoteConnectionInfoIfNecessary(t);
 
-    if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
-    {
-        auto bytes = t->estimatedBytesOfInternalColumns(executor ? executor->rs_operator : EMPTY_RS_OPERATOR, start_ts);
-        LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
-    }
     t->initInputStream(
         columns_to_read,
         start_ts,

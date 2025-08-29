@@ -599,40 +599,16 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & dm_context,
     return ret;
 }
 
-DMFilePackFilterResults StableValueSpace::Snapshot::loadDMFilePackFilters(
-    const DMContext & dm_context,
-    const RowKeyRanges & real_ranges,
-    const RSOperatorPtr & rs_operator) const
-{
-    DMFilePackFilterResults pack_filter_results;
-    const auto & dmfiles = getDMFiles();
-    pack_filter_results.reserve(dmfiles.size());
-    for (const auto & dmfile : dmfiles)
-    {
-        auto result = DMFilePackFilter::loadFrom(
-            dm_context,
-            dmfile,
-            /*set_cache_if_miss*/ true,
-            real_ranges,
-            rs_operator,
-            /*read_pack*/ {});
-        pack_filter_results.push_back(result);
-    }
-    return pack_filter_results;
-}
-
 // Estimating the number of rows that need to be read to build the MVCC bitmap.
 // If a delta index is used, the relevant data must be read and merged with the delta.
 // For stable-only or version chain, no merging with the delta is required,
 // so reading occurs only when filtering of the pack is necessary.
 UInt64 StableValueSpace::Snapshot::estimatedReadRows(
     const DMContext & dm_context,
-    const RowKeyRanges & real_ranges,
-    const RSOperatorPtr & rs_operator,
+    const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
     bool use_delta_index) const
 {
-    auto pack_filter_results = loadDMFilePackFilters(dm_context, real_ranges, rs_operator);
     const auto & dmfiles = getDMFiles();
     auto file_provider = dm_context.global_context.getFileProvider();
     UInt64 rows = 0;
