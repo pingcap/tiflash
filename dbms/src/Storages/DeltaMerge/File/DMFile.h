@@ -528,6 +528,7 @@ private:
     friend class DMFileWriterRemote;
     friend class DMFileReader;
     friend class MarkLoader;
+    friend class MinMaxIndexLoader;
     friend class ColumnReadStream;
     friend class DMFilePackFilter;
     friend class DMFileBlockInputStreamBuilder;
