@@ -179,10 +179,100 @@ protected:
     }
 };
 
+<<<<<<< HEAD
 TEST_F(SegmentBitmapFilterTest, InMemory1)
 try
 {
     runTestCase(TestCase("d_mem:[0, 1000)", 1000, "[0, 1000)", "[0, 1000)"));
+=======
+void SegmentBitmapFilterTest::checkBitmap(const CheckBitmapOptions & opt)
+{
+    auto info = opt.toDebugString();
+    auto [seg, snap] = getSegmentForRead(opt.seg_id);
+
+    const auto read_ranges
+        = shrinkRowKeyRanges(seg->getRowKeyRange(), opt.read_ranges.value_or(RowKeyRanges{seg->getRowKeyRange()}));
+
+    const auto & rs_filter_results
+        = opt.rs_filter_results.empty() ? loadPackFilterResults(snap, read_ranges) : opt.rs_filter_results;
+
+    auto bitmap_filter_version_chain = seg->buildMVCCBitmapFilter(
+        *dm_context,
+        snap,
+        read_ranges,
+        rs_filter_results,
+        opt.read_ts,
+        DEFAULT_BLOCK_SIZE,
+        /*enable_version_chain*/ true);
+
+    auto bitmap_filter_delta_index = seg->buildMVCCBitmapFilter(
+        *dm_context,
+        snap,
+        read_ranges,
+        rs_filter_results,
+        opt.read_ts,
+        DEFAULT_BLOCK_SIZE,
+        /*enable_version_chain*/ false);
+
+    if (opt.expected_bitmap)
+        ASSERT_EQ(bitmap_filter_version_chain->toDebugString(), *(opt.expected_bitmap))
+            << fmt::format("{}, bitmap_filter_delta_index={}", info, bitmap_filter_delta_index->toDebugString());
+
+    ASSERT_EQ(*bitmap_filter_delta_index, *bitmap_filter_version_chain) << fmt::format(
+        "{}, bitmap_filter_delta_index={}, bitmap_filter_version_chain={}",
+        info,
+        bitmap_filter_delta_index->toDebugString(),
+        bitmap_filter_version_chain->toDebugString());
+}
+
+INSTANTIATE_TEST_CASE_P(MVCC, SegmentBitmapFilterTest, /* is_common_handle */ ::testing::Bool());
+
+UInt64 SegmentBitmapFilterTest::estimatedBytesOfInternalColumns(UInt64 start_ts, Int64 enable_version_chain)
+{
+    auto & ctx = db_context->getGlobalContext();
+    auto & settings = ctx.getSettingsRef();
+    Int64 original_enable_version_chain = settings.enable_version_chain;
+    settings.set("enable_version_chain", std::to_string(enable_version_chain));
+    SCOPE_EXIT({ settings.set("enable_version_chain", std::to_string(original_enable_version_chain)); });
+    auto dm_ctx = DMContext::create(
+        ctx,
+        dm_context->path_pool,
+        dm_context->storage_pool,
+        dm_context->min_version,
+        dm_context->keyspace_id,
+        dm_context->physical_table_id,
+        dm_context->pk_col_id,
+        dm_context->is_common_handle,
+        dm_context->rowkey_column_size,
+        ctx.getSettingsRef(),
+        dm_context->scan_context,
+        dm_context->tracing_id);
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto pack_filter_results = loadPackFilterResults(snap, {});
+    return Segment::estimatedBytesOfInternalColumns(*dm_ctx, snap, pack_filter_results, start_ts);
+}
+
+TEST_P(SegmentBitmapFilterTest, InMemory1)
+try
+{
+    runTestCaseGeneric(
+        TestCase{
+            .seg_data = "d_mem:[0, 1000)",
+            .expected_size = 1000,
+            .expected_row_id = "[0, 1000)",
+            .expected_handle = "[0, 1000)"},
+        __LINE__);
+
+    // Delta only
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 1);
+    ASSERT_EQ(bytes, 17 * 1000);
+    bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 0);
+    ASSERT_EQ(bytes, 17 * 1000);
+    bytes = estimatedBytesOfInternalColumns(0, 1);
+    ASSERT_EQ(bytes, 17 * 1000);
+    bytes = estimatedBytesOfInternalColumns(0, 0);
+    ASSERT_EQ(bytes, 17 * 1000);
+>>>>>>> c34abae6cd (Storages: Fix MVCC bitmap read bytes estimation (#10378))
 }
 CATCH
 
@@ -271,7 +361,27 @@ CATCH
 TEST_F(SegmentBitmapFilterTest, Stable1)
 try
 {
+<<<<<<< HEAD
     runTestCase(TestCase{"s:[0, 1024)", 1024, "[0, 1024)", "[0, 1024)"});
+=======
+    runTestCaseGeneric(
+        TestCase{
+            .seg_data = "s:[0, 1024)",
+            .expected_size = 1024,
+            .expected_row_id = "[0, 1024)",
+            .expected_handle = "[0, 1024)"},
+        __LINE__);
+
+    // Stable only
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 0);
+    ASSERT_EQ(bytes, 0);
+    bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 1);
+    ASSERT_EQ(bytes, 0);
+    bytes = estimatedBytesOfInternalColumns(0, 0);
+    ASSERT_GE(bytes, 17 * 1024);
+    bytes = estimatedBytesOfInternalColumns(0, 1);
+    ASSERT_GE(bytes, 17 * 1024);
+>>>>>>> c34abae6cd (Storages: Fix MVCC bitmap read bytes estimation (#10378))
 }
 CATCH
 
@@ -297,11 +407,33 @@ CATCH
 TEST_F(SegmentBitmapFilterTest, Mix)
 try
 {
+<<<<<<< HEAD
     runTestCase(TestCase{
         "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
         946,
         "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
         "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"});
+=======
+    runTestCaseGeneric(
+        TestCase{
+            .seg_data = "s:[0, 1024)|d_dr:[128, 256)|d_tiny_del:[300, 310)|d_tiny:[200, 255)|d_mem:[298, 305)",
+            .expected_size = 946,
+            .expected_row_id = "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
+            .expected_handle = "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"},
+        __LINE__);
+
+    // Delta + Stable
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 0);
+    ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
+    bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max(), 1);
+    ASSERT_GE(bytes, 17 * (10 + 55 + 7));
+    ASSERT_LT(bytes, 17 * (1024 + 10 + 55 + 7));
+
+    bytes = estimatedBytesOfInternalColumns(0, 0);
+    ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
+    bytes = estimatedBytesOfInternalColumns(0, 1);
+    ASSERT_GE(bytes, 17 * (1024 + 10 + 55 + 7));
+>>>>>>> c34abae6cd (Storages: Fix MVCC bitmap read bytes estimation (#10378))
 }
 CATCH
 
