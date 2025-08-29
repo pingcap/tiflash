@@ -65,6 +65,38 @@ public:
         return wb.str();
     }
 
+    struct AnnQueryInfoTopKOptions
+    {
+        std::vector<float> vec;
+        // note: when set to true, vector cd must be excluded in the read columns and distance cd must be included (at the end of read columns)
+        // to follow the protocol.
+        bool enable_distance_proj = false;
+        UInt32 top_k;
+        Int64 column_id = 100; // vec_column_id
+        Int64 index_id = 0;
+        tipb::VectorDistanceMetric distance_metric = tipb::VectorDistanceMetric::L2;
+        bool vector_is_nullable = false; // indicate if vector column is nullable type
+    };
+
+    static ANNQueryInfoPtr annQueryInfoTopK(AnnQueryInfoTopKOptions options)
+    {
+        auto ann_query_info = std::make_shared<tipb::ANNQueryInfo>();
+        ann_query_info->set_query_type(tipb::ANNQueryType::OrderBy);
+        ann_query_info->set_distance_metric(options.distance_metric);
+        ann_query_info->set_top_k(options.top_k);
+        // set columnInfo
+        ann_query_info->set_column_id(options.column_id);
+        // ann_query_info->mutable_column()->set_tp(TiDB::TP::TypeTiDBVectorFloat32);
+        // if (!options.vector_is_nullable)
+        //     ann_query_info->mutable_column()->set_flag(1); // 1 is NotNullFlag (1 << 0)
+
+        // ann_query_info->set_enable_distance_proj(options.enable_distance_proj);
+        ann_query_info->set_ref_vec_f32(encodeVectorFloat32(options.vec));
+        if (options.index_id != 0)
+            ann_query_info->set_index_id(options.index_id);
+        return ann_query_info;
+    }
+
     ColumnDefine cdVec() const
     {
         // When used in read, no need to assign vector_index.
