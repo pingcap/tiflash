@@ -956,6 +956,32 @@ ALWAYS_INLINE void sanitizeCheckReadRanges(
 #endif
 }
 
+UInt64 Segment::estimatedBytesOfInternalColumns(
+    const DMContext & dm_context,
+    const SegmentSnapshotPtr & read_snap,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts)
+{
+    // stable->getDMFiles() at least return one DMFile.
+    const auto & dmfiles = read_snap->stable->getDMFiles();
+    RUNTIME_CHECK(!dmfiles.empty());
+    auto handle_size = dmfiles.front()->getColumnStat(MutSup::extra_handle_id).avg_size;
+    if (handle_size == 0)
+        handle_size = sizeof(UInt64);
+    constexpr auto version_size = sizeof(UInt64);
+    constexpr auto delmark_size = sizeof(UInt8);
+
+    // For delta, rs_filter does not filter rows, so we need to read all rows.
+    const auto delta_read_rows = read_snap->delta->getRows();
+    // For Stable, rs_filter may filter rows.
+    const auto stable_read_rows = read_snap->stable->estimatedReadRows(
+        dm_context,
+        pack_filter_results,
+        start_ts,
+        /*use_delta_index*/ delta_read_rows != 0 && !dm_context.isVersionChainEnabled());
+    return (handle_size + version_size + delmark_size) * (delta_read_rows + stable_read_rows);
+}
+
 BlockInputStreamPtr Segment::getInputStream(
     const ReadMode & read_mode,
     const DMContext & dm_context,
@@ -991,6 +1017,19 @@ BlockInputStreamPtr Segment::getInputStream(
             executor ? executor->rs_operator : EMPTY_RS_OPERATOR,
             /*read_pack*/ {});
         pack_filter_results.push_back(result);
+    }
+
+    // Building MVCC bitmap can be a resource-intensive operation that cannot be paused midway.
+    // To prevent scenarios where multiple segments concurrently build MVCC bitmaps but exhaust
+    // RU during execution and causing RU consumption to exceed limitations, we need to first
+    // estimate the cost of building the MVCC bitmap, pre-consume the corresponding RU,
+    // and then proceed with the building task.
+    const auto & res_group_name = dm_context.scan_context->resource_group_name;
+    if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
+    {
+        const auto keyspace_id = dm_context.scan_context->keyspace_id;
+        auto bytes = estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filter_results, start_ts);
+        LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
     }
 
     switch (read_mode)
