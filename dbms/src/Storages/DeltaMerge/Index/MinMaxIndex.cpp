@@ -606,4 +606,18 @@ RSResult MinMaxIndex::addNullIfHasNull(RSResult value_result, size_t i) const
         value_result.setHasNull();
     return value_result;
 }
+
+MinMaxIndex::Cell MinMaxIndex::getCell(size_t pack_index) const
+{
+    Cell cell;
+    if (has_null_marks[pack_index])
+        cell.has_null = true;
+    if (has_value_marks[pack_index])
+    {
+        cell.has_value = true;
+        minmaxes->get(pack_index * 2, cell.min);
+        minmaxes->get(pack_index * 2 + 1, cell.max);
+    }
+    return cell;
+}
 } // namespace DB::DM
