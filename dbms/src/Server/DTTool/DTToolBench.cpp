@@ -322,7 +322,25 @@ int benchEntry(const std::vector<std::string> & opts)
                 encryption,
                 algorithm_config);
             opt.emplace(std::map<std::string, std::string>{}, frame, algorithm);
+<<<<<<< HEAD
             DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
+=======
+            if (version == 2)
+            {
+                // frame checksum
+                DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V3;
+            }
+            else if (version == 3)
+            {
+                // DMFileMetaV2
+                DB::STORAGE_FORMAT_CURRENT = DB::STORAGE_FORMAT_V5;
+            }
+            else
+            {
+                std::cerr << "invalid dtfile version: " << version << std::endl;
+                return -EINVAL;
+            }
+>>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
         }
 
         // start initialization
@@ -342,15 +360,20 @@ int benchEntry(const std::vector<std::string> & opts)
             property.effective_num_rows = block_size;
             properties.push_back(property);
         }
+<<<<<<< HEAD
         LOG_INFO(logger, "effective_size: {}", effective_size);
         LOG_INFO(logger, "start writing");
         size_t write_records = 0;
+=======
+
+        TableID table_id = 1;
+>>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
         auto settings = DB::Settings();
         auto db_context = env.getContext();
         auto path_pool
             = std::make_shared<DB::StoragePathPool>(db_context->getPathPool().withTable("test", "t1", false));
         auto storage_pool
-            = std::make_shared<DB::DM::StoragePool>(*db_context, NullspaceID, /*ns_id*/ 1, *path_pool, "test.t1");
+            = std::make_shared<DB::DM::StoragePool>(*db_context, NullspaceID, table_id, *path_pool, "test.t1");
         auto dm_settings = DB::DM::DeltaMergeStore::Settings{};
         auto dm_context = DB::DM::DMContext::createUnique(
             *db_context,
@@ -358,7 +381,12 @@ int benchEntry(const std::vector<std::string> & opts)
             storage_pool,
             /*min_version_*/ 0,
             NullspaceID,
+<<<<<<< HEAD
             /*physical_table_id*/ 1,
+=======
+            table_id,
+            /*pk_col_id*/ 0,
+>>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
             false,
             1,
             db_context->getSettingsRef());
@@ -367,9 +395,15 @@ int benchEntry(const std::vector<std::string> & opts)
         // Write
         for (size_t i = 0; i < repeat; ++i)
         {
+<<<<<<< HEAD
             using namespace std::chrono;
             dmfile = DB::DM::DMFile::create(1, workdir, opt);
             auto start = high_resolution_clock::now();
+=======
+            size_t write_cost_ms = 0;
+            LOG_INFO(logger, "start writing");
+            for (size_t i = 0; i < write_repeat; ++i)
+>>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
             {
                 auto stream = DB::DM::DMFileBlockOutputStream(*db_context, dmfile, *defines);
                 stream.writePrefix();
@@ -379,10 +413,24 @@ int benchEntry(const std::vector<std::string> & opts)
                 }
                 stream.writeSuffix();
             }
+<<<<<<< HEAD
             auto end = high_resolution_clock::now();
             auto duration = duration_cast<nanoseconds>(end - start).count();
             write_records += duration;
             LOG_INFO(logger, "attemp {} finished in {} ns", i, duration);
+=======
+            size_t effective_size_on_disk = dmfile->getBytesOnDisk();
+            LOG_INFO(
+                logger,
+                "average write time: {} ms",
+                (static_cast<double>(write_cost_ms) / static_cast<double>(repeat)));
+            LOG_INFO(
+                logger,
+                "write throughput by uncompressed size: {:.3f}MiB/s;"
+                " write throughput by compressed size: {:.3f}MiB/s",
+                (effective_size * 1'000.0 * repeat / write_cost_ms / 1024 / 1024),
+                (effective_size_on_disk * 1'000.0 * repeat / write_cost_ms / 1024 / 1024));
+>>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
         }
 
         LOG_INFO(
@@ -426,9 +474,16 @@ int benchEntry(const std::vector<std::string> & opts)
         LOG_INFO(logger, "average read time: {} ns", (static_cast<double>(read_records) / static_cast<double>(repeat)));
         LOG_INFO(
             logger,
+<<<<<<< HEAD
             "throughput (MB/s): {}",
             (static_cast<double>(effective_size) * 1'000'000'000 * static_cast<double>(repeat)
              / static_cast<double>(read_records) / 1024 / 1024));
+=======
+            "read throughput by uncompressed bytes: {:.3f}MiB/s;"
+            " read throughput by compressed bytes: {:.3f}MiB/s",
+            (effective_size_read * 1'000.0 * repeat / read_cost_ms / 1024 / 1024),
+            (effective_size_on_disk * 1'000.0 * repeat / read_cost_ms / 1024 / 1024));
+>>>>>>> b5beeee9fb (Storage: Fix TableScan performance regression under wide-sparse table (#10379))
     }
     catch (const boost::wrapexcept<boost::bad_any_cast> & e)
     {
