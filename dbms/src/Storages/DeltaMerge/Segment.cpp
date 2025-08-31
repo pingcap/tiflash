@@ -932,16 +932,47 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
         Logger::get(dm_context.tracing_id));
 }
 
+std::vector<DMFilePackFilter> Segment::loadDMFilePackFilters(
+    const DMFiles & dmfiles,
+    const MinMaxIndexCachePtr & index_cache,
+    const RowKeyRanges & rowkey_ranges,
+    const RSOperatorPtr & rs_filter,
+    const FileProviderPtr & file_provider,
+    const ReadLimiterPtr & read_limiter,
+    const ScanContextPtr & scan_context,
+    const String & tracing_id,
+    const ReadTag & read_tag)
+{
+    std::vector<DMFilePackFilter> pack_filters;
+    pack_filters.reserve(dmfiles.size());
+    for (const auto & dmfile : dmfiles)
+    {
+        auto pack_filter = DMFilePackFilter::loadFrom(
+            dmfile,
+            index_cache,
+            /*set_cache_if_miss*/ true,
+            rowkey_ranges,
+            rs_filter,
+            /*read_packs*/ {},
+            file_provider,
+            read_limiter,
+            scan_context,
+            tracing_id,
+            read_tag);
+        pack_filters.emplace_back(std::move(pack_filter));
+    }
+    return pack_filters;
+}
+
 UInt64 Segment::estimatedBytesOfInternalColumns(
-    const DMContext & dm_context,
     const SegmentSnapshotPtr & read_snap,
-    const DMFilePackFilterResults & pack_filter_results,
+    std::vector<DMFilePackFilter> & pack_filters,
     UInt64 start_ts)
 {
     // stable->getDMFiles() at least return one DMFile.
     const auto & dmfiles = read_snap->stable->getDMFiles();
     RUNTIME_CHECK(!dmfiles.empty());
-    auto handle_size = dmfiles.front()->getColumnStat(MutSup::extra_handle_id).avg_size;
+    auto handle_size = dmfiles.front()->getColumnStat(EXTRA_HANDLE_COLUMN_ID).avg_size;
     if (handle_size == 0)
         handle_size = sizeof(UInt64);
     constexpr auto version_size = sizeof(UInt64);
@@ -951,10 +982,9 @@ UInt64 Segment::estimatedBytesOfInternalColumns(
     const auto delta_read_rows = read_snap->delta->getRows();
     // For Stable, rs_filter may filter rows.
     const auto stable_read_rows = read_snap->stable->estimatedReadRows(
-        dm_context,
-        pack_filter_results,
+        pack_filters,
         start_ts,
-        /*use_delta_index*/ delta_read_rows != 0 && !dm_context.isVersionChainEnabled());
+        /*use_delta_index*/ delta_read_rows != 0);
     return (handle_size + version_size + delmark_size) * (delta_read_rows + stable_read_rows);
 }
 
@@ -975,27 +1005,6 @@ BlockInputStreamPtr Segment::getInputStream(
         expected_block_size,
         columns_to_read,
         segment_snap->stable->stable);
-<<<<<<< HEAD
-=======
-    auto real_ranges = shrinkRowKeyRanges(read_ranges);
-    if (read_ranges.empty())
-        return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
-
-    // load DMilePackFilterResult for each DMFile
-    // Note that the ranges must be shrunk by the segment key-range
-    DMFilePackFilterResults pack_filter_results;
-    pack_filter_results.reserve(segment_snap->stable->getDMFiles().size());
-    for (const auto & dmfile : segment_snap->stable->getDMFiles())
-    {
-        auto result = DMFilePackFilter::loadFrom(
-            dm_context,
-            dmfile,
-            /*set_cache_if_miss*/ true,
-            real_ranges,
-            executor ? executor->rs_operator : EMPTY_RS_OPERATOR,
-            /*read_pack*/ {});
-        pack_filter_results.push_back(result);
-    }
 
     // Building MVCC bitmap can be a resource-intensive operation that cannot be paused midway.
     // To prevent scenarios where multiple segments concurrently build MVCC bitmaps but exhaust
@@ -1005,12 +1014,24 @@ BlockInputStreamPtr Segment::getInputStream(
     const auto & res_group_name = dm_context.scan_context->resource_group_name;
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {
-        const auto keyspace_id = dm_context.scan_context->keyspace_id;
-        auto bytes = estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filter_results, start_ts);
-        LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
+        auto real_ranges = shrinkRowKeyRanges(read_ranges);
+        if (!real_ranges.empty())
+        {
+            auto pack_filters = loadDMFilePackFilters(
+                segment_snap->stable->getDMFiles(),
+                dm_context.global_context.getMinMaxIndexCache(),
+                real_ranges,
+                filter ? filter->rs_operator : EMPTY_RS_OPERATOR,
+                dm_context.global_context.getFileProvider(),
+                dm_context.global_context.getReadLimiter(),
+                dm_context.scan_context,
+                dm_context.tracing_id,
+                ReadTag::MVCC);
+            auto bytes = estimatedBytesOfInternalColumns(segment_snap, pack_filters, start_ts);
+            LocalAdmissionController::global_instance->consumeBytesResource(res_group_name, bytesToRU(bytes));
+        }
     }
 
->>>>>>> c34abae6cd (Storages: Fix MVCC bitmap read bytes estimation (#10378))
     switch (read_mode)
     {
     case ReadMode::Normal:

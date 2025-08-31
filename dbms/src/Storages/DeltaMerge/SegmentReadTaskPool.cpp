@@ -89,14 +89,6 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
 
     t->fetchPages();
 
-<<<<<<< HEAD
-    if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
-    {
-        auto bytes = t->read_snapshot->estimatedBytesOfInternalColumns();
-        LocalAdmissionController::global_instance->consumeBytesResource(res_group_name, bytesToRU(bytes));
-    }
-=======
->>>>>>> c34abae6cd (Storages: Fix MVCC bitmap read bytes estimation (#10378))
     t->initInputStream(
         columns_to_read,
         start_ts,
