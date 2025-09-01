@@ -50,6 +50,19 @@ public:
             total_rows += column_file->getRows();
             total_bytes += column_file->getBytes();
         }
+
+        String toString() const
+        {
+            return fmt::format(
+                "Task{{to_compact_size={} first_file_index={} total_rows={} total_bytes={} is_trivial_move={} "
+                "result_rows={}}}",
+                to_compact.size(),
+                first_file_index,
+                total_rows,
+                total_bytes,
+                is_trivial_move,
+                result ? result->getRows() : 0);
+        }
     };
     using Tasks = std::vector<Task>;
 
