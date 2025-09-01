@@ -158,6 +158,13 @@ void ConcatSkippableBlockInputStream<need_row_id>::addReadBytes(UInt64 bytes)
     {
         scan_context->user_read_bytes += bytes;
         lac_bytes_collector.collect(bytes);
+        if (!scan_context->resource_group_name.empty())
+            TiFlashMetrics::instance()
+                .getStorageRUReadBytesCounter(
+                    scan_context->keyspace_id,
+                    scan_context->resource_group_name,
+                    ReadRUType::QUERY_READ)
+                .Increment(bytes);
     }
 }
 

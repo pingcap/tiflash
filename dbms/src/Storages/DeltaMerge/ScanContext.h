@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -507,6 +508,18 @@ public:
     void setStreamCost(uint64_t local_min_ns, uint64_t local_max_ns, uint64_t remote_min_ns, uint64_t remote_max_ns);
 
     static void initCurrentInstanceId(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
+
+    void addBuildMVCCBitmapReadBytes(UInt64 bytes)
+    {
+        user_read_bytes += bytes;
+        if (!resource_group_name.empty())
+            TiFlashMetrics::instance()
+                .getStorageRUReadBytesCounter(
+                    keyspace_id,
+                    resource_group_name,
+                    ReadRUType::MVCC_READ)
+                .Increment(bytes);
+    }
 
 private:
     void serializeRegionNumOfInstance(tipb::TiFlashScanContext & proto) const;
