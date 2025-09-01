@@ -47,14 +47,10 @@ private:
     void partitionAndWriteBlocksV1();
 
 private:
-    Int64 max_buffered_rows;
-    UInt64 max_buffered_bytes;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
     std::vector<Int64> partition_col_ids;
     TiDB::TiDBCollators collators;
-    size_t rows_in_blocks;
-    size_t bytes_in_blocks;
     uint16_t partition_num;
     DataTypes expected_types;
     MPPDataPacketVersion data_codec_version;

@@ -38,12 +38,8 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
     UInt64 max_buffered_bytes_,
     DAGContext & dag_context_)
     : DAGResponseWriter(records_per_chunk_, dag_context_)
-    , max_buffered_rows(batch_send_min_limit_)
-    , max_buffered_bytes(max_buffered_bytes_)
     , writer(writer_)
 {
-    rows_in_blocks = 0;
-    bytes_in_blocks = 0;
     switch (dag_context.encode_type)
     {
     case tipb::EncodeType::TypeDefault:
@@ -59,15 +55,20 @@ StreamingDAGResponseWriter<StreamWriterPtr>::StreamingDAGResponseWriter(
         throw TiFlashException("Unsupported EncodeType", Errors::Coprocessor::Internal);
     }
     /// For other encode types, we will use records_per_chunk to control the batch size sent.
-    max_buffered_rows
-        = dag_context.encode_type == tipb::EncodeType::TypeCHBlock ? max_buffered_rows : (records_per_chunk - 1);
+    auto batch_send_min_limit
+        = dag_context.encode_type == tipb::EncodeType::TypeCHBlock ? batch_send_min_limit_ : (records_per_chunk - 1);
+    if (batch_send_min_limit <= 0)
+        max_buffered_rows = 1;
+    else
+        max_buffered_rows = static_cast<UInt64>(batch_send_min_limit);
+    max_buffered_bytes = max_buffered_bytes_;
 }
 
 template <class StreamWriterPtr>
 WriteResult StreamingDAGResponseWriter<StreamWriterPtr>::flush()
 {
     has_pending_flush = false;
-    if (rows_in_blocks > 0)
+    if (buffered_rows > 0)
     {
         auto wait_res = waitForWritable();
         if (wait_res == WaitResult::Ready)
@@ -99,12 +100,12 @@ WriteResult StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & blo
     size_t rows = block.rows();
     if (rows > 0)
     {
-        rows_in_blocks += rows;
-        bytes_in_blocks += block.allocatedBytes();
+        buffered_rows += rows;
+        buffered_bytes += block.allocatedBytes();
         blocks.push_back(block);
     }
 
-    if (static_cast<Int64>(rows_in_blocks) > max_buffered_rows || bytes_in_blocks > max_buffered_bytes)
+    if (needFlush())
     {
         return flush();
     }
@@ -161,8 +162,8 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::encodeThenWriteBlocks()
     }
 
     assert(blocks.empty());
-    rows_in_blocks = 0;
-    bytes_in_blocks = 0;
+    buffered_rows = 0;
+    buffered_bytes = 0;
     writer->write(response.getResponse());
 }
 

@@ -43,12 +43,12 @@ FineGrainedShuffleWriter<ExchangeWriterPtr>::FineGrainedShuffleWriter(
     , collators(std::move(collators_))
     , fine_grained_shuffle_stream_count(fine_grained_shuffle_stream_count_)
     , fine_grained_shuffle_batch_size(fine_grained_shuffle_batch_size_)
-    , max_buffered_rows(fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count)
-    , max_buffered_bytes(max_buffered_bytes_)
     , hash(0)
     , data_codec_version(data_codec_version_)
     , compression_method(ToInternalCompressionMethod(compression_mode_))
 {
+    max_buffered_rows = fine_grained_shuffle_batch_size * fine_grained_shuffle_stream_count;
+    max_buffered_bytes = max_buffered_bytes_;
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
@@ -94,7 +94,7 @@ template <class ExchangeWriterPtr>
 WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::flush()
 {
     has_pending_flush = false;
-    if (rows_in_blocks > 0)
+    if (buffered_rows > 0)
     {
         auto wait_res = waitForWritable();
         if (wait_res == WaitResult::Ready)
@@ -133,13 +133,12 @@ WriteResult FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & blo
 
     if (rows > 0)
     {
-        rows_in_blocks += rows;
-        bytes_in_blocks += block.allocatedBytes();
+        buffered_rows += rows;
+        buffered_bytes += block.allocatedBytes();
         blocks.push_back(block);
     }
 
-    if (blocks.size() == fine_grained_shuffle_stream_count || rows_in_blocks >= max_buffered_rows
-        || bytes_in_blocks >= max_buffered_bytes)
+    if (needFlush() || blocks.size() == fine_grained_shuffle_stream_count)
     {
         return flush();
     }
@@ -174,7 +173,7 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffleIm
     assert(!blocks.empty());
 
     {
-        assert(rows_in_blocks > 0);
+        assert(buffered_rows > 0);
         assert(fine_grained_shuffle_stream_count <= 1024);
 
         HashBaseWriterHelper::materializeBlocks(blocks);
@@ -226,8 +225,8 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::batchWriteFineGrainedShuffleIm
                 data_codec_version,
                 compression_method);
         }
-        rows_in_blocks = 0;
-        bytes_in_blocks = 0;
+        buffered_rows = 0;
+        buffered_bytes = 0;
     }
 }
 

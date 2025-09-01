@@ -46,12 +46,8 @@ private:
     void encodeThenWriteBlocks();
 
 private:
-    Int64 max_buffered_rows;
-    UInt64 max_buffered_bytes;
     StreamWriterPtr writer;
     std::vector<Block> blocks;
-    size_t rows_in_blocks;
-    size_t bytes_in_blocks;
     std::unique_ptr<ChunkCodecStream> chunk_codec_stream;
 };
 

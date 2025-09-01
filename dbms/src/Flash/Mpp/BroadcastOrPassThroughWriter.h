@@ -45,12 +45,8 @@ private:
     void writeBlocks();
 
 private:
-    Int64 max_buffered_rows;
-    UInt64 max_buffered_bytes;
     ExchangeWriterPtr writer;
     std::vector<Block> blocks;
-    size_t rows_in_blocks;
-    size_t bytes_in_blocks;
     const tipb::ExchangeType exchange_type;
 
     // support data compression

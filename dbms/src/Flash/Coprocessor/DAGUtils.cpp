@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/ThresholdUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -30,8 +31,6 @@
 #include <TiDB/Schema/TiDBTypes.h>
 
 #include <unordered_map>
-
-#include "Common/ThresholdUtils.h"
 
 namespace DB
 {
