@@ -960,6 +960,7 @@ UInt64 Segment::estimatedBytesOfInternalColumns(
     const DMContext & dm_context,
     const SegmentSnapshotPtr & read_snap,
     const DMFilePackFilterResults & pack_filter_results,
+    const RowKeyRanges & read_ranges,
     UInt64 start_ts)
 {
     // stable->getDMFiles() at least return one DMFile.
@@ -973,12 +974,25 @@ UInt64 Segment::estimatedBytesOfInternalColumns(
 
     // For delta, rs_filter does not filter rows, so we need to read all rows.
     const auto delta_read_rows = read_snap->delta->getRows();
-    // For Stable, rs_filter may filter rows.
-    const auto stable_read_rows = read_snap->stable->estimatedReadRows(
-        dm_context,
-        pack_filter_results,
-        start_ts,
-        /*use_delta_index*/ delta_read_rows != 0 && !dm_context.isVersionChainEnabled());
+    // For Stable, rs_filter and delta index may filter rows.
+    auto update_pack_filter_by_delat_index = [&]() {
+        ColumnDefines columns_to_read{
+            getExtraHandleColumnDefine(is_common_handle),
+        };
+        auto read_info = getReadInfo(dm_context, columns_to_read, read_snap, read_ranges, ReadTag::MVCC, start_ts);
+        auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVersion(
+            dm_context,
+            dmfiles,
+            pack_filter_results,
+            start_ts,
+            read_info.index_begin,
+            read_info.index_end);
+        return new_pack_filter_results;
+    };
+    const bool use_delta_index = delta_read_rows != 0 && !dm_context.isVersionChainEnabled();
+    const auto & new_pack_filter_results = use_delta_index ? update_pack_filter_by_delat_index() : pack_filter_results;
+    const auto stable_read_rows
+        = read_snap->stable->estimatedReadRows(dm_context, new_pack_filter_results, start_ts, use_delta_index);
     return (handle_size + version_size + delmark_size) * (delta_read_rows + stable_read_rows);
 }
 
@@ -1000,7 +1014,7 @@ BlockInputStreamPtr Segment::getInputStream(
         columns_to_read,
         segment_snap->stable->stable);
     auto real_ranges = shrinkRowKeyRanges(read_ranges);
-    if (read_ranges.empty())
+    if (real_ranges.empty())
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
 
     // load DMilePackFilterResult for each DMFile
@@ -1028,7 +1042,8 @@ BlockInputStreamPtr Segment::getInputStream(
     if (likely(read_mode == ReadMode::Bitmap && !res_group_name.empty()))
     {
         const auto keyspace_id = dm_context.scan_context->keyspace_id;
-        auto bytes = estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filter_results, start_ts);
+        auto bytes
+            = estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filter_results, real_ranges, start_ts);
         TiFlashMetrics::instance()
             .getStorageRUReadBytesCounter(keyspace_id, res_group_name, ReadRUType::MVCC_ESTIMATE)
             .Increment(bytes);

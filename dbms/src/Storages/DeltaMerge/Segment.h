@@ -833,10 +833,11 @@ public:
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
 
-    static UInt64 estimatedBytesOfInternalColumns(
+    UInt64 estimatedBytesOfInternalColumns(
         const DMContext & dm_context,
         const SegmentSnapshotPtr & read_snap,
         const DMFilePackFilterResults & pack_filter_results,
+        const RowKeyRanges & read_ranges,
         UInt64 start_ts);
 
 #ifndef DBMS_PUBLIC_GTEST
