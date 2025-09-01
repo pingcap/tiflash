@@ -237,6 +237,15 @@ public:
             bool need_row_id = false,
             BitmapFilterPtr bitmap_filter = nullptr);
 
+        SkippableBlockInputStreamPtr getInputStreamWithPackFilterResult(
+            const DMContext & dm_context, //
+            const ColumnDefines & read_columns,
+            const RowKeyRanges & rowkey_ranges,
+            UInt64 max_data_version,
+            size_t expected_block_size,
+            ReadTag read_tag,
+            const DMFilePackFilterResults & pack_filter_results);
+
         RowsAndBytes getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
         struct AtLeastRowsAndBytesResult

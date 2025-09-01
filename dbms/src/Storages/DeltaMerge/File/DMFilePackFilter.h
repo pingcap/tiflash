@@ -18,7 +18,9 @@
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/FileProvider/ChecksumReadBufferBuilder.h>
+#include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/File/DMFile.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilterResult.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/Filter/FilterHelper.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
@@ -40,9 +42,11 @@ namespace DM
 {
 class DMFilePackFilter
 {
+    friend class DMFilePackFilterResult;
+
 public:
     // Empty `rowkey_ranges` means do not filter by rowkey_ranges
-    static DMFilePackFilter loadFrom(
+    static DMFilePackFilterResultPtr loadFrom(
         const DMFilePtr & dmfile,
         const MinMaxIndexCachePtr & index_cache,
         bool set_cache_if_miss,
@@ -55,7 +59,7 @@ public:
         const String & tracing_id,
         const ReadTag read_tag)
     {
-        return DMFilePackFilter(
+        auto f = DMFilePackFilter(
             dmfile,
             index_cache,
             set_cache_if_miss,
@@ -65,55 +69,40 @@ public:
             file_provider,
             read_limiter,
             scan_context,
-            tracing_id,
-            read_tag);
+            tracing_id);
+        return f.load(read_tag);
     }
 
-    const RSResults & getHandleRes() const { return handle_res; }
-    const RSResults & getPackResConst() const { return pack_res; }
-    RSResults & getPackRes() { return pack_res; }
-    UInt64 countUsePack() const;
-
-    Handle getMinHandle(size_t pack_id)
+    struct Range
     {
-        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
-            tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
-        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
-        return minmax_index->getIntMinMax(pack_id).first;
-    }
+        UInt64 offset;
+        UInt64 rows;
+        Range(UInt64 offset_, UInt64 rows_)
+            : offset(offset_)
+            , rows(rows_)
+        {}
 
-    StringRef getMinStringHandle(size_t pack_id)
-    {
-        if (!param.indexes.count(EXTRA_HANDLE_COLUMN_ID))
-            tryLoadIndex(EXTRA_HANDLE_COLUMN_ID);
-        auto & minmax_index = param.indexes.find(EXTRA_HANDLE_COLUMN_ID)->second.minmax;
-        return minmax_index->getStringMinMax(pack_id).first;
-    }
+        bool operator==(const Range &) const = default;
+    };
+    /**
+    * @brief For all the packs in `pack_filter_results`, if all the rows in the pack
+    *        comply with RowKey filter and MVCC filter (by `start_ts`) requirements,
+    *        and are continuously sorted in delta index, or are deleted, then we skip
+    *        reading the packs from disk and return the skipped ranges(not deleted), 
+    *        and new PackFilterResults for building bitmap.
+    * @return <SkippedRanges, NewPackFilterResults>
+    *        - SkippedRanges: All the rows in the ranges that comply with the requirements.
+    *        - NewPackFilterResults: Those packs should be read from disk and go through
+    *                                the delta merge, RowKey filter, and MVCC filter.
+    */
+    static std::pair<std::vector<Range>, DMFilePackFilterResults> getSkippedRangeAndFilterForBitmapNormal(
+        const DMContext & dm_context,
+        const DMFiles & dmfiles,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts,
+        const DeltaIndexIterator & delta_index_begin,
+        const DeltaIndexIterator & delta_index_end);
 
-    UInt64 getMaxVersion(size_t pack_id)
-    {
-        if (!param.indexes.count(VERSION_COLUMN_ID))
-            tryLoadIndex(VERSION_COLUMN_ID);
-        auto & minmax_index = param.indexes.find(VERSION_COLUMN_ID)->second.minmax;
-        return minmax_index->getUInt64MinMax(pack_id).second;
-    }
-
-    // Get valid rows and bytes after filter invalid packs by handle_range and filter
-    std::pair<size_t, size_t> validRowsAndBytes()
-    {
-        size_t rows = 0;
-        size_t bytes = 0;
-        const auto & pack_stats = dmfile->getPackStats();
-        for (size_t i = 0; i < pack_stats.size(); ++i)
-        {
-            if (pack_res[i].isUse())
-            {
-                rows += pack_stats[i].rows;
-                bytes += pack_stats[i].bytes;
-            }
-        }
-        return {rows, bytes};
-    }
 
     static std::pair<DataTypePtr, MinMaxIndexPtr> loadIndex(
         const DMFile & dmfile,
@@ -135,8 +124,7 @@ private:
         const FileProviderPtr & file_provider_,
         const ReadLimiterPtr & read_limiter_,
         const ScanContextPtr & scan_context_,
-        const String & tracing_id,
-        const ReadTag read_tag)
+        const String & tracing_id)
         : dmfile(dmfile_)
         , index_cache(index_cache_)
         , set_cache_if_miss(set_cache_if_miss_)
@@ -144,15 +132,12 @@ private:
         , filter(filter_)
         , read_packs(read_packs_)
         , file_provider(file_provider_)
-        , handle_res(dmfile->getPacks(), RSResult::All)
         , scan_context(scan_context_)
         , log(Logger::get(tracing_id))
         , read_limiter(read_limiter_)
-    {
-        init(read_tag);
-    }
+    {}
 
-    void init(ReadTag read_tag);
+    DMFilePackFilterResultPtr load(ReadTag read_tag);
 
     static void loadIndex(
         ColumnIndexes & indexes,
@@ -164,10 +149,7 @@ private:
         const ReadLimiterPtr & read_limiter,
         const ScanContextPtr & scan_context);
 
-    void tryLoadIndex(ColId col_id);
-
-    // None+NoneNull, Some+SomeNull, All, AllNull
-    std::tuple<UInt64, UInt64, UInt64, UInt64> countPackRes() const;
+    void tryLoadIndex(RSCheckParam & param, ColId col_id);
 
 private:
     DMFilePtr dmfile;
@@ -177,13 +159,6 @@ private:
     RSOperatorPtr filter;
     IdSetPtr read_packs;
     FileProviderPtr file_provider;
-
-    RSCheckParam param;
-
-    // `handle_res` is the filter results of `rowkey_ranges`.
-    std::vector<RSResult> handle_res;
-    // `pack_res` is the filter results of `rowkey_ranges && filter && read_packs`.
-    std::vector<RSResult> pack_res;
 
     const ScanContextPtr scan_context;
 

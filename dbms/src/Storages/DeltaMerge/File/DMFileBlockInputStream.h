@@ -20,6 +20,7 @@
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/File/ColumnCache.h>
 #include <Storages/DeltaMerge/File/ColumnCacheLongTerm_fwd.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilterResult.h>
 #include <Storages/DeltaMerge/File/DMFileReader.h>
 #include <Storages/DeltaMerge/File/DMFileWithVectorIndexBlockInputStream_fwd.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
@@ -180,6 +181,15 @@ public:
         return *this;
     }
 
+    DMFileBlockInputStreamBuilder & setDMFilePackFilterResult(const DMFilePackFilterResultPtr & pack_filter_)
+    {
+        pack_filter = pack_filter_;
+        RUNTIME_CHECK_MSG(
+            pack_filter == nullptr || read_packs == nullptr,
+            "read_packs is not nullptr when setting pack_filter");
+        return *this;
+    }
+
     /**
      * @note To really enable the long term cache, you also need to ensure
      * ColumnCacheLongTerm is initialized in the global context.
@@ -233,6 +243,8 @@ private:
     size_t max_sharing_column_bytes_for_all = 0;
     String tracing_id;
     ReadTag read_tag = ReadTag::Internal;
+
+    DMFilePackFilterResultPtr pack_filter;
 
     VectorIndexCachePtr vector_index_cache;
     // Note: Currently thie field is assigned only for Stable streams, not available for ColumnFileBig
