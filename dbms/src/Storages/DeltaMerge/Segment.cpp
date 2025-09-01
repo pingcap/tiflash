@@ -978,7 +978,7 @@ UInt64 Segment::estimatedBytesOfInternalColumns(
         dm_context,
         pack_filter_results,
         start_ts,
-        /*use_delta_index*/ delta_read_rows != 0 && !dm_context.isVersionChainEnabled());
+        dm_context.isVersionChainEnabled());
     return (handle_size + version_size + delmark_size) * (delta_read_rows + stable_read_rows);
 }
 
@@ -998,6 +998,9 @@ static void consumeBuildMVCCReadBytesRU(
     {
         const auto keyspace_id = dm_context.scan_context->keyspace_id;
         auto bytes = Segment::estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filter_results, start_ts);
+        TiFlashMetrics::instance()
+            .getStorageRUReadBytesCounter(keyspace_id, res_group_name, ReadRUType::MVCC_ESTIMATE)
+            .Increment(bytes);
         LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
     }
 }
@@ -3078,11 +3081,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilter(
     {
         if (enable_version_chain)
         {
-            consumeBuildMVCCReadBytesRU(
-                dm_context,
-                segment_snap,
-                pack_filter_results,
-                start_ts);
+            consumeBuildMVCCReadBytesRU(dm_context, segment_snap, pack_filter_results, start_ts);
             return ::DB::DM::buildMVCCBitmapFilter(
                 dm_context,
                 *segment_snap,
@@ -3239,11 +3238,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterNormal(
             dm_context.scan_context);
     }
 
-    consumeBuildMVCCReadBytesRU(
-        dm_context,
-        segment_snap,
-        new_pack_filter_results,
-        start_ts);
+    consumeBuildMVCCReadBytesRU(dm_context, segment_snap, new_pack_filter_results, start_ts);
 
     LOG_TRACE(
         segment_snap->log,
@@ -3314,11 +3309,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
         return bitmap_filter;
     }
 
-    consumeBuildMVCCReadBytesRU(
-        dm_context,
-        segment_snap,
-        new_pack_filter_results,
-        start_ts);
+    consumeBuildMVCCReadBytesRU(dm_context, segment_snap, new_pack_filter_results, start_ts);
 
     BlockInputStreamPtr stream;
     if constexpr (is_fast_scan)

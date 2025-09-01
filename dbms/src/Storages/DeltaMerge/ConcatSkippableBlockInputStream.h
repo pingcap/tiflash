@@ -16,9 +16,9 @@
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/ConcatSkippableBlockInputStream_fwd.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
-#include <Storages/DeltaMerge/ReadMode.h>
 
 
 namespace DB::DM
@@ -73,6 +73,7 @@ private:
     const ScanContextPtr scan_context;
     LACBytesCollector lac_bytes_collector;
     ReadTag read_tag;
+    prometheus::Counter * read_bytes_counter;
 };
 
 } // namespace DB::DM
