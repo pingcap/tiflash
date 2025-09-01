@@ -115,6 +115,15 @@ public:
         return {rows, bytes};
     }
 
+    static std::pair<DataTypePtr, MinMaxIndexPtr> loadIndex(
+        const DMFile & dmfile,
+        const FileProviderPtr & file_provider,
+        const MinMaxIndexCachePtr & index_cache,
+        bool set_cache_if_miss,
+        ColId col_id,
+        const ReadLimiterPtr & read_limiter,
+        const ScanContextPtr & scan_context);
+
 private:
     DMFilePackFilter(
         const DMFilePtr & dmfile_,

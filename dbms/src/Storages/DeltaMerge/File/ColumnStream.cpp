@@ -96,40 +96,40 @@ private:
     {
         const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(reader.dmfile->meta.get());
         assert(dmfile_meta != nullptr);
-        const auto & info = dmfile_meta->merged_sub_file_infos.find(colMarkFileName(file_name_base));
-        if (info == dmfile_meta->merged_sub_file_infos.end())
+        const auto & info_iter = dmfile_meta->merged_sub_file_infos.find(colMarkFileName(file_name_base));
+        if (info_iter == dmfile_meta->merged_sub_file_infos.end())
         {
             throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown mark file {}", colMarkFileName(file_name_base));
         }
 
-        auto file_path = dmfile_meta->mergedPath(info->second.number);
-        auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
-        auto offset = info->second.offset;
-        auto data_size = info->second.size;
+        const auto & merged_file_info = info_iter->second;
+        const auto file_path = dmfile_meta->mergedPath(merged_file_info.number);
+        const auto offset = merged_file_info.offset;
+        const auto data_size = merged_file_info.size;
 
         if (data_size == 0)
             return res;
 
         // First, read from merged file to get the raw data(contains the header)
+        // Note that we use min(`data_size`, checksum_frame_size) as the size of buffer size in order
+        // to minimize read amplification in the merged file.
         auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
             reader.file_provider,
             file_path,
-            encryp_path,
-            reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+            dmfile_meta->encryptionMergedPath(merged_file_info.number),
+            std::min(data_size, reader.dmfile->getConfiguration()->getChecksumFrameLength()),
             read_limiter);
         buffer.seek(offset);
 
         // Read the raw data into memory. It is OK because the mark merged into
         // merged_file is small enough.
-        String raw_data;
-        raw_data.resize(data_size);
+        String raw_data(data_size, '\0');
         buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
-        // Then read from the buffer based on the raw data
+        // Then read from the buffer based on the raw data. The buffer size is min(data.size(), checksum_frame_size)
         auto buf = ChecksumReadBufferBuilder::build(
             std::move(raw_data),
-            reader.dmfile->colDataPath(file_name_base),
-            reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+            file_path, // just for debug, the buffer is part of the merged file
             reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
             reader.dmfile->getConfiguration()->getChecksumFrameLength());
         buf->readBig(reinterpret_cast<char *>(res->data()), bytes_size);
@@ -230,9 +230,10 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
 {
     const auto * dmfile_meta = typeid_cast<const DMFileMetaV2 *>(reader.dmfile->meta.get());
     assert(dmfile_meta != nullptr);
-    const auto & info = dmfile_meta->merged_sub_file_infos.find(colDataFileName(file_name_base));
-    if (info == dmfile_meta->merged_sub_file_infos.end())
+    const auto & info_iter = dmfile_meta->merged_sub_file_infos.find(colDataFileName(file_name_base));
+    if (info_iter == dmfile_meta->merged_sub_file_infos.end())
     {
+        // Not merged into merged file, read from the original data file.
         return CompressedReadBufferFromFileBuilder::build(
             reader.file_provider,
             reader.dmfile->colDataPath(file_name_base),
@@ -243,32 +244,31 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
             reader.dmfile->getConfiguration()->getChecksumFrameLength());
     }
 
-    assert(info != dmfile_meta->merged_sub_file_infos.end());
-    auto file_path = dmfile_meta->mergedPath(info->second.number);
-    auto encryp_path = dmfile_meta->encryptionMergedPath(info->second.number);
-    auto offset = info->second.offset;
-    auto size = info->second.size;
+    assert(info_iter != dmfile_meta->merged_sub_file_infos.end());
+    auto file_path = dmfile_meta->mergedPath(info_iter->second.number);
+    const auto offset = info_iter->second.offset;
+    const auto data_size = info_iter->second.size;
 
     // First, read from merged file to get the raw data(contains the header)
+    // Note that we use min(`data_size`, checksum_frame_size) as the size of buffer size in order
+    // to minimize read amplification in the merged file.
     auto buffer = ReadBufferFromRandomAccessFileBuilder::build(
         reader.file_provider,
         file_path,
-        encryp_path,
-        reader.dmfile->getConfiguration()->getChecksumFrameLength(),
+        dmfile_meta->encryptionMergedPath(info_iter->second.number),
+        std::min(data_size, reader.dmfile->getConfiguration()->getChecksumFrameLength()),
         read_limiter);
     buffer.seek(offset);
 
     // Read the raw data into memory. It is OK because the mark merged into
     // merged_file is small enough.
-    String raw_data;
-    raw_data.resize(size);
-    buffer.read(reinterpret_cast<char *>(raw_data.data()), size);
+    String raw_data(data_size, '\0');
+    buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
 
-    // Then read from the buffer based on the raw data
+    // Then read from the buffer based on the raw data. The buffer size is min(data.size(), checksum_frame_size)
     return CompressedReadBufferFromFileBuilder::build(
         std::move(raw_data),
         file_path,
-        reader.dmfile->getConfiguration()->getChecksumFrameLength(),
         reader.dmfile->getConfiguration()->getChecksumAlgorithm(),
         reader.dmfile->getConfiguration()->getChecksumFrameLength());
 }
