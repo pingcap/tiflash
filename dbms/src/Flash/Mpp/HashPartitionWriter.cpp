@@ -63,7 +63,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
     }
 
     if (needFlush())
-        partitionAndEncodeThenWriteBlocks();
+        return flush();
 }
 
 template <class ExchangeWriterPtr>

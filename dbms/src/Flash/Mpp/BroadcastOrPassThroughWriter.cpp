@@ -56,7 +56,7 @@ void BroadcastOrPassThroughWriter<ExchangeWriterPtr>::write(const Block & block)
     }
 
     if (needFlush())
-        encodeThenWriteBlocks();
+        return flush();
 }
 
 template <class ExchangeWriterPtr>

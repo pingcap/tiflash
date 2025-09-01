@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/ThresholdUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -28,6 +29,7 @@
 
 #include <algorithm>
 #include <unordered_map>
+
 namespace DB
 {
 const Int8 VAR_SIZE = 0;
