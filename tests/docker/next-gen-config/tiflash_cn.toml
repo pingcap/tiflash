@@ -22,7 +22,7 @@ addr = "0.0.0.0:20170"
 advertise-addr = "tiflash-cn0:20170"
 engine-addr = "tiflash-cn0:3930"
 status-addr = "0.0.0.0:20292"
-advertise-status-addr = "tiflash-wn0:20292"
+advertise-status-addr = "tiflash-cn0:20292"
 data-dir = "/data/tiflash/flash"
 config = "/tiflash_tikv.toml"
 

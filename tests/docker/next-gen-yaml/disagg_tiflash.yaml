@@ -32,10 +32,11 @@ services:
       - "minio0"
       - "tikv0"
     environment:
-      - MALLOC_CONF=prof:true
+      - MALLOC_CONF=prof:true,prof_active:false
     restart: on-failure
-    ports:
-      - "127.0.0.1:20292:20292"  # tiflash-wn0 proxy status port
+    # uncomment the following lines to enable port mapping for local access
+    #ports:
+    #  - "127.0.0.1:20292:20292"  # tiflash-wn0 proxy status port
   tiflash-cn0:
     image: ${TIFLASH_IMAGE:-hub.pingcap.net/tiflash/tiflash-ci-base:rocky8-20241028}
     security_opt:
@@ -53,5 +54,5 @@ services:
       - "minio0"
       - "tikv0"
     environment:
-      - MALLOC_CONF=prof:true
+      - MALLOC_CONF=prof:true,prof_active:false
     restart: on-failure
