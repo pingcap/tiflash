@@ -633,6 +633,48 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
     return ret;
 }
 
+// Estimating the number of rows that need to be read to build the MVCC bitmap.
+// If a delta index is used, the relevant data must be read and merged with the delta.
+// For stable-only (use_delta_index is false), no merging with the delta is required,
+// so reading occurs only when filtering of the pack is necessary.
+UInt64 StableValueSpace::Snapshot::estimatedReadRows(
+    std::vector<DMFilePackFilter> & pack_filters,
+    UInt64 start_ts,
+    bool use_delta_index) const
+{
+    const auto & dmfiles = getDMFiles();
+    UInt64 rows = 0;
+    for (size_t i = 0; i < dmfiles.size(); ++i)
+    {
+        const auto & dmfile = dmfiles[i];
+        auto & pack_filter = pack_filters[i];
+        const auto & pack_res = pack_filter.getPackResConst();
+        const auto & handle_res = pack_filter.getHandleRes();
+        const auto & pack_stats = dmfile->getPackStats();
+        for (size_t pack_id = 0; pack_id < pack_stats.size(); ++pack_id)
+        {
+            const auto & pack_stat = pack_stats[pack_id];
+            if (!pack_res[pack_id].isUse())
+                continue;
+
+            if (use_delta_index)
+            {
+                rows += pack_stat.rows;
+            }
+            else if (
+                handle_res[pack_id] == RSResult::Some || pack_stat.not_clean > 0
+                || pack_filter.getMaxVersion(pack_id) > start_ts)
+            {
+                // `not_clean > 0` means there are more than one version for some rowkeys in this pack
+                // `pack.max_version > start_ts` means some rows will be filtered by MVCC reading
+                // We need to read this pack to do RowKey or MVCC filter.
+                rows += pack_stat.rows;
+            }
+        }
+    }
+    return rows;
+}
+
 static size_t defaultValueBytes(const Field & f)
 {
     switch (f.getType())

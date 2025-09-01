@@ -253,6 +253,9 @@ public:
          */
         AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
+        UInt64 estimatedReadRows(std::vector<DMFilePackFilter> & pack_filters, UInt64 start_ts, bool use_delta_index)
+            const;
+
     private:
         LoggerPtr log;
     };
