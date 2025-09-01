@@ -489,7 +489,8 @@ ConcatSkippableBlockInputStreamPtr<need_row_id> StableValueSpace::Snapshot::getI
     return ConcatSkippableBlockInputStream<need_row_id>::create(
         std::move(streams),
         std::move(rows),
-        dm_context.scan_context);
+        dm_context.scan_context,
+        read_tag);
 }
 
 template ConcatSkippableBlockInputStreamPtr<false> StableValueSpace::Snapshot::getInputStream(
@@ -607,7 +608,7 @@ UInt64 StableValueSpace::Snapshot::estimatedReadRows(
     const DMContext & dm_context,
     const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts,
-    bool use_delta_index) const
+    bool use_version_chain) const
 {
     const auto & dmfiles = getDMFiles();
     auto file_provider = dm_context.global_context.getFileProvider();
@@ -625,7 +626,7 @@ UInt64 StableValueSpace::Snapshot::estimatedReadRows(
             if (!pack_res[pack_id].isUse())
                 continue;
 
-            if (use_delta_index)
+            if (!use_version_chain)
             {
                 rows += pack_stat.rows;
             }

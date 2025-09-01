@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/Common.h>
 #include <Storages/DeltaMerge/VersionChain/DeleteMarkFilter.h>
@@ -44,6 +45,8 @@ UInt32 buildDeleteMarkFilterBlock(
         "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
         cf.toString(),
         block.rows());
+    if (dm_context.scan_context)
+        dm_context.scan_context->addMVCCReadBytes(block.bytes());
     const auto deleteds = ColumnView<UInt8>(*(block.begin()->column));
     UInt32 filtered_out_rows = 0;
     for (UInt32 i = 0; i < deleteds.size(); ++i)
@@ -104,6 +107,8 @@ UInt32 buildDeleteMarkFilterDMFile(
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
+        if (dm_context.scan_context)
+            dm_context.scan_context->addMVCCReadBytes(block.bytes());
         const auto deleteds = ColumnView<UInt8>(*(block.begin()->column));
         const auto itr = start_row_id_of_need_read_packs.find(pack_id);
         RUNTIME_CHECK(itr != start_row_id_of_need_read_packs.end(), start_row_id_of_need_read_packs, pack_id);

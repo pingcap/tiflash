@@ -18,6 +18,7 @@
 #include <Common/ProcessCollector_fwd.h>
 #include <Common/TiFlashBuildInfo.h>
 #include <Common/nocopyable.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <common/types.h>
 #include <prometheus/counter.h>
 #include <prometheus/exposer.h>
@@ -1247,6 +1248,8 @@ namespace tests
 struct TiFlashMetricsHelper;
 }
 
+using KeyspaceID = UInt32;
+
 /// Centralized registry of TiFlash metrics.
 /// Cope with MetricsPrometheus by registering
 /// profile events, current metrics and customized metrics (as individual member for caller to access) into registry ahead of being updated.
@@ -1291,7 +1294,6 @@ private:
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 
     prometheus::Family<prometheus::Gauge> * registered_keypace_store_used_family;
-    using KeyspaceID = UInt32;
     std::unordered_map<KeyspaceID, prometheus::Gauge *> registered_keypace_store_used_metrics;
     prometheus::Gauge * store_used_total_metric;
 
@@ -1307,6 +1309,11 @@ private:
     prometheus::Family<prometheus::Gauge> * registered_storage_thread_memory_usage_family;
     std::shared_mutex storage_thread_report_mtx;
     std::unordered_map<std::string, prometheus::Gauge *> registered_storage_thread_memory_usage_metrics;
+
+    prometheus::Family<prometheus::Counter> * registered_storage_ru_read_bytes_family;
+    std::shared_mutex storage_ru_read_bytes_mtx;
+    // {keyspace}_{resource_group}_{type} -> Counter
+    std::unordered_map<std::string, prometheus::Counter *> registered_storage_ru_read_bytes_metrics;
 
 public:
 #define MAKE_METRIC_MEMBER_M(family_name, help, type, ...) \

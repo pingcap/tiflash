@@ -261,7 +261,7 @@ public:
             const DMContext & dm_context,
             const DMFilePackFilterResults & pack_filter_results,
             UInt64 start_ts,
-            bool use_delta_index) const;
+            bool use_version_chain) const;
 
     private:
         LoggerPtr log;

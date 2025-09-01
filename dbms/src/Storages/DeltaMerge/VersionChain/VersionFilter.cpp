@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/VersionFilter.h>
 
@@ -89,7 +90,8 @@ UInt32 buildVersionFilterVector(
         auto block = cf_reader->readNextBlock();
         if (!block)
             break;
-
+        if (dm_context.scan_context)
+            dm_context.scan_context->addMVCCReadBytes(block.bytes());
         ++read_block_count;
         read_rows += block.rows();
         const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column);
@@ -169,6 +171,8 @@ template <ExtraHandleType HandleType>
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
+        if (dm_context.scan_context)
+            dm_context.scan_context->addMVCCReadBytes(block.bytes());
         const auto handles = ColumnView<HandleType>(*(block.getByPosition(0).column));
         const auto & versions = *toColumnVectorDataPtr<UInt64>(block.getByPosition(1).column);
         const auto itr = start_row_id_of_need_read_packs.find(pack_id);

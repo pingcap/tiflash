@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
 
@@ -73,6 +74,8 @@ UInt32 buildRowKeyFilterBlock(
         "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
         cf.toString(),
         block.rows());
+    if (dm_context.scan_context)
+        dm_context.scan_context->addMVCCReadBytes(block.bytes());
 
     const auto handles = ColumnView<HandleType>(*(block.begin()->column));
     return buildRowKeyFilterVector<HandleType>(handles, delete_ranges, read_ranges, start_row_id, filter);
@@ -126,6 +129,8 @@ UInt32 buildRowKeyFilterDMFile(
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
+        if (dm_context.scan_context)
+            dm_context.scan_context->addMVCCReadBytes(block.bytes());
         const auto handles = ColumnView<HandleType>(*(block.begin()->column));
         const auto itr = start_row_id_of_need_read_packs.find(pack_id);
         RUNTIME_CHECK(itr != start_row_id_of_need_read_packs.end(), start_row_id_of_need_read_packs, pack_id);

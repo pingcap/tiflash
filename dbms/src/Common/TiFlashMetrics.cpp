@@ -18,6 +18,8 @@
 #include <Common/TiFlashMetrics.h>
 #include <common/defines.h>
 
+#include <magic_enum.hpp>
+
 namespace DB
 {
 TiFlashMetrics & TiFlashMetrics::instance()
@@ -66,6 +68,11 @@ TiFlashMetrics::TiFlashMetrics()
 
     registered_storage_thread_memory_usage_family
         = &prometheus::BuildGauge().Name(storages_thread_memory_usage).Help("").Register(*registry);
+
+    registered_storage_ru_read_bytes_family = &prometheus::BuildCounter()
+                                                   .Name("tiflash_storage_ru_read_bytes")
+                                                   .Help("Read bytes for storage RU calculation")
+                                                   .Register(*registry);
 }
 
 void TiFlashMetrics::addReplicaSyncRU(UInt32 keyspace_id, UInt64 ru)

@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -22,6 +23,7 @@
 #include <common/types.h>
 #include <fmt/format.h>
 #include <pingcap/pd/Types.h>
+#include <prometheus/counter.h>
 #include <sys/types.h>
 #include <tipb/executor.pb.h>
 
@@ -507,6 +509,10 @@ public:
     void setStreamCost(uint64_t local_min_ns, uint64_t local_max_ns, uint64_t remote_min_ns, uint64_t remote_max_ns);
 
     static void initCurrentInstanceId(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
+
+    void addMVCCReadBytes(UInt64 bytes) { user_read_bytes += bytes; }
+
+    void addQueryReadBytes(UInt64 bytes) { user_read_bytes += bytes; }
 
 private:
     void serializeRegionNumOfInstance(tipb::TiFlashScanContext & proto) const;

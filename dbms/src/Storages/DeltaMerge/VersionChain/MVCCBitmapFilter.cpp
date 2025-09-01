@@ -17,6 +17,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/DeleteMarkFilter.h>
 #include <Storages/DeltaMerge/VersionChain/MVCCBitmapFilter.h>
@@ -52,8 +53,12 @@ BitmapFilterPtr buildMVCCBitmapFilter(
         *bitmap_filter);
     const auto build_version_filter_ms = sw.elapsedMillisecondsFromLastTime();
 
-    const auto rowkey_filtered_out_rows
-        = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, stable_filter_res, *bitmap_filter);
+    const auto rowkey_filtered_out_rows = buildRowKeyFilter<HandleType>(
+        dm_context,
+        snapshot,
+        read_ranges,
+        stable_filter_res,
+        *bitmap_filter);
     const auto build_rowkey_filter_ms = sw.elapsedMillisecondsFromLastTime();
 
     const auto delete_filtered_out_rows
