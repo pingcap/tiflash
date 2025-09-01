@@ -18,6 +18,7 @@
 #include <Storages/DeltaMerge/ConcatSkippableBlockInputStream_fwd.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 
 
 namespace DB::DM
@@ -30,18 +31,21 @@ public:
     static auto create(
         SkippableBlockInputStreams && inputs_,
         std::vector<size_t> && rows_,
-        const ScanContextPtr & scan_context_)
+        const ScanContextPtr & scan_context_,
+        ReadTag read_tag_)
     {
         return std::make_shared<ConcatSkippableBlockInputStream<need_row_id>>(
             std::move(inputs_),
             std::move(rows_),
-            scan_context_);
+            scan_context_,
+            read_tag_);
     }
 
     ConcatSkippableBlockInputStream(
         SkippableBlockInputStreams && inputs_,
         std::vector<size_t> && rows_,
-        const ScanContextPtr & scan_context_);
+        const ScanContextPtr & scan_context_,
+        ReadTag read_tag_);
 
     void appendChild(SkippableBlockInputStreamPtr child, size_t rows_);
 
@@ -68,6 +72,7 @@ private:
     size_t precede_stream_rows;
     const ScanContextPtr scan_context;
     LACBytesCollector lac_bytes_collector;
+    ReadTag read_tag;
 };
 
 } // namespace DB::DM

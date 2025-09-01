@@ -25,13 +25,15 @@ template <bool need_row_id>
 ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     SkippableBlockInputStreams && inputs_,
     std::vector<size_t> && rows_,
-    const ScanContextPtr & scan_context_)
+    const ScanContextPtr & scan_context_,
+    ReadTag read_tag_)
     : rows(std::move(rows_))
     , precede_stream_rows(0)
     , scan_context(scan_context_)
     , lac_bytes_collector(
           scan_context_ ? scan_context_->keyspace_id : NullspaceID,
           scan_context_ ? scan_context_->resource_group_name : "")
+    , read_tag(read_tag_)
 {
     assert(rows.size() == inputs_.size());
     children.insert(children.end(), inputs_.begin(), inputs_.end());
@@ -152,13 +154,10 @@ Block ConcatSkippableBlockInputStream<need_row_id>::read()
 template <bool need_row_id>
 void ConcatSkippableBlockInputStream<need_row_id>::addReadBytes(UInt64 bytes)
 {
-    if (likely(scan_context != nullptr))
+    if (likely(scan_context != nullptr) && read_tag != ReadTag::MVCC)
     {
         scan_context->user_read_bytes += bytes;
-        if constexpr (!need_row_id)
-        {
-            lac_bytes_collector.collect(bytes);
-        }
+        lac_bytes_collector.collect(bytes);
     }
 }
 

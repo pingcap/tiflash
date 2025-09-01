@@ -136,7 +136,8 @@ try
         return ConcatSkippableBlockInputStream<false>::create(
             {NopSkippableBlockInputStream::wrap(block1), NopSkippableBlockInputStream::wrap(block2)},
             {7, 4},
-            nullptr);
+            nullptr,
+            ReadTag::Query);
     };
 
     // VectorIndexInputStream does not need this information, but ctx needs at least a correct vec column.
