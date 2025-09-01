@@ -803,7 +803,7 @@ public:
         const ReadTag & read_tag);
     static UInt64 estimatedBytesOfInternalColumns(
         const SegmentSnapshotPtr & read_snap,
-        std::vector<DMFilePackFilter> & pack_filter_results,
+        std::vector<DMFilePackFilter> & pack_filters,
         UInt64 start_ts);
 
 #ifndef DBMS_PUBLIC_GTEST
