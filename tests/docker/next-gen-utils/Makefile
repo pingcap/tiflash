@@ -44,3 +44,15 @@ versions:
 
 download: tikv pd tidb tiflash versions
 	
+pre_package:
+	mkdir -p ./binaries/package
+package_tikv: pre_package
+	tar -czvf ./binaries/package/tikv.tar.gz -C ./binaries/tikv .
+package_pd: pre_package
+	tar -czvf ./binaries/package/pd.tar.gz -C ./binaries/pd .
+package_tidb: pre_package
+	tar -czvf ./binaries/package/tidb.tar.gz -C ./binaries/tidb .
+package_tiflash: pre_package
+	tar -czvf ./binaries/package/tiflash.tar.gz -C ./binaries/ tiflash/
+
+package: package_pd package_tidb package_tikv package_tiflash
