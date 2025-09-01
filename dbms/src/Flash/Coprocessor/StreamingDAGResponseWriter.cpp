@@ -83,7 +83,7 @@ void StreamingDAGResponseWriter<StreamWriterPtr>::write(const Block & block)
     }
 
     if (needFlush())
-        encodeThenWriteBlocks();
+        return flush();
 }
 
 template <class StreamWriterPtr>

@@ -87,8 +87,8 @@ void FineGrainedShuffleWriter<ExchangeWriterPtr>::write(const Block & block)
         blocks.push_back(block);
     }
 
-    if (blocks.size() == fine_grained_shuffle_stream_count || needFlush())
-        batchWriteFineGrainedShuffle();
+    if (needFlush() || blocks.size() == fine_grained_shuffle_stream_count)
+        return flush();
 }
 
 template <class ExchangeWriterPtr>
