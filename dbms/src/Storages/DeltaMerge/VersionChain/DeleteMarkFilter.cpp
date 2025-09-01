@@ -28,7 +28,8 @@ UInt32 buildDeleteMarkFilterBlock(
     const IColumnFileDataProviderPtr & data_provider,
     const ColumnFile & cf,
     const UInt32 start_row_id,
-    BitmapFilter & filter)
+    BitmapFilter & filter,
+    prometheus::Counter * read_bytes_counter)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
     const auto rows = cf.getRows();
@@ -44,6 +45,8 @@ UInt32 buildDeleteMarkFilterBlock(
         "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
         cf.toString(),
         block.rows());
+    if (read_bytes_counter)
+        read_bytes_counter->Increment(block.bytes());
     const auto deleteds = ColumnView<UInt8>(*(block.begin()->column));
     UInt32 filtered_out_rows = 0;
     for (UInt32 i = 0; i < deleteds.size(); ++i)
@@ -63,7 +66,8 @@ UInt32 buildDeleteMarkFilterDMFile(
     const UInt32 start_pack_id,
     const RSResults & rs_results,
     const ssize_t start_row_id,
-    BitmapFilter & filter)
+    BitmapFilter & filter,
+    prometheus::Counter * read_bytes_counter)
 {
     auto need_read_packs = std::make_shared<IdSet>();
     std::unordered_map<UInt32, UInt32> start_row_id_of_need_read_packs; // pack_id -> start_row_id
@@ -104,6 +108,8 @@ UInt32 buildDeleteMarkFilterDMFile(
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
+        if (read_bytes_counter)
+            read_bytes_counter->Increment(block.bytes());
         const auto deleteds = ColumnView<UInt8>(*(block.begin()->column));
         const auto itr = start_row_id_of_need_read_packs.find(pack_id);
         RUNTIME_CHECK(itr != start_row_id_of_need_read_packs.end(), start_row_id_of_need_read_packs, pack_id);
@@ -124,7 +130,8 @@ UInt32 buildDeleteMarkFilterColumnFileBig(
     const DMContext & dm_context,
     const ColumnFileBig & cf_big,
     const ssize_t start_row_id,
-    BitmapFilter & filter)
+    BitmapFilter & filter,
+    prometheus::Counter * read_bytes_counter)
 {
     auto [valid_handle_res, valid_start_pack_id]
         = getClippedRSResultsByRange(dm_context, cf_big.getFile(), cf_big.getRange());
@@ -136,14 +143,16 @@ UInt32 buildDeleteMarkFilterColumnFileBig(
         valid_start_pack_id,
         valid_handle_res,
         start_row_id,
-        filter);
+        filter,
+        read_bytes_counter);
 }
 
 UInt32 buildDeleteMarkFilterStable(
     const DMContext & dm_context,
     const StableValueSpace::Snapshot & stable,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter)
+    BitmapFilter & filter,
+    prometheus::Counter * read_bytes_counter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
@@ -153,14 +162,16 @@ UInt32 buildDeleteMarkFilterStable(
         /*start_pack_id*/ 0,
         stable_filter_res->getPackRes(),
         /*start_row_id*/ 0,
-        filter);
+        filter,
+        read_bytes_counter);
 }
 
 UInt32 buildDeleteMarkFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter)
+    BitmapFilter & filter,
+    prometheus::Counter * read_bytes_counter)
 {
     const auto & stable = *(snapshot.stable);
     const UInt32 stable_rows = stable.getDMFilesRows();
@@ -169,7 +180,8 @@ UInt32 buildDeleteMarkFilter(
     const auto cfs = snapshot.delta->getColumnFiles();
     const auto & data_provider = snapshot.delta->getDataProvider();
 
-    auto filtered_out_rows = buildDeleteMarkFilterStable(dm_context, stable, stable_filter_res, filter);
+    auto filtered_out_rows
+        = buildDeleteMarkFilterStable(dm_context, stable, stable_filter_res, filter, read_bytes_counter);
     auto read_rows = stable_rows;
     for (const auto & cf : cfs)
     {
@@ -183,13 +195,15 @@ UInt32 buildDeleteMarkFilter(
         // TODO: add deleted_rows in tiny file and we can skip this column file is deleted_rows equals to 0.
         if (cf->isInMemoryFile() || cf->isTinyFile())
         {
-            filtered_out_rows += buildDeleteMarkFilterBlock(dm_context, data_provider, *cf, start_row_id, filter);
+            filtered_out_rows
+                += buildDeleteMarkFilterBlock(dm_context, data_provider, *cf, start_row_id, filter, read_bytes_counter);
             continue;
         }
 
         if (const auto * cf_big = cf->tryToBigFile(); cf_big)
         {
-            filtered_out_rows += buildDeleteMarkFilterColumnFileBig(dm_context, *cf_big, start_row_id, filter);
+            filtered_out_rows
+                += buildDeleteMarkFilterColumnFileBig(dm_context, *cf_big, start_row_id, filter, read_bytes_counter);
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());

@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <prometheus/counter.h>
+
 namespace DB::DM
 {
 struct DMContext;
@@ -25,5 +27,6 @@ UInt32 buildDeleteMarkFilter(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter);
+    BitmapFilter & filter,
+    prometheus::Counter * read_bytes_counter);
 } // namespace DB::DM

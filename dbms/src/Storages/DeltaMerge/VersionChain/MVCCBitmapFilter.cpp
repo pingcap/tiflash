@@ -17,6 +17,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Storages/DeltaMerge/BitmapFilter/BitmapFilter.h>
 #include <Storages/DeltaMerge/DMContext.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/DeleteMarkFilter.h>
 #include <Storages/DeltaMerge/VersionChain/MVCCBitmapFilter.h>
@@ -43,21 +44,36 @@ BitmapFilterPtr buildMVCCBitmapFilter(
     const auto & stable_filter_res = pack_filter_results[0];
     auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, true);
 
+    prometheus::Counter * read_bytes_counter = nullptr;
+    if (dm_context.scan_context && !dm_context.scan_context->resource_group_name.empty())
+    {
+        read_bytes_counter = &TiFlashMetrics::instance().getStorageRUReadBytesCounter(
+            dm_context.scan_context->keyspace_id,
+            dm_context.scan_context->resource_group_name,
+            ReadRUType::MVCC_READ);
+    }
+
     const auto version_filtered_out_rows = buildVersionFilter<HandleType>(
         dm_context,
         snapshot,
         *base_ver_snap,
         read_ts,
         stable_filter_res,
-        *bitmap_filter);
+        *bitmap_filter,
+        read_bytes_counter);
     const auto build_version_filter_ms = sw.elapsedMillisecondsFromLastTime();
 
-    const auto rowkey_filtered_out_rows
-        = buildRowKeyFilter<HandleType>(dm_context, snapshot, read_ranges, stable_filter_res, *bitmap_filter);
+    const auto rowkey_filtered_out_rows = buildRowKeyFilter<HandleType>(
+        dm_context,
+        snapshot,
+        read_ranges,
+        stable_filter_res,
+        *bitmap_filter,
+        read_bytes_counter);
     const auto build_rowkey_filter_ms = sw.elapsedMillisecondsFromLastTime();
 
     const auto delete_filtered_out_rows
-        = buildDeleteMarkFilter(dm_context, snapshot, stable_filter_res, *bitmap_filter);
+        = buildDeleteMarkFilter(dm_context, snapshot, stable_filter_res, *bitmap_filter, read_bytes_counter);
     const auto build_delete_filter_ms = sw.elapsedMillisecondsFromLastTime();
 
     // The sum of `*_filtered_out_rows` may greater than the actual number of rows that are filtered out,
