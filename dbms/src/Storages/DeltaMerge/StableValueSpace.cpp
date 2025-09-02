@@ -640,7 +640,7 @@ StableValueSpace::Snapshot::getAtLeastRowsAndBytes(const DMContext & context, co
 UInt64 StableValueSpace::Snapshot::estimatedReadRows(
     std::vector<DMFilePackFilter> & pack_filters,
     UInt64 start_ts,
-    bool use_delta_index) const
+    bool use_version_chain) const
 {
     const auto & dmfiles = getDMFiles();
     UInt64 rows = 0;
@@ -657,7 +657,9 @@ UInt64 StableValueSpace::Snapshot::estimatedReadRows(
             if (!pack_res[pack_id].isUse())
                 continue;
 
-            if (use_delta_index)
+            // If VersionChain is not used, prior to this, pack_filter_results would have already been ​processed and filtered​
+            // by either DMFilePackFilter::getSkippedRangeAndFilter or DMFilePackFilter::getSkippedRangeAndFilterWithMultiVersion.
+            if (!use_version_chain)
             {
                 rows += pack_stat.rows;
             }

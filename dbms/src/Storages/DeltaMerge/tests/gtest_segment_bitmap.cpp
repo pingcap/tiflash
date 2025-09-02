@@ -196,7 +196,99 @@ protected:
     }
 };
 
+<<<<<<< HEAD
 TEST_F(SegmentBitmapFilterTest, InMemory1)
+=======
+    const auto read_ranges
+        = shrinkRowKeyRanges(seg->getRowKeyRange(), opt.read_ranges.value_or(RowKeyRanges{seg->getRowKeyRange()}));
+
+    const auto & rs_filter_results
+        = opt.rs_filter_results.empty() ? loadPackFilterResults(snap, read_ranges) : opt.rs_filter_results;
+
+    auto bitmap_filter_version_chain = seg->buildMVCCBitmapFilter(
+        *dm_context,
+        snap,
+        read_ranges,
+        rs_filter_results,
+        opt.read_ts,
+        DEFAULT_BLOCK_SIZE,
+        /*enable_version_chain*/ true);
+
+    auto bitmap_filter_delta_index = seg->buildMVCCBitmapFilter(
+        *dm_context,
+        snap,
+        read_ranges,
+        rs_filter_results,
+        opt.read_ts,
+        DEFAULT_BLOCK_SIZE,
+        /*enable_version_chain*/ false);
+
+    if (opt.expected_bitmap)
+        ASSERT_EQ(bitmap_filter_version_chain->toDebugString(), *(opt.expected_bitmap))
+            << fmt::format("{}, bitmap_filter_delta_index={}", info, bitmap_filter_delta_index->toDebugString());
+
+    ASSERT_EQ(*bitmap_filter_delta_index, *bitmap_filter_version_chain) << fmt::format(
+        "{}, bitmap_filter_delta_index={}, bitmap_filter_version_chain={}",
+        info,
+        bitmap_filter_delta_index->toDebugString(),
+        bitmap_filter_version_chain->toDebugString());
+}
+
+INSTANTIATE_TEST_CASE_P(MVCC, SegmentBitmapFilterTest, /* is_common_handle */ ::testing::Bool());
+
+UInt64 SegmentBitmapFilterTest::estimatedBytesOfInternalColumns(UInt64 start_ts, Int64 enable_version_chain)
+{
+    auto & ctx = db_context->getGlobalContext();
+    auto & settings = ctx.getSettingsRef();
+    Int64 original_enable_version_chain = settings.enable_version_chain;
+    settings.set("enable_version_chain", std::to_string(enable_version_chain));
+    SCOPE_EXIT({ settings.set("enable_version_chain", std::to_string(original_enable_version_chain)); });
+    auto dm_ctx = DMContext::create(
+        ctx,
+        dm_context->path_pool,
+        dm_context->storage_pool,
+        dm_context->min_version,
+        dm_context->keyspace_id,
+        dm_context->physical_table_id,
+        dm_context->pk_col_id,
+        dm_context->is_common_handle,
+        dm_context->rowkey_column_size,
+        ctx.getSettingsRef(),
+        dm_context->scan_context,
+        dm_context->tracing_id);
+    auto [seg, snap] = getSegmentForRead(SEG_ID);
+    auto pack_filter_results = loadPackFilterResults(snap, {});
+
+    if (!dm_ctx->isVersionChainEnabled())
+    {
+        const auto & dmfiles = snap->stable->getDMFiles();
+        if (snap->delta->getRows() == 0)
+        {
+            auto [_ignore, new_pack_filter_results]
+                = DMFilePackFilter::getSkippedRangeAndFilter(*dm_ctx, dmfiles, pack_filter_results, start_ts);
+            pack_filter_results = std::move(new_pack_filter_results);
+        }
+        else
+        {
+            ColumnDefines columns_to_read{
+                getExtraHandleColumnDefine(is_common_handle),
+            };
+            auto read_info = seg->getReadInfo(*dm_context, columns_to_read, snap, {}, ReadTag::MVCC, start_ts);
+            auto [_ignore, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVersion(
+                *dm_ctx,
+                dmfiles,
+                pack_filter_results,
+                start_ts,
+                read_info.index_begin,
+                read_info.index_end);
+            pack_filter_results = std::move(new_pack_filter_results);
+        }
+    }
+    return Segment::estimatedBytesOfInternalColumns(*dm_ctx, snap, pack_filter_results, start_ts);
+}
+
+TEST_P(SegmentBitmapFilterTest, InMemory1)
+>>>>>>> 571f315503 (Storages: Fix read RU estimation (#10394))
 try
 {
     runTestCase(TestCase("d_mem:[0, 1000)", 1000, "[0, 1000)", "[0, 1000)"));

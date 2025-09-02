@@ -659,6 +659,18 @@ public:
         }
     }
 
+<<<<<<< HEAD
+=======
+    void setVersionChain(const GenericVersionChainPtr & version_chain_) { version_chain = version_chain_; }
+    const GenericVersionChainPtr & getVersionChain() const { return version_chain; }
+
+    static UInt64 estimatedBytesOfInternalColumns(
+        const DMContext & dm_context,
+        const SegmentSnapshotPtr & read_snap,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts);
+
+>>>>>>> 571f315503 (Storages: Fix read RU estimation (#10394))
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -791,6 +803,7 @@ public:
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
 
+<<<<<<< HEAD
     static std::vector<DMFilePackFilter> loadDMFilePackFilters(
         const DMFiles & dmfiles,
         const MinMaxIndexCachePtr & index_cache,
@@ -806,6 +819,8 @@ public:
         std::vector<DMFilePackFilter> & pack_filters,
         UInt64 start_ts);
 
+=======
+>>>>>>> 571f315503 (Storages: Fix read RU estimation (#10394))
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else

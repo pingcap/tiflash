@@ -984,8 +984,32 @@ UInt64 Segment::estimatedBytesOfInternalColumns(
     const auto stable_read_rows = read_snap->stable->estimatedReadRows(
         pack_filters,
         start_ts,
+<<<<<<< HEAD
         /*use_delta_index*/ delta_read_rows != 0);
+=======
+        dm_context.isVersionChainEnabled());
+>>>>>>> 571f315503 (Storages: Fix read RU estimation (#10394))
     return (handle_size + version_size + delmark_size) * (delta_read_rows + stable_read_rows);
+}
+
+static void consumeBuildMVCCReadBytesRU(
+    const DMContext & dm_context,
+    const SegmentSnapshotPtr & segment_snap,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts)
+{
+    // Building MVCC bitmap can be a resource-intensive operation that cannot be paused midway.
+    // To prevent scenarios where multiple segments concurrently build MVCC bitmaps but exhaust
+    // RU during execution and causing RU consumption to exceed limitations, we need to first
+    // estimate the cost of building the MVCC bitmap, pre-consume the corresponding RU,
+    // and then proceed with the building task.
+    const auto & res_group_name = dm_context.scan_context->resource_group_name;
+    if (likely(!res_group_name.empty()))
+    {
+        const auto keyspace_id = dm_context.scan_context->keyspace_id;
+        auto bytes = Segment::estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filter_results, start_ts);
+        LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
+    }
 }
 
 BlockInputStreamPtr Segment::getInputStream(
@@ -1005,6 +1029,7 @@ BlockInputStreamPtr Segment::getInputStream(
         expected_block_size,
         columns_to_read,
         segment_snap->stable->stable);
+<<<<<<< HEAD
 
     // Building MVCC bitmap can be a resource-intensive operation that cannot be paused midway.
     // To prevent scenarios where multiple segments concurrently build MVCC bitmaps but exhaust
@@ -1032,6 +1057,28 @@ BlockInputStreamPtr Segment::getInputStream(
         }
     }
 
+=======
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
+    if (real_ranges.empty())
+        return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
+
+    // load DMilePackFilterResult for each DMFile
+    // Note that the ranges must be shrunk by the segment key-range
+    DMFilePackFilterResults pack_filter_results;
+    pack_filter_results.reserve(segment_snap->stable->getDMFiles().size());
+    for (const auto & dmfile : segment_snap->stable->getDMFiles())
+    {
+        auto result = DMFilePackFilter::loadFrom(
+            dm_context,
+            dmfile,
+            /*set_cache_if_miss*/ true,
+            real_ranges,
+            executor ? executor->rs_operator : EMPTY_RS_OPERATOR,
+            /*read_pack*/ {});
+        pack_filter_results.push_back(result);
+    }
+
+>>>>>>> 571f315503 (Storages: Fix read RU estimation (#10394))
     switch (read_mode)
     {
     case ReadMode::Normal:
@@ -3135,7 +3182,26 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
+<<<<<<< HEAD
         return buildBitmapFilterStableOnly(
+=======
+        if (enable_version_chain)
+        {
+            consumeBuildMVCCReadBytesRU(dm_context, segment_snap, pack_filter_results, start_ts);
+            return ::DB::DM::buildMVCCBitmapFilter(
+                dm_context,
+                *segment_snap,
+                read_ranges,
+                pack_filter_results,
+                start_ts,
+                *version_chain);
+        }
+    }
+
+    if (readStableOnly(dm_context, segment_snap))
+    {
+        return buildMVCCBitmapFilterStableOnly<is_fast_scan>(
+>>>>>>> 571f315503 (Storages: Fix read RU estimation (#10394))
             dm_context,
             segment_snap,
             read_ranges,
@@ -3158,11 +3224,115 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     size_t expected_block_size)
 {
     Stopwatch sw_total;
+<<<<<<< HEAD
     ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
     };
     // Generate the bitmap according to the MVCC filter result
     auto stream = getInputStreamModeNormal(
+=======
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
+    const auto & dmfiles = segment_snap->stable->getDMFiles();
+    auto read_tag = ReadTag::MVCC;
+
+    LOG_TRACE(segment_snap->log, "Begin segment create input stream");
+    BlockInputStreamPtr stream;
+    std::vector<DMFilePackFilter::Range> skipped_ranges;
+    DMFilePackFilterResults new_pack_filter_results;
+    if constexpr (is_fast_scan)
+    {
+        auto columns_to_read = std::make_shared<ColumnDefines>(ColumnDefines{
+            getExtraHandleColumnDefine(is_common_handle),
+            getTagColumnDefine(),
+        });
+
+        std::tie(skipped_ranges, new_pack_filter_results)
+            = DMFilePackFilter::getSkippedRangeAndFilter(dm_context, dmfiles, pack_filter_results, start_ts);
+
+        BlockInputStreamPtr stable_stream = segment_snap->stable->getInputStream</*need_rowid*/ true>(
+            dm_context,
+            *columns_to_read,
+            read_ranges,
+            std::numeric_limits<UInt64>::max(),
+            expected_block_size,
+            /*enable_handle_clean_read*/ true,
+            read_tag,
+            new_pack_filter_results,
+            /*is_fast_scan*/ true,
+            /*enable_del_clean_read*/ true);
+
+        BlockInputStreamPtr delta_stream = std::make_shared<DeltaValueInputStreamWithRowID>(
+            dm_context,
+            segment_snap->delta,
+            columns_to_read,
+            this->rowkey_range,
+            read_tag,
+            segment_snap->stable->getDMFilesRows());
+
+        // Do row key filtering based on data_ranges.
+        delta_stream = std::make_shared<DMRowKeyFilterBlockInputStream<false>>(delta_stream, read_ranges, 0);
+        stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, read_ranges, 0);
+
+        // Filter the unneeded column and filter out the rows whose del_mark is true.
+        delta_stream
+            = std::make_shared<DMDeleteFilterBlockInputStream>(delta_stream, *columns_to_read, dm_context.tracing_id);
+        stable_stream
+            = std::make_shared<DMDeleteFilterBlockInputStream>(stable_stream, *columns_to_read, dm_context.tracing_id);
+
+        BlockInputStreams streams{delta_stream, stable_stream};
+        stream = std::make_shared<ConcatBlockInputStream>(streams, dm_context.tracing_id);
+    }
+    else
+    {
+        ColumnDefines columns_to_read{
+            getExtraHandleColumnDefine(is_common_handle),
+        };
+        auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, read_ranges, read_tag, start_ts);
+
+        std::tie(skipped_ranges, new_pack_filter_results) = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVersion(
+            dm_context,
+            dmfiles,
+            pack_filter_results,
+            start_ts,
+            read_info.index_begin,
+            read_info.index_end);
+
+        stream = getPlacedStream(
+            dm_context,
+            *read_info.read_columns,
+            read_ranges,
+            segment_snap->stable,
+            read_info.getDeltaReader(read_tag),
+            read_info.index_begin,
+            read_info.index_end,
+            expected_block_size,
+            read_tag,
+            new_pack_filter_results,
+            start_ts,
+            true);
+
+        stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_ranges, 0);
+        stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::MVCC>>(
+            stream,
+            columns_to_read,
+            start_ts,
+            is_common_handle,
+            dm_context.tracing_id,
+            dm_context.scan_context);
+    }
+
+    // consume the RU according to `new_pack_filter_result` which could skip reading more packs for MVCC than `pack_filter_results`
+    consumeBuildMVCCReadBytesRU(dm_context, segment_snap, new_pack_filter_results, start_ts);
+
+    LOG_TRACE(
+        segment_snap->log,
+        "Finish segment create input stream, start_ts={} range_size={} ranges={}",
+        start_ts,
+        read_ranges.size(),
+        read_ranges);
+
+    return ::DB::DM::buildBitmapFilterByStream(
+>>>>>>> 571f315503 (Storages: Fix read RU estimation (#10394))
         dm_context,
         columns_to_read,
         segment_snap,
@@ -3344,12 +3514,72 @@ BitmapFilterPtr Segment::buildBitmapFilterStableOnly(
         return bitmap_filter;
     }
 
+<<<<<<< HEAD
     const ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
         getVersionColumnDefine(),
         getTagColumnDefine(),
     };
     BlockInputStreamPtr stream = segment_snap->stable->getInputStream(
+=======
+    // consume the RU according to `new_pack_filter_result` which could skip reading more packs for MVCC than `pack_filter_results`
+    consumeBuildMVCCReadBytesRU(dm_context, segment_snap, new_pack_filter_results, start_ts);
+
+    BlockInputStreamPtr stream;
+    if constexpr (is_fast_scan)
+    {
+        const ColumnDefines columns_to_read{
+            getExtraHandleColumnDefine(is_common_handle),
+            getTagColumnDefine(),
+        };
+        stream = segment_snap->stable->getInputStream</*need_rowid*/ true>(
+            dm_context,
+            columns_to_read,
+            read_ranges,
+            std::numeric_limits<UInt64>::max(),
+            expected_block_size,
+            /*enable_handle_clean_read*/ true,
+            ReadTag::MVCC,
+            new_pack_filter_results,
+            /*is_fast_scan*/ true,
+            /*enable_del_clean_read*/ true,
+            /*read_packs*/ {});
+        stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_ranges, 0);
+        stream = std::make_shared<DMDeleteFilterBlockInputStream>(stream, columns_to_read, dm_context.tracing_id);
+    }
+    else
+    {
+        const ColumnDefines columns_to_read{
+            getExtraHandleColumnDefine(is_common_handle),
+            getVersionColumnDefine(),
+            getTagColumnDefine(),
+        };
+        stream = segment_snap->stable->getInputStream</*need_rowid*/ true>(
+            dm_context,
+            columns_to_read,
+            read_ranges,
+            start_ts,
+            expected_block_size,
+            /*enable_handle_clean_read*/ false,
+            ReadTag::MVCC,
+            new_pack_filter_results,
+            /*is_fast_scan*/ false,
+            /*enable_del_clean_read*/ false,
+            /*read_packs*/ {});
+        stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, read_ranges, 0);
+        const ColumnDefines read_columns{
+            getExtraHandleColumnDefine(is_common_handle),
+        };
+        stream = std::make_shared<DMVersionFilterBlockInputStream<DMVersionFilterMode::MVCC>>(
+            stream,
+            read_columns,
+            start_ts,
+            is_common_handle,
+            dm_context.tracing_id);
+    }
+
+    return ::DB::DM::buildBitmapFilterByStream(
+>>>>>>> 571f315503 (Storages: Fix read RU estimation (#10394))
         dm_context,
         columns_to_read,
         read_ranges,

@@ -253,8 +253,16 @@ public:
          */
         AtLeastRowsAndBytesResult getAtLeastRowsAndBytes(const DMContext & context, const RowKeyRange & range) const;
 
+<<<<<<< HEAD
         UInt64 estimatedReadRows(std::vector<DMFilePackFilter> & pack_filters, UInt64 start_ts, bool use_delta_index)
             const;
+=======
+        UInt64 estimatedReadRows(
+            const DMContext & dm_context,
+            const DMFilePackFilterResults & pack_filter_results,
+            UInt64 start_ts,
+            bool use_version_chain) const;
+>>>>>>> 571f315503 (Storages: Fix read RU estimation (#10394))
 
     private:
         LoggerPtr log;
