@@ -51,6 +51,8 @@ public:
         for (size_t i = 0; i < this->partition_num; i++)
         {
             this->partitions.push_back(std::make_shared<CTEPartition>(i, expected_source_num_));
+            for (size_t cte_reader_id = 0; cte_reader_id < expected_source_num_; cte_reader_id++)
+                this->partitions.back()->fetch_block_idxs.insert(std::make_pair(cte_reader_id, 0));
             this->partitions.back()->mu = std::make_unique<std::mutex>();
             this->partitions.back()->pipe_cv = std::make_unique<PipeConditionVariable>();
         }
@@ -122,11 +124,7 @@ public:
             "next_cte_reader_id: {}, expected_source_num: {}",
             this->next_cte_reader_id,
             this->expected_source_num);
-        auto cte_reader_id = this->next_cte_reader_id;
-        this->next_cte_reader_id++;
-        for (auto & item : this->partitions)
-            item->fetch_block_idxs.insert(std::make_pair(cte_reader_id, 0));
-        return cte_reader_id;
+        return this->next_cte_reader_id++;
     }
 
     CTEOpStatus tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block & block);

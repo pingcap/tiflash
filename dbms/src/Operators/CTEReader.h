@@ -44,6 +44,9 @@ public:
     std::atomic_size_t total_fetch_blocks = 0;
     std::atomic_size_t total_fetch_rows = 0;
 
+    std::atomic_size_t total_fetch_from_mem = 0;
+    std::atomic_size_t total_fetch_from_disk = 0;
+
     // For Test
     CTEReader(const String & query_id_and_cte_id_, CTEManager * cte_manager_, std::shared_ptr<CTE> cte_)
         : query_id_and_cte_id(query_id_and_cte_id_)
@@ -62,9 +65,12 @@ public:
         LOG_INFO(
             log,
             fmt::format(
-                "xzxdebug CTEReader fb: {} fr: {}",
+                "xzxdebug CTEReader {} fb: {} fr: {}, from mem: {}, from disk: {}",
+                this->cte_reader_id,
                 this->total_fetch_blocks.load(),
-                this->total_fetch_rows.load()));
+                this->total_fetch_rows.load(),
+                this->total_fetch_from_mem.load(),
+                this->total_fetch_from_disk.load()));
     }
 
     CTEOpStatus fetchNextBlock(size_t source_id, Block & block);

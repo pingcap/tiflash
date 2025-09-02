@@ -14,6 +14,7 @@
 
 #pragma once
 
+#include <Common/Exception.h>
 #include <Core/SpillConfig.h>
 #include <Core/Spiller.h>
 #include <Flash/Pipeline/Schedule/Tasks/PipeConditionVariable.h>
@@ -148,17 +149,31 @@ struct CTEPartition
     void setSharedConfig(std::shared_ptr<CTEPartitionSharedConfig> config) { this->config = config; }
 
     size_t getIdxInMemoryNoLock(size_t cte_reader_id);
+
+    UInt64 getTotalEvictedBlockNumnoLock() const
+    {
+        return this->total_block_released_num + this->total_block_in_disk_num;
+    }
+
     bool isBlockAvailableInDiskNoLock(size_t cte_reader_id)
     {
-        return this->fetch_block_idxs[cte_reader_id] < this->total_block_in_disk_num;
+        auto idx = this->fetch_block_idxs[cte_reader_id];
+        RUNTIME_CHECK_MSG(
+            idx >= this->total_block_released_num,
+            "partition: {}, idx: {}, total_block_released_num: {}",
+            this->partition_id,
+            idx,
+            this->total_block_released_num);
+        return idx < this->getTotalEvictedBlockNumnoLock();
     }
+
     bool isBlockAvailableInMemoryNoLock(size_t cte_reader_id)
     {
         return this->getIdxInMemoryNoLock(cte_reader_id) < this->blocks.size();
     }
 
     bool isSpillTriggeredNoLock() const { return this->total_block_in_disk_num > 0; }
-    void addIdxNoLock(size_t cte_reader_id) { this->fetch_block_idxs[cte_reader_id]++; }
+    void addIdxNoLock(size_t cte_reader_id) { ++this->fetch_block_idxs[cte_reader_id]; }
     bool exceedMemoryThresholdNoLock() const
     {
         if (this->config->memory_threshold == 0)
@@ -199,6 +214,8 @@ struct CTEPartition
     std::vector<std::pair<size_t, size_t>> spill_ranges;
     std::map<size_t, std::vector<size_t>> fetch_in_mem_idxs;
     std::map<size_t, std::vector<size_t>> fetch_in_disk_idxs;
+
+    bool first_log = true;
     // -----------
 
     size_t total_byte_usage = 0;
@@ -218,10 +235,10 @@ struct CTEPartition
     size_t memory_usage = 0;
     const size_t expected_source_num;
 
-    std::vector<UInt64> block_in_disk_nums;
     std::unordered_map<size_t, SpillerPtr> spillers;
     std::unordered_map<size_t, BlockInputStreamPtr> cte_reader_restore_streams;
     UInt64 total_block_in_disk_num = 0;
+    UInt64 total_block_released_num = 0;
 
     std::shared_ptr<CTEPartitionSharedConfig> config;
 

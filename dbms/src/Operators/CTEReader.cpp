@@ -37,10 +37,13 @@ CTEOpStatus CTEReader::fetchNextBlock(size_t source_id, Block & block)
     case CTEOpStatus::SINK_NOT_REGISTERED:
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
     case CTEOpStatus::CANCELLED:
+        // TODO merge
         return ret;
     case CTEOpStatus::OK:
+        // TODO remove
         this->total_fetch_blocks.fetch_add(1);
         this->total_fetch_rows.fetch_add(block.rows());
+        this->total_fetch_from_mem.fetch_add(1);
         return ret;
     }
     throw Exception("Should not reach here");
@@ -51,7 +54,13 @@ CTEOpStatus CTEReader::fetchBlockFromDisk(size_t source_id, Block & block)
     bool expected_bool = false;
     if (this->is_first_log.compare_exchange_weak(expected_bool, true))
         LOG_INFO(this->cte->getLog(), "Begin restore data from disk for cte.");
-
-    return this->cte->getBlockFromDisk(this->cte_reader_id, source_id, block);
+    auto ret = this->cte->getBlockFromDisk(this->cte_reader_id, source_id, block);
+    if (block)
+    {
+        this->total_fetch_blocks.fetch_add(1);
+        this->total_fetch_rows.fetch_add(block.rows());
+        this->total_fetch_from_disk.fetch_add(1);
+    }
+    return ret;
 }
 } // namespace DB

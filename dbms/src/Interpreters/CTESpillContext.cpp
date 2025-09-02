@@ -21,9 +21,6 @@ namespace DB
 {
 Int64 CTESpillContext::triggerSpillImpl(Int64 expected_released_memories)
 {
-    String info = "xzxdebug CTE auto spill is triggered, spilled partitions: ";
-    auto * log = &Poco::Logger::get("LRUCache");
-
     for (auto & partition : this->partitions)
     {
         std::lock_guard<std::mutex> aux_lock(*(partition->aux_lock));
@@ -31,17 +28,15 @@ Int64 CTESpillContext::triggerSpillImpl(Int64 expected_released_memories)
             continue;
 
         partition->status = CTEPartitionStatus::NEED_SPILL;
-        info = fmt::format("{}, {}", info, partition->partition_id);
 
         std::lock_guard<std::mutex> lock(*(partition->mu));
+        if (partition->memory_usage == 0)
+            continue;
+
         expected_released_memories = std::max(expected_released_memories - partition->memory_usage, 0);
         if (expected_released_memories <= 0)
-        {
-            LOG_INFO(log, info);
             return expected_released_memories;
-        }
     }
-    LOG_INFO(log, info);
     return expected_released_memories;
 }
 } // namespace DB
