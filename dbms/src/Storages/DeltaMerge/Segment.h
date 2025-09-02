@@ -662,6 +662,12 @@ public:
     void setVersionChain(const GenericVersionChainPtr & version_chain_) { version_chain = version_chain_; }
     const GenericVersionChainPtr & getVersionChain() const { return version_chain; }
 
+    static UInt64 estimatedBytesOfInternalColumns(
+        const DMContext & dm_context,
+        const SegmentSnapshotPtr & read_snap,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts);
+
 #ifndef DBMS_PUBLIC_GTEST
 private:
 #else
@@ -832,12 +838,6 @@ public:
         size_t expected_block_rows,
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
-
-    static UInt64 estimatedBytesOfInternalColumns(
-        const DMContext & dm_context,
-        const SegmentSnapshotPtr & read_snap,
-        const DMFilePackFilterResults & pack_filter_results,
-        UInt64 start_ts);
 
 #ifndef DBMS_PUBLIC_GTEST
 private:
