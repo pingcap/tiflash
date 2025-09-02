@@ -238,6 +238,8 @@ private:
             case tipb::ScalarFuncSig::FTSMatchPrefix:
             case tipb::ScalarFuncSig::LogicalAnd:
             case tipb::ScalarFuncSig::LogicalOr:
+            case tipb::ScalarFuncSig::UnaryNotInt:
+            case tipb::ScalarFuncSig::UnaryNotReal:
                 ret.sig = expr.sig();
                 break;
             default:
