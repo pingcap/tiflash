@@ -1607,7 +1607,7 @@ tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
     return func_name_sig_map[name];
 }
 
-constexpr ssize_t MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE = 1024 * 1024 * 32; // 32: 8192 Rows * 256 Byte/row * 16 partitions
+constexpr ssize_t MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE = 1024 * 1024 * 32; // 32MB (8192 Rows * 256 Byte/row * 16 partitions)
 
 UInt64 getMaxBufferedBytesInResponseWriter(Int64 max_buffered_bytes_in_executor, size_t concurrency)
 {
