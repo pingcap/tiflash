@@ -26,8 +26,6 @@
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.cpp>
 #include <cstddef>
 
-#include "common/types.h"
-
 namespace DB
 {
 namespace tests
