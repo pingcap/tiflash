@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Storages/DeltaMerge/VersionChain/Common.h>
-#include <prometheus/counter.h>
 
 namespace DB::DM
 {
@@ -32,6 +31,5 @@ UInt32 buildRowKeyFilter(
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter);
+    BitmapFilter & filter);
 } // namespace DB::DM

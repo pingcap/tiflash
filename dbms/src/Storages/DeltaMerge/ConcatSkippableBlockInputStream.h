@@ -73,7 +73,6 @@ private:
     const ScanContextPtr scan_context;
     LACBytesCollector lac_bytes_collector;
     ReadTag read_tag;
-    prometheus::Counter * read_bytes_counter;
 };
 
 } // namespace DB::DM

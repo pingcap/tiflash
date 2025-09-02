@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/VersionFilter.h>
 
@@ -76,8 +77,7 @@ UInt32 buildVersionFilterVector(
     const std::vector<RowID> & base_ver_snap,
     const UInt32 stable_rows,
     const UInt32 start_row_id,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter)
+    BitmapFilter & filter)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile() || cf.isBigFile());
     static const auto version_cds_ptr = std::make_shared<ColumnDefines>(1, getVersionColumnDefine());
@@ -90,8 +90,8 @@ UInt32 buildVersionFilterVector(
         auto block = cf_reader->readNextBlock();
         if (!block)
             break;
-        if (read_bytes_counter)
-            read_bytes_counter->Increment(block.bytes());
+        if (dm_context.scan_context)
+            dm_context.scan_context->addMVCCReadBytes(block.bytes());
         ++read_block_count;
         read_rows += block.rows();
         const auto & versions = *toColumnVectorDataPtr<UInt64>(block.begin()->column);
@@ -119,8 +119,7 @@ template <ExtraHandleType HandleType>
     const UInt32 start_pack_id,
     const RSResults & rs_results, // Use to skip packs that are not used.
     const ssize_t start_row_id,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter)
+    BitmapFilter & filter)
 {
     // Load the max version of each pack.
     // Note that it is the max version of the non-deleted rows.
@@ -172,8 +171,8 @@ template <ExtraHandleType HandleType>
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
-        if (read_bytes_counter)
-            read_bytes_counter->Increment(block.bytes());
+        if (dm_context.scan_context)
+            dm_context.scan_context->addMVCCReadBytes(block.bytes());
         const auto handles = ColumnView<HandleType>(*(block.getByPosition(0).column));
         const auto & versions = *toColumnVectorDataPtr<UInt64>(block.getByPosition(1).column);
         const auto itr = start_row_id_of_need_read_packs.find(pack_id);
@@ -247,8 +246,7 @@ template <ExtraHandleType HandleType>
     const ColumnFileBig & cf_big,
     const UInt64 read_ts,
     const ssize_t start_row_id,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter)
+    BitmapFilter & filter)
 {
     auto [valid_handle_res, valid_start_pack_id]
         = getClippedRSResultsByRange(dm_context, cf_big.getFile(), cf_big.getRange());
@@ -262,8 +260,7 @@ template <ExtraHandleType HandleType>
         valid_start_pack_id,
         valid_handle_res,
         start_row_id,
-        filter,
-        read_bytes_counter);
+        filter);
 }
 
 template <ExtraHandleType HandleType>
@@ -272,8 +269,7 @@ template <ExtraHandleType HandleType>
     const StableValueSpace::Snapshot & stable,
     const UInt64 read_ts,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter)
+    BitmapFilter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
@@ -281,8 +277,14 @@ template <ExtraHandleType HandleType>
     const auto & pack_res = stable_filter_res->getPackRes();
     constexpr UInt32 start_pack_id = 0;
     constexpr UInt32 start_row_id = 0;
-    return buildVersionFilterDMFile<
-        HandleType>(dm_context, dmfile, read_ts, start_pack_id, pack_res, start_row_id, filter, read_bytes_counter);
+    return buildVersionFilterDMFile<HandleType>(
+        dm_context,
+        dmfile,
+        read_ts,
+        start_pack_id,
+        pack_res,
+        start_row_id,
+        filter);
 }
 
 template <ExtraHandleType HandleType>
@@ -292,8 +294,7 @@ UInt32 buildVersionFilter(
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter)
+    BitmapFilter & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -333,8 +334,7 @@ UInt32 buildVersionFilter(
                 base_ver_snap,
                 stable_rows,
                 start_row_id,
-                filter,
-                read_bytes_counter);
+                filter);
             continue;
         }
 
@@ -350,13 +350,8 @@ UInt32 buildVersionFilter(
             // If `​has_base_version` is ​false, it means we only need to handle version filtering ​within the DMFile.
             if (likely(!has_base_version))
             {
-                filtered_out_rows += buildVersionFilterColumnFileBig<HandleType>(
-                    dm_context,
-                    *cf_big,
-                    read_ts,
-                    start_row_id,
-                    filter,
-                    read_bytes_counter);
+                filtered_out_rows
+                    += buildVersionFilterColumnFileBig<HandleType>(dm_context, *cf_big, read_ts, start_row_id, filter);
             }
             else
             {
@@ -368,21 +363,14 @@ UInt32 buildVersionFilter(
                     base_ver_snap,
                     stable_rows,
                     start_row_id,
-                    filter,
-                    read_bytes_counter);
+                    filter);
             }
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
     }
     RUNTIME_CHECK(read_rows == delta_rows, read_rows, delta_rows);
-    filtered_out_rows += buildVersionFilterStable<HandleType>(
-        dm_context,
-        stable,
-        read_ts,
-        stable_filter_res,
-        filter,
-        read_bytes_counter);
+    filtered_out_rows += buildVersionFilterStable<HandleType>(dm_context, stable, read_ts, stable_filter_res, filter);
     return filtered_out_rows;
 }
 
@@ -392,8 +380,7 @@ template UInt32 buildVersionFilter<Int64>(
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter);
+    BitmapFilter & filter);
 
 template UInt32 buildVersionFilter<String>(
     const DMContext & dm_context,
@@ -401,6 +388,5 @@ template UInt32 buildVersionFilter<String>(
     const std::vector<RowID> & base_ver_snap,
     const UInt64 read_ts,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter);
+    BitmapFilter & filter);
 } // namespace DB::DM

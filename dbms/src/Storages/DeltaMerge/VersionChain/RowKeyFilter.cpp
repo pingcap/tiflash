@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFileBlockInputStream.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/Segment.h>
 #include <Storages/DeltaMerge/VersionChain/RowKeyFilter.h>
 
@@ -59,8 +60,7 @@ UInt32 buildRowKeyFilterBlock(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter)
+    BitmapFilter & filter)
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
     const UInt32 rows = cf.getRows();
@@ -74,8 +74,8 @@ UInt32 buildRowKeyFilterBlock(
         "ColumnFile<{}> returns {} rows. Read all rows in one block is required!",
         cf.toString(),
         block.rows());
-    if (read_bytes_counter)
-        read_bytes_counter->Increment(block.bytes());
+    if (dm_context.scan_context)
+        dm_context.scan_context->addMVCCReadBytes(block.bytes());
 
     const auto handles = ColumnView<HandleType>(*(block.begin()->column));
     return buildRowKeyFilterVector<HandleType>(handles, delete_ranges, read_ranges, start_row_id, filter);
@@ -91,8 +91,7 @@ UInt32 buildRowKeyFilterDMFile(
     const RSResults & handle_res, // read_ranges && !delete_ranges
     const RSResults & pack_res, // read_ranges && !delete_ranges && (rs_filter if stable)
     const UInt32 start_row_id,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter)
+    BitmapFilter & filter)
 {
     auto need_read_packs = std::make_shared<IdSet>();
     std::unordered_map<UInt32, UInt32> start_row_id_of_need_read_packs; // pack_id -> start_row_id
@@ -130,8 +129,8 @@ UInt32 buildRowKeyFilterDMFile(
     {
         auto block = stream->read();
         RUNTIME_CHECK(block.rows() == pack_stats[pack_id].rows, block.rows(), pack_stats[pack_id].rows);
-        if (read_bytes_counter)
-            read_bytes_counter->Increment(block.bytes());
+        if (dm_context.scan_context)
+            dm_context.scan_context->addMVCCReadBytes(block.bytes());
         const auto handles = ColumnView<HandleType>(*(block.begin()->column));
         const auto itr = start_row_id_of_need_read_packs.find(pack_id);
         RUNTIME_CHECK(itr != start_row_id_of_need_read_packs.end(), start_row_id_of_need_read_packs, pack_id);
@@ -153,8 +152,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const UInt32 start_row_id,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter)
+    BitmapFilter & filter)
 {
     auto [valid_handle_res, valid_start_pack_id]
         = getClippedRSResultsByRange(dm_context, cf_big.getFile(), cf_big.getRange());
@@ -184,8 +182,7 @@ UInt32 buildRowKeyFilterColumnFileBig(
         valid_handle_res,
         valid_handle_res,
         start_row_id,
-        filter,
-        read_bytes_counter);
+        filter);
 }
 
 template <ExtraHandleType HandleType>
@@ -195,8 +192,7 @@ UInt32 buildRowKeyFilterStable(
     const RowKeyRanges & delete_ranges,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter)
+    BitmapFilter & filter)
 {
     const auto & dmfiles = stable.getDMFiles();
     RUNTIME_CHECK(dmfiles.size() == 1, dmfiles.size());
@@ -225,8 +221,7 @@ UInt32 buildRowKeyFilterStable(
         handle_res,
         pack_res,
         /*start_row_id*/ 0,
-        filter,
-        read_bytes_counter);
+        filter);
 }
 
 } // namespace
@@ -237,8 +232,7 @@ UInt32 buildRowKeyFilter(
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & stable_filter_res,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter)
+    BitmapFilter & filter)
 {
     const auto & delta = *(snapshot.delta);
     const auto & stable = *(snapshot.stable);
@@ -277,8 +271,7 @@ UInt32 buildRowKeyFilter(
                 delete_ranges,
                 read_ranges,
                 start_row_id,
-                filter,
-                read_bytes_counter);
+                filter);
             continue;
         }
 
@@ -290,8 +283,7 @@ UInt32 buildRowKeyFilter(
                 delete_ranges,
                 read_ranges,
                 start_row_id,
-                filter,
-                read_bytes_counter);
+                filter);
             continue;
         }
         RUNTIME_CHECK_MSG(false, "{}: unknow ColumnFile type", cf->toString());
@@ -304,8 +296,7 @@ UInt32 buildRowKeyFilter(
         delete_ranges,
         read_ranges,
         stable_filter_res,
-        filter,
-        read_bytes_counter);
+        filter);
     return filtered_out_rows;
 }
 
@@ -314,14 +305,12 @@ template UInt32 buildRowKeyFilter<Int64>(
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & filter_res,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter);
+    BitmapFilter & filter);
 
 template UInt32 buildRowKeyFilter<String>(
     const DMContext & dm_context,
     const SegmentSnapshot & snapshot,
     const RowKeyRanges & read_ranges,
     const DMFilePackFilterResultPtr & filter_res,
-    BitmapFilter & filter,
-    prometheus::Counter * read_bytes_counter);
+    BitmapFilter & filter);
 } // namespace DB::DM

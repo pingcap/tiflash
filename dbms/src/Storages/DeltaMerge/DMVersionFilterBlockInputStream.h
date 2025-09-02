@@ -148,7 +148,7 @@ private:
         else
         {
             if (raw_block.segmentRowIdCol() != nullptr && scan_context != nullptr)
-                scan_context->addBuildMVCCBitmapReadBytes(raw_block.bytes());
+                scan_context->addMVCCReadBytes(raw_block.bytes());
             rowkey_column = std::make_unique<RowKeyColumnContainer>(
                 raw_block.getByPosition(handle_col_pos).column,
                 is_common_handle);

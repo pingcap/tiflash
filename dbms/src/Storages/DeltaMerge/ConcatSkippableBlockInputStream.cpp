@@ -34,19 +34,10 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
           scan_context_ ? scan_context_->keyspace_id : NullspaceID,
           scan_context_ ? scan_context_->resource_group_name : "")
     , read_tag(read_tag_)
-    , read_bytes_counter(nullptr)
 {
     assert(rows.size() == inputs_.size());
     children.insert(children.end(), inputs_.begin(), inputs_.end());
     current_stream = children.begin();
-
-    if (scan_context && !scan_context->resource_group_name.empty() && read_tag != ReadTag::MVCC)
-    {
-        read_bytes_counter = &TiFlashMetrics::instance().getStorageRUReadBytesCounter(
-            scan_context->keyspace_id,
-            scan_context->resource_group_name,
-            ReadRUType::QUERY_READ);
-    }
 }
 
 template <bool need_row_id>
@@ -165,10 +156,8 @@ void ConcatSkippableBlockInputStream<need_row_id>::addReadBytes(UInt64 bytes)
 {
     if (likely(scan_context != nullptr) && read_tag != ReadTag::MVCC)
     {
-        scan_context->user_read_bytes += bytes;
+        scan_context->addQueryReadBytes(bytes);
         lac_bytes_collector.collect(bytes);
-        if (read_bytes_counter)
-            read_bytes_counter->Increment(bytes);
     }
 }
 
