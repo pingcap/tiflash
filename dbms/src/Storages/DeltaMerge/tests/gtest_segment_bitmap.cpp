@@ -256,6 +256,32 @@ UInt64 SegmentBitmapFilterTest::estimatedBytesOfInternalColumns(UInt64 start_ts,
         dm_context->tracing_id);
     auto [seg, snap] = getSegmentForRead(SEG_ID);
     auto pack_filter_results = loadPackFilterResults(snap, {});
+
+    if (!dm_ctx->isVersionChainEnabled())
+    {
+        const auto & dmfiles = snap->stable->getDMFiles();
+        if (snap->delta->getRows() == 0)
+        {
+            auto [_ignore, new_pack_filter_results]
+                = DMFilePackFilter::getSkippedRangeAndFilter(*dm_ctx, dmfiles, pack_filter_results, start_ts);
+            pack_filter_results = std::move(new_pack_filter_results);
+        }
+        else
+        {
+            ColumnDefines columns_to_read{
+                getExtraHandleColumnDefine(is_common_handle),
+            };
+            auto read_info = seg->getReadInfo(*dm_context, columns_to_read, snap, {}, ReadTag::MVCC, start_ts);
+            auto [_ignore, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterWithMultiVersion(
+                *dm_ctx,
+                dmfiles,
+                pack_filter_results,
+                start_ts,
+                read_info.index_begin,
+                read_info.index_end);
+            pack_filter_results = std::move(new_pack_filter_results);
+        }
+    }
     return Segment::estimatedBytesOfInternalColumns(*dm_ctx, snap, pack_filter_results, start_ts);
 }
 
