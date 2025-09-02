@@ -68,7 +68,7 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
         break;
     }
     }
-    max_buffered_rows_ = static_cast<UInt64>(max_buffered_rows_);
+    max_buffered_rows = static_cast<UInt64>(max_buffered_rows_);
     max_buffered_bytes = max_buffered_bytes_;
 }
 
