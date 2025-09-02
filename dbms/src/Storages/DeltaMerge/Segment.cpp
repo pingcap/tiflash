@@ -3235,6 +3235,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterNormal(
             dm_context.scan_context);
     }
 
+    // consume the RU according to `new_pack_filter_result` which could skip reading more packs for MVCC than `pack_filter_results`
     consumeBuildMVCCReadBytesRU(dm_context, segment_snap, new_pack_filter_results, start_ts);
 
     LOG_TRACE(
@@ -3306,6 +3307,7 @@ BitmapFilterPtr Segment::buildMVCCBitmapFilterStableOnly(
         return bitmap_filter;
     }
 
+    // consume the RU according to `new_pack_filter_result` which could skip reading more packs for MVCC than `pack_filter_results`
     consumeBuildMVCCReadBytesRU(dm_context, segment_snap, new_pack_filter_results, start_ts);
 
     BlockInputStreamPtr stream;
