@@ -98,6 +98,7 @@ public:
 
     bool isAppendable() const override { return !disable_append; }
     void disableAppend() override;
+
     AppendResult append(
         const DMContext & dm_context,
         const Block & data,
