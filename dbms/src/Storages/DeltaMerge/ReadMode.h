@@ -46,11 +46,4 @@ enum class ReadTag
     MVCC, // Read columns to build MVCC bitmap.
     LMFilter, // Read columns required by late-materialization filter.
 };
-
-enum class ReadRUType
-{
-    MVCC_ESTIMATE,
-    MVCC_READ,
-    QUERY_READ,
-};
 } // namespace DB::DM
