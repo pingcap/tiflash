@@ -41,7 +41,7 @@ enum class ReadMode
 
 enum class ReadTag
 {
-    Internal, // Read columns required by some internal tasks.
+    Internal, // Read columns required by some internal tasks, such as building delta index, building version chain, compaction.
     Query, // Read columns required by queries.
     MVCC, // Read columns to build MVCC bitmap.
     LMFilter, // Read columns required by late-materialization filter.

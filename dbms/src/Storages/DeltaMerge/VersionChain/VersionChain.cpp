@@ -205,7 +205,8 @@ UInt32 VersionChain<HandleType>::replayBlock(
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
 
-    auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<HandleType>(), ReadTag::MVCC);
+    auto cf_reader
+        = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<HandleType>(), ReadTag::Internal);
     auto block = cf_reader->readNextBlock();
     RUNTIME_CHECK_MSG(
         cf.getRows() == block.rows(),
@@ -310,7 +311,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
         dm_context,
         /*data_provider*/ nullptr,
         getHandleColumnDefinesPtr<HandleType>(),
-        ReadTag::MVCC);
+        ReadTag::Internal);
     UInt32 read_rows = 0;
     while (true)
     {
@@ -387,7 +388,7 @@ DeltaValueReader VersionChain<HandleType>::createDeltaValueReader(
         delta_snap,
         getHandleColumnDefinesPtr<HandleType>(),
         /*range*/ {},
-        ReadTag::MVCC};
+        ReadTag::Internal};
 }
 
 template <ExtraHandleType HandleType>

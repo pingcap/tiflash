@@ -480,8 +480,14 @@ private:
     ColumnDefinesPtr col_defs;
     RowKeyRange segment_range;
 
+    const DMContext & dm_context;
+    ReadTag read_tag;
+
 private:
-    DeltaValueReader() = default;
+    DeltaValueReader(const DMContext & dm_context_, ReadTag read_tag_)
+        : dm_context(dm_context_)
+        , read_tag(read_tag_)
+    {}
 
 public:
     DeltaValueReader(

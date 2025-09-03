@@ -508,6 +508,13 @@ public:
 
     static void initCurrentInstanceId(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
 
+    void addUserReadBytes(size_t bytes, ReadTag read_tag)
+    {
+        if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MVCC)
+            return;
+        user_read_bytes += bytes;
+    }
+
 private:
     void serializeRegionNumOfInstance(tipb::TiFlashScanContext & proto) const;
     void deserializeRegionNumberOfInstance(const tipb::TiFlashScanContext & proto);
