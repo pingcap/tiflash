@@ -998,6 +998,9 @@ static void consumeBuildMVCCReadBytesRU(
     {
         const auto keyspace_id = dm_context.scan_context->keyspace_id;
         auto bytes = Segment::estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filter_results, start_ts);
+        TiFlashMetrics::instance()
+            .getStorageRUReadBytesCounter(keyspace_id, res_group_name, ReadRUType::MVCC_ESTIMATE)
+            .Increment(bytes);
         LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
     }
 }

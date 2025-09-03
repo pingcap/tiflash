@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -22,6 +23,7 @@
 #include <common/types.h>
 #include <fmt/format.h>
 #include <pingcap/pd/Types.h>
+#include <prometheus/counter.h>
 #include <sys/types.h>
 #include <tipb/executor.pb.h>
 
@@ -143,7 +145,19 @@ public:
     explicit ScanContext(const KeyspaceID & keyspace_id_ = NullspaceID, const String & name = "")
         : keyspace_id(keyspace_id_)
         , resource_group_name(name)
-    {}
+    {
+        if (!resource_group_name.empty())
+        {
+            mvcc_read_bytes_counter = &TiFlashMetrics::instance().getStorageRUReadBytesCounter(
+                keyspace_id,
+                resource_group_name,
+                ReadRUType::MVCC_READ);
+            query_read_bytes_counter = &TiFlashMetrics::instance().getStorageRUReadBytesCounter(
+                keyspace_id,
+                resource_group_name,
+                ReadRUType::QUERY_READ);
+        }
+    }
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
     {
@@ -513,6 +527,10 @@ public:
         if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MVCC)
             return;
         user_read_bytes += bytes;
+        if (read_tag == ReadTag::MVCC)
+            mvcc_read_bytes_counter->Increment(bytes);
+        else
+            query_read_bytes_counter->Increment(bytes);
     }
 
 private:
@@ -536,6 +554,9 @@ private:
     // `current_instance_id` is a identification of this store.
     // It only used to identify which store generated the ScanContext object.
     inline static String current_instance_id;
+
+    prometheus::Counter * mvcc_read_bytes_counter = nullptr;
+    prometheus::Counter * query_read_bytes_counter = nullptr;
 };
 
 } // namespace DB::DM
