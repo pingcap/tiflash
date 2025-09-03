@@ -30,9 +30,7 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     : rows(std::move(rows_))
     , precede_stream_rows(0)
     , scan_context(scan_context_)
-    , lac_bytes_collector(
-          scan_context_ ? scan_context_->keyspace_id : NullspaceID,
-          scan_context_ ? scan_context_->resource_group_name : "")
+    , lac_bytes_collector(scan_context_ ? scan_context_->newLACBytesCollector(read_tag_) : std::nullopt)
     , read_tag(read_tag_)
 {
     assert(rows.size() == inputs_.size());
@@ -155,11 +153,7 @@ template <bool need_row_id>
 void ConcatSkippableBlockInputStream<need_row_id>::addReadBytes(UInt64 bytes)
 {
     if (likely(scan_context != nullptr))
-    {
-        scan_context->addUserReadBytes(bytes, read_tag);
-        if (read_tag == ReadTag::Query || read_tag == ReadTag::LMFilter)
-            lac_bytes_collector.collect(bytes);
-    }
+        scan_context->addUserReadBytes(bytes, read_tag, lac_bytes_collector);
 }
 
 template class ConcatSkippableBlockInputStream<false>;

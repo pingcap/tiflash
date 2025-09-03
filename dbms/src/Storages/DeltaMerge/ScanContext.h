@@ -16,6 +16,7 @@
 
 #include <Common/Logger.h>
 #include <Common/TiFlashMetrics.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -522,16 +523,9 @@ public:
 
     static void initCurrentInstanceId(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
 
-    void addUserReadBytes(size_t bytes, ReadTag read_tag)
-    {
-        if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MVCC)
-            return;
-        user_read_bytes += bytes;
-        if (read_tag == ReadTag::MVCC)
-            mvcc_read_bytes_counter->Increment(bytes);
-        else
-            query_read_bytes_counter->Increment(bytes);
-    }
+    // LACBytesCollector is not thread-safe, to avoid locking, we create a new one for each stream.
+    std::optional<LACBytesCollector> newLACBytesCollector(ReadTag read_tag);
+    void addUserReadBytes(size_t bytes, ReadTag read_tag, std::optional<LACBytesCollector> & lac_bytes_collector);
 
 private:
     void serializeRegionNumOfInstance(tipb::TiFlashScanContext & proto) const;

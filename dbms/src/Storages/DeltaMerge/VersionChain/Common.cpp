@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
@@ -155,6 +156,9 @@ template std::optional<std::pair<String, String>> loadDMFileHandleRange<String>(
 void addUserReadBytes(const DMContext & dm_context, size_t bytes)
 {
     if (dm_context.scan_context)
-        dm_context.scan_context->addUserReadBytes(bytes, ReadTag::MVCC);
+    {
+        std::optional<LACBytesCollector> lac_bytes_collector;
+        dm_context.scan_context->addUserReadBytes(bytes, ReadTag::MVCC, lac_bytes_collector);
+    }
 }
 } // namespace DB::DM

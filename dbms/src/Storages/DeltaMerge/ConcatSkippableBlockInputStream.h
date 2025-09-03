@@ -70,7 +70,7 @@ private:
     std::vector<size_t> rows;
     size_t precede_stream_rows;
     const ScanContextPtr scan_context;
-    LACBytesCollector lac_bytes_collector;
+    std::optional<LACBytesCollector> lac_bytes_collector;
     ReadTag read_tag;
 };
 

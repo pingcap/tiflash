@@ -267,4 +267,32 @@ void ScanContext::initCurrentInstanceId(Poco::Util::AbstractConfiguration & conf
     current_instance_id = getCurrentInstanceId(flash_server_addr, log);
     LOG_INFO(log, "flash_server_addr={}, current_instance_id={}", flash_server_addr, current_instance_id);
 }
+
+std::optional<LACBytesCollector> ScanContext::newLACBytesCollector(ReadTag read_tag)
+{
+    if (resource_group_name.empty())
+        return std::nullopt;
+    if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter)
+        return std::nullopt;
+    return LACBytesCollector(keyspace_id, resource_group_name);
+}
+
+void ScanContext::addUserReadBytes(
+    size_t bytes,
+    ReadTag read_tag,
+    std::optional<LACBytesCollector> & lac_bytes_collector)
+{
+    if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MVCC)
+        return;
+    user_read_bytes += bytes;
+    if (read_tag == ReadTag::MVCC)
+        mvcc_read_bytes_counter->Increment(bytes);
+    else
+    {
+        query_read_bytes_counter->Increment(bytes);
+        if (lac_bytes_collector)
+            lac_bytes_collector->collect(bytes);
+    }
+}
+
 } // namespace DB::DM

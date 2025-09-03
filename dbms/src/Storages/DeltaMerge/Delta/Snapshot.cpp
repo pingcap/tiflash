@@ -94,6 +94,8 @@ DeltaValueReader::DeltaValueReader(
     , segment_range(segment_range_)
     , dm_context(context)
     , read_tag(read_tag_)
+    , lac_bytes_collector(
+          dm_context.scan_context ? dm_context.scan_context->newLACBytesCollector(read_tag_) : std::nullopt)
 {}
 
 DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag read_tag_)
@@ -182,7 +184,7 @@ size_t DeltaValueReader::readRows(
     if (dm_context.scan_context)
     {
         const auto final_bytes = columnsBytes(output_cols);
-        dm_context.scan_context->addUserReadBytes(final_bytes - initial_bytes, read_tag);
+        dm_context.scan_context->addUserReadBytes(final_bytes - initial_bytes, read_tag, lac_bytes_collector);
     }
 
     return actual_read;
