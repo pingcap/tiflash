@@ -19283,6 +19283,14 @@
               "interval": "",
               "legendFormat": "query-sum-24h-{{cluster_id}}",
               "refId": "D"
+            },
+            {
+              "exemplar": true,
+              "expr": "sum(rate(tiflash_storage_ru_read_bytes[1m])) by (keyspace, resource_group, type) / (64 * 1024)",
+              "hide": false,
+              "interval": "",
+              "legendFormat": "storage-{{keyspace}}_{{resource_group}}_{{type}}",
+              "refId": "E"
             }
           ],
           "thresholds": [],
