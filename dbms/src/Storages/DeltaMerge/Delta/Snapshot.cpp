@@ -114,7 +114,7 @@ DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & n
 static size_t columnsBytes(const MutableColumns & columns)
 {
     size_t bytes = 0;
-    for (auto & col : columns)
+    for (const auto & col : columns)
         bytes += col->byteSize();
     return bytes;
 }
