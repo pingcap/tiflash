@@ -2636,6 +2636,8 @@ Segment::ReadInfo Segment::getReadInfo(
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs = std::make_shared<ColumnDefines>(
         ColumnDefines{getExtraHandleColumnDefine(dm_context.is_common_handle), getVersionColumnDefine()});
+    // Create a reader that reads pk and version columns to update delta-index.
+    // Updating delta-index is not count as MVCC, use `ReadTag::Internal` for it.
     auto delta_reader = std::make_shared<DeltaValueReader>(
         dm_context,
         segment_snap->delta,
