@@ -62,6 +62,153 @@ extern const char file_cache_fg_download_fail[];
 namespace DB::DM::tests
 {
 
+<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/tests/gtest_dm_vector_index.cpp
+=======
+TEST(VectorIndexInputStream, NormalStream)
+try
+{
+    // When a normal stream is provided in the VectorIndexInputStream, BitmapFilter should be applied.
+
+    auto make_block_stream = [] {
+        return NopSkippableBlockInputStream::wrap(std::make_shared<OneBlockInputStream>(Block{createColumns({
+            createColumn<UInt64>({7, 4, 7, 0, 1, 2, 3}, "a"),
+        })}));
+    };
+
+    // VectorIndexInputStream does not need this information, but ctx needs at least a correct vec column.
+    auto ann = DeltaMergeStoreVectorBase::annQueryInfoTopK({.vec = {}, .top_k = 1, .column_id = 1});
+    auto ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+        ann,
+        std::make_shared<ColumnDefines>(
+            ColumnDefines{ColumnDefine{1, "vec", tests::typeFromString("Array(Float32)")}}));
+
+    auto stream = VectorIndexTestUtils::wrapVectorStream( //
+        ctx,
+        make_block_stream(),
+        std::make_shared<BitmapFilter>(7, true));
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({7, 4, 7, 0, 1, 2, 3}),
+        }));
+
+    stream = VectorIndexTestUtils::wrapVectorStream(ctx, make_block_stream(), std::make_shared<BitmapFilter>(7, false));
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({}),
+        }));
+
+    auto filter = std::make_shared<BitmapFilter>(7, false);
+    filter->set(4, 1);
+    stream = VectorIndexTestUtils::wrapVectorStream(ctx, make_block_stream(), filter);
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({1}),
+        }));
+
+    filter = std::make_shared<BitmapFilter>(7, false);
+    filter->set(4, 1);
+    filter->set(0, 1);
+    stream = VectorIndexTestUtils::wrapVectorStream(ctx, make_block_stream(), filter);
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({7, 1}),
+        }));
+}
+CATCH
+
+TEST(VectorIndexInputStream, MultipleStreams)
+try
+{
+    auto make_multi_stream = [] {
+        auto block1 = std::make_shared<OneBlockInputStream>(Block{createColumns({
+            createColumn<UInt64>({7, 4, 7, 0, 1, 2, 3}, "a"),
+        })});
+        auto block2 = std::make_shared<OneBlockInputStream>(Block{createColumns({
+            createColumn<UInt64>({42, 45, 50, 37}, "a"),
+        })});
+        return ConcatSkippableBlockInputStream<false>::create(
+            {NopSkippableBlockInputStream::wrap(block1), NopSkippableBlockInputStream::wrap(block2)},
+            {7, 4},
+            nullptr,
+            ReadTag::Query);
+    };
+
+    // VectorIndexInputStream does not need this information, but ctx needs at least a correct vec column.
+    auto ann = DeltaMergeStoreVectorBase::annQueryInfoTopK({.vec = {}, .top_k = 1, .column_id = 1});
+    auto ctx = VectorIndexStreamCtx::createForStableOnlyTests(
+        ann,
+        std::make_shared<ColumnDefines>(
+            ColumnDefines{ColumnDefine{1, "vec", tests::typeFromString("Array(Float32)")}}));
+
+    auto stream = VectorIndexInputStream::create(ctx, std::make_shared<BitmapFilter>(11, true), make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({7, 4, 7, 0, 1, 2, 3, 42, 45, 50, 37}),
+        }));
+
+    stream = VectorIndexInputStream::create(ctx, std::make_shared<BitmapFilter>(11, false), make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({}),
+        }));
+
+    auto filter = std::make_shared<BitmapFilter>(11, false);
+    filter->set(4, 1);
+    stream = VectorIndexInputStream::create(ctx, filter, make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({1}),
+        }));
+
+    filter = std::make_shared<BitmapFilter>(11, false);
+    filter->set(4, 1);
+    filter->set(0, 1);
+    stream = VectorIndexInputStream::create(ctx, filter, make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({7, 1}),
+        }));
+
+    filter = std::make_shared<BitmapFilter>(11, false);
+    filter->set(9, 1);
+    stream = VectorIndexInputStream::create(ctx, filter, make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({50}),
+        }));
+
+    filter = std::make_shared<BitmapFilter>(11, false);
+    filter->set(4, 1);
+    filter->set(9, 1);
+    stream = VectorIndexInputStream::create(ctx, filter, make_multi_stream());
+    ASSERT_INPUTSTREAM_COLS_UR(
+        stream,
+        {"a"},
+        createColumns({
+            createColumn<UInt64>({1, 50}),
+        }));
+}
+CATCH
+
+>>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396)):dbms/src/Storages/DeltaMerge/Index/VectorIndex/tests/gtest_dm_vector_index.cpp
 class VectorIndexDMFileTest
     : public VectorIndexTestUtils
     , public DB::base::TiFlashStorageTestBasic

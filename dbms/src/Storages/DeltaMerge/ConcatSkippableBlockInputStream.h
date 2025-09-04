@@ -15,11 +15,15 @@
 #pragma once
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
+<<<<<<< HEAD
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+=======
+#include <Storages/DeltaMerge/ConcatSkippableBlockInputStream_fwd.h>
+#include <Storages/DeltaMerge/ReadMode.h>
+>>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
-
 
 namespace DB::DM
 {
@@ -28,12 +32,28 @@ template <bool need_row_id = false>
 class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
+<<<<<<< HEAD
     ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, const ScanContextPtr & scan_context_);
+=======
+    static auto create(
+        SkippableBlockInputStreams && inputs_,
+        std::vector<size_t> && rows_,
+        const ScanContextPtr & scan_context_,
+        ReadTag read_tag_)
+    {
+        return std::make_shared<ConcatSkippableBlockInputStream<need_row_id>>(
+            std::move(inputs_),
+            std::move(rows_),
+            scan_context_,
+            read_tag_);
+    }
+>>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 
     ConcatSkippableBlockInputStream(
         SkippableBlockInputStreams inputs_,
         std::vector<size_t> && rows_,
-        const ScanContextPtr & scan_context_);
+        const ScanContextPtr & scan_context_,
+        ReadTag read_tag_);
 
     void appendChild(SkippableBlockInputStreamPtr child, size_t rows_);
 
@@ -65,7 +85,8 @@ private:
     std::vector<size_t> rows;
     size_t precede_stream_rows;
     const ScanContextPtr scan_context;
-    LACBytesCollector lac_bytes_collector;
+    std::optional<LACBytesCollector> lac_bytes_collector;
+    ReadTag read_tag;
 };
 
 class ConcatVectorIndexBlockInputStream : public SkippableBlockInputStream

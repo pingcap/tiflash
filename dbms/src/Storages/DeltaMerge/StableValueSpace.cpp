@@ -511,6 +511,7 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
             context.scan_context));
         rows.push_back(stable->files[i]->getRows());
     }
+<<<<<<< HEAD
     if (need_row_id)
     {
         return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ true>>(
@@ -525,6 +526,14 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
             std::move(rows),
             context.scan_context);
     }
+=======
+
+    return ConcatSkippableBlockInputStream<need_row_id>::create(
+        std::move(streams),
+        std::move(rows),
+        dm_context.scan_context,
+        read_tag);
+>>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 }
 
 RowsAndBytes StableValueSpace::Snapshot::getApproxRowsAndBytes(const DMContext & context, const RowKeyRange & range)

@@ -988,6 +988,32 @@ UInt64 Segment::estimatedBytesOfInternalColumns(
     return (handle_size + version_size + delmark_size) * (delta_read_rows + stable_read_rows);
 }
 
+<<<<<<< HEAD
+=======
+static void consumeBuildMVCCReadBytesRU(
+    const DMContext & dm_context,
+    const SegmentSnapshotPtr & segment_snap,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts)
+{
+    // Building MVCC bitmap can be a resource-intensive operation that cannot be paused midway.
+    // To prevent scenarios where multiple segments concurrently build MVCC bitmaps but exhaust
+    // RU during execution and causing RU consumption to exceed limitations, we need to first
+    // estimate the cost of building the MVCC bitmap, pre-consume the corresponding RU,
+    // and then proceed with the building task.
+    const auto & res_group_name = dm_context.scan_context->resource_group_name;
+    if (likely(!res_group_name.empty()))
+    {
+        const auto keyspace_id = dm_context.scan_context->keyspace_id;
+        auto bytes = Segment::estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filter_results, start_ts);
+        TiFlashMetrics::instance()
+            .getStorageRUReadBytesCounter(keyspace_id, res_group_name, ReadRUType::MVCC_ESTIMATE)
+            .Increment(bytes);
+        LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
+    }
+}
+
+>>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 BlockInputStreamPtr Segment::getInputStream(
     const ReadMode & read_mode,
     const DMContext & dm_context,
@@ -2716,14 +2742,14 @@ Segment::ReadInfo Segment::getReadInfo(
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs = std::make_shared<ColumnDefines>(
         ColumnDefines{getExtraHandleColumnDefine(dm_context.is_common_handle), getVersionColumnDefine()});
-    // Create a reader that reads pk and version columns to update deltaindex.
-    // It related to MVCC, so always set a `ReadTag::MVCC` for it.
+    // Create a reader that reads pk and version columns to update delta-index.
+    // Updating delta-index is not count as MVCC, use `ReadTag::Internal` for it.
     auto delta_reader = std::make_shared<DeltaValueReader>(
         dm_context,
         segment_snap->delta,
         pk_ver_col_defs,
         this->rowkey_range,
-        ReadTag::MVCC);
+        ReadTag::Internal);
 
     auto [my_delta_index, fully_indexed] = ensurePlace(dm_context, segment_snap, delta_reader, read_ranges, start_ts);
     auto compacted_index = my_delta_index->getDeltaTree()->getCompactedEntries();
@@ -3021,7 +3047,7 @@ bool Segment::placeUpsert(
         compacted_index->begin(),
         compacted_index->end(),
         dm_context.stable_pack_rows,
-        ReadTag::MVCC);
+        ReadTag::Internal);
 
     if (do_sort)
         return DM::placeInsert<true>(
@@ -3074,7 +3100,7 @@ bool Segment::placeDelete(
             compacted_index->begin(),
             compacted_index->end(),
             dm_context.stable_pack_rows,
-            ReadTag::MVCC);
+            ReadTag::Internal);
 
         delete_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(delete_stream, delete_ranges, 0);
 
@@ -3112,7 +3138,7 @@ bool Segment::placeDelete(
             compacted_index->begin(),
             compacted_index->end(),
             dm_context.stable_pack_rows,
-            ReadTag::MVCC);
+            ReadTag::Internal);
         fully_indexed &= DM::placeDelete(
             merged_stream,
             block,
