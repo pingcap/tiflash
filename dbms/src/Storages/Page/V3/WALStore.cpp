@@ -279,14 +279,14 @@ bool WALStore::saveSnapshot(
 
     auto get_logging_str = [&]() {
         FmtBuffer fmt_buf;
-        fmt_buf.append("Dumped directory snapshot to log file done. files_snapshot=");
+        fmt_buf.append("Dumped directory snapshot to log file done. files_snapshot=[");
         fmt_buf.joinStr(
             files_snap.persisted_log_files.begin(),
             files_snap.persisted_log_files.end(),
             [](const auto & arg, FmtBuffer & fb) { fb.append(arg.filename(arg.stage)); },
             ", ");
         fmt_buf.fmtAppend(
-            " dump_cost={} num_records={} file={} size={}",
+            "] dump_cost={} num_records={} file={} size={}",
             files_snap.dump_elapsed_ms,
             files_snap.num_records,
             normal_fullname,
