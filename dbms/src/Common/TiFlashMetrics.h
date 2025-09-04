@@ -1299,7 +1299,6 @@ private:
     std::unordered_map<std::string, prometheus::Gauge *> registered_async_metrics;
 
     prometheus::Family<prometheus::Gauge> * registered_keypace_store_used_family;
-    using KeyspaceID = UInt32;
     std::unordered_map<KeyspaceID, prometheus::Gauge *> registered_keypace_store_used_metrics;
     prometheus::Gauge * store_used_total_metric;
 
