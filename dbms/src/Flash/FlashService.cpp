@@ -1071,10 +1071,12 @@ grpc::Status FlashService::FetchDisaggPages(
     auto record_error = [&](grpc::StatusCode err_code, const String & err_msg) {
         disaggregated::PagesPacket err_response;
         auto * err = err_response.mutable_error();
-        err->set_code(ErrorCodes::UNKNOWN_EXCEPTION);
+        err->set_code(err_code);
         err->set_msg(err_msg);
         sync_writer->Write(err_response);
-        return grpc::Status(err_code, err_msg);
+        // Do NOT both write an error packet AND return a non-OK grpc::Status.
+        // We only write an error packet and return OK.
+        return grpc::Status::OK;
     };
 
     RUNTIME_CHECK_MSG(
