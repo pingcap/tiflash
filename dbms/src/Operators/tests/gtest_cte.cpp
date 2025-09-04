@@ -92,7 +92,7 @@ try
     size_t row_num = di(dre);
     Blocks sink_blocks = generateBlocks(0, row_num);
     for (size_t i = 0; i < sink_blocks.size(); i++)
-        ASSERT_TRUE(cte->pushBlock<true>(i % PARTITION_NUM, sink_blocks[i]));
+        ASSERT_EQ(CTEOpStatus::OK, cte->pushBlock<true>(i % PARTITION_NUM, sink_blocks[i]));
 
     Blocks received_blocks;
     std::vector<Int64> received_results;
@@ -219,7 +219,10 @@ void concurrentTest()
             {
                 std::lock_guard<std::mutex> lock(*(source_mus[source_idx]));
                 received_blocks[source_idx].push_back(block);
+                break;
             }
+            default:
+                throw Exception("Should not reach here");
             }
         }
         if (partition_idx == 0)

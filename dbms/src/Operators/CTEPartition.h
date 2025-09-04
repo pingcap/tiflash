@@ -176,6 +176,10 @@ struct CTEPartition
     void addIdxNoLock(size_t cte_reader_id) { ++this->fetch_block_idxs[cte_reader_id]; }
     bool exceedMemoryThresholdNoLock() const
     {
+        // config will be nullptr in test
+        if unlikely (this->config == nullptr)
+            return false;
+
         if (this->config->memory_threshold == 0)
             return false;
         return this->memory_usage >= this->config->memory_threshold;

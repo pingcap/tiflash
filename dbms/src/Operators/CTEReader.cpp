@@ -63,4 +63,26 @@ CTEOpStatus CTEReader::fetchBlockFromDisk(size_t source_id, Block & block)
     }
     return ret;
 }
+
+CTEOpStatus CTEReader::waitForBlockAvailableForTest(size_t partition_idx)
+{
+    auto & partition = this->cte->getPartitionForTest(partition_idx);
+    std::unique_lock<std::mutex> lock(*(partition->mu_for_test));
+    while (true)
+    {
+        partition->cv_for_test->wait(lock);
+        auto status = this->cte->checkBlockAvailable(this->cte_reader_id, partition_idx);
+        switch (status)
+        {
+        case CTEOpStatus::BLOCK_NOT_AVAILABLE:
+            break;
+        case CTEOpStatus::OK:
+        case CTEOpStatus::CANCELLED:
+        case CTEOpStatus::END_OF_FILE:
+            return status;
+        default:
+            throw Exception("Should not reach here");
+        }
+    }
+}
 } // namespace DB
