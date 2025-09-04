@@ -15,6 +15,8 @@
 #pragma once
 
 #include <Common/Logger.h>
+#include <Common/TiFlashMetrics.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Poco/Util/AbstractConfiguration.h>
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
@@ -22,6 +24,7 @@
 #include <common/types.h>
 #include <fmt/format.h>
 #include <pingcap/pd/Types.h>
+#include <prometheus/counter.h>
 #include <sys/types.h>
 #include <tipb/executor.pb.h>
 
@@ -57,8 +60,6 @@ public:
     std::atomic<uint64_t> total_local_region_num{0};
     std::atomic<uint64_t> num_stale_read{0};
 
-    // the read bytes from delta layer and stable layer (in-mem, decompressed)
-    std::atomic<uint64_t> user_read_bytes{0};
     std::atomic<uint64_t> disagg_read_cache_hit_size{0};
     std::atomic<uint64_t> disagg_read_cache_miss_size{0};
 
@@ -143,7 +144,19 @@ public:
     explicit ScanContext(const KeyspaceID & keyspace_id_ = NullspaceID, const String & name = "")
         : keyspace_id(keyspace_id_)
         , resource_group_name(name)
-    {}
+    {
+        if (!resource_group_name.empty())
+        {
+            mvcc_read_bytes_counter = &TiFlashMetrics::instance().getStorageRUReadBytesCounter(
+                keyspace_id,
+                resource_group_name,
+                ReadRUType::MVCC_READ);
+            query_read_bytes_counter = &TiFlashMetrics::instance().getStorageRUReadBytesCounter(
+                keyspace_id,
+                resource_group_name,
+                ReadRUType::QUERY_READ);
+        }
+    }
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
     {
@@ -160,7 +173,9 @@ public:
         create_snapshot_time_ns = tiflash_scan_context_pb.total_build_snapshot_ms() * 1000000;
         total_remote_region_num = tiflash_scan_context_pb.remote_regions();
         total_local_region_num = tiflash_scan_context_pb.local_regions();
-        user_read_bytes = tiflash_scan_context_pb.user_read_bytes();
+        // TODO: rename user_read_bytes to query_read_bytes in tipb.
+        query_read_bytes = tiflash_scan_context_pb.user_read_bytes();
+        // TODO: add mvcc_read_bytes in tipb.
         learner_read_ns = tiflash_scan_context_pb.total_learner_read_ms() * 1000000;
         disagg_read_cache_hit_size = tiflash_scan_context_pb.disagg_read_cache_hit_bytes();
         disagg_read_cache_miss_size = tiflash_scan_context_pb.disagg_read_cache_miss_bytes();
@@ -247,7 +262,9 @@ public:
         tiflash_scan_context_pb.set_total_build_snapshot_ms(create_snapshot_time_ns / 1000000);
         tiflash_scan_context_pb.set_remote_regions(total_remote_region_num);
         tiflash_scan_context_pb.set_local_regions(total_local_region_num);
-        tiflash_scan_context_pb.set_user_read_bytes(user_read_bytes);
+        // TODO: rename user_read_bytes to query_read_bytes in tipb.
+        tiflash_scan_context_pb.set_user_read_bytes(userReadBytes());
+        // TODO: add mvcc_read_bytes in tipb.
         tiflash_scan_context_pb.set_total_learner_read_ms(learner_read_ns / 1000000);
         tiflash_scan_context_pb.set_disagg_read_cache_hit_bytes(disagg_read_cache_hit_size);
         tiflash_scan_context_pb.set_disagg_read_cache_miss_bytes(disagg_read_cache_miss_size);
@@ -338,7 +355,8 @@ public:
 
         total_local_region_num += other.total_local_region_num;
         total_remote_region_num += other.total_remote_region_num;
-        user_read_bytes += other.user_read_bytes;
+        query_read_bytes += other.query_read_bytes;
+        mvcc_read_bytes += other.mvcc_read_bytes;
         disagg_read_cache_hit_size += other.disagg_read_cache_hit_size;
         disagg_read_cache_miss_size += other.disagg_read_cache_miss_size;
 
@@ -429,7 +447,9 @@ public:
         create_snapshot_time_ns += other.total_build_snapshot_ms() * 1000000;
         total_local_region_num += other.local_regions();
         total_remote_region_num += other.remote_regions();
-        user_read_bytes += other.user_read_bytes();
+        // TODO: rename user_read_bytes to query_read_bytes in tipb.
+        query_read_bytes += other.user_read_bytes();
+        // TODO: add mvcc_read_bytes in tipb.
         learner_read_ns += other.total_learner_read_ms() * 1000000;
         disagg_read_cache_hit_size += other.disagg_read_cache_hit_bytes();
         disagg_read_cache_miss_size += other.disagg_read_cache_miss_bytes();
@@ -508,6 +528,11 @@ public:
 
     static void initCurrentInstanceId(Poco::Util::AbstractConfiguration & config, const LoggerPtr & log);
 
+    // LACBytesCollector is not thread-safe, to avoid locking, we create a new one for each stream.
+    std::optional<LACBytesCollector> newLACBytesCollector(ReadTag read_tag);
+    void addUserReadBytes(size_t bytes, ReadTag read_tag, std::optional<LACBytesCollector> & lac_bytes_collector);
+    uint64_t userReadBytes() const { return query_read_bytes + mvcc_read_bytes; }
+
 private:
     void serializeRegionNumOfInstance(tipb::TiFlashScanContext & proto) const;
     void deserializeRegionNumberOfInstance(const tipb::TiFlashScanContext & proto);
@@ -529,6 +554,12 @@ private:
     // `current_instance_id` is a identification of this store.
     // It only used to identify which store generated the ScanContext object.
     inline static String current_instance_id;
+
+    // the read bytes from delta layer and stable layer (in-mem, decompressed)
+    std::atomic<uint64_t> query_read_bytes{0};
+    std::atomic<uint64_t> mvcc_read_bytes{0};
+    prometheus::Counter * mvcc_read_bytes_counter = nullptr;
+    prometheus::Counter * query_read_bytes_counter = nullptr;
 };
 
 } // namespace DB::DM

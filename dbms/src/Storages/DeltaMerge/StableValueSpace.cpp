@@ -489,7 +489,8 @@ ConcatSkippableBlockInputStreamPtr<need_row_id> StableValueSpace::Snapshot::getI
     return ConcatSkippableBlockInputStream<need_row_id>::create(
         std::move(streams),
         std::move(rows),
-        dm_context.scan_context);
+        dm_context.scan_context,
+        read_tag);
 }
 
 template ConcatSkippableBlockInputStreamPtr<false> StableValueSpace::Snapshot::getInputStream(

@@ -138,7 +138,8 @@ public:
         auto stream = ConcatSkippableBlockInputStream<false>::create(
             /* inputs */ {inner},
             /* rows */ {filter->size()},
-            /* ScanContext */ nullptr);
+            /* ScanContext */ nullptr,
+            ReadTag::Query);
         return VectorIndexInputStream::create(ctx, filter, stream);
     }
 };
