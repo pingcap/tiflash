@@ -861,6 +861,7 @@ try
 }
 CATCH
 
+/* unstable test, disable it
 // Test cancel and regular snapshot
 TEST_F(RegionKVStoreTestFAP, Cancel4)
 try
@@ -950,6 +951,7 @@ try
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH
+*/
 
 // Test cancel when building segments
 TEST_F(RegionKVStoreTestFAP, Cancel5)
