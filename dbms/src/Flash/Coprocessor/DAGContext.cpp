@@ -484,7 +484,7 @@ UInt64 DAGContext::getReadBytes() const
     for (const auto & [id, sc] : scan_context_map)
     {
         (void)id; // Disable unused variable warnning.
-        read_bytes += sc->user_read_bytes;
+        read_bytes += sc->userReadBytes();
     }
     return read_bytes;
 }

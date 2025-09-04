@@ -118,7 +118,8 @@ String ScanContext::toJson() const
     json->set("num_local_region", total_local_region_num.load());
     json->set("num_stale_read", num_stale_read.load());
 
-    json->set("read_bytes", user_read_bytes.load());
+    json->set("query_read_bytes", query_read_bytes.load());
+    json->set("mvcc_read_bytes", mvcc_read_bytes.load());
 
     if (disagg_read_cache_hit_size.load() > 0 && disagg_read_cache_miss_size.load() > 0)
     {
@@ -284,12 +285,17 @@ void ScanContext::addUserReadBytes(
 {
     if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter && read_tag != ReadTag::MVCC)
         return;
-    user_read_bytes += bytes;
     if (read_tag == ReadTag::MVCC)
-        mvcc_read_bytes_counter->Increment(bytes);
+    {
+        mvcc_read_bytes += bytes;
+        if (mvcc_read_bytes_counter)
+            mvcc_read_bytes_counter->Increment(bytes);
+    }
     else
     {
-        query_read_bytes_counter->Increment(bytes);
+        query_read_bytes += bytes;
+        if (query_read_bytes_counter)
+            query_read_bytes_counter->Increment(bytes);
         if (lac_bytes_collector)
             lac_bytes_collector->collect(bytes);
     }
