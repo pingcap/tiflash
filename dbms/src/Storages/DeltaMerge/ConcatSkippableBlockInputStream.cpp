@@ -37,11 +37,17 @@ template <bool need_row_id>
 ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     SkippableBlockInputStreams inputs_,
     std::vector<size_t> && rows_,
-    const ScanContextPtr & scan_context_)
+    const ScanContextPtr & scan_context_,
+    ReadTag read_tag_)
     : rows(std::move(rows_))
     , precede_stream_rows(0)
     , scan_context(scan_context_)
+<<<<<<< HEAD
     , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
+=======
+    , lac_bytes_collector(scan_context_ ? scan_context_->newLACBytesCollector(read_tag_) : std::nullopt)
+    , read_tag(read_tag_)
+>>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 {
     children.insert(children.end(), inputs_.begin(), inputs_.end());
     current_stream = children.begin();
@@ -178,13 +184,7 @@ template <bool need_row_id>
 void ConcatSkippableBlockInputStream<need_row_id>::addReadBytes(UInt64 bytes)
 {
     if (likely(scan_context != nullptr))
-    {
-        scan_context->user_read_bytes += bytes;
-        if constexpr (!need_row_id)
-        {
-            lac_bytes_collector.collect(bytes);
-        }
-    }
+        scan_context->addUserReadBytes(bytes, read_tag, lac_bytes_collector);
 }
 
 template class ConcatSkippableBlockInputStream<false>;

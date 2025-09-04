@@ -18,6 +18,7 @@
 #include <Common/CurrentMetrics.h>
 #include <Common/Exception.h>
 #include <Core/Block.h>
+#include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <IO/WriteHelpers.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFile.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileBig.h>
@@ -25,7 +26,7 @@
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileInMemory.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileSetInputStream.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileTiny.h>
-#include <Storages/DeltaMerge/DMContext_fwd.h>
+#include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/ColumnFilePersistedSet.h>
 #include <Storages/DeltaMerge/Delta/MemTableSet.h>
 #include <Storages/DeltaMerge/DeltaIndex.h>
@@ -33,8 +34,12 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
+<<<<<<< HEAD
+=======
+#include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/SegmentRowID.h>
+>>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 #include <Storages/Page/PageDefinesBase.h>
-
 
 namespace DB::DM
 {
@@ -456,8 +461,17 @@ private:
     ColumnDefinesPtr col_defs;
     RowKeyRange segment_range;
 
+    const DMContext & dm_context;
+    ReadTag read_tag;
+    std::optional<LACBytesCollector> lac_bytes_collector;
+
 private:
-    DeltaValueReader() = default;
+    DeltaValueReader(const DMContext & dm_context_, ReadTag read_tag_)
+        : dm_context(dm_context_)
+        , read_tag(read_tag_)
+        , lac_bytes_collector(
+              dm_context.scan_context ? dm_context.scan_context->newLACBytesCollector(read_tag_) : std::nullopt)
+    {}
 
 public:
     DeltaValueReader(
