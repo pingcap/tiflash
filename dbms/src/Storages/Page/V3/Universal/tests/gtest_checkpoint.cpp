@@ -1210,7 +1210,7 @@ try
     // Check that data_location are restored from S3 latest manifest
     {
         auto & restored_page_directory = new_service->uni_page_storage->page_directory;
-        auto snap = restored_page_directory->createSnapshot("");
+        auto snap = restored_page_directory->createSnapshot(SnapshotType::General, "");
         // page_id "2" is deleted
         EXPECT_EQ(restored_page_directory->numPages(), 8)
             << fmt::format("{}", restored_page_directory->getAllPageIds());

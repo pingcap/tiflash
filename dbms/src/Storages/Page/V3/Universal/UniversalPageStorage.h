@@ -90,7 +90,10 @@ public:
 
     void restore();
 
-    SnapshotPtr getSnapshot(const String & tracing_id) const { return page_directory->createSnapshot(tracing_id); }
+    SnapshotPtr getSnapshot(const String & tracing_id) const
+    {
+        return page_directory->createSnapshot(PS::V3::SnapshotType::General, tracing_id);
+    }
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const { return page_directory->getSnapshotsStat(); }
