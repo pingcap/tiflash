@@ -59,5 +59,7 @@ private:
     IOProfileInfoPtr io_profile_info;
 
     std::shared_ptr<TS::TantivyInputStream> input;
+    Stopwatch watcher;
 };
+
 } // namespace DB
