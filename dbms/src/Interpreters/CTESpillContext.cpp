@@ -15,25 +15,39 @@
 #include <Common/Exception.h>
 #include <Interpreters/CTESpillContext.h>
 
+#include <algorithm>
 #include <mutex>
+#include <utility>
 
 namespace DB
 {
 Int64 CTESpillContext::triggerSpillImpl(Int64 expected_released_memories)
 {
-    for (auto & partition : this->partitions)
+    size_t partition_num = this->partitions.size();
+    std::vector<std::pair<size_t, size_t>> part_idx_with_mem_usages;
+    part_idx_with_mem_usages.reserve(partition_num);
+    for (size_t i = 0; i < partition_num; i++)
+        part_idx_with_mem_usages.push_back(std::make_pair(this->partitions[i]->memory_usage.load(), i));
+
+    std::sort(
+        part_idx_with_mem_usages.begin(),
+        part_idx_with_mem_usages.end(),
+        [](const std::pair<size_t, size_t> & l, const std::pair<size_t, size_t> & r) { return l.first > r.first; });
+
+    for (const auto & item : part_idx_with_mem_usages)
     {
+        auto memory_usage = item.first;
+        const std::shared_ptr<CTEPartition> & partition = partitions[item.second];
         std::lock_guard<std::mutex> aux_lock(*(partition->aux_lock));
         if (partition->status != CTEPartitionStatus::NORMAL)
             continue;
 
-        partition->status = CTEPartitionStatus::NEED_SPILL;
-
-        std::lock_guard<std::mutex> lock(*(partition->mu));
-        if (partition->memory_usage == 0)
+        if (memory_usage == 0)
             continue;
 
-        expected_released_memories = std::max(expected_released_memories - partition->memory_usage, 0);
+        partition->status = CTEPartitionStatus::NEED_SPILL;
+
+        expected_released_memories = std::max(expected_released_memories - memory_usage, 0);
         if (expected_released_memories <= 0)
             return expected_released_memories;
     }

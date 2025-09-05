@@ -41,7 +41,7 @@ void CTE::initCTESpillContextAndPartitionConfig(
         = std::make_shared<CTESpillContext>(operator_spill_threshold, query_id_and_cte_id, this->partitions);
 
     this->partition_config = std::make_shared<CTEPartitionSharedConfig>(
-        operator_spill_threshold / this->partition_num,
+        operator_spill_threshold == 0 ? 0 : operator_spill_threshold / this->partition_num,
         spill_config,
         spill_block_schema,
         query_id_and_cte_id,
@@ -88,15 +88,18 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
 template <bool for_test>
 CTEOpStatus CTE::pushBlock(size_t partition_id, const Block & block)
 {
-    if unlikely (block.rows() == 0)
-        return CTEOpStatus::OK;
-
     std::shared_lock<std::shared_mutex> rw_lock(this->rw_lock);
     if unlikely (this->is_cancelled)
         return CTEOpStatus::CANCELLED;
 
+    if unlikely (block.rows() == 0)
+        return CTEOpStatus::OK;
+
+    // TODO delete ------------------
     this->total_recv_blocks.fetch_add(1);
     this->total_recv_rows.fetch_add(block.rows());
+    // ------------------
+
     return this->partitions[partition_id]->pushBlock<false>(block);
 }
 

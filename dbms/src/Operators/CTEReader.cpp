@@ -57,6 +57,7 @@ CTEOpStatus CTEReader::fetchBlockFromDisk(size_t source_id, Block & block)
     auto ret = this->cte->getBlockFromDisk(this->cte_reader_id, source_id, block);
     if (block)
     {
+        // TODO remove
         this->total_fetch_blocks.fetch_add(1);
         this->total_fetch_rows.fetch_add(block.rows());
         this->total_fetch_from_disk.fetch_add(1);

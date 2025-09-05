@@ -778,8 +778,8 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_wait_on_join_build, {"type", "wait_on_join_build"}),                                                                   \
       F(type_wait_on_join_probe, {"type", "wait_on_join_probe"}),                                                                   \
       F(type_wait_on_result_queue_write, {"type", "wait_on_result_queue_write"}),                                                   \
-      F(type_type_wait_on_cte_read, {"type", "type_wait_on_cte_read"}),                                                             \
-      F(type_type_wait_on_cte_io, {"type", "type_wait_on_cte_io"}))                                                                 \
+      F(type_wait_on_cte_read, {"type", "type_wait_on_cte_read"}),                                                                  \
+      F(type_wait_on_cte_io, {"type", "type_wait_on_cte_io"}))                                                                      \
     M(tiflash_pipeline_task_duration_seconds,                                                                                       \
       "Bucketed histogram of pipeline task duration in seconds",                                                                    \
       Histogram, /* these command usually cost several hundred milliseconds to several seconds, increase the start bucket to 5ms */ \

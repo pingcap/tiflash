@@ -45,10 +45,7 @@ protected:
     {
         Int64 total_memory = 0;
         for (auto & partition : this->partitions)
-        {
-            std::lock_guard<std::mutex> lock(*(partition->mu));
-            total_memory += partition->memory_usage;
-        }
+            total_memory += partition->memory_usage.load();
         return total_memory;
     }
 

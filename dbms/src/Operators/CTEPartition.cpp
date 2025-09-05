@@ -71,10 +71,9 @@ template <bool for_test>
 CTEOpStatus CTEPartition::pushBlock(const Block & block)
 {
     std::unique_lock<std::mutex> aux_lock(*(this->aux_lock));
-    this->total_blocks.fetch_add(1);
+    this->total_blocks.fetch_add(1); // TODO delete
     CTEOpStatus ret_status = CTEOpStatus::OK;
-    if unlikely (this->status != CTEPartitionStatus::NORMAL && block.rows() != 0)
-        // Block memory usage will be calculated after the finish of spill
+    if unlikely (this->status != CTEPartitionStatus::NORMAL)
         this->tmp_blocks.push_back(block);
 
     switch (this->status)
@@ -91,7 +90,7 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
     // Blocked in cpu pool is very bad.
     std::lock_guard<std::mutex> lock(*(this->mu));
 
-    this->memory_usage += block.bytes();
+    this->memory_usage.fetch_add(block.bytes());
     this->blocks.push_back(BlockWithCounter(block, static_cast<Int16>(this->expected_source_num)));
     if constexpr (for_test)
         this->cv_for_test->notify_all();
@@ -99,7 +98,7 @@ CTEOpStatus CTEPartition::pushBlock(const Block & block)
         this->pipe_cv->notifyAll();
 
 
-    if unlikely (this->exceedMemoryThresholdNoLock())
+    if unlikely (this->exceedMemoryThreshold())
     {
         this->status = CTEPartitionStatus::NEED_SPILL;
         ret_status = CTEOpStatus::NEED_SPILL;
@@ -139,24 +138,15 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
         this->first_log = false;
     }
 
-    // TODO remove
-    // auto * log = &Poco::Logger::get("LRUCache");
-    String info = fmt::format("xzxdebug spill detail {} ", this->partition_id);
-
     // Key represents logical index
     // Value represents physical index in `this->blocks`
     std::map<size_t, size_t> split_idxs;
     auto evicted_block_num = this->getTotalEvictedBlockNumnoLock();
     split_idxs.insert(std::make_pair(evicted_block_num, 0));
-    info = fmt::format("{} <split_idxs insert: {}:{}>", info, evicted_block_num, 0);
     for (const auto & [cte_reader_id, logical_idx] : this->fetch_block_idxs)
     {
-        info = fmt::format("{} <{}:{}>", info, cte_reader_id, logical_idx);
         if (logical_idx > evicted_block_num)
-        {
             split_idxs.insert(std::make_pair(logical_idx, logical_idx - evicted_block_num));
-            info = fmt::format("{} <split_idxs insert: {}:{}>", info, logical_idx, logical_idx - evicted_block_num);
-        }
     }
 
     auto split_iter = split_idxs.begin();
@@ -164,6 +154,7 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
     auto total_block_in_memory_num = this->blocks.size();
     while (split_iter != split_idxs.end())
     {
+        // No more blocks can be spilled
         if (split_iter->second == this->blocks.size())
             break;
 
@@ -184,15 +175,10 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
             end_iter = blocks_begin_iter + next_iter->second;
         }
 
-        info = fmt::format("{} <spill_ranges: {}-{}>", info, spill_ranges.back().first, spill_ranges.back().second);
-
         bool counter_is_zero = false;
         if (iter->counter == 0)
             // In one slice, all blocks' counter should be 0 or not be 0. Check it.
             counter_is_zero = true;
-
-        // TODO remove it
-        auto before_release_num = this->total_block_released_num;
 
         while (iter != end_iter)
         {
@@ -209,10 +195,6 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
             ++iter;
         }
 
-        // TODO remove
-        if (before_release_num != this->total_block_released_num)
-            info = fmt::format("{} released_num: {}->{}", info, before_release_num, this->total_block_released_num);
-
         if (counter_is_zero)
         {
             split_iter = next_iter;
@@ -221,28 +203,25 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
 
         RUNTIME_CHECK(!spilled_blocks.empty());
 
-        // TODO remove
-        // LOG_INFO(log, "xzxdebug spill info {} total_block_in_disk_num {}, spilled_blocks.size(): {}, total_block_in_disk_num change: {}->{}", this->partition_id, this->total_block_in_disk_num, spilled_blocks.size(), this->total_block_in_disk_num, this->total_block_in_disk_num+spilled_blocks.size());
         this->total_block_in_disk_num += spilled_blocks.size();
 
         auto spiller = this->config->getSpiller(this->partition_id, this->spillers.size());
+
         // TODO delete -----------------
         this->total_spill_blocks.fetch_add(spilled_blocks.size());
         block_num.fetch_add(spilled_blocks.size());
         for (auto & block : spilled_blocks)
             row_num.fetch_add(block.rows());
         // -----------------
+
         spiller->spillBlocks(std::move(spilled_blocks), this->partition_id);
         spiller->finishSpill();
         this->spillers.insert(std::make_pair(split_iter->first, std::move(spiller)));
         split_iter = next_iter;
     }
 
-    // if (this->blocks.size() > 0)
-    // LOG_INFO(log, "xzxdebug block change {} {} -> 0", this->partition_id, this->blocks.size());
-    // LOG_INFO(log, info);
     this->blocks.clear();
-    this->memory_usage = 0;
+    this->memory_usage.store(0);
 
     std::lock_guard<std::mutex> aux_lock(*(this->aux_lock));
     this->status = CTEPartitionStatus::NORMAL;
@@ -266,7 +245,7 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
     RUNTIME_CHECK_MSG(this->isSpillTriggeredNoLock(), "Spill should be triggered");
     RUNTIME_CHECK_MSG(this->isBlockAvailableInDiskNoLock(cte_reader_id), "Requested block is not in disk");
 
-    bool retry = false;
+    bool retried = false;
     while (true)
     {
         auto [iter, _] = this->cte_reader_restore_streams.insert(std::make_pair(cte_reader_id, nullptr));
@@ -286,11 +265,11 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
         block = iter->second->read();
         if (!block)
         {
-            RUNTIME_CHECK(!retry);
+            RUNTIME_CHECK(!retried);
 
             iter->second->readSuffix();
             iter->second = nullptr;
-            retry = true;
+            retried = true;
             continue;
         }
 

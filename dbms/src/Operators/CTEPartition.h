@@ -174,7 +174,7 @@ struct CTEPartition
 
     bool isSpillTriggeredNoLock() const { return this->total_block_in_disk_num > 0; }
     void addIdxNoLock(size_t cte_reader_id) { ++this->fetch_block_idxs[cte_reader_id]; }
-    bool exceedMemoryThresholdNoLock() const
+    bool exceedMemoryThreshold() const
     {
         // config will be nullptr in test
         if unlikely (this->config == nullptr)
@@ -182,7 +182,7 @@ struct CTEPartition
 
         if (this->config->memory_threshold == 0)
             return false;
-        return this->memory_usage >= this->config->memory_threshold;
+        return this->memory_usage.load() >= this->config->memory_threshold;
     }
 
     template <bool for_test>
@@ -204,7 +204,7 @@ struct CTEPartition
     {
         for (const auto & block : this->tmp_blocks)
         {
-            this->memory_usage += block.bytes();
+            this->memory_usage.fetch_add(block.bytes());
             this->blocks.push_back(BlockWithCounter(block, static_cast<Int16>(this->expected_source_num)));
         }
         tmp_blocks.clear();
@@ -236,7 +236,7 @@ struct CTEPartition
     std::unordered_map<size_t, size_t> fetch_block_idxs;
     std::unique_ptr<PipeConditionVariable> pipe_cv;
 
-    size_t memory_usage = 0;
+    std::atomic_size_t memory_usage = 0;
     const size_t expected_source_num;
 
     std::unordered_map<size_t, SpillerPtr> spillers;
