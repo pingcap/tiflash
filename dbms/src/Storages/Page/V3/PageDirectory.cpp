@@ -128,7 +128,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
             // to replace the entry with newer sequence.
             RUNTIME_CHECK_MSG(
                 last_iter->second.being_ref_count.getLatestRefCount() == 1 || last_iter->first.sequence >= ver.sequence,
-                "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
+                "Try to replace normal entry with an newer seq, ver={} prev_ver={} last_entry={}",
                 ver,
                 last_iter->first,
                 last_iter->second);
@@ -140,8 +140,8 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
 
     throw Exception(
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS,
-        "try to create entry version with invalid state "
-        "[ver={}] [entry={}] [state={}]",
+        "try to create entry version with invalid state, "
+        "ver={} entry={} state={}",
         ver,
         entry,
         toDebugString());
@@ -186,7 +186,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
             // to replace the entry with newer sequence.
             RUNTIME_CHECK_MSG(
                 last_iter->second.being_ref_count.getLatestRefCount() == 1 || last_iter->first.sequence >= ver.sequence,
-                "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
+                "Try to replace normal entry with an newer seq, ver={} prev_ver={} last_entry={}",
                 ver,
                 last_iter->first,
                 last_iter->second);
@@ -228,8 +228,8 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
 
     throw Exception(
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS,
-        "try to create upsert entry version with invalid state "
-        "[ver={}] [entry={}] [state={}]",
+        "try to create upsert entry version with invalid state, "
+        "ver={} entry={} state={}",
         ver,
         entry,
         toDebugString());
@@ -288,8 +288,8 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
 
     throw Exception(
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS,
-        "try to create external version with invalid state "
-        "[ver={}] [state={}]",
+        "try to create external version with invalid state, "
+        "ver={} state={}",
         ver,
         toDebugString());
 }
@@ -324,8 +324,8 @@ void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver) NO_THREA
 
     throw Exception(
         ErrorCodes::LOGICAL_ERROR,
-        "try to create delete version with invalid state "
-        "[ver={}] [state={}]",
+        "try to create delete version with invalid state, "
+        "ver={} state={}",
         ver,
         toDebugString());
 }
@@ -375,8 +375,8 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(
     }
     throw Exception(
         ErrorCodes::LOGICAL_ERROR,
-        "try to update remote page with invalid state "
-        "[ver={}] [state={}]",
+        "try to update remote page with invalid state, "
+        "ver={} state={}",
         ver,
         toDebugString());
 }
@@ -431,8 +431,8 @@ bool VersionedPageEntries<Trait>::createNewRef(const PageVersion & ver, const Pa
     // adding ref to replace put/external is not allowed
     throw Exception(
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS,
-        "try to create ref version with invalid state "
-        "[ver={}] [ori_page_id={}] [state={}]",
+        "try to create ref version with invalid state, "
+        "ver={} ori_page_id={} state={}",
         ver,
         ori_page_id_,
         toDebugString());
@@ -668,8 +668,8 @@ bool VersionedPageEntries<Trait>::isVisible(UInt64 seq) const NO_THREAD_SAFETY_A
 
     throw Exception(
         ErrorCodes::LOGICAL_ERROR,
-        "calling isDeleted with invalid state "
-        "[seq={}] [state={}]",
+        "calling isDeleted with invalid state, "
+        "seq={} state={}",
         seq,
         toDebugString());
 }
@@ -698,7 +698,7 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, 
                 {
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
-                        "Try to add ref to a completely deleted entry [entry={}] [ver={}]",
+                        "Try to add ref to a completely deleted entry, entry={} ver={}",
                         iter->second,
                         target_ver);
                 }
@@ -719,7 +719,7 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, 
     }
     throw Exception(
         ErrorCodes::LOGICAL_ERROR,
-        "The entry to be added ref count is not found [ver={}] [state={}]",
+        "The entry to be added ref count is not found, ver={} state={}",
         target_ver,
         toDebugString());
 }
@@ -916,7 +916,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
         {
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "Can not find entry for decreasing ref count [page_id={}] [ver={}] [deref_count={}]",
+                "Can not find entry for decreasing ref count, page_id={} ver={} deref_count={}",
                 page_id,
                 deref_ver,
                 deref_count);
@@ -932,7 +932,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
             // run into the begin of `entries`, but still can not find a valid entry to decrease the ref-count
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "Can not find entry for decreasing ref count till the begin [page_id={}] [ver={}] [deref_count={}]",
+                "Can not find entry for decreasing ref count till the begin, page_id={} ver={} deref_count={}",
                 page_id,
                 deref_ver,
                 deref_count);
@@ -1168,18 +1168,18 @@ typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(
             {
                 if (throw_on_not_exist)
                 {
-                    LOG_WARNING(log, "Dump state for invalid page id [page_id={}]", page_id);
+                    LOG_WARNING(log, "Dump state for invalid page id, page_id={}", page_id);
                     for (const auto & [dump_id, dump_entry] : mvcc_table_directory)
                     {
                         LOG_WARNING(
                             log,
-                            "Dumping state [page_id={}] [entry={}]",
+                            "Dumping state, page_id={} entry={}",
                             dump_id,
                             dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
                     }
                     throw Exception(
                         ErrorCodes::PS_ENTRY_NOT_EXISTS,
-                        "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
+                        "Invalid page id, entry not exist, page_id={} resolve_id={}",
                         page_id,
                         id_to_resolve);
                 }
@@ -1218,7 +1218,7 @@ typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(
     {
         throw Exception(
             ErrorCodes::PS_ENTRY_NO_VALID_VERSION,
-            "Fail to get entry [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
+            "Fail to get entry, page_id={} seq={} resolve_id={} resolve_ver={}",
             page_id,
             snap->sequence,
             id_to_resolve,
@@ -1261,7 +1261,7 @@ std::pair<typename PageDirectory<Trait>::PageIdAndEntries, typename PageDirector
                     {
                         throw Exception(
                             ErrorCodes::PS_ENTRY_NOT_EXISTS,
-                            "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
+                            "Invalid page id, entry not exist, page_id={} resolve_id={}",
                             page_id,
                             id_to_resolve);
                     }
@@ -1299,7 +1299,7 @@ std::pair<typename PageDirectory<Trait>::PageIdAndEntries, typename PageDirector
         {
             throw Exception(
                 ErrorCodes::PS_ENTRY_NO_VALID_VERSION,
-                "Fail to get entry [page_id={}] [ver={}] [resolve_id={}] [resolve_ver={}] [idx={}]",
+                "Fail to get entry, page_id={} ver={} resolve_id={} resolve_ver={} idx={}",
                 page_id,
                 init_ver_to_resolve,
                 id_to_resolve,
@@ -1350,7 +1350,7 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(
                 {
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
-                        "Invalid page id [page_id={}] [resolve_id={}]",
+                        "Invalid page id, page_id={} resolve_id={}",
                         page_id,
                         id_to_resolve);
                 }
@@ -1388,7 +1388,7 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
+            "fail to get normal id, page_id={} seq={} resolve_id={} resolve_ver={}",
             page_id,
             snap->sequence,
             id_to_resolve,
@@ -1576,7 +1576,7 @@ void PageDirectory<Trait>::applyRefEditRecord(
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "Trying to add ref to non-exist page [page_id={}] [ori_id={}] [ver={}] [resolve_id={}] [resolve_ver={}]",
+            "Trying to add ref to non-exist page, page_id={} ori_id={} ver={} resolve_id={} resolve_ver={}",
             rec.page_id,
             rec.ori_page_id,
             version,
@@ -1600,7 +1600,7 @@ void PageDirectory<Trait>::applyRefEditRecord(
         {
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "The ori page id is not found [page_id={}] [ori_id={}] [ver={}] [resolved_id={}] [resolved_ver={}]",
+                "The ori page id is not found, page_id={} ori_id={} ver={} resolved_id={} resolved_ver={}",
                 rec.page_id,
                 rec.ori_page_id,
                 version,
@@ -1779,7 +1779,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 case EditRecordType::UPDATE_DATA_FROM_REMOTE:
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
-                        "should not handle edit with invalid type [type={}]",
+                        "should not handle edit with invalid type, type={}",
                         magic_enum::enum_name(r.type));
                 }
 
@@ -1792,7 +1792,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
             catch (DB::Exception & e)
             {
                 e.addMessage(fmt::format(
-                    " [type={}] [page_id={}] [ver={}] [edit_size={}]",
+                    " type={} page_id={} ver={} edit_size={}",
                     magic_enum::enum_name(r.type),
                     r.page_id,
                     r.version,
@@ -1875,7 +1875,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
             catch (DB::Exception & e)
             {
                 e.addMessage(fmt::format(
-                    " type={}, page_id={}, ver={}, seq={}",
+                    " type={} page_id={} ver={} seq={}",
                     magic_enum::enum_name(r.type),
                     r.page_id,
                     r.version,
@@ -2269,12 +2269,12 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
     LOG_IMPL(
         log,
         log_level,
-        "After MVCC gc in memory [lowest_seq={}] "
-        "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
-        "[total_deref_counter={}] [all_del_entries={}]. "
-        "Still exist [snapshot_nums={}], [page_nums={}]. "
-        "Longest alive snapshot: [longest_alive_snapshot_time={}] "
-        "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
+        "After MVCC gc in memory, lowest_seq={} "
+        "clean invalid_snapshot_nums={} invalid_page_nums={} "
+        "total_deref_counter={} all_del_entries={}. "
+        "Still exist, snapshot_nums={} page_nums={}. "
+        "Longest alive snapshot: longest_alive_snapshot_time={} "
+        "longest_alive_snapshot_seq={} stale_snapshot_nums={}",
         lowest_seq,
         invalid_snapshot_nums,
         invalid_page_nums,

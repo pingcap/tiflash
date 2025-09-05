@@ -654,12 +654,15 @@ private:
 
 namespace details
 {
+// Get the max sequence number from a serialized edit record.
+// If the record is empty, return std::nullopt.
 template <typename Trait>
-UInt64 getMaxSequenceForRecord(const String & record)
+std::optional<UInt64> getMaxSequenceForRecord(const String & record)
 {
     auto edit = Trait::Serializer::deserializeFrom(record, nullptr);
     const auto & records = edit.getRecords();
-    RUNTIME_CHECK(!records.empty(), record.size());
+    if (records.empty())
+        return std::nullopt;
     return records.back().version.sequence;
 }
 } // namespace details
