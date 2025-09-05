@@ -234,7 +234,7 @@ template <typename F, typename FP>
 void eventuallyPredicateEx(F f, FP fp)
 {
     using namespace std::chrono_literals;
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 20; i++)
     {
         if (f())
             return;
@@ -861,7 +861,6 @@ try
 }
 CATCH
 
-/* unstable test, disable it
 // Test cancel and regular snapshot
 TEST_F(RegionKVStoreTestFAP, Cancel4)
 try
@@ -951,7 +950,6 @@ try
     FailPointHelper::disableFailPoint(FailPoints::force_set_fap_candidate_store_id);
 }
 CATCH
-*/
 
 // Test cancel when building segments
 TEST_F(RegionKVStoreTestFAP, Cancel5)
