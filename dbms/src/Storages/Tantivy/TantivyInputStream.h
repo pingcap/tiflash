@@ -61,7 +61,7 @@ public:
             ", ");
         auto [expr, cids] = tipbToTiCIExpr(match_expr_);
         match_expr = std::move(expr);
-        LOG_INFO(log, "columns: [{}], match columns: {}", buf.toString(), cids);
+        LOG_DEBUG(log, "columns: [{}], match columns: {}", buf.toString(), cids);
     }
 
     String getName() const override { return NAME; }
@@ -76,7 +76,7 @@ public:
         }
         if (processed_shard >= query_shard_infos.size())
         {
-            LOG_INFO(log, "empty shard info, returning empty block");
+            LOG_DEBUG(log, "empty shard info, returning empty block");
             done = true;
             return {};
         }
@@ -92,7 +92,7 @@ protected:
     {
         auto return_fields = getFields(return_columns);
         auto & shard_info = query_shard_infos[processing];
-        LOG_INFO(log, "Processing shard: {}, shard info: {}", processing, shard_info.toString());
+        LOG_DEBUG(log, "Processing shard: {}, shard info: {}", processing, shard_info.toString());
         auto key_ranges = getKeyRanges(shard_info.key_ranges);
 
         auto search_param = SearchParam{static_cast<size_t>(limit)};

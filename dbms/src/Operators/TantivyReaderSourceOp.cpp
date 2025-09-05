@@ -47,12 +47,12 @@ String TantivyReaderSourceOp::getName() const
 
 void TantivyReaderSourceOp::operatePrefixImpl()
 {
-    LOG_DEBUG(log, "start reading from TantivyReaderSourceOp");
+    watcher.start();
 }
 
 void TantivyReaderSourceOp::operateSuffixImpl()
 {
-    LOG_DEBUG(log, "finish read {} rows from TantivyReaderSourceOp", total_rows);
+    LOG_DEBUG(log, "TantivyReaderSourceOp read {} rows, took {} ms", total_rows, watcher.elapsedMilliseconds());
 }
 
 Block TantivyReaderSourceOp::popFromBlockQueue()
