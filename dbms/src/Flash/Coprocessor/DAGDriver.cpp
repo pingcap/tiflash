@@ -20,6 +20,7 @@
 #include <DataStreams/copyData.h>
 #include <Flash/Coprocessor/DAGContext.h>
 #include <Flash/Coprocessor/DAGDriver.h>
+#include <Flash/Coprocessor/DAGUtils.h>
 #include <Flash/Coprocessor/StreamWriter.h>
 #include <Flash/Coprocessor/StreamingDAGResponseWriter.h>
 #include <Flash/Coprocessor/UnaryDAGResponseWriter.h>
@@ -171,6 +172,7 @@ try
             streaming_writer,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
+            getMaxBufferedBytesInResponseWriter(context.getSettingsRef().max_buffered_bytes_in_executor, 1),
             dag_context);
         response_writer->prepare(query_executor->getSampleBlock());
         query_executor
@@ -225,6 +227,7 @@ try
             streaming_writer,
             context.getSettingsRef().dag_records_per_chunk,
             context.getSettingsRef().batch_send_min_limit,
+            getMaxBufferedBytesInResponseWriter(context.getSettingsRef().max_buffered_bytes_in_executor, 1),
             dag_context);
         response_writer->prepare(query_executor->getSampleBlock());
         query_executor
