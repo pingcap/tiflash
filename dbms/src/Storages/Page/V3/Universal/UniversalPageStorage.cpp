@@ -512,7 +512,7 @@ PS::V3::S3LockLocalManager::ExtraLockInfo UniversalPageStorage::allocateNewUploa
 bool UniversalPageStorage::canSkipCheckpoint() const
 {
     std::scoped_lock lock(checkpoint_mu);
-    auto snap = page_directory->createSnapshot(/*tracing_id*/ "canSkipCheckpoint");
+    auto snap = page_directory->createSnapshot(PS::V3::SnapshotType::General, /*tracing_id*/ "canSkipCheckpoint");
     return snap->sequence == last_checkpoint_sequence;
 }
 
@@ -522,7 +522,9 @@ std::optional<PS::V3::CPDataDumpStats> UniversalPageStorage::dumpIncrementalChec
     std::scoped_lock lock(checkpoint_mu);
     Stopwatch sw;
     // Let's keep this snapshot until all finished, so that blob data will not be GCed.
-    auto snap = page_directory->createSnapshot(/*tracing_id*/ "dumpIncrementalCheckpoint");
+    auto snap = page_directory->createSnapshot(
+        PS::V3::SnapshotType::General,
+        /*tracing_id*/ "dumpIncrementalCheckpoint");
 
     if (snap->sequence == last_checkpoint_sequence && !options.full_compact)
         return PS::V3::CPDataDumpStats{.has_new_data = false};

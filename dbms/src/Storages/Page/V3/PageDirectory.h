@@ -44,14 +44,20 @@ extern const Metric PSMVCCNumSnapshots;
 namespace DB::PS::V3
 {
 
+enum class SnapshotType : UInt32
+{
+    General,
+    DeltaTreeOnly,
+};
 class PageDirectorySnapshot : public DB::PageStorageSnapshot
 {
 public:
     using TimePoint = std::chrono::time_point<std::chrono::steady_clock>;
 
-    explicit PageDirectorySnapshot(UInt64 seq, const String & tracing_id_)
+    explicit PageDirectorySnapshot(UInt64 seq, SnapshotType tp, const String & tracing_id_)
         : sequence(seq)
         , create_thread(Poco::ThreadNumber::get())
+        , type(tp)
         , tracing_id(tracing_id_)
         , create_time(std::chrono::steady_clock::now())
     {
@@ -69,7 +75,8 @@ public:
 
 public:
     const UInt64 sequence;
-    const unsigned create_thread;
+    const UInt32 create_thread;
+    const SnapshotType type;
     const String tracing_id;
 
 private:
@@ -127,9 +134,9 @@ public:
     {
         if (snap_seq == 0)
         {
-            // When `snap_seq` is 0, it means the deref operation is caused by rewritting a ref page to a normal page.
-            // Actually we can collapse versioned_ref_counts here too because there should be no other gc happend concurrently.
-            // But collpase it when `snap_seq` is not zero should be enough. So we just do an append here.
+            // When `snap_seq` is 0, it means the deref operation is caused by rewriting a ref page to a normal page.
+            // Actually we can collapse versioned_ref_counts here too because there should be no other gc happened concurrently.
+            // But collapse it when `snap_seq` is not zero should be enough. So we just do an append here.
             versioned_ref_counts->emplace_back(PageVersion(0, 0), -deref_count_delta);
         }
         else
@@ -309,7 +316,7 @@ public:
     // Commit the upsert entry after full gc.
     // Return a PageId, if the page id is valid, it means it rewrite a RefPage into
     // a normal Page. Caller must call `derefAndClean` to decrease the ref-count of
-    // the returing page id.
+    // the returning page id.
     [[nodiscard]] PageId createUpsertEntry(const PageVersion & ver, const PageEntryV3 & entry, bool strict_check);
 
     bool createNewRef(const PageVersion & ver, const PageId & ori_page_id);
@@ -454,7 +461,8 @@ public:
         WALStorePtr && wal,
         UInt64 max_persisted_log_files_ = MAX_PERSISTED_LOG_FILES);
 
-    PageDirectorySnapshotPtr createSnapshot(const String & tracing_id = "") const;
+    PageDirectorySnapshotPtr createSnapshot(SnapshotType tp = SnapshotType::General, const String & tracing_id = "")
+        const;
 
     SnapshotsStatistics getSnapshotsStat() const;
 

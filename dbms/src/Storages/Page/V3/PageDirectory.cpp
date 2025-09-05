@@ -1064,10 +1064,10 @@ PageDirectory<Trait>::PageDirectory(String storage_name, WALStorePtr && wal_, UI
 {}
 
 template <typename Trait>
-PageDirectorySnapshotPtr PageDirectory<Trait>::createSnapshot(const String & tracing_id) const
+PageDirectorySnapshotPtr PageDirectory<Trait>::createSnapshot(SnapshotType tp, const String & tracing_id) const
 {
     GET_METRIC(tiflash_storage_page_command_count, type_snapshot).Increment();
-    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tracing_id);
+    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tp, tracing_id);
     {
         std::lock_guard snapshots_lock(snapshots_mutex);
         snapshots.emplace_back(std::weak_ptr<PageDirectorySnapshot>(snap));
@@ -2063,7 +2063,7 @@ template <typename Trait>
 bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter, bool force)
 {
     auto identifier = fmt::format("{}.dump", wal->name());
-    auto snap = createSnapshot(identifier);
+    auto snap = createSnapshot(PS::V3::SnapshotType::General, identifier);
     SYNC_FOR("after_PageDirectory::create_snap_for_dump");
 
     // Only apply compact logs when files snapshot is valid
@@ -2139,7 +2139,10 @@ template <typename Trait>
 typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(const InMemGCOption & options)
     NO_THREAD_SAFETY_ANALYSIS
 {
-    UInt64 lowest_seq = sequence.load();
+    const UInt64 seq_clone = sequence.load();
+    UInt64 delta_tree_only_seq = seq_clone;
+    std::optional<UInt64> general_lowest_seq = std::nullopt;
+    UInt64 lowest_seq_of_all_snapshots = seq_clone;
 
     UInt64 invalid_snapshot_nums = 0;
     UInt64 valid_snapshot_nums = 0;
@@ -2159,11 +2162,20 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
             }
             else
             {
-                lowest_seq = std::min(lowest_seq, snap->sequence);
-                ++iter;
-                valid_snapshot_nums++;
-                const auto alive_time_seconds = snap->elapsedSeconds();
+                switch (snap->type)
+                {
+                case SnapshotType::General:
+                    general_lowest_seq.emplace(std::min(general_lowest_seq.value_or(seq_clone), snap->sequence));
+                    break;
+                case SnapshotType::DeltaTreeOnly:
+                    delta_tree_only_seq = std::min(delta_tree_only_seq, snap->sequence);
+                    break;
+                }
+                lowest_seq_of_all_snapshots = std::min(lowest_seq_of_all_snapshots, snap->sequence);
 
+                ++iter;
+                ++valid_snapshot_nums;
+                const auto alive_time_seconds = snap->elapsedSeconds();
                 if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
                 {
                     if (!tracing_id_set.contains(snap->tracing_id))
@@ -2177,7 +2189,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
                             alive_time_seconds);
                         tracing_id_set.emplace(snap->tracing_id);
                     }
-                    stale_snapshot_nums++;
+                    ++stale_snapshot_nums;
                 }
 
                 if (longest_alive_snapshot_time < alive_time_seconds)
@@ -2209,10 +2221,37 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
     // Iterate all page_id and try to clean up useless var entries
     while (true)
     {
+        UInt64 actual_seq = 0;
+        if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+        {
+            // For Universal PageDirectory, we store Raft data together but this kind
+            // of data is frequently created and deleted. So we split the snapshot into
+            // two kinds and the delta-tree-only reading snapshot does not protect the
+            // Raft data from being GCed.
+            // If the page_id is from proxy and there is no general snapshot,
+            // we can use `seq_clone` to clean up entries more aggressively to
+            // reduce memory usage.
+            if (bool page_id_from_proxy = Trait::PageIdTrait::isFromProxy(iter->first); //
+                page_id_from_proxy)
+            {
+                // Page from proxy is only protected by general snapshots.
+                actual_seq = general_lowest_seq.value_or(seq_clone);
+            }
+            else
+            {
+                // Protected by all kinds of snapshots
+                actual_seq = lowest_seq_of_all_snapshots;
+            }
+        }
+        else
+        {
+            // Protected by all kinds of snapshots
+            actual_seq = lowest_seq_of_all_snapshots;
+        }
         // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
         // do gc on the version list without lock on `mvcc_table_directory`.
         const bool all_deleted = iter->second->cleanOutdatedEntries(
-            lowest_seq,
+            actual_seq,
             &normal_entries_to_deref,
             options.need_removed_entries ? &all_del_entries : nullptr,
             options.remote_valid_sizes,
@@ -2250,7 +2289,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
 
         const bool all_deleted = iter->second->derefAndClean(
-            lowest_seq,
+            lowest_seq_of_all_snapshots,
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
@@ -2269,13 +2308,14 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
     LOG_IMPL(
         log,
         log_level,
-        "After MVCC gc in memory, lowest_seq={} "
+        "After MVCC gc in memory, general_lowest_seq={} delta_tree_only_seq={}. "
         "clean invalid_snapshot_nums={} invalid_page_nums={} "
         "total_deref_counter={} all_del_entries={}. "
         "Still exist, snapshot_nums={} page_nums={}. "
         "Longest alive snapshot: longest_alive_snapshot_time={} "
         "longest_alive_snapshot_seq={} stale_snapshot_nums={}",
-        lowest_seq,
+        general_lowest_seq,
+        delta_tree_only_seq,
         invalid_snapshot_nums,
         invalid_page_nums,
         total_deref_counter,
@@ -2294,7 +2334,7 @@ typename PageDirectory<Trait>::PageEntriesEdit PageDirectory<Trait>::dumpSnapsho
 {
     if (!snap)
     {
-        snap = createSnapshot(/*tracing_id*/ "");
+        snap = createSnapshot(PS::V3::SnapshotType::General, /*tracing_id*/ "");
     }
 
     PageEntriesEdit edit;

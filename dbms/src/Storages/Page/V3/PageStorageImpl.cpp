@@ -98,7 +98,7 @@ PageIdU64 PageStorageImpl::getNormalPageIdImpl(
 
 DB::PageStorage::SnapshotPtr PageStorageImpl::getSnapshot(const String & tracing_id)
 {
-    return page_directory->createSnapshot(tracing_id);
+    return page_directory->createSnapshot(PS::V3::SnapshotType::General, tracing_id);
 }
 
 FileUsageStatistics PageStorageImpl::getFileUsageStatistics() const
