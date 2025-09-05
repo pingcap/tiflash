@@ -44,7 +44,6 @@ public:
 
     Block getHeader() const override { return header; }
     void write(const Block & block) override;
-    Int64 writeAndReturnBlockSize(const Block & block);
     void flush() override;
 
     static void writeData(

@@ -40,12 +40,13 @@ public:
         RUNTIME_CHECK(cte);
     }
 
-    // TODO maybe remove it
+    // TODO remove --------------
     std::atomic_size_t total_fetch_blocks = 0;
     std::atomic_size_t total_fetch_rows = 0;
 
     std::atomic_size_t total_fetch_from_mem = 0;
     std::atomic_size_t total_fetch_from_disk = 0;
+    // --------------
 
     // For Test
     CTEReader(const String & query_id_and_cte_id_, CTEManager * cte_manager_, std::shared_ptr<CTE> cte_)

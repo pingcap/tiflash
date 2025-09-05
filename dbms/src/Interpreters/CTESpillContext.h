@@ -15,14 +15,13 @@
 #pragma once
 
 #include <Common/Exception.h>
+#include <Common/Logger.h>
 #include <Core/Block.h>
 #include <Core/OperatorSpillContext.h>
 #include <Operators/CTEPartition.h>
 
 #include <memory>
 #include <mutex>
-
-#include "Common/Logger.h"
 
 namespace DB
 {

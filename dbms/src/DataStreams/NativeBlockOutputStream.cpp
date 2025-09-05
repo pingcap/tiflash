@@ -140,12 +140,4 @@ void NativeBlockOutputStream::write(const Block & block)
         }
     }
 }
-
-Int64 NativeBlockOutputStream::writeAndReturnBlockSize(const Block & block)
-{
-    Int64 prev_byte_count = this->ostr.count();
-    this->write(block);
-    return this->ostr.count() - prev_byte_count;
-}
-
 } // namespace DB

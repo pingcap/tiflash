@@ -32,6 +32,7 @@
 
 namespace DB
 {
+// TODO delete
 inline String genInfo(const String & name, const std::map<size_t, std::atomic_size_t> & data)
 {
     String info = fmt::format("{}: ", name);
@@ -82,6 +83,7 @@ public:
 
     ~CTE()
     {
+        // TODO delete ---------------
         String info;
         info = fmt::format(
             "total_recv_blocks: {}, total_recv_rows: {}, total_spilled_blocks: {}, total_spilled_rows: {}, ",
@@ -99,6 +101,7 @@ public:
 
         for (auto & p : this->partitions)
             p->debugOutput();
+        // TODO ---------------
     }
 
     void initCTESpillContextAndPartitionConfig(

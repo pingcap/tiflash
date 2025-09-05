@@ -57,11 +57,12 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
 
     if ((--this->blocks[idx].counter) == 0)
         this->blocks[idx].block.clear();
+    // TODO delete -------------
     {
-        // TODO delete it
         auto [iter, _] = this->fetch_in_mem_idxs.insert(std::make_pair(cte_reader_id, 0));
         iter->second.push_back(this->fetch_block_idxs[cte_reader_id]);
     }
+    // -------------
     this->addIdxNoLock(cte_reader_id);
     return CTEOpStatus::OK;
 }
@@ -128,7 +129,7 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
 
     if (this->first_log)
     {
-        // TODO remove xzxdebug
+        // TODO remove
         LOG_INFO(
             this->config->log,
             fmt::format(
@@ -138,6 +139,7 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
         this->first_log = false;
     }
 
+    // TODO remove
     // auto * log = &Poco::Logger::get("LRUCache");
     String info = fmt::format("xzxdebug spill detail {} ", this->partition_id);
 
@@ -217,14 +219,14 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
             continue;
         }
 
-        RUNTIME_CHECK(spilled_blocks.size() != 0);
+        RUNTIME_CHECK(!spilled_blocks.empty());
 
+        // TODO remove
         // LOG_INFO(log, "xzxdebug spill info {} total_block_in_disk_num {}, spilled_blocks.size(): {}, total_block_in_disk_num change: {}->{}", this->partition_id, this->total_block_in_disk_num, spilled_blocks.size(), this->total_block_in_disk_num, this->total_block_in_disk_num+spilled_blocks.size());
         this->total_block_in_disk_num += spilled_blocks.size();
 
         auto spiller = this->config->getSpiller(this->partition_id, this->spillers.size());
-        // -----------------
-        // TODO delete it
+        // TODO delete -----------------
         this->total_spill_blocks.fetch_add(spilled_blocks.size());
         block_num.fetch_add(spilled_blocks.size());
         for (auto & block : spilled_blocks)
@@ -292,10 +294,12 @@ CTEOpStatus CTEPartition::getBlockFromDisk(size_t cte_reader_id, Block & block)
             continue;
         }
 
+        // TODO delete -------------
         {
             auto [iter, _] = this->fetch_in_disk_idxs.insert(std::make_pair(cte_reader_id, 0));
             iter->second.push_back(this->fetch_block_idxs[cte_reader_id]);
         }
+        // -------------
         this->addIdxNoLock(cte_reader_id);
         break;
     };

@@ -243,26 +243,6 @@ void MPPTask::run()
 
 void MPPTask::registerTunnels(const mpp::DispatchTaskRequest & task_request)
 {
-    if unlikely (!dag_context->dag_request.rootExecutor().has_exchange_sender())
-    {
-        RUNTIME_CHECK_MSG(
-            dag_context->dag_request.rootExecutor().has_cte_sink(),
-            "Task should has either exchange sender or cte sink");
-
-        this->has_cte_sink.store(true);
-        const auto & cte_sink = dag_context->dag_request.rootExecutor().cte_sink();
-        String query_id_and_cte_id
-            = fmt::format("{}_{}", context->getDAGContext()->getMPPTaskId().getQueryID(), cte_sink.cte_id());
-        context->getDAGContext()->setQueryIDAndCTEIDForSink(query_id_and_cte_id);
-        auto cte = context->getCTEManager()->getOrCreateCTE(
-            query_id_and_cte_id,
-            context->getMaxStreams(),
-            cte_sink.cte_sink_num(),
-            cte_sink.cte_source_num());
-        cte->registerSink();
-        context->getDAGContext()->setCTESink(cte);
-        return;
-    }
     auto tunnel_set_local = std::make_shared<MPPTunnelSet>(log->identifier());
     std::chrono::seconds timeout(task_request.timeout());
     const auto & exchange_sender = dag_context->dag_request.rootExecutor().exchange_sender();

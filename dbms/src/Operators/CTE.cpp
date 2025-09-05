@@ -68,14 +68,16 @@ CTEOpStatus CTE::tryGetBlockAt(size_t cte_reader_id, size_t partition_id, Block 
     switch (status)
     {
     case CTEOpStatus::OK:
-    {
-        auto [iter, _] = this->total_fetch_blocks.insert(std::make_pair(cte_reader_id, 0));
-        iter->second.fetch_add(1);
-    }
+        // TODO delete ---------------------
+        {
+            auto [iter, _] = this->total_fetch_blocks.insert(std::make_pair(cte_reader_id, 0));
+            iter->second.fetch_add(1);
+        }
         {
             auto [iter, _] = this->total_fetch_rows.insert(std::make_pair(cte_reader_id, 0));
             iter->second.fetch_add(block.rows());
         }
+        // ---------------------
         return status;
     case CTEOpStatus::BLOCK_NOT_AVAILABLE:
         return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;

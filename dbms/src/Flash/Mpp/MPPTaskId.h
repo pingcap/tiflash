@@ -116,8 +116,7 @@ struct MPPGatherId
             query_id.query_ts,
             query_id.local_query_id,
             query_id.server_id,
-            query_id.start_ts,
-            this->gather_id);
+            query_id.start_ts);
     }
 
     bool hasMeaningfulGatherId() const { return gather_id > 0; }
