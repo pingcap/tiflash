@@ -433,6 +433,21 @@ private:
     std::shared_ptr<PageId> external_holder;
 };
 
+struct SnapshotGCStatistics
+{
+    UInt64 seq = 0;
+    UInt64 delta_tree_only_seq = 0;
+    std::optional<UInt64> general_seq = 0;
+    UInt64 lowest_seq_of_all = 0;
+
+    UInt64 num_invalid = 0;
+    UInt64 num_valid = 0;
+
+    UInt64 longest_alive_time = 0;
+    UInt64 longest_alive_seq = 0;
+    UInt64 num_stale = 0;
+};
+
 // `PageDirectory` store VersionedPageEntries for all pages.
 // User can acquire a snapshot from it and get a consist result by the snapshot.
 // All its functions are consider concurrent safe.
@@ -587,6 +602,8 @@ private:
         const PageIds & page_ids,
         const PageDirectorySnapshotPtr & snap,
         bool throw_on_not_exist) const;
+
+    SnapshotGCStatistics gcInMemSnapshots();
 
 private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
