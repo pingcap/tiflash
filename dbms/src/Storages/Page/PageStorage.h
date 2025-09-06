@@ -30,7 +30,6 @@
 #include <common/logger_useful.h>
 #include <fmt/format.h>
 
-#include <functional>
 #include <memory>
 #include <set>
 
