@@ -472,7 +472,6 @@ bool DeltaValueSpace::compact(DMContext & context)
         // create a snapshot reader for compaction task under the mutex lock
         reader = context.storage_pool->newLogReader(
             context.getReadLimiter(),
-            /*snapshot_read=*/true,
             fmt::format("minor_compact_{}", simpleInfo()));
     }
 

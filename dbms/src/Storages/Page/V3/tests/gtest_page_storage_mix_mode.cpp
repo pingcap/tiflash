@@ -95,10 +95,7 @@ public:
         return run_mode;
     }
 
-    PageReaderPtr newMixedSnapshotPageReader(const String & id)
-    {
-        return storage_pool_mix->newLogReader(nullptr, /*snapshot_read=*/true, id);
-    }
+    PageReaderPtr newMixedSnapshotPageReader(const String & id) { return storage_pool_mix->newLogReader(nullptr, id); }
 
     void reloadV2StoragePool()
     {

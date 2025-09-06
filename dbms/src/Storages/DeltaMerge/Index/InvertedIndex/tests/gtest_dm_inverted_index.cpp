@@ -508,7 +508,7 @@ protected:
     std::shared_ptr<StoragePathPool> path_pool;
     std::shared_ptr<StoragePool> storage_pool;
 
-    NamespaceID ns_id = 100;
+    TableID ns_id = 100;
 
     ColumnFilePersistedSetPtr persisted_set = nullptr;
 

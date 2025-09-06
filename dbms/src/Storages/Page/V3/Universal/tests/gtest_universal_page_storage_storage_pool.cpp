@@ -213,7 +213,7 @@ try
         storage_pool->logWriter()->write(std::move(batch), nullptr);
     }
 
-    auto snap_reader = storage_pool->newLogReader(nullptr, /*snapshot_read=*/true, "ReadWithSnapshotTest");
+    auto snap_reader = storage_pool->newLogReader(nullptr, "ReadWithSnapshotTest");
     {
         const auto & page1 = snap_reader->read(1);
         const auto & page2 = snap_reader->read(2);
@@ -373,7 +373,7 @@ try
         ASSERT_PAGE_EQ(c_buff, buf_sz, page, 9);
     }
 
-    auto snap_reader = storage_pool->newLogReader(nullptr, /*snapshot_read=*/true, "ReadWithSnapshotTest");
+    auto snap_reader = storage_pool->newLogReader(nullptr, "ReadWithSnapshotTest");
 
     {
         WriteBatchWrapper batch{
