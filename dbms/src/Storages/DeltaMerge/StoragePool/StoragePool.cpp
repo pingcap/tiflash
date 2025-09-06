@@ -969,7 +969,7 @@ inline static PageReaderPtr newReader(
             nullptr,
             nullptr,
             uni_ps,
-            uni_ps->getSnapshot(tracing_id),
+            uni_ps->getDeltaTreeOnlySnapshot(tracing_id),
             read_limiter);
     default:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));

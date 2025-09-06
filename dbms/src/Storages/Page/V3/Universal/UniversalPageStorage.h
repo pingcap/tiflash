@@ -90,9 +90,13 @@ public:
 
     void restore();
 
-    SnapshotPtr getSnapshot(const String & tracing_id) const
+    SnapshotPtr getGeneralSnapshot(const String & tracing_id) const
     {
         return page_directory->createSnapshot(PS::V3::SnapshotType::General, tracing_id);
+    }
+    SnapshotPtr getDeltaTreeOnlySnapshot(const String & tracing_id) const
+    {
+        return page_directory->createSnapshot(PS::V3::SnapshotType::DeltaTreeOnly, tracing_id);
     }
 
     // Get some statistics of all living snapshots and the oldest living snapshot.

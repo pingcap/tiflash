@@ -430,7 +430,7 @@ public:
 
     PageStorageSnapshotPtr getSnapshot(const String & tracing_id) const override
     {
-        return storage->getSnapshot(tracing_id);
+        return storage->getDeltaTreeOnlySnapshot(tracing_id);
     }
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
@@ -438,7 +438,7 @@ public:
 
     void traverse(const TraversePageCallback & acceptor, bool /*only_v2*/, bool /*only_v3*/) const override
     {
-        auto snapshot = storage->getSnapshot(fmt::format("scan_{}", prefix));
+        auto snapshot = storage->getDeltaTreeOnlySnapshot(fmt::format("scan_{}", prefix));
         const auto page_ids = storage->page_directory->getAllPageIdsWithPrefix(prefix, snapshot);
         const auto num_pages = page_ids.size();
         for (const auto & page_id : page_ids)
