@@ -208,7 +208,7 @@ TEST_F(UniPageStorageTest, TraverseWithSnap)
         page_storage->write(std::move(wb));
     }
 
-    auto snap = page_storage->getSnapshot("UniPageStorageTest");
+    auto snap = page_storage->getGeneralSnapshot("UniPageStorageTest");
     // write more after create snap
     {
         UniversalWriteBatch wb;

@@ -972,7 +972,7 @@ bool SegmentTestBasic::ensureSegmentDeltaLocalIndex(PageIdU64 segment_id, const 
     {
         return false;
     }
-    auto storage_snap = std::make_shared<StorageSnapshot>(*storage_pool, nullptr, "", true);
+    auto storage_snap = std::make_shared<StorageSnapshot>(*storage_pool, nullptr, "");
     auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
     auto persisted_files_snap = delta->getPersistedFileSet()->createSnapshot(data_from_storage_snap);
     WriteBatches wbs(*storage_pool, nullptr);

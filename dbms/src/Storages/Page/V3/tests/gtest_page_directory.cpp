@@ -32,9 +32,11 @@
 #include <Storages/Page/V3/WAL/serialize.h>
 #include <Storages/Page/V3/WALStore.h>
 #include <Storages/Page/V3/tests/entries_helper.h>
+#include <Storages/PathPool_fwd.h>
 #include <TestUtils/MockDiskDelegator.h>
 #include <TestUtils/TiFlashStorageTestBasic.h>
 #include <TestUtils/TiFlashTestBasic.h>
+#include <TiDB/Schema/TiDB.h>
 #include <common/UInt128.h>
 #include <common/logger_useful.h>
 #include <common/types.h>
@@ -1492,7 +1494,7 @@ try
     }
 
     // create a snap for dump
-    auto snap = dir->createSnapshot("");
+    auto snap = dir->createSnapshot(SnapshotType::General, "");
 
     // add a ref during dump snapshot
     {
@@ -1632,7 +1634,7 @@ try
     dir = restoreFromDisk();
     {
         ASSERT_EQ(dir->numPages(), 1);
-        auto snap = dir->createSnapshot("");
+        auto snap = dir->createSnapshot(SnapshotType::General, "");
         EXPECT_ENTRY_EQ(entry_1_v1, dir, 5, snap);
     }
 }
@@ -1748,7 +1750,7 @@ try
     dir = restoreFromDisk();
     {
         EXPECT_EQ(dir->numPages(), 1);
-        auto snap = dir->createSnapshot("");
+        auto snap = dir->createSnapshot(SnapshotType::General, "");
         EXPECT_ENTRY_EQ(entry_1_v1, dir, 1, snap);
     }
 
@@ -1763,7 +1765,7 @@ try
     dir = restoreFromDisk();
     {
         EXPECT_EQ(dir->numPages(), 3);
-        auto snap = dir->createSnapshot("");
+        auto snap = dir->createSnapshot(SnapshotType::General, "");
         EXPECT_ENTRY_EQ(entry_1_v1, dir, 1, snap);
         auto normal_id = getNormalPageIdU64(dir, 11, snap);
         EXPECT_EQ(normal_id, 10);
@@ -2222,7 +2224,7 @@ try
     }
 
     // A.2 Full GC execute apply, upsert `another_page_id`, but we still don't
-    // support Full GC and gcInMem run conncurrently
+    // support Full GC and gcInMem run concurrently
     dir->gcApply(std::move(gc_migrate_entries));
 
     auto snap = dir->createSnapshot();
@@ -3085,4 +3087,5 @@ CATCH
 #undef INSERT_DELETE
 
 } // namespace PS::V3::tests
+
 } // namespace DB

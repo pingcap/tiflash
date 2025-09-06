@@ -131,7 +131,7 @@ Page RNLocalPageCache::getPage(const PageOID & oid, const std::vector<size_t> & 
             key);
     }
 
-    auto snapshot = storage->getSnapshot("RNLocalPageCache.getPage");
+    auto snapshot = storage->getGeneralSnapshot("RNLocalPageCache.getPage");
     auto page_map = storage->read(
         {{key, indices}},
         /* read_limiter */ nullptr,
@@ -385,7 +385,7 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
         RUNTIME_CHECK(guard == nullptr);
     }
 
-    auto snapshot = storage->getSnapshot("RNLocalPageCache.occupySpace");
+    auto snapshot = storage->getGeneralSnapshot("RNLocalPageCache.occupySpace");
     std::vector<PageOID> missing_ids;
     for (size_t i = 0; i < n; ++i)
     {
