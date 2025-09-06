@@ -999,7 +999,7 @@ try
 
     {
         LOG_INFO(logger, "remove 100, create 105");
-        DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx"); // must hold and write
         // write delete again
         WriteBatch batch;
         batch.delPage(100);
@@ -1009,7 +1009,7 @@ try
     }
     {
         LOG_INFO(logger, "remove 101, create 106");
-        DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx"); // must hold and write
         // write delete again
         WriteBatch batch;
         batch.delPage(101);
@@ -1019,7 +1019,7 @@ try
     }
     {
         LOG_INFO(logger, "remove 102, create 107");
-        DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx", true); // must hold and write
+        DM::StorageSnapshot snap(*storage_pool_mix, nullptr, "xxx"); // must hold and write
         // write delete again
         WriteBatch batch;
         batch.delPage(102);
