@@ -474,11 +474,8 @@ public:
 
     ColumnFileSetSnapshotPtr getSnapshot()
     {
-        auto storage_snap = std::make_shared<StorageSnapshot>(
-            *storage_pool,
-            dm_context->getReadLimiter(),
-            dm_context->tracing_id,
-            /*snapshot_read*/ true);
+        auto storage_snap
+            = std::make_shared<StorageSnapshot>(*storage_pool, dm_context->getReadLimiter(), dm_context->tracing_id);
         auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
         return persisted_set->createSnapshot(data_from_storage_snap);
     }
