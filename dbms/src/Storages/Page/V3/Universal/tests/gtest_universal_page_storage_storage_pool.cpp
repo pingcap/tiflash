@@ -73,7 +73,7 @@ public:
     }
 
 private:
-    PageStorageRunMode old_run_mode;
+    PageStorageRunMode old_run_mode = PageStorageRunMode::UNI_PS;
     std::unique_ptr<StoragePathPool> storage_path_pool_v2;
     std::unique_ptr<PathPool> path_pool;
 
@@ -213,13 +213,11 @@ try
         storage_pool->logWriter()->write(std::move(batch), nullptr);
     }
 
-    auto snapshot = storage_pool->logReader()->getSnapshot("ReadWithSnapshotTest");
+    auto snap_reader = storage_pool->newLogReader(nullptr, /*snapshot_read=*/true, "ReadWithSnapshotTest");
     {
-        auto page_reader_with_snap = storage_pool->newLogReader(nullptr, snapshot);
-
-        const auto & page1 = page_reader_with_snap->read(1);
-        const auto & page2 = page_reader_with_snap->read(2);
-        const auto & page3 = page_reader_with_snap->read(3);
+        const auto & page1 = snap_reader->read(1);
+        const auto & page2 = snap_reader->read(2);
+        const auto & page3 = snap_reader->read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
@@ -234,11 +232,12 @@ try
         batch.putPage(4, tag, buff2, buf_sz2);
         storage_pool->logWriter()->write(std::move(batch), nullptr);
     }
+
+    // The snap_reader should still see page 3, but not page 4
     {
-        auto page_reader_with_snap = storage_pool->newLogReader(nullptr, snapshot);
-        const auto & page3 = page_reader_with_snap->read(3);
+        const auto & page3 = snap_reader->read(3);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
-        ASSERT_THROW(page_reader_with_snap->read(4), DB::Exception);
+        ASSERT_THROW(snap_reader->read(4), DB::Exception);
     }
 }
 CATCH
@@ -374,7 +373,7 @@ try
         ASSERT_PAGE_EQ(c_buff, buf_sz, page, 9);
     }
 
-    auto snapshot = storage_pool->logReader()->getSnapshot("ReadWithSnapshotTest");
+    auto snap_reader = storage_pool->newLogReader(nullptr, /*snapshot_read=*/true, "ReadWithSnapshotTest");
 
     {
         WriteBatchWrapper batch{
@@ -385,10 +384,10 @@ try
         storage_pool->logWriter()->write(std::move(batch), nullptr);
     }
 
+    // The snap_reader should still see page 9 as ref to 7
     {
-        auto page_reader_with_snap = storage_pool->newLogReader(nullptr, snapshot);
-        ASSERT_EQ(page_reader_with_snap->getNormalPageId(9), 7);
-        const auto & page = page_reader_with_snap->read(9);
+        ASSERT_EQ(snap_reader->getNormalPageId(9), 7);
+        const auto & page = snap_reader->read(9);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page, 9);
     }
 }

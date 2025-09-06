@@ -993,20 +993,6 @@ PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, bool snapsh
         tracing_id);
 }
 
-PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
-{
-    return std::make_shared<PageReader>(
-        run_mode,
-        keyspace_id,
-        StorageType::Log,
-        table_id,
-        log_storage_v2,
-        log_storage_v3,
-        uni_ps,
-        snapshot,
-        read_limiter);
-}
-
 PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
 {
     return newReader(

@@ -112,12 +112,10 @@ public:
         return run_mode;
     }
 
-    PageReaderPtr newMixedPageReader(PageStorage::SnapshotPtr & snapshot)
+    PageReaderPtr newMixedSnapshotPageReader(const String & id)
     {
-        return storage_pool_mix->newLogReader(nullptr, snapshot);
+        return storage_pool_mix->newLogReader(nullptr, /*snapshot_read=*/true, id);
     }
-
-    PageReaderPtr newMixedPageReader() { return storage_pool_mix->newLogReader(nullptr, true, "PageStorageMixedTest"); }
 
     void reloadV2StoragePool()
     {
@@ -359,39 +357,26 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
-    auto snapshot_mix = page_reader_mix->getSnapshot("ReadWithSnapshotTest");
-
+    auto snap_page_reader = newMixedSnapshotPageReader("ReadWithSnapshotTest");
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix);
-
-        const auto & page1 = page_reader_mix_with_snap->read(1);
-        const auto & page2 = page_reader_mix_with_snap->read(2);
-        const auto & page3 = page_reader_mix_with_snap->read(3);
+        const auto & page1 = snap_page_reader->read(1);
+        const auto & page2 = snap_page_reader->read(2);
+        const auto & page3 = snap_page_reader->read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
     }
 
-    {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, true, "ReadWithSnapshotTest");
-        const auto & page1 = page_reader_mix_with_snap->read(1);
-        const auto & page2 = page_reader_mix_with_snap->read(2);
-        const auto & page3 = page_reader_mix_with_snap->read(3);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
-        ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
-    }
-
+    // Write after get snapshot
     {
         WriteBatch batch;
         ReadBufferPtr buff2 = std::make_shared<ReadBufferFromMemory>(c_buff2, sizeof(c_buff2));
         batch.putPage(4, tag, buff2, buf_sz2);
         page_writer_mix->write(std::move(batch), nullptr);
     }
-    {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix);
-        ASSERT_THROW(page_reader_mix_with_snap->read(4), DB::Exception);
-    }
+
+    // Snapshot reader should not see the page id 4
+    ASSERT_THROW(snap_page_reader->read(4), DB::Exception);
 
     {
         // Revert v3
@@ -540,22 +525,22 @@ try
         ASSERT_EQ(page_reader_mix->getNormalPageId(2), 1);
     }
 
-    auto snapshot_mix_mode = page_reader_mix->getSnapshot("ReadWithSnapshotAfterDelOrigin");
+    auto snap_page_reader = newMixedSnapshotPageReader("ReadWithSnapshotAfterDelOrigin");
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap->read(1);
+        const auto & page1 = snap_page_reader->read(1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
     }
 
+    // Delete origin page 1
     {
         WriteBatch batch;
         batch.delPage(1);
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
+    // Snapshot reader should still see the page id 1
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap->read(1);
+        const auto & page1 = snap_page_reader->read(1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
     }
 }
@@ -586,13 +571,13 @@ try
         ASSERT_EQ(page_reader_mix->getNormalPageId(2), 1);
     }
 
-    auto snapshot_mix_mode = page_reader_mix->getSnapshot("ReadWithSnapshotAfterDelOrigin");
+    auto snap_page_reader = newMixedSnapshotPageReader("ReadWithSnapshotAfterDelOrigin");
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap->read(1);
+        const auto & page1 = snap_page_reader->read(1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
     }
 
+    // Delete origin page 1 and ref page 2
     {
         WriteBatch batch;
         batch.delPage(1);
@@ -600,10 +585,12 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
+    // Snapshot reader should still see the page_id 1 and 2
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap->read(1);
+        const auto & page1 = snap_page_reader->read(1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
+        const auto & page2 = snap_page_reader->read(2);
+        ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 1);
     }
 }
 CATCH
@@ -639,22 +626,22 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
-    auto snapshot_mix_mode = page_reader_mix->getSnapshot("ReadWithSnapshotAfterDelOrigin");
+    auto snap_page_reader = newMixedSnapshotPageReader("ReadWithSnapshotAfterDelOrigin");
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap->read(2);
+        const auto & page1 = snap_page_reader->read(2);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
     }
 
+    // Delete ref page 2
     {
         WriteBatch batch;
         batch.delPage(2);
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
+    // Snapshot reader should still see the page_id 2
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_mix_mode);
-        const auto & page1 = page_reader_mix_with_snap->read(2);
+        const auto & page1 = snap_page_reader->read(2);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
     }
 }
@@ -839,11 +826,10 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
-    auto snapshot_after_del_origin = page_reader_mix->getSnapshot("ReadWithSnapshotAfterDelOrigin");
+    auto snap_page_reader_after_del_ori = newMixedSnapshotPageReader("ReadWithSnapshotAfterDelOrigin");
 
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_before_del);
-        const auto & page1 = page_reader_mix_with_snap->read(1);
+        const auto & page1 = snap_page_reader_after_del_ori->read(1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
     }
 
@@ -853,23 +839,15 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
-    auto snapshot_after_del_all = page_reader_mix->getSnapshot("ReadWithSnapshotAfterDelAll");
+    auto snap_page_reader_after_del_all = newMixedSnapshotPageReader("ReadWithSnapshotAfterDelAll");
 
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_after_del_origin);
-        const auto & page1 = page_reader_mix_with_snap->read(2);
+        const auto & page1 = snap_page_reader_after_del_ori->read(2);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
     }
 
     {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_after_del_origin);
-        const auto & page1 = page_reader_mix_with_snap->read(2);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 2);
-    }
-
-    {
-        auto page_reader_mix_with_snap = storage_pool_mix->newLogReader(nullptr, snapshot_after_del_all);
-        ASSERT_ANY_THROW(page_reader_mix_with_snap->read(2));
+        ASSERT_ANY_THROW(snap_page_reader_after_del_all->read(2));
     }
 }
 CATCH
@@ -1101,25 +1079,16 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
     // Thread A create snapshot for read
-    auto snapshot_mix_before_merge_delta = page_reader_mix->getSnapshot("ReadWithSnapshotAfterMergeDelta");
+    auto snapshot_reader_before_merge_delta = newMixedSnapshotPageReader("ReadWithSnapshotBeforeMergeDelta");
     {
-        auto page_reader_mix_with_snap = newMixedPageReader(snapshot_mix_before_merge_delta);
-        const auto & page1 = page_reader_mix_with_snap->read(1);
-        const auto & page2 = page_reader_mix_with_snap->read(2);
-        const auto & page3 = page_reader_mix_with_snap->read(3);
+        const auto & page1 = snapshot_reader_before_merge_delta->read(1);
+        const auto & page2 = snapshot_reader_before_merge_delta->read(2);
+        const auto & page3 = snapshot_reader_before_merge_delta->read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
     }
-    {
-        auto page_reader_mix_with_snap = newMixedPageReader();
-        const auto & page1 = page_reader_mix_with_snap->read(1);
-        const auto & page2 = page_reader_mix_with_snap->read(2);
-        const auto & page3 = page_reader_mix_with_snap->read(3);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
-        ASSERT_PAGE_EQ(c_buff, buf_sz, page2, 2);
-        ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
-    }
+
     // Thread B apply merge delta, create page 4, and delete the origin page 1, 3
     {
         WriteBatch batch;
@@ -1131,13 +1100,13 @@ try
     }
     // Thread A continue to read 1, 3
     {
-        auto page_reader_mix_with_snap = newMixedPageReader(snapshot_mix_before_merge_delta);
         // read 1, 3 with snapshot, should be success
-        const auto & page1 = page_reader_mix_with_snap->read(1);
-        const auto & page3 = page_reader_mix_with_snap->read(3);
+        const auto & page1 = snapshot_reader_before_merge_delta->read(1);
+        const auto & page3 = snapshot_reader_before_merge_delta->read(3);
         ASSERT_PAGE_EQ(c_buff, buf_sz, page1, 1);
         ASSERT_PAGE_EQ(c_buff2, buf_sz2, page3, 3);
-        ASSERT_THROW(page_reader_mix_with_snap->read(4), DB::Exception);
+        // can not read 4
+        ASSERT_THROW(snapshot_reader_before_merge_delta->read(4), DB::Exception);
     }
 
     {
@@ -1177,7 +1146,9 @@ try
     // Change to mix mode here
     ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
 
-    auto snapshot_mix = page_reader_mix->getSnapshot("");
+    auto snap_reader = newMixedSnapshotPageReader("");
+
+    // Delete both 1 and 2
     {
         WriteBatch batch;
         batch.delPage(1);
@@ -1185,8 +1156,9 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
+    // Use snapshot to read 1 and 2
     {
-        auto page_maps = newMixedPageReader(snapshot_mix)->read({1, 2});
+        auto page_maps = snap_reader->read({1, 2});
         ASSERT_EQ(page_maps.size(), 2);
 
         ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(1), 1);
@@ -1244,7 +1216,9 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
-    auto snapshot_mix = page_reader_mix->getSnapshot("");
+    auto snap_reader = newMixedSnapshotPageReader("");
+
+    // Delete both 1 and 2
     {
         WriteBatch batch;
         batch.delPage(1);
@@ -1252,8 +1226,9 @@ try
         page_writer_mix->write(std::move(batch), nullptr);
     }
 
+    // Use snapshot to read 1 and 2
     {
-        auto page_maps = newMixedPageReader(snapshot_mix)->read({1, 2});
+        auto page_maps = snap_reader->read({1, 2});
         ASSERT_EQ(page_maps.size(), 2);
 
         ASSERT_PAGE_EQ(c_buff, buf_sz, page_maps.at(1), 1);
@@ -1406,7 +1381,7 @@ try
     // Change to mix mode here
     ASSERT_EQ(reloadMixedStoragePool(), PageStorageRunMode::MIX_MODE);
 
-    auto snapshot_mix = page_reader_mix->getSnapshot("");
+    auto snap_reader = newMixedSnapshotPageReader("");
     {
         WriteBatch batch;
         batch.delPage(1);
@@ -1416,11 +1391,13 @@ try
     }
 
     {
-        auto page1 = newMixedPageReader(snapshot_mix)->read(1);
+        // read with snapshot, should be the old value
+        auto page1 = snap_reader->read(1);
         ASSERT_PAGE_EQ(c_buff1, buf_sz, page1, 1);
     }
 
     {
+        // read with current reader, should be the new value
         auto page1 = page_reader_mix->read(1);
         ASSERT_PAGE_EQ(c_buff2, buf_sz, page1, 1);
     }
