@@ -69,7 +69,7 @@ public:
         std::chrono::seconds refresh_duration)
     {
         return snapshots.withExclusive([&](auto & snapshots) {
-            LOG_INFO(log, "Register Disaggregated Snapshot, task_id={}", task_id);
+            LOG_INFO(log, "Register Disaggregated Snapshot, timeout={} task_id={}", refresh_duration, task_id);
 
             // Since EstablishDisagg may be retried, there may be existing snapshot.
             // We replace these existing snapshot using a new one.
@@ -78,7 +78,7 @@ public:
         });
     }
 
-    DisaggReadSnapshotPtr getSnapshot(const DisaggTaskId & task_id, bool refresh_expiration = false) const
+    DisaggReadSnapshotPtr getDisaggSnapshot(const DisaggTaskId & task_id, bool refresh_expiration) const
     {
         return snapshots.withShared([&](auto & snapshots) {
             if (auto iter = snapshots.find(task_id); iter != snapshots.end())

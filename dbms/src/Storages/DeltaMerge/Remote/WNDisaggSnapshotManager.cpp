@@ -38,7 +38,7 @@ WNDisaggSnapshotManager::~WNDisaggSnapshotManager()
 
 bool WNDisaggSnapshotManager::unregisterSnapshotIfEmpty(const DisaggTaskId & task_id)
 {
-    auto snap = getSnapshot(task_id);
+    auto snap = getDisaggSnapshot(task_id, /*refresh_expiration*/ false);
     if (!snap)
         return false;
     if (!snap->empty())
