@@ -76,8 +76,7 @@ TEST_F(ColumnFileCloneTest, CloneColumnFileTinyWithVectorIndex)
     auto storage_snap = std::make_shared<StorageSnapshot>(
         *dm_context->storage_pool,
         dm_context->getReadLimiter(),
-        dm_context->tracing_id,
-        /*snapshot_read*/ true);
+        dm_context->tracing_id);
     auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
     {
         Page page = data_from_storage_snap->readTinyData(data_page_id, {});

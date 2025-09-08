@@ -916,12 +916,11 @@ inline static PageReaderPtr newReader(
     const PageStorageRunMode run_mode,
     KeyspaceID keyspace_id,
     StorageType tag,
-    const NamespaceID table_id,
+    const TableID table_id,
     T & storage_v2,
     T & storage_v3,
     UniversalPageStoragePtr uni_ps,
     ReadLimiterPtr read_limiter,
-    bool snapshot_read,
     const String & tracing_id)
 {
     switch (run_mode)
@@ -935,7 +934,7 @@ inline static PageReaderPtr newReader(
             storage_v2,
             nullptr,
             /*uni_ps*/ nullptr,
-            snapshot_read ? storage_v2->getSnapshot(tracing_id) : nullptr,
+            storage_v2->getSnapshot(tracing_id),
             read_limiter);
     case PageStorageRunMode::ONLY_V3:
         return std::make_shared<PageReader>(
@@ -946,7 +945,7 @@ inline static PageReaderPtr newReader(
             nullptr,
             storage_v3,
             /*uni_ps*/ nullptr,
-            snapshot_read ? storage_v3->getSnapshot(tracing_id) : nullptr,
+            storage_v3->getSnapshot(tracing_id),
             read_limiter);
     case PageStorageRunMode::MIX_MODE:
         return std::make_shared<PageReader>(
@@ -957,10 +956,9 @@ inline static PageReaderPtr newReader(
             storage_v2,
             storage_v3,
             /*uni_ps*/ nullptr,
-            snapshot_read ? std::make_shared<PageStorageSnapshotMixed>(
+            std::make_shared<PageStorageSnapshotMixed>(
                 storage_v2->getSnapshot(fmt::format("{}-v2", tracing_id)),
-                storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id)))
-                          : nullptr,
+                storage_v3->getSnapshot(fmt::format("{}-v3", tracing_id))),
             read_limiter);
     case PageStorageRunMode::UNI_PS:
         return std::make_shared<PageReader>(
@@ -979,7 +977,7 @@ inline static PageReaderPtr newReader(
     }
 }
 
-PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, const String & tracing_id)
 {
     return newReader(
         run_mode,
@@ -990,25 +988,10 @@ PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, bool snapsh
         log_storage_v3,
         uni_ps,
         read_limiter,
-        snapshot_read,
         tracing_id);
 }
 
-PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, PageStorage::SnapshotPtr & snapshot)
-{
-    return std::make_shared<PageReader>(
-        run_mode,
-        keyspace_id,
-        StorageType::Log,
-        table_id,
-        log_storage_v2,
-        log_storage_v3,
-        uni_ps,
-        snapshot,
-        read_limiter);
-}
-
-PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, const String & tracing_id)
 {
     return newReader(
         run_mode,
@@ -1019,11 +1002,10 @@ PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, bool snaps
         data_storage_v3,
         uni_ps,
         read_limiter,
-        snapshot_read,
         tracing_id);
 }
 
-PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id)
+PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, const String & tracing_id)
 {
     return newReader(
         run_mode,
@@ -1034,7 +1016,6 @@ PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, bool snaps
         meta_storage_v3,
         uni_ps,
         read_limiter,
-        snapshot_read,
         tracing_id);
 }
 

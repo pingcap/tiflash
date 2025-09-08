@@ -452,7 +452,7 @@ bool DeltaValueSpace::compact(DMContext & context)
     LOG_DEBUG(log, "Compact start, delta={}", info());
 
     MinorCompactionPtr compaction_task;
-    PageStorage::SnapshotPtr log_storage_snap;
+    PageReaderPtr reader;
     {
         std::scoped_lock lock(mutex);
         if (abandoned.load(std::memory_order_relaxed))
@@ -466,8 +466,10 @@ bool DeltaValueSpace::compact(DMContext & context)
             LOG_DEBUG(log, "Compact cancel because nothing to compact, delta={}", simpleInfo());
             return true;
         }
-        log_storage_snap = context.storage_pool->logReader()->getSnapshot(
-            /*tracing_id*/ fmt::format("minor_compact_{}", simpleInfo()));
+        // create a snapshot reader for compaction task under the mutex lock
+        reader = context.storage_pool->newLogReader(
+            context.getReadLimiter(),
+            fmt::format("minor_compact_{}", simpleInfo()));
     }
 
     SYNC_FOR("DeltaValueSpace::compact_after_compaction_task_build");
@@ -475,9 +477,8 @@ bool DeltaValueSpace::compact(DMContext & context)
     WriteBatches wbs(*context.storage_pool, context.getWriteLimiter());
     {
         // do compaction task
-        const auto & reader = context.storage_pool->newLogReader(context.getReadLimiter(), log_storage_snap);
         compaction_task->prepare(context, wbs, *reader);
-        log_storage_snap.reset(); // release the snapshot ASAP
+        reader.reset(); // release the snapshot ASAP
     }
 
     GET_METRIC(tiflash_storage_subtask_throughput_bytes, type_delta_compact)
