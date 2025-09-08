@@ -25,7 +25,7 @@ namespace DB
 size_t CTEPartition::getIdxInMemoryNoLock(size_t cte_reader_id)
 {
     auto idx = this->fetch_block_idxs[cte_reader_id];
-    auto total_evicted = this->getTotalEvictedBlockNumnoLock();
+    auto total_evicted = this->getTotalEvictedBlockNumNoLock();
     RUNTIME_CHECK_MSG(
         idx >= total_evicted,
         "partition id: {}, idx: {}, total_evicted: {}",
@@ -141,7 +141,7 @@ CTEOpStatus CTEPartition::spillBlocks(std::atomic_size_t & block_num, std::atomi
     // Key represents logical index
     // Value represents physical index in `this->blocks`
     std::map<size_t, size_t> split_idxs;
-    auto evicted_block_num = this->getTotalEvictedBlockNumnoLock();
+    auto evicted_block_num = this->getTotalEvictedBlockNumNoLock();
     split_idxs.insert(std::make_pair(evicted_block_num, 0));
     for (const auto & [cte_reader_id, logical_idx] : this->fetch_block_idxs)
     {

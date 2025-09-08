@@ -150,7 +150,7 @@ struct CTEPartition
 
     size_t getIdxInMemoryNoLock(size_t cte_reader_id);
 
-    UInt64 getTotalEvictedBlockNumnoLock() const
+    UInt64 getTotalEvictedBlockNumNoLock() const
     {
         return this->total_block_released_num + this->total_block_in_disk_num;
     }
@@ -164,7 +164,7 @@ struct CTEPartition
             this->partition_id,
             idx,
             this->total_block_released_num);
-        return idx < this->getTotalEvictedBlockNumnoLock();
+        return idx < this->getTotalEvictedBlockNumNoLock();
     }
 
     bool isBlockAvailableInMemoryNoLock(size_t cte_reader_id)
@@ -190,14 +190,6 @@ struct CTEPartition
     CTEOpStatus tryGetBlock(size_t cte_reader_id, Block & block);
     CTEOpStatus spillBlocks(std::atomic_size_t & block_num, std::atomic_size_t & row_num);
     CTEOpStatus getBlockFromDisk(size_t cte_reader_id, Block & block);
-
-    bool isBlockAvailableNoLock(size_t cte_reader_id)
-    {
-        if (this->isBlockAvailableInDiskNoLock(cte_reader_id))
-            return true;
-
-        return this->isBlockAvailableInMemoryNoLock(cte_reader_id);
-    }
 
     // Need aux_lock and mu
     void putTmpBlocksIntoBlocksNoLock()

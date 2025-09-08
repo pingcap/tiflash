@@ -277,7 +277,8 @@ private:
         if unlikely (this->is_cancelled)
             return CTEOpStatus::CANCELLED;
 
-        if (this->partitions[partition_id]->isBlockAvailableInMemoryNoLock(cte_reader_id))
+        if (this->partitions[partition_id]->isBlockAvailableInDiskNoLock(cte_reader_id)
+            || this->partitions[partition_id]->isBlockAvailableInMemoryNoLock(cte_reader_id))
             return CTEOpStatus::OK;
 
         return this->is_eof ? CTEOpStatus::END_OF_FILE : CTEOpStatus::BLOCK_NOT_AVAILABLE;
