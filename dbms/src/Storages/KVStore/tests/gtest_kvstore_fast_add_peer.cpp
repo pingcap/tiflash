@@ -233,11 +233,7 @@ template <typename F>
 void eventuallyPredicate(F f)
 {
     using namespace std::chrono_literals;
-<<<<<<< HEAD
-    for (int i = 0; i < 5; i++)
-=======
     for (int i = 0; i < 20; i++)
->>>>>>> 6fce86513f (Limit memory usage of exchange sender (#10387))
     {
         if (f())
             return;
