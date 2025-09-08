@@ -513,7 +513,7 @@ protected:
     ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
 
-    NamespaceID ns_id = 100;
+    TableID ns_id = 100;
 
     // the segment we are going to test
     SegmentPtr wn_segment;

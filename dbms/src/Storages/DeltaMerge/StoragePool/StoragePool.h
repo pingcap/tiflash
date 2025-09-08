@@ -72,22 +72,29 @@ public:
 
     KeyspaceID getKeyspaceID() const { return keyspace_id; }
 
-    NamespaceID getTableID() const { return table_id; }
+    TableID getTableID() const { return table_id; }
 
     PageStorageRunMode getPageStorageRunMode() const { return run_mode; }
+
+    // Create snapshot reader for "Log"/"Data"/"Meta" respectively.
+    // The snapshot reader can keep a snapshot view of the StoragePool when created.
+
+    PageReaderPtr newLogReader(ReadLimiterPtr read_limiter, const String & tracing_id);
+    PageReaderPtr newDataReader(ReadLimiterPtr read_limiter, const String & tracing_id);
+    PageReaderPtr newMetaReader(ReadLimiterPtr read_limiter, const String & tracing_id);
+
+    // `logReader`/`dataReader`/`metaReader` are non snapshot readers, which always read the latest data.
 
     PageReaderPtr & logReader()
     {
         assert(log_storage_reader);
         return log_storage_reader;
     }
-
     PageReaderPtr & dataReader()
     {
         assert(data_storage_reader);
         return data_storage_reader;
     }
-
     PageReaderPtr & metaReader()
     {
         assert(meta_storage_reader);
@@ -111,14 +118,6 @@ public:
         assert(meta_storage_writer);
         return meta_storage_writer;
     }
-
-
-    PageReaderPtr newLogReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
-    PageReaderPtr newLogReader(ReadLimiterPtr read_limiter, PageStorageSnapshotPtr & snapshot);
-
-    PageReaderPtr newDataReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
-
-    PageReaderPtr newMetaReader(ReadLimiterPtr read_limiter, bool snapshot_read, const String & tracing_id);
 
     // Register the clean up DMFiles callbacks to PageStorage.
     // The callbacks will be unregister when `shutdown` is called.
@@ -181,9 +180,8 @@ private:
     PageWriterPtr data_storage_writer;
     PageWriterPtr meta_storage_writer;
 
-    std::atomic<Timepoint> last_try_gc_time = Clock::now();
-
     std::mutex mutex;
+    std::atomic<Timepoint> last_try_gc_time = Clock::now();
 
     Context & global_context;
 
@@ -196,10 +194,10 @@ private:
 
 struct StorageSnapshot : private boost::noncopyable
 {
-    StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, const String & tracing_id, bool snapshot_read)
-        : log_reader(storage.newLogReader(read_limiter, snapshot_read, tracing_id))
-        , data_reader(storage.newDataReader(read_limiter, snapshot_read, tracing_id))
-        , meta_reader(storage.newMetaReader(read_limiter, snapshot_read, tracing_id))
+    StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, const String & tracing_id)
+        : log_reader(storage.newLogReader(read_limiter, tracing_id))
+        , data_reader(storage.newDataReader(read_limiter, tracing_id))
+        , meta_reader(storage.newMetaReader(read_limiter, tracing_id))
     {}
 
     PageReaderPtr log_reader;

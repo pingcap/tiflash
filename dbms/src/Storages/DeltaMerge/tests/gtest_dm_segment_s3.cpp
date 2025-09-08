@@ -180,7 +180,7 @@ protected:
     /// dm_context
     std::unique_ptr<DMContext> dm_context;
 
-    NamespaceID ns_id = 100;
+    TableID ns_id = 100;
 
     // the segment we are going to test
     SegmentPtr segment;
