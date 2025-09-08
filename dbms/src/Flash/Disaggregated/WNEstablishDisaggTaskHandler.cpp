@@ -109,7 +109,7 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const auto & task_id = *dag_context->getDisaggTaskId();
     // Take the snapshot without refresh expiration. Here we use it to generate response.
-    auto snap = snaps->getDisaggSnapshot(task_id, /*refresh_expiration*/ false);
+    auto snap = snaps->getDisaggSnapshot(task_id, /*refresh_duration*/ std::nullopt);
     RUNTIME_CHECK_MSG(snap, "Snapshot was missing, task_id={}", task_id);
 
     {
