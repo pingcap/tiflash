@@ -714,8 +714,7 @@ void DeltaMergeStore::segmentEnsureStableLocalIndex(
     auto storage_snapshot = std::make_shared<StorageSnapshot>( //
         *dm_context.storage_pool,
         dm_context.getReadLimiter(),
-        dm_context.tracing_id,
-        dm_context.global_context.getSettingsRef().dt_snapshot_delta_tree_only);
+        dm_context.tracing_id);
 
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
 
@@ -1038,8 +1037,7 @@ void DeltaMergeStore::segmentEnsureDeltaLocalIndex(
         auto storage_snap = std::make_shared<StorageSnapshot>( //
             *storage_pool,
             dm_context.getReadLimiter(),
-            dm_context.tracing_id,
-            dm_context.global_context.getSettingsRef().dt_snapshot_delta_tree_only);
+            dm_context.tracing_id);
         auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
         persisted_files_snap = delta->getPersistedFileSet()->createSnapshot(data_from_storage_snap);
     }

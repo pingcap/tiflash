@@ -1108,8 +1108,7 @@ grpc::Status FlashService::FetchDisaggPages(
 
     SCOPE_EXIT({
         // The snapshot is created in the 1st request (Establish), and will be destroyed when all FetchPages are finished.
-        // FIXME: Not unregister the snapshot for testing
-        // snaps->unregisterSnapshotIfEmpty(task_id);
+        snaps->unregisterSnapshotIfEmpty(task_id);
     });
 
     try

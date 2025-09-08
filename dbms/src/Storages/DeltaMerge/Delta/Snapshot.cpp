@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <IO/Buffer/MemoryReadWriteBuffer.h>
-#include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/ColumnFile/ColumnFileDataProvider.h>
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
@@ -43,8 +42,7 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(
     auto storage_snap = std::make_shared<StorageSnapshot>( //
         *context.storage_pool,
         context.getReadLimiter(),
-        context.tracing_id,
-        context.global_context.getSettingsRef().dt_snapshot_delta_tree_only);
+        context.tracing_id);
     auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
     auto persisted_snap = persisted_file_set->createSnapshot(data_from_storage_snap);
     auto mem_snap = mem_table_set->createSnapshot(data_from_storage_snap, for_update);

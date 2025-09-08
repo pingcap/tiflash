@@ -921,8 +921,7 @@ inline static PageReaderPtr newReader(
     T & storage_v3,
     UniversalPageStoragePtr uni_ps,
     ReadLimiterPtr read_limiter,
-    const String & tracing_id,
-    bool dt_only)
+    const String & tracing_id)
 {
     switch (run_mode)
     {
@@ -970,14 +969,15 @@ inline static PageReaderPtr newReader(
             nullptr,
             nullptr,
             uni_ps,
-            dt_only ? uni_ps->getDeltaTreeOnlySnapshot(tracing_id) : uni_ps->getGeneralSnapshot(tracing_id),
+            // Under uni_ps, only protect the data belong to DeltaTree engine
+            uni_ps->getDeltaTreeOnlySnapshot(tracing_id),
             read_limiter);
     default:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));
     }
 }
 
-PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, const String & tracing_id, bool dt_only)
+PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, const String & tracing_id)
 {
     return newReader(
         run_mode,
@@ -988,11 +988,10 @@ PageReaderPtr StoragePool::newLogReader(ReadLimiterPtr read_limiter, const Strin
         log_storage_v3,
         uni_ps,
         read_limiter,
-        tracing_id,
-        dt_only);
+        tracing_id);
 }
 
-PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, const String & tracing_id, bool dt_only)
+PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, const String & tracing_id)
 {
     return newReader(
         run_mode,
@@ -1003,11 +1002,10 @@ PageReaderPtr StoragePool::newDataReader(ReadLimiterPtr read_limiter, const Stri
         data_storage_v3,
         uni_ps,
         read_limiter,
-        tracing_id,
-        dt_only);
+        tracing_id);
 }
 
-PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, const String & tracing_id, bool dt_only)
+PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, const String & tracing_id)
 {
     return newReader(
         run_mode,
@@ -1018,8 +1016,7 @@ PageReaderPtr StoragePool::newMetaReader(ReadLimiterPtr read_limiter, const Stri
         meta_storage_v3,
         uni_ps,
         read_limiter,
-        tracing_id,
-        dt_only);
+        tracing_id);
 }
 
 } // namespace DB::DM
