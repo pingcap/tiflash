@@ -20,6 +20,15 @@
 
 namespace DB
 {
+
+enum class SnapshotType : UInt32
+{
+    // Protect all data
+    General,
+    // Protect only data in DeltaTree engine
+    DeltaTreeOnly,
+};
+
 struct SnapshotsStatistics
 {
     size_t num_snapshots = 0;

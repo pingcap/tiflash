@@ -96,18 +96,7 @@ public:
     DISALLOW_COPY_AND_MOVE(WNDisaggSnapshotManager);
 
 private:
-    bool unregisterSnapshot(const DisaggTaskId & task_id)
-    {
-        return snapshots.withExclusive([&](auto & snapshots) {
-            if (auto iter = snapshots.find(task_id); iter != snapshots.end())
-            {
-                LOG_INFO(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
-                snapshots.erase(iter);
-                return true;
-            }
-            return false;
-        });
-    }
+    bool unregisterSnapshot(const DisaggTaskId & task_id);
 
     void clearExpiredSnapshots();
 

@@ -31,7 +31,7 @@ struct PageIdTrait
     static inline Prefix getPrefix(const PageId & page_id) { return page_id.high; }
     static inline PageIdU64 getPageMapKey(const PageId & page_id) { return page_id.low; }
     static inline size_t getPageIDSize(const PageId & page_id) { return sizeof(page_id); }
-    static inline bool isFromProxy(const PageId & /*page_id*/) { return false; }
+    static inline bool isFromRaftLayer(const PageId & /*page_id*/) { return false; }
 };
 } // namespace u128
 namespace universal
@@ -52,7 +52,7 @@ struct PageIdTrait
     static inline size_t getPageIDSize(const PageId & page_id) { return page_id.size(); }
 
     // Return true if the page_id is generated for raft engine or kv engine.
-    static inline bool isFromProxy(const PageId & page_id)
+    static inline bool isFromRaftLayer(const PageId & page_id)
     {
         switch (UniversalPageIdFormat::getUniversalPageIdType(page_id))
         {

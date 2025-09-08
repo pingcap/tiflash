@@ -44,11 +44,6 @@ extern const Metric PSMVCCNumSnapshots;
 namespace DB::PS::V3
 {
 
-enum class SnapshotType : UInt32
-{
-    General,
-    DeltaTreeOnly,
-};
 class PageDirectorySnapshot : public DB::PageStorageSnapshot
 {
 public:
@@ -443,9 +438,15 @@ struct SnapshotGCStatistics
     UInt64 num_invalid = 0;
     UInt64 num_valid = 0;
 
-    UInt64 longest_alive_time = 0;
-    UInt64 longest_alive_seq = 0;
+    // "stale" means the snapshot last longer than expected
     UInt64 num_stale = 0;
+
+    // The longest living snapshot info
+    double longest_alive_time = 0;
+    UInt64 longest_alive_seq = 0;
+    SnapshotType longest_alive_type = SnapshotType::General;
+    UInt32 longest_alive_from_thread_id = 0;
+    String longest_alive_from_tracing_id;
 };
 
 // `PageDirectory` store VersionedPageEntries for all pages.
@@ -603,7 +604,8 @@ private:
         const PageDirectorySnapshotPtr & snap,
         bool throw_on_not_exist) const;
 
-    SnapshotGCStatistics gcInMemSnapshots();
+    // Perform a GC for in-memory snapshots
+    SnapshotGCStatistics gcInMemSnapshots() const;
 
 private:
     // Only `std::map` is allow for `MVCCMap`. Cause `std::map::insert` ensure that
