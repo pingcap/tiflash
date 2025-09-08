@@ -79,9 +79,9 @@ public:
     // Create snapshot reader for "Log"/"Data"/"Meta" respectively.
     // The snapshot reader can keep a snapshot view of the StoragePool when created.
 
-    PageReaderPtr newLogReader(ReadLimiterPtr read_limiter, const String & tracing_id);
-    PageReaderPtr newDataReader(ReadLimiterPtr read_limiter, const String & tracing_id);
-    PageReaderPtr newMetaReader(ReadLimiterPtr read_limiter, const String & tracing_id);
+    PageReaderPtr newLogReader(ReadLimiterPtr read_limiter, const String & tracing_id, bool dt_only = false);
+    PageReaderPtr newDataReader(ReadLimiterPtr read_limiter, const String & tracing_id, bool dt_only = false);
+    PageReaderPtr newMetaReader(ReadLimiterPtr read_limiter, const String & tracing_id, bool dt_only = false);
 
     // `logReader`/`dataReader`/`metaReader` are non snapshot readers, which always read the latest data.
 
@@ -194,10 +194,10 @@ private:
 
 struct StorageSnapshot : private boost::noncopyable
 {
-    StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, const String & tracing_id)
-        : log_reader(storage.newLogReader(read_limiter, tracing_id))
-        , data_reader(storage.newDataReader(read_limiter, tracing_id))
-        , meta_reader(storage.newMetaReader(read_limiter, tracing_id))
+    StorageSnapshot(StoragePool & storage, ReadLimiterPtr read_limiter, const String & tracing_id, bool dt_only)
+        : log_reader(storage.newLogReader(read_limiter, tracing_id, dt_only))
+        , data_reader(storage.newDataReader(read_limiter, tracing_id, dt_only))
+        , meta_reader(storage.newMetaReader(read_limiter, tracing_id, dt_only))
     {}
 
     PageReaderPtr log_reader;
