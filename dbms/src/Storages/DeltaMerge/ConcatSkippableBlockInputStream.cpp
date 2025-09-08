@@ -23,11 +23,13 @@ namespace DB::DM
 template <bool need_row_id>
 ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     SkippableBlockInputStreams inputs_,
-    const ScanContextPtr & scan_context_)
+    const ScanContextPtr & scan_context_,
+    ReadTag read_tag_)
     : rows(inputs_.size(), 0)
     , precede_stream_rows(0)
     , scan_context(scan_context_)
-    , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
+    , lac_bytes_collector(scan_context_ ? scan_context_->newLACBytesCollector(read_tag_) : std::nullopt)
+    , read_tag(read_tag_)
 {
     children.insert(children.end(), inputs_.begin(), inputs_.end());
     current_stream = children.begin();
@@ -42,12 +44,8 @@ ConcatSkippableBlockInputStream<need_row_id>::ConcatSkippableBlockInputStream(
     : rows(std::move(rows_))
     , precede_stream_rows(0)
     , scan_context(scan_context_)
-<<<<<<< HEAD
-    , lac_bytes_collector(scan_context_ ? scan_context_->resource_group_name : "")
-=======
     , lac_bytes_collector(scan_context_ ? scan_context_->newLACBytesCollector(read_tag_) : std::nullopt)
     , read_tag(read_tag_)
->>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 {
     children.insert(children.end(), inputs_.begin(), inputs_.end());
     current_stream = children.begin();

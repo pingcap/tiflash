@@ -34,11 +34,7 @@
 #include <Storages/DeltaMerge/DeltaMergeHelpers.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
-<<<<<<< HEAD
-=======
 #include <Storages/DeltaMerge/ScanContext.h>
-#include <Storages/DeltaMerge/SegmentRowID.h>
->>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 #include <Storages/Page/PageDefinesBase.h>
 
 namespace DB::DM

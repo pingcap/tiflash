@@ -125,22 +125,6 @@ public:
         };
         return std::make_shared<LocalIndexInfos>(index_infos);
     }
-<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/tests/gtest_dm_vector_index_utils.h
-=======
-
-    static auto wrapVectorStream(
-        const VectorIndexStreamCtxPtr & ctx,
-        const SkippableBlockInputStreamPtr & inner,
-        const BitmapFilterPtr & filter)
-    {
-        auto stream = ConcatSkippableBlockInputStream<false>::create(
-            /* inputs */ {inner},
-            /* rows */ {filter->size()},
-            /* ScanContext */ nullptr,
-            ReadTag::Query);
-        return VectorIndexInputStream::create(ctx, filter, stream);
-    }
->>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396)):dbms/src/Storages/DeltaMerge/Index/VectorIndex/tests/gtest_dm_vector_index_utils.h
 };
 
 class DeltaMergeStoreVectorBase : public VectorIndexTestUtils

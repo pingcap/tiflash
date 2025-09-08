@@ -276,7 +276,7 @@ std::optional<LACBytesCollector> ScanContext::newLACBytesCollector(ReadTag read_
         return std::nullopt;
     if (read_tag != ReadTag::Query && read_tag != ReadTag::LMFilter)
         return std::nullopt;
-    return LACBytesCollector(keyspace_id, resource_group_name);
+    return LACBytesCollector(resource_group_name);
 }
 
 void ScanContext::addUserReadBytes(

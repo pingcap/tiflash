@@ -792,7 +792,7 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
         }
 
         BlockInputStreamPtr stable_stream
-            = std::make_shared<ConcatSkippableBlockInputStream<>>(streams, dm_context.scan_context);
+            = std::make_shared<ConcatSkippableBlockInputStream<>>(streams, dm_context.scan_context, ReadTag::Internal);
         stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, read_ranges, 0);
         stable_stream->readPrefix();
         while (true)
@@ -988,32 +988,6 @@ UInt64 Segment::estimatedBytesOfInternalColumns(
     return (handle_size + version_size + delmark_size) * (delta_read_rows + stable_read_rows);
 }
 
-<<<<<<< HEAD
-=======
-static void consumeBuildMVCCReadBytesRU(
-    const DMContext & dm_context,
-    const SegmentSnapshotPtr & segment_snap,
-    const DMFilePackFilterResults & pack_filter_results,
-    UInt64 start_ts)
-{
-    // Building MVCC bitmap can be a resource-intensive operation that cannot be paused midway.
-    // To prevent scenarios where multiple segments concurrently build MVCC bitmaps but exhaust
-    // RU during execution and causing RU consumption to exceed limitations, we need to first
-    // estimate the cost of building the MVCC bitmap, pre-consume the corresponding RU,
-    // and then proceed with the building task.
-    const auto & res_group_name = dm_context.scan_context->resource_group_name;
-    if (likely(!res_group_name.empty()))
-    {
-        const auto keyspace_id = dm_context.scan_context->keyspace_id;
-        auto bytes = Segment::estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filter_results, start_ts);
-        TiFlashMetrics::instance()
-            .getStorageRUReadBytesCounter(keyspace_id, res_group_name, ReadRUType::MVCC_ESTIMATE)
-            .Increment(bytes);
-        LocalAdmissionController::global_instance->consumeBytesResource(keyspace_id, res_group_name, bytesToRU(bytes));
-    }
-}
-
->>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 BlockInputStreamPtr Segment::getInputStream(
     const ReadMode & read_mode,
     const DMContext & dm_context,
@@ -1054,6 +1028,9 @@ BlockInputStreamPtr Segment::getInputStream(
                 dm_context.tracing_id,
                 ReadTag::MVCC);
             auto bytes = estimatedBytesOfInternalColumns(segment_snap, pack_filters, start_ts);
+            TiFlashMetrics::instance()
+                .getStorageRUReadBytesCounter(NullspaceID, res_group_name, ReadRUType::MVCC_ESTIMATE)
+                .Increment(bytes);
             LocalAdmissionController::global_instance->consumeBytesResource(res_group_name, bytesToRU(bytes));
         }
     }

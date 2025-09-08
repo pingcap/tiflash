@@ -15,12 +15,8 @@
 #pragma once
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
-<<<<<<< HEAD
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
-=======
-#include <Storages/DeltaMerge/ConcatSkippableBlockInputStream_fwd.h>
 #include <Storages/DeltaMerge/ReadMode.h>
->>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
@@ -32,22 +28,10 @@ template <bool need_row_id = false>
 class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
-<<<<<<< HEAD
-    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, const ScanContextPtr & scan_context_);
-=======
-    static auto create(
-        SkippableBlockInputStreams && inputs_,
-        std::vector<size_t> && rows_,
+    ConcatSkippableBlockInputStream(
+        SkippableBlockInputStreams inputs_,
         const ScanContextPtr & scan_context_,
-        ReadTag read_tag_)
-    {
-        return std::make_shared<ConcatSkippableBlockInputStream<need_row_id>>(
-            std::move(inputs_),
-            std::move(rows_),
-            scan_context_,
-            read_tag_);
-    }
->>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
+        ReadTag read_tag_);
 
     ConcatSkippableBlockInputStream(
         SkippableBlockInputStreams inputs_,

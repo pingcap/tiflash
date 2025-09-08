@@ -22,11 +22,8 @@
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <common/types.h>
 #include <fmt/format.h>
-<<<<<<< HEAD
-=======
 #include <pingcap/pd/Types.h>
 #include <prometheus/counter.h>
->>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 #include <sys/types.h>
 #include <tipb/executor.pb.h>
 
@@ -108,28 +105,21 @@ public:
     const String resource_group_name;
     PushDownFilterPtr pushdown_executor;
 
-<<<<<<< HEAD
     explicit ScanContext(const String & name = "")
         : resource_group_name(name)
-    {}
-=======
-    explicit ScanContext(const KeyspaceID & keyspace_id_ = NullspaceID, const String & name = "")
-        : keyspace_id(keyspace_id_)
-        , resource_group_name(name)
     {
         if (!resource_group_name.empty())
         {
             mvcc_read_bytes_counter = &TiFlashMetrics::instance().getStorageRUReadBytesCounter(
-                keyspace_id,
+                NullspaceID,
                 resource_group_name,
                 ReadRUType::MVCC_READ);
             query_read_bytes_counter = &TiFlashMetrics::instance().getStorageRUReadBytesCounter(
-                keyspace_id,
+                NullspaceID,
                 resource_group_name,
                 ReadRUType::QUERY_READ);
         }
     }
->>>>>>> 2120b051b8 (Storages: Fix the statistics of user_read_bytes and add metrics (#10396))
 
     void deserialize(const tipb::TiFlashScanContext & tiflash_scan_context_pb)
     {
