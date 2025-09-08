@@ -125,26 +125,12 @@ WriteResult HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 
     if (rows > 0)
     {
-<<<<<<< HEAD
-        rows_in_blocks += rows;
-        if (data_codec_version == MPPDataPacketV1)
-            mem_size_in_blocks += block.bytes();
-        blocks.push_back(block);
-    }
-
-    auto row_count_exceed = static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit;
-    auto row_bytes_exceed
-        = data_codec_version == MPPDataPacketV1 && mem_size_in_blocks >= MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE;
-
-    if (row_count_exceed || row_bytes_exceed)
-=======
         buffered_rows += rows;
         buffered_bytes += block.allocatedBytes();
         blocks.push_back(block);
     }
 
     if (needFlush())
->>>>>>> 6fce86513f (Limit memory usage of exchange sender (#10387))
         return flush();
     return WriteResult::Done;
 }
