@@ -25,9 +25,7 @@
 #include <fmt/format.h>
 
 
-namespace DB
-{
-namespace tests
+namespace DB::tests
 {
 class PathPoolTest : public ::testing::Test
 {
@@ -403,7 +401,7 @@ class PathCapacity : public DB::base::TiFlashStorageTestBasic
         main_data_path = getTemporaryPath() + "/main";
         createIfNotExist(main_data_path);
 
-        latest_data_path = getTemporaryPath() + "/lastest";
+        latest_data_path = getTemporaryPath() + "/latest";
         createIfNotExist(latest_data_path);
     }
 
@@ -422,58 +420,63 @@ protected:
 
 TEST_F(PathCapacity, SingleDiskSinglePathTest)
 {
-    size_t capactity = 100;
+    size_t capacity = 100;
     size_t used = 10;
 
-    ASSERT_GE(vfs_info.f_bavail * vfs_info.f_frsize, capactity * 2);
+    ASSERT_GE(vfs_info.f_bavail * vfs_info.f_frsize, capacity * 2);
 
     // Single disk with single path
     {
-        auto capacity = PathCapacityMetrics(0, {main_data_path}, {capactity}, {latest_data_path}, {capactity});
+        auto path_capacity = PathCapacityMetrics(
+            0,
+            {main_data_path},
+            {capacity},
+            {latest_data_path},
+            {capacity});
 
-        capacity.addUsedSize(main_data_path, used);
-        auto stats = capacity.getFsStats(false);
-        ASSERT_EQ(stats.capacity_size, capactity * 2);
+        path_capacity.addUsedSize(main_data_path, used);
+        auto stats = path_capacity.getFsStats(DisaggregatedMode::None, false);
+        ASSERT_EQ(stats.capacity_size, capacity * 2);
         ASSERT_EQ(stats.used_size, used);
-        ASSERT_EQ(stats.avail_size, capactity * 2 - used);
+        ASSERT_EQ(stats.avail_size, capacity * 2 - used);
 
-        auto main_path_stats = std::get<0>(capacity.getFsStatsOfPath(main_data_path));
-        ASSERT_EQ(main_path_stats.capacity_size, capactity);
+        auto main_path_stats = std::get<0>(path_capacity.getFsStatsOfPath(main_data_path));
+        ASSERT_EQ(main_path_stats.capacity_size, capacity);
         ASSERT_EQ(main_path_stats.used_size, used);
-        ASSERT_EQ(main_path_stats.avail_size, capactity - used);
+        ASSERT_EQ(main_path_stats.avail_size, capacity - used);
 
-        auto lastest_path_stats = std::get<0>(capacity.getFsStatsOfPath(latest_data_path));
-        ASSERT_EQ(lastest_path_stats.capacity_size, capactity);
-        ASSERT_EQ(lastest_path_stats.used_size, 0);
-        ASSERT_EQ(lastest_path_stats.avail_size, capactity);
+        auto latest_path_stats = std::get<0>(path_capacity.getFsStatsOfPath(latest_data_path));
+        ASSERT_EQ(latest_path_stats.capacity_size, capacity);
+        ASSERT_EQ(latest_path_stats.used_size, 0);
+        ASSERT_EQ(latest_path_stats.avail_size, capacity);
     }
 
     // Single disk with multi path
     {
         String main_data_path1 = getTemporaryPath() + "/main1";
         createIfNotExist(main_data_path1);
-        String lastest_data_path1 = getTemporaryPath() + "/lastest1";
-        createIfNotExist(lastest_data_path1);
+        String latest_data_path1 = getTemporaryPath() + "/latest1";
+        createIfNotExist(latest_data_path1);
 
         // Not use the capacity limit
-        auto capacity = PathCapacityMetrics(
+        auto path_capacity = PathCapacityMetrics(
             0,
             {main_data_path, main_data_path1},
-            {capactity * 2, capactity * 2},
-            {latest_data_path, lastest_data_path1},
-            {capactity, capactity});
+            {capacity * 2, capacity * 2},
+            {latest_data_path, latest_data_path1},
+            {capacity, capacity});
 
-        capacity.addUsedSize(main_data_path, used);
-        capacity.addUsedSize(main_data_path1, used);
-        capacity.addUsedSize(latest_data_path, used);
+        path_capacity.addUsedSize(main_data_path, used);
+        path_capacity.addUsedSize(main_data_path1, used);
+        path_capacity.addUsedSize(latest_data_path, used);
 
-        auto stats = capacity.getFsStats(false);
-        ASSERT_EQ(stats.capacity_size, capactity * 6);
+        auto stats = path_capacity.getFsStats(DisaggregatedMode::None, false);
+        ASSERT_EQ(stats.capacity_size, capacity * 6);
         ASSERT_EQ(stats.used_size, 3 * used);
-        ASSERT_EQ(stats.avail_size, capactity * 6 - (3 * used));
+        ASSERT_EQ(stats.avail_size, capacity * 6 - (3 * used));
 
         dropDataOnDisk(main_data_path1);
-        dropDataOnDisk(lastest_data_path1);
+        dropDataOnDisk(latest_data_path1);
     }
 }
 
@@ -508,7 +511,7 @@ TEST_F(PathCapacity, MultiDiskMultiPathTest)
                {.used_size = 12, .avail_size = 50, .capacity_size = 1000, .ok = 1},
            }};
     capacity.setDiskStats(disk_capacity_map);
-    FsStats total_stats = capacity.getFsStats(false);
+    FsStats total_stats = capacity.getFsStats(DisaggregatedMode::None, false);
     ASSERT_EQ(total_stats.capacity_size, 100);
     ASSERT_EQ(total_stats.used_size, 16);
     ASSERT_EQ(total_stats.avail_size, 50);
@@ -534,7 +537,7 @@ TEST_F(PathCapacity, MultiDiskMultiPathTest)
            }};
     capacity.setDiskStats(disk_capacity_map);
 
-    total_stats = capacity.getFsStats(false);
+    total_stats = capacity.getFsStats(DisaggregatedMode::None, false);
     ASSERT_EQ(total_stats.capacity_size, 100 + 98);
     ASSERT_EQ(total_stats.used_size, 16 + 52);
     ASSERT_EQ(total_stats.avail_size, 50 + 46);
@@ -549,14 +552,14 @@ try
         PathCapacityMetrics
             path_capacity(global_capacity_quota, {main_data_path}, {capacity}, {latest_data_path}, {capacity});
 
-        FsStats fs_stats = path_capacity.getFsStats(false);
+        FsStats fs_stats = path_capacity.getFsStats(DisaggregatedMode::None, false);
         EXPECT_EQ(fs_stats.capacity_size, 2 * capacity); // summing the capacity of main and latest path
     }
 
     {
         PathCapacityMetrics path_capacity(global_capacity_quota, {main_data_path}, {}, {latest_data_path}, {});
 
-        FsStats fs_stats = path_capacity.getFsStats(false);
+        FsStats fs_stats = path_capacity.getFsStats(DisaggregatedMode::None, false);
         EXPECT_EQ(
             fs_stats.capacity_size,
             global_capacity_quota); // Use `global_capacity_quota` when `main_capacity_quota_` is empty
@@ -564,5 +567,4 @@ try
 }
 CATCH
 
-} // namespace tests
-} // namespace DB
+} // namespace DB::tests

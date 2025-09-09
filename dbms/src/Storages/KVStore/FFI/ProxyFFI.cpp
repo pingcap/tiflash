@@ -16,6 +16,7 @@
 #include <Common/TiFlashMetrics.h>
 #include <Common/nocopyable.h>
 #include <Interpreters/Context.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Storages/DeltaMerge/ExternalDTFileInfo.h>
 #include <Storages/KVStore/FFI/FileEncryption.h>
 #include <Storages/KVStore/FFI/ProxyFFI.h>
@@ -506,8 +507,10 @@ StoreStats HandleComputeStoreStats(EngineStoreServerWrap * server)
     try
     {
         RUNTIME_CHECK(server->tmt != nullptr);
-        auto global_capacity = server->tmt->getContext().getPathCapacity();
-        res.fs_stats = global_capacity->getFsStats();
+        auto & global_ctx = server->tmt->getContext();
+        auto disagg_mode = global_ctx.getSharedContextDisagg()->disaggregated_mode;
+        auto global_capacity = global_ctx.getPathCapacity();
+        res.fs_stats = global_capacity->getFsStats(disagg_mode);
         // TODO: set engine read/write stats
     }
     catch (...)
