@@ -52,7 +52,7 @@
   "gnetId": null,
   "graphTooltip": 1,
   "id": null,
-  "iteration": 1757395110030,
+  "iteration": 1757395110033,
   "links": [],
   "panels": [
     {
@@ -8651,6 +8651,104 @@
             "align": false,
             "alignLevel": null
           }
+        },
+        {
+          "aliasColors": {},
+          "bars": false,
+          "dashLength": 10,
+          "dashes": false,
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "fill": 1,
+          "fillGradient": 0,
+          "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 12,
+            "y": 48
+          },
+          "hiddenSeries": false,
+          "id": 263,
+          "legend": {
+            "avg": false,
+            "current": false,
+            "max": false,
+            "min": false,
+            "show": true,
+            "total": false,
+            "values": false
+          },
+          "lines": true,
+          "linewidth": 1,
+          "links": [],
+          "nullPointMode": "null",
+          "options": {
+            "alertThreshold": true
+          },
+          "percentage": false,
+          "pluginVersion": "7.5.11",
+          "pointradius": 2,
+          "points": false,
+          "renderer": "flot",
+          "seriesOverrides": [],
+          "spaceLength": 10,
+          "stack": false,
+          "steppedLine": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(tiflash_system_current_metric_MemoryTrackingKVStore{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
+              "format": "time_series",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{instance}}",
+              "refId": "B"
+            }
+          ],
+          "thresholds": [],
+          "timeFrom": null,
+          "timeRegions": [],
+          "timeShift": null,
+          "title": "KVStore memory",
+          "tooltip": {
+            "shared": true,
+            "sort": 0,
+            "value_type": "individual"
+          },
+          "type": "graph",
+          "xaxis": {
+            "buckets": null,
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "yaxes": [
+            {
+              "format": "bytes",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            },
+            {
+              "format": "short",
+              "label": null,
+              "logBase": 1,
+              "max": null,
+              "min": null,
+              "show": true
+            }
+          ],
+          "yaxis": {
+            "align": false,
+            "alignLevel": null
+          }
         }
       ],
       "title": "Memory trace",
@@ -14029,7 +14127,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 13
+            "y": 61
           },
           "hiddenSeries": false,
           "id": 167,
@@ -14129,7 +14227,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 13
+            "y": 61
           },
           "hiddenSeries": false,
           "id": 35,
@@ -14227,7 +14325,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 20
+            "y": 68
           },
           "hiddenSeries": false,
           "id": 270,
@@ -14327,7 +14425,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 20
+            "y": 68
           },
           "hiddenSeries": false,
           "id": 271,
@@ -14427,7 +14525,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 27
+            "y": 75
           },
           "hiddenSeries": false,
           "id": 37,
@@ -14561,7 +14659,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 27
+            "y": 75
           },
           "hiddenSeries": false,
           "id": 36,
@@ -14683,7 +14781,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 34
+            "y": 82
           },
           "hiddenSeries": false,
           "id": 82,
@@ -14838,7 +14936,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 41
+            "y": 89
           },
           "hiddenSeries": false,
           "id": 242,
@@ -14949,7 +15047,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 48
+            "y": 96
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15019,7 +15117,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 48
+            "y": 96
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15089,7 +15187,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 55
+            "y": 103
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15161,7 +15259,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 55
+            "y": 103
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15223,7 +15321,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 62
+            "y": 110
           },
           "hiddenSeries": false,
           "id": 235,
@@ -15323,7 +15421,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 62
+            "y": 110
           },
           "hiddenSeries": false,
           "id": 241,
@@ -15431,7 +15529,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 69
+            "y": 117
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15512,7 +15610,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 69
+            "y": 117
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15585,7 +15683,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 76
+            "y": 124
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15661,7 +15759,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 76
+            "y": 124
           },
           "hiddenSeries": false,
           "id": 249,
@@ -15767,7 +15865,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 83
+            "y": 131
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15840,7 +15938,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 83
+            "y": 131
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15913,7 +16011,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 90
+            "y": 138
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -15986,7 +16084,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 90
+            "y": 138
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -16051,7 +16149,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 97
+            "y": 145
           },
           "hiddenSeries": false,
           "id": 240,
@@ -16155,7 +16253,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 97
+            "y": 145
           },
           "hiddenSeries": false,
           "id": 239,
@@ -16292,7 +16390,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 104
+            "y": 152
           },
           "hiddenSeries": false,
           "id": 75,
@@ -16416,7 +16514,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 111
+            "y": 159
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -16486,7 +16584,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 111
+            "y": 159
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -16533,176 +16631,6 @@
           "yBucketSize": null
         },
         {
-          "aliasColors": {},
-          "bars": false,
-          "dashLength": 10,
-          "dashes": false,
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "",
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "fill": 1,
-          "fillGradient": 0,
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 0,
-            "y": 118
-          },
-          "hiddenSeries": false,
-          "id": 263,
-          "legend": {
-            "avg": false,
-            "current": false,
-            "max": false,
-            "min": false,
-            "show": true,
-            "total": false,
-            "values": false
-          },
-          "lines": true,
-          "linewidth": 1,
-          "links": [],
-          "nullPointMode": "null",
-          "options": {
-            "alertThreshold": true
-          },
-          "percentage": false,
-          "pluginVersion": "7.5.11",
-          "pointradius": 2,
-          "points": false,
-          "renderer": "flot",
-          "seriesOverrides": [],
-          "spaceLength": 10,
-          "stack": false,
-          "steppedLine": false,
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "sum(tiflash_system_current_metric_MemoryTrackingKVStore{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\"}) by (instance)",
-              "format": "time_series",
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": "{{instance}}",
-              "refId": "B"
-            }
-          ],
-          "thresholds": [],
-          "timeFrom": null,
-          "timeRegions": [],
-          "timeShift": null,
-          "title": "KVStore memory",
-          "tooltip": {
-            "shared": true,
-            "sort": 0,
-            "value_type": "individual"
-          },
-          "type": "graph",
-          "xaxis": {
-            "buckets": null,
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "yaxes": [
-            {
-              "format": "bytes",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            },
-            {
-              "format": "short",
-              "label": null,
-              "logBase": 1,
-              "max": null,
-              "min": null,
-              "show": true
-            }
-          ],
-          "yaxis": {
-            "align": false,
-            "alignLevel": null
-          }
-        },
-        {
-          "cards": {
-            "cardPadding": null,
-            "cardRound": null
-          },
-          "color": {
-            "cardColor": "#b4ff00",
-            "colorScale": "sqrt",
-            "colorScheme": "interpolateSpectral",
-            "exponent": 0.5,
-            "min": 0,
-            "mode": "spectrum"
-          },
-          "dataFormat": "tsbuckets",
-          "datasource": "${DS_TEST-CLUSTER}",
-          "description": "",
-          "fieldConfig": {
-            "defaults": {},
-            "overrides": []
-          },
-          "gridPos": {
-            "h": 7,
-            "w": 12,
-            "x": 12,
-            "y": 118
-          },
-          "heatmap": {},
-          "hideZeroBuckets": true,
-          "highlightCards": true,
-          "id": 250,
-          "legend": {
-            "show": true
-          },
-          "links": [],
-          "reverseYBuckets": false,
-          "targets": [
-            {
-              "exemplar": true,
-              "expr": "sum(delta(tiflash_raft_snapshot_total_bytes_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"approx_raft_snapshot\"}[1m])) by (le)",
-              "format": "heatmap",
-              "interval": "",
-              "intervalFactor": 2,
-              "legendFormat": "{{le}}",
-              "refId": "B"
-            }
-          ],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Snapshot Size Heatmap",
-          "tooltip": {
-            "show": true,
-            "showHistogram": true
-          },
-          "type": "heatmap",
-          "xAxis": {
-            "show": true
-          },
-          "xBucketNumber": null,
-          "xBucketSize": null,
-          "yAxis": {
-            "decimals": 0,
-            "format": "bytes",
-            "logBase": 1,
-            "max": null,
-            "min": null,
-            "show": true,
-            "splitFactor": null
-          },
-          "yBucketBound": "upper",
-          "yBucketNumber": null,
-          "yBucketSize": null
-        },
-        {
           "cards": {
             "cardPadding": null,
             "cardRound": null
@@ -16726,7 +16654,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 125
+            "y": 166
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -16775,6 +16703,78 @@
           "yBucketSize": null
         },
         {
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateSpectral",
+            "exponent": 0.5,
+            "min": 0,
+            "mode": "spectrum"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_TEST-CLUSTER}",
+          "description": "",
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 7,
+            "w": 12,
+            "x": 12,
+            "y": 166
+          },
+          "heatmap": {},
+          "hideZeroBuckets": true,
+          "highlightCards": true,
+          "id": 250,
+          "legend": {
+            "show": true
+          },
+          "links": [],
+          "reverseYBuckets": false,
+          "targets": [
+            {
+              "exemplar": true,
+              "expr": "sum(delta(tiflash_raft_snapshot_total_bytes_bucket{k8s_cluster=\"$k8s_cluster\", tidb_cluster=\"$tidb_cluster\", instance=~\"$instance\", type=\"approx_raft_snapshot\"}[1m])) by (le)",
+              "format": "heatmap",
+              "interval": "",
+              "intervalFactor": 2,
+              "legendFormat": "{{le}}",
+              "refId": "B"
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Snapshot Size Heatmap",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "type": "heatmap",
+          "xAxis": {
+            "show": true
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "bytes",
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true,
+            "splitFactor": null
+          },
+          "yBucketBound": "upper",
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
           "aliasColors": {},
           "bars": false,
           "dashLength": 10,
@@ -16792,7 +16792,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 132
+            "y": 173
           },
           "height": "",
           "hiddenSeries": false,
@@ -16902,7 +16902,7 @@
             "h": 7,
             "w": 24,
             "x": 0,
-            "y": 139
+            "y": 180
           },
           "height": "",
           "hiddenSeries": false,
@@ -17018,7 +17018,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 146
+            "y": 187
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -17087,7 +17087,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 146
+            "y": 187
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -17157,7 +17157,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 153
+            "y": 194
           },
           "heatmap": {},
           "hideZeroBuckets": true,
@@ -17223,7 +17223,7 @@
             "h": 7,
             "w": 12,
             "x": 12,
-            "y": 153
+            "y": 194
           },
           "hiddenSeries": false,
           "id": 91,
@@ -17351,7 +17351,7 @@
             "h": 7,
             "w": 12,
             "x": 0,
-            "y": 160
+            "y": 201
           },
           "hiddenSeries": false,
           "id": 296,
