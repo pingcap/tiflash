@@ -427,12 +427,7 @@ TEST_F(PathCapacity, SingleDiskSinglePathTest)
 
     // Single disk with single path
     {
-        auto path_capacity = PathCapacityMetrics(
-            0,
-            {main_data_path},
-            {capacity},
-            {latest_data_path},
-            {capacity});
+        auto path_capacity = PathCapacityMetrics(0, {main_data_path}, {capacity}, {latest_data_path}, {capacity});
 
         path_capacity.addUsedSize(main_data_path, used);
         auto stats = path_capacity.getFsStats(DisaggregatedMode::None, false);
