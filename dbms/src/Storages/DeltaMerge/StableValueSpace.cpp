@@ -516,14 +516,16 @@ SkippableBlockInputStreamPtr StableValueSpace::Snapshot::getInputStream(
         return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ true>>(
             streams,
             std::move(rows),
-            context.scan_context);
+            context.scan_context,
+            read_tag);
     }
     else
     {
         return std::make_shared<ConcatSkippableBlockInputStream</*need_row_id*/ false>>(
             streams,
             std::move(rows),
-            context.scan_context);
+            context.scan_context,
+            read_tag);
     }
 }
 

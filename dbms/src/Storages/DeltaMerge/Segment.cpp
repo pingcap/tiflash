@@ -792,7 +792,7 @@ bool Segment::isDefinitelyEmpty(DMContext & dm_context, const SegmentSnapshotPtr
         }
 
         BlockInputStreamPtr stable_stream
-            = std::make_shared<ConcatSkippableBlockInputStream<>>(streams, dm_context.scan_context);
+            = std::make_shared<ConcatSkippableBlockInputStream<>>(streams, dm_context.scan_context, ReadTag::Internal);
         stable_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stable_stream, read_ranges, 0);
         stable_stream->readPrefix();
         while (true)
@@ -1028,6 +1028,9 @@ BlockInputStreamPtr Segment::getInputStream(
                 dm_context.tracing_id,
                 ReadTag::MVCC);
             auto bytes = estimatedBytesOfInternalColumns(segment_snap, pack_filters, start_ts);
+            TiFlashMetrics::instance()
+                .getStorageRUReadBytesCounter(NullspaceID, res_group_name, ReadRUType::MVCC_ESTIMATE)
+                .Increment(bytes);
             LocalAdmissionController::global_instance->consumeBytesResource(res_group_name, bytesToRU(bytes));
         }
     }
@@ -2716,14 +2719,14 @@ Segment::ReadInfo Segment::getReadInfo(
     auto new_read_columns = arrangeReadColumns(getExtraHandleColumnDefine(is_common_handle), read_columns);
     auto pk_ver_col_defs = std::make_shared<ColumnDefines>(
         ColumnDefines{getExtraHandleColumnDefine(dm_context.is_common_handle), getVersionColumnDefine()});
-    // Create a reader that reads pk and version columns to update deltaindex.
-    // It related to MVCC, so always set a `ReadTag::MVCC` for it.
+    // Create a reader that reads pk and version columns to update delta-index.
+    // Updating delta-index is not count as MVCC, use `ReadTag::Internal` for it.
     auto delta_reader = std::make_shared<DeltaValueReader>(
         dm_context,
         segment_snap->delta,
         pk_ver_col_defs,
         this->rowkey_range,
-        ReadTag::MVCC);
+        ReadTag::Internal);
 
     auto [my_delta_index, fully_indexed] = ensurePlace(dm_context, segment_snap, delta_reader, read_ranges, start_ts);
     auto compacted_index = my_delta_index->getDeltaTree()->getCompactedEntries();
@@ -3021,7 +3024,7 @@ bool Segment::placeUpsert(
         compacted_index->begin(),
         compacted_index->end(),
         dm_context.stable_pack_rows,
-        ReadTag::MVCC);
+        ReadTag::Internal);
 
     if (do_sort)
         return DM::placeInsert<true>(
@@ -3074,7 +3077,7 @@ bool Segment::placeDelete(
             compacted_index->begin(),
             compacted_index->end(),
             dm_context.stable_pack_rows,
-            ReadTag::MVCC);
+            ReadTag::Internal);
 
         delete_stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(delete_stream, delete_ranges, 0);
 
@@ -3112,7 +3115,7 @@ bool Segment::placeDelete(
             compacted_index->begin(),
             compacted_index->end(),
             dm_context.stable_pack_rows,
-            ReadTag::MVCC);
+            ReadTag::Internal);
         fully_indexed &= DM::placeDelete(
             merged_stream,
             block,

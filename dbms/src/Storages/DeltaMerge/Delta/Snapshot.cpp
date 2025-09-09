@@ -17,6 +17,7 @@
 #include <Storages/DeltaMerge/DMContext.h>
 #include <Storages/DeltaMerge/Delta/DeltaValueSpace.h>
 #include <Storages/DeltaMerge/RowKeyFilter.h>
+#include <Storages/DeltaMerge/ScanContext.h>
 #include <Storages/DeltaMerge/StoragePool/StoragePool.h>
 #include <Storages/DeltaMerge/convertColumnTypeHelpers.h>
 
@@ -87,11 +88,15 @@ DeltaValueReader::DeltaValueReader(
           read_tag_))
     , col_defs(col_defs_)
     , segment_range(segment_range_)
+    , dm_context(context)
+    , read_tag(read_tag_)
+    , lac_bytes_collector(
+          dm_context.scan_context ? dm_context.scan_context->newLACBytesCollector(read_tag_) : std::nullopt)
 {}
 
-DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag read_tag)
+DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & new_col_defs, ReadTag read_tag_)
 {
-    auto * new_reader = new DeltaValueReader();
+    auto * new_reader = new DeltaValueReader(dm_context, read_tag_);
     new_reader->delta_snap = delta_snap;
     new_reader->compacted_delta_index = compacted_delta_index;
     new_reader->persisted_files_reader = persisted_files_reader->createNewReader(new_col_defs, read_tag);
@@ -100,6 +105,14 @@ DeltaValueReaderPtr DeltaValueReader::createNewReader(const ColumnDefinesPtr & n
     new_reader->segment_range = segment_range;
 
     return std::shared_ptr<DeltaValueReader>(new_reader);
+}
+
+static size_t columnsBytes(const MutableColumns & columns)
+{
+    size_t bytes = 0;
+    for (const auto & col : columns)
+        bytes += col->byteSize();
+    return bytes;
 }
 
 size_t DeltaValueReader::readRows(
@@ -132,6 +145,7 @@ size_t DeltaValueReader::readRows(
         ? 0
         : std::min(offset + limit - mem_table_rows_offset, total_delta_rows - mem_table_rows_offset);
 
+    const auto initial_bytes = columnsBytes(output_cols);
     size_t actual_read = 0;
     size_t persisted_read_rows = 0;
     if (persisted_files_start < persisted_files_end)
@@ -161,6 +175,12 @@ size_t DeltaValueReader::readRows(
             row_ids->cend(),
             row_ids->begin() + persisted_read_rows, // write to the same location
             [mem_table_rows_offset](UInt32 id) { return id + mem_table_rows_offset; });
+    }
+
+    if (dm_context.scan_context)
+    {
+        const auto final_bytes = columnsBytes(output_cols);
+        dm_context.scan_context->addUserReadBytes(final_bytes - initial_bytes, read_tag, lac_bytes_collector);
     }
 
     return actual_read;

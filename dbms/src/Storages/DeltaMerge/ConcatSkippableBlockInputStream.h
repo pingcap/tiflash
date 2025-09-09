@@ -16,10 +16,10 @@
 
 #include <Flash/ResourceControl/LocalAdmissionController.h>
 #include <Storages/DeltaMerge/Index/VectorIndex_fwd.h>
+#include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SkippableBlockInputStream.h>
 #include <Storages/DeltaMerge/VectorIndexBlockInputStream.h>
-
 
 namespace DB::DM
 {
@@ -28,12 +28,16 @@ template <bool need_row_id = false>
 class ConcatSkippableBlockInputStream : public SkippableBlockInputStream
 {
 public:
-    ConcatSkippableBlockInputStream(SkippableBlockInputStreams inputs_, const ScanContextPtr & scan_context_);
+    ConcatSkippableBlockInputStream(
+        SkippableBlockInputStreams inputs_,
+        const ScanContextPtr & scan_context_,
+        ReadTag read_tag_);
 
     ConcatSkippableBlockInputStream(
         SkippableBlockInputStreams inputs_,
         std::vector<size_t> && rows_,
-        const ScanContextPtr & scan_context_);
+        const ScanContextPtr & scan_context_,
+        ReadTag read_tag_);
 
     void appendChild(SkippableBlockInputStreamPtr child, size_t rows_);
 
@@ -65,7 +69,8 @@ private:
     std::vector<size_t> rows;
     size_t precede_stream_rows;
     const ScanContextPtr scan_context;
-    LACBytesCollector lac_bytes_collector;
+    std::optional<LACBytesCollector> lac_bytes_collector;
+    ReadTag read_tag;
 };
 
 class ConcatVectorIndexBlockInputStream : public SkippableBlockInputStream
