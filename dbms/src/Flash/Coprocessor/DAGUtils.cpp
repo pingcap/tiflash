@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FmtUtils.h>
+#include <Common/ThresholdUtils.h>
 #include <Common/TiFlashException.h>
 #include <Core/Types.h>
 #include <DataTypes/DataTypeNullable.h>
@@ -1570,4 +1571,19 @@ tipb::ScalarFuncSig reverseGetFuncSigByFuncName(const String & name)
         throw Exception(fmt::format("Unsupported function {}", name));
     return func_name_sig_map[name];
 }
+
+constexpr ssize_t MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE
+    = 1024 * 1024 * 32; // 32MB (8192 Rows * 256 Byte/row * 16 partitions)
+
+UInt64 getMaxBufferedBytesInResponseWriter(Int64 max_buffered_bytes_in_executor, size_t concurrency)
+{
+    // max buffered bytes in ExchangeSender, we don't want to send too many small chunks so there is a minimum limit of MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE
+    UInt64 ret = MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE;
+    if (max_buffered_bytes_in_executor > 0)
+    {
+        ret = std::max(ret, getAverageThreshold(max_buffered_bytes_in_executor, concurrency));
+    }
+    return ret;
+}
+
 } // namespace DB
