@@ -154,7 +154,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         delta_delete_ranges);
     RUNTIME_CHECK(base_versions->size() == delta_rows, base_versions->size(), delta_rows);
 
-    LOG_INFO(
+    LOG_DEBUG(
         snapshot.log,
         "snapshot={}, replays {} rows and {} deletes, cost={}ms",
         snapshot.detailInfo(),

@@ -711,7 +711,7 @@ void DeltaMergeStore::segmentEnsureStableLocalIndex(
     //   3. segL, segR=LogicalSplit(seg)
     //   4. CreateStableLocalIndex(seg)
 
-    auto storage_snapshot = std::make_shared<StorageSnapshot>(
+    auto storage_snapshot = std::make_shared<StorageSnapshot>( //
         *dm_context.storage_pool,
         dm_context.getReadLimiter(),
         dm_context.tracing_id);
@@ -1034,8 +1034,10 @@ void DeltaMergeStore::segmentEnsureDeltaLocalIndex(
     ColumnFileSetSnapshotPtr persisted_files_snap;
     if (auto lock = delta->getLock(); lock)
     {
-        auto storage_snap
-            = std::make_shared<StorageSnapshot>(*storage_pool, dm_context.getReadLimiter(), dm_context.tracing_id);
+        auto storage_snap = std::make_shared<StorageSnapshot>( //
+            *storage_pool,
+            dm_context.getReadLimiter(),
+            dm_context.tracing_id);
         auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
         persisted_files_snap = delta->getPersistedFileSet()->createSnapshot(data_from_storage_snap);
     }
