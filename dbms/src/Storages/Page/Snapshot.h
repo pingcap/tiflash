@@ -25,17 +25,21 @@ enum class SnapshotType : UInt32
 {
     // Protect all data
     General,
-    // Protect only data in DeltaTree engine
+    // Protect only data in DeltaTree engine.
+    // Only used under UniversalPageStorage now.
     DeltaTreeOnly,
 };
 
+// The statistics of all living snapshots and the oldest living snapshot.
 struct SnapshotsStatistics
 {
     size_t num_snapshots = 0;
     double longest_living_seconds = 0.0;
-    unsigned longest_living_from_thread_id = 0;
+    SnapshotType longest_living_type = SnapshotType::General;
+    UInt32 longest_living_from_thread_id = 0;
     String longest_living_from_tracing_id;
 };
+
 class PageStorageSnapshot
 {
 public:

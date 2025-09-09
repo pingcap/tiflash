@@ -1083,6 +1083,7 @@ SnapshotsStatistics PageDirectory<Trait>::getSnapshotsStat() const
     return SnapshotsStatistics{
         .num_snapshots = gc_stat.num_valid,
         .longest_living_seconds = gc_stat.longest_alive_time,
+        .longest_living_type = gc_stat.longest_alive_type,
         .longest_living_from_thread_id = gc_stat.longest_alive_from_thread_id,
         .longest_living_from_tracing_id = gc_stat.longest_alive_from_tracing_id,
     };
