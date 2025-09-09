@@ -207,5 +207,4 @@ struct StorageSnapshot : private boost::noncopyable
     PageReaderPtr meta_reader;
 };
 
-
 } // namespace DB::DM

@@ -541,7 +541,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
 // here we assume that, if the columns' id and data type in query is the same as the columns in TiDB,
 // we think we can directly do read, and don't need sync schema.
-// compare the columns in table_scan with the columns in storages, to check if the current schema is satisified this query.
+// compare the columns in table_scan with the columns in storages, to check if the current schema is satisfied this query.
 // column.name are always empty from table_scan, and column name is not necessary in read process, so we don't need compare the name here.
 std::tuple<bool, String> compareColumns(
     const TiDBTableScan & table_scan,
@@ -1256,9 +1256,10 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         // register the snapshot to manager
         auto snaps = context.getSharedContextDisagg()->wn_snapshot_manager;
         const auto & snap_id = *dag_context.getDisaggTaskId();
-        auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
-        bool register_snapshot_ok
-            = snaps->registerSnapshot(snap_id, disaggregated_snap, std::chrono::seconds(timeout_s));
+        bool register_snapshot_ok = snaps->registerSnapshot(
+            snap_id,
+            disaggregated_snap,
+            std::chrono::seconds(context.getSettingsRef().disagg_task_snapshot_timeout));
         RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
     }
 
@@ -1313,9 +1314,10 @@ void DAGStorageInterpreter::buildLocalExec(
         // register the snapshot to manager
         auto snaps = context.getSharedContextDisagg()->wn_snapshot_manager;
         const auto & snap_id = *dag_context.getDisaggTaskId();
-        auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
-        bool register_snapshot_ok
-            = snaps->registerSnapshot(snap_id, disaggregated_snap, std::chrono::seconds(timeout_s));
+        bool register_snapshot_ok = snaps->registerSnapshot(
+            snap_id,
+            disaggregated_snap,
+            std::chrono::seconds(context.getSettingsRef().disagg_task_snapshot_timeout));
         RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
     }
 

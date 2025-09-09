@@ -36,9 +36,31 @@ WNDisaggSnapshotManager::~WNDisaggSnapshotManager()
     }
 }
 
+DisaggReadSnapshotPtr WNDisaggSnapshotManager::getDisaggSnapshot(
+    const DisaggTaskId & task_id,
+    std::optional<std::chrono::seconds> refresh_duration) const
+{
+    return snapshots.withShared([&](auto & snapshots) {
+        if (auto iter = snapshots.find(task_id); iter != snapshots.end())
+        {
+            if (refresh_duration.has_value())
+            {
+                if (bool done_refresh = iter->second->refreshExpiredTime(refresh_duration.value()); done_refresh)
+                    LOG_INFO(
+                        log,
+                        "Refresh Disaggregated Snapshot expiration, task_id={} refresh_duration={}",
+                        task_id,
+                        refresh_duration.value());
+            }
+            return iter->second->snap;
+        }
+        return DisaggReadSnapshotPtr{nullptr};
+    });
+}
+
 bool WNDisaggSnapshotManager::unregisterSnapshotIfEmpty(const DisaggTaskId & task_id)
 {
-    auto snap = getSnapshot(task_id);
+    auto snap = getDisaggSnapshot(task_id, /*refresh_duration*/ std::nullopt);
     if (!snap)
         return false;
     if (!snap->empty())
@@ -46,9 +68,23 @@ bool WNDisaggSnapshotManager::unregisterSnapshotIfEmpty(const DisaggTaskId & tas
     return unregisterSnapshot(task_id);
 }
 
+<<<<<<< HEAD
 size_t WNDisaggSnapshotManager::getActiveSnapshotCount() const
 {
     return snapshots.withShared([&](auto & snapshots) { return snapshots.size(); });
+=======
+bool WNDisaggSnapshotManager::unregisterSnapshot(const DisaggTaskId & task_id)
+{
+    return snapshots.withExclusive([&](auto & snapshots) {
+        if (auto iter = snapshots.find(task_id); iter != snapshots.end())
+        {
+            LOG_INFO(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
+            snapshots.erase(iter);
+            return true;
+        }
+        return false;
+    });
+>>>>>>> 34a302dd81 (PageStorage: Fix tiflash wn oom issue by introducing DeltaTreeOnlySnapshot (#10410))
 }
 
 void WNDisaggSnapshotManager::clearExpiredSnapshots()
@@ -57,13 +93,14 @@ void WNDisaggSnapshotManager::clearExpiredSnapshots()
     snapshots.withExclusive([&](auto & snapshots) {
         for (auto iter = snapshots.begin(); iter != snapshots.end(); /*empty*/)
         {
-            if (iter->second->expired_at < now)
+            auto exp = iter->second->getExpiredAt();
+            if (exp < now)
             {
                 LOG_INFO(
                     log,
                     "Remove expired Disaggregated Snapshot, task_id={} expired_at={:%Y-%m-%d %H:%M:%S}",
                     iter->first,
-                    iter->second->expired_at);
+                    exp);
                 iter = snapshots.erase(iter);
             }
             else

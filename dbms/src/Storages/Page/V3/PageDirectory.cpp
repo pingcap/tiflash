@@ -1064,58 +1064,29 @@ PageDirectory<Trait>::PageDirectory(String storage_name, WALStorePtr && wal_, UI
 {}
 
 template <typename Trait>
-PageDirectorySnapshotPtr PageDirectory<Trait>::createSnapshot(const String & tracing_id) const
+PageDirectorySnapshotPtr PageDirectory<Trait>::createSnapshot(SnapshotType tp, const String & tracing_id) const
 {
     GET_METRIC(tiflash_storage_page_command_count, type_snapshot).Increment();
-    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tracing_id);
+    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tp, tracing_id);
     {
         std::lock_guard snapshots_lock(snapshots_mutex);
         snapshots.emplace_back(std::weak_ptr<PageDirectorySnapshot>(snap));
     }
 
-    CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
     return snap;
 }
 
 template <typename Trait>
 SnapshotsStatistics PageDirectory<Trait>::getSnapshotsStat() const
 {
-    SnapshotsStatistics stat;
-    DB::Int64 num_snapshots_removed = 0;
-    {
-        std::lock_guard lock(snapshots_mutex);
-        for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
-        {
-            auto snapshot_ptr = iter->lock();
-            if (!snapshot_ptr)
-            {
-                iter = snapshots.erase(iter);
-                num_snapshots_removed++;
-            }
-            else
-            {
-                fiu_do_on(FailPoints::random_slow_page_storage_remove_expired_snapshots, {
-                    pcg64 rng(randomSeed());
-                    std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
-                    std::this_thread::sleep_for(ms);
-                });
-
-                const auto snapshot_lifetime = snapshot_ptr->elapsedSeconds();
-                if (snapshot_lifetime > stat.longest_living_seconds)
-                {
-                    stat.longest_living_seconds = snapshot_lifetime;
-                    stat.longest_living_from_thread_id = snapshot_ptr->create_thread;
-                    stat.longest_living_from_tracing_id = snapshot_ptr->tracing_id;
-                }
-                stat.num_snapshots++;
-                ++iter;
-            }
-        }
-    }
-
-    CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
-    // Return some statistics of the oldest living snapshot.
-    return stat;
+    auto gc_stat = this->gcInMemSnapshots();
+    return SnapshotsStatistics{
+        .num_snapshots = gc_stat.num_valid,
+        .longest_living_seconds = gc_stat.longest_alive_time,
+        .longest_living_type = gc_stat.longest_alive_type,
+        .longest_living_from_thread_id = gc_stat.longest_alive_from_thread_id,
+        .longest_living_from_tracing_id = gc_stat.longest_alive_from_tracing_id,
+    };
 }
 
 template <typename Trait>
@@ -2054,7 +2025,7 @@ template <typename Trait>
 bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter, bool force)
 {
     auto identifier = fmt::format("{}.dump", wal->name());
-    auto snap = createSnapshot(identifier);
+    auto snap = createSnapshot(SnapshotType::General, identifier);
     SYNC_FOR("after_PageDirectory::create_snap_for_dump");
 
     // Only apply compact logs when files snapshot is valid
@@ -2127,58 +2098,90 @@ size_t PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & 
 }
 
 template <typename Trait>
+SnapshotGCStatistics PageDirectory<Trait>::gcInMemSnapshots() const
+{
+    const UInt64 seq_clone = sequence.load();
+    SnapshotGCStatistics stat{
+        .seq = seq_clone,
+        .delta_tree_only_seq = seq_clone,
+        .general_seq = std::nullopt,
+        .lowest_seq_of_all = seq_clone,
+
+        .num_invalid = 0,
+        .num_valid = 0,
+
+        .num_stale = 0,
+    };
+
+    // Cleanup released snapshots
+    std::lock_guard lock(snapshots_mutex);
+    std::unordered_set<String> tracing_id_set;
+    for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
+    {
+        auto snap = iter->lock();
+        if (snap == nullptr)
+        {
+            iter = snapshots.erase(iter);
+            stat.num_invalid++;
+            continue;
+        }
+
+        fiu_do_on(FailPoints::random_slow_page_storage_remove_expired_snapshots, {
+            pcg64 rng(randomSeed());
+            std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
+            std::this_thread::sleep_for(ms);
+        });
+
+        switch (snap->type)
+        {
+        case SnapshotType::General:
+            stat.general_seq.emplace(std::min(stat.general_seq.value_or(seq_clone), snap->sequence));
+            break;
+        case SnapshotType::DeltaTreeOnly:
+            stat.delta_tree_only_seq = std::min(stat.delta_tree_only_seq, snap->sequence);
+            break;
+        }
+        stat.lowest_seq_of_all = std::min(stat.lowest_seq_of_all, snap->sequence);
+
+        ++iter;
+        ++stat.num_valid;
+
+        const auto snap_alive_time = snap->elapsedSeconds();
+        if (snap_alive_time > 10 * 60) // TODO: Make `10 * 60` as a configuration
+        {
+            if (!tracing_id_set.contains(snap->tracing_id))
+            {
+                LOG_WARNING(
+                    log,
+                    "Meet a stale snapshot, create_thread={} tracing_id={} seq={} type={} alive_time={:.3f}",
+                    snap->create_thread,
+                    snap->tracing_id,
+                    snap->sequence,
+                    magic_enum::enum_name(snap->type),
+                    snap_alive_time);
+                tracing_id_set.emplace(snap->tracing_id);
+            }
+            ++stat.num_stale;
+        }
+
+        if (snap_alive_time > stat.longest_alive_time)
+        {
+            stat.longest_alive_time = snap_alive_time;
+            stat.longest_alive_seq = snap->sequence;
+            stat.longest_alive_type = snap->type;
+            stat.longest_alive_from_thread_id = snap->create_thread;
+            stat.longest_alive_from_tracing_id = snap->tracing_id;
+        }
+    }
+
+    return stat;
+}
+
+template <typename Trait>
 typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(const InMemGCOption & options)
     NO_THREAD_SAFETY_ANALYSIS
 {
-    UInt64 lowest_seq = sequence.load();
-
-    UInt64 invalid_snapshot_nums = 0;
-    UInt64 valid_snapshot_nums = 0;
-    UInt64 longest_alive_snapshot_time = 0;
-    UInt64 longest_alive_snapshot_seq = 0;
-    UInt64 stale_snapshot_nums = 0;
-    {
-        // Cleanup released snapshots
-        std::lock_guard lock(snapshots_mutex);
-        std::unordered_set<String> tracing_id_set;
-        for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
-        {
-            if (auto snap = iter->lock(); snap == nullptr)
-            {
-                iter = snapshots.erase(iter);
-                invalid_snapshot_nums++;
-            }
-            else
-            {
-                lowest_seq = std::min(lowest_seq, snap->sequence);
-                ++iter;
-                valid_snapshot_nums++;
-                const auto alive_time_seconds = snap->elapsedSeconds();
-
-                if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
-                {
-                    if (!tracing_id_set.contains(snap->tracing_id))
-                    {
-                        LOG_WARNING(
-                            log,
-                            "Meet a stale snapshot, create_thread={} tracing_id={} seq={} alive_time={:.3f}",
-                            snap->create_thread,
-                            snap->tracing_id,
-                            snap->sequence,
-                            alive_time_seconds);
-                        tracing_id_set.emplace(snap->tracing_id);
-                    }
-                    stale_snapshot_nums++;
-                }
-
-                if (longest_alive_snapshot_time < alive_time_seconds)
-                {
-                    longest_alive_snapshot_time = alive_time_seconds;
-                    longest_alive_snapshot_seq = snap->sequence;
-                }
-            }
-        }
-    }
+    const auto snap_stat = gcInMemSnapshots();
 
     SYNC_FOR("after_PageDirectory::doGC_getLowestSeq");
 
@@ -2191,7 +2194,10 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
             return all_del_entries;
     }
 
+    // The number of page removed this round. Not counting raft pages.
     UInt64 invalid_page_nums = 0;
+    // The number of proxy page removed this round.
+    UInt64 invalid_raft_pages_nums = 0;
     UInt64 valid_page_nums = 0;
 
     // The page_id that we need to decrease ref count
@@ -2200,10 +2206,38 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
     // Iterate all page_id and try to clean up useless var entries
     while (true)
     {
+        bool page_id_from_raft = false;
+        UInt64 actual_seq = 0;
+        if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+        {
+            // For Universal PageDirectory, we store Raft data together but this kind
+            // of data is frequently created and deleted. So we split the snapshot into
+            // two kinds and the delta-tree-only reading snapshot does not protect the
+            // Raft data from being GCed.
+            // If the page_id is from proxy and there is no general snapshot,
+            // we can use `seq_clone` to clean up entries more aggressively to
+            // reduce memory usage.
+            page_id_from_raft = Trait::PageIdTrait::isFromRaftLayer(iter->first); //
+            if (page_id_from_raft)
+            {
+                // Pages from proxy is only protected by general snapshots
+                actual_seq = snap_stat.general_seq.value_or(snap_stat.seq);
+            }
+            else
+            {
+                // Other Pages are protected by all kinds of snapshots
+                actual_seq = snap_stat.lowest_seq_of_all;
+            }
+        }
+        else
+        {
+            // Protected by all kinds of snapshots
+            actual_seq = snap_stat.lowest_seq_of_all;
+        }
         // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
         // do gc on the version list without lock on `mvcc_table_directory`.
         const bool all_deleted = iter->second->cleanOutdatedEntries(
-            lowest_seq,
+            actual_seq,
             &normal_entries_to_deref,
             options.need_removed_entries ? &all_del_entries : nullptr,
             options.remote_valid_sizes,
@@ -2214,7 +2248,10 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
             if (all_deleted)
             {
                 iter = mvcc_table_directory.erase(iter);
-                invalid_page_nums++;
+                if (page_id_from_raft)
+                    invalid_raft_pages_nums++;
+                else
+                    invalid_page_nums++;
             }
             else
             {
@@ -2241,7 +2278,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
 
         const bool all_deleted = iter->second->derefAndClean(
-            lowest_seq,
+            snap_stat.lowest_seq_of_all,
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
@@ -2256,10 +2293,11 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
     }
 
-    auto log_level = stale_snapshot_nums > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    auto log_level = snap_stat.num_stale > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
     LOG_IMPL(
         log,
         log_level,
+<<<<<<< HEAD
         "After MVCC gc in memory [lowest_seq={}] "
         "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
         "[total_deref_counter={}] [all_del_entries={}]. "
@@ -2268,14 +2306,27 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
         lowest_seq,
         invalid_snapshot_nums,
+=======
+        "After MVCC gc in memory, general_lowest_seq={} delta_tree_only_seq={}. "
+        "clean invalid_snapshot_nums={} invalid_page_nums={} invalid_raft_pages_nums={} "
+        "total_deref_counter={} all_del_entries={}. "
+        "Still exist, snapshot_nums={} page_nums={}. "
+        "Longest alive snapshot: {{alive_time={:.3f} seq={} type={} tracing_id={}}} stale_snapshot_nums={}",
+        snap_stat.general_seq,
+        snap_stat.delta_tree_only_seq,
+        snap_stat.num_invalid,
+>>>>>>> 34a302dd81 (PageStorage: Fix tiflash wn oom issue by introducing DeltaTreeOnlySnapshot (#10410))
         invalid_page_nums,
+        invalid_raft_pages_nums,
         total_deref_counter,
         all_del_entries.size(),
-        valid_snapshot_nums,
+        snap_stat.num_valid,
         valid_page_nums,
-        longest_alive_snapshot_time,
-        longest_alive_snapshot_seq,
-        stale_snapshot_nums);
+        snap_stat.longest_alive_time,
+        snap_stat.longest_alive_seq,
+        magic_enum::enum_name(snap_stat.longest_alive_type),
+        snap_stat.longest_alive_from_tracing_id,
+        snap_stat.num_stale);
 
     return all_del_entries;
 }
@@ -2285,7 +2336,7 @@ typename PageDirectory<Trait>::PageEntriesEdit PageDirectory<Trait>::dumpSnapsho
 {
     if (!snap)
     {
-        snap = createSnapshot(/*tracing_id*/ "");
+        snap = createSnapshot(SnapshotType::General, /*tracing_id*/ "");
     }
 
     PageEntriesEdit edit;
