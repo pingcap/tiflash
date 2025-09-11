@@ -140,5 +140,4 @@ void NativeBlockOutputStream::write(const Block & block)
         }
     }
 }
-
 } // namespace DB
