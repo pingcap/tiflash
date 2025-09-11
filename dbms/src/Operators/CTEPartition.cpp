@@ -51,12 +51,15 @@ CTEOpStatus CTEPartition::tryGetBlock(size_t cte_reader_id, Block & block)
     if (!this->isBlockAvailableInMemoryNoLock(cte_reader_id))
         return CTEOpStatus::BLOCK_NOT_AVAILABLE;
 
-    auto idx = this->getIdxInMemoryNoLock(cte_reader_id);
+    const auto idx = this->getIdxInMemoryNoLock(cte_reader_id);
     block = this->blocks[idx].block;
     assert(this->blocks[idx].counter > 0);
 
     if ((--this->blocks[idx].counter) == 0)
+    {
+        this->memory_usage.fetch_sub(this->blocks[idx].block.bytes());
         this->blocks[idx].block.clear();
+    }
     // TODO delete -------------
     {
         auto [iter, _] = this->fetch_in_mem_idxs.insert(std::make_pair(cte_reader_id, 0));
