@@ -77,6 +77,7 @@ public:
         virtual ~IPattern() = default;
 
         virtual void compile(const std::string & pattern, char escape) = 0;
+        virtual void try_compile_ascii_ci(const std::string & pattern, char escape) = 0;
         virtual bool match(const char * s, size_t length) const = 0;
 
     protected:
@@ -183,10 +184,16 @@ class Pattern : public ITiDBCollator::IPattern
 {
 public:
     void compile(const std::string & pattern, char escape) override;
+    void try_compile_ascii_ci(const std::string & pattern, char escape) override;
     bool match(const char * s, size_t length) const override;
 
 private:
-    std::vector<typename Collator::CharType> chars;
+    int try_match_ascii_ci(const char * s, size_t length) const;
+
+    std::vector<typename Collator::CharType> pattern_weights;
+    bool is_ascii_ci_pattern = false;
+    std::vector<char> ascii_ci_pattern;
+
     enum MatchType
     {
         Match,
