@@ -32,6 +32,7 @@ extern const int CANNOT_DECOMPRESS;
 
 CompressionCodecLightweight::CompressionCodecLightweight(CompressionDataType data_type_, int level_)
     : ctx(level_)
+    , float_ctx(level_)
     , data_type(data_type_)
 {}
 
@@ -43,7 +44,7 @@ UInt8 CompressionCodecLightweight::getMethodByte() const
 UInt32 CompressionCodecLightweight::getMaxCompressedDataSize(UInt32 uncompressed_size) const
 {
     // 1 byte for bytes_size, 1 byte for mode, and the rest for compressed data
-    return 1 + 1 + LZ4_COMPRESSBOUND(uncompressed_size);
+    return 1 + 1 + LZ4_COMPRESSBOUND(uncompressed_size) * 4;
 }
 
 UInt32 CompressionCodecLightweight::doCompressData(const char * source, UInt32 source_size, char * dest) const
@@ -61,10 +62,12 @@ UInt32 CompressionCodecLightweight::doCompressData(const char * source, UInt32 s
     case CompressionDataType::Int64:
         return 1 + compressDataForInteger<UInt64>(source, source_size, dest);
     case CompressionDataType::Float32:
+        return 1 + compressDataForFloat<float>(source, source_size, dest);
     case CompressionDataType::Float64:
+        return 1 + compressDataForFloat<double>(source, source_size, dest);
     case CompressionDataType::String:
     case CompressionDataType::Unknown:
-        return 1 + compressDataForNonInteger(source, source_size, dest);
+        return 1 + compressDataForString(source, source_size, dest);
     default:
         throw Exception(
             ErrorCodes::CANNOT_COMPRESS,
@@ -111,10 +114,14 @@ void CompressionCodecLightweight::doDecompressData(
         decompressDataForInteger<UInt64>(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     case CompressionDataType::Float32:
+        decompressDataForFloat<float>(&source[1], source_size_no_header, dest, uncompressed_size);
+        break;
     case CompressionDataType::Float64:
+        decompressDataForFloat<double>(&source[1], source_size_no_header, dest, uncompressed_size);
+        break;
     case CompressionDataType::String:
     case CompressionDataType::Unknown:
-        decompressDataForNonInteger(&source[1], source_size_no_header, dest, uncompressed_size);
+        decompressDataForString(&source[1], source_size_no_header, dest, uncompressed_size);
         break;
     default:
         throw Exception(
