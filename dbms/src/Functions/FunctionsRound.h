@@ -269,7 +269,7 @@ template <typename T, RoundingMode rounding_mode, ScaleMode scale_mode, typename
 struct DecimalRoundingComputation
 {
     static_assert(IsDecimal<T>);
-    using NativeType = T::NativeType;
+    using NativeType = typename T::NativeType;
     static const size_t data_count = 1;
     static size_t prepare(size_t scale) { return scale; }
     // compute need decimal_scale to interpret decimals
