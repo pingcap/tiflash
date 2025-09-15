@@ -133,7 +133,7 @@ protected:
 
     void verifyFile(const String & key, size_t size)
     {
-        S3RandomAccessFile file(s3_client, key);
+        S3RandomAccessFile file(s3_client, key, nullptr);
         std::vector<char> tmp_buf;
         size_t read_size = 0;
         while (read_size < size)
@@ -248,7 +248,7 @@ try
     WriteSettings write_setting;
     const String key = "/a/b/c/seek";
     writeFile(key, size, write_setting);
-    S3RandomAccessFile file(s3_client, key);
+    S3RandomAccessFile file(s3_client, key, nullptr);
     {
         std::vector<char> tmp_buf(256);
         auto n = file.read(tmp_buf.data(), tmp_buf.size());

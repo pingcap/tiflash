@@ -396,7 +396,10 @@ static_assert(RAFT_REGION_BIG_WRITE_THRES * 4 < RAFT_REGION_BIG_WRITE_MAX, "Inva
       F(type_worker_prepare_stream, {{"type", "worker_prepare_stream"}}, ExpBuckets{0.01, 2, 20}),                                  \
       F(type_stream_wait_next_task, {{"type", "stream_wait_next_task"}}, ExpBuckets{0.01, 2, 20}),                                  \
       F(type_stream_read, {{"type", "stream_read"}}, ExpBuckets{0.01, 2, 20}),                                                      \
-      F(type_deserialize_page, {{"type", "deserialize_page"}}, ExpBuckets{0.01, 2, 20}))                                            \
+      F(type_deserialize_page, {{"type", "deserialize_page"}}, ExpBuckets{0.01, 2, 20}),                                            \
+      F(type_build_read_tasks, {{"type", "build_read_tasks"}}, ExpBuckets{0.01, 2, 20}),                                            \
+      F(type_build_batch_cop_tasks, {{"type", "build_batch_cop_tasks"}}, ExpBuckets{0.01, 2, 20}),                                  \
+      F(type_parse_read_tasks, {{"type", "parse_read_tasks"}}, ExpBuckets{0.01, 2, 20}))                                            \
     M(tiflash_disaggregated_details,                                                                                                \
       "",                                                                                                                           \
       Counter,                                                                                                                      \

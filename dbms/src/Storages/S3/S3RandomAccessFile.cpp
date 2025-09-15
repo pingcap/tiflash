@@ -44,11 +44,15 @@ String S3RandomAccessFile::summary() const
     return fmt::format("remote_fname={} cur_offset={} cur_retry={}", remote_fname, cur_offset, cur_retry);
 }
 
-S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_ptr_, const String & remote_fname_)
+S3RandomAccessFile::S3RandomAccessFile(
+    std::shared_ptr<TiFlashS3Client> client_ptr_,
+    const String & remote_fname_,
+    const DM::ScanContextPtr & scan_context_)
     : client_ptr(std::move(client_ptr_))
     , remote_fname(remote_fname_)
     , cur_offset(0)
     , log(Logger::get(remote_fname))
+    , scan_context(scan_context_)
 {
     RUNTIME_CHECK(client_ptr != nullptr);
     RUNTIME_CHECK(initialize(), remote_fname);
@@ -118,17 +122,23 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
             sw.elapsed());
         return (state & std::ios_base::failbit || state & std::ios_base::badbit) ? S3StreamError : S3UnknownError;
     }
-    auto elapsed_ns = sw.elapsed();
-    GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_ns / 1000000000.0);
-    if (elapsed_ns > 10000000) // 10ms
+    auto elapsed_secs = sw.elapsedSeconds();
+    if (scan_context)
+    {
+        scan_context->disagg_s3file_read_time_ms += elapsed_secs * 1000;
+        scan_context->disagg_s3file_read_count += 1;
+        scan_context->disagg_s3file_read_bytes += gcount;
+    }
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_secs);
+    if (elapsed_secs > 0.01) // 10ms
     {
         LOG_DEBUG(
             log,
-            "gcount={} cur_offset={} content_length={} cost={}ns",
+            "gcount={} cur_offset={} content_length={} cost={}s",
             gcount,
             cur_offset,
             content_length,
-            elapsed_ns);
+            elapsed_secs);
     }
     cur_offset += gcount;
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, gcount);
@@ -196,17 +206,23 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
             sw.elapsed());
         return (state & std::ios_base::failbit || state & std::ios_base::badbit) ? S3StreamError : S3UnknownError;
     }
-    auto elapsed_ns = sw.elapsed();
-    GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_ns / 1000000000.0);
-    if (elapsed_ns > 10000000) // 10ms
+    auto elapsed_secs = sw.elapsedSeconds();
+    if (scan_context)
+    {
+        scan_context->disagg_s3file_seek_time_ms += elapsed_secs * 1000;
+        scan_context->disagg_s3file_seek_count += 1;
+        scan_context->disagg_s3file_seek_bytes += offset_ - cur_offset;
+    }
+    GET_METRIC(tiflash_storage_s3_request_seconds, type_read_stream).Observe(elapsed_secs);
+    if (elapsed_secs > 0.01) // 10ms
     {
         LOG_DEBUG(
             log,
-            "ignore_count={} cur_offset={} content_length={} cost={}ns",
+            "ignore_count={} cur_offset={} content_length={} cost={}s",
             offset_ - cur_offset,
             cur_offset,
             content_length,
-            elapsed_ns);
+            elapsed_secs);
     }
     ProfileEvents::increment(ProfileEvents::S3ReadBytes, offset_ - cur_offset);
     cur_offset = offset_;
@@ -219,13 +235,22 @@ String S3RandomAccessFile::readRangeOfObject()
 
 bool S3RandomAccessFile::initialize()
 {
-    Stopwatch sw;
     bool request_succ = false;
     Aws::S3::Model::GetObjectRequest req;
     req.SetRange(readRangeOfObject());
     client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
     while (cur_retry < max_retry)
     {
+        Stopwatch sw_get_object;
+        SCOPE_EXIT({
+            auto elapsed_secs = sw_get_object.elapsedSeconds();
+            if (scan_context)
+            {
+                scan_context->disagg_s3file_get_object_ms += elapsed_secs * 1000;
+                scan_context->disagg_s3file_get_object_count += 1;
+            }
+            GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(elapsed_secs);
+        });
         cur_retry += 1;
         ProfileEvents::increment(ProfileEvents::S3GetObject);
         if (cur_retry > 1)
@@ -235,12 +260,13 @@ bool S3RandomAccessFile::initialize()
         auto outcome = client_ptr->GetObject(req);
         if (!outcome.IsSuccess())
         {
-            auto el = sw.elapsedSeconds();
+            auto el = sw_get_object.elapsedSeconds();
             LOG_ERROR(
                 log,
-                "S3 GetObject failed: {}, cur_retry={}, key={}, elapsed{}={:.3f}s",
+                "S3 GetObject failed: {}, retry={}/{}, key={}, elapsed{}={:.3f}s",
                 S3::S3ErrorMessage(outcome.GetError()),
                 cur_retry,
+                max_retry,
                 req.GetKey(),
                 el > 60.0 ? "(long)" : "",
                 el);
@@ -254,19 +280,7 @@ bool S3RandomAccessFile::initialize()
         }
         read_result = outcome.GetResultWithOwnership();
         RUNTIME_CHECK(read_result.GetBody(), remote_fname, strerror(errno));
-        GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
         break;
-    }
-    if (cur_retry >= max_retry && !request_succ)
-    {
-        auto el = sw.elapsedSeconds();
-        LOG_INFO(
-            log,
-            "S3 GetObject timeout: max_retry={}, key={}, elapsed{}={:.3f}s",
-            max_retry,
-            req.GetKey(),
-            el > 60.0 ? "(long)" : "",
-            el);
     }
     return request_succ;
 }
@@ -302,7 +316,10 @@ inline static RandomAccessFilePtr createFromNormalFile(
     if (scan_context.has_value())
         scan_context.value()->disagg_read_cache_miss_size += filesize.value();
     auto & ins = S3::ClientFactory::instance();
-    return std::make_shared<S3RandomAccessFile>(ins.sharedTiFlashClient(), remote_fname);
+    return std::make_shared<S3RandomAccessFile>(
+        ins.sharedTiFlashClient(),
+        remote_fname,
+        scan_context ? *scan_context : nullptr);
 }
 
 RandomAccessFilePtr S3RandomAccessFile::create(const String & remote_fname)

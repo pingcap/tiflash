@@ -125,6 +125,19 @@ String ScanContext::toJson() const
     {
         json->set("disagg_cache_hit_size", disagg_read_cache_hit_size.load());
         json->set("disagg_cache_miss_size", disagg_read_cache_miss_size.load());
+        json->set("disagg_build_read_tasks_ms", disagg_build_read_tasks_ms.load());
+        json->set("disagg_establish_disagg_task_ms", disagg_establish_disagg_task_ms.load());
+        json->set("disagg_resolve_lock_ms", disagg_resolve_lock_ms.load());
+        json->set("disagg_parse_read_task_ms", disagg_parse_read_task_ms.load());
+        json->set("disagg_build_batch_cop_tasks_ms", disagg_build_batch_cop_tasks_ms.load());
+        json->set("disagg_s3file_get_object_ms", disagg_s3file_get_object_ms.load());
+        json->set("disagg_s3file_get_object_count", disagg_s3file_get_object_count.load());
+        json->set("disagg_s3file_read_time_ms", disagg_s3file_read_time_ms.load());
+        json->set("disagg_s3file_read_count", disagg_s3file_read_count.load());
+        json->set("disagg_s3file_read_bytes", disagg_s3file_read_bytes.load());
+        json->set("disagg_s3file_seek_count", disagg_s3file_seek_count.load());
+        json->set("disagg_s3file_seek_time_ms", disagg_s3file_seek_time_ms.load());
+        json->set("disagg_s3file_seek_bytes", disagg_s3file_seek_bytes.load());
     }
 
     json->set("num_segments", num_segments.load());
