@@ -41,17 +41,9 @@ public:
         return tici_scan->idx_scan().fts_query_info().match_expr();
     }
 
-    bool isCount() const
-    {
-        if (tici_scan->idx_scan().fts_query_info().has_agg_expr())
-        {
-            RUNTIME_ASSERT(
-                tici_scan->idx_scan().fts_query_info().agg_expr().tp() == tipb::ExprType::Count,
-                "TiCIScan only supports count aggregation");
-            return true;
-        }
-        return false;
-    }
+    bool isCount() const { return is_count_agg; }
+
+    void setIsCountAgg(bool v) { is_count_agg = v; }
 
 private:
     const tipb::Executor * tici_scan;
@@ -62,5 +54,6 @@ private:
     [[maybe_unused]] tipb::FTSQueryType query_type;
     const TableShardInfos shard_infos;
     const int limit;
+    bool is_count_agg = false;
 };
 } // namespace DB

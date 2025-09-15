@@ -66,6 +66,11 @@ public:
 
     const Block & getSampleBlock() const override;
 
+    bool isOnlyOneCount() const
+    {
+        return aggregate_descriptions.size() == 1 && aggregate_descriptions[0].function->getName() == "count";
+    }
+
 private:
     void buildBlockInputStreamImpl(DAGPipeline & pipeline, Context & context, size_t max_streams) override;
 

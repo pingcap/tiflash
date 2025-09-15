@@ -124,7 +124,10 @@ protected:
             // Construct const columns with search_result.count items, only used by count(*)
             for (auto & name_and_type : return_columns)
             {
-                auto col = name_and_type.type->createColumnConst(static_cast<size_t>(search_result.count), Field());
+                auto type_default_value = name_and_type.type->getDefault();
+                auto col = name_and_type.type->createColumnConst(
+                    static_cast<size_t>(search_result.count),
+                    type_default_value);
                 res.getByName(name_and_type.name).column = std::move(col);
             }
             return res;
