@@ -121,6 +121,7 @@ protected:
             {
                 return res;
             }
+            // Construct const columns with search_result.count items, only used by count(*)
             for (auto & name_and_type : return_columns)
             {
                 auto col = name_and_type.type->createColumnConst(static_cast<size_t>(search_result.count), Field());
