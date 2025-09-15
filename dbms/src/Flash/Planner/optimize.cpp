@@ -48,7 +48,7 @@ public:
         if (plan->tp() == PlanType::Aggregation)
         {
             auto agg = std::static_pointer_cast<PhysicalAggregation>(plan);
-            if (agg->isOnlyOneCount())
+            if (agg->isCountNotNullableColumnWithoutGroupbyKey())
             {
                 auto child = agg->children(0);
                 if (child->tp() == PlanType::TiCiScan)
@@ -75,7 +75,7 @@ public:
 PhysicalPlanNodePtr optimize(const Context & context, PhysicalPlanNodePtr plan, const LoggerPtr & log)
 {
     RUNTIME_CHECK(plan);
-    static std::vector<RulePtr> rules{FinalizeRule::create(), TiCICountAggOptimizeRule::create()};
+    static std::vector<RulePtr> rules{TiCICountAggOptimizeRule::create(), FinalizeRule::create()};
     for (const auto & rule : rules)
     {
         plan = rule->apply(context, plan, log);
