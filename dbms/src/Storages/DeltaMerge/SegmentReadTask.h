@@ -161,7 +161,9 @@ private:
         ReadMode read_mode,
         size_t expected_block_size);
 
-    void finishPagesPacketStream(std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> & stream);
+    void finishPagesPacketStream(
+        std::unique_ptr<grpc::ClientReader<disaggregated::PagesPacket>> & stream,
+        bool ignore_err);
 
     BlockInputStreamPtr input_stream;
 
