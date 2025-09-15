@@ -22,7 +22,9 @@
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
+#include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
@@ -101,19 +103,30 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & cont
     while (true)
     {
         auto elapsed_ms = watch.elapsedMilliseconds();
-        if (!all_tasks_finished)
+        if (context->getSharedContextDisagg()->isDisaggregatedStorageMode())
         {
-            std::unique_lock lock(mu);
-            if (monitored_tasks.empty())
-                all_tasks_finished = true;
-        }
-        if (all_tasks_finished)
-        {
-            // Also needs to check if all MPP gRPC connections are finished
-            if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
+            if (context->getSharedContextDisagg()->wn_snapshot_manager->getActiveSnapshotCount() == 0)
             {
-                LOG_INFO(log, "All MPP tasks have finished after {}ms", elapsed_ms);
+                LOG_INFO(log, "All disagg snapshot have finished after {}ms", elapsed_ms);
                 break;
+            }
+        }
+        else
+        {
+            if (!all_tasks_finished)
+            {
+                std::unique_lock lock(mu);
+                if (monitored_tasks.empty())
+                    all_tasks_finished = true;
+            }
+            if (all_tasks_finished)
+            {
+                // Also needs to check if all MPP gRPC connections are finished
+                if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
+                {
+                    LOG_INFO(log, "All MPP tasks have finished after {}ms", elapsed_ms);
+                    break;
+                }
             }
         }
         if (elapsed_ms >= graceful_wait_shutdown_timeout_ms)
