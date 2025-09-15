@@ -587,11 +587,11 @@ void SegmentReadTask::doFetchPages(const disaggregated::FetchDisaggPagesRequest 
         }
     });
 
-    // All delta data is cached.
     if (request.page_ids_size() == 0 && !needFetchMemTableSet())
     {
-        // All data is cached in the compute node, just send a request to notify WN to release the snapshot of current segment.
-        // The Compute node can safely ignore the error message in response under this case.
+        // All delta data is cached in the compute node, just send a request to notify WN
+        // to release the snapshot of current segment. The Compute node can safely ignore
+        // the error message in response under this case.
         finishPagesPacketStream(stream_resp, /*ignore_err*/ true);
         return;
     }
