@@ -109,6 +109,8 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & cont
         auto elapsed_ms = watch.elapsedMilliseconds();
         if (is_disagg_storage_mode)
         {
+            // For write node under disagg arch, should wait for all snapshot being released. 
+            // Otherwise compute nodes may meet error when calling `FetchDisaggPages` on write nodes.
             if (context->getSharedContextDisagg()->wn_snapshot_manager->getActiveSnapshotCount() == 0)
             {
                 LOG_INFO(log, "All disagg snapshots have finished after {}ms", elapsed_ms);
