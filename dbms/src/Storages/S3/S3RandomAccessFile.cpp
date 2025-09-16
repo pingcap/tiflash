@@ -24,10 +24,9 @@
 #include <Storages/S3/S3RandomAccessFile.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <common/likely.h>
+#include <common/logger_useful.h>
 
 #include <optional>
-
-#include "common/logger_useful.h"
 
 namespace ProfileEvents
 {
@@ -199,7 +198,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     if (!istr.ignore(offset_ - cur_offset))
     {
         auto state = istr.rdstate();
-        LOG_ERROR(
+        LOG_WARNING(
             log,
             "Cannot ignore from istream, state=0x{:02X}, errno={} errmsg={} cost={}ns",
             state,
@@ -263,7 +262,7 @@ bool S3RandomAccessFile::initialize()
         if (!outcome.IsSuccess())
         {
             auto el = sw_get_object.elapsedSeconds();
-            LOG_ERROR(
+            LOG_WARNING(
                 log,
                 "S3 GetObject failed: {}, retry={}/{}, key={}, elapsed{}={:.3f}s",
                 S3::S3ErrorMessage(outcome.GetError()),
