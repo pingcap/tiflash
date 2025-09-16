@@ -213,7 +213,8 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
         SCOPE_EXIT({
             auto elapsed_seconds = sw.elapsedSeconds();
             scan_context->disagg_build_batch_cop_tasks_ms += elapsed_seconds * 1000;
-            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_batch_cop_tasks).Observe(elapsed_seconds);
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_batch_cop_tasks)
+                .Observe(elapsed_seconds);
         });
         auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
         scan_context->setRegionNumOfCurrentInstance(region_num);
