@@ -147,6 +147,7 @@ std::unique_ptr<Aggregator::Params> buildParams(
         spill_config,
         context.getSettingsRef().max_block_size,
         settings.hashagg_use_magic_hash,
+        settings.hashagg_use_phmap,
         has_collator ? reordered_collators : TiDB::dummy_collators);
 }
 
