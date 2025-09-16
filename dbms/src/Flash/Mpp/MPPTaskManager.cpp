@@ -102,7 +102,7 @@ void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & cont
     UInt64 graceful_wait_shutdown_timeout_ms = graceful_wait_shutdown_timeout * 1000;
     Stopwatch watch;
     // The first sleep before checking to reduce the chance of missing MPP tasks that are still in the process of being dispatched
-    std::this_thread::sleep_for(std::chrono::seconds(3));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
     bool all_tasks_finished = false;
     while (true)
     {
