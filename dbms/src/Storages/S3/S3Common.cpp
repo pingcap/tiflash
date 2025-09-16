@@ -723,7 +723,7 @@ void downloadFileByS3RandomAccessFile(
     const String & remote_fname)
 {
     Stopwatch sw;
-    S3RandomAccessFile file(client, remote_fname);
+    S3RandomAccessFile file(client, remote_fname, nullptr);
     Aws::OFStream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
     RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} fail: {}", local_fname, strerror(errno));
 

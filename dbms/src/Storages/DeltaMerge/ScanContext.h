@@ -62,6 +62,24 @@ public:
 
     std::atomic<uint64_t> disagg_read_cache_hit_size{0};
     std::atomic<uint64_t> disagg_read_cache_miss_size{0};
+    std::atomic<uint64_t> disagg_build_read_tasks_ms{0};
+    std::atomic<uint64_t> disagg_build_read_tasks_backoff_num{0};
+    std::atomic<uint64_t> disagg_establish_disagg_task_ms{0};
+    std::atomic<uint64_t> disagg_resolve_lock_ms{0};
+    std::atomic<uint64_t> disagg_parse_read_task_ms{0};
+    std::atomic<uint64_t> disagg_build_batch_cop_tasks_ms{0};
+    std::atomic<uint64_t> disagg_page_hit_count{0};
+    std::atomic<uint64_t> disagg_page_miss_count{0};
+    std::atomic<uint64_t> disagg_s3file_hit_count{0};
+    std::atomic<uint64_t> disagg_s3file_miss_count{0};
+    std::atomic<uint64_t> disagg_s3file_get_object_count{0};
+    std::atomic<uint64_t> disagg_s3file_get_object_ms{0};
+    std::atomic<uint64_t> disagg_s3file_read_count{0};
+    std::atomic<uint64_t> disagg_s3file_read_time_ms{0};
+    std::atomic<uint64_t> disagg_s3file_read_bytes{0};
+    std::atomic<uint64_t> disagg_s3file_seek_count{0};
+    std::atomic<uint64_t> disagg_s3file_seek_time_ms{0};
+    std::atomic<uint64_t> disagg_s3file_seek_bytes{0};
 
     // num segments, num tasks
     std::atomic<uint64_t> num_segments{0};

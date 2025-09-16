@@ -394,10 +394,12 @@ RNLocalPageCache::OccupySpaceResult RNLocalPageCache::occupySpace(
         if (const auto & page_entry = storage->getEntry(keys[i], snapshot); page_entry.isValid())
         {
             scan_context->disagg_read_cache_hit_size += page_sizes[i];
+            scan_context->disagg_page_hit_count++;
             continue;
         }
         missing_ids.push_back(pages[i]);
         scan_context->disagg_read_cache_miss_size += page_sizes[i];
+        scan_context->disagg_page_miss_count++;
     }
     GET_METRIC(tiflash_storage_remote_cache, type_page_miss).Increment(missing_ids.size());
     GET_METRIC(tiflash_storage_remote_cache, type_page_hit).Increment(pages.size() - missing_ids.size());

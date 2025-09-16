@@ -45,7 +45,10 @@ class S3RandomAccessFile final : public RandomAccessFile
 public:
     static RandomAccessFilePtr create(const String & remote_fname);
 
-    S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_ptr_, const String & remote_fname_);
+    S3RandomAccessFile(
+        std::shared_ptr<TiFlashS3Client> client_ptr_,
+        const String & remote_fname_,
+        const DM::ScanContextPtr & scan_context_);
 
     // Can only seek forward.
     off_t seek(off_t offset, int whence) override;
@@ -106,6 +109,7 @@ private:
 
     Int32 cur_retry = 0;
     static constexpr Int32 max_retry = 3;
+    DM::ScanContextPtr scan_context;
 };
 
 using S3RandomAccessFilePtr = std::shared_ptr<S3RandomAccessFile>;
