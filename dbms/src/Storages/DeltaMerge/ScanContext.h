@@ -67,6 +67,10 @@ public:
     std::atomic<uint64_t> disagg_resolve_lock_ms{0};
     std::atomic<uint64_t> disagg_parse_read_task_ms{0};
     std::atomic<uint64_t> disagg_build_batch_cop_tasks_ms{0};
+    std::atomic<uint64_t> disagg_page_hit_count{0};
+    std::atomic<uint64_t> disagg_page_miss_count{0};
+    std::atomic<uint64_t> disagg_s3file_hit_count{0};
+    std::atomic<uint64_t> disagg_s3file_miss_count{0};
     std::atomic<uint64_t> disagg_s3file_get_object_count{0};
     std::atomic<uint64_t> disagg_s3file_get_object_ms{0};
     std::atomic<uint64_t> disagg_s3file_read_count{0};

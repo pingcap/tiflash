@@ -130,6 +130,10 @@ String ScanContext::toJson() const
         json->set("disagg_resolve_lock_ms", disagg_resolve_lock_ms.load());
         json->set("disagg_parse_read_task_ms", disagg_parse_read_task_ms.load());
         json->set("disagg_build_batch_cop_tasks_ms", disagg_build_batch_cop_tasks_ms.load());
+        json->set("disagg_page_hit_count", disagg_page_hit_count.load());
+        json->set("disagg_page_miss_count", disagg_page_miss_count.load());
+        json->set("disagg_s3file_hit_count", disagg_s3file_hit_count.load());
+        json->set("disagg_s3file_miss_count", disagg_s3file_miss_count.load());
         json->set("disagg_s3file_get_object_ms", disagg_s3file_get_object_ms.load());
         json->set("disagg_s3file_get_object_count", disagg_s3file_get_object_count.load());
         json->set("disagg_s3file_read_time_ms", disagg_s3file_read_time_ms.load());
