@@ -189,6 +189,7 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Contex
             if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
                 throw;
 
+            scan_context->disagg_build_read_tasks_backoff_num += 1;
             Stopwatch w_backoff;
             SCOPE_EXIT({ total_backoff_seconds += w_backoff.elapsedSeconds(); });
 

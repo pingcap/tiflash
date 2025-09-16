@@ -63,6 +63,7 @@ public:
     std::atomic<uint64_t> disagg_read_cache_hit_size{0};
     std::atomic<uint64_t> disagg_read_cache_miss_size{0};
     std::atomic<uint64_t> disagg_build_read_tasks_ms{0};
+    std::atomic<uint64_t> disagg_build_read_tasks_backoff_num{0};
     std::atomic<uint64_t> disagg_establish_disagg_task_ms{0};
     std::atomic<uint64_t> disagg_resolve_lock_ms{0};
     std::atomic<uint64_t> disagg_parse_read_task_ms{0};

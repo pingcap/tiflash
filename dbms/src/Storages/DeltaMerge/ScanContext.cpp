@@ -121,11 +121,12 @@ String ScanContext::toJson() const
     json->set("query_read_bytes", query_read_bytes.load());
     json->set("mvcc_read_bytes", mvcc_read_bytes.load());
 
-    if (disagg_read_cache_hit_size.load() > 0 && disagg_read_cache_miss_size.load() > 0)
+    if (disagg_read_cache_hit_size.load() > 0 || disagg_read_cache_miss_size.load() > 0)
     {
         json->set("disagg_cache_hit_size", disagg_read_cache_hit_size.load());
         json->set("disagg_cache_miss_size", disagg_read_cache_miss_size.load());
         json->set("disagg_build_read_tasks_ms", disagg_build_read_tasks_ms.load());
+        json->set("disagg_build_read_tasks_backoff_num", disagg_build_read_tasks_backoff_num.load());
         json->set("disagg_establish_disagg_task_ms", disagg_establish_disagg_task_ms.load());
         json->set("disagg_resolve_lock_ms", disagg_resolve_lock_ms.load());
         json->set("disagg_parse_read_task_ms", disagg_parse_read_task_ms.load());

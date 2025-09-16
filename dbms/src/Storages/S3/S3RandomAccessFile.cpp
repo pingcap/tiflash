@@ -27,6 +27,8 @@
 
 #include <optional>
 
+#include "common/logger_useful.h"
+
 namespace ProfileEvents
 {
 extern const Event S3GetObject;
@@ -108,7 +110,7 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     if (gcount < size && (!istr.eof() || cur_offset + gcount != static_cast<size_t>(content_length)))
     {
         auto state = istr.rdstate();
-        LOG_ERROR(
+        LOG_WARNING(
             log,
             "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} errno={} "
             "errmsg={} cost={}ns",
@@ -134,7 +136,7 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     {
         LOG_DEBUG(
             log,
-            "gcount={} cur_offset={} content_length={} cost={}s",
+            "gcount={} cur_offset={} content_length={} cost={:.3f}s",
             gcount,
             cur_offset,
             content_length,
@@ -218,7 +220,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     {
         LOG_DEBUG(
             log,
-            "ignore_count={} cur_offset={} content_length={} cost={}s",
+            "ignore_count={} cur_offset={} content_length={} cost={:.3f}s",
             offset_ - cur_offset,
             cur_offset,
             content_length,
