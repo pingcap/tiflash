@@ -964,7 +964,7 @@ grpc::Status FlashService::EstablishDisaggTask(
     auto logger = Logger::get(task_id);
 
     auto record_other_error = [&](int flash_err_code, const String & err_msg) {
-        // Note: We intentinally do not remove the snapshot from the SnapshotManager
+        // Note: We intentially do not remove the snapshot from the SnapshotManager
         // when this request is failed. Consider this case:
         // EstablishDisagg for A: ---------------- Failed --------------------------------------------- Cleanup Snapshot for A
         // EstablishDisagg for B: - Failed - RN retry EstablishDisagg for A+B -- InsertSnapshot for A+B ----- FetchPages (Boom!)
@@ -1133,9 +1133,16 @@ grpc::Status FlashService::FetchDisaggPages(
             task.seg_task,
             read_ids,
             context->getSettingsRef());
-        stream_writer->syncWrite();
+        auto summary = stream_writer->syncWrite();
 
-        LOG_INFO(logger, "FetchDisaggPages respond finished, task_id={}", task_id);
+        LOG_INFO(
+            logger,
+            "FetchDisaggPages respond finished, keyspace={} table_id={} segment_id={} num_fetch={} summary={}",
+            keyspace_id,
+            request->table_id(),
+            request->segment_id(),
+            request->page_ids_size(),
+            summary);
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)
