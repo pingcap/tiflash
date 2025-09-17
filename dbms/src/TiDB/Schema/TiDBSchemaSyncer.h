@@ -113,7 +113,6 @@ private:
         Getter & getter,
         bool force,
         const char * next_action);
-
 };
 
 } // namespace DB
