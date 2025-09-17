@@ -16,18 +16,10 @@
 
 #include <Interpreters/Context_fwd.h>
 #include <Storages/KVStore/Types.h>
+#include <TiDB/Schema/TiDB_fwd.h>
 #include <common/logger_useful.h>
 
 #include <memory>
-#include <vector>
-
-namespace TiDB
-{
-struct DBInfo;
-using DBInfoPtr = std::shared_ptr<DBInfo>;
-struct TableInfo;
-using TableInfoPtr = std::shared_ptr<TableInfo>;
-} // namespace TiDB
 
 namespace DB
 {
@@ -48,10 +40,10 @@ public:
      */
     virtual bool syncTableSchema(Context & context, TableID physical_table_id) = 0;
 
-    virtual void reset() = 0;
-
-    virtual TiDB::DBInfoPtr getDBInfoByName(const String & database_name) = 0;
-
+    /*
+     * When the table is physically dropped from the TiFlash node, use this method to unregister
+     * the TableID mapping.
+     */
     virtual void removeTableID(TableID table_id) = 0;
 
     /**
@@ -59,6 +51,14 @@ public:
       * When a keyspace is removed, drop all its databases and tables.
       */
     virtual void dropAllSchema(Context & context) = 0;
+
+    /*
+     * Clear all states.
+     * just for testing restart
+     */
+    virtual void reset() = 0;
+
+    virtual TiDB::DBInfoPtr getDBInfoByName(const String & database_name) = 0;
 };
 
 using SchemaSyncerPtr = std::shared_ptr<SchemaSyncer>;
