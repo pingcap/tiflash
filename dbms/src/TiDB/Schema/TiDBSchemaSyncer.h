@@ -36,28 +36,28 @@ class TiDBSchemaSyncer : public SchemaSyncer
     using NameMapper = std::conditional_t<mock_mapper, MockSchemaNameMapper, SchemaNameMapper>;
 
 private:
+    // The KV cluster to get schema info from TiKV cluster
     KVClusterPtr cluster;
 
     const KeyspaceID keyspace_id;
-
-    Int64 cur_version;
-
-    // Ensure `syncSchemas` will only executed by one thread.
-    std::mutex mutex_for_sync_schema;
-
     LoggerPtr log;
 
-    DatabaseInfoCache databases;
-    TableIDMap table_id_map;
+    // Ensure `syncSchemasByGetter` will only executed by one thread.
+    std::mutex mutex_for_sync_schema;
+    // The current applied schema version. Should only accessed in `syncSchemasByGetter` and protected by `mutex_for_sync_schema`
+    Int64 cur_version;
 
-    Getter createSchemaGetter(KeyspaceID keyspace_id);
+    // Cache of DatabaseID -> DatabaseInfo in this keyspace
+    DatabaseInfoCache databases;
+    // Cache of TableIDMap in this keyspace
+    TableIDMap table_id_map;
 
 public:
     TiDBSchemaSyncer(KVClusterPtr cluster_, KeyspaceID keyspace_id_)
         : cluster(std::move(cluster_))
         , keyspace_id(keyspace_id_)
-        , cur_version(0)
         , log(Logger::get(fmt::format("keyspace={}", keyspace_id)))
+        , cur_version(0)
         , table_id_map(log)
     {}
 
@@ -68,7 +68,7 @@ public:
 
     /*
      * Sync the table's inner schema(like add columns, modify columns, etc) for given physical_table_id
-     * This function will be called concurrently when the schema not matches during reading or writing
+     * This function could be called concurrently when the schema not matches during reading or writing
      */
     bool syncTableSchema(Context & context, TableID physical_table_id) override;
 
@@ -78,11 +78,35 @@ public:
      */
     void removeTableID(TableID table_id) override { table_id_map.erase(table_id); }
 
+    /**
+      * Drop all schema of a given keyspace.
+      * When a keyspace is removed, drop all its databases and tables.
+      */
+    void dropAllSchema(Context & context) override;
+
+    /*
+     * Clear all states.
+     * just for testing restart
+     */
+    void reset() override
+    {
+        databases.clear();
+        table_id_map.clear();
+        cur_version = 0;
+    }
+
+    TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
+    {
+        return databases.getDBInfoByName(database_name);
+    }
+
 private:
-    Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 latest_version);
+    Getter createSchemaGetter(KeyspaceID keyspace_id);
+    bool syncSchemasByGetter(Context & context, Getter & getter);
+
+    Int64 syncSchemaDiffs(Context & context, Getter & getter, Int64 before_sync_diff_version, Int64 latest_version);
     Int64 syncAllSchemas(Context & context, Getter & getter, Int64 version);
 
-    bool syncSchemasByGetter(Context & context, Getter & getter);
     std::tuple<bool, String> trySyncTableSchema(
         Context & context,
         TableID physical_table_id,
@@ -90,25 +114,6 @@ private:
         bool force,
         const char * next_action);
 
-    TiDB::DBInfoPtr getDBInfoByName(const String & database_name) override
-    {
-        return databases.getDBInfoByName(database_name);
-    }
-
-    /**
-      * Drop all schema of a given keyspace.
-      * When a keyspace is removed, drop all its databases and tables.
-      */
-    void dropAllSchema(Context & context) override;
-
-    // clear all states.
-    // just for testing restart
-    void reset() override
-    {
-        databases.clear();
-        table_id_map.clear();
-        cur_version = 0;
-    }
 };
 
 } // namespace DB
