@@ -334,6 +334,7 @@ struct ProxyStateMachine
         // It means that in tiflash-proxy
         // * rpc server for handling raft command is started
         // * http status server is started
+        // https://github.com/pingcap/tidb-engine-ext/blob/74d6916e0aee34783cf3835b6fb93d40f32bb889/proxy_components/proxy_server/src/run.rs#L241-L265
         tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
         while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));
