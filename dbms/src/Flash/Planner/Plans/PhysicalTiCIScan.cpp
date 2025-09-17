@@ -80,7 +80,7 @@ PhysicalTiCIScan::PhysicalTiCIScan(
     const String & req_id,
     const TiCIScan & tici_scan_,
     const Block & sample_block_)
-    : PhysicalLeaf(executor_id_, PlanType::TableScan, schema_, FineGrainedShuffle{}, req_id)
+    : PhysicalLeaf(executor_id_, PlanType::TiCiScan, schema_, FineGrainedShuffle{}, req_id)
     , tici_scan(tici_scan_)
     , sample_block(sample_block_)
 {}

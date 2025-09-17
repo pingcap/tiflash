@@ -41,6 +41,10 @@ public:
         return tici_scan->idx_scan().fts_query_info().match_expr();
     }
 
+    bool isCount() const { return is_count_agg; }
+
+    void setIsCountAgg(bool v) { is_count_agg = v; }
+
 private:
     const tipb::Executor * tici_scan;
     [[maybe_unused]] String executor_id;
@@ -50,5 +54,6 @@ private:
     [[maybe_unused]] tipb::FTSQueryType query_type;
     const TableShardInfos shard_infos;
     const int limit;
+    bool is_count_agg = false;
 };
 } // namespace DB

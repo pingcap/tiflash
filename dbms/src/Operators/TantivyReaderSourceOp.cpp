@@ -31,13 +31,22 @@ TantivyReaderSourceOp::TantivyReaderSourceOp(
     const NamesAndTypes & return_columns,
     const UInt64 & limit,
     const UInt64 & read_ts,
-    const google::protobuf::RepeatedPtrField<tipb::Expr> & expr)
+    const google::protobuf::RepeatedPtrField<tipb::Expr> & expr,
+    bool is_count)
     : SourceOp(exec_context_, req_id)
 {
     setHeader(Block(return_columns));
 
-    input = std::make_shared<
-        TS::TantivyInputStream>(log, table_id, index_id, query_shard_infos, return_columns, limit, read_ts, expr);
+    input = std::make_shared<TS::TantivyInputStream>(
+        log,
+        table_id,
+        index_id,
+        query_shard_infos,
+        return_columns,
+        limit,
+        read_ts,
+        expr,
+        is_count);
 }
 
 String TantivyReaderSourceOp::getName() const

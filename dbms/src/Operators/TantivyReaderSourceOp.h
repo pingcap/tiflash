@@ -37,7 +37,8 @@ public:
         const NamesAndTypes & return_columns,
         const UInt64 & limit,
         const UInt64 & read_ts,
-        const google::protobuf::RepeatedPtrField<tipb::Expr> & expr);
+        const google::protobuf::RepeatedPtrField<tipb::Expr> & expr,
+        bool is_count);
 
     String getName() const override;
 

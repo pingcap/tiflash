@@ -82,7 +82,8 @@ void StorageTantivy::read(
         return_columns,
         tici_scan.getLimit(),
         context.getSettingsRef().read_tso,
-        tici_scan.getMatchExpr()));
+        tici_scan.getMatchExpr(),
+        tici_scan.isCount()));
 }
 
 void StorageTantivy::splitRemoteReadAndLocalRead()
