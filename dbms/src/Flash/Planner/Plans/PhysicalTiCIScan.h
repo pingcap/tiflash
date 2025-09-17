@@ -34,6 +34,8 @@ public:
         const TiCIScan & tici_scan_,
         const Block & sample_block_);
 
+    void setIsCountAgg(bool v) { tici_scan.setIsCountAgg(v); }
+
     void finalizeImpl(const Names & parent_require) override;
 
     const Block & getSampleBlock() const override;

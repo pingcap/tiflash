@@ -44,7 +44,8 @@ public:
         NamesAndTypes return_columns_,
         UInt64 limit_,
         UInt64 read_ts_,
-        google::protobuf::RepeatedPtrField<tipb::Expr> match_expr_)
+        google::protobuf::RepeatedPtrField<tipb::Expr> match_expr_,
+        bool is_count)
         : log(log_)
         , table_id(table_id_)
         , index_id(index_id_)
@@ -52,6 +53,7 @@ public:
         , return_columns(return_columns_)
         , limit(limit_)
         , read_ts(read_ts_)
+        , is_count(is_count)
     {
         FmtBuffer buf;
         buf.joinStr(
@@ -81,14 +83,14 @@ public:
             return {};
         }
 
-        Block ret = readFromS3(processed_shard);
+        Block ret = readFromS3(processed_shard, is_count);
         processed_shard++;
         done = processed_shard >= query_shard_infos.size();
         return ret;
     }
 
 protected:
-    Block readFromS3(size_t processing)
+    Block readFromS3(size_t processing, bool is_count)
     {
         auto return_fields = getFields(return_columns);
         auto & shard_info = query_shard_infos[processing];
@@ -96,7 +98,10 @@ protected:
         auto key_ranges = getKeyRanges(shard_info.key_ranges);
 
         auto search_param = SearchParam{static_cast<size_t>(limit)};
-        rust::Vec<IdDocument> documents = search(
+        if (is_count)
+            return_fields = {};
+
+        SearchResult search_result = search(
             {
                 .table_id = table_id,
                 .index_id = index_id,
@@ -110,6 +115,26 @@ protected:
             read_ts);
 
         Block res(return_columns);
+        if (is_count)
+        {
+            if (search_result.count == 0)
+            {
+                return res;
+            }
+            // Construct const columns with search_result.count items, only used by count(*)
+            for (auto & name_and_type : return_columns)
+            {
+                auto type_default_value = name_and_type.type->getDefault();
+                auto col = name_and_type.type->createColumnConst(
+                    static_cast<size_t>(search_result.count),
+                    type_default_value);
+                res.getByName(name_and_type.name).column = std::move(col);
+            }
+            return res;
+        }
+
+
+        auto documents = search_result.rows;
         if (documents.empty())
         {
             return res;
@@ -165,6 +190,7 @@ private:
     UInt64 limit;
     UInt64 read_ts;
     ::Expr match_expr;
+    bool is_count;
 
     size_t processed_shard = 0;
 
