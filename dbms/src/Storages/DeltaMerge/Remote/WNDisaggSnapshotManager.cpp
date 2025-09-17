@@ -46,6 +46,27 @@ bool WNDisaggSnapshotManager::unregisterSnapshotIfEmpty(const DisaggTaskId & tas
     return unregisterSnapshot(task_id);
 }
 
+<<<<<<< HEAD
+=======
+bool WNDisaggSnapshotManager::unregisterSnapshot(const DisaggTaskId & task_id)
+{
+    return snapshots.withExclusive([&](auto & snapshots) {
+        if (auto iter = snapshots.find(task_id); iter != snapshots.end())
+        {
+            LOG_INFO(log, "Unregister Disaggregated Snapshot, task_id={}", task_id);
+            snapshots.erase(iter);
+            return true;
+        }
+        return false;
+    });
+}
+
+size_t WNDisaggSnapshotManager::getActiveSnapshotCount() const
+{
+    return snapshots.withShared([&](auto & snapshots) { return snapshots.size(); });
+}
+
+>>>>>>> ff34ccca61 (Support graceful shutdown in WN (#10430))
 void WNDisaggSnapshotManager::clearExpiredSnapshots()
 {
     Timepoint now = Clock::now();
