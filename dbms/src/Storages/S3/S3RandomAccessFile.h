@@ -51,9 +51,9 @@ public:
         const DM::ScanContextPtr & scan_context_);
 
     // Can only seek forward.
-    off_t seek(off_t offset, int whence) override;
+    [[nodiscard]] off_t seek(off_t offset, int whence) override;
 
-    ssize_t read(char * buf, size_t size) override;
+    [[nodiscard]] ssize_t read(char * buf, size_t size) override;
 
     // Note that this will return "{S3Client.bucket_name}/{remote_fname}"
     std::string getFileName() const override;
@@ -61,7 +61,7 @@ public:
     // Return "remote_fname"
     std::string getInitialFileName() const override;
 
-    ssize_t pread(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
+    [[nodiscard]] ssize_t pread(char * /*buf*/, size_t /*size*/, off_t /*offset*/) const override
     {
         throw Exception("S3RandomAccessFile not support pread", ErrorCodes::NOT_IMPLEMENTED);
     }

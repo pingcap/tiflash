@@ -78,7 +78,7 @@ public:
             res.insert({name_type.type->createColumn(), name_type.type, name_type.name});
 
         return Nested::flatten(res);
-    };
+    }
 
 protected:
     Block readImpl() override;
@@ -101,7 +101,10 @@ private:
             , compressed(plain)
         {
             if (offset)
-                plain.seek(offset);
+            {
+                auto ret = plain.seek(offset);
+                RUNTIME_CHECK_MSG(ret >= 0, "Failed to seek in file, ret={} path={}", ret, data_path);
+            }
         }
 
         ReadBufferFromFile plain;

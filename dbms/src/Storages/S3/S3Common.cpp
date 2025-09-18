@@ -733,7 +733,7 @@ void downloadFileByS3RandomAccessFile(
     while (true)
     {
         auto n = file.read(buf, sizeof(buf));
-        RUNTIME_CHECK(n >= 0, remote_fname);
+        RUNTIME_CHECK_MSG(n >= 0, "Failed to download file, n={} key={} local_name={}", n, remote_fname, local_fname);
         if (n == 0)
         {
             break;

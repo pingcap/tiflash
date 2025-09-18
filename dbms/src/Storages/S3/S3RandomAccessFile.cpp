@@ -56,7 +56,7 @@ S3RandomAccessFile::S3RandomAccessFile(
     , scan_context(scan_context_)
 {
     RUNTIME_CHECK(client_ptr != nullptr);
-    RUNTIME_CHECK(initialize(), remote_fname);
+    RUNTIME_CHECK_MSG(initialize(), "Open S3 file for read fail, key={}", remote_fname);
 }
 
 std::string S3RandomAccessFile::getFileName() const

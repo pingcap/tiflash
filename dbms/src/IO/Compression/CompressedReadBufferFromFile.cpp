@@ -65,7 +65,16 @@ void CompressedReadBufferFromFileImpl<has_legacy_checksum>::seek(
     }
     else
     {
-        file_in.seek(offset_in_compressed_file);
+        auto ret = file_in.seek(offset_in_compressed_file);
+        if (unlikely(ret < 0))
+        {
+            throw Exception(
+                ErrorCodes::LOGICAL_ERROR,
+                "Seek in compressed file failed, ret={} offset_in_compressed_file={} offset_in_decompressed_block={}",
+                ret,
+                file_in.getFileName(),
+                offset_in_compressed_file);
+        }
 
         bytes += offset();
         nextImpl();
