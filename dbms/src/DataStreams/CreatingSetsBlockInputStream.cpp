@@ -146,7 +146,7 @@ void CreatingSetsBlockInputStream::createAll()
 
         if (!exception_from_workers.empty())
         {
-            LOG_INFO(
+            LOG_WARNING(
                 log,
                 "Creating all tasks takes {} sec with exception and rethrow the first of total {} exceptions",
                 watch.elapsedSeconds(),
@@ -276,7 +276,7 @@ void CreatingSetsBlockInputStream::createOne(SubqueryForSet & subquery)
         auto error_message = getCurrentExceptionMessage(false, true);
         if (subquery.join)
             subquery.join->meetError(error_message);
-        LOG_INFO(log, "{} throw exception: {} In {} sec. ", gen_log_msg(), error_message, watch.elapsedSeconds());
+        LOG_WARNING(log, "{} throw exception: {} In {} sec. ", gen_log_msg(), error_message, watch.elapsedSeconds());
         /// createOne is concurrently running in multiple threads, call cancel here to stop other threads
         /// need to use cancel(true) here because the other threads may be blocked in `ExchangeReceiver::nextResult`,
         /// cancel(true) will wake up these threads
