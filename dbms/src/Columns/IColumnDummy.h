@@ -45,6 +45,7 @@ public:
     virtual MutableColumnPtr cloneDummy(size_t s_) const = 0;
 
     MutableColumnPtr cloneResized(size_t s_) const override { return cloneDummy(s_); }
+    size_t capacity() const override { return s; }
     size_t size() const override { return s; }
     void insertDefault() override { ++s; }
 

@@ -91,18 +91,51 @@ ColumnFile::AppendResult ColumnFileInMemory::append(
         return AppendResult{false, 0};
 
     size_t new_alloc_block_bytes = 0;
+    size_t max_capacity = 0;
     for (size_t i = 0; i < cache->block.columns(); ++i)
     {
         const auto & col = data.getByPosition(i).column;
         const auto & cache_col = *cache->block.getByPosition(i).column;
         auto * mutable_cache_col = const_cast<IColumn *>(&cache_col);
         size_t alloc_bytes = mutable_cache_col->allocatedBytes();
+        if (mutable_cache_col->capacity() < mutable_cache_col->size() + limit)
+        {
+            // If the column is not enough, we reserve more space by 1.5 factor
+            mutable_cache_col->reserveWithStrategy(
+                mutable_cache_col->size() + limit,
+                IColumn::ReserveStrategy::ScaleFactor1_5);
+        }
         mutable_cache_col->insertRangeFrom(*col, offset, limit);
+        max_capacity = std::max(max_capacity, mutable_cache_col->capacity());
         new_alloc_block_bytes += mutable_cache_col->allocatedBytes() - alloc_bytes;
     }
 
     rows += limit;
     bytes += data_bytes;
+    // TODO: Remove this logging
+    LOG_INFO(
+        Logger::get(),
+        "Append rows to ColumnFileInMemory, new_rows={} new_bytes={} new_alloc_bytes={} max_capacity={} total_rows={} "
+        "total_bytes={}",
+        limit - offset,
+        data_bytes,
+        new_alloc_block_bytes,
+        max_capacity,
+        rows,
+        bytes);
+    for (size_t i = 0; i < cache->block.columns(); ++i)
+    {
+        const auto & cache_col = *cache->block.getByPosition(i).column;
+        LOG_INFO(
+            Logger::get(""),
+            "col i={} name={} type={} rows={} bytes={} alloc_bytes={}",
+            i,
+            cache->block.getByPosition(i).name,
+            cache_col.getName(),
+            cache_col.size(),
+            cache_col.byteSize(),
+            cache_col.allocatedBytes());
+    }
     return AppendResult{true, new_alloc_block_bytes};
 }
 
