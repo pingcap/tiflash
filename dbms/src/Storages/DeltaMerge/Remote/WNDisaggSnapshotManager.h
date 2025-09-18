@@ -93,6 +93,8 @@ public:
 
     bool unregisterSnapshotIfEmpty(const DisaggTaskId & task_id);
 
+    size_t getActiveSnapshotCount() const;
+
     DISALLOW_COPY_AND_MOVE(WNDisaggSnapshotManager);
 
 private:
