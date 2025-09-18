@@ -21,6 +21,8 @@
 
 #include <ext/scope_guard.h>
 
+#include "common/logger_useful.h"
+
 namespace DB::DM
 {
 class SegmentReader
@@ -85,7 +87,7 @@ private:
         }
         catch (DB::Exception & e)
         {
-            LOG_ERROR(
+            LOG_WARNING(
                 merged_task != nullptr ? merged_task->getCurrentLogger() : log,
                 "ErrMsg: {} StackTrace {}",
                 e.message(),
@@ -97,7 +99,7 @@ private:
         }
         catch (std::exception & e)
         {
-            LOG_ERROR(log, "ErrMsg: {}", e.what());
+            LOG_WARNING(log, "ErrMsg: {}", e.what());
             if (merged_task != nullptr)
             {
                 merged_task->setException(DB::Exception(e.what()));

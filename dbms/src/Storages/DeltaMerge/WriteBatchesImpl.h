@@ -19,6 +19,8 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 
+#include "common/logger_useful.h"
+
 namespace DB
 {
 namespace DM
@@ -83,7 +85,7 @@ struct WriteBatches : private boost::noncopyable
                 if (!wb.empty())
                 {
                     StackTrace trace;
-                    LOG_ERROR(
+                    LOG_WARNING(
                         Logger::get(),
                         "!!!=========================Modifications in {} haven't persisted=========================!!! "
                         "Stack trace: {}",

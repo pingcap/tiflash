@@ -301,27 +301,27 @@ catch (const LockException & e)
 }
 catch (const TiFlashException & e)
 {
-    LOG_ERROR(log, "{}\n{}", e.standardText(), e.getStackTrace().toString());
+    LOG_WARNING(log, "{}\n{}", e.standardText(), e.getStackTrace().toString());
     recordError(grpc::StatusCode::INTERNAL, e.standardText());
 }
 catch (const Exception & e)
 {
-    LOG_ERROR(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
+    LOG_WARNING(log, "DB Exception: {}\n{}", e.message(), e.getStackTrace().toString());
     recordError(e.code(), e.message());
 }
 catch (const pingcap::Exception & e)
 {
-    LOG_ERROR(log, "KV Client Exception: {}", e.message());
+    LOG_WARNING(log, "KV Client Exception: {}", e.message());
     recordError(e.code(), e.message());
 }
 catch (const std::exception & e)
 {
-    LOG_ERROR(log, "std exception: {}", e.what());
+    LOG_WARNING(log, "std exception: {}", e.what());
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, e.what());
 }
 catch (...)
 {
-    LOG_ERROR(log, "other exception");
+    LOG_WARNING(log, "other exception");
     recordError(ErrorCodes::UNKNOWN_EXCEPTION, "other exception");
 }
 
