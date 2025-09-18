@@ -269,6 +269,49 @@ try
 }
 CATCH
 
+TEST_P(S3FileTest, ReadAfterDel1)
+try
+{
+    const String key = "/a/b/c/file";
+    const size_t size = 5 * 1024 * 1024;
+    writeFile(key, size, WriteSettings{});
+    verifyFile(key, size);
+
+    // delete the file
+    DB::S3::deleteObject(*s3_client, key);
+
+    // try open the deleted file, should throw exception
+    ASSERT_ANY_THROW(S3RandomAccessFile file2(s3_client, key, nullptr););
+}
+CATCH
+
+TEST_P(S3FileTest, ReadAfterDel2)
+try
+{
+    // skip this test if using mocked s3 client
+    if (TiFlashTestEnv::isMockedS3Client())
+        return;
+
+    const String key = "/a/b/c/file";
+    const size_t size = 5 * 1024 * 1024;
+    writeFile(key, size, WriteSettings{});
+    verifyFile(key, size);
+
+    {
+        // First init the stream
+        S3RandomAccessFile file(s3_client, key, nullptr);
+
+        // then delete the file
+        DB::S3::deleteObject(*s3_client, key);
+
+        // try read from the stream
+        std::vector<char> buff(size, 0x00);
+        auto nread = file.read(buff.data(), buff.size());
+        ASSERT_LT(nread, 0);
+    }
+}
+CATCH
+
 TEST_P(S3FileTest, WriteRead)
 try
 {
@@ -405,7 +448,7 @@ try
 {
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
 
-    const size_t num_rows_write = 128;
+    const size_t num_rows_write = 512000;
 
     auto read_dmfile = [&](DMFilePtr dmf) {
         DMFileBlockInputStreamBuilder builder(dbContext());
@@ -432,13 +475,15 @@ try
     block_propertys.push_back(block_property2);
     auto parent_path = TiFlashStorageTestBasic::getTemporaryPath();
     DMFilePtr dmfile;
-    DMFileOID oid;
-    oid.store_id = 1;
-    oid.table_id = 1;
-    oid.file_id = std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())
-                      .time_since_epoch()
-                      .count();
-    oid.keyspace_id = keyspace_id;
+    DMFileOID oid{
+        .store_id = 1,
+        .keyspace_id = keyspace_id,
+        .table_id = 1,
+        .file_id
+        = static_cast<UInt64>(std::chrono::time_point_cast<std::chrono::milliseconds>(std::chrono::system_clock::now())
+                                  .time_since_epoch()
+                                  .count()),
+    };
 
     {
         // Prepare for write
@@ -471,6 +516,7 @@ try
     {
         auto local_files = dmfile->listFilesForUpload();
         data_store->putDMFile(dmfile, oid, /*remove_local*/ true);
+        // check the uploaded files size
         auto remote_files_with_size = listFiles(oid);
         ASSERT_EQ(local_files.size(), remote_files_with_size.size());
         for (const auto & fname : local_files)
@@ -479,15 +525,44 @@ try
             ASSERT_NE(itr, remote_files_with_size.end());
             uploaded_files.push_back(fname);
         }
-        LOG_TRACE(log, "remote_files_with_size => {}", remote_files_with_size);
+        LOG_INFO(log, "remote_files_with_size => {}", remote_files_with_size);
     }
     ASSERT_FALSE(std::filesystem::exists(local_dir));
     ASSERT_EQ(dmfile->path(), S3::S3Filename::fromDMFileOID(oid).toFullKeyWithPrefix());
     read_dmfile(dmfile);
 
-    auto dmfile_from_s3 = restoreDMFile(oid);
-    ASSERT_NE(dmfile_from_s3, nullptr);
-    read_dmfile(dmfile_from_s3);
+    {
+        // read dmfile stored on S3 indicated by `oid`
+        auto dmfile_from_s3 = restoreDMFile(oid);
+        ASSERT_NE(dmfile_from_s3, nullptr);
+        read_dmfile(dmfile_from_s3);
+    }
+
+    {
+        auto dmfile_from_s3 = restoreDMFile(oid);
+        ASSERT_NE(dmfile_from_s3, nullptr);
+        DMFileBlockInputStreamBuilder builder(dbContext());
+        auto stream = builder.build(
+            dmfile_from_s3,
+            *cols,
+            RowKeyRanges{RowKeyRange::newAll(false, 1)},
+            std::make_shared<ScanContext>());
+
+        // remove the file on S3 after stream is built
+        auto key = S3Filename::fromDMFileOID(oid).toFullKey();
+        S3::listPrefix(*s3_client, key, [&](const Aws::S3::Model::Object & obj)-> PageResult {
+            LOG_INFO(log, "delete key={}", obj.GetKey());
+            S3::deleteObject(*s3_client, obj.GetKey());
+            return PageResult{.num_keys = 1, .more = true};
+        });
+
+        ASSERT_INPUTSTREAM_COLS_UR(
+            stream,
+            Strings({DMTestEnv::pk_name}),
+            createColumns({
+                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
+            }));
+    }
 }
 CATCH
 
