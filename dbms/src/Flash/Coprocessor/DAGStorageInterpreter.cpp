@@ -375,9 +375,9 @@ void DAGStorageInterpreter::executeImpl(
     auto remote_requests = buildRemoteRequests(dag_context.scan_context_map[table_scan.getTableScanExecutorID()]);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
-        // This means RN is sending requests with stale region info, we simply reject the request
-        // and ask RN to send requests again with correct region info. When RN updates region info,
-        // RN may be sending requests to other WN.
+        // This means compute node is sending requests with stale region info, we simply reject the request
+        // and ask compute node to send requests again with correct region info. When compute node updates region info,
+        // compute node may be sending requests to other WN.
 
         RegionException::UnavailableRegions region_ids;
         for (const auto & info : context.getDAGContext()->retry_regions)
@@ -487,9 +487,9 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     auto remote_requests = buildRemoteRequests(dag_context.scan_context_map[table_scan.getTableScanExecutorID()]);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
-        // This means RN is sending requests with stale region info, we simply reject the request
-        // and ask RN to send requests again with correct region info. When RN updates region info,
-        // RN may be sending requests to other WN.
+        // This means compute node is sending requests with stale region info, we simply reject the request
+        // and ask compute node to send requests again with correct region info. When compute node updates region info,
+        // compute node may be sending requests to other write node.
 
         RegionException::UnavailableRegions region_ids;
         for (const auto & info : context.getDAGContext()->retry_regions)
@@ -879,7 +879,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (const LockException & e)
         {
-            // When this is a disaggregated read task on WN issued by RN, we need RN
+            // When this is a disaggregated read task on write node issued by compute node, we need compute node
             // to take care of retrying.
             if (context.getDAGContext()->is_disaggregated_task)
                 throw;
@@ -891,7 +891,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (const RegionException & e)
         {
-            // When this is a disaggregated read task on WN issued by RN, we need RN
+            // When this is a disaggregated read task on write node issued by compute node, we need compute node
             // to take care of retrying.
             if (context.getDAGContext()->is_disaggregated_task)
                 throw;

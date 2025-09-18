@@ -81,6 +81,11 @@ bool WNDisaggSnapshotManager::unregisterSnapshot(const DisaggTaskId & task_id)
     });
 }
 
+size_t WNDisaggSnapshotManager::getActiveSnapshotCount() const
+{
+    return snapshots.withShared([&](auto & snapshots) { return snapshots.size(); });
+}
+
 void WNDisaggSnapshotManager::clearExpiredSnapshots()
 {
     Timepoint now = Clock::now();
