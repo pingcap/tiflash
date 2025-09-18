@@ -109,8 +109,10 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     {
     case Aws::Utils::Logging::LogLevel::Off:
     case Aws::Utils::Logging::LogLevel::Fatal:
-    case Aws::Utils::Logging::LogLevel::Error:
         return Poco::Message::PRIO_ERROR;
+    case Aws::Utils::Logging::LogLevel::Error:
+        // treat AWS error log as warning level
+        return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:

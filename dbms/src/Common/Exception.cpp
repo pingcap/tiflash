@@ -22,8 +22,9 @@
 #include <common/demangle.h>
 #include <common/logger_useful.h>
 #include <cxxabi.h>
-#include <errno.h>
 #include <string.h>
+
+#include "Poco/Message.h"
 
 namespace DB
 {
@@ -67,11 +68,6 @@ void tryLogCurrentException(const char * log_name, const std::string & start_of_
     tryLogCurrentException(&Poco::Logger::get(log_name), start_of_message);
 }
 
-void tryLogCurrentFatalException(const char * log_name, const std::string & start_of_message)
-{
-    tryLogCurrentFatalException(&Poco::Logger::get(log_name), start_of_message);
-}
-
 #define TRY_LOG_CURRENT_EXCEPTION(logger, prio, start_of_message) \
     try                                                           \
     {                                                             \
@@ -96,14 +92,14 @@ void tryLogCurrentException(Poco::Logger * logger, const std::string & start_of_
     TRY_LOG_CURRENT_EXCEPTION(logger, Poco::Message::PRIO_ERROR, start_of_message);
 }
 
-void tryLogCurrentFatalException(const LoggerPtr & logger, const std::string & start_of_message)
+void tryLogCurrentFatalException(const char * log_name, const std::string & start_of_message)
 {
-    TRY_LOG_CURRENT_EXCEPTION(logger, Poco::Message::PRIO_FATAL, start_of_message);
+    TRY_LOG_CURRENT_EXCEPTION(&Poco::Logger::get(log_name), Poco::Message::PRIO_FATAL, start_of_message);
 }
 
-void tryLogCurrentFatalException(Poco::Logger * logger, const std::string & start_of_message)
+void tryLogCurrentWarningException(const LoggerPtr & logger, const std::string & start_of_message)
 {
-    TRY_LOG_CURRENT_EXCEPTION(logger, Poco::Message::PRIO_FATAL, start_of_message);
+    TRY_LOG_CURRENT_EXCEPTION(logger, Poco::Message::PRIO_WARNING, start_of_message);
 }
 
 #undef TRY_LOG_CURRENT_EXCEPTION
