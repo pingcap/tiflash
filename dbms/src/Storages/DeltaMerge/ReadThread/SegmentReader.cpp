@@ -21,8 +21,6 @@
 
 #include <ext/scope_guard.h>
 
-#include "common/logger_useful.h"
-
 namespace DB::DM
 {
 class SegmentReader

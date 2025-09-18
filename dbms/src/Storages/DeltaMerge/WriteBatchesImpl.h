@@ -19,8 +19,6 @@
 #include <Storages/Page/PageStorage.h>
 #include <Storages/Page/WriteBatchWrapperImpl.h>
 
-#include "common/logger_useful.h"
-
 namespace DB
 {
 namespace DM

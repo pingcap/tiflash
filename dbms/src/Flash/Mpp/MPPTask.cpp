@@ -43,8 +43,6 @@
 #include <ext/scope_guard.h>
 #include <magic_enum.hpp>
 
-#include "common/logger_useful.h"
-
 
 namespace DB
 {
