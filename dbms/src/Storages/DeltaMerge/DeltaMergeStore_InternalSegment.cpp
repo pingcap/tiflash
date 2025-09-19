@@ -715,8 +715,7 @@ void DeltaMergeStore::segmentEnsureStableLocalIndex(
     auto storage_snapshot = std::make_shared<StorageSnapshot>( //
         *dm_context.storage_pool,
         dm_context.getReadLimiter(),
-        dm_context.tracing_id,
-        /*snapshot_read*/ true);
+        dm_context.tracing_id);
 
     auto tracing_logger = log->getChild(getLogTracingId(dm_context));
 
@@ -1036,18 +1035,10 @@ void DeltaMergeStore::segmentEnsureDeltaLocalIndex(
     ColumnFileSetSnapshotPtr persisted_files_snap;
     if (auto lock = delta->getLock(); lock)
     {
-<<<<<<< HEAD
-        auto storage_snap = std::make_shared<StorageSnapshot>(
-            *storage_pool,
-            dm_context.getReadLimiter(),
-            dm_context.tracing_id,
-            /*snapshot_read*/ true);
-=======
         auto storage_snap = std::make_shared<StorageSnapshot>( //
             *storage_pool,
             dm_context.getReadLimiter(),
             dm_context.tracing_id);
->>>>>>> 34a302dd81 (PageStorage: Fix tiflash wn oom issue by introducing DeltaTreeOnlySnapshot (#10410))
         auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
         persisted_files_snap = delta->getPersistedFileSet()->createSnapshot(data_from_storage_snap);
     }

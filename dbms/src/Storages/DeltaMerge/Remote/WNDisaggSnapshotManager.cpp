@@ -68,11 +68,6 @@ bool WNDisaggSnapshotManager::unregisterSnapshotIfEmpty(const DisaggTaskId & tas
     return unregisterSnapshot(task_id);
 }
 
-<<<<<<< HEAD
-size_t WNDisaggSnapshotManager::getActiveSnapshotCount() const
-{
-    return snapshots.withShared([&](auto & snapshots) { return snapshots.size(); });
-=======
 bool WNDisaggSnapshotManager::unregisterSnapshot(const DisaggTaskId & task_id)
 {
     return snapshots.withExclusive([&](auto & snapshots) {
@@ -84,7 +79,11 @@ bool WNDisaggSnapshotManager::unregisterSnapshot(const DisaggTaskId & task_id)
         }
         return false;
     });
->>>>>>> 34a302dd81 (PageStorage: Fix tiflash wn oom issue by introducing DeltaTreeOnlySnapshot (#10410))
+}
+
+size_t WNDisaggSnapshotManager::getActiveSnapshotCount() const
+{
+    return snapshots.withShared([&](auto & snapshots) { return snapshots.size(); });
 }
 
 void WNDisaggSnapshotManager::clearExpiredSnapshots()

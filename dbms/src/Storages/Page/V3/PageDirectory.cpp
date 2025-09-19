@@ -2297,16 +2297,6 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
     LOG_IMPL(
         log,
         log_level,
-<<<<<<< HEAD
-        "After MVCC gc in memory [lowest_seq={}] "
-        "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
-        "[total_deref_counter={}] [all_del_entries={}]. "
-        "Still exist [snapshot_nums={}], [page_nums={}]. "
-        "Longest alive snapshot: [longest_alive_snapshot_time={}] "
-        "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
-        lowest_seq,
-        invalid_snapshot_nums,
-=======
         "After MVCC gc in memory, general_lowest_seq={} delta_tree_only_seq={}. "
         "clean invalid_snapshot_nums={} invalid_page_nums={} invalid_raft_pages_nums={} "
         "total_deref_counter={} all_del_entries={}. "
@@ -2315,7 +2305,6 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         snap_stat.general_seq,
         snap_stat.delta_tree_only_seq,
         snap_stat.num_invalid,
->>>>>>> 34a302dd81 (PageStorage: Fix tiflash wn oom issue by introducing DeltaTreeOnlySnapshot (#10410))
         invalid_page_nums,
         invalid_raft_pages_nums,
         total_deref_counter,

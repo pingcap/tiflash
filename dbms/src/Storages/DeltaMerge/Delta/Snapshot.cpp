@@ -39,24 +39,13 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(
     if (abandoned.load(std::memory_order_relaxed))
         return {};
 
-<<<<<<< HEAD
     auto snap = std::make_shared<DeltaValueSnapshot>(type, for_update);
     snap->delta = this->shared_from_this();
-=======
-    auto storage_snap = std::make_shared<StorageSnapshot>( //
-        *context.storage_pool,
-        context.getReadLimiter(),
-        context.tracing_id);
-    auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
-    auto persisted_snap = persisted_file_set->createSnapshot(data_from_storage_snap);
-    auto mem_snap = mem_table_set->createSnapshot(data_from_storage_snap, for_update);
->>>>>>> 34a302dd81 (PageStorage: Fix tiflash wn oom issue by introducing DeltaTreeOnlySnapshot (#10410))
 
     auto storage_snap = std::make_shared<StorageSnapshot>(
         *context.storage_pool,
         context.getReadLimiter(),
-        context.tracing_id,
-        /*snapshot_read*/ true);
+        context.tracing_id);
     auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
     snap->persisted_files_snap = persisted_file_set->createSnapshot(data_from_storage_snap);
     snap->mem_table_snap = mem_table_set->createSnapshot(data_from_storage_snap, for_update);
