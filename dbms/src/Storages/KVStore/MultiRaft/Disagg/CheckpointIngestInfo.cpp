@@ -43,7 +43,7 @@ CheckpointIngestInfoPtr CheckpointIngestInfo::restore(
     auto log = DB::Logger::get("CheckpointIngestInfo");
     auto uni_ps = tmt.getContext().getWriteNodePageStorage();
     RUNTIME_CHECK(uni_ps != nullptr);
-    auto snapshot = uni_ps->getSnapshot(fmt::format("read_fap_i_{}", region_id));
+    auto snapshot = uni_ps->getGeneralSnapshot(fmt::format("read_fap_i_{}", region_id));
     RUNTIME_CHECK(snapshot != nullptr);
     auto page_id = UniversalPageIdFormat::toFAPIngestInfoPageID(region_id);
     Page page = uni_ps->read(page_id, nullptr, snapshot, /*throw_on_not_exist*/ false);

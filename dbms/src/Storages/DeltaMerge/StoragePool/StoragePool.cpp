@@ -971,7 +971,8 @@ inline static PageReaderPtr newReader(
             nullptr,
             nullptr,
             uni_ps,
-            snapshot_read ? uni_ps->getSnapshot(tracing_id) : nullptr,
+            // Under uni_ps, only protect the data belong to DeltaTree engine
+            uni_ps->getDeltaTreeOnlySnapshot(tracing_id),
             read_limiter);
     default:
         throw Exception(ErrorCodes::LOGICAL_ERROR, "Unknown PageStorageRunMode {}", static_cast<UInt8>(run_mode));

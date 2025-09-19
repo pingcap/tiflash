@@ -59,6 +59,11 @@ void WNEstablishDisaggTaskHandler::prepare(const disaggregated::EstablishDisaggT
     context->setSetting("schema_version", schema_ver);
     auto start_ts = meta.start_ts();
     context->setSetting("read_tso", start_ts);
+    if (auto snap_timeout = request->timeout_s(); snap_timeout > 0)
+    {
+        // Set the disagg_task_snapshot_timeout if specified by compute node
+        context->setSetting("disagg_task_snapshot_timeout", snap_timeout);
+    }
 
     // Parse the encoded plan into `dag_req`
     dag_req = getDAGRequestFromStringWithRetry(request->encoded_plan());
@@ -91,7 +96,8 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
 
     auto snaps = context->getSharedContextDisagg()->wn_snapshot_manager;
     const auto & task_id = *dag_context->getDisaggTaskId();
-    auto snap = snaps->getSnapshot(task_id);
+    // Take the snapshot without refresh expiration. Here we use it to generate response.
+    auto snap = snaps->getDisaggSnapshot(task_id, /*refresh_duration*/ std::nullopt);
     RUNTIME_CHECK_MSG(snap, "Snapshot was missing, task_id={}", task_id);
 
     {
@@ -108,6 +114,8 @@ void WNEstablishDisaggTaskHandler::execute(disaggregated::EstablishDisaggTaskRes
 
     // Release SegmentReadTasks that do not have ColumnFileTiny and ColumnFileInMemory
     // because these tasks will never call FetchDisaggPages.
+    // Do it after building response to compute node because the segment tasks are still needed
+    // for reading in the compute node.
     auto to_release_tasks = snap->releaseNoNeedFetchTasks();
     if (!to_release_tasks.empty())
         LOG_INFO(log, "Release no need fetch tasks: count={} segments={}", to_release_tasks.size(), to_release_tasks);

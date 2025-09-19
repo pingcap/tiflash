@@ -282,7 +282,8 @@ void AsynchronousMetrics::update()
         {
             if (auto uni_ps = context.tryGetWriteNodePageStorage(); uni_ps != nullptr)
             {
-                // Only set delta snapshot lifetime when UniPS is enabled
+                // Only set delta snapshot lifetime when UniPS is enabled.
+                // It returns the longest living snapshot stat include "General" and "DeltaTreeOnly".
                 const auto snap_stat = uni_ps->getSnapshotsStat();
                 set("MaxDTDeltaOldestSnapshotLifetime", snap_stat.longest_living_seconds);
             }
