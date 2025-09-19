@@ -751,7 +751,8 @@ CoprocessorReaderPtr DAGStorageInterpreter::buildCoprocessorReader(const std::ve
         queue_size,
         cop_timeout,
         tiflash_label_filter,
-        log->identifier());
+        log->identifier(),
+        tmt.getKVStore()->getStoreID());
     context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
 
     return coprocessor_reader;

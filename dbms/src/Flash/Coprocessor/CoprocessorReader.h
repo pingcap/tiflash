@@ -177,7 +177,8 @@ public:
         size_t queue_size,
         UInt64 cop_timeout,
         const pingcap::kv::LabelFilter & tiflash_label_filter_,
-        const String & source_identifier)
+        const String & source_identifier,
+        UInt64 prefer_store_id = 0)
         : schema(schema_)
         , has_enforce_encode_type(has_enforce_encode_type_)
         , concurrency(concurrency_)
@@ -189,7 +190,9 @@ public:
               concurrency_,
               &Poco::Logger::get(fmt::format("{} pingcap/coprocessor", source_identifier)),
               cop_timeout,
-              tiflash_label_filter_)
+              tiflash_label_filter_,
+              "",
+              prefer_store_id)
     {}
 
     const DAGSchema & getOutputSchema() const { return schema; }
