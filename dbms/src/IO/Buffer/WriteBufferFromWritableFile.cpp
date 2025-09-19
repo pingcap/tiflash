@@ -116,7 +116,7 @@ void WriteBufferFromWritableFile::close()
 off_t WriteBufferFromWritableFile::doSeek(off_t offset, int whence)
 {
     off_t res = file->seek(offset, whence);
-    if (-1 == res)
+    if (res < 0)
         throwFromErrno("Cannot seek through file " + getFileName(), ErrorCodes::CANNOT_SEEK_THROUGH_FILE);
     return res;
 }

@@ -309,7 +309,13 @@ private:
             dmfile_meta->encryptionMergedPath(merged_file_info.number),
             std::min(data_size, dmfile.getConfiguration()->getChecksumFrameLength()),
             read_limiter);
-        buffer.seek(offset);
+        auto ret = buffer.seek(offset);
+        RUNTIME_CHECK_MSG(
+            ret >= 0,
+            "Failed to seek in merged file, ret={} file_path={} offset={}",
+            ret,
+            file_path,
+            offset);
 
         String raw_data(data_size, '\0');
         buffer.read(reinterpret_cast<char *>(raw_data.data()), data_size);
