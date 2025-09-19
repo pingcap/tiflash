@@ -28,11 +28,7 @@ public:
     // Write N bytes of buf to file.  Return the number written, or -1.
     [[nodiscard]] virtual ssize_t write(char * buf, size_t size) = 0;
 
-<<<<<<< HEAD
-    virtual ssize_t pwrite(char * buf, size_t size, off_t offset) const = 0;
-=======
-    [[nodiscard]] virtual ssize_t pwrite(char * buf, size_t size, off_t offset) = 0;
->>>>>>> 12549246b8 (IO: Fix infinity retries when meet network partition with S3 (#10447))
+    [[nodiscard]] virtual ssize_t pwrite(char * buf, size_t size, off_t offset) const = 0;
 
     [[nodiscard]] virtual off_t seek(off_t offset, int whence) const = 0;
 

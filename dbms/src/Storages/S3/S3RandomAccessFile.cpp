@@ -26,11 +26,8 @@
 #include <aws/core/utils/Outcome.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <common/likely.h>
-<<<<<<< HEAD
-=======
 #include <common/logger_useful.h>
 #include <fiu.h>
->>>>>>> 12549246b8 (IO: Fix infinity retries when meet network partition with S3 (#10447))
 
 #include <optional>
 #include <string_view>
@@ -231,29 +228,13 @@ String S3RandomAccessFile::readRangeOfObject()
 
 void S3RandomAccessFile::initialize(std::string_view action)
 {
-<<<<<<< HEAD
-    Stopwatch sw;
-    bool request_succ = false;
-    Aws::S3::Model::GetObjectRequest req;
-    req.SetRange(readRangeOfObject());
-    client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
-    while (cur_retry < max_retry)
-    {
-        cur_retry += 1;
-=======
     while (cur_retry < max_retry)
     {
         Stopwatch sw_get_object;
         SCOPE_EXIT({
             auto elapsed_secs = sw_get_object.elapsedSeconds();
-            if (scan_context)
-            {
-                scan_context->disagg_s3file_get_object_ms += elapsed_secs * 1000;
-                scan_context->disagg_s3file_get_object_count += 1;
-            }
             GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(elapsed_secs);
         });
->>>>>>> 12549246b8 (IO: Fix infinity retries when meet network partition with S3 (#10447))
         ProfileEvents::increment(ProfileEvents::S3GetObject);
         if (cur_retry > 0)
         {
@@ -274,14 +255,9 @@ void S3RandomAccessFile::initialize(std::string_view action)
         });
         if (!outcome.IsSuccess())
         {
-<<<<<<< HEAD
-            auto el = sw.elapsedSeconds();
-            LOG_ERROR(
-=======
             cur_retry += 1;
             auto el = sw_get_object.elapsedSeconds();
             LOG_WARNING(
->>>>>>> 12549246b8 (IO: Fix infinity retries when meet network partition with S3 (#10447))
                 log,
                 "S3 GetObject failed: {}, cur_retry={}, key={}, elapsed{}={:.3f}s",
                 S3::S3ErrorMessage(outcome.GetError()),
@@ -298,23 +274,6 @@ void S3RandomAccessFile::initialize(std::string_view action)
         }
         read_result = outcome.GetResultWithOwnership();
         RUNTIME_CHECK(read_result.GetBody(), remote_fname, strerror(errno));
-<<<<<<< HEAD
-        GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
-        break;
-    }
-    if (cur_retry >= max_retry && !request_succ)
-    {
-        auto el = sw.elapsedSeconds();
-        LOG_INFO(
-            log,
-            "S3 GetObject timeout: max_retry={}, key={}, elapsed{}={:.3f}s",
-            max_retry,
-            req.GetKey(),
-            el > 60.0 ? "(long)" : "",
-            el);
-    }
-    return request_succ;
-=======
         return; // init successfully
     }
     // exceed max retry times
@@ -323,7 +282,6 @@ void S3RandomAccessFile::initialize(std::string_view action)
         "Open S3 file for read fail after retries when {}, key={}",
         action,
         remote_fname);
->>>>>>> 12549246b8 (IO: Fix infinity retries when meet network partition with S3 (#10447))
 }
 
 inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname, std::optional<UInt64> filesize)

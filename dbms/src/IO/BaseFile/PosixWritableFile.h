@@ -45,11 +45,7 @@ public:
 
     [[nodiscard]] ssize_t write(char * buf, size_t size) override;
 
-<<<<<<< HEAD
-    ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
-=======
-    [[nodiscard]] ssize_t pwrite(char * buf, size_t size, off_t offset) override;
->>>>>>> 12549246b8 (IO: Fix infinity retries when meet network partition with S3 (#10447))
+    [[nodiscard]] ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
 
     [[nodiscard]] off_t seek(off_t offset, int whence) const override;
 
