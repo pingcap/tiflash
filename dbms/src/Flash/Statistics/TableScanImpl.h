@@ -24,6 +24,11 @@ struct TableScanTimeDetail
 {
     double min_stream_cost_ns = -1.0;
     double max_stream_cost_ns = -1.0;
+
+    double total_speed_rows_per_sec = 0.0;
+    double total_speed_bytes_per_sec = 0.0;
+    size_t num_streams = 0;
+
     String toJson() const;
 };
 struct LocalTableScanDetail

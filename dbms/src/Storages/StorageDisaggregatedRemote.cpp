@@ -102,17 +102,25 @@ void initDisaggTaskMeta(
 
 BlockInputStreams StorageDisaggregated::readThroughS3(const Context & db_context, unsigned num_streams)
 {
+    auto * dag_context = context.getDAGContext();
+    auto scan_context
+        = std::make_shared<DM::ScanContext>(dag_context->getKeyspaceID(), dag_context->getResourceGroupName());
+    dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+
     // Build InputStream according to the remote segment read tasks
     DAGPipeline pipeline;
-    buildRemoteSegmentInputStreams(db_context, buildReadTaskWithBackoff(db_context), num_streams, pipeline);
+    buildRemoteSegmentInputStreams(
+        db_context,
+        buildReadTaskWithBackoff(db_context, scan_context),
+        num_streams,
+        pipeline);
 
     NamesAndTypes source_columns;
     source_columns.reserve(table_scan.getColumnSize());
     const auto & remote_segment_stream_header = pipeline.firstStream()->getHeader();
     for (const auto & col : remote_segment_stream_header)
-    {
         source_columns.emplace_back(col.name, col.type);
-    }
+    scan_context->num_columns = source_columns.size();
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // Handle duration type column
@@ -128,11 +136,16 @@ void StorageDisaggregated::readThroughS3(
     const Context & db_context,
     unsigned num_streams)
 {
+    auto * dag_context = context.getDAGContext();
+    auto scan_context
+        = std::make_shared<DM::ScanContext>(dag_context->getKeyspaceID(), dag_context->getResourceGroupName());
+    dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
+
     buildRemoteSegmentSourceOps(
         exec_context,
         group_builder,
         db_context,
-        buildReadTaskWithBackoff(db_context),
+        buildReadTaskWithBackoff(db_context, scan_context),
         num_streams);
 
     NamesAndTypes source_columns;
@@ -140,6 +153,7 @@ void StorageDisaggregated::readThroughS3(
     source_columns.reserve(header.columns());
     for (const auto & col : header)
         source_columns.emplace_back(col.name, col.type);
+    scan_context->num_columns = source_columns.size();
     analyzer = std::make_unique<DAGExpressionAnalyzer>(std::move(source_columns), context);
 
     // Handle duration type column
@@ -148,14 +162,11 @@ void StorageDisaggregated::readThroughS3(
     filterConditions(exec_context, group_builder, *analyzer);
 }
 
-DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Context & db_context)
+DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(
+    const Context & db_context,
+    const DM::ScanContextPtr & scan_context)
 {
     using namespace pingcap;
-
-    auto * dag_context = context.getDAGContext();
-    auto scan_context
-        = std::make_shared<DM::ScanContext>(dag_context->getKeyspaceID(), dag_context->getResourceGroupName());
-    dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
 
     Stopwatch build_read_task_watch;
     SCOPE_EXIT({
@@ -219,6 +230,8 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
         });
         auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
         scan_context->setRegionNumOfCurrentInstance(region_num);
+        scan_context->total_remote_region_num = scan_context->total_local_region_num.load();
+        scan_context->total_local_region_num = 0;
         // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
         const auto label_filter = pingcap::kv::labelFilterOnlyTiFlashWriteNode;
         batch_cop_tasks = buildBatchCopTasks(remote_table_ranges, label_filter);
@@ -712,7 +725,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     });
 }
 
-struct SrouceOpBuilder
+struct SourceOpBuilder
 {
     const String & tracing_id;
     const DM::ColumnDefinesPtr & column_defines;
@@ -757,7 +770,7 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
         = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
 
     RUNTIME_CHECK(num_streams > 0, num_streams);
-    SrouceOpBuilder builder{
+    SourceOpBuilder builder{
         .tracing_id = log->identifier(),
         .column_defines = column_defines,
         .extra_table_id_index = extra_table_id_index,
