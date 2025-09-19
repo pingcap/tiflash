@@ -43,11 +43,15 @@ public:
 
     ~PosixWritableFile() override;
 
-    ssize_t write(char * buf, size_t size) override;
+    [[nodiscard]] ssize_t write(char * buf, size_t size) override;
 
+<<<<<<< HEAD
     ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
+=======
+    [[nodiscard]] ssize_t pwrite(char * buf, size_t size, off_t offset) override;
+>>>>>>> 12549246b8 (IO: Fix infinity retries when meet network partition with S3 (#10447))
 
-    off_t seek(off_t offset, int whence) const override;
+    [[nodiscard]] off_t seek(off_t offset, int whence) const override;
 
     std::string getFileName() const override { return file_name; }
 

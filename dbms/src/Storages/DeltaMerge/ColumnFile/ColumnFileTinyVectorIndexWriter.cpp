@@ -173,11 +173,24 @@ ColumnFileTinyPtr ColumnFileTinyVectorIndexWriter::buildIndexForFile(
             auto index_page_id = options.storage_pool->newLogPageId();
             MemoryWriteBuffer write_buf;
             CompressedWriteBuffer compressed(write_buf);
+<<<<<<< HEAD:dbms/src/Storages/DeltaMerge/ColumnFile/ColumnFileTinyVectorIndexWriter.cpp
             index_builder->saveToBuffer(compressed);
             compressed.next();
             auto data_size = write_buf.count();
             auto buf = write_buf.tryGetReadBuffer();
             // ColumnFileDataProviderRNLocalPageCache currently does not support read data with fields
+=======
+            dtpb::ColumnFileIndexInfo pb_cf_idx;
+            pb_cf_idx.set_index_page_id(index_page_id);
+            auto idx_info = index.index_writer->finalize(compressed, [&compressed, &write_buf]() {
+                compressed.next(); // ensure the compressed data is flushed to write_buf
+                return write_buf.count();
+            });
+            pb_cf_idx.mutable_index_props()->Swap(&idx_info);
+            auto data_size = write_buf.count();
+            auto buf = write_buf.tryGetReadBuffer();
+            // ColumnFileDataProviderRNLocalPageCache currently does not support read data without fields
+>>>>>>> 12549246b8 (IO: Fix infinity retries when meet network partition with S3 (#10447)):dbms/src/Storages/DeltaMerge/ColumnFile/ColumnFileTinyLocalIndexWriter.cpp
             options.wbs.log.putPage(index_page_id, 0, buf, data_size, {data_size});
 
             dtpb::VectorIndexFileProps vector_index;

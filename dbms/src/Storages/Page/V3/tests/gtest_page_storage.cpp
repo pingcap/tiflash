@@ -356,9 +356,11 @@ try
             PageTypeUtils::nextFileID(PageType::Normal, 1)),
         -1,
         nullptr);
-    file_read->pread(c_buff_read, buf_sz, 0);
+    auto n_read = file_read->pread(c_buff_read, buf_sz, 0);
+    ASSERT_GT(n_read, 0);
     ASSERT_NE(c_buff_read, c_buff);
-    file_read->pread(c_buff_read, buf_sz, buf_sz);
+    n_read = file_read->pread(c_buff_read, buf_sz, buf_sz);
+    ASSERT_GT(n_read, 0);
     ASSERT_NE(c_buff_read, c_buff);
 }
 CATCH
