@@ -124,7 +124,11 @@ namespace DB
     M(force_thread_0_no_agg_spill)                           \
     M(force_checkpoint_dump_throw_datafile)                  \
     M(force_semi_join_time_exceed)                           \
-    M(force_set_proxy_state_machine_cpu_cores)
+    M(force_set_proxy_state_machine_cpu_cores)               \
+    M(force_join_v2_probe_enable_lm)                         \
+    M(force_join_v2_probe_disable_lm)                        \
+    M(force_s3_random_access_file_init_fail)                 \
+    M(force_s3_random_access_file_read_fail)
 
 #define APPLY_FOR_PAUSEABLE_FAILPOINTS_ONCE(M)    \
     M(pause_with_alter_locks_acquired)            \

@@ -34,7 +34,7 @@ public:
     ReadBufferFromFileBase(size_t buf_size, char * existing_memory, size_t alignment);
     ReadBufferFromFileBase(ReadBufferFromFileBase &&) = default;
     ~ReadBufferFromFileBase() override;
-    off_t seek(off_t off, int whence = SEEK_SET);
+    [[nodiscard]] off_t seek(off_t off, int whence = SEEK_SET);
     virtual off_t getPositionInFile() = 0;
     virtual std::string getFileName() const = 0;
     virtual int getFD() const = 0;

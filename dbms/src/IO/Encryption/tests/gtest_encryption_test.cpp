@@ -473,7 +473,8 @@ try
 
     String file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_file");
     PosixWritableFile file(file_path, true, -1, 0600, nullptr);
-    file.write(buff_write, buff_size);
+    auto n_write = file.write(buff_write, buff_size);
+    ASSERT_EQ(n_write, buff_size);
     file.close();
 
     String linked_file_path = tests::TiFlashTestEnv::getTemporaryPath("posix_linked_file");
@@ -496,7 +497,8 @@ try
     // Read and check
     char buff_read[buff_size];
     RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(linked_file_path, -1, nullptr);
-    file_for_read->read(buff_read, buff_size);
+    auto n_read = file_for_read->read(buff_read, buff_size);
+    ASSERT_EQ(n_read, buff_size);
     file_for_read->close();
     ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);
 }
@@ -529,7 +531,8 @@ try
     char buff_write_cpy[buff_size];
     memcpy(buff_write_cpy, buff_write, buff_size);
 
-    enc_file.write(buff_write_cpy, buff_size);
+    auto n_write = enc_file.write(buff_write_cpy, buff_size);
+    ASSERT_EQ(n_write, buff_size);
     enc_file.fsync();
     enc_file.close();
 
@@ -556,7 +559,8 @@ try
     char buff_read[buff_size];
     RandomAccessFilePtr file_for_read = std::make_shared<PosixRandomAccessFile>(linked_file_path, -1, nullptr);
     EncryptedRandomAccessFile enc_file_for_read(file_for_read, cipher_stream);
-    enc_file_for_read.read(buff_read, buff_size);
+    n_write = enc_file_for_read.read(buff_read, buff_size);
+    ASSERT_EQ(n_write, buff_size);
     enc_file_for_read.close();
 
     ASSERT_EQ(strncmp(buff_write, buff_read, buff_size), 0);

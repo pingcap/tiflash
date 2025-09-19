@@ -24,7 +24,6 @@
 #include <IO/WriteHelpers.h>
 
 #include <boost/range/adaptor/reversed.hpp>
-#include <iostream>
 #include <vector>
 
 /*

@@ -260,7 +260,7 @@ void PocoHTTPClient::makeRequestInternal(
     }
     catch (...)
     {
-        tryLogCurrentException(tracing_logger, fmt::format("Failed to make request to: {}", uri));
+        tryLogCurrentWarningException(tracing_logger, fmt::format("Failed to make request to: {}", uri));
         response->SetClientErrorType(Aws::Client::CoreErrors::NETWORK_CONNECTION);
         response->SetClientErrorMessage(getCurrentExceptionMessage(false));
 

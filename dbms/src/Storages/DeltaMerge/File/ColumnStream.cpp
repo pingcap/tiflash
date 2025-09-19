@@ -119,7 +119,13 @@ private:
             dmfile_meta->encryptionMergedPath(merged_file_info.number),
             std::min(data_size, reader.dmfile->getConfiguration()->getChecksumFrameLength()),
             read_limiter);
-        buffer.seek(offset);
+        auto ret = buffer.seek(offset);
+        RUNTIME_CHECK_MSG(
+            ret >= 0,
+            "Failed to seek in merged file, ret={} file_path={} offset={}",
+            ret,
+            file_path,
+            offset);
 
         // Read the raw data into memory. It is OK because the mark merged into
         // merged_file is small enough.
@@ -258,7 +264,8 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
         dmfile_meta->encryptionMergedPath(info_iter->second.number),
         std::min(data_size, reader.dmfile->getConfiguration()->getChecksumFrameLength()),
         read_limiter);
-    buffer.seek(offset);
+    auto ret = buffer.seek(offset);
+    RUNTIME_CHECK_MSG(ret >= 0, "Failed to seek in merged file, ret={} file_path={} offset={}", ret, file_path, offset);
 
     // Read the raw data into memory. It is OK because the mark merged into
     // merged_file is small enough.

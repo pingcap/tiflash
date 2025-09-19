@@ -162,7 +162,8 @@ void runSeekingTest()
             {
                 auto [offset, whence, length, next] = randomOperation(size, current);
                 current = next;
-                buffer.seek(offset, whence);
+                auto ret = buffer.seek(offset, whence);
+                ASSERT_GE(ret, 0);
                 ASSERT_EQ(current, buffer.getPositionInFile());
                 std::vector<char> data_slice(length);
                 std::vector<char> file_slice(length);
@@ -219,7 +220,8 @@ void runReadBigTest()
     {
         auto file = provider->newRandomAccessFile(filename, {"/tmp/test.enc", "test.enc"}, limiter->getReadLimiter());
         auto buffer = FramedChecksumReadBuffer<D>(file);
-        buffer.seek(static_cast<ssize_t>(i));
+        auto ret = buffer.seek(static_cast<ssize_t>(i));
+        ASSERT_GE(ret, 0);
         buffer.readBig(compare.data(), i);
         ASSERT_EQ(std::memcmp(compare.data(), data.data() + i, i), 0) << "seed: " << seed;
     }

@@ -51,7 +51,7 @@ std::string ReadBufferFromFileDescriptor::getFileName() const
 bool ReadBufferFromFileDescriptor::nextImpl()
 {
     size_t bytes_read = 0;
-    while (!bytes_read)
+    while (bytes_read == 0)
     {
         ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorRead);
 
@@ -59,14 +59,11 @@ bool ReadBufferFromFileDescriptor::nextImpl()
         if (profile_callback)
             watch.emplace(clock_type);
 
-        ssize_t res = 0;
-        {
-            res = ::read(fd, internal_buffer.begin(), internal_buffer.size());
-        }
-        if (!res)
+        ssize_t res = ::read(fd, internal_buffer.begin(), internal_buffer.size());
+        if (res == 0)
             break;
 
-        if (-1 == res && errno != EINTR)
+        if (res < 0 && errno != EINTR)
         {
             ProfileEvents::increment(ProfileEvents::ReadBufferFromFileDescriptorReadFailed);
             throwFromErrno("Cannot read from file " + getFileName(), ErrorCodes::CANNOT_READ_FROM_FILE_DESCRIPTOR);

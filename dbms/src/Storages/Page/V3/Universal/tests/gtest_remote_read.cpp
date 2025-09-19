@@ -907,7 +907,8 @@ try
         PosixWritableFile wf(full_path, true, -1, 0600, nullptr);
         for (const auto & d : filename_with_data.data)
         {
-            wf.write(const_cast<char *>(d.data()), d.size());
+            auto n_write = wf.write(const_cast<char *>(d.data()), d.size());
+            ASSERT_EQ(n_write, d.size());
         }
         wf.fsync();
         wf.close();
