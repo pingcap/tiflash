@@ -15,6 +15,7 @@
 #include <Common/Exception.h>
 #include <Common/FailPoint.h>
 #include <IO/BaseFile/PosixWritableFile.h>
+#include <IO/Buffer/ReadBufferFromRandomAccessFile.h>
 #include <IO/Encryption/MockKeyManager.h>
 #include <Interpreters/Context.h>
 #include <Poco/DigestStream.h>
@@ -48,6 +49,7 @@
 #include <chrono>
 #include <ext/scope_guard.h>
 #include <fstream>
+#include <memory>
 
 
 using namespace std::chrono_literals;
@@ -58,6 +60,8 @@ using namespace DB::S3;
 namespace DB::FailPoints
 {
 extern const char force_set_mocked_s3_object_mtime[];
+extern const char force_s3_random_access_file_init_fail[];
+extern const char force_s3_random_access_file_read_fail[];
 } // namespace DB::FailPoints
 
 namespace DB::tests
@@ -285,30 +289,55 @@ try
 }
 CATCH
 
-TEST_P(S3FileTest, ReadAfterDel2)
+TEST_P(S3FileTest, InitFileThenFailure)
 try
 {
-    // skip this test if using mocked s3 client
-    if (TiFlashTestEnv::isMockedS3Client())
-        return;
-
     const String key = "/a/b/c/file";
     const size_t size = 5 * 1024 * 1024;
     writeFile(key, size, WriteSettings{});
     verifyFile(key, size);
 
-    {
-        // First init the stream
-        S3RandomAccessFile file(s3_client, key, nullptr);
+    // First init the file, this should success
+    S3RandomAccessFile file(s3_client, key, nullptr);
 
-        // then delete the file
-        DB::S3::deleteObject(*s3_client, key);
+    // Mock s3 failure, for example, network error or file already deleted
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+        FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+    });
 
-        // try read from the stream
-        std::vector<char> buff(size, 0x00);
-        auto nread = file.read(buff.data(), buff.size());
-        ASSERT_LT(nread, 0);
-    }
+    // try read from the file
+    std::vector<char> buff(size, 0x00);
+    auto nread = file.read(buff.data(), buff.size());
+    ASSERT_LT(nread, 0);
+}
+CATCH
+
+TEST_P(S3FileTest, InitBufferThenFailure)
+try
+{
+    const String key = "/a/b/c/file";
+    const size_t size = 5 * 1024 * 1024;
+    writeFile(key, size, WriteSettings{});
+    verifyFile(key, size);
+
+    // First init the buffer, this should success
+    auto buf_reader = ReadBufferFromRandomAccessFile(std::make_shared<S3RandomAccessFile>(s3_client, key, nullptr));
+
+    // Mock s3 failure, for example, network error or file already deleted
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+    FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+    SCOPE_EXIT({
+        FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
+        FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
+    });
+
+    // try read from the buffer
+    std::vector<char> buff(size, 0x00);
+    auto nread = buf_reader.read(buff.data(), buff.size());
+    ASSERT_LT(nread, 0);
 }
 CATCH
 
@@ -531,38 +560,10 @@ try
     ASSERT_EQ(dmfile->path(), S3::S3Filename::fromDMFileOID(oid).toFullKeyWithPrefix());
     read_dmfile(dmfile);
 
-    {
-        // read dmfile stored on S3 indicated by `oid`
-        auto dmfile_from_s3 = restoreDMFile(oid);
-        ASSERT_NE(dmfile_from_s3, nullptr);
-        read_dmfile(dmfile_from_s3);
-    }
-
-    {
-        auto dmfile_from_s3 = restoreDMFile(oid);
-        ASSERT_NE(dmfile_from_s3, nullptr);
-        DMFileBlockInputStreamBuilder builder(dbContext());
-        auto stream = builder.build(
-            dmfile_from_s3,
-            *cols,
-            RowKeyRanges{RowKeyRange::newAll(false, 1)},
-            std::make_shared<ScanContext>());
-
-        // remove the file on S3 after stream is built
-        auto key = S3Filename::fromDMFileOID(oid).toFullKey();
-        S3::listPrefix(*s3_client, key, [&](const Aws::S3::Model::Object & obj)-> PageResult {
-            LOG_INFO(log, "delete key={}", obj.GetKey());
-            S3::deleteObject(*s3_client, obj.GetKey());
-            return PageResult{.num_keys = 1, .more = true};
-        });
-
-        ASSERT_INPUTSTREAM_COLS_UR(
-            stream,
-            Strings({DMTestEnv::pk_name}),
-            createColumns({
-                createColumn<Int64>(createNumbers<Int64>(0, num_rows_write)),
-            }));
-    }
+    // read dmfile stored on S3 indicated by `oid`
+    auto dmfile_from_s3 = restoreDMFile(oid);
+    ASSERT_NE(dmfile_from_s3, nullptr);
+    read_dmfile(dmfile_from_s3);
 }
 CATCH
 

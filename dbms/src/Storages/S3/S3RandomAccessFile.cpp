@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -22,9 +23,11 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
+#include <aws/core/utils/Outcome.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <common/likely.h>
 #include <common/logger_useful.h>
+#include <fiu.h>
 
 #include <optional>
 
@@ -37,6 +40,11 @@ extern const Event S3IORead;
 extern const Event S3IOSeek;
 extern const Event S3IOSeekBackward;
 } // namespace ProfileEvents
+namespace DB::FailPoints
+{
+extern const char force_s3_random_access_file_init_fail[];
+extern const char force_s3_random_access_file_read_fail[];
+} // namespace DB::FailPoints
 
 namespace DB::S3
 {
@@ -104,6 +112,12 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     auto & istr = read_result.GetBody();
     istr.read(buf, size);
     size_t gcount = istr.gcount();
+
+    fiu_do_on(FailPoints::force_s3_random_access_file_read_fail, {
+        LOG_WARNING(log, "failpoint force_s3_random_access_file_read_fail is triggered, return S3StreamError");
+        return S3StreamError;
+    });
+
     // Theoretically, `istr.eof()` is equivalent to `cur_offset + gcount != static_cast<size_t>(content_length)`.
     // It's just a double check for more safety.
     if (gcount < size && (!istr.eof() || cur_offset + gcount != static_cast<size_t>(content_length)))
@@ -236,10 +250,6 @@ String S3RandomAccessFile::readRangeOfObject()
 
 bool S3RandomAccessFile::initialize()
 {
-    bool request_succ = false;
-    Aws::S3::Model::GetObjectRequest req;
-    req.SetRange(readRangeOfObject());
-    client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
     while (cur_retry < max_retry)
     {
         Stopwatch sw_get_object;
@@ -258,7 +268,19 @@ bool S3RandomAccessFile::initialize()
         {
             ProfileEvents::increment(ProfileEvents::S3GetObjectRetry);
         }
+
+        Aws::S3::Model::GetObjectRequest req;
+        req.SetRange(readRangeOfObject());
+        client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
         auto outcome = client_ptr->GetObject(req);
+        fiu_do_on(FailPoints::force_s3_random_access_file_init_fail, {
+            LOG_WARNING(log, "failpoint force_s3_random_access_file_init_fail is triggered, set outcome to error");
+            outcome = Aws::S3::Model::GetObjectOutcome(Aws::Client::AWSError<Aws::S3::S3Errors>(
+                Aws::S3::S3Errors::INTERNAL_FAILURE,
+                "InternalError",
+                "Injected error by failpoint",
+                true));
+        });
         if (!outcome.IsSuccess())
         {
             auto el = sw_get_object.elapsedSeconds();
@@ -274,16 +296,15 @@ bool S3RandomAccessFile::initialize()
             continue;
         }
 
-        request_succ = true;
         if (content_length == 0)
         {
             content_length = outcome.GetResult().GetContentLength();
         }
         read_result = outcome.GetResultWithOwnership();
         RUNTIME_CHECK(read_result.GetBody(), remote_fname, strerror(errno));
-        break;
+        return true; // init successfully
     }
-    return request_succ;
+    return false;
 }
 
 inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname, std::optional<UInt64> filesize)

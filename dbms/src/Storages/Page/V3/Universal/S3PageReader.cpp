@@ -119,7 +119,7 @@ std::tuple<Page, ReadBufferFromRandomAccessFilePtr, S3PageReader::ReuseStat> S3P
         RUNTIME_CHECK(read_buff != nullptr);
         auto seek_ret = read_buff->seek(location.offset_in_file, SEEK_SET);
         RUNTIME_CHECK_MSG(
-            seek_ret > 0,
+            seek_ret >= 0,
             "Failed to seek in S3 file, ret={} location={}",
             seek_ret,
             location.toDebugString());
