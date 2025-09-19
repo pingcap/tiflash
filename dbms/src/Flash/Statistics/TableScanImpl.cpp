@@ -147,7 +147,8 @@ void TableScanStatistics::collectExtraRuntimeDetail()
                 double rows_per_second = profile_info.operator_info->rows / this_execution_time_sec;
                 LOG_INFO(
                     Logger::get(),
-                    "TableScan local stream details, rows={} bytes={} cost={:.3f}s rows_speed={:.3f}/s bytes_speed={}/s",
+                    "TableScan local stream details, rows={} bytes={} cost={:.3f}s rows_speed={:.3f}/s "
+                    "bytes_speed={}/s",
                     profile_info.operator_info->rows,
                     ReadableSize(profile_info.operator_info->bytes),
                     this_execution_time_sec,
@@ -170,7 +171,8 @@ void TableScanStatistics::collectExtraRuntimeDetail()
                 double rows_per_second = profile_info.operator_info->rows / this_execution_time_sec;
                 LOG_INFO(
                     Logger::get(),
-                    "TableScan remote stream details, rows={} bytes={} cost={:.3f}s rows_speed={:.3f}/s bytes_speed={}/s",
+                    "TableScan remote stream details, rows={} bytes={} cost={:.3f}s rows_speed={:.3f}/s "
+                    "bytes_speed={}/s",
                     profile_info.operator_info->rows,
                     ReadableSize(profile_info.operator_info->bytes),
                     this_execution_time_sec,

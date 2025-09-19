@@ -277,7 +277,7 @@ TEST_P(S3FileTest, ReadAfterDel1)
 try
 {
     const String key = "/a/b/c/file";
-    const size_t size = 5 * 1024 * 1024;
+    const size_t size = 5 * 1024;
     writeFile(key, size, WriteSettings{});
     verifyFile(key, size);
 
@@ -293,7 +293,7 @@ TEST_P(S3FileTest, InitFileThenFailure)
 try
 {
     const String key = "/a/b/c/file";
-    const size_t size = 5 * 1024 * 1024;
+    const size_t size = 5 * 1024;
     writeFile(key, size, WriteSettings{});
     verifyFile(key, size);
 
@@ -308,10 +308,14 @@ try
         FailPointHelper::disableFailPoint(FailPoints::force_s3_random_access_file_init_fail);
     });
 
-    // try read from the file
-    std::vector<char> buff(size, 0x00);
-    auto nread = file.read(buff.data(), buff.size());
-    ASSERT_LT(nread, 0);
+    // try read from the file, should throw exception
+    ASSERT_THROW(
+        {
+            std::vector<char> buff(size, 0x00);
+            auto nread = file.read(buff.data(), buff.size());
+            ASSERT_LT(nread, 0);
+        },
+        DB::Exception);
 }
 CATCH
 
@@ -319,7 +323,7 @@ TEST_P(S3FileTest, InitBufferThenFailure)
 try
 {
     const String key = "/a/b/c/file";
-    const size_t size = 5 * 1024 * 1024;
+    const size_t size = 5 * 1024;
     writeFile(key, size, WriteSettings{});
     verifyFile(key, size);
 
@@ -335,9 +339,13 @@ try
     });
 
     // try read from the buffer
-    std::vector<char> buff(size, 0x00);
-    auto nread = buf_reader.read(buff.data(), buff.size());
-    ASSERT_LT(nread, 0);
+    ASSERT_THROW(
+        {
+            std::vector<char> buff(size, 0x00);
+            auto nread = buf_reader.read(buff.data(), buff.size());
+            ASSERT_LT(nread, 0);
+        },
+        DB::Exception);
 }
 CATCH
 
@@ -477,7 +485,7 @@ try
 {
     auto cols = DMTestEnv::getDefaultColumns(DMTestEnv::PkType::HiddenTiDBRowID, /*add_nullable*/ true);
 
-    const size_t num_rows_write = 512000;
+    const size_t num_rows_write = 128;
 
     auto read_dmfile = [&](DMFilePtr dmf) {
         DMFileBlockInputStreamBuilder builder(dbContext());

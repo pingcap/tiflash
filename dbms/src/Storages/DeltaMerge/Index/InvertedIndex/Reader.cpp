@@ -279,7 +279,12 @@ void InvertedIndexFileReader<T>::search(BitmapFilterPtr & bitmap_filter, const K
 
     ReadBufferFromFile file_buf(path, DBMS_DEFAULT_BUFFER_SIZE, O_RDONLY);
     auto ret = file_buf.seek(it->offset, SEEK_SET);
-    RUNTIME_CHECK_MSG(ret >= 0, "Failed to seek in inverted index file, ret={} path={} offset={}", ret, path, it->offset);
+    RUNTIME_CHECK_MSG(
+        ret >= 0,
+        "Failed to seek in inverted index file, ret={} path={} offset={}",
+        ret,
+        path,
+        it->offset);
     InvertedIndex::Block<T>::search(bitmap_filter, file_buf, real_key);
 }
 
@@ -312,7 +317,12 @@ void InvertedIndexFileReader<T>::searchRange(BitmapFilterPtr & bitmap_filter, co
     for (auto it = meta_begin; it != meta_end; ++it)
     {
         auto ret = file_buf.seek(it->offset, SEEK_SET);
-        RUNTIME_CHECK_MSG(ret >= 0, "Failed to seek in inverted index file, ret={} path={} offset={}", ret, this->path, it->offset);
+        RUNTIME_CHECK_MSG(
+            ret >= 0,
+            "Failed to seek in inverted index file, ret={} path={} offset={}",
+            ret,
+            this->path,
+            it->offset);
         InvertedIndex::Block<T>::searchRange(bitmap_filter, file_buf, real_begin, real_end);
     }
 }

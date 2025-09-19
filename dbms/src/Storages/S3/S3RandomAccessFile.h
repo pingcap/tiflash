@@ -87,7 +87,7 @@ public:
     String summary() const;
 
 private:
-    bool initialize();
+    void initialize(std::string_view action);
     off_t seekImpl(off_t offset, int whence);
     ssize_t readImpl(char * buf, size_t size);
     String readRangeOfObject();

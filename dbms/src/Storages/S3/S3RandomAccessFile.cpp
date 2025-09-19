@@ -30,6 +30,7 @@
 #include <fiu.h>
 
 #include <optional>
+#include <string_view>
 
 namespace ProfileEvents
 {
@@ -64,7 +65,7 @@ S3RandomAccessFile::S3RandomAccessFile(
     , scan_context(scan_context_)
 {
     RUNTIME_CHECK(client_ptr != nullptr);
-    RUNTIME_CHECK_MSG(initialize(), "Open S3 file for read fail, key={}", remote_fname);
+    initialize("init file");
 }
 
 std::string S3RandomAccessFile::getFileName() const
@@ -95,11 +96,9 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
         auto n = readImpl(buf, size);
         if (unlikely(n < 0 && isRetryableError(n, errno)))
         {
-            // If it is a retryable error, then initialize again
-            if (initialize())
-            {
-                continue;
-            }
+            // If it is a retryable error, then initialize again and retry read
+            initialize("read meet retryable error");
+            continue;
         }
         return n;
     }
@@ -167,11 +166,9 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
         auto off = seekImpl(offset_, whence);
         if (unlikely(off < 0 && isRetryableError(off, errno)))
         {
-            // If it is a retryable error, then initialize again
-            if (initialize())
-            {
-                continue;
-            }
+            // If it is a retryable error, then initialize again and retry seek
+            initialize("seek meet retryable error");
+            continue;
         }
         return off;
     }
@@ -195,13 +192,10 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     if (offset_ < cur_offset)
     {
         ProfileEvents::increment(ProfileEvents::S3IOSeekBackward, 1);
+        // Backward seek, need to reset the retry count and re-initialize
         cur_offset = offset_;
         cur_retry = 0;
-
-        if (!initialize())
-        {
-            return S3StreamError;
-        }
+        initialize("seek backward");
         return cur_offset;
     }
 
@@ -248,7 +242,7 @@ String S3RandomAccessFile::readRangeOfObject()
     return fmt::format("bytes={}-", cur_offset);
 }
 
-bool S3RandomAccessFile::initialize()
+void S3RandomAccessFile::initialize(std::string_view action)
 {
     while (cur_retry < max_retry)
     {
@@ -262,9 +256,8 @@ bool S3RandomAccessFile::initialize()
             }
             GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(elapsed_secs);
         });
-        cur_retry += 1;
         ProfileEvents::increment(ProfileEvents::S3GetObject);
-        if (cur_retry > 1)
+        if (cur_retry > 0)
         {
             ProfileEvents::increment(ProfileEvents::S3GetObjectRetry);
         }
@@ -283,6 +276,7 @@ bool S3RandomAccessFile::initialize()
         });
         if (!outcome.IsSuccess())
         {
+            cur_retry += 1;
             auto el = sw_get_object.elapsedSeconds();
             LOG_WARNING(
                 log,
@@ -302,9 +296,14 @@ bool S3RandomAccessFile::initialize()
         }
         read_result = outcome.GetResultWithOwnership();
         RUNTIME_CHECK(read_result.GetBody(), remote_fname, strerror(errno));
-        return true; // init successfully
+        return; // init successfully
     }
-    return false;
+    // exceed max retry times
+    throw Exception(
+        ErrorCodes::S3_ERROR,
+        "Open S3 file for read fail after retries when {}, key={}",
+        action,
+        remote_fname);
 }
 
 inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname, std::optional<UInt64> filesize)

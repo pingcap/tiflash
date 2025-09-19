@@ -268,12 +268,7 @@ std::unique_ptr<CompressedSeekableReaderBuffer> ColumnReadStream::buildColDataRe
         std::min(data_size, reader.dmfile->getConfiguration()->getChecksumFrameLength()),
         read_limiter);
     auto ret = buffer.seek(offset);
-    RUNTIME_CHECK_MSG(
-        ret >= 0,
-        "Failed to seek in merged file, ret={} file_path={} offset={}",
-        ret,
-        file_path,
-        offset);
+    RUNTIME_CHECK_MSG(ret >= 0, "Failed to seek in merged file, ret={} file_path={} offset={}", ret, file_path, offset);
 
     // Read the raw data into memory. It is OK because the mark merged into
     // merged_file is small enough.
