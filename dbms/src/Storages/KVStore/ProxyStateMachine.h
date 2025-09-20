@@ -114,7 +114,7 @@ struct TiFlashProxyConfig
 private:
     TiFlashProxyConfig()
     {
-        // For test, bootstrap no proxy.
+        // For test, bootstrap without proxy.
     }
     // TiFlash Proxy will set the default value of "flash.proxy.addr", so we don't need to set here.
     void addExtraArgs(const std::string & k, const std::string & v) { val_map["--" + k] = v; }
@@ -331,6 +331,10 @@ struct ProxyStateMachine
         tiflash_instance_wrap.tmt = &tmt_context;
         LOG_INFO(log, "Let tiflash proxy start all services");
         // Set tiflash instance status to running, then wait for proxy enter running status
+        // It means that in tiflash-proxy
+        // * rpc server for handling raft command is started
+        // * http status server is started
+        // https://github.com/pingcap/tidb-engine-ext/blob/74d6916e0aee34783cf3835b6fb93d40f32bb889/proxy_components/proxy_server/src/run.rs#L241-L265
         tiflash_instance_wrap.status = EngineStoreServerStatus::Running;
         while (tiflash_instance_wrap.proxy_helper->getProxyStatus() == RaftProxyStatus::Idle)
             std::this_thread::sleep_for(std::chrono::milliseconds(200));

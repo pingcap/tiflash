@@ -30,9 +30,9 @@ class WriteReadableFile
 public:
     virtual ~WriteReadableFile() = default;
 
-    virtual ssize_t pwrite(char * buf, size_t size, off_t offset) const = 0;
+    [[nodiscard]] virtual ssize_t pwrite(char * buf, size_t size, off_t offset) const = 0;
 
-    virtual ssize_t pread(char * buf, size_t size, off_t offset) const = 0;
+    [[nodiscard]] virtual ssize_t pread(char * buf, size_t size, off_t offset) const = 0;
 
     virtual int fsync() = 0;
 

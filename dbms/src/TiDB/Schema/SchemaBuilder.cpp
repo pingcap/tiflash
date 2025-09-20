@@ -370,7 +370,7 @@ void SchemaBuilder<Getter, NameMapper>::applyDiff(const SchemaDiff & diff)
         {
             // >= SchemaActionType::MaxRecognizedType
             // log down the Int8 value directly
-            LOG_ERROR(log, "Unsupported change type: {}, diff_version={}", fmt::underlying(diff.type), diff.version);
+            LOG_WARNING(log, "Unsupported change type: {}, diff_version={}", fmt::underlying(diff.type), diff.version);
         }
 
         break;
@@ -1138,7 +1138,7 @@ void SchemaBuilder<Getter, NameMapper>::applyCreateStorageInstance(
     // Else the storage instance does not exist, create it.
 
     // We need to create a Storage instance to handle its raft log and snapshot when it
-    // is "dropped" but not physically removed in TiDB. To handle it porperly, we get a
+    // is "dropped" but not physically removed in TiDB. To handle it properly, we get a
     // tso from PD to create the table. The tso must be newer than what "DROP TABLE" DDL
     // is executed. So when the gc-safepoint is larger than tombstone_ts, the table can
     // be safe to physically drop on TiFlash.
@@ -1434,7 +1434,7 @@ void SchemaBuilder<Getter, NameMapper>::syncAllSchema()
     }
     sync_all_schema_wait_group->wait();
 
-    // `applyRenameLogicalTable` is not atmoic when renaming a partitioned table
+    // `applyRenameLogicalTable` is not atomic when renaming a partitioned table
     // to new database. There could be a chance that the logical table .sql have
     // been moved to the new database while some partitions' sql are not moved.
     // Try to detect such situation and fix it.
@@ -1526,7 +1526,7 @@ void SchemaBuilder<Getter, NameMapper>::tryFixPartitionsBelongingDatabase()
             auto it = part_to_db_id.find(*opt_tbl_id);
             if (it == part_to_db_id.end())
             {
-                // this is not a physical_table_id of a partition, ignore sliently
+                // this is not a physical_table_id of a partition, ignore silently
                 continue;
             }
             // Get the `new_database_id` from `table_id_map`
@@ -1769,8 +1769,8 @@ String SchemaBuilder<Getter, NameMapper>::tryGetDatabaseDisplayNameFromLocal(Dat
 {
     // This method is called in the `applyDiff` loop. The `applyDiff` loop should apply the all the DDL operations before
     // the database get dropped, so the database info should be cached in `databases`.
-    // But for corner cases that the database is dropped on some unkonwn cases, we just return a display database name
-    // according to the keyspace_id and database_id because display name ususally is not critical.
+    // But for corner cases that the database is dropped on some unknown cases, we just return a display database name
+    // according to the keyspace_id and database_id because display name usually is not critical.
     if (auto new_db_info = databases.getDBInfo(database_id); likely(new_db_info != nullptr))
     {
         return name_mapper.displayDatabaseName(*new_db_info);

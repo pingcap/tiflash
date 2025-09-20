@@ -117,7 +117,12 @@ std::tuple<Page, ReadBufferFromRandomAccessFilePtr, S3PageReader::ReuseStat> S3P
     try
     {
         RUNTIME_CHECK(read_buff != nullptr);
-        read_buff->seek(location.offset_in_file, SEEK_SET);
+        auto seek_ret = read_buff->seek(location.offset_in_file, SEEK_SET);
+        RUNTIME_CHECK_MSG(
+            seek_ret >= 0,
+            "Failed to seek in S3 file, ret={} location={}",
+            seek_ret,
+            location.toDebugString());
         // TODO: support checksum verification
         read_buff->readStrict(data_buf, buf_size);
     }

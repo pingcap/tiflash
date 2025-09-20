@@ -220,7 +220,7 @@ struct BinStrPattern
             }
         }
         return true;
-    };
+    }
 
     // match from end exactly
     // - return true if meet %
@@ -265,7 +265,7 @@ struct BinStrPattern
             }
         }
         return true;
-    };
+    }
 
     // search by pattern `...%..%`
     // - return true if meet %
@@ -336,7 +336,7 @@ struct BinStrPattern
                 }
             }
         }
-    };
+    }
 
     ALWAYS_INLINE inline bool match(std::string_view src) const
     {
@@ -432,6 +432,7 @@ ALWAYS_INLINE inline bool StringPatternMatchImpl(
     {
     case TiDB::ITiDBCollator::CollatorType::UTF8MB4_BIN:
     case TiDB::ITiDBCollator::CollatorType::UTF8_BIN:
+    case TiDB::ITiDBCollator::CollatorType::UTF8MB4_0900_BIN:
     {
         BinStringPatternMatch<Result, revert, true>(a_data, a_offsets, pattern_str, escape_char, c);
         use_optimized_path = true;

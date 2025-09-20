@@ -307,6 +307,11 @@ void WaitCheckRegionReadyImpl(
         total_regions_cnt);
 }
 
+/**
+ * For the region_ids stored in `kvstore`
+ * 1. fetch the latest commit-index from TiKV
+ * 2. wait until the tiflash-proxy apply raft logs for regions has catchup (applied to the commit-index)
+ */
 void WaitCheckRegionReady(KVStore & kvstore, const std::atomic_size_t & terminate_signals_counter)
 {
     const auto & config = kvstore.getConfigRef();

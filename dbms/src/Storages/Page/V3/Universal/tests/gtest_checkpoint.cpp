@@ -87,7 +87,7 @@ public:
         // Currently there is no compression, so reading data is rather easy.
 
         auto buf = ReadBufferFromFile(dir + *location.data_file_id);
-        buf.seek(location.offset_in_file);
+        RUNTIME_CHECK(buf.seek(location.offset_in_file) >= 0);
         auto n = buf.readBig(ret.data(), location.size_in_file);
         RUNTIME_CHECK(n == location.size_in_file);
 
@@ -1002,7 +1002,7 @@ protected:
 
         auto data_file = S3::S3RandomAccessFile::create(data_file_key);
         ReadBufferFromRandomAccessFile buf(data_file);
-        buf.seek(location.offset_in_file);
+        RUNTIME_CHECK(buf.seek(location.offset_in_file) >= 0);
         auto n = buf.readBig(ret.data(), location.size_in_file);
         RUNTIME_CHECK(n == location.size_in_file);
 

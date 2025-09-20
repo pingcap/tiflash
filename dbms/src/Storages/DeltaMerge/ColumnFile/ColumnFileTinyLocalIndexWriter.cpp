@@ -180,11 +180,14 @@ ColumnFileTinyPtr ColumnFileTinyLocalIndexWriter::buildIndexForFile(
             CompressedWriteBuffer compressed(write_buf);
             dtpb::ColumnFileIndexInfo pb_cf_idx;
             pb_cf_idx.set_index_page_id(index_page_id);
-            auto idx_info = index.index_writer->finalize(compressed, [&write_buf] { return write_buf.count(); });
+            auto idx_info = index.index_writer->finalize(compressed, [&compressed, &write_buf]() {
+                compressed.next(); // ensure the compressed data is flushed to write_buf
+                return write_buf.count();
+            });
             pb_cf_idx.mutable_index_props()->Swap(&idx_info);
             auto data_size = write_buf.count();
             auto buf = write_buf.tryGetReadBuffer();
-            // ColumnFileDataProviderRNLocalPageCache currently does not support read data withiout fields
+            // ColumnFileDataProviderRNLocalPageCache currently does not support read data without fields
             options.wbs.log.putPage(index_page_id, 0, buf, data_size, {data_size});
             index_infos->emplace_back(std::move(pb_cf_idx));
         }
