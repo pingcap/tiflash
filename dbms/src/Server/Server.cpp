@@ -379,7 +379,7 @@ void syncSchemaWithTiDB(
             }
             catch (DB::Exception & e)
             {
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
@@ -389,7 +389,7 @@ void syncSchemaWithTiDB(
             }
             catch (Poco::Exception & e)
             {
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
