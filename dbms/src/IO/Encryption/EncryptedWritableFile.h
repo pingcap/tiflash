@@ -52,7 +52,7 @@ public:
 
     int ftruncate(off_t length) override { return file->ftruncate(length); }
 
-    void hardLink(const std::string & existing_file) override { file->hardLink(existing_file); };
+    void hardLink(const std::string & existing_file) override { file->hardLink(existing_file); }
 
 private:
     WritableFilePtr file;

@@ -285,7 +285,7 @@ try
     DB::S3::deleteObject(*s3_client, key);
 
     // try open the deleted file, should throw exception
-    ASSERT_ANY_THROW(S3RandomAccessFile file2(s3_client, key, nullptr););
+    ASSERT_ANY_THROW(S3RandomAccessFile file2(s3_client, key););
 }
 CATCH
 
@@ -298,7 +298,7 @@ try
     verifyFile(key, size);
 
     // First init the file, this should success
-    S3RandomAccessFile file(s3_client, key, nullptr);
+    S3RandomAccessFile file(s3_client, key);
 
     // Mock s3 failure, for example, network error or file already deleted
     FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
@@ -328,7 +328,7 @@ try
     verifyFile(key, size);
 
     // First init the buffer, this should success
-    auto buf_reader = ReadBufferFromRandomAccessFile(std::make_shared<S3RandomAccessFile>(s3_client, key, nullptr));
+    auto buf_reader = ReadBufferFromRandomAccessFile(std::make_shared<S3RandomAccessFile>(s3_client, key));
 
     // Mock s3 failure, for example, network error or file already deleted
     FailPointHelper::enableFailPoint(FailPoints::force_s3_random_access_file_read_fail);
