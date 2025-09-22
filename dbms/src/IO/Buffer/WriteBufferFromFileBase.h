@@ -28,7 +28,7 @@ public:
     WriteBufferFromFileBase(size_t buf_size, char * existing_memory, size_t alignment);
     ~WriteBufferFromFileBase() override;
 
-    off_t seek(off_t off, int whence = SEEK_SET);
+    [[nodiscard]] off_t seek(off_t off, int whence = SEEK_SET);
     void truncate(off_t length = 0);
     virtual off_t getPositionInFile() = 0;
     virtual off_t getMaterializedBytes() { return getPositionInFile(); }

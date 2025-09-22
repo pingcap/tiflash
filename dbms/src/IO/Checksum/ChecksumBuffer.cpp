@@ -51,7 +51,7 @@ off_t FramedChecksumReadBuffer<Backend>::doSeek(off_t offset, int whence)
     // read the header and the body
     auto header_offset = target_frame * (sizeof(ChecksumFrame<Backend>) + frame_size);
     auto result = in->seek(static_cast<off_t>(header_offset), SEEK_SET);
-    if (result == -1)
+    if (result < 0)
     {
         throw TiFlashException(
             Errors::Checksum::IOFailure,
