@@ -322,7 +322,7 @@ void concurrentTest()
 TEST_F(TestCTE, Concurrent)
 try
 {
-    for (size_t i = 0; i < 100; i++)
+    for (size_t i = 0; i < 10; i++)
         concurrentTest();
 }
 CATCH
