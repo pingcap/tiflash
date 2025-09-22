@@ -272,6 +272,9 @@ public:
         throw Exception("getPermutation is not implemented for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
     }
 
+    // A fake capacity for ColumnFunction, as it does not hold data in the same way as other columns.
+    size_t capacity() const override { return 0; }
+
     void gather(ColumnGathererStream &) override
     {
         throw Exception("Method gather is not supported for " + getName(), ErrorCodes::NOT_IMPLEMENTED);
