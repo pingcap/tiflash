@@ -105,7 +105,7 @@ public:
 
     void tryToGetResp(tipb::SelectResponse & resp)
     {
-        std::shared_lock<std::shared_mutex> lock(this->rw_lock);
+        std::unique_lock<std::shared_mutex> lock(this->rw_lock);
         if (!this->get_resp)
         {
             this->get_resp = true;

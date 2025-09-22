@@ -178,6 +178,8 @@ void concurrentTest()
         auto * reader = readers[source_idx].get();
         Block block;
         bool exit = false;
+        std::random_device r;
+        std::default_random_engine dre(r());
         std::uniform_int_distribution<size_t> di1(1, 10);
         std::uniform_int_distribution<size_t> di2(10, 50);
         while (!exit)
@@ -230,6 +232,8 @@ void concurrentTest()
     exit_num_for_each_partition.resize(EXPECTED_SINK_NUM, 0);
 
     auto sink_func = [&](size_t sink_idx, size_t partition_idx) {
+        std::random_device r;
+        std::default_random_engine dre(r());
         std::uniform_int_distribution<size_t> di1(1, 10);
         std::uniform_int_distribution<size_t> di2(10, 50);
 
@@ -261,6 +265,8 @@ void concurrentTest()
 
     std::atomic_bool cancelled = false;
     auto cancel_func = [&]() {
+        std::random_device r;
+        std::default_random_engine dre(r());
         std::uniform_int_distribution<size_t> di(1, 200);
         auto random_val = di(dre);
         std::this_thread::sleep_for(std::chrono::milliseconds(random_val));
