@@ -23,8 +23,6 @@
 
 namespace DB
 {
-constexpr ssize_t MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE
-    = 1024 * 1024 * 64; // 64MB: 8192 Rows * 256 Byte/row * 32 partitions
 const char * HashPartitionWriterLabels[] = {"HashPartitionWriter", "HashPartitionWriter-V1"};
 
 template <class ExchangeWriterPtr>
@@ -32,19 +30,18 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     ExchangeWriterPtr writer_,
     std::vector<Int64> partition_col_ids_,
     TiDB::TiDBCollators collators_,
-    Int64 batch_send_min_limit_,
+    Int64 max_buffered_rows_,
+    UInt64 max_buffered_bytes_,
     DAGContext & dag_context_,
     MPPDataPacketVersion data_codec_version_,
     tipb::CompressionMode compression_mode_)
     : DAGResponseWriter(/*records_per_chunk=*/-1, dag_context_)
-    , batch_send_min_limit(batch_send_min_limit_)
     , writer(writer_)
     , partition_col_ids(std::move(partition_col_ids_))
     , collators(std::move(collators_))
     , data_codec_version(data_codec_version_)
     , compression_method(ToInternalCompressionMethod(compression_mode_))
 {
-    rows_in_blocks = 0;
     partition_num = writer_->getPartitionNum();
     RUNTIME_CHECK(partition_num > 0);
     RUNTIME_CHECK(dag_context.encode_type == tipb::EncodeType::TypeCHBlock);
@@ -52,17 +49,17 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
     switch (data_codec_version)
     {
     case MPPDataPacketV0:
-        if (batch_send_min_limit <= 0)
-            batch_send_min_limit = 1;
+        if (max_buffered_rows_ <= 0)
+            max_buffered_rows_ = 1;
         break;
     case MPPDataPacketV1:
     default:
     {
         // make `batch_send_min_limit` always GT 0
-        if (batch_send_min_limit <= 0)
+        if (max_buffered_rows_ <= 0)
         {
             // set upper limit if not specified
-            batch_send_min_limit = 8 * 1024 * partition_num /* 8K * partition-num */;
+            max_buffered_rows_ = 8 * 1024 * partition_num /* 8K * partition-num */;
         }
         for (const auto & field_type : dag_context.result_field_types)
         {
@@ -71,13 +68,15 @@ HashPartitionWriter<ExchangeWriterPtr>::HashPartitionWriter(
         break;
     }
     }
+    max_buffered_rows = static_cast<UInt64>(max_buffered_rows_);
+    max_buffered_bytes = max_buffered_bytes_;
 }
 
 template <class ExchangeWriterPtr>
 WriteResult HashPartitionWriter<ExchangeWriterPtr>::flush()
 {
     has_pending_flush = false;
-    if (0 == rows_in_blocks)
+    if (0 == buffered_rows)
         return WriteResult::Done;
 
     auto wait_res = waitForWritable();
@@ -126,17 +125,12 @@ WriteResult HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 
     if (rows > 0)
     {
-        rows_in_blocks += rows;
-        if (data_codec_version == MPPDataPacketV1)
-            mem_size_in_blocks += block.bytes();
+        buffered_rows += rows;
+        buffered_bytes += block.allocatedBytes();
         blocks.push_back(block);
     }
 
-    auto row_count_exceed = static_cast<Int64>(rows_in_blocks) >= batch_send_min_limit;
-    auto row_bytes_exceed
-        = data_codec_version == MPPDataPacketV1 && mem_size_in_blocks >= MAX_BATCH_SEND_MIN_LIMIT_MEM_SIZE;
-
-    if (row_count_exceed || row_bytes_exceed)
+    if (needFlush())
         return flush();
     return WriteResult::Done;
 }
@@ -144,8 +138,8 @@ WriteResult HashPartitionWriter<ExchangeWriterPtr>::write(const Block & block)
 template <class ExchangeWriterPtr>
 void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
 {
-    assert(rows_in_blocks > 0);
-    assert(mem_size_in_blocks > 0);
+    assert(buffered_rows > 0);
+    assert(buffered_bytes > 0);
     assert(!blocks.empty());
 
     HashBaseWriterHelper::materializeBlocks(blocks);
@@ -191,7 +185,7 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
         }
     }
     blocks.clear();
-    RUNTIME_CHECK(rows_in_blocks, total_rows);
+    RUNTIME_CHECK(buffered_rows, total_rows);
 
     for (size_t part_id = 0; part_id < partition_num; ++part_id)
     {
@@ -204,8 +198,8 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocksV1()
     }
 
     assert(blocks.empty());
-    rows_in_blocks = 0;
-    mem_size_in_blocks = 0;
+    buffered_rows = 0;
+    buffered_bytes = 0;
 }
 
 template <class ExchangeWriterPtr>
@@ -252,7 +246,8 @@ void HashPartitionWriter<ExchangeWriterPtr>::partitionAndWriteBlocks()
             }
         }
         assert(blocks.empty());
-        rows_in_blocks = 0;
+        buffered_rows = 0;
+        buffered_bytes = 0;
     }
 
     for (size_t part_id = 0; part_id < partition_num; ++part_id)

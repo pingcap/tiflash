@@ -249,12 +249,12 @@ DeltaMergeStore::DeltaMergeStore(
 
     replica_exist.store(has_replica);
     // for mock test, table_id_ should be DB::InvalidTableID
-    NamespaceID ns_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
+    TableID tbl_id = physical_table_id == DB::InvalidTableID ? TEST_NAMESPACE_ID : physical_table_id;
 
     LOG_INFO(log, "Restore DeltaMerge Store start");
 
     storage_pool
-        = std::make_shared<StoragePool>(global_context, keyspace_id, ns_id, *path_pool, db_name_ + "." + table_name_);
+        = std::make_shared<StoragePool>(global_context, keyspace_id, tbl_id, *path_pool, db_name_ + "." + table_name_);
 
     // Restore existing dm files.
     // Should be done before any background task setup.

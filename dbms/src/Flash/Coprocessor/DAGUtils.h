@@ -85,6 +85,8 @@ void assertBlockSchema(const DataTypes & expected_types, const Block & block, co
 
 void assertBlockSchema(const Block & header, const Block & block, const String & context_description);
 
+UInt64 getMaxBufferedBytesInResponseWriter(Int64 max_buffered_bytes_in_executor, size_t concurrency);
+
 class UniqueNameGenerator
 {
 private:

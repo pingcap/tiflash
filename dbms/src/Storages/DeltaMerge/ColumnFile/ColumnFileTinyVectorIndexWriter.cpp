@@ -174,10 +174,10 @@ ColumnFileTinyPtr ColumnFileTinyVectorIndexWriter::buildIndexForFile(
             MemoryWriteBuffer write_buf;
             CompressedWriteBuffer compressed(write_buf);
             index_builder->saveToBuffer(compressed);
-            compressed.next();
+            compressed.next(); // ensure the compressed data is flushed to write_buf
             auto data_size = write_buf.count();
             auto buf = write_buf.tryGetReadBuffer();
-            // ColumnFileDataProviderRNLocalPageCache currently does not support read data with fields
+            // ColumnFileDataProviderRNLocalPageCache currently does not support read data without fields
             options.wbs.log.putPage(index_page_id, 0, buf, data_size, {data_size});
 
             dtpb::VectorIndexFileProps vector_index;

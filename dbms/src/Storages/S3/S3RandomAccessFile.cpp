@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/Exception.h>
+#include <Common/FailPoint.h>
 #include <Common/ProfileEvents.h>
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
@@ -22,10 +23,14 @@
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
 #include <Storages/S3/S3RandomAccessFile.h>
+#include <aws/core/utils/Outcome.h>
 #include <aws/s3/model/GetObjectRequest.h>
 #include <common/likely.h>
+#include <common/logger_useful.h>
+#include <fiu.h>
 
 #include <optional>
+#include <string_view>
 
 namespace ProfileEvents
 {
@@ -34,7 +39,13 @@ extern const Event S3ReadBytes;
 extern const Event S3GetObjectRetry;
 extern const Event S3IORead;
 extern const Event S3IOSeek;
+extern const Event S3IOSeekBackward;
 } // namespace ProfileEvents
+namespace DB::FailPoints
+{
+extern const char force_s3_random_access_file_init_fail[];
+extern const char force_s3_random_access_file_read_fail[];
+} // namespace DB::FailPoints
 
 namespace DB::S3
 {
@@ -50,7 +61,7 @@ S3RandomAccessFile::S3RandomAccessFile(std::shared_ptr<TiFlashS3Client> client_p
     , log(Logger::get(remote_fname))
 {
     RUNTIME_CHECK(client_ptr != nullptr);
-    RUNTIME_CHECK(initialize(), remote_fname);
+    initialize("init file");
 }
 
 std::string S3RandomAccessFile::getFileName() const
@@ -70,7 +81,7 @@ constexpr int S3StreamError = -2;
 
 bool isRetryableError(int ret, int err)
 {
-    return ret == S3StreamError || err == ECONNRESET || err == EAGAIN;
+    return ret == S3StreamError || err == ECONNRESET || err == EAGAIN || err == EINPROGRESS;
 }
 } // namespace
 
@@ -81,11 +92,9 @@ ssize_t S3RandomAccessFile::read(char * buf, size_t size)
         auto n = readImpl(buf, size);
         if (unlikely(n < 0 && isRetryableError(n, errno)))
         {
-            // If it is a retryable error, then initialize again
-            if (initialize())
-            {
-                continue;
-            }
+            // If it is a retryable error, then initialize again and retry read
+            initialize("read meet retryable error");
+            continue;
         }
         return n;
     }
@@ -98,16 +107,21 @@ ssize_t S3RandomAccessFile::readImpl(char * buf, size_t size)
     auto & istr = read_result.GetBody();
     istr.read(buf, size);
     size_t gcount = istr.gcount();
+
+    fiu_do_on(FailPoints::force_s3_random_access_file_read_fail, {
+        LOG_WARNING(log, "failpoint force_s3_random_access_file_read_fail is triggered, return S3StreamError");
+        return S3StreamError;
+    });
+
     // Theoretically, `istr.eof()` is equivalent to `cur_offset + gcount != static_cast<size_t>(content_length)`.
-    // It's just a double check for more safty.
+    // It's just a double check for more safety.
     if (gcount < size && (!istr.eof() || cur_offset + gcount != static_cast<size_t>(content_length)))
     {
         auto state = istr.rdstate();
         LOG_ERROR(
             log,
             "Cannot read from istream, size={} gcount={} state=0x{:02X} cur_offset={} content_length={} errno={} "
-            "errmsg={} "
-            "cost={}ns",
+            "errmsg={} cost={}ns",
             size,
             gcount,
             state,
@@ -142,11 +156,9 @@ off_t S3RandomAccessFile::seek(off_t offset_, int whence)
         auto off = seekImpl(offset_, whence);
         if (unlikely(off < 0 && isRetryableError(off, errno)))
         {
-            // If it is a retryable error, then initialize again
-            if (initialize())
-            {
-                continue;
-            }
+            // If it is a retryable error, then initialize again and retry seek
+            initialize("seek meet retryable error");
+            continue;
         }
         return off;
     }
@@ -156,7 +168,7 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
 {
     RUNTIME_CHECK_MSG(whence == SEEK_SET, "Only SEEK_SET mode is allowed, but {} is received", whence);
     RUNTIME_CHECK_MSG(
-        offset_ >= cur_offset && offset_ <= content_length,
+        offset_ >= 0 && offset_ <= content_length,
         "Seek position is out of bounds: offset={}, cur_offset={}, content_length={}",
         offset_,
         cur_offset,
@@ -166,6 +178,18 @@ off_t S3RandomAccessFile::seekImpl(off_t offset_, int whence)
     {
         return cur_offset;
     }
+
+    if (offset_ < cur_offset)
+    {
+        ProfileEvents::increment(ProfileEvents::S3IOSeekBackward, 1);
+        // Backward seek, need to reset the retry count and re-initialize
+        cur_offset = offset_;
+        cur_retry = 0;
+        initialize("seek backward");
+        return cur_offset;
+    }
+
+    // Forward seek
     Stopwatch sw;
     ProfileEvents::increment(ProfileEvents::S3IOSeek, 1);
     auto & istr = read_result.GetBody();
@@ -202,26 +226,38 @@ String S3RandomAccessFile::readRangeOfObject()
     return fmt::format("bytes={}-", cur_offset);
 }
 
-bool S3RandomAccessFile::initialize()
+void S3RandomAccessFile::initialize(std::string_view action)
 {
-    Stopwatch sw;
-    bool request_succ = false;
-    Aws::S3::Model::GetObjectRequest req;
-    req.SetRange(readRangeOfObject());
-    client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
     while (cur_retry < max_retry)
     {
-        cur_retry += 1;
+        Stopwatch sw_get_object;
+        SCOPE_EXIT({
+            auto elapsed_secs = sw_get_object.elapsedSeconds();
+            GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(elapsed_secs);
+        });
         ProfileEvents::increment(ProfileEvents::S3GetObject);
-        if (cur_retry > 1)
+        if (cur_retry > 0)
         {
             ProfileEvents::increment(ProfileEvents::S3GetObjectRetry);
         }
+
+        Aws::S3::Model::GetObjectRequest req;
+        req.SetRange(readRangeOfObject());
+        client_ptr->setBucketAndKeyWithRoot(req, remote_fname);
         auto outcome = client_ptr->GetObject(req);
+        fiu_do_on(FailPoints::force_s3_random_access_file_init_fail, {
+            LOG_WARNING(log, "failpoint force_s3_random_access_file_init_fail is triggered, set outcome to error");
+            outcome = Aws::S3::Model::GetObjectOutcome(Aws::Client::AWSError<Aws::S3::S3Errors>(
+                Aws::S3::S3Errors::INTERNAL_FAILURE,
+                "InternalError",
+                "Injected error by failpoint",
+                true));
+        });
         if (!outcome.IsSuccess())
         {
-            auto el = sw.elapsedSeconds();
-            LOG_ERROR(
+            cur_retry += 1;
+            auto el = sw_get_object.elapsedSeconds();
+            LOG_WARNING(
                 log,
                 "S3 GetObject failed: {}, cur_retry={}, key={}, elapsed{}={:.3f}s",
                 S3::S3ErrorMessage(outcome.GetError()),
@@ -232,28 +268,20 @@ bool S3RandomAccessFile::initialize()
             continue;
         }
 
-        request_succ = true;
         if (content_length == 0)
         {
             content_length = outcome.GetResult().GetContentLength();
         }
         read_result = outcome.GetResultWithOwnership();
         RUNTIME_CHECK(read_result.GetBody(), remote_fname, strerror(errno));
-        GET_METRIC(tiflash_storage_s3_request_seconds, type_get_object).Observe(sw.elapsedSeconds());
-        break;
+        return; // init successfully
     }
-    if (cur_retry >= max_retry && !request_succ)
-    {
-        auto el = sw.elapsedSeconds();
-        LOG_INFO(
-            log,
-            "S3 GetObject timeout: max_retry={}, key={}, elapsed{}={:.3f}s",
-            max_retry,
-            req.GetKey(),
-            el > 60.0 ? "(long)" : "",
-            el);
-    }
-    return request_succ;
+    // exceed max retry times
+    throw Exception(
+        ErrorCodes::S3_ERROR,
+        "Open S3 file for read fail after retries when {}, key={}",
+        action,
+        remote_fname);
 }
 
 inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname, std::optional<UInt64> filesize)

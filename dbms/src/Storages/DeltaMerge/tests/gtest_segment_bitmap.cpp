@@ -16,6 +16,7 @@
 #include <DataStreams/OneBlockInputStream.h>
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
@@ -202,12 +203,34 @@ protected:
         }
         return results;
     }
+
+    UInt64 estimatedBytesOfInternalColumns(UInt64 start_ts)
+    {
+        auto [seg, snap] = getSegmentForRead(SEG_ID);
+        auto pack_filters = Segment::loadDMFilePackFilters(
+            snap->stable->getDMFiles(),
+            dm_context->global_context.getMinMaxIndexCache(),
+            /*rowkey_ranges*/ {},
+            EMPTY_RS_OPERATOR,
+            dm_context->global_context.getFileProvider(),
+            dm_context->global_context.getReadLimiter(),
+            dm_context->scan_context,
+            dm_context->tracing_id,
+            ReadTag::MVCC);
+        return Segment::estimatedBytesOfInternalColumns(snap, pack_filters, start_ts);
+    }
 };
 
 TEST_F(SegmentBitmapFilterTest, InMemory1)
 try
 {
     runTestCase(TestCase("d_mem:[0, 1000)", 1000, "[0, 1000)", "[0, 1000)"));
+
+    // Delta only
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max());
+    ASSERT_EQ(bytes, 17 * 1000);
+    bytes = estimatedBytesOfInternalColumns(0);
+    ASSERT_EQ(bytes, 17 * 1000);
 }
 CATCH
 
@@ -297,6 +320,12 @@ TEST_F(SegmentBitmapFilterTest, Stable1)
 try
 {
     runTestCase(TestCase{"s:[0, 1024)", 1024, "[0, 1024)", "[0, 1024)"});
+
+    // Stable only
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max());
+    ASSERT_EQ(bytes, 0);
+    bytes = estimatedBytesOfInternalColumns(0);
+    ASSERT_EQ(bytes, 17 * 1024);
 }
 CATCH
 
@@ -327,6 +356,12 @@ try
         946,
         "[0, 128)|[1034, 1089)|[256, 298)|[1089, 1096)|[310, 1024)",
         "[0, 128)|[200, 255)|[256, 305)|[310, 1024)"});
+
+    // Delta + Stable
+    auto bytes = estimatedBytesOfInternalColumns(std::numeric_limits<UInt64>::max());
+    ASSERT_EQ(bytes, 17 * (1024 + 10 + 55 + 7));
+    bytes = estimatedBytesOfInternalColumns(0);
+    ASSERT_EQ(bytes, 17 * (1024 + 10 + 55 + 7));
 }
 CATCH
 

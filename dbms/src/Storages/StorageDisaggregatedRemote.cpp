@@ -449,7 +449,7 @@ std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> StorageDisaggregated:
     }
 
     // how long the task is valid on the write node
-    establish_req->set_timeout_s(DEFAULT_DISAGG_TASK_TIMEOUT_SEC);
+    establish_req->set_timeout_s(settings.disagg_task_snapshot_timeout);
     establish_req->set_address(batch_cop_task.store_addr);
     establish_req->set_schema_ver(settings.schema_version);
 

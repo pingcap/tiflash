@@ -43,11 +43,11 @@ public:
 
     ~PosixWritableFile() override;
 
-    ssize_t write(char * buf, size_t size) override;
+    [[nodiscard]] ssize_t write(char * buf, size_t size) override;
 
-    ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
+    [[nodiscard]] ssize_t pwrite(char * buf, size_t size, off_t offset) const override;
 
-    off_t seek(off_t offset, int whence) const override;
+    [[nodiscard]] off_t seek(off_t offset, int whence) const override;
 
     std::string getFileName() const override { return file_name; }
 

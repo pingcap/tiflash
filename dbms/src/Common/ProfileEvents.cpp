@@ -138,6 +138,7 @@
     M(S3PutObjectRetry)                        \
     M(S3IORead)                                \
     M(S3IOSeek)                                \
+    M(S3IOSeekBackward)                        \
     M(FileCacheHit)                            \
     M(FileCacheMiss)                           \
     M(FileCacheEvict)                          \
