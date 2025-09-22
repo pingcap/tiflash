@@ -17,14 +17,12 @@
 #include <Interpreters/Context.h>
 #include <Storages/DeltaMerge/DeltaMergeStore.h>
 #include <Storages/DeltaMerge/File/DMFilePackFilter.h>
+#include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_test_basic.h>
 #include <Storages/DeltaMerge/tests/gtest_segment_util.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
 #include <common/defines.h>
-
-#include "Storages/DeltaMerge/File/DMFilePackFilter.h"
-#include "Storages/DeltaMerge/Filter/RSOperator.h"
 using namespace std::chrono_literals;
 using namespace DB::tests;
 
