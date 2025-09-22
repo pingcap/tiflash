@@ -1110,7 +1110,10 @@ grpc::Status FlashService::FetchDisaggPages(
 
     try
     {
-        auto snap = snaps->getSnapshot(task_id, /*refresh_expiration*/ true);
+        // Every FetchDisaggPages request refreshes the snapshot expiration.
+        auto snap = snaps->getDisaggSnapshot(
+            task_id,
+            /*refresh_duration*/ std::chrono::seconds(DEFAULT_DISAGG_TASK_REFRESH_SEC));
         RUNTIME_CHECK_MSG(snap != nullptr, "Can not find disaggregated task, task_id={}", task_id);
         auto task = snap->popSegTask(request->table_id(), request->segment_id());
         RUNTIME_CHECK(task.isValid(), task.err_msg);

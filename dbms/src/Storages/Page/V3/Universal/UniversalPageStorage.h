@@ -90,7 +90,25 @@ public:
 
     void restore();
 
-    SnapshotPtr getSnapshot(const String & tracing_id) const { return page_directory->createSnapshot(tracing_id); }
+    // In UniversalPageStorage, we store (almost) all data of TiFlash to UniversalPageStorage.
+    // However, the "RaftLog" is frequently written and deleted, and those data are not needed
+    // for handling read requests. Frequent writing and deleting will lead to sharp increase of
+    // memory usage if we keep a snapshot of those data.
+    // So we provide two kinds of snapshot as follow:
+    // - `getGeneralSnapshot`
+    // - `getDeltaTreeOnlySnapshot`
+
+    // GeneralSnapshot: protect all data, used for general-purpose reading on UniversalPageStorage.
+    SnapshotPtr getGeneralSnapshot(const String & tracing_id) const
+    {
+        return page_directory->createSnapshot(SnapshotType::General, tracing_id);
+    }
+
+    // DeltaTreeOnlySnapshot: protect only data in DeltaTree engine, used for handling reading requests.
+    SnapshotPtr getDeltaTreeOnlySnapshot(const String & tracing_id) const
+    {
+        return page_directory->createSnapshot(SnapshotType::DeltaTreeOnly, tracing_id);
+    }
 
     // Get some statistics of all living snapshots and the oldest living snapshot.
     SnapshotsStatistics getSnapshotsStat() const { return page_directory->getSnapshotsStat(); }

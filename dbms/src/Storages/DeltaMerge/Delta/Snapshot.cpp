@@ -42,11 +42,10 @@ DeltaSnapshotPtr DeltaValueSpace::createSnapshot(
     auto snap = std::make_shared<DeltaValueSnapshot>(type, for_update);
     snap->delta = this->shared_from_this();
 
-    auto storage_snap = std::make_shared<StorageSnapshot>(
+    auto storage_snap = std::make_shared<StorageSnapshot>( //
         *context.storage_pool,
         context.getReadLimiter(),
-        context.tracing_id,
-        /*snapshot_read*/ true);
+        context.tracing_id);
     auto data_from_storage_snap = ColumnFileDataProviderLocalStoragePool::create(storage_snap);
     snap->persisted_files_snap = persisted_file_set->createSnapshot(data_from_storage_snap);
     snap->mem_table_snap = mem_table_set->createSnapshot(data_from_storage_snap, for_update);
@@ -192,7 +191,7 @@ BlockOrDeletes DeltaValueReader::getPlaceItems(
     size_t rows_end,
     size_t deletes_end)
 {
-    /// Note that we merge the consecutive ColumnFileInMemory or ColumnFileTiny together, which are seperated in groups by ColumnFileDeleteRange and ColumnFileBig.
+    /// Note that we merge the consecutive ColumnFileInMemory or ColumnFileTiny together, which are separated in groups by ColumnFileDeleteRange and ColumnFileBig.
     BlockOrDeletes res;
     auto mem_table_rows_offset = delta_snap->getMemTableSetRowsOffset();
     auto mem_table_deletes_offset = delta_snap->getMemTableSetDeletesOffset();
