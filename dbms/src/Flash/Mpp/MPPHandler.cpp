@@ -94,14 +94,14 @@ grpc::Status MPPHandler::execute(const ContextPtr & context, mpp::DispatchTaskRe
     }
     catch (Exception & e)
     {
-        LOG_ERROR(log, "dispatch task meet error : {}", e.displayText());
+        LOG_WARNING(log, "dispatch task meet error : {}", e.displayText());
         auto * err = response->mutable_error();
         err->set_msg(e.displayText());
         handleError(task, e.displayText());
     }
     catch (std::exception & e)
     {
-        LOG_ERROR(log, "dispatch task meet error : {}", e.what());
+        LOG_WARNING(log, "dispatch task meet error : {}", e.what());
         auto * err = response->mutable_error();
         err->set_msg(e.what());
         handleError(task, e.what());
