@@ -1707,11 +1707,13 @@ bool DeltaMergeStore::checkSegmentUpdate(
         if (shutdown_called.load(std::memory_order_relaxed))
             return;
 
-        auto [added, heavy] = background_tasks.tryAddTask(
-            task,
-            thread_type,
-            std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3),
-            log);
+        size_t max_task_num = 0;
+        {
+            std::shared_lock lock(read_write_mutex); // protect `id_to_segment`
+            max_task_num = std::max(id_to_segment.size() * 2, background_pool.getNumberOfThreads() * 3);
+        }
+
+        auto [added, heavy] = background_tasks.tryAddTask(task, thread_type, max_task_num, log);
         // Prevent too many tasks.
         if (!added)
             return;
