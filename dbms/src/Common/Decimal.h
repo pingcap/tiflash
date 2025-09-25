@@ -19,6 +19,7 @@
 #include <Core/Types.h>
 
 #include <ext/singleton.h>
+#include <type_traits>
 
 namespace DB
 {
@@ -164,7 +165,21 @@ struct SumDecimalInferer
 struct AvgDecimalInferer
 {
     static constexpr PrecType decimal_longlong_digits = 22;
-    static std::tuple<PrecType, ScaleType> infer(PrecType left_prec, ScaleType left_scale, ScaleType div_precincrement)
+
+    static std::tuple<PrecType, ScaleType> inferResultType(
+        PrecType left_prec,
+        ScaleType left_scale,
+        ScaleType div_precincrement)
+    {
+        return {
+            std::min(left_prec + div_precincrement, decimal_max_prec),
+            std::min(left_scale + div_precincrement, decimal_max_scale)};
+    }
+
+    static std::tuple<PrecType, ScaleType> inferCalculate(
+        PrecType left_prec,
+        ScaleType left_scale,
+        ScaleType div_precincrement)
     {
         return {
             std::min(left_prec + div_precincrement + decimal_longlong_digits, decimal_max_prec),
@@ -227,6 +242,14 @@ struct Decimal
     operator T() const // NOLINT(google-explicit-constructor)
     {
         return value;
+    }
+
+    template <
+        typename U,
+        std::enable_if_t<(std::is_same_v<T, Int256> || std::is_same_v<T, Int512>)&&std::is_integral_v<U>> * = nullptr>
+    Decimal<U> degrade() const
+    {
+        return Decimal<U>(value.template convert_to<U>());
     }
 
     template <typename U>
