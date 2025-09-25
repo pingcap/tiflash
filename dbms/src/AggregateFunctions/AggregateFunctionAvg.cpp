@@ -30,38 +30,32 @@ AggregateFunctionPtr createAggregateFunctionAvgForDecimal(const IDataType * p, I
     if (const auto * dec_type = typeid_cast<const T *>(p))
     {
         AggregateFunctionPtr res;
+
+        auto [calculate_prec, calculate_scale]
+            = AvgDecimalInferer::inferCalculate(dec_type->getPrec(), dec_type->getScale(), div_precincrement);
+        auto calculate_type = createDecimal(calculate_prec, calculate_scale);
+
         auto [result_prec, result_scale]
-            = AvgDecimalInferer::infer(dec_type->getPrec(), dec_type->getScale(), div_precincrement);
+            = AvgDecimalInferer::inferResultType(dec_type->getPrec(), dec_type->getScale(), div_precincrement);
         auto result_type = createDecimal(result_prec, result_scale);
-        if (checkDecimal<Decimal32>(*result_type))
-            res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal32>(
-                *dec_type,
-                dec_type->getPrec(),
-                dec_type->getScale(),
-                result_prec,
-                result_scale));
-        else if (checkDecimal<Decimal64>(*result_type))
-            res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal64>(
-                *dec_type,
-                dec_type->getPrec(),
-                dec_type->getScale(),
-                result_prec,
-                result_scale));
-        else if (checkDecimal<Decimal128>(*result_type))
-            res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal128>(
-                *dec_type,
-                dec_type->getPrec(),
-                dec_type->getScale(),
-                result_prec,
-                result_scale));
-        else
-            res = AggregateFunctionPtr(createWithDecimalType<AggregateFunctionAvg, Decimal256>(
-                *dec_type,
-                dec_type->getPrec(),
-                dec_type->getScale(),
-                result_prec,
-                result_scale));
-        return res;
+
+#define DISPATCH(CALCULATETYPE, RESULTTYPE)                                                                    \
+    if (checkDecimal<CALCULATETYPE>(*calculate_type) && checkDecimal<RESULTTYPE>(*result_type))                \
+        return AggregateFunctionPtr(createAvgWithDecimalType<AggregateFunctionAvg, CALCULATETYPE, RESULTTYPE>( \
+            *dec_type,                                                                                         \
+            dec_type->getPrec(),                                                                               \
+            dec_type->getScale(),                                                                              \
+            result_prec,                                                                                       \
+            result_scale));
+
+        DISPATCH(Decimal128, Decimal32)
+        DISPATCH(Decimal128, Decimal64)
+        DISPATCH(Decimal128, Decimal128)
+        DISPATCH(Decimal256, Decimal32)
+        DISPATCH(Decimal256, Decimal64)
+        DISPATCH(Decimal256, Decimal128)
+        DISPATCH(Decimal256, Decimal256)
+#undef DISPATCH
     }
     return nullptr;
 }

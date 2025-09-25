@@ -21,6 +21,8 @@
 #include <IO/ReadHelpers.h>
 #include <IO/WriteHelpers.h>
 
+#include <type_traits>
+
 namespace DB
 {
 template <typename T>
@@ -46,14 +48,13 @@ struct AggregateFunctionAvgData
 template <typename T, typename TResult = Float64>
 class AggregateFunctionAvg final
     : public IAggregateFunctionDataHelper<
-          AggregateFunctionAvgData<std::conditional_t<IsDecimal<T>, TResult, typename NearestFieldType<T>::Type>>,
+          AggregateFunctionAvgData<std::conditional_t<IsDecimal<T>, T, typename NearestFieldType<T>::Type>>,
           AggregateFunctionAvg<T, TResult>>
 {
     PrecType prec;
     ScaleType scale;
     PrecType result_prec;
     ScaleType result_scale;
-    ScaleType div_precincrement;
 
 public:
     AggregateFunctionAvg() = default;
@@ -117,12 +118,17 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        if constexpr (IsDecimal<TResult>)
+        if constexpr (IsDecimal<T>)
         {
             ScaleType left_scale = result_scale - scale;
-            TResult result = this->data(place).sum.value * getScaleMultiplier<TResult>(left_scale)
-                / static_cast<typename TResult::NativeType>(this->data(place).count);
-            static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(result);
+            T result = this->data(place).sum.value * getScaleMultiplier<T>(left_scale)
+                / static_cast<typename T::NativeType>(this->data(place).count);
+            if constexpr ((std::is_same_v<T, Decimal<Int256>>
+                           || std::is_same_v<T, Decimal<Int512>>)&&std::is_integral_v<typename TResult::NativeType>)
+                static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(
+                    result.template degrade<typename TResult::NativeType>());
+            else
+                static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(result);
         }
         else
         {
@@ -136,10 +142,14 @@ public:
         if constexpr (IsDecimal<TResult>)
         {
             ScaleType left_scale = result_scale - scale;
-            TResult result = this->data(place).sum.value * getScaleMultiplier<TResult>(left_scale)
-                / static_cast<typename TResult::NativeType>(this->data(place).count);
+            T result = this->data(place).sum.value * getScaleMultiplier<T>(left_scale)
+                / static_cast<typename T::NativeType>(this->data(place).count);
             auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
-            container.resize_fill(container.size() + num, result);
+            if constexpr ((std::is_same_v<T, Decimal<Int256>>
+                           || std::is_same_v<T, Decimal<Int512>>)&&std::is_integral_v<typename TResult::NativeType>)
+                container.resize_fill(container.size() + num, result.template degrade<typename TResult::NativeType>());
+            else
+                container.resize_fill(container.size() + num, TResult(result));
         }
         else
         {

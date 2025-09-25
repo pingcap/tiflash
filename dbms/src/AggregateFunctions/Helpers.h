@@ -61,13 +61,22 @@
 
 namespace DB
 {
-template <template <typename, typename> class AggregateFunctionTemplate, typename ResultType, typename... TArgs>
-static IAggregateFunction * createWithDecimalType(const IDataType & argument_type, TArgs &&... args)
+template <
+    template <typename, typename>
+    class AggregateFunctionTemplate,
+    typename CalculateType,
+    typename ResultType,
+    typename... TArgs>
+static IAggregateFunction * createAvgWithDecimalType(const IDataType & argument_type, TArgs &&... args)
 {
-#define DISPATCH(FIELDTYPE, DATATYPE)                  \
+#define DISPATCH(DATATYPE)                             \
     if (typeid_cast<const DATATYPE *>(&argument_type)) \
-        return new AggregateFunctionTemplate<FIELDTYPE, ResultType>(std::forward<TArgs>(args)...);
-    FOR_DECIMAL_TYPES(DISPATCH)
+        return new AggregateFunctionTemplate<CalculateType, ResultType>(std::forward<TArgs>(args)...);
+
+    DISPATCH(DataTypeDecimal32)
+    DISPATCH(DataTypeDecimal64)
+    DISPATCH(DataTypeDecimal128)
+    DISPATCH(DataTypeDecimal256)
 #undef DISPATCH
     return nullptr;
 }
