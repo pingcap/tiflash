@@ -650,7 +650,7 @@ void MPPTask::runImpl()
         reportStatus(trimmed_err_msg);
         if (status == RUNNING)
         {
-            LOG_ERROR(log, "task running meets error: {}", err_msg);
+            LOG_WARNING(log, "task running meets error: {}", err_msg);
             try
             {
                 handleError(trimmed_err_msg);

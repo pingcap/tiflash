@@ -768,7 +768,7 @@ void LocalAdmissionController::doWatch()
     if (!write_ok)
     {
         auto status = stream->Finish();
-        LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + status.error_message());
+        LOG_WARNING(log, WATCH_GAC_ERR_PREFIX + status.error_message());
         return;
     }
 
@@ -779,28 +779,28 @@ void LocalAdmissionController::doWatch()
         if (!read_ok)
         {
             auto status = stream->Finish();
-            LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + "read watch stream failed, " + status.error_message());
+            LOG_WARNING(log, WATCH_GAC_ERR_PREFIX + "read watch stream failed, " + status.error_message());
             break;
         }
         LOG_DEBUG(log, "watchGAC got resp: {}", resp.ShortDebugString());
         if (resp.canceled())
         {
-            LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + "watch is canceled");
+            LOG_WARNING(log, WATCH_GAC_ERR_PREFIX + "watch is canceled");
             break;
         }
         for (const auto & event : resp.events())
         {
-            std::string err_msg;
+            std::string err_msg2;
             const mvccpb::KeyValue & kv = event.kv();
             switch (event.type())
             {
             case mvccpb::Event_EventType_DELETE:
-                if (!handleDeleteEvent(kv, err_msg))
-                    LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + err_msg);
+                if (!handleDeleteEvent(kv, err_msg2))
+                    LOG_WARNING(log, WATCH_GAC_ERR_PREFIX + err_msg2);
                 break;
             case mvccpb::Event_EventType_PUT:
-                if (!handlePutEvent(kv, err_msg))
-                    LOG_ERROR(log, WATCH_GAC_ERR_PREFIX + err_msg);
+                if (!handlePutEvent(kv, err_msg2))
+                    LOG_WARNING(log, WATCH_GAC_ERR_PREFIX + err_msg2);
                 break;
             default:
                 RUNTIME_ASSERT(false, log, "unexpect event type {}", magic_enum::enum_name(event.type()));
@@ -963,7 +963,7 @@ void LocalAdmissionController::stop()
         }
         catch (...)
         {
-            LOG_ERROR(
+            LOG_WARNING(
                 log,
                 "LAC stop got error: delete server id({}) from GAC failed: {}",
                 unique_client_id,
