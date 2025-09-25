@@ -127,7 +127,7 @@ protected:
             SegmentTestBasic::writeSegment(SEG_ID, end - begin, begin);
             if (unit.pack_size)
             {
-                db_context->getSettingsRef().set("dt_segment_stable_pack_rows", *(unit.pack_size));
+                db_context->getSettingsRef().dt_segment_stable_pack_rows = *(unit.pack_size);
                 reloadDMContext();
                 ASSERT_EQ(dm_context->stable_pack_rows, *(unit.pack_size));
             }
@@ -204,6 +204,20 @@ protected:
 
     UInt64 estimatedBytesOfInternalColumns(UInt64 start_ts)
     {
+        auto & ctx = db_context->getGlobalContext();
+        auto dm_ctx = DMContext::create(
+            ctx,
+            dm_context->path_pool,
+            dm_context->storage_pool,
+            dm_context->min_version,
+            dm_context->keyspace_id,
+            dm_context->physical_table_id,
+            dm_context->pk_col_id,
+            dm_context->is_common_handle,
+            dm_context->rowkey_column_size,
+            ctx.getSettingsRef(),
+            dm_context->scan_context,
+            dm_context->tracing_id);
         auto [seg, snap] = getSegmentForRead(SEG_ID);
         auto pack_filters = Segment::loadDMFilePackFilters(
             snap->stable->getDMFiles(),
@@ -215,7 +229,7 @@ protected:
             dm_context->scan_context,
             dm_context->tracing_id,
             ReadTag::MVCC);
-        return Segment::estimatedBytesOfInternalColumns(snap, pack_filters, start_ts);
+        return Segment::estimatedBytesOfInternalColumns(*dm_ctx, snap, pack_filters, start_ts);
     }
 };
 
