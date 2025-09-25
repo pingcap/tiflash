@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <Common/config.h>
+
+#if ENABLE_CLARA
 #include <Core/ColumnWithTypeAndName.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Stream/InputStream.h>
@@ -107,3 +110,4 @@ public:
 };
 
 } // namespace DB::DM::tests
+#endif

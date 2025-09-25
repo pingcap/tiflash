@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
+
+#if ENABLE_CLARA
 #include <DataTypes/DataTypeFactory.h>
 #include <DataTypes/DataTypeNullable.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -158,3 +161,4 @@ ClaraFTS::BruteScoredSearcher & FullTextIndexStreamCtx::ensureBruteScoredSearche
 }
 
 } // namespace DB::DM
+#endif

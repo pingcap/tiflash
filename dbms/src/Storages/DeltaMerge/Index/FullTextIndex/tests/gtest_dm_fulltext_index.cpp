@@ -12,6 +12,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
+
+#if ENABLE_CLARA
 #include <Interpreters/Context.h>
 #include <Interpreters/sortBlock.h>
 #include <Storages/DeltaMerge/DMContext.h>
@@ -843,3 +846,4 @@ CATCH
 
 
 } // namespace DB::DM::tests
+#endif

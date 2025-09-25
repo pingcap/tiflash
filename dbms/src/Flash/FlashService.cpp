@@ -964,7 +964,7 @@ grpc::Status FlashService::EstablishDisaggTask(
     auto logger = Logger::get(task_id);
 
     auto record_other_error = [&](int flash_err_code, const String & err_msg) {
-        // Note: We intentinally do not remove the snapshot from the SnapshotManager
+        // Note: We intentially do not remove the snapshot from the SnapshotManager
         // when this request is failed. Consider this case:
         // EstablishDisagg for A: ---------------- Failed --------------------------------------------- Cleanup Snapshot for A
         // EstablishDisagg for B: - Failed - RN retry EstablishDisagg for A+B -- InsertSnapshot for A+B ----- FetchPages (Boom!)
@@ -1071,10 +1071,12 @@ grpc::Status FlashService::FetchDisaggPages(
     auto record_error = [&](grpc::StatusCode err_code, const String & err_msg) {
         disaggregated::PagesPacket err_response;
         auto * err = err_response.mutable_error();
-        err->set_code(ErrorCodes::UNKNOWN_EXCEPTION);
+        err->set_code(err_code);
         err->set_msg(err_msg);
         sync_writer->Write(err_response);
-        return grpc::Status(err_code, err_msg);
+        // Do NOT both write an error packet AND return a non-OK grpc::Status.
+        // We only write an error packet and return OK.
+        return grpc::Status::OK;
     };
 
     RUNTIME_CHECK_MSG(
@@ -1111,7 +1113,10 @@ grpc::Status FlashService::FetchDisaggPages(
 
     try
     {
-        auto snap = snaps->getSnapshot(task_id, /*refresh_expiration*/ true);
+        // Every FetchDisaggPages request refreshes the snapshot expiration.
+        auto snap = snaps->getDisaggSnapshot(
+            task_id,
+            /*refresh_duration*/ std::chrono::seconds(DEFAULT_DISAGG_TASK_REFRESH_SEC));
         RUNTIME_CHECK_MSG(snap != nullptr, "Can not find disaggregated task, task_id={}", task_id);
         auto task = snap->popSegTask(request->table_id(), request->segment_id());
         RUNTIME_CHECK(task.isValid(), task.err_msg);
@@ -1128,9 +1133,16 @@ grpc::Status FlashService::FetchDisaggPages(
             task.seg_task,
             read_ids,
             context->getSettingsRef());
-        stream_writer->syncWrite();
+        auto summary = stream_writer->syncWrite();
 
-        LOG_INFO(logger, "FetchDisaggPages respond finished, task_id={}", task_id);
+        LOG_INFO(
+            logger,
+            "FetchDisaggPages respond finished, keyspace={} table_id={} segment_id={} num_fetch={} summary={}",
+            keyspace_id,
+            request->table_id(),
+            request->segment_id(),
+            request->page_ids_size(),
+            summary);
         return grpc::Status::OK;
     }
     catch (const TiFlashException & e)

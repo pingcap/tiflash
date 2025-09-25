@@ -13,9 +13,11 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/Logger.h>
 #include <Flash/Pipeline/Exec/PipelineExec.h>
 #include <Operators/Operator.h>
 #include <Operators/OperatorHelper.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -92,7 +94,7 @@ void PipelineExec::executePrefix()
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operatePrefix();
     source_op->operatePrefix();
-    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_suffix_failpoint);
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_prefix_failpoint);
 }
 
 void PipelineExec::executeSuffix()
@@ -101,6 +103,7 @@ void PipelineExec::executeSuffix()
     for (auto it = transform_ops.rbegin(); it != transform_ops.rend(); ++it) // NOLINT(modernize-loop-convert)
         (*it)->operateSuffix();
     source_op->operateSuffix();
+    FAIL_POINT_TRIGGER_EXCEPTION(FailPoints::random_pipeline_model_execute_suffix_failpoint);
 }
 
 void PipelineExec::notify()

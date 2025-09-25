@@ -109,8 +109,10 @@ Poco::Message::Priority convertLogLevel(Aws::Utils::Logging::LogLevel log_level)
     {
     case Aws::Utils::Logging::LogLevel::Off:
     case Aws::Utils::Logging::LogLevel::Fatal:
-    case Aws::Utils::Logging::LogLevel::Error:
         return Poco::Message::PRIO_ERROR;
+    case Aws::Utils::Logging::LogLevel::Error:
+        // treat AWS error log as warning level
+        return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Warn:
         return Poco::Message::PRIO_WARNING;
     case Aws::Utils::Logging::LogLevel::Info:
@@ -723,22 +725,37 @@ void downloadFileByS3RandomAccessFile(
     const String & remote_fname)
 {
     Stopwatch sw;
-    S3RandomAccessFile file(client, remote_fname);
+    S3RandomAccessFile file(client, remote_fname, nullptr);
     Aws::OFStream ostr(local_fname, std::ios_base::out | std::ios_base::binary);
-    RUNTIME_CHECK_MSG(ostr.is_open(), "Open {} fail: {}", local_fname, strerror(errno));
+    RUNTIME_CHECK_MSG(
+        ostr.is_open(),
+        "Failed to open local file while downloading file from S3, remote_fname={} local_fname={} err={}",
+        remote_fname,
+        local_fname,
+        strerror(errno));
 
     char buf[8192];
     while (true)
     {
         auto n = file.read(buf, sizeof(buf));
-        RUNTIME_CHECK(n >= 0, remote_fname);
+        RUNTIME_CHECK_MSG(
+            n >= 0,
+            "Failed to read from S3 while downloading file, n={} remote_fname={} local_fname={}",
+            n,
+            remote_fname,
+            local_fname);
         if (n == 0)
         {
             break;
         }
 
         ostr.write(buf, n);
-        RUNTIME_CHECK_MSG(ostr.good(), "Write {} fail: {}", local_fname, strerror(errno));
+        RUNTIME_CHECK_MSG(
+            ostr.good(),
+            "Failed to write to local file while downloading file from S3, remote_fname={} local_fname={} err={}",
+            remote_fname,
+            local_fname,
+            strerror(errno));
     }
 }
 

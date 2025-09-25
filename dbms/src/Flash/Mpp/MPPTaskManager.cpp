@@ -22,7 +22,9 @@
 #include <Flash/Mpp/MPPTaskManager.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/ProcessList.h>
+#include <Interpreters/SharedContexts/Disagg.h>
 #include <Interpreters/executeQuery.h>
+#include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
 #include <fmt/core.h>
 
 #include <magic_enum.hpp>
@@ -86,39 +88,58 @@ MPPGatherTaskSetPtr MPPQuery::addMPPGatherTaskSet(const MPPGatherId & gather_id)
 
 void MPPTaskMonitor::waitAllMPPTasksFinish(const std::unique_ptr<Context> & context)
 {
-    // The maximum seconds TiFlash will wait for all current MPP tasks to finish before shutting down
-    static constexpr const char * GRACEFUL_WIAT_BEFORE_SHUTDOWN = "flash.graceful_wait_before_shutdown";
-    // The default value of flash.graceful_wait_before_shutdown
-    static constexpr UInt64 DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN = 600;
-    auto graceful_wait_before_shutdown
-        = context->getUsersConfig()->getUInt64(GRACEFUL_WIAT_BEFORE_SHUTDOWN, DEFAULT_GRACEFUL_WAIT_BEFORE_SHUTDOWN);
-    LOG_INFO(log, "Start to wait all MPPTasks to finish, timeout={}s", graceful_wait_before_shutdown);
-    UInt64 graceful_wait_before_shutdown_ms = graceful_wait_before_shutdown * 1000;
+    // The maximum seconds TiFlash will wait for all current MPP tasks or disagg snapshots to finish before shutting down
+    static constexpr const char * GRACEFUL_WAIT_SHUTDOWN_TIMEOUT = "flash.graceful_wait_shutdown_timeout";
+    // The default value of flash.graceful_wait_shutdown_timeout
+    static constexpr UInt64 DEFAULT_GRACEFUL_WAIT_SHUTDOWN_TIMEOUT = 600;
+    auto graceful_wait_shutdown_timeout
+        = context->getUsersConfig()->getUInt64(GRACEFUL_WAIT_SHUTDOWN_TIMEOUT, DEFAULT_GRACEFUL_WAIT_SHUTDOWN_TIMEOUT);
+
+    bool is_disagg_storage_mode = context->getSharedContextDisagg()->isDisaggregatedStorageMode();
+    const String & wait_target = is_disagg_storage_mode ? "disagg snapshots" : "MPP tasks";
+    LOG_INFO(log, "Start to wait all {} to finish, timeout={}s", wait_target, graceful_wait_shutdown_timeout);
+
+    UInt64 graceful_wait_shutdown_timeout_ms = graceful_wait_shutdown_timeout * 1000;
     Stopwatch watch;
     // The first sleep before checking to reduce the chance of missing MPP tasks that are still in the process of being dispatched
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
     bool all_tasks_finished = false;
     while (true)
     {
         auto elapsed_ms = watch.elapsedMilliseconds();
-        if (!all_tasks_finished)
+        if (is_disagg_storage_mode)
         {
-            std::unique_lock lock(mu);
-            if (monitored_tasks.empty())
-                all_tasks_finished = true;
-        }
-        if (all_tasks_finished)
-        {
-            // Also needs to check if all MPP gRPC connections are finished
-            if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
+            // For write node under disagg arch, should wait for all disagg establish task rpc being finished
+            // and all snapshot being released.
+            // Otherwise compute nodes may meet error when calling `FetchDisaggPages` on write nodes.
+            if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_disagg_establish_task).Value() == 0
+                && context->getSharedContextDisagg()->wn_snapshot_manager->getActiveSnapshotCount() == 0)
             {
-                LOG_INFO(log, "All MPP tasks have finished after {}ms", elapsed_ms);
+                LOG_INFO(log, "All disagg snapshots have finished after {}ms", elapsed_ms);
                 break;
             }
         }
-        if (elapsed_ms >= graceful_wait_before_shutdown_ms)
+        else
         {
-            LOG_WARNING(log, "Timed out waiting for all MPP tasks to finish after {}ms", elapsed_ms);
+            if (!all_tasks_finished)
+            {
+                std::unique_lock lock(mu);
+                if (monitored_tasks.empty())
+                    all_tasks_finished = true;
+            }
+            if (all_tasks_finished)
+            {
+                // Also needs to check if all MPP gRPC connections are finished
+                if (GET_METRIC(tiflash_coprocessor_handling_request_count, type_mpp_establish_conn).Value() == 0)
+                {
+                    LOG_INFO(log, "All MPP tasks have finished after {}ms", elapsed_ms);
+                    break;
+                }
+            }
+        }
+        if (elapsed_ms >= graceful_wait_shutdown_timeout_ms)
+        {
+            LOG_WARNING(log, "Timed out waiting for all {} to finish after {}ms", wait_target, elapsed_ms);
             break;
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(200));

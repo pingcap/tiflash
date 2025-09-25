@@ -18,6 +18,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashException.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <DataStreams/ExpressionBlockInputStream.h>
 #include <DataStreams/FilterBlockInputStream.h>
 #include <DataStreams/GeneratedColumnPlaceholderBlockInputStream.h>
@@ -41,7 +42,6 @@
 #include <Operators/NullSourceOp.h>
 #include <Operators/UnorderedSourceOp.h>
 #include <Parsers/makeDummyQuery.h>
-#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Index/VectorIndex/Stream/Ctx.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot.h>
 #include <Storages/DeltaMerge/Remote/WNDisaggSnapshotManager.h>
@@ -61,6 +61,10 @@
 #include <common/logger_useful.h>
 #include <kvproto/coprocessor.pb.h>
 #include <tipb/select.pb.h>
+
+#if ENABLE_CLARA
+#include <Storages/DeltaMerge/Index/FullTextIndex/Stream/Ctx.h>
+#endif
 
 namespace DB
 {
@@ -371,9 +375,9 @@ void DAGStorageInterpreter::executeImpl(
     auto remote_requests = buildRemoteRequests(dag_context.scan_context_map[table_scan.getTableScanExecutorID()]);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
-        // This means RN is sending requests with stale region info, we simply reject the request
-        // and ask RN to send requests again with correct region info. When RN updates region info,
-        // RN may be sending requests to other WN.
+        // This means compute node is sending requests with stale region info, we simply reject the request
+        // and ask compute node to send requests again with correct region info. When compute node updates region info,
+        // compute node may be sending requests to other WN.
 
         RegionException::UnavailableRegions region_ids;
         for (const auto & info : context.getDAGContext()->retry_regions)
@@ -483,9 +487,9 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
     auto remote_requests = buildRemoteRequests(dag_context.scan_context_map[table_scan.getTableScanExecutorID()]);
     if (dag_context.is_disaggregated_task && !remote_requests.empty())
     {
-        // This means RN is sending requests with stale region info, we simply reject the request
-        // and ask RN to send requests again with correct region info. When RN updates region info,
-        // RN may be sending requests to other WN.
+        // This means compute node is sending requests with stale region info, we simply reject the request
+        // and ask compute node to send requests again with correct region info. When compute node updates region info,
+        // compute node may be sending requests to other write node.
 
         RegionException::UnavailableRegions region_ids;
         for (const auto & info : context.getDAGContext()->retry_regions)
@@ -542,7 +546,7 @@ void DAGStorageInterpreter::executeImpl(DAGPipeline & pipeline)
 
 // here we assume that, if the columns' id and data type in query is the same as the columns in TiDB,
 // we think we can directly do read, and don't need sync schema.
-// compare the columns in table_scan with the columns in storages, to check if the current schema is satisified this query.
+// compare the columns in table_scan with the columns in storages, to check if the current schema is satisfied this query.
 // column.name are always empty from table_scan, and column name is not necessary in read process, so we don't need compare the name here.
 std::tuple<bool, String> compareColumns(
     ColumnID logical_table_id,
@@ -763,7 +767,8 @@ CoprocessorReaderPtr DAGStorageInterpreter::buildCoprocessorReader(const std::ve
         cop_timeout,
         tiflash_label_filter,
         log->identifier(),
-        store_zone_label);
+        store_zone_label,
+        kv_store->getStoreID());
     context.getDAGContext()->addCoprocessorReader(coprocessor_reader);
 
     return coprocessor_reader;
@@ -874,7 +879,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (const LockException & e)
         {
-            // When this is a disaggregated read task on WN issued by RN, we need RN
+            // When this is a disaggregated read task on write node issued by compute node, we need compute node
             // to take care of retrying.
             if (context.getDAGContext()->is_disaggregated_task)
                 throw;
@@ -886,7 +891,7 @@ LearnerReadSnapshot DAGStorageInterpreter::doBatchCopLearnerRead()
         }
         catch (const RegionException & e)
         {
-            // When this is a disaggregated read task on WN issued by RN, we need RN
+            // When this is a disaggregated read task on write node issued by compute node, we need compute node
             // to take care of retrying.
             if (context.getDAGContext()->is_disaggregated_task)
                 throw;
@@ -1270,9 +1275,10 @@ void DAGStorageInterpreter::buildLocalStreams(DAGPipeline & pipeline, size_t max
         // register the snapshot to manager
         auto snaps = context.getSharedContextDisagg()->wn_snapshot_manager;
         const auto & snap_id = *dag_context.getDisaggTaskId();
-        auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
-        bool register_snapshot_ok
-            = snaps->registerSnapshot(snap_id, disaggregated_snap, std::chrono::seconds(timeout_s));
+        bool register_snapshot_ok = snaps->registerSnapshot(
+            snap_id,
+            disaggregated_snap,
+            std::chrono::seconds(context.getSettingsRef().disagg_task_snapshot_timeout));
         RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
     }
 
@@ -1327,9 +1333,10 @@ void DAGStorageInterpreter::buildLocalExec(
         // register the snapshot to manager
         auto snaps = context.getSharedContextDisagg()->wn_snapshot_manager;
         const auto & snap_id = *dag_context.getDisaggTaskId();
-        auto timeout_s = context.getSettingsRef().disagg_task_snapshot_timeout;
-        bool register_snapshot_ok
-            = snaps->registerSnapshot(snap_id, disaggregated_snap, std::chrono::seconds(timeout_s));
+        bool register_snapshot_ok = snaps->registerSnapshot(
+            snap_id,
+            disaggregated_snap,
+            std::chrono::seconds(context.getSettingsRef().disagg_task_snapshot_timeout));
         RUNTIME_CHECK_MSG(register_snapshot_ok, "Disaggregated task has been registered, snap_id={}", snap_id);
     }
 
@@ -1610,8 +1617,10 @@ std::pair<Names, std::vector<UInt8>> DAGStorageInterpreter::getColumnsForTableSc
             name = MutSup::extra_table_id_column_name;
         else if (cid == DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.id)
             name = DM::VectorIndexStreamCtx::VIRTUAL_DISTANCE_CD.name;
+#if ENABLE_CLARA
         else if (cid == DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.id)
             name = DM::FullTextIndexStreamCtx::VIRTUAL_SCORE_CD.name;
+#endif
         else
             name = storage_for_logical_table->getTableInfo().getColumnName(cid);
         required_columns_tmp.emplace_back(std::move(name));

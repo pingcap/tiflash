@@ -128,7 +128,7 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
             // to replace the entry with newer sequence.
             RUNTIME_CHECK_MSG(
                 last_iter->second.being_ref_count.getLatestRefCount() == 1 || last_iter->first.sequence >= ver.sequence,
-                "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
+                "Try to replace normal entry with an newer seq, ver={} prev_ver={} last_entry={}",
                 ver,
                 last_iter->first,
                 last_iter->second);
@@ -140,8 +140,8 @@ void VersionedPageEntries<Trait>::createNewEntry(const PageVersion & ver, const 
 
     throw Exception(
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS,
-        "try to create entry version with invalid state "
-        "[ver={}] [entry={}] [state={}]",
+        "try to create entry version with invalid state, "
+        "ver={} entry={} state={}",
         ver,
         entry,
         toDebugString());
@@ -186,7 +186,7 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
             // to replace the entry with newer sequence.
             RUNTIME_CHECK_MSG(
                 last_iter->second.being_ref_count.getLatestRefCount() == 1 || last_iter->first.sequence >= ver.sequence,
-                "Try to replace normal entry with an newer seq [ver={}] [prev_ver={}] [last_entry={}]",
+                "Try to replace normal entry with an newer seq, ver={} prev_ver={} last_entry={}",
                 ver,
                 last_iter->first,
                 last_iter->second);
@@ -228,8 +228,8 @@ typename VersionedPageEntries<Trait>::PageId VersionedPageEntries<Trait>::create
 
     throw Exception(
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS,
-        "try to create upsert entry version with invalid state "
-        "[ver={}] [entry={}] [state={}]",
+        "try to create upsert entry version with invalid state, "
+        "ver={} entry={} state={}",
         ver,
         entry,
         toDebugString());
@@ -288,8 +288,8 @@ std::shared_ptr<typename VersionedPageEntries<Trait>::PageId> VersionedPageEntri
 
     throw Exception(
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS,
-        "try to create external version with invalid state "
-        "[ver={}] [state={}]",
+        "try to create external version with invalid state, "
+        "ver={} state={}",
         ver,
         toDebugString());
 }
@@ -324,8 +324,8 @@ void VersionedPageEntries<Trait>::createDelete(const PageVersion & ver) NO_THREA
 
     throw Exception(
         ErrorCodes::LOGICAL_ERROR,
-        "try to create delete version with invalid state "
-        "[ver={}] [state={}]",
+        "try to create delete version with invalid state, "
+        "ver={} state={}",
         ver,
         toDebugString());
 }
@@ -375,8 +375,8 @@ bool VersionedPageEntries<Trait>::updateLocalCacheForRemotePage(
     }
     throw Exception(
         ErrorCodes::LOGICAL_ERROR,
-        "try to update remote page with invalid state "
-        "[ver={}] [state={}]",
+        "try to update remote page with invalid state, "
+        "ver={} state={}",
         ver,
         toDebugString());
 }
@@ -431,8 +431,8 @@ bool VersionedPageEntries<Trait>::createNewRef(const PageVersion & ver, const Pa
     // adding ref to replace put/external is not allowed
     throw Exception(
         ErrorCodes::PS_DIR_APPLY_INVALID_STATUS,
-        "try to create ref version with invalid state "
-        "[ver={}] [ori_page_id={}] [state={}]",
+        "try to create ref version with invalid state, "
+        "ver={} ori_page_id={} state={}",
         ver,
         ori_page_id_,
         toDebugString());
@@ -668,8 +668,8 @@ bool VersionedPageEntries<Trait>::isVisible(UInt64 seq) const NO_THREAD_SAFETY_A
 
     throw Exception(
         ErrorCodes::LOGICAL_ERROR,
-        "calling isDeleted with invalid state "
-        "[seq={}] [state={}]",
+        "calling isDeleted with invalid state, "
+        "seq={} state={}",
         seq,
         toDebugString());
 }
@@ -698,7 +698,7 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, 
                 {
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
-                        "Try to add ref to a completely deleted entry [entry={}] [ver={}]",
+                        "Try to add ref to a completely deleted entry, entry={} ver={}",
                         iter->second,
                         target_ver);
                 }
@@ -719,7 +719,7 @@ Int64 VersionedPageEntries<Trait>::incrRefCount(const PageVersion & target_ver, 
     }
     throw Exception(
         ErrorCodes::LOGICAL_ERROR,
-        "The entry to be added ref count is not found [ver={}] [state={}]",
+        "The entry to be added ref count is not found, ver={} state={}",
         target_ver,
         toDebugString());
 }
@@ -916,7 +916,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
         {
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "Can not find entry for decreasing ref count [page_id={}] [ver={}] [deref_count={}]",
+                "Can not find entry for decreasing ref count, page_id={} ver={} deref_count={}",
                 page_id,
                 deref_ver,
                 deref_count);
@@ -932,7 +932,7 @@ bool VersionedPageEntries<Trait>::derefAndClean(
             // run into the begin of `entries`, but still can not find a valid entry to decrease the ref-count
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "Can not find entry for decreasing ref count till the begin [page_id={}] [ver={}] [deref_count={}]",
+                "Can not find entry for decreasing ref count till the begin, page_id={} ver={} deref_count={}",
                 page_id,
                 deref_ver,
                 deref_count);
@@ -1064,58 +1064,29 @@ PageDirectory<Trait>::PageDirectory(String storage_name, WALStorePtr && wal_, UI
 {}
 
 template <typename Trait>
-PageDirectorySnapshotPtr PageDirectory<Trait>::createSnapshot(const String & tracing_id) const
+PageDirectorySnapshotPtr PageDirectory<Trait>::createSnapshot(SnapshotType tp, const String & tracing_id) const
 {
     GET_METRIC(tiflash_storage_page_command_count, type_snapshot).Increment();
-    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tracing_id);
+    auto snap = std::make_shared<PageDirectorySnapshot>(sequence.load(), tp, tracing_id);
     {
         std::lock_guard snapshots_lock(snapshots_mutex);
         snapshots.emplace_back(std::weak_ptr<PageDirectorySnapshot>(snap));
     }
 
-    CurrentMetrics::add(CurrentMetrics::PSMVCCSnapshotsList);
     return snap;
 }
 
 template <typename Trait>
 SnapshotsStatistics PageDirectory<Trait>::getSnapshotsStat() const
 {
-    SnapshotsStatistics stat;
-    DB::Int64 num_snapshots_removed = 0;
-    {
-        std::lock_guard lock(snapshots_mutex);
-        for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
-        {
-            auto snapshot_ptr = iter->lock();
-            if (!snapshot_ptr)
-            {
-                iter = snapshots.erase(iter);
-                num_snapshots_removed++;
-            }
-            else
-            {
-                fiu_do_on(FailPoints::random_slow_page_storage_remove_expired_snapshots, {
-                    pcg64 rng(randomSeed());
-                    std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
-                    std::this_thread::sleep_for(ms);
-                });
-
-                const auto snapshot_lifetime = snapshot_ptr->elapsedSeconds();
-                if (snapshot_lifetime > stat.longest_living_seconds)
-                {
-                    stat.longest_living_seconds = snapshot_lifetime;
-                    stat.longest_living_from_thread_id = snapshot_ptr->create_thread;
-                    stat.longest_living_from_tracing_id = snapshot_ptr->tracing_id;
-                }
-                stat.num_snapshots++;
-                ++iter;
-            }
-        }
-    }
-
-    CurrentMetrics::sub(CurrentMetrics::PSMVCCSnapshotsList, num_snapshots_removed);
-    // Return some statistics of the oldest living snapshot.
-    return stat;
+    auto gc_stat = this->gcInMemSnapshots();
+    return SnapshotsStatistics{
+        .num_snapshots = gc_stat.num_valid,
+        .longest_living_seconds = gc_stat.longest_alive_time,
+        .longest_living_type = gc_stat.longest_alive_type,
+        .longest_living_from_thread_id = gc_stat.longest_alive_from_thread_id,
+        .longest_living_from_tracing_id = gc_stat.longest_alive_from_tracing_id,
+    };
 }
 
 template <typename Trait>
@@ -1168,18 +1139,18 @@ typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(
             {
                 if (throw_on_not_exist)
                 {
-                    LOG_WARNING(log, "Dump state for invalid page id [page_id={}]", page_id);
+                    LOG_WARNING(log, "Dump state for invalid page id, page_id={}", page_id);
                     for (const auto & [dump_id, dump_entry] : mvcc_table_directory)
                     {
                         LOG_WARNING(
                             log,
-                            "Dumping state [page_id={}] [entry={}]",
+                            "Dumping state, page_id={} entry={}",
                             dump_id,
                             dump_entry == nullptr ? "<null>" : dump_entry->toDebugString());
                     }
                     throw Exception(
                         ErrorCodes::PS_ENTRY_NOT_EXISTS,
-                        "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
+                        "Invalid page id, entry not exist, page_id={} resolve_id={}",
                         page_id,
                         id_to_resolve);
                 }
@@ -1218,7 +1189,7 @@ typename PageDirectory<Trait>::PageIdAndEntry PageDirectory<Trait>::getByIDImpl(
     {
         throw Exception(
             ErrorCodes::PS_ENTRY_NO_VALID_VERSION,
-            "Fail to get entry [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
+            "Fail to get entry, page_id={} seq={} resolve_id={} resolve_ver={}",
             page_id,
             snap->sequence,
             id_to_resolve,
@@ -1261,7 +1232,7 @@ std::pair<typename PageDirectory<Trait>::PageIdAndEntries, typename PageDirector
                     {
                         throw Exception(
                             ErrorCodes::PS_ENTRY_NOT_EXISTS,
-                            "Invalid page id, entry not exist [page_id={}] [resolve_id={}]",
+                            "Invalid page id, entry not exist, page_id={} resolve_id={}",
                             page_id,
                             id_to_resolve);
                     }
@@ -1299,7 +1270,7 @@ std::pair<typename PageDirectory<Trait>::PageIdAndEntries, typename PageDirector
         {
             throw Exception(
                 ErrorCodes::PS_ENTRY_NO_VALID_VERSION,
-                "Fail to get entry [page_id={}] [ver={}] [resolve_id={}] [resolve_ver={}] [idx={}]",
+                "Fail to get entry, page_id={} ver={} resolve_id={} resolve_ver={} idx={}",
                 page_id,
                 init_ver_to_resolve,
                 id_to_resolve,
@@ -1350,7 +1321,7 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(
                 {
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
-                        "Invalid page id [page_id={}] [resolve_id={}]",
+                        "Invalid page id, page_id={} resolve_id={}",
                         page_id,
                         id_to_resolve);
                 }
@@ -1388,7 +1359,7 @@ typename PageDirectory<Trait>::PageId PageDirectory<Trait>::getNormalPageId(
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "fail to get normal id [page_id={}] [seq={}] [resolve_id={}] [resolve_ver={}]",
+            "fail to get normal id, page_id={} seq={} resolve_id={} resolve_ver={}",
             page_id,
             snap->sequence,
             id_to_resolve,
@@ -1576,7 +1547,7 @@ void PageDirectory<Trait>::applyRefEditRecord(
     {
         throw Exception(
             ErrorCodes::LOGICAL_ERROR,
-            "Trying to add ref to non-exist page [page_id={}] [ori_id={}] [ver={}] [resolve_id={}] [resolve_ver={}]",
+            "Trying to add ref to non-exist page, page_id={} ori_id={} ver={} resolve_id={} resolve_ver={}",
             rec.page_id,
             rec.ori_page_id,
             version,
@@ -1600,7 +1571,7 @@ void PageDirectory<Trait>::applyRefEditRecord(
         {
             throw Exception(
                 ErrorCodes::LOGICAL_ERROR,
-                "The ori page id is not found [page_id={}] [ori_id={}] [ver={}] [resolved_id={}] [resolved_ver={}]",
+                "The ori page id is not found, page_id={} ori_id={} ver={} resolved_id={} resolved_ver={}",
                 rec.page_id,
                 rec.ori_page_id,
                 version,
@@ -1779,7 +1750,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
                 case EditRecordType::UPDATE_DATA_FROM_REMOTE:
                     throw Exception(
                         ErrorCodes::LOGICAL_ERROR,
-                        "should not handle edit with invalid type [type={}]",
+                        "should not handle edit with invalid type, type={}",
                         magic_enum::enum_name(r.type));
                 }
 
@@ -1792,7 +1763,7 @@ std::unordered_set<String> PageDirectory<Trait>::apply(PageEntriesEdit && edit, 
             catch (DB::Exception & e)
             {
                 e.addMessage(fmt::format(
-                    " [type={}] [page_id={}] [ver={}] [edit_size={}]",
+                    " type={} page_id={} ver={} edit_size={}",
                     magic_enum::enum_name(r.type),
                     r.page_id,
                     r.version,
@@ -1875,7 +1846,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::updateLocalCach
             catch (DB::Exception & e)
             {
                 e.addMessage(fmt::format(
-                    " type={}, page_id={}, ver={}, seq={}",
+                    " type={} page_id={} ver={} seq={}",
                     magic_enum::enum_name(r.type),
                     r.page_id,
                     r.version,
@@ -2063,7 +2034,7 @@ template <typename Trait>
 bool PageDirectory<Trait>::tryDumpSnapshot(const WriteLimiterPtr & write_limiter, bool force)
 {
     auto identifier = fmt::format("{}.dump", wal->name());
-    auto snap = createSnapshot(identifier);
+    auto snap = createSnapshot(SnapshotType::General, identifier);
     SYNC_FOR("after_PageDirectory::create_snap_for_dump");
 
     // Only apply compact logs when files snapshot is valid
@@ -2136,58 +2107,90 @@ size_t PageDirectory<Trait>::copyCheckpointInfoFromEdit(const PageEntriesEdit & 
 }
 
 template <typename Trait>
+SnapshotGCStatistics PageDirectory<Trait>::gcInMemSnapshots() const
+{
+    const UInt64 seq_clone = sequence.load();
+    SnapshotGCStatistics stat{
+        .seq = seq_clone,
+        .delta_tree_only_seq = seq_clone,
+        .general_seq = std::nullopt,
+        .lowest_seq_of_all = seq_clone,
+
+        .num_invalid = 0,
+        .num_valid = 0,
+
+        .num_stale = 0,
+    };
+
+    // Cleanup released snapshots
+    std::lock_guard lock(snapshots_mutex);
+    std::unordered_set<String> tracing_id_set;
+    for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
+    {
+        auto snap = iter->lock();
+        if (snap == nullptr)
+        {
+            iter = snapshots.erase(iter);
+            stat.num_invalid++;
+            continue;
+        }
+
+        fiu_do_on(FailPoints::random_slow_page_storage_remove_expired_snapshots, {
+            pcg64 rng(randomSeed());
+            std::chrono::milliseconds ms{std::uniform_int_distribution(0, 900)(rng)}; // 0~900 milliseconds
+            std::this_thread::sleep_for(ms);
+        });
+
+        switch (snap->type)
+        {
+        case SnapshotType::General:
+            stat.general_seq.emplace(std::min(stat.general_seq.value_or(seq_clone), snap->sequence));
+            break;
+        case SnapshotType::DeltaTreeOnly:
+            stat.delta_tree_only_seq = std::min(stat.delta_tree_only_seq, snap->sequence);
+            break;
+        }
+        stat.lowest_seq_of_all = std::min(stat.lowest_seq_of_all, snap->sequence);
+
+        ++iter;
+        ++stat.num_valid;
+
+        const auto snap_alive_time = snap->elapsedSeconds();
+        if (snap_alive_time > 10 * 60) // TODO: Make `10 * 60` as a configuration
+        {
+            if (!tracing_id_set.contains(snap->tracing_id))
+            {
+                LOG_WARNING(
+                    log,
+                    "Meet a stale snapshot, create_thread={} tracing_id={} seq={} type={} alive_time={:.3f}",
+                    snap->create_thread,
+                    snap->tracing_id,
+                    snap->sequence,
+                    magic_enum::enum_name(snap->type),
+                    snap_alive_time);
+                tracing_id_set.emplace(snap->tracing_id);
+            }
+            ++stat.num_stale;
+        }
+
+        if (snap_alive_time > stat.longest_alive_time)
+        {
+            stat.longest_alive_time = snap_alive_time;
+            stat.longest_alive_seq = snap->sequence;
+            stat.longest_alive_type = snap->type;
+            stat.longest_alive_from_thread_id = snap->create_thread;
+            stat.longest_alive_from_tracing_id = snap->tracing_id;
+        }
+    }
+
+    return stat;
+}
+
+template <typename Trait>
 typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(const InMemGCOption & options)
     NO_THREAD_SAFETY_ANALYSIS
 {
-    UInt64 lowest_seq = sequence.load();
-
-    UInt64 invalid_snapshot_nums = 0;
-    UInt64 valid_snapshot_nums = 0;
-    UInt64 longest_alive_snapshot_time = 0;
-    UInt64 longest_alive_snapshot_seq = 0;
-    UInt64 stale_snapshot_nums = 0;
-    {
-        // Cleanup released snapshots
-        std::lock_guard lock(snapshots_mutex);
-        std::unordered_set<String> tracing_id_set;
-        for (auto iter = snapshots.begin(); iter != snapshots.end(); /* empty */)
-        {
-            if (auto snap = iter->lock(); snap == nullptr)
-            {
-                iter = snapshots.erase(iter);
-                invalid_snapshot_nums++;
-            }
-            else
-            {
-                lowest_seq = std::min(lowest_seq, snap->sequence);
-                ++iter;
-                valid_snapshot_nums++;
-                const auto alive_time_seconds = snap->elapsedSeconds();
-
-                if (alive_time_seconds > 10 * 60) // TODO: Make `10 * 60` as a configuration
-                {
-                    if (!tracing_id_set.contains(snap->tracing_id))
-                    {
-                        LOG_WARNING(
-                            log,
-                            "Meet a stale snapshot, create_thread={} tracing_id={} seq={} alive_time={:.3f}",
-                            snap->create_thread,
-                            snap->tracing_id,
-                            snap->sequence,
-                            alive_time_seconds);
-                        tracing_id_set.emplace(snap->tracing_id);
-                    }
-                    stale_snapshot_nums++;
-                }
-
-                if (longest_alive_snapshot_time < alive_time_seconds)
-                {
-                    longest_alive_snapshot_time = alive_time_seconds;
-                    longest_alive_snapshot_seq = snap->sequence;
-                }
-            }
-        }
-    }
+    const auto snap_stat = gcInMemSnapshots();
 
     SYNC_FOR("after_PageDirectory::doGC_getLowestSeq");
 
@@ -2200,7 +2203,10 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
             return all_del_entries;
     }
 
+    // The number of page removed this round. Not counting raft pages.
     UInt64 invalid_page_nums = 0;
+    // The number of proxy page removed this round.
+    UInt64 invalid_raft_pages_nums = 0;
     UInt64 valid_page_nums = 0;
 
     // The page_id that we need to decrease ref count
@@ -2209,10 +2215,38 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
     // Iterate all page_id and try to clean up useless var entries
     while (true)
     {
+        bool page_id_from_raft = false;
+        UInt64 actual_seq = 0;
+        if constexpr (std::is_same_v<Trait, universal::PageDirectoryTrait>)
+        {
+            // For Universal PageDirectory, we store Raft data together but this kind
+            // of data is frequently created and deleted. So we split the snapshot into
+            // two kinds and the delta-tree-only reading snapshot does not protect the
+            // Raft data from being GCed.
+            // If the page_id is from proxy and there is no general snapshot,
+            // we can use `seq_clone` to clean up entries more aggressively to
+            // reduce memory usage.
+            page_id_from_raft = Trait::PageIdTrait::isFromRaftLayer(iter->first); //
+            if (page_id_from_raft)
+            {
+                // Pages from proxy is only protected by general snapshots
+                actual_seq = snap_stat.general_seq.value_or(snap_stat.seq);
+            }
+            else
+            {
+                // Other Pages are protected by all kinds of snapshots
+                actual_seq = snap_stat.lowest_seq_of_all;
+            }
+        }
+        else
+        {
+            // Protected by all kinds of snapshots
+            actual_seq = snap_stat.lowest_seq_of_all;
+        }
         // `iter` is an iter that won't be invalid cause by `apply`/`gcApply`.
         // do gc on the version list without lock on `mvcc_table_directory`.
         const bool all_deleted = iter->second->cleanOutdatedEntries(
-            lowest_seq,
+            actual_seq,
             &normal_entries_to_deref,
             options.need_removed_entries ? &all_del_entries : nullptr,
             options.remote_valid_sizes,
@@ -2223,7 +2257,10 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
             if (all_deleted)
             {
                 iter = mvcc_table_directory.erase(iter);
-                invalid_page_nums++;
+                if (page_id_from_raft)
+                    invalid_raft_pages_nums++;
+                else
+                    invalid_page_nums++;
             }
             else
             {
@@ -2250,7 +2287,7 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
 
         const bool all_deleted = iter->second->derefAndClean(
-            lowest_seq,
+            snap_stat.lowest_seq_of_all,
             page_id,
             /*deref_ver=*/deref_counter.first,
             /*deref_count=*/deref_counter.second,
@@ -2265,26 +2302,29 @@ typename PageDirectory<Trait>::PageEntries PageDirectory<Trait>::gcInMemEntries(
         }
     }
 
-    auto log_level = stale_snapshot_nums > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
+    auto log_level = snap_stat.num_stale > 0 ? Poco::Message::PRIO_INFORMATION : Poco::Message::PRIO_DEBUG;
     LOG_IMPL(
         log,
         log_level,
-        "After MVCC gc in memory [lowest_seq={}] "
-        "clean [invalid_snapshot_nums={}] [invalid_page_nums={}] "
-        "[total_deref_counter={}] [all_del_entries={}]. "
-        "Still exist [snapshot_nums={}], [page_nums={}]. "
-        "Longest alive snapshot: [longest_alive_snapshot_time={}] "
-        "[longest_alive_snapshot_seq={}] [stale_snapshot_nums={}]",
-        lowest_seq,
-        invalid_snapshot_nums,
+        "After MVCC gc in memory, general_lowest_seq={} delta_tree_only_seq={}. "
+        "clean invalid_snapshot_nums={} invalid_page_nums={} invalid_raft_pages_nums={} "
+        "total_deref_counter={} all_del_entries={}. "
+        "Still exist, snapshot_nums={} page_nums={}. "
+        "Longest alive snapshot: {{alive_time={:.3f} seq={} type={} tracing_id={}}} stale_snapshot_nums={}",
+        snap_stat.general_seq,
+        snap_stat.delta_tree_only_seq,
+        snap_stat.num_invalid,
         invalid_page_nums,
+        invalid_raft_pages_nums,
         total_deref_counter,
         all_del_entries.size(),
-        valid_snapshot_nums,
+        snap_stat.num_valid,
         valid_page_nums,
-        longest_alive_snapshot_time,
-        longest_alive_snapshot_seq,
-        stale_snapshot_nums);
+        snap_stat.longest_alive_time,
+        snap_stat.longest_alive_seq,
+        magic_enum::enum_name(snap_stat.longest_alive_type),
+        snap_stat.longest_alive_from_tracing_id,
+        snap_stat.num_stale);
 
     return all_del_entries;
 }
@@ -2294,7 +2334,7 @@ typename PageDirectory<Trait>::PageEntriesEdit PageDirectory<Trait>::dumpSnapsho
 {
     if (!snap)
     {
-        snap = createSnapshot(/*tracing_id*/ "");
+        snap = createSnapshot(SnapshotType::General, /*tracing_id*/ "");
     }
 
     PageEntriesEdit edit;

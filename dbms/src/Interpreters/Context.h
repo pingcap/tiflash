@@ -36,7 +36,6 @@
 #include <mutex>
 #include <thread>
 
-
 namespace pingcap
 {
 struct ClusterConfig;
@@ -103,6 +102,7 @@ using TiFlashSecurityConfigPtr = std::shared_ptr<TiFlashSecurityConfig>;
 class MockStorage;
 class JointThreadInfoJeallocMap;
 using JointThreadInfoJeallocMapPtr = std::shared_ptr<JointThreadInfoJeallocMap>;
+class CTEManager;
 
 enum class PageStorageRunMode : UInt8;
 namespace DM
@@ -212,6 +212,8 @@ public:
     String getFlagsPath() const;
     String getUserFilesPath() const;
     PathPool & getPathPool() const;
+
+    CTEManager * getCTEManager() const;
 
     void setPath(const String & path);
     void setTemporaryPath(const String & path);

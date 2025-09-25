@@ -4171,7 +4171,7 @@ void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
             seg_read_task->read_snapshot->delta,
             pk_ver_col_defs,
             RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize()),
-            ReadTag::MVCC);
+            ReadTag::Internal);
         return seg_read_task->segment->ensurePlace(
             *dm_context,
             seg_read_task->read_snapshot,

@@ -12,6 +12,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Common/config.h>
+
+#if ENABLE_CLARA
+
 #include <Columns/ColumnString.h>
 #include <Functions/FunctionHelpers.h>
 #include <Storages/DeltaMerge/Index/FullTextIndex/Writer.h>
@@ -79,3 +83,4 @@ void FullTextIndexWriterOnDisk::addBlock(
 }
 
 } // namespace DB::DM
+#endif

@@ -26,6 +26,7 @@
 #include <Interpreters/JoinV2/HashJoinProbe.h>
 #include <Interpreters/JoinV2/HashJoinRowLayout.h>
 #include <Interpreters/JoinV2/HashJoinSettings.h>
+#include <Interpreters/JoinV2/SemiJoinProbe.h>
 
 
 namespace DB
@@ -82,6 +83,7 @@ private:
 
 private:
     friend JoinProbeHelper;
+    friend SemiJoinProbeHelper;
 
     static const DataTypePtr match_helper_type;
 
@@ -151,6 +153,7 @@ private:
     std::vector<JoinProbeWorkerData> probe_workers_data;
     std::atomic<size_t> active_probe_worker = 0;
     std::unique_ptr<JoinProbeHelper> join_probe_helper;
+    std::unique_ptr<SemiJoinProbeHelper> semi_join_probe_helper;
 
     const JoinProfileInfoPtr profile_info = std::make_shared<JoinProfileInfo>();
 

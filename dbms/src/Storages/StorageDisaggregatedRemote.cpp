@@ -16,6 +16,7 @@
 #include <Common/Stopwatch.h>
 #include <Common/ThreadManager.h>
 #include <Common/TiFlashMetrics.h>
+#include <Common/config.h> // For ENABLE_CLARA
 #include <Core/NamesAndTypes.h>
 #include <DataStreams/IBlockInputStream.h>
 #include <DataStreams/TiRemoteBlockInputStream.h>
@@ -156,6 +157,13 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Contex
         = std::make_shared<DM::ScanContext>(dag_context->getKeyspaceID(), dag_context->getResourceGroupName());
     dag_context->scan_context_map[table_scan.getTableScanExecutorID()] = scan_context;
 
+    Stopwatch build_read_task_watch;
+    SCOPE_EXIT({
+        auto elapsed_seconds = build_read_task_watch.elapsedSeconds();
+        scan_context->disagg_build_read_tasks_ms += elapsed_seconds * 1000;
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_read_tasks).Observe(elapsed_seconds);
+    });
+
     DM::SegmentReadTasks read_task;
 
     double total_backoff_seconds = 0.0;
@@ -181,6 +189,7 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Contex
             if (e.code() != ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR)
                 throw;
 
+            scan_context->disagg_build_read_tasks_backoff_num += 1;
             Stopwatch w_backoff;
             SCOPE_EXIT({ total_backoff_seconds += w_backoff.elapsedSeconds(); });
 
@@ -201,6 +210,13 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTask(
     // First split the read task for different write nodes.
     // For each write node, a BatchCopTask is built.
     {
+        Stopwatch sw;
+        SCOPE_EXIT({
+            auto elapsed_seconds = sw.elapsedSeconds();
+            scan_context->disagg_build_batch_cop_tasks_ms += elapsed_seconds * 1000;
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_build_batch_cop_tasks)
+                .Observe(elapsed_seconds);
+        });
         auto [remote_table_ranges, region_num] = buildRemoteTableRanges();
         scan_context->setRegionNumOfCurrentInstance(region_num);
         // only send to tiflash node with label [{"engine":"tiflash"}, {"engine-role":"write"}]
@@ -252,8 +268,9 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     if (status.error_code() == grpc::StatusCode::DEADLINE_EXCEEDED)
         throw Exception(
             ErrorCodes::TIMEOUT_EXCEEDED,
-            "EstablishDisaggregated execution was interrupted, maximum execution time exceeded, wn_address={} {}",
+            "EstablishDisaggTask timeout exceeded, wn_address={}, timeout={}s, {}",
             req->address(),
+            getBuildTaskRPCTimeout(),
             log->identifier());
     else if (!status.ok())
         throw Exception(
@@ -266,14 +283,16 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     const DM::DisaggTaskId snapshot_id(resp.snapshot_id());
     LOG_DEBUG(
         log,
-        "Received EstablishDisaggregated response, error={} store={} snap_id={} addr={} resp.num_tables={}",
+        "Received EstablishDisaggTask response, error={} store={} snap_id={} addr={} resp.num_tables={}",
         resp.has_error(),
         resp.store_id(),
         snapshot_id,
         batch_cop_task.store_addr,
         resp.tables_size());
 
-    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_establish).Observe(watch.elapsedSeconds());
+    auto elapsed_seconds = watch.elapsedSeconds();
+    scan_context->disagg_establish_disagg_task_ms += elapsed_seconds * 1000;
+    GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_rpc_establish).Observe(elapsed_seconds);
     watch.restart();
 
     if (resp.has_error())
@@ -291,7 +310,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 
             LOG_INFO(
                 log,
-                "Received EstablishDisaggregated response with retryable error: {}, addr={} retry_regions={}",
+                "Received EstablishDisaggTask response with retryable error: {}, addr={} retry_regions={}",
                 error.msg(),
                 batch_cop_task.store_addr,
                 retry_regions);
@@ -308,7 +327,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 
             LOG_INFO(
                 log,
-                "Received EstablishDisaggregated response with retryable error: {}, addr={}",
+                "Received EstablishDisaggTask response with retryable error: {}, addr={}",
                 error.msg(),
                 batch_cop_task.store_addr);
 
@@ -327,16 +346,17 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
                 pushed);
 
             // TODO: Use `pushed` to bypass large txn.
+            elapsed_seconds = w_resolve_lock.elapsedSeconds();
+            scan_context->disagg_resolve_lock_ms += elapsed_seconds * 1000;
             LOG_DEBUG(
                 log,
                 "Finished resolve locks, elapsed={}s n_locks={} pushed.size={} before_expired={}",
-                w_resolve_lock.elapsedSeconds(),
+                elapsed_seconds,
                 locks.size(),
                 pushed.size(),
                 before_expired);
 
-            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_resolve_lock)
-                .Observe(w_resolve_lock.elapsedSeconds());
+            GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_resolve_lock).Observe(elapsed_seconds);
 
             throw Exception(error.msg(), ErrorCodes::DISAGG_ESTABLISH_RETRYABLE_ERROR);
         }
@@ -346,14 +366,14 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
 
             LOG_WARNING(
                 log,
-                "Received EstablishDisaggregated response with error, addr={} err={}",
+                "Received EstablishDisaggTask response with error, addr={} err={}",
                 batch_cop_task.store_addr,
                 error.msg());
 
             // Meet other errors... May be not retryable?
             throw Exception(
                 error.code(),
-                "EstablishDisaggregatedTask failed: {}, addr={}",
+                "EstablishDisaggTask failed: {}, addr={}",
                 error.msg(),
                 batch_cop_task.store_addr);
         }
@@ -362,9 +382,16 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
     const bool is_same_zone = isSameZone(batch_cop_task);
     const size_t resp_size = resp.ByteSizeLong();
 
+    watch.restart();
+    SCOPE_EXIT({
+        elapsed_seconds = watch.elapsedSeconds();
+        scan_context->disagg_parse_read_task_ms += elapsed_seconds * 1000;
+        GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_parse_read_tasks).Observe(elapsed_seconds);
+    });
     // Now we have successfully established disaggregated read for this write node.
     // Let's parse the result and generate actual segment read tasks.
     // There may be multiple tables, so we concurrently build tasks for these tables.
+    // Note: Building a SegmentReadTask may need to read meta of DMFile from S3.
     IOPoolHelper::FutureContainer futures(log, resp.tables().size());
     for (auto i = 0; i < resp.tables().size(); ++i)
     {
@@ -476,7 +503,7 @@ std::shared_ptr<disaggregated::EstablishDisaggTaskRequest> StorageDisaggregated:
     }
 
     // how long the task is valid on the write node
-    establish_req->set_timeout_s(DEFAULT_DISAGG_TASK_TIMEOUT_SEC);
+    establish_req->set_timeout_s(settings.disagg_task_snapshot_timeout);
     establish_req->set_address(batch_cop_task.store_addr);
     establish_req->set_schema_ver(settings.schema_version);
 
@@ -552,14 +579,18 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     DM::ANNQueryInfoPtr ann_query_info = nullptr;
     if (table_scan.getANNQueryInfo().query_type() != tipb::ANNQueryType::InvalidQueryType)
         ann_query_info = std::make_shared<tipb::ANNQueryInfo>(table_scan.getANNQueryInfo());
+#if ENABLE_CLARA
     DM::FTSQueryInfoPtr fts_query_info = nullptr;
     if (table_scan.getFTSQueryInfo().query_type() != tipb::FTSQueryType::FTSQueryTypeInvalid)
         fts_query_info = std::make_shared<tipb::FTSQueryInfo>(table_scan.getFTSQueryInfo());
+#endif
     // build push down executor
     auto push_down_executor = DM::PushDownExecutor::build(
         rs_operator,
         ann_query_info,
+#if ENABLE_CLARA
         fts_query_info,
+#endif
         table_scan.getColumns(),
         table_scan.getPushedDownFilters(),
         *column_defines,

@@ -76,6 +76,7 @@
 #include <fmt/core.h>
 
 #include <boost/functional/hash/hash.hpp>
+#include <memory>
 #include <pcg_random.hpp>
 #include <unordered_map>
 
@@ -568,6 +569,12 @@ PathPool & Context::getPathPool() const
 {
     auto lock = getLock();
     return shared->path_pool;
+}
+
+CTEManager * Context::getCTEManager() const
+{
+    auto lock = getLock();
+    return this->shared->tmt_context->getCTEManager();
 }
 
 void Context::setPath(const String & path)

@@ -379,7 +379,7 @@ void syncSchemaWithTiDB(
             }
             catch (DB::Exception & e)
             {
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
@@ -389,7 +389,7 @@ void syncSchemaWithTiDB(
             }
             catch (Poco::Exception & e)
             {
-                LOG_ERROR(
+                LOG_WARNING(
                     log,
                     "Bootstrap failed because sync schema error: {}\nWe will sleep for {}"
                     " seconds and try again.",
@@ -1138,6 +1138,7 @@ try
         SessionCleaner session_cleaner(*global_context);
         auto & tmt_context = global_context->getTMTContext();
 
+        // Start the proxy service, including the grpc service for raft and http status service
         proxy_machine.startProxyService(tmt_context, store_ident);
         if (proxy_machine.isProxyRunnable())
         {
@@ -1162,6 +1163,8 @@ try
                     syncSchemaWithTiDB(storage_config, bg_init_stores, terminate_signals_counter, global_context, log);
                     bg_init_stores.waitUntilFinish();
                 }
+
+                // Start read index workers and wait region apply index catch up with TiKV before serving requests.
                 proxy_machine.waitProxyServiceReady(tmt_context, terminate_signals_counter);
             }
         }
@@ -1224,13 +1227,13 @@ try
             GRPCCompletionQueuePool::global_instance = std::make_unique<GRPCCompletionQueuePool>(size);
         }
 
-        /// startup grpc server to serve raft and/or flash services.
+        /// startup flash service for handling coprocessor and MPP requests.
         FlashGrpcServerHolder flash_grpc_server_holder(this->context(), this->config(), raft_config, log);
 
         SCOPE_EXIT({
             // Stop LAC for AutoScaler managed CN before FlashGrpcServerHolder is destructed.
             // Because AutoScaler it will kill tiflash process when port of flash_server_addr is down.
-            // And we want to make sure LAC is cleanedup.
+            // And we want to make sure LAC is cleaned up.
             // The effects are there will be no resource control during [lac.safeStop(), FlashGrpcServer destruct done],
             // but it's basically ok, that duration is small(normally 100-200ms).
             if (is_disagg_compute_mode && disagg_opt.use_autoscaler && LocalAdmissionController::global_instance)

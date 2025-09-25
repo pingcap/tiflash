@@ -154,7 +154,7 @@ std::shared_ptr<const std::vector<RowID>> VersionChain<HandleType>::replaySnapsh
         delta_delete_ranges);
     RUNTIME_CHECK(base_versions->size() == delta_rows, base_versions->size(), delta_rows);
 
-    LOG_INFO(
+    LOG_DEBUG(
         snapshot.log,
         "snapshot={}, replays {} rows and {} deletes, cost={}ms",
         snapshot.detailInfo(),
@@ -205,7 +205,8 @@ UInt32 VersionChain<HandleType>::replayBlock(
 {
     assert(cf.isInMemoryFile() || cf.isTinyFile());
 
-    auto cf_reader = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<HandleType>(), ReadTag::MVCC);
+    auto cf_reader
+        = cf.getReader(dm_context, data_provider, getHandleColumnDefinesPtr<HandleType>(), ReadTag::Internal);
     auto block = cf_reader->readNextBlock();
     RUNTIME_CHECK_MSG(
         cf.getRows() == block.rows(),
@@ -310,7 +311,7 @@ UInt32 VersionChain<HandleType>::replayColumnFileBig(
         dm_context,
         /*data_provider*/ nullptr,
         getHandleColumnDefinesPtr<HandleType>(),
-        ReadTag::MVCC);
+        ReadTag::Internal);
     UInt32 read_rows = 0;
     while (true)
     {
@@ -387,12 +388,13 @@ DeltaValueReader VersionChain<HandleType>::createDeltaValueReader(
         delta_snap,
         getHandleColumnDefinesPtr<HandleType>(),
         /*range*/ {},
-        ReadTag::MVCC};
+        ReadTag::Internal};
 }
 
 template <ExtraHandleType HandleType>
 size_t VersionChain<HandleType>::getBytes() const
 {
+    std::lock_guard lock(mtx);
     // Ignore the size of `dmfile_or_delete_range_list` because it is small.
     return base_versions->capacity() * sizeof(RowID) + new_handle_to_row_ids.getBytes();
 }

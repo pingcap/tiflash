@@ -136,7 +136,8 @@ try
         return ConcatSkippableBlockInputStream<false>::create(
             {NopSkippableBlockInputStream::wrap(block1), NopSkippableBlockInputStream::wrap(block2)},
             {7, 4},
-            nullptr);
+            nullptr,
+            ReadTag::Query);
     };
 
     // VectorIndexInputStream does not need this information, but ctx needs at least a correct vec column.
@@ -2136,7 +2137,7 @@ protected:
     ColumnDefinesPtr table_columns;
     DM::DeltaMergeStore::Settings settings;
 
-    NamespaceID ns_id = 100;
+    TableID ns_id = 100;
 
     // the segment we are going to test
     SegmentPtr wn_segment;
