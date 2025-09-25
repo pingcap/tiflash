@@ -954,8 +954,9 @@ ALWAYS_INLINE void sanitizeCheckReadRanges(
             log->identifier());
     }
 #endif
+}
 
-std::vector<DMFilePackFilter> Segment::loadDMFilePackFilters(
+DMFilePackFilterResults Segment::loadDMFilePackFilters(
     const DMFiles & dmfiles,
     const MinMaxIndexCachePtr & index_cache,
     const RowKeyRanges & rowkey_ranges,
@@ -966,7 +967,7 @@ std::vector<DMFilePackFilter> Segment::loadDMFilePackFilters(
     const String & tracing_id,
     const ReadTag & read_tag)
 {
-    std::vector<DMFilePackFilter> pack_filters;
+    DMFilePackFilterResults pack_filters;
     pack_filters.reserve(dmfiles.size());
     for (const auto & dmfile : dmfiles)
     {
@@ -988,8 +989,9 @@ std::vector<DMFilePackFilter> Segment::loadDMFilePackFilters(
 }
 
 UInt64 Segment::estimatedBytesOfInternalColumns(
+    const DMContext & dm_context,
     const SegmentSnapshotPtr & read_snap,
-    std::vector<DMFilePackFilter> & pack_filters,
+    const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts)
 {
     // stable->getDMFiles() at least return one DMFile.
@@ -1005,7 +1007,8 @@ UInt64 Segment::estimatedBytesOfInternalColumns(
     const auto delta_read_rows = read_snap->delta->getRows();
     // For Stable, rs_filter may filter rows.
     const auto stable_read_rows = read_snap->stable->estimatedReadRows(
-        pack_filters,
+        dm_context,
+        pack_filter_results,
         start_ts,
         /*use_delta_index*/ delta_read_rows != 0);
     return (handle_size + version_size + delmark_size) * (delta_read_rows + stable_read_rows);
@@ -1050,7 +1053,7 @@ BlockInputStreamPtr Segment::getInputStream(
                 dm_context.scan_context,
                 dm_context.tracing_id,
                 ReadTag::MVCC);
-            auto bytes = estimatedBytesOfInternalColumns(segment_snap, pack_filters, start_ts);
+            auto bytes = estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filters, start_ts);
             TiFlashMetrics::instance()
                 .getStorageRUReadBytesCounter(NullspaceID, res_group_name, ReadRUType::MVCC_ESTIMATE)
                 .Increment(bytes);

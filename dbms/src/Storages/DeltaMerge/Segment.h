@@ -816,7 +816,7 @@ public:
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
 
-    static std::vector<DMFilePackFilter> loadDMFilePackFilters(
+    static DMFilePackFilterResults loadDMFilePackFilters(
         const DMFiles & dmfiles,
         const MinMaxIndexCachePtr & index_cache,
         const RowKeyRanges & rowkey_ranges,
@@ -827,8 +827,9 @@ public:
         const String & tracing_id,
         const ReadTag & read_tag);
     static UInt64 estimatedBytesOfInternalColumns(
+        const DMContext & dm_context,
         const SegmentSnapshotPtr & read_snap,
-        std::vector<DMFilePackFilter> & pack_filters,
+        const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts);
 
 #ifndef DBMS_PUBLIC_GTEST
