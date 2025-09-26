@@ -193,9 +193,11 @@ TEST(RowKey, ToNextKeyIntHandle)
         key_end.insert(key_end.end(), rand_suffix.begin(), rand_suffix.end());
         LOG_INFO(
             Logger::get(),
-            "key_end={} rand_suffix={}",
+            "key_end={} rand_length={} rand_suffix={} rand_suffix_size={}",
             key_end.toDebugString(),
-            Redact::keyToDebugString(rand_suffix.data(), rand_length));
+            rand_length,
+            Redact::keyToDebugString(rand_suffix.data(), rand_length),
+            rand_suffix.size());
 
         const auto range_keys = std::make_shared<RegionRangeKeys>(
             RecordKVFormat::genKey(table_id, 0),
