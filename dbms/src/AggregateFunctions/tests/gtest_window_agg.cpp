@@ -977,7 +977,7 @@ try
     res_col->get(0, res_field);
     agg_func->destroy(agg_state.data());
 
-    ASSERT_EQ(res_field.toString(), "Decimal128_10000.0000");
+    ASSERT_EQ(res_field.toString(), "Decimal32_10000.0000");
 }
 CATCH
 

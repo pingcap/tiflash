@@ -24,6 +24,32 @@ namespace DB
 {
 namespace
 {
+template <typename CalculateType, typename ResultType>
+IAggregateFunction * createAvgWithDecimalType(
+    const IDataType & argument_type,
+    PrecType arg_prec,
+    ScaleType arg_scale,
+    PrecType res_prec,
+    ScaleType res_scale)
+{
+#define DISPATCH(FIELDTYPE, DATATYPE)                  \
+    if (typeid_cast<const DATATYPE *>(&argument_type)) \
+        return new AggregateFunctionAvg<FIELDTYPE, CalculateType, ResultType>(arg_prec, arg_scale, res_prec, res_scale);
+    FOR_DECIMAL_TYPES(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
+IAggregateFunction * createAvgWithNumericType(const IDataType & argument_type)
+{
+#define DISPATCH(FIELDTYPE, DATATYPE)                  \
+    if (typeid_cast<const DATATYPE *>(&argument_type)) \
+        return new AggregateFunctionAvg<FIELDTYPE, FIELDTYPE>();
+    FOR_NUMERIC_TYPES_AND_ENUMS(DISPATCH)
+#undef DISPATCH
+    return nullptr;
+}
+
 template <typename T>
 AggregateFunctionPtr createAggregateFunctionAvgForDecimal(const IDataType * p, Int32 div_precincrement)
 {
@@ -39,13 +65,13 @@ AggregateFunctionPtr createAggregateFunctionAvgForDecimal(const IDataType * p, I
             = AvgDecimalInferer::inferResultType(dec_type->getPrec(), dec_type->getScale(), div_precincrement);
         auto result_type = createDecimal(result_prec, result_scale);
 
-#define DISPATCH(CALCULATETYPE, RESULTTYPE)                                                                    \
-    if (checkDecimal<CALCULATETYPE>(*calculate_type) && checkDecimal<RESULTTYPE>(*result_type))                \
-        return AggregateFunctionPtr(createAvgWithDecimalType<AggregateFunctionAvg, CALCULATETYPE, RESULTTYPE>( \
-            *dec_type,                                                                                         \
-            dec_type->getPrec(),                                                                               \
-            dec_type->getScale(),                                                                              \
-            result_prec,                                                                                       \
+#define DISPATCH(CALCULATETYPE, RESULTTYPE)                                                     \
+    if (checkDecimal<CALCULATETYPE>(*calculate_type) && checkDecimal<RESULTTYPE>(*result_type)) \
+        return AggregateFunctionPtr(createAvgWithDecimalType<CALCULATETYPE, RESULTTYPE>(        \
+            *dec_type,                                                                          \
+            dec_type->getPrec(),                                                                \
+            dec_type->getScale(),                                                               \
+            result_prec,                                                                        \
             result_scale));
 
         DISPATCH(Decimal128, Decimal32)
@@ -86,7 +112,7 @@ AggregateFunctionPtr createAggregateFunctionAvg(
     else if ((res = createAggregateFunctionAvgForDecimal<DataTypeDecimal256>(p, div_precincrement)) != nullptr)
         return res;
     else
-        res = AggregateFunctionPtr(createWithNumericType<AggregateFunctionAvg>(*p));
+        res = AggregateFunctionPtr(createAvgWithNumericType(*p));
     if (!res)
         throw Exception(
             fmt::format("Illegal type {} of argument for aggregate function {}", p->getName(), name),

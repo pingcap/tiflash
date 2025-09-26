@@ -45,11 +45,12 @@ struct AggregateFunctionAvgData
 
 
 /// Calculates arithmetic mean of numbers.
-template <typename T, typename TResult = Float64>
+template <typename T, typename CalculateType, typename TResult = Float64>
 class AggregateFunctionAvg final
     : public IAggregateFunctionDataHelper<
-          AggregateFunctionAvgData<std::conditional_t<IsDecimal<T>, T, typename NearestFieldType<T>::Type>>,
-          AggregateFunctionAvg<T, TResult>>
+          AggregateFunctionAvgData<
+              std::conditional_t<IsDecimal<CalculateType>, CalculateType, typename NearestFieldType<T>::Type>>,
+          AggregateFunctionAvg<T, CalculateType, TResult>>
 {
     PrecType prec;
     ScaleType scale;
@@ -118,15 +119,18 @@ public:
 
     void insertResultInto(ConstAggregateDataPtr __restrict place, IColumn & to, Arena *) const override
     {
-        if constexpr (IsDecimal<T>)
+        if constexpr (IsDecimal<CalculateType>)
         {
             ScaleType left_scale = result_scale - scale;
-            T result = this->data(place).sum.value * getScaleMultiplier<T>(left_scale)
-                / static_cast<typename T::NativeType>(this->data(place).count);
-            if constexpr ((std::is_same_v<T, Decimal<Int256>>
-                           || std::is_same_v<T, Decimal<Int512>>)&&std::is_integral_v<typename TResult::NativeType>)
-                static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(
-                    result.template degrade<typename TResult::NativeType>());
+            CalculateType result = this->data(place).sum.value * getScaleMultiplier<CalculateType>(left_scale)
+                / static_cast<typename CalculateType::NativeType>(this->data(place).count);
+            if constexpr ((std::is_same_v<CalculateType, Decimal<Int256>>
+                           || std::is_same_v<CalculateType, Decimal<Int512>>)&&std::
+                              is_integral_v<typename TResult::NativeType>)
+            {
+                auto res = result.template degrade<typename TResult::NativeType>();
+                static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(res);
+            }
             else
                 static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(result);
         }
@@ -142,11 +146,12 @@ public:
         if constexpr (IsDecimal<TResult>)
         {
             ScaleType left_scale = result_scale - scale;
-            T result = this->data(place).sum.value * getScaleMultiplier<T>(left_scale)
-                / static_cast<typename T::NativeType>(this->data(place).count);
+            CalculateType result = this->data(place).sum.value * getScaleMultiplier<CalculateType>(left_scale)
+                / static_cast<typename CalculateType::NativeType>(this->data(place).count);
             auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
-            if constexpr ((std::is_same_v<T, Decimal<Int256>>
-                           || std::is_same_v<T, Decimal<Int512>>)&&std::is_integral_v<typename TResult::NativeType>)
+            if constexpr ((std::is_same_v<CalculateType, Decimal<Int256>>
+                           || std::is_same_v<CalculateType, Decimal<Int512>>)&&std::
+                              is_integral_v<typename TResult::NativeType>)
                 container.resize_fill(container.size() + num, result.template degrade<typename TResult::NativeType>());
             else
                 container.resize_fill(container.size() + num, TResult(result));
@@ -162,8 +167,8 @@ public:
 
     void create(AggregateDataPtr __restrict place) const override
     {
-        using Data
-            = AggregateFunctionAvgData<std::conditional_t<IsDecimal<T>, TResult, typename NearestFieldType<T>::Type>>;
+        using Data = AggregateFunctionAvgData<
+            std::conditional_t<IsDecimal<CalculateType>, CalculateType, typename NearestFieldType<T>::Type>>;
         new (place) Data;
     }
 
