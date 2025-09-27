@@ -932,7 +932,31 @@ SegmentSnapshotPtr Segment::createSnapshot(const DMContext & dm_context, bool fo
         Logger::get(dm_context.tracing_id));
 }
 
-std::vector<DMFilePackFilter> Segment::loadDMFilePackFilters(
+// The `read_ranges` must be included by `segment_rowkey_range`. Usually this step is
+// done in `Segment::getInputStream`. Apply the check only under debug mode.
+ALWAYS_INLINE void sanitizeCheckReadRanges(
+    [[maybe_unused]] const std::string_view whom,
+    [[maybe_unused]] const RowKeyRanges & read_ranges,
+    [[maybe_unused]] const RowKeyRange & segment_rowkey_range,
+    [[maybe_unused]] const LoggerPtr & log)
+{
+#ifndef NDEBUG
+    RUNTIME_CHECK_MSG(!read_ranges.empty(), "read_ranges should not be empty");
+    for (const auto & range : read_ranges)
+    {
+        RUNTIME_CHECK_MSG(
+            segment_rowkey_range.checkRangeIncluded(range),
+            "{} read_ranges contains range of out the segment_rowkey_range, "
+            "segment_rowkey_range={} read_range={} ident={}",
+            whom,
+            segment_rowkey_range.toString(),
+            range.toString(),
+            log->identifier());
+    }
+#endif
+}
+
+DMFilePackFilterResults Segment::loadDMFilePackFilters(
     const DMFiles & dmfiles,
     const MinMaxIndexCachePtr & index_cache,
     const RowKeyRanges & rowkey_ranges,
@@ -943,7 +967,7 @@ std::vector<DMFilePackFilter> Segment::loadDMFilePackFilters(
     const String & tracing_id,
     const ReadTag & read_tag)
 {
-    std::vector<DMFilePackFilter> pack_filters;
+    DMFilePackFilterResults pack_filters;
     pack_filters.reserve(dmfiles.size());
     for (const auto & dmfile : dmfiles)
     {
@@ -965,8 +989,9 @@ std::vector<DMFilePackFilter> Segment::loadDMFilePackFilters(
 }
 
 UInt64 Segment::estimatedBytesOfInternalColumns(
+    const DMContext & dm_context,
     const SegmentSnapshotPtr & read_snap,
-    std::vector<DMFilePackFilter> & pack_filters,
+    const DMFilePackFilterResults & pack_filter_results,
     UInt64 start_ts)
 {
     // stable->getDMFiles() at least return one DMFile.
@@ -982,7 +1007,8 @@ UInt64 Segment::estimatedBytesOfInternalColumns(
     const auto delta_read_rows = read_snap->delta->getRows();
     // For Stable, rs_filter may filter rows.
     const auto stable_read_rows = read_snap->stable->estimatedReadRows(
-        pack_filters,
+        dm_context,
+        pack_filter_results,
         start_ts,
         /*use_delta_index*/ delta_read_rows != 0);
     return (handle_size + version_size + delmark_size) * (delta_read_rows + stable_read_rows);
@@ -1027,7 +1053,7 @@ BlockInputStreamPtr Segment::getInputStream(
                 dm_context.scan_context,
                 dm_context.tracing_id,
                 ReadTag::MVCC);
-            auto bytes = estimatedBytesOfInternalColumns(segment_snap, pack_filters, start_ts);
+            auto bytes = estimatedBytesOfInternalColumns(dm_context, segment_snap, pack_filters, start_ts);
             TiFlashMetrics::instance()
                 .getStorageRUReadBytesCounter(NullspaceID, res_group_name, ReadRUType::MVCC_ESTIMATE)
                 .Increment(bytes);
@@ -2849,6 +2875,50 @@ SkippableBlockInputStreamPtr Segment::getPlacedStream(
     }
 }
 
+template <bool skippable_place>
+SkippableBlockInputStreamPtr Segment::getPlacedStreamWithPackFilterResult(
+    const DMContext & dm_context,
+    const ColumnDefines & read_columns,
+    const RowKeyRanges & rowkey_ranges,
+    const StableSnapshotPtr & stable_snap,
+    const DeltaValueReaderPtr & delta_reader,
+    const DeltaIndexIterator & delta_index_begin,
+    const DeltaIndexIterator & delta_index_end,
+    size_t expected_block_size,
+    ReadTag read_tag,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts)
+{
+    if (unlikely(rowkey_ranges.empty()))
+        throw Exception("rowkey ranges shouldn't be empty", ErrorCodes::LOGICAL_ERROR);
+
+    SkippableBlockInputStreamPtr stable_input_stream = stable_snap->getInputStreamWithPackFilterResult(
+        dm_context,
+        read_columns,
+        rowkey_ranges,
+        start_ts,
+        expected_block_size,
+        read_tag,
+        pack_filter_results);
+    RowKeyRange rowkey_range = rowkey_ranges.size() == 1
+        ? rowkey_ranges[0]
+        : mergeRanges(rowkey_ranges, rowkey_ranges[0].is_common_handle, rowkey_ranges[0].rowkey_column_size);
+    constexpr bool need_row_id = true;
+    return std::make_shared<DeltaMergeBlockInputStream< //
+        DeltaValueReader,
+        DeltaIndexIterator,
+        skippable_place,
+        need_row_id>>(
+        stable_input_stream,
+        delta_reader,
+        delta_index_begin,
+        delta_index_end,
+        rowkey_range,
+        expected_block_size,
+        stable_snap->getDMFilesRows(),
+        dm_context.tracing_id);
+}
+
 std::pair<DeltaIndexPtr, bool> Segment::ensurePlace(
     const DMContext & dm_context,
     const SegmentSnapshotPtr & segment_snap,
@@ -3136,6 +3206,7 @@ BitmapFilterPtr Segment::buildBitmapFilter(
     size_t expected_block_size)
 {
     RUNTIME_CHECK_MSG(!dm_context.read_delta_only, "Read delta only is unsupported");
+    sanitizeCheckReadRanges(__FUNCTION__, read_ranges, rowkey_range, log);
     if (dm_context.read_stable_only || (segment_snap->delta->getRows() == 0 && segment_snap->delta->getDeletes() == 0))
     {
         return buildBitmapFilterStableOnly(
@@ -3164,29 +3235,108 @@ BitmapFilterPtr Segment::buildBitmapFilterNormal(
     ColumnDefines columns_to_read{
         getExtraHandleColumnDefine(is_common_handle),
     };
-    // Generate the bitmap according to the MVCC filter result
-    auto stream = getInputStreamModeNormal(
+    auto real_ranges = shrinkRowKeyRanges(read_ranges);
+    auto read_tag = ReadTag::MVCC;
+    auto read_info = getReadInfo(dm_context, columns_to_read, segment_snap, real_ranges, read_tag, start_ts);
+
+    const auto & dmfiles = segment_snap->stable->getDMFiles();
+    DMFilePackFilterResults pack_filter_results;
+    pack_filter_results.reserve(dmfiles.size());
+    for (const auto & dmfile : dmfiles)
+    {
+        DMFilePackFilterResultPtr pack_filter = DMFilePackFilter::loadFrom(
+            dmfile,
+            dm_context.global_context.getMinMaxIndexCache(),
+            /*set_cache_if_miss*/ true,
+            real_ranges,
+            filter,
+            {},
+            dm_context.global_context.getFileProvider(),
+            dm_context.global_context.getReadLimiter(),
+            dm_context.scan_context,
+            dm_context.tracing_id,
+            read_tag);
+        pack_filter_results.emplace_back(pack_filter);
+    }
+
+    auto bitmap_filter = buildBitmapFilterNormalByFilterResult(
         dm_context,
         columns_to_read,
+        read_info,
         segment_snap,
-        read_ranges,
-        filter,
+        real_ranges,
+        pack_filter_results,
         start_ts,
-        expected_block_size,
-        /*need_row_id*/ true);
-    // `total_rows` is the rows read for building bitmap
-    auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
-    auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
-    bitmap_filter->set(stream);
-    bitmap_filter->runOptimize();
+        expected_block_size);
 
     const auto elapse_ns = sw_total.elapsed();
     dm_context.scan_context->build_bitmap_time_ns += elapse_ns;
     LOG_DEBUG(
         segment_snap->log,
         "buildBitmapFilterNormal total_rows={} cost={:.3f}ms",
-        total_rows,
+        bitmap_filter->size(),
         elapse_ns / 1'000'000.0);
+    return bitmap_filter;
+}
+
+BitmapFilterPtr Segment::buildBitmapFilterNormalByFilterResult(
+    const DMContext & dm_context,
+    const ColumnDefines & columns_to_read,
+    const Segment::ReadInfo & read_info,
+    const SegmentSnapshotPtr & segment_snap,
+    const RowKeyRanges & real_ranges,
+    const DMFilePackFilterResults & pack_filter_results,
+    UInt64 start_ts,
+    size_t expected_block_size)
+{
+    auto read_tag = ReadTag::MVCC;
+    // Generate the bitmap according to the MVCC filter result
+    const auto & dmfiles = segment_snap->stable->getDMFiles();
+    auto [skipped_ranges, new_pack_filter_results] = DMFilePackFilter::getSkippedRangeAndFilterForBitmapNormal(
+        dm_context,
+        dmfiles,
+        pack_filter_results,
+        start_ts,
+        read_info.index_begin,
+        read_info.index_end);
+
+    BlockInputStreamPtr stream = getPlacedStreamWithPackFilterResult(
+        dm_context,
+        *read_info.read_columns,
+        real_ranges,
+        segment_snap->stable,
+        read_info.getDeltaReader(read_tag),
+        read_info.index_begin,
+        read_info.index_end,
+        expected_block_size,
+        read_tag,
+        new_pack_filter_results,
+        start_ts);
+
+    stream = std::make_shared<DMRowKeyFilterBlockInputStream<true>>(stream, real_ranges, 0);
+    stream = std::make_shared<DMVersionFilterBlockInputStream<DM_VERSION_FILTER_MODE_MVCC>>(
+        stream,
+        columns_to_read,
+        start_ts,
+        is_common_handle,
+        dm_context.tracing_id,
+        dm_context.scan_context);
+
+    LOG_TRACE(
+        segment_snap->log,
+        "Finish segment create input stream, start_ts={} range_size={} ranges={}",
+        start_ts,
+        real_ranges.size(),
+        DB::DM::toDebugString(real_ranges));
+
+    // `total_rows` is the rows read for building bitmap
+    auto total_rows = segment_snap->delta->getRows() + segment_snap->stable->getDMFilesRows();
+    auto bitmap_filter = std::make_shared<BitmapFilter>(total_rows, /*default_value*/ false);
+    // Generate the bitmap according to the MVCC filter result
+    bitmap_filter->set(stream);
+    for (const auto & range : skipped_ranges)
+        bitmap_filter->set(range.offset, range.rows);
+    bitmap_filter->runOptimize();
     return bitmap_filter;
 }
 
@@ -3227,22 +3377,23 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
     size_t rows = 0;
     UInt32 preceded_rows = 0;
 
+    auto file_provider = dm_context.global_context.getFileProvider();
     for (const auto & dmfile : dmfiles)
     {
-        DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
+        DMFilePackFilterResultPtr pack_filter = DMFilePackFilter::loadFrom(
             dmfile,
             dm_context.global_context.getMinMaxIndexCache(),
             /*set_cache_if_miss*/ true,
             read_ranges,
             filter,
             /*read_pack*/ {},
-            dm_context.global_context.getFileProvider(),
+            file_provider,
             dm_context.global_context.getReadLimiter(),
             dm_context.scan_context,
             dm_context.tracing_id,
             ReadTag::MVCC);
-        const auto & pack_res = pack_filter.getPackResConst();
-        const auto & handle_res = pack_filter.getHandleRes();
+        const auto & pack_res = pack_filter->getPackResConst();
+        const auto & handle_res = pack_filter->getHandleRes();
         const auto & pack_stats = dmfile->getPackStats();
 
         auto some_packs_set = std::make_shared<IdSet>();
@@ -3257,7 +3408,12 @@ std::pair<std::vector<Range>, std::vector<IdSetPtr>> parseDMFilePackInfo(
             }
 
             if (handle_res[pack_id] == RSResult::Some || pack_stat.not_clean > 0
-                || pack_filter.getMaxVersion(pack_id) > start_ts)
+                || (pack_filter->getMaxVersion( //
+                        dmfile,
+                        pack_id,
+                        file_provider,
+                        dm_context.scan_context)
+                    > start_ts))
             {
                 // We need to read this pack to do RowKey or MVCC filter.
                 some_packs_set->insert(pack_id);
@@ -3580,6 +3736,7 @@ BlockInputStreamPtr Segment::getBitmapFilterInputStream(
     {
         return std::make_shared<EmptyBlockInputStream>(toEmptyBlock(columns_to_read));
     }
+    sanitizeCheckReadRanges(__FUNCTION__, real_ranges, rowkey_range, log);
 
     auto bitmap_filter = buildBitmapFilter(
         dm_context,

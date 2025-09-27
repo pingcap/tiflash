@@ -173,7 +173,7 @@ public:
 
     static RSResults & getReaderPackRes(DMFileBlockInputStreamPtr & stream)
     {
-        return stream->reader.pack_filter.getPackRes();
+        return stream->reader.pack_filter->getPackRes();
     }
 
 protected:

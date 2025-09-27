@@ -58,18 +58,21 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::build(
 
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
 
-    DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
-        dmfile,
-        index_cache,
-        /*set_cache_if_miss*/ true,
-        rowkey_ranges,
-        rs_filter,
-        read_packs,
-        file_provider,
-        read_limiter,
-        scan_context,
-        tracing_id,
-        read_tag);
+    if (!pack_filter)
+    {
+        pack_filter = DMFilePackFilter::loadFrom(
+            dmfile,
+            index_cache,
+            /*set_cache_if_miss*/ true,
+            rowkey_ranges,
+            rs_filter,
+            read_packs,
+            file_provider,
+            read_limiter,
+            scan_context,
+            tracing_id,
+            read_tag);
+    }
 
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
 
@@ -181,18 +184,21 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
 
     // All check passed. Let's read via vector index.
 
-    DMFilePackFilter pack_filter = DMFilePackFilter::loadFrom(
-        dmfile,
-        index_cache,
-        /*set_cache_if_miss*/ true,
-        rowkey_ranges,
-        rs_filter,
-        read_packs,
-        file_provider,
-        read_limiter,
-        scan_context,
-        tracing_id,
-        ReadTag::Query);
+    if (!pack_filter)
+    {
+        pack_filter = DMFilePackFilter::loadFrom(
+            dmfile,
+            index_cache,
+            /*set_cache_if_miss*/ true,
+            rowkey_ranges,
+            rs_filter,
+            read_packs,
+            file_provider,
+            read_limiter,
+            scan_context,
+            tracing_id,
+            ReadTag::Query);
+    }
 
     bool enable_read_thread = SegmentReaderPoolManager::instance().isSegmentReader();
     bool is_common_handle = !rowkey_ranges.empty() && rowkey_ranges[0].is_common_handle;
@@ -205,7 +211,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::tryBuildWithVectorIn
         enable_del_clean_read,
         is_fast_scan,
         max_data_version,
-        std::move(pack_filter),
+        pack_filter,
         mark_cache,
         enable_column_cache,
         column_cache,

@@ -21,6 +21,7 @@
 #include <Storages/DeltaMerge/DeltaIndex.h>
 #include <Storages/DeltaMerge/DeltaMergeDefines.h>
 #include <Storages/DeltaMerge/DeltaTree.h>
+#include <Storages/DeltaMerge/File/DMFilePackFilter_fwd.h>
 #include <Storages/DeltaMerge/Range.h>
 #include <Storages/DeltaMerge/RowKeyRange.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
@@ -690,6 +691,21 @@ public:
         UInt64 start_ts = std::numeric_limits<UInt64>::max(),
         bool need_row_id = false);
 
+    /// Create a stream which merged delta and stable streams together.
+    template <bool skippable_place = false>
+    static SkippableBlockInputStreamPtr getPlacedStreamWithPackFilterResult(
+        const DMContext & dm_context,
+        const ColumnDefines & read_columns,
+        const RowKeyRanges & rowkey_ranges,
+        const StableSnapshotPtr & stable_snap,
+        const DeltaValueReaderPtr & delta_reader,
+        const DeltaIndexIterator & delta_index_begin,
+        const DeltaIndexIterator & delta_index_end,
+        size_t expected_block_size,
+        ReadTag read_tag,
+        const DMFilePackFilterResults & pack_filter_results,
+        UInt64 start_ts);
+
     /// Make sure that all delta packs have been placed.
     /// Note that the index returned could be partial index, and cannot be updated to shared index.
     /// Returns <placed index, this index is fully indexed or not>
@@ -739,6 +755,15 @@ public:
         const SegmentSnapshotPtr & segment_snap,
         const RowKeyRanges & read_ranges,
         const RSOperatorPtr & filter,
+        UInt64 start_ts,
+        size_t expected_block_size);
+    BitmapFilterPtr buildBitmapFilterNormalByFilterResult(
+        const DMContext & dm_context,
+        const ColumnDefines & columns_to_read,
+        const Segment::ReadInfo & read_info,
+        const SegmentSnapshotPtr & segment_snap,
+        const RowKeyRanges & real_ranges,
+        const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts,
         size_t expected_block_size);
     BitmapFilterPtr buildBitmapFilterStableOnly(
@@ -791,7 +816,7 @@ public:
         const ColumnDefines & read_columns,
         const StableValueSpacePtr & stable);
 
-    static std::vector<DMFilePackFilter> loadDMFilePackFilters(
+    static DMFilePackFilterResults loadDMFilePackFilters(
         const DMFiles & dmfiles,
         const MinMaxIndexCachePtr & index_cache,
         const RowKeyRanges & rowkey_ranges,
@@ -802,8 +827,9 @@ public:
         const String & tracing_id,
         const ReadTag & read_tag);
     static UInt64 estimatedBytesOfInternalColumns(
+        const DMContext & dm_context,
         const SegmentSnapshotPtr & read_snap,
-        std::vector<DMFilePackFilter> & pack_filters,
+        const DMFilePackFilterResults & pack_filter_results,
         UInt64 start_ts);
 
 #ifndef DBMS_PUBLIC_GTEST

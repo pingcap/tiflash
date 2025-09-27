@@ -454,6 +454,7 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
         }
 
         // Sort all columns by handle. Assume position 0 is hanle column in these tests.
+        auto handle_type = blk.getByPosition(0).type;
         auto & handle_col = mut_cols[0];
         std::vector<size_t> ids;
         for (size_t i = 0; i < handle_col->size(); i++)
@@ -461,6 +462,8 @@ size_t getInputStreamNRows(const BlockInputStreamPtr & stream)
             ids.push_back(i);
         }
         std::sort(ids.begin(), ids.end(), [&](size_t a, size_t b) {
+            if (handle_type->isInteger())
+                return handle_col->getInt(a) < handle_col->getInt(b);
             return handle_col->getDataAt(a) < handle_col->getDataAt(b);
         });
         auto sorted_cols = blk.cloneEmptyColumns();

@@ -20,6 +20,7 @@
 #include <TestUtils/TiFlashTestBasic.h>
 #include <TiDB/Schema/TiDB.h>
 
+#include <algorithm>
 #include <limits>
 #include <random>
 
@@ -184,18 +185,20 @@ TEST(RowKey, ToNextKeyIntHandle)
         EXPECT_EQ(next.toRowKeyValueRef(), range.getEnd());
         EXPECT_EQ(range.getEnd().toDebugString(), "21");
     }
-    // any suffix will be regarded as Key=21 in RowKeyRange::fromRegionRange.
+    // any non-empty suffix will be regarded as Key=21 in RowKeyRange::fromRegionRange.
     {
         auto key_end = RecordKVFormat::genRawKey(table_id, 20);
         std::mt19937_64 rand_gen(std::random_device{}());
-        size_t rand_length = rand_gen() % 255;
+        size_t rand_length = std::min(1, rand_gen() % 255); // ensure rand_length is at least 1
         auto rand_suffix = DB::random::randomString(rand_length);
         key_end.insert(key_end.end(), rand_suffix.begin(), rand_suffix.end());
         LOG_INFO(
             Logger::get(),
-            "key_end={} rand_suffix={}",
+            "key_end={} rand_length={} rand_suffix={} rand_suffix_size={}",
             key_end.toDebugString(),
-            Redact::keyToDebugString(rand_suffix.data(), rand_length));
+            rand_length,
+            Redact::keyToDebugString(rand_suffix.data(), rand_length),
+            rand_suffix.size());
 
         const auto range_keys = std::make_shared<RegionRangeKeys>(
             RecordKVFormat::genKey(table_id, 0),
