@@ -183,7 +183,7 @@ struct AvgDecimalInferer
     {
         return {
             std::min(left_prec + div_precincrement + decimal_longlong_digits, decimal_max_prec),
-            std::min(left_scale + div_precincrement, decimal_max_scale)};
+            std::min(left_scale, decimal_max_scale)};
     }
 };
 
