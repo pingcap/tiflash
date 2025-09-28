@@ -394,7 +394,7 @@ void SchemaBuilder<Getter, NameMapper>::applySetTiFlashReplica(DatabaseID databa
         auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
         if (unlikely(storage == nullptr))
         {
-            LOG_ERROR(
+            LOG_WARNING(
                 log,
                 "Storage instance is not exist in TiFlash, applySetTiFlashReplica is ignored, table_id={}",
                 table_id);
@@ -523,12 +523,12 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_i
     auto table_info = getter.getTableInfo(database_id, table_id);
     if (unlikely(table_info == nullptr))
     {
-        LOG_ERROR(log, "table is not exist in TiKV, applyPartitionDiff is ignored, table_id={}", table_id);
+        LOG_WARNING(log, "table is not exist in TiKV, applyPartitionDiff is ignored, table_id={}", table_id);
         return;
     }
     if (!table_info->isLogicalPartitionTable())
     {
-        LOG_ERROR(
+        LOG_WARNING(
             log,
             "new table in TiKV is not a partition table {}, database_id={} table_id={}",
             name_mapper.debugCanonicalName(*table_info, database_id, keyspace_id),
@@ -541,7 +541,7 @@ void SchemaBuilder<Getter, NameMapper>::applyPartitionDiff(DatabaseID database_i
     auto storage = tmt_context.getStorages().get(keyspace_id, table_info->id);
     if (storage == nullptr)
     {
-        LOG_ERROR(
+        LOG_WARNING(
             log,
             "logical_table storage instance is not exist in TiFlash, applyPartitionDiff is ignored, table_id={}",
             table_id);
@@ -664,7 +664,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRenameTable(DatabaseID database_id,
     auto new_table_info = getter.getTableInfo(database_id, table_id);
     if (unlikely(new_table_info == nullptr))
     {
-        LOG_ERROR(log, "table is not exist in TiKV, applyRenameTable is ignored, table_id={}", table_id);
+        LOG_WARNING(log, "table is not exist in TiKV, applyRenameTable is ignored, table_id={}", table_id);
         return;
     }
 
@@ -970,7 +970,7 @@ void SchemaBuilder<Getter, NameMapper>::applyRecoverDatabase(DatabaseID database
     auto db = context.tryGetDatabase(db_name);
     if (unlikely(!db))
     {
-        LOG_ERROR(
+        LOG_WARNING(
             log,
             "Recover database is ignored because instance is not exists, may have been physically dropped, "
             "database_id={}",
