@@ -24,7 +24,7 @@ namespace DB
 {
 namespace
 {
-template <typename CalculateType, typename ResultType>
+template <typename CALCULATETYPE, typename RESULTTYPE>
 IAggregateFunction * createAvgWithDecimalType(
     const IDataType & argument_type,
     PrecType arg_prec,
@@ -34,7 +34,7 @@ IAggregateFunction * createAvgWithDecimalType(
 {
 #define DISPATCH(FIELDTYPE, DATATYPE)                  \
     if (typeid_cast<const DATATYPE *>(&argument_type)) \
-        return new AggregateFunctionAvg<FIELDTYPE, CalculateType, ResultType>(arg_prec, arg_scale, res_prec, res_scale);
+        return new AggregateFunctionAvg<FIELDTYPE, CALCULATETYPE, RESULTTYPE>(arg_prec, arg_scale, res_prec, res_scale);
     FOR_DECIMAL_TYPES(DISPATCH)
 #undef DISPATCH
     return nullptr;

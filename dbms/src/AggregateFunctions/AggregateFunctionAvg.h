@@ -127,10 +127,8 @@ public:
             if constexpr ((std::is_same_v<CalculateType, Decimal<Int256>>
                            || std::is_same_v<CalculateType, Decimal<Int512>>)&&std::
                               is_integral_v<typename TResult::NativeType>)
-            {
-                auto res = result.template degrade<typename TResult::NativeType>();
-                static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(res);
-            }
+                static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(
+                    result.template degrade<typename TResult::NativeType>());
             else
                 static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(result);
         }
