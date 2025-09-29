@@ -198,6 +198,7 @@ DM::SegmentReadTasks StorageDisaggregated::buildReadTaskWithBackoff(const Contex
         }
     }
 
+    LOG_INFO(log, "build read task done, num_read_tasks={} elapsed_s={:.3f}", read_task.size(), build_read_task_watch.elapsedSeconds());
     return read_task;
 }
 
@@ -387,6 +388,7 @@ void StorageDisaggregated::buildReadTaskForWriteNode(
         elapsed_seconds = watch.elapsedSeconds();
         scan_context->disagg_parse_read_task_ms += elapsed_seconds * 1000;
         GET_METRIC(tiflash_disaggregated_breakdown_duration_seconds, type_parse_read_tasks).Observe(elapsed_seconds);
+        LOG_INFO(log, "build read task for write node done, wn_addr={} elapsed_s={:.3f}", req->address(), elapsed_seconds);
     });
     // Now we have successfully established disaggregated read for this write node.
     // Let's parse the result and generate actual segment read tasks.
