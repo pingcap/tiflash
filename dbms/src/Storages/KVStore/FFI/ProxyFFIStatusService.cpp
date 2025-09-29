@@ -164,6 +164,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
 }
 
 // Return store status of this tiflash node
+// TiUP/tidb-operator rely on this API to check whether the tiflash node is ready
 HttpRequestRes HandleHttpRequestStoreStatus(
     EngineStoreServerWrap * server,
     std::string_view,
@@ -253,6 +254,27 @@ std::optional<HttpRequestRes> allowDisaggAPI(
             message,
             magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode));
         return buildOkResp(api_name, std::move(body));
+    }
+    return std::nullopt;
+}
+
+// Check whether the disaggregated mode is enabled.
+// If not, return a HttpRequestRes with error message.
+std::optional<HttpRequestRes> allowDisaggAPI(Context & global_ctx, std::string_view message)
+{
+    if (!global_ctx.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        auto * body = RawCppString::New(fmt::format(
+            R"json({{"message":"{}, disagg_mode={}"}})json",
+            message,
+            magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode)));
+        return HttpRequestRes{
+            .status = HttpRequestStatus::ErrorParam,
+            .res = CppStrWithView{
+                .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+                .view = BaseBuffView{body->data(), body->size()},
+            },
+        };
     }
     return std::nullopt;
 }
