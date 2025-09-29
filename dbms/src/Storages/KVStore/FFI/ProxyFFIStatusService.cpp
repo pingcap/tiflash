@@ -162,6 +162,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
 }
 
 // Return store status of this tiflash node
+// TiUP/tidb-operator rely on this API to check whether the tiflash node is ready
 HttpRequestRes HandleHttpRequestStoreStatus(
     EngineStoreServerWrap * server,
     std::string_view,
@@ -178,6 +179,27 @@ HttpRequestRes HandleHttpRequestStoreStatus(
     };
 }
 
+// Check whether the disaggregated mode is enabled.
+// If not, return a HttpRequestRes with error message.
+std::optional<HttpRequestRes> allowDisaggAPI(Context & global_ctx, std::string_view message)
+{
+    if (!global_ctx.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    {
+        auto * body = RawCppString::New(fmt::format(
+            R"json({{"message":"{}, disagg_mode={}"}})json",
+            message,
+            magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode)));
+        return HttpRequestRes{
+            .status = HttpRequestStatus::ErrorParam,
+            .res = CppStrWithView{
+                .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+                .view = BaseBuffView{body->data(), body->size()},
+            },
+        };
+    }
+    return std::nullopt;
+}
+
 /// set a flag for upload all PageData to remote store from local UniPS
 HttpRequestRes HandleHttpRequestRemoteReUpload(
     EngineStoreServerWrap * server,
@@ -187,18 +209,9 @@ HttpRequestRes HandleHttpRequestRemoteReUpload(
     std::string_view)
 {
     auto & global_ctx = server->tmt->getContext();
-    if (!global_ctx.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    if (auto err_resp = allowDisaggAPI(global_ctx, "can not sync remote store"); err_resp)
     {
-        auto * body = RawCppString::New(fmt::format(
-            R"json({{"message":"can not sync remote store on a node with disagg_mode={}"}})json",
-            magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode)));
-        return HttpRequestRes{
-            .status = HttpRequestStatus::ErrorParam,
-            .res = CppStrWithView{
-                .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-                .view = BaseBuffView{body->data(), body->size()},
-            },
-        };
+        return err_resp.value();
     }
 
     bool flag_set = global_ctx.tryUploadAllDataToRemoteStore();
@@ -220,6 +233,12 @@ HttpRequestRes HandleHttpRequestRemoteOwnerInfo(
     std::string_view,
     std::string_view)
 {
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, "can not get gc owner"); err_resp)
+    {
+        return err_resp.value();
+    }
+
     const auto & owner = server->tmt->getS3GCOwnerManager();
     const auto owner_info = owner->getOwnerID();
     auto * body = RawCppString::New(fmt::format(
@@ -243,6 +262,12 @@ HttpRequestRes HandleHttpRequestRemoteOwnerResign(
     std::string_view,
     std::string_view)
 {
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, "can not resign gc owner"); err_resp)
+    {
+        return err_resp.value();
+    }
+
     const auto & owner = server->tmt->getS3GCOwnerManager();
     bool has_resign = owner->resignOwner();
     String msg = has_resign ? "Done" : "This node is not the remote gc owner, can't be resigned.";
@@ -264,6 +289,12 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     std::string_view,
     std::string_view)
 {
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, "can not trigger gc"); err_resp)
+    {
+        return err_resp.value();
+    }
+
     const auto & owner = server->tmt->getS3GCOwnerManager();
     const auto owner_info = owner->getOwnerID();
     bool gc_is_executed = false;
