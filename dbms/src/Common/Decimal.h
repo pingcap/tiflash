@@ -244,14 +244,6 @@ struct Decimal
         return value;
     }
 
-    template <
-        typename U,
-        std::enable_if_t<(std::is_same_v<T, Int256> || std::is_same_v<T, Int512>)&&std::is_integral_v<U>> * = nullptr>
-    Decimal<U> degrade() const
-    {
-        return Decimal<U>(value.template convert_to<U>());
-    }
-
     template <typename U>
     std::enable_if_t<std::is_floating_point_v<U>, U> toFloat(ScaleType scale) const
     {
