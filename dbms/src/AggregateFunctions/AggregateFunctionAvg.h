@@ -124,13 +124,8 @@ public:
             ScaleType left_scale = result_scale - scale;
             CalculateType result = this->data(place).sum.value * getScaleMultiplier<CalculateType>(left_scale)
                 / static_cast<typename CalculateType::NativeType>(this->data(place).count);
-            if constexpr ((std::is_same_v<CalculateType, Decimal<Int256>>
-                           || std::is_same_v<CalculateType, Decimal<Int512>>)&&std::
-                              is_integral_v<typename TResult::NativeType>)
-                static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(
-                    result.template degrade<typename TResult::NativeType>());
-            else
-                static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(result);
+            static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(
+                TResult(static_cast<typename TResult::NativeType>(result.value)));
         }
         else
         {
@@ -147,12 +142,9 @@ public:
             CalculateType result = this->data(place).sum.value * getScaleMultiplier<CalculateType>(left_scale)
                 / static_cast<typename CalculateType::NativeType>(this->data(place).count);
             auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
-            if constexpr ((std::is_same_v<CalculateType, Decimal<Int256>>
-                           || std::is_same_v<CalculateType, Decimal<Int512>>)&&std::
-                              is_integral_v<typename TResult::NativeType>)
-                container.resize_fill(container.size() + num, result.template degrade<typename TResult::NativeType>());
-            else
-                container.resize_fill(container.size() + num, TResult(result));
+            container.resize_fill(
+                container.size() + num,
+                TResult(static_cast<typename TResult::NativeType>(result.value)));
         }
         else
         {
