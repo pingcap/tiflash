@@ -122,10 +122,11 @@ public:
         if constexpr (IsDecimal<CalculateType>)
         {
             ScaleType left_scale = result_scale - scale;
-            CalculateType result = this->data(place).sum.value * getScaleMultiplier<CalculateType>(left_scale)
+            typename CalculateType::NativeType result = this->data(place).sum.value
+                * getScaleMultiplier<CalculateType>(left_scale)
                 / static_cast<typename CalculateType::NativeType>(this->data(place).count);
             static_cast<ColumnDecimal<TResult> &>(to).getData().push_back(
-                TResult(static_cast<typename TResult::NativeType>(result.value)));
+                TResult(static_cast<typename TResult::NativeType>(result)));
         }
         else
         {
@@ -139,12 +140,11 @@ public:
         if constexpr (IsDecimal<TResult>)
         {
             ScaleType left_scale = result_scale - scale;
-            CalculateType result = this->data(place).sum.value * getScaleMultiplier<CalculateType>(left_scale)
+            typename CalculateType::NativeType result = this->data(place).sum.value
+                * getScaleMultiplier<CalculateType>(left_scale)
                 / static_cast<typename CalculateType::NativeType>(this->data(place).count);
             auto & container = static_cast<ColumnDecimal<TResult> &>(to).getData();
-            container.resize_fill(
-                container.size() + num,
-                TResult(static_cast<typename TResult::NativeType>(result.value)));
+            container.resize_fill(container.size() + num, TResult(static_cast<typename TResult::NativeType>(result)));
         }
         else
         {
