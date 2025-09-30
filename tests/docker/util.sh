@@ -141,6 +141,7 @@ function check_env() {
     exit -1
   else
     echo "Running tests with pre-built tiflash binary: ${prebuilt_bin_dir}/tiflash"
+    ls -l ${prebuilt_bin_dir}
     ${prebuilt_bin_dir}/tiflash --version
   fi
 }

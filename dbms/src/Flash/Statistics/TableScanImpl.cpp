@@ -143,7 +143,7 @@ void TableScanStatistics::collectExtraRuntimeDetail()
                     || remote_table_scan_detail.time_detail.max_stream_cost_ns < this_execution_time)
                     remote_table_scan_detail.time_detail.max_stream_cost_ns = this_execution_time;
                 if (remote_table_scan_detail.time_detail.min_stream_cost_ns < 0.0 // not inited
-                    || remote_table_scan_detail.time_detail.max_stream_cost_ns > this_execution_time)
+                    || remote_table_scan_detail.time_detail.min_stream_cost_ns > this_execution_time)
                     remote_table_scan_detail.time_detail.min_stream_cost_ns = this_execution_time;
             }
         });
