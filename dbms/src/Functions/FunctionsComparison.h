@@ -1476,6 +1476,10 @@ struct IsTrueTrait
     {
         if constexpr (IsDecimal<T>)
             return value.value == 0 ? 0 : 1;
+        else if constexpr (std::is_floating_point_v<T>)
+            // For TiDB compatibility, floating point values should be considered true if not zero
+            // This matches SQL standard behavior where non-zero values are true in boolean context
+            return std::abs(value) < std::numeric_limits<T>::epsilon() ? 0 : 1;
         else
             return value == 0 ? 0 : 1;
     }
@@ -1492,6 +1496,10 @@ struct IsFalseTrait
     {
         if constexpr (IsDecimal<T>)
             return value.value == 0 ? 1 : 0;
+        else if constexpr (std::is_floating_point_v<T>)
+            // For TiDB compatibility, floating point values should be considered false only if zero
+            // This matches SQL standard behavior where zero values are false in boolean context
+            return std::abs(value) < std::numeric_limits<T>::epsilon() ? 1 : 0;
         else
             return value == 0 ? 1 : 0;
     }
