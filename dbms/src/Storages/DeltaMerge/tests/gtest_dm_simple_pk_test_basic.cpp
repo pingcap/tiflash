@@ -43,7 +43,7 @@ void SimplePKTestBasic::reload()
 {
     TiFlashStorageTestBasic::SetUp();
 
-    version = 0;
+    version.store(0);
 
     auto cols = DMTestEnv::getDefaultColumns(
         is_common_handle ? DMTestEnv::PkType::CommonHandle : DMTestEnv::PkType::HiddenTiDBRowID);
@@ -185,12 +185,12 @@ Block SimplePKTestBasic::fillBlock(const FillBlockOptions & options)
     RUNTIME_CHECK(start_key <= end_key);
     if (end_key == start_key)
         return Block{};
-    version++;
+    auto tso = version.fetch_add(1) + 1;
     return DMTestEnv::prepareSimpleWriteBlock(
         start_key, //
         end_key,
         false,
-        version,
+        tso,
         DMTestEnv::pk_name,
         MutSup::extra_handle_id,
         is_common_handle ? MutSup::getExtraHandleColumnStringType() : MutSup::getExtraHandleColumnIntType(),

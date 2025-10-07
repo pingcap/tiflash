@@ -110,7 +110,7 @@ protected:
     DeltaMergeStorePtr store;
     DMContextPtr dm_context;
 
-    UInt64 version = 0;
+    std::atomic<UInt64> version = 0;
 
     LoggerPtr logger = Logger::get();
     LoggerPtr logger_op = Logger::get("SimplePKTestBasicOperation");
