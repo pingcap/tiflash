@@ -245,9 +245,11 @@ S3CredentialsProviderChain::S3CredentialsProviderChain()
     /// And ProcessCredentialsProvider is useless in our cases, removed.
 
     AddProvider(std::make_shared<DB::S3::STSAssumeRoleWebIdentityCredentialsProvider>());
-    AddProvider(std::make_shared<DB::S3::AlibabaCloud::ECSRAMRoleCredentialsProvider>());
-    AddProvider(std::make_shared<DB::S3::AlibabaCloud::OIDCCredentialsProvider>());
-    AddProvider(Aws::MakeShared<Aws::Auth::EnvironmentAWSCredentialsProvider>(S3CredentialsProviderChainTag));
+    if (auto provider = DB::S3::AlibabaCloud::ECSRAMRoleCredentialsProvider::build(); provider != nullptr)
+        AddProvider(provider);
+    if (auto provider = DB::S3::AlibabaCloud::OIDCCredentialsProvider::build(); provider != nullptr)
+        AddProvider(provider);
+    AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
 
     //ECS TaskRole Credentials only available when ENVIRONMENT VARIABLE is set
     auto const relative_uri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI);
