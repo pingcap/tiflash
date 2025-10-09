@@ -17,6 +17,7 @@
 #include <Common/Logger.h>
 #include <aws/core/auth/AWSCredentialsProvider.h>
 #include <aws/core/http/HttpClientFactory.h>
+#include <common/types.h>
 
 namespace DB::S3::AlibabaCloud
 {
@@ -24,7 +25,13 @@ namespace DB::S3::AlibabaCloud
 class OIDCCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
 {
 public:
-    OIDCCredentialsProvider();
+    static std::shared_ptr<Aws::Auth::AWSCredentialsProvider> build();
+
+    OIDCCredentialsProvider(
+        const String & region_id,
+        const String & role_arn,
+        const String & oidc_provider_arn,
+        const String & token_file);
 
     /**
      * Retrieves the credentials if found, otherwise returns empty credential set.
@@ -58,6 +65,8 @@ private:
 class ECSRAMRoleCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
 {
 public:
+    static std::shared_ptr<Aws::Auth::AWSCredentialsProvider> build();
+
     ECSRAMRoleCredentialsProvider();
 
     /**

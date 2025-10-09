@@ -35,23 +35,35 @@ namespace DB::S3::AlibabaCloud
 static constexpr int CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD = 180 * 1000; // 180 seconds
 
 /// OIDCCredentialsProvider ///
-OIDCCredentialsProvider::OIDCCredentialsProvider()
-    : m_initialized(false)
-    , log(Logger::get())
+std::shared_ptr<Aws::Auth::AWSCredentialsProvider> OIDCCredentialsProvider::build()
 {
     // check environment variables
-    m_region_id = Aws::Environment::GetEnv("ALIBABA_CLOUD_REGION_ID");
-    m_role_arn = Aws::Environment::GetEnv("ALIBABA_CLOUD_ROLE_ARN");
-    m_oidc_provider_arn = Aws::Environment::GetEnv("ALIBABA_CLOUD_OIDC_PROVIDER_ARN");
-    m_token_file = Aws::Environment::GetEnv("ALIBABA_CLOUD_OIDC_TOKEN_FILE");
+    auto region_id = Aws::Environment::GetEnv("ALIBABA_CLOUD_REGION_ID");
+    auto role_arn = Aws::Environment::GetEnv("ALIBABA_CLOUD_ROLE_ARN");
+    auto oidc_provider_arn = Aws::Environment::GetEnv("ALIBABA_CLOUD_OIDC_PROVIDER_ARN");
+    auto token_file = Aws::Environment::GetEnv("ALIBABA_CLOUD_OIDC_TOKEN_FILE");
 
     // only support environment variable
-    if (m_role_arn.empty() || m_token_file.empty() || m_region_id.empty() || m_oidc_provider_arn.empty())
+    if (role_arn.empty() || token_file.empty() || region_id.empty() || oidc_provider_arn.empty())
     {
-        LOG_WARNING(log, "Environment variables must be specified to use Alibaba Cloud OIDC creds provider");
-        return;
+        LOG_WARNING(Logger::get(), "Environment variables must be specified to use Alibaba Cloud OIDC creds provider");
+        return nullptr;
     }
+    return std::make_shared<OIDCCredentialsProvider>(region_id, role_arn, oidc_provider_arn, token_file);
+}
 
+OIDCCredentialsProvider::OIDCCredentialsProvider(
+    const String & region_id,
+    const String & role_arn,
+    const String & oidc_provider_arn,
+    const String & token_file)
+    : m_oidc_provider_arn(oidc_provider_arn)
+    , m_region_id(region_id)
+    , m_role_arn(role_arn)
+    , m_token_file(token_file)
+    , m_initialized(false)
+    , log(Logger::get())
+{
     if (m_session_name.empty())
     {
         m_session_name = Aws::Utils::UUID::RandomUUID();
@@ -216,18 +228,22 @@ bool isTruthy(const String & str)
 static const std::string_view IMDS_BASE_URL("http://100.100.100.200");
 } // namespace details
 
+std::shared_ptr<Aws::Auth::AWSCredentialsProvider> ECSRAMRoleCredentialsProvider::build()
+{
+    String tmp_ecs_metadata_disabled = Aws::Environment::GetEnv("ALIBABA_CLOUD_ECS_METADATA_DISABLED");
+    if (!tmp_ecs_metadata_disabled.empty() && details::isTruthy(tmp_ecs_metadata_disabled))
+    {
+        LOG_WARNING(Logger::get(), "IMDS is disabled for Alibaba Cloud IMDS creds provider");
+        return nullptr;
+    }
+    return std::make_shared<ECSRAMRoleCredentialsProvider>();
+}
+
 ECSRAMRoleCredentialsProvider::ECSRAMRoleCredentialsProvider()
     : m_disable_imdsv1(false)
     , m_initialized(false)
     , log(Logger::get())
 {
-    String tmp_ecs_metadata_disabled = Aws::Environment::GetEnv("ALIBABA_CLOUD_ECS_METADATA_DISABLED");
-    if (!tmp_ecs_metadata_disabled.empty() && details::isTruthy(tmp_ecs_metadata_disabled))
-    {
-        LOG_WARNING(log, "IMDS is disabled for Alibaba Cloud IMDS creds provider");
-        return;
-    }
-
     String tmp_imdsv1_disabled = Aws::Environment::GetEnv("ALIBABA_CLOUD_IMDSV1_DISABLED");
     if (!tmp_imdsv1_disabled.empty() && details::isTruthy(tmp_imdsv1_disabled))
     {
