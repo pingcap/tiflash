@@ -39,6 +39,7 @@ private:
     Aws::String calculateQueryString() const;
     bool expiresSoon() const;
 
+private:
     Aws::Auth::AWSCredentials m_credentials;
     Aws::String m_oidc_provider_arn;
     Aws::String m_region_id;
@@ -47,6 +48,38 @@ private:
     Aws::String m_session_name;
     Aws::String m_token;
     Aws::String m_endpoint;
+    bool m_initialized;
+    std::shared_ptr<Aws::Http::HttpClientFactory> m_http_client_factory;
+    std::shared_ptr<Aws::Utils::RateLimits::RateLimiterInterface> m_limiter;
+    LoggerPtr log;
+};
+
+// AWSCredentialsProvider for Alibaba Cloud using ECS RAM Role
+class ECSRAMRoleCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
+{
+public:
+    ECSRAMRoleCredentialsProvider();
+
+    /**
+     * Retrieves the credentials if found, otherwise returns empty credential set.
+     */
+    Aws::Auth::AWSCredentials GetAWSCredentials() override;
+
+protected:
+    void Reload() override;
+
+private:
+    void refreshIfExpired();
+    Aws::String calculateQueryString() const;
+    bool expiresSoon() const;
+
+    std::optional<Aws::String> getMetadataToken();
+    std::optional<Aws::String> getRoleName();
+
+private:
+    Aws::Auth::AWSCredentials m_credentials;
+    Aws::String m_role_name;
+    bool m_disable_imdsv1;
     bool m_initialized;
     std::shared_ptr<Aws::Http::HttpClientFactory> m_http_client_factory;
     std::shared_ptr<Aws::Utils::RateLimits::RateLimiterInterface> m_limiter;
