@@ -41,7 +41,7 @@ namespace DB::S3
 {
 
 
-static const char STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG[] = "STSAssumeRoleWithWebIdentityCredentialsProvider";
+static const char STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG[] = "STSAssumeRoleWebIdentityCredentialsProvider";
 
 // Override Aws::Auth::STSAssumeRoleWebIdentityCredentialsProvider for better logging and metrics
 class STSAssumeRoleWebIdentityCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
@@ -143,9 +143,10 @@ STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentials
     aws_client_configuration.scheme = Aws::Http::Scheme::HTTPS;
     aws_client_configuration.region = tmp_region;
 
-    Aws::Vector<Aws::String> retryable_errors;
-    retryable_errors.push_back("IDPCommunicationError");
-    retryable_errors.push_back("InvalidIdentityToken");
+    Aws::Vector<Aws::String> retryable_errors{
+        "IDPCommunicationError",
+        "InvalidIdentityToken",
+    };
 
     aws_client_configuration.retryStrategy = Aws::MakeShared<Aws::Client::SpecifiedRetryableErrorsRetryStrategy>(
         STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG,
@@ -242,6 +243,7 @@ S3CredentialsProviderChain::S3CredentialsProviderChain()
     /// And ProcessCredentialsProvider is useless in our cases, removed.
 
     AddProvider(std::make_shared<DB::S3::STSAssumeRoleWebIdentityCredentialsProvider>());
+    AddProvider(std::make_shared<DB::S3::AlibabaCloud::ECSRAMRoleCredentialsProvider>());
     AddProvider(std::make_shared<DB::S3::AlibabaCloud::OIDCCredentialsProvider>());
     AddProvider(Aws::MakeShared<Aws::Auth::EnvironmentAWSCredentialsProvider>(S3CredentialsProviderChainTag));
 
@@ -286,7 +288,7 @@ S3CredentialsProviderChain::S3CredentialsProviderChain()
         LOG_INFO(log, "Added EC2 metadata service credentials provider to the provider chain.");
     }
 
-    /// Quite verbose provider (argues if file with credentials doesn't exist) so iut's the last one
+    /// Quite verbose provider (argues if file with credentials doesn't exist) so it's the last one
     /// in chain.
     AddProvider(std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>());
 }

@@ -12,23 +12,25 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <Storages/S3/Credentials.h>
+#include <Storages/S3/CredentialsAliCloud.h>
+#include <Storages/S3/PocoHTTPClientFactory.h>
+#include <aws/core/auth/AWSCredentials.h>
+#include <aws/core/client/ClientConfiguration.h>
+#include <aws/core/platform/Environment.h>
+#include <aws/core/utils/UUID.h>
+#include <aws/core/utils/ratelimiter/DefaultRateLimiter.h>
+#include <common/logger_useful.h>
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/JSON/Object.h>
 #include <Poco/JSON/Parser.h>
 #pragma GCC diagnostic pop
 
-#include <Storages/S3/Credentials.h>
-#include <Storages/S3/CredentialsAliCloud.h>
-#include <Storages/S3/PocoHTTPClientFactory.h>
-#include <aws/core/platform/Environment.h>
-#include <aws/core/utils/UUID.h>
-#include <aws/core/utils/ratelimiter/DefaultRateLimiter.h>
-#include <common/logger_useful.h>
-
 namespace DB::S3::AlibabaCloud
 {
-
+/// OIDCCredentialsProvider ///
 OIDCCredentialsProvider::OIDCCredentialsProvider()
     : m_initialized(false)
     , log(Logger::get())
@@ -42,9 +44,7 @@ OIDCCredentialsProvider::OIDCCredentialsProvider()
     // only support environment variable
     if (m_role_arn.empty() || m_token_file.empty() || m_region_id.empty() || m_oidc_provider_arn.empty())
     {
-        LOG_WARNING(
-            log,
-            "Environment variables must be specified to use Alibaba Cloud STS AssumeRole web identity creds provider.");
+        LOG_WARNING(log, "Environment variables must be specified to use Alibaba Cloud OIDC creds provider");
         return;
     }
 
@@ -63,7 +63,7 @@ OIDCCredentialsProvider::OIDCCredentialsProvider()
     m_http_client_factory = std::make_shared<PocoHTTPClientFactory>(poco_cfg);
     m_limiter = Aws::MakeShared<Aws::Utils::RateLimits::DefaultRateLimiter<>>("OIDCCredentialsProvider", 200000);
     m_initialized = true;
-    LOG_INFO(log, "Creating Alibaba Cloud STS AssumeRole with web identity creds provider.");
+    LOG_INFO(log, "Creating Alibaba Cloud OIDC creds provider");
 }
 
 Aws::Auth::AWSCredentials OIDCCredentialsProvider::GetAWSCredentials()
@@ -107,7 +107,7 @@ void OIDCCredentialsProvider::Reload()
 {
     LOG_INFO(
         log,
-        "Credentials have expired, attempting to renew from Alibaba Cloud STS, role_arn={} role_session_name={}.",
+        "Credentials have expired, attempting to renew from Alibaba Cloud OIDC, role_arn={} role_session_name={}",
         m_role_arn,
         m_session_name);
 
@@ -134,7 +134,12 @@ void OIDCCredentialsProvider::Reload()
     auto response = http_client->MakeRequest(http_request, m_limiter.get(), m_limiter.get());
     if (response->GetResponseCode() != Aws::Http::HttpResponseCode::OK)
     {
-        LOG_ERROR(log, "Failed to send request to Alibaba Cloud STS AssumeRole with web identity creds provider.");
+        LOG_ERROR(
+            log,
+            "Failed to send request to Alibaba Cloud OIDC creds provider, role_arn={} role_session_name={} code={}",
+            m_role_arn,
+            m_session_name,
+            response->GetResponseCode());
         return;
     }
 
@@ -147,9 +152,7 @@ void OIDCCredentialsProvider::Reload()
         const auto & obj = result.extract<Poco::JSON::Object::Ptr>();
         if (!obj->has("Credentials"))
         {
-            LOG_ERROR(
-                log,
-                "Failed to parse response from Alibaba Cloud STS AssumeRole with web identity creds provider.");
+            LOG_ERROR(log, "Failed to parse response from Alibaba Cloud OIDC creds provider");
             return;
         }
         auto credentials = obj->getObject("Credentials");
@@ -159,12 +162,16 @@ void OIDCCredentialsProvider::Reload()
         auto expiration = credentials->getValue<Aws::String>("Expiration");
         Aws::Utils::DateTime expiration_time(expiration, Aws::Utils::DateFormat::ISO_8601);
 
-        LOG_TRACE(log, "Successfully retrieved credentials with AWS_ACCESS_KEY: {}", access_key_id);
+        LOG_INFO(
+            log,
+            "Successfully retrieved credentials from Alibaba Cloud OIDC, role_arn={} role_session_name={}",
+            m_role_arn,
+            m_session_name);
         m_credentials = Aws::Auth::AWSCredentials(access_key_id, secret_access_key, security_token, expiration_time);
     }
     catch (const Poco::Exception & e)
     {
-        LOG_ERROR(log, "Failed to parse response from Alibaba Cloud STS, {}", e.displayText());
+        LOG_ERROR(log, "Failed to parse response from Alibaba Cloud OIDC, {}", e.displayText());
         return;
     }
 }
@@ -191,6 +198,245 @@ void OIDCCredentialsProvider::refreshIfExpired()
     }
 
     Reload();
+}
+
+/// ECSRAMRoleCredentialsProvider ///
+namespace details
+{
+bool isTruthy(const String & str)
+{
+    auto normalized_str = Poco::toLower(str);
+    return str == "1" || str == "true" || str == "yes" || str == "on";
+}
+
+static const std::string_view IMDS_BASE_URL("http://100.100.100.200");
+} // namespace details
+
+ECSRAMRoleCredentialsProvider::ECSRAMRoleCredentialsProvider()
+    : m_disable_imdsv1(false)
+    , m_initialized(false)
+    , log(Logger::get())
+{
+    String tmp_ecs_metadata_disabled = Aws::Environment::GetEnv("ALIBABA_CLOUD_ECS_METADATA_DISABLED");
+    if (!tmp_ecs_metadata_disabled.empty() && details::isTruthy(tmp_ecs_metadata_disabled))
+    {
+        LOG_WARNING(log, "IMDS is disabled for Alibaba Cloud IMDS creds provider");
+        return;
+    }
+
+    String tmp_imdsv1_disabled = Aws::Environment::GetEnv("ALIBABA_CLOUD_IMDSV1_DISABLED");
+    if (!tmp_imdsv1_disabled.empty() && details::isTruthy(tmp_imdsv1_disabled))
+    {
+        m_disable_imdsv1 = true;
+        LOG_INFO(log, "IMDSv1 is disabled for Alibaba Cloud IMDS creds provider");
+    }
+
+    m_role_name = Aws::Environment::GetEnv("ALIBABA_CLOUD_ECS_METADATA");
+
+    auto poco_cfg = PocoHTTPClientConfiguration(std::make_shared<RemoteHostFilter>(), 1, false, true);
+    m_http_client_factory = std::make_shared<PocoHTTPClientFactory>(poco_cfg);
+    m_limiter = std::make_shared<Aws::Utils::RateLimits::DefaultRateLimiter<>>(200000);
+    m_initialized = true;
+    LOG_INFO(log, "Creating Alibaba Cloud IMDS creds provider");
+}
+
+Aws::Auth::AWSCredentials ECSRAMRoleCredentialsProvider::GetAWSCredentials()
+{
+    if (!m_initialized)
+    {
+        return Aws::Auth::AWSCredentials();
+    }
+    refreshIfExpired();
+    Aws::Utils::Threading::ReaderLockGuard guard(m_reloadLock);
+    return m_credentials;
+}
+
+bool ECSRAMRoleCredentialsProvider::expiresSoon() const
+{
+    return (
+        (m_credentials.GetExpiration() - Aws::Utils::DateTime::Now()).count()
+        < STS_CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD);
+}
+
+void ECSRAMRoleCredentialsProvider::refreshIfExpired()
+{
+    Aws::Utils::Threading::ReaderLockGuard guard(m_reloadLock);
+    if (!m_credentials.IsEmpty() && !expiresSoon())
+    {
+        return;
+    }
+
+    guard.UpgradeToWriterLock();
+    if (!m_credentials.IsExpiredOrEmpty() && !expiresSoon()) // double-checked lock to avoid refreshing twice
+    {
+        return;
+    }
+
+    Reload();
+}
+
+std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getMetadataToken()
+{
+    String url = fmt::format("{}/latest/api/token", details::IMDS_BASE_URL);
+
+    auto http_client = m_http_client_factory->CreateHttpClient(Aws::Client::ClientConfiguration());
+    auto http_request = m_http_client_factory->CreateHttpRequest(
+        url,
+        Aws::Http::HttpMethod::HTTP_PUT,
+        Aws::Utils::Stream::DefaultResponseStreamFactoryMethod);
+    static const Int64 DEFAULT_METADATA_TOKEN_TTL_SECS = 21600;
+    http_request->SetHeaderValue(
+        "X-aliyun-ecs-metadata-token-ttl-seconds",
+        fmt::format("{}", DEFAULT_METADATA_TOKEN_TTL_SECS));
+
+    // Try IMDSv2 first; if it fails, fall back to IMDSv1 unless explicitly disabled.
+    auto response = http_client->MakeRequest(http_request, m_limiter.get(), m_limiter.get());
+    if (response->GetResponseCode() == Aws::Http::HttpResponseCode::OK)
+    {
+        auto body = Aws::String(Aws::IStreamBufIterator(response->GetResponseBody()), Aws::IStreamBufIterator());
+        return Poco::trim(body);
+    }
+    // IMDSv2 failed
+    assert(response->GetResponseCode() != Aws::Http::HttpResponseCode::OK);
+    if (m_disable_imdsv1)
+    {
+        auto body = Aws::String(Aws::IStreamBufIterator(response->GetResponseBody()), Aws::IStreamBufIterator());
+        LOG_ERROR(
+            log,
+            "Failed to get token from IMDS, code={} body={}",
+            response->GetResponseCode(),
+            body);
+        return std::nullopt;
+    }
+    // else fall back to IMDSv1
+    return "";
+}
+
+std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getRoleName()
+{
+    if (likely(!m_role_name.empty()))
+    {
+        return m_role_name;
+    }
+
+    String url = fmt::format("{}/latest/meta-data/ram/security-credentials/", details::IMDS_BASE_URL);
+    auto http_client = m_http_client_factory->CreateHttpClient(Aws::Client::ClientConfiguration());
+    auto http_request = m_http_client_factory->CreateHttpRequest(
+        url,
+        Aws::Http::HttpMethod::HTTP_GET,
+        Aws::Utils::Stream::DefaultResponseStreamFactoryMethod);
+    std::optional<String> token = getMetadataToken();
+    if (token.has_value())
+    {
+        // If token is not empty, it means IMDSv2 is used.
+        // Else IMDSv1 is used.
+        http_request->SetHeaderValue("X-aliyun-ecs-metadata-token", fmt::format("{}", token.value()));
+    }
+
+    auto response = http_client->MakeRequest(http_request, m_limiter.get(), m_limiter.get());
+    if (response->GetResponseCode() != Aws::Http::HttpResponseCode::OK)
+    {
+        LOG_ERROR(
+            log,
+            "Failed to get IMDSv2 token from IMDS, token={} code={}",
+            token,
+            response->GetResponseCode());
+        return std::nullopt;
+    }
+
+    auto body = Aws::String(Aws::IStreamBufIterator(response->GetResponseBody()), Aws::IStreamBufIterator());
+    return Poco::trim(body);
+}
+
+void ECSRAMRoleCredentialsProvider::Reload()
+{
+    LOG_INFO(
+        log,
+        "Credentials have expired, attempting to renew from Alibaba Cloud IMDS, role_name={} disable_imdsv1={}",
+        m_role_name,
+        m_disable_imdsv1);
+
+    std::optional<String> role_name = getRoleName();
+    if (!role_name.has_value() || role_name->empty())
+    {
+        LOG_ERROR(log, "Failed to get role_name from Alibaba Cloud IMDS");
+        return;
+    }
+
+    String url = fmt::format("{}/latest/meta-data/ram/security-credentials/{}", details::IMDS_BASE_URL, role_name);
+    auto http_client = m_http_client_factory->CreateHttpClient(Aws::Client::ClientConfiguration());
+    auto http_request = m_http_client_factory->CreateHttpRequest(
+        url,
+        Aws::Http::HttpMethod::HTTP_GET,
+        Aws::Utils::Stream::DefaultResponseStreamFactoryMethod);
+    std::optional<String> token = getMetadataToken();
+    if (token.has_value())
+    {
+        // If token is not empty, it means IMDSv2 is used.
+        // Else IMDSv1 is used.
+        http_request->SetHeaderValue("X-aliyun-ecs-metadata-token", fmt::format("{}", token.value()));
+    }
+
+    auto response = http_client->MakeRequest(http_request, m_limiter.get(), m_limiter.get());
+    if (response->GetResponseCode() != Aws::Http::HttpResponseCode::OK)
+    {
+        LOG_ERROR(
+            log,
+            "Failed to send request to Alibaba Cloud IMDS, role_name={} code={}",
+            role_name,
+            response->GetResponseCode());
+        return;
+    }
+
+    // parse http response
+    auto body = Aws::String(Aws::IStreamBufIterator(response->GetResponseBody()), Aws::IStreamBufIterator());
+    try
+    {
+        Poco::JSON::Parser parser;
+        Poco::Dynamic::Var result = parser.parse(body);
+        const auto & obj = result.extract<Poco::JSON::Object::Ptr>();
+        if (!obj->has("Code"))
+        {
+            LOG_ERROR(log, "Failed to parse response from Alibaba Cloud IMDS, resp_body={}", body);
+            return;
+        }
+        auto code = obj->getValue<Aws::String>("Code");
+        if (code != "Success")
+        {
+            LOG_ERROR(
+                log,
+                "Failed to get valid credentials from Alibaba Cloud IMDS, code={} resp_body={}",
+                code,
+                body);
+            return;
+        }
+
+        if (!obj->has("AccessKeyId") || !obj->has("AccessKeySecret") || !obj->has("SecurityToken")
+            || !obj->has("Expiration"))
+        {
+            LOG_ERROR(
+                log,
+                "Failed to get valid credentials from Alibaba Cloud IMDS, resp_body={}",
+                body);
+            return;
+        }
+        auto access_key_id = obj->getValue<Aws::String>("AccessKeyId");
+        auto secret_access_key = obj->getValue<Aws::String>("AccessKeySecret");
+        auto security_token = obj->getValue<Aws::String>("SecurityToken");
+        auto expiration = obj->getValue<Aws::String>("Expiration");
+        Aws::Utils::DateTime expiration_time(expiration, Aws::Utils::DateFormat::ISO_8601);
+
+        LOG_INFO(
+            log,
+            "Successfully retrieved credentials from Alibaba Cloud IMDS, role_name={}",
+            role_name);
+        m_credentials = Aws::Auth::AWSCredentials(access_key_id, secret_access_key, security_token, expiration_time);
+    }
+    catch (const Poco::Exception & e)
+    {
+        LOG_ERROR(log, "Failed to parse response from Alibaba Cloud IMDS, {}", e.displayText());
+        return;
+    }
 }
 
 } // namespace DB::S3::AlibabaCloud
