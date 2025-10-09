@@ -974,11 +974,10 @@ try
     auto & ctx = TiFlashTestEnv::getGlobalContext();
     ASSERT_NE(proxy_helper->sst_reader_interfaces.fn_key, nullptr);
     UInt64 region_id = 1;
-    TableID table_id;
 
     initStorages();
     KVStore & kvs = getKVS();
-    table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
+    TableID table_id = proxy_instance->bootstrapTable(ctx, kvs, ctx.getTMTContext());
     LOG_INFO(&Poco::Logger::get("Test"), "generated table_id {}", table_id);
     proxy_instance->bootstrapWithRegion(kvs, ctx.getTMTContext(), region_id, std::nullopt);
     auto kvr1 = kvs.getRegion(region_id);
