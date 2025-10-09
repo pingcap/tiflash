@@ -19,6 +19,8 @@
 
 namespace DB::S3
 {
+static const int STS_CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD = 5 * 1000;
+
 // Override AWS credentials provider chain
 class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
 {
