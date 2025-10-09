@@ -202,6 +202,8 @@ void STSAssumeRoleWebIdentityCredentialsProvider::Reload()
     m_credentials = result.creds;
 }
 
+static const int STS_CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD = 5 * 1000; // 5 seconds
+
 bool STSAssumeRoleWebIdentityCredentialsProvider::expiresSoon() const
 {
     return (
