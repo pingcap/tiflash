@@ -22,6 +22,8 @@
 #include <aws/core/utils/ratelimiter/DefaultRateLimiter.h>
 #include <common/logger_useful.h>
 
+#include <magic_enum.hpp>
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wunused-parameter"
 #include <Poco/JSON/Object.h>
@@ -30,6 +32,8 @@
 
 namespace DB::S3::AlibabaCloud
 {
+static constexpr int CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD = 180 * 1000; // 180 seconds
+
 /// OIDCCredentialsProvider ///
 OIDCCredentialsProvider::OIDCCredentialsProvider()
     : m_initialized(false)
@@ -139,7 +143,7 @@ void OIDCCredentialsProvider::Reload()
             "Failed to send request to Alibaba Cloud OIDC creds provider, role_arn={} role_session_name={} code={}",
             m_role_arn,
             m_session_name,
-            response->GetResponseCode());
+            magic_enum::enum_name(response->GetResponseCode()));
         return;
     }
 
@@ -180,7 +184,7 @@ bool OIDCCredentialsProvider::expiresSoon() const
 {
     return (
         (m_credentials.GetExpiration() - Aws::Utils::DateTime::Now()).count()
-        < STS_CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD);
+        < CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD);
 }
 
 void OIDCCredentialsProvider::refreshIfExpired()
@@ -255,7 +259,7 @@ bool ECSRAMRoleCredentialsProvider::expiresSoon() const
 {
     return (
         (m_credentials.GetExpiration() - Aws::Utils::DateTime::Now()).count()
-        < STS_CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD);
+        < CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD);
 }
 
 void ECSRAMRoleCredentialsProvider::refreshIfExpired()
@@ -277,6 +281,7 @@ void ECSRAMRoleCredentialsProvider::refreshIfExpired()
 
 std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getMetadataToken()
 {
+    // PUT http://100.100.100.200/latest/api/token
     String url = fmt::format("{}/latest/api/token", details::IMDS_BASE_URL);
 
     auto http_client = m_http_client_factory->CreateHttpClient(Aws::Client::ClientConfiguration());
@@ -284,7 +289,7 @@ std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getMetadataToken()
         url,
         Aws::Http::HttpMethod::HTTP_PUT,
         Aws::Utils::Stream::DefaultResponseStreamFactoryMethod);
-    static const Int64 DEFAULT_METADATA_TOKEN_TTL_SECS = 21600;
+    static const Int64 DEFAULT_METADATA_TOKEN_TTL_SECS = 21600; // 6 hours
     http_request->SetHeaderValue(
         "X-aliyun-ecs-metadata-token-ttl-seconds",
         fmt::format("{}", DEFAULT_METADATA_TOKEN_TTL_SECS));
@@ -304,11 +309,11 @@ std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getMetadataToken()
         LOG_ERROR(
             log,
             "Failed to get token from IMDS, code={} body={}",
-            response->GetResponseCode(),
+            magic_enum::enum_name(response->GetResponseCode()),
             body);
         return std::nullopt;
     }
-    // else fall back to IMDSv1
+    // else return an empty token for fall back to IMDSv1
     return "";
 }
 
@@ -326,7 +331,11 @@ std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getRoleName()
         Aws::Http::HttpMethod::HTTP_GET,
         Aws::Utils::Stream::DefaultResponseStreamFactoryMethod);
     std::optional<String> token = getMetadataToken();
-    if (token.has_value())
+    if (!token.has_value())
+    {
+        return std::nullopt;
+    }
+    else if (!token->empty())
     {
         // If token is not empty, it means IMDSv2 is used.
         // Else IMDSv1 is used.
@@ -340,10 +349,9 @@ std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getRoleName()
             log,
             "Failed to get IMDSv2 token from IMDS, token={} code={}",
             token,
-            response->GetResponseCode());
+            magic_enum::enum_name(response->GetResponseCode()));
         return std::nullopt;
     }
-
     auto body = Aws::String(Aws::IStreamBufIterator(response->GetResponseBody()), Aws::IStreamBufIterator());
     return Poco::trim(body);
 }
@@ -370,7 +378,11 @@ void ECSRAMRoleCredentialsProvider::Reload()
         Aws::Http::HttpMethod::HTTP_GET,
         Aws::Utils::Stream::DefaultResponseStreamFactoryMethod);
     std::optional<String> token = getMetadataToken();
-    if (token.has_value())
+    if (!token.has_value())
+    {
+        return;
+    }
+    else if (!token->empty())
     {
         // If token is not empty, it means IMDSv2 is used.
         // Else IMDSv1 is used.
@@ -384,7 +396,7 @@ void ECSRAMRoleCredentialsProvider::Reload()
             log,
             "Failed to send request to Alibaba Cloud IMDS, role_name={} code={}",
             role_name,
-            response->GetResponseCode());
+            magic_enum::enum_name(response->GetResponseCode()));
         return;
     }
 
@@ -403,21 +415,14 @@ void ECSRAMRoleCredentialsProvider::Reload()
         auto code = obj->getValue<Aws::String>("Code");
         if (code != "Success")
         {
-            LOG_ERROR(
-                log,
-                "Failed to get valid credentials from Alibaba Cloud IMDS, code={} resp_body={}",
-                code,
-                body);
+            LOG_ERROR(log, "Failed to get valid credentials from Alibaba Cloud IMDS, code={} resp_body={}", code, body);
             return;
         }
 
         if (!obj->has("AccessKeyId") || !obj->has("AccessKeySecret") || !obj->has("SecurityToken")
             || !obj->has("Expiration"))
         {
-            LOG_ERROR(
-                log,
-                "Failed to get valid credentials from Alibaba Cloud IMDS, resp_body={}",
-                body);
+            LOG_ERROR(log, "Failed to get valid credentials from Alibaba Cloud IMDS, resp_body={}", body);
             return;
         }
         auto access_key_id = obj->getValue<Aws::String>("AccessKeyId");
@@ -426,10 +431,7 @@ void ECSRAMRoleCredentialsProvider::Reload()
         auto expiration = obj->getValue<Aws::String>("Expiration");
         Aws::Utils::DateTime expiration_time(expiration, Aws::Utils::DateFormat::ISO_8601);
 
-        LOG_INFO(
-            log,
-            "Successfully retrieved credentials from Alibaba Cloud IMDS, role_name={}",
-            role_name);
+        LOG_INFO(log, "Successfully retrieved credentials from Alibaba Cloud IMDS, role_name={}", role_name);
         m_credentials = Aws::Auth::AWSCredentials(access_key_id, secret_access_key, security_token, expiration_time);
     }
     catch (const Poco::Exception & e)
