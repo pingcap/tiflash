@@ -12,12 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wunused-parameter"
-#include <Poco/JSON/Object.h>
-#include <Poco/JSON/Parser.h>
-#pragma GCC diagnostic pop
-
 #include <Common/Logger.h>
 #include <Storages/S3/Credentials.h>
 #include <Storages/S3/CredentialsAliCloud.h>
@@ -36,6 +30,12 @@
 #include <common/logger_useful.h>
 
 #include <fstream>
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#include <Poco/JSON/Object.h>
+#include <Poco/JSON/Parser.h>
+#pragma GCC diagnostic pop
 
 namespace DB::S3
 {

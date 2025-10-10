@@ -155,7 +155,7 @@ void OIDCCredentialsProvider::Reload()
             "Failed to send request to Alibaba Cloud OIDC creds provider, role_arn={} role_session_name={} code={}",
             m_role_arn,
             m_session_name,
-            magic_enum::enum_name(response->GetResponseCode()));
+            magic_enum::enum_integer(response->GetResponseCode()));
         return;
     }
 
@@ -325,7 +325,7 @@ std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getMetadataToken()
         LOG_ERROR(
             log,
             "Failed to get token from IMDS, code={} body={}",
-            magic_enum::enum_name(response->GetResponseCode()),
+            magic_enum::enum_integer(response->GetResponseCode()),
             body);
         return std::nullopt;
     }
@@ -365,11 +365,48 @@ std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getRoleName()
             log,
             "Failed to get IMDSv2 token from IMDS, token={} code={}",
             token,
-            magic_enum::enum_name(response->GetResponseCode()));
+            magic_enum::enum_integer(response->GetResponseCode()));
         return std::nullopt;
     }
     auto body = Aws::String(Aws::IStreamBufIterator(response->GetResponseBody()), Aws::IStreamBufIterator());
     return Poco::trim(body);
+}
+
+std::pair<Aws::Auth::AWSCredentials, String> ECSRAMRoleCredentialsProvider::parseFromResponse(const String & resp)
+{
+    using Aws::Auth::AWSCredentials;
+    try
+    {
+        Poco::JSON::Parser parser;
+        Poco::Dynamic::Var result = parser.parse(resp);
+        const auto & obj = result.extract<Poco::JSON::Object::Ptr>();
+        if (unlikely(!obj->has("Code")))
+            return {AWSCredentials{}, "missing Code field in response"};
+
+        auto code = obj->getValue<Aws::String>("Code");
+        if (unlikely(code != "Success"))
+            return {AWSCredentials{}, fmt::format("request failed, code={}", code)};
+
+        if (unlikely(
+                !obj->has("AccessKeyId") || !obj->has("AccessKeySecret") || !obj->has("SecurityToken")
+                || !obj->has("Expiration")))
+            return {AWSCredentials{}, "missing required fields in response"};
+
+        auto access_key_id = obj->getValue<Aws::String>("AccessKeyId");
+        auto secret_access_key = obj->getValue<Aws::String>("AccessKeySecret");
+        auto security_token = obj->getValue<Aws::String>("SecurityToken");
+        auto expiration = obj->getValue<Aws::String>("Expiration");
+        if (unlikely(access_key_id.empty() || secret_access_key.empty() || security_token.empty()))
+            return {AWSCredentials{}, "empty required fields in response"};
+
+        Aws::Utils::DateTime expiration_time(expiration, Aws::Utils::DateFormat::ISO_8601);
+
+        return {Aws::Auth::AWSCredentials(access_key_id, secret_access_key, security_token, expiration_time), ""};
+    }
+    catch (const Poco::Exception & e)
+    {
+        return {AWSCredentials{}, fmt::format("parse response failed: {}", e.displayText())};
+    }
 }
 
 void ECSRAMRoleCredentialsProvider::Reload()
@@ -413,49 +450,27 @@ void ECSRAMRoleCredentialsProvider::Reload()
             log,
             "Failed to send request to Alibaba Cloud IMDS, role_name={} code={}",
             role_name,
-            magic_enum::enum_name(response->GetResponseCode()));
+            magic_enum::enum_integer(response->GetResponseCode()));
         return;
     }
 
     // parse http response
     auto body = Aws::String(Aws::IStreamBufIterator(response->GetResponseBody()), Aws::IStreamBufIterator());
-    try
+    auto [cred, err_msg] = parseFromResponse(body);
+    if (!err_msg.empty())
     {
-        Poco::JSON::Parser parser;
-        Poco::Dynamic::Var result = parser.parse(body);
-        const auto & obj = result.extract<Poco::JSON::Object::Ptr>();
-        if (!obj->has("Code"))
-        {
-            LOG_ERROR(log, "Failed to parse response from Alibaba Cloud IMDS, resp_body={}", body);
-            return;
-        }
-        auto code = obj->getValue<Aws::String>("Code");
-        if (code != "Success")
-        {
-            LOG_ERROR(log, "Failed to get valid credentials from Alibaba Cloud IMDS, code={} resp_body={}", code, body);
-            return;
-        }
-
-        if (!obj->has("AccessKeyId") || !obj->has("AccessKeySecret") || !obj->has("SecurityToken")
-            || !obj->has("Expiration"))
-        {
-            LOG_ERROR(log, "Failed to get valid credentials from Alibaba Cloud IMDS, resp_body={}", body);
-            return;
-        }
-        auto access_key_id = obj->getValue<Aws::String>("AccessKeyId");
-        auto secret_access_key = obj->getValue<Aws::String>("AccessKeySecret");
-        auto security_token = obj->getValue<Aws::String>("SecurityToken");
-        auto expiration = obj->getValue<Aws::String>("Expiration");
-        Aws::Utils::DateTime expiration_time(expiration, Aws::Utils::DateFormat::ISO_8601);
-
-        LOG_INFO(log, "Successfully retrieved credentials from Alibaba Cloud IMDS, role_name={}", role_name);
-        m_credentials = Aws::Auth::AWSCredentials(access_key_id, secret_access_key, security_token, expiration_time);
-    }
-    catch (const Poco::Exception & e)
-    {
-        LOG_ERROR(log, "Failed to parse response from Alibaba Cloud IMDS, {}", e.displayText());
+        LOG_ERROR(
+            log,
+            "Failed to get valid credentials from Alibaba Cloud IMDS, role_name={} err={} body={}",
+            role_name,
+            err_msg,
+            body);
         return;
     }
+
+    // update the credentials
+    m_credentials = cred;
+    LOG_INFO(log, "Successfully retrieved credentials from Alibaba Cloud IMDS, role_name={}", role_name);
 }
 
 } // namespace DB::S3::AlibabaCloud

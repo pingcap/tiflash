@@ -74,6 +74,10 @@ public:
      */
     Aws::Auth::AWSCredentials GetAWSCredentials() override;
 
+    // Parse credentials from IMDS response body.
+    // Returns AwsCredentials or error message.
+    static std::pair<Aws::Auth::AWSCredentials, String> parseFromResponse(const String & resp);
+
 protected:
     void Reload() override;
 
