@@ -47,7 +47,9 @@ static const char STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG[] = "STSAssumeRoleWebIden
 class STSAssumeRoleWebIdentityCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
 {
 public:
-    STSAssumeRoleWebIdentityCredentialsProvider();
+    static std::shared_ptr<Aws::Auth::AWSCredentialsProvider> build();
+
+    STSAssumeRoleWebIdentityCredentialsProvider(String role_arn, String token_file, String region, String session_name);
 
     /**
      * Retrieves the credentials if found, otherwise returns empty credential set.
@@ -72,20 +74,19 @@ private:
     LoggerPtr log;
 };
 
-
-STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentialsProvider()
-    : m_initialized(false)
-    , log(Logger::get())
+std::shared_ptr<Aws::Auth::AWSCredentialsProvider> STSAssumeRoleWebIdentityCredentialsProvider::build()
 {
+    auto log = Logger::get();
+
     // check environment variables
     Aws::String tmp_region = Aws::Environment::GetEnv("AWS_DEFAULT_REGION");
-    m_role_arn = Aws::Environment::GetEnv("AWS_ROLE_ARN");
-    m_token_file = Aws::Environment::GetEnv("AWS_WEB_IDENTITY_TOKEN_FILE");
-    m_session_name = Aws::Environment::GetEnv("AWS_ROLE_SESSION_NAME");
+    String token_file = Aws::Environment::GetEnv("AWS_WEB_IDENTITY_TOKEN_FILE");
+    String role_arn = Aws::Environment::GetEnv("AWS_ROLE_ARN");
+    String session_name = Aws::Environment::GetEnv("AWS_ROLE_SESSION_NAME");
 
     // check profile_config if either m_role_arn or m_token_file is not loaded from environment variable
     // region source is not enforced, but we need it to construct sts endpoint, if we can't find from environment, we should check if it's set in config file.
-    if (m_role_arn.empty() || m_token_file.empty() || tmp_region.empty())
+    if (role_arn.empty() || token_file.empty() || tmp_region.empty())
     {
         auto profile = Aws::Config::GetCachedConfigProfile(Aws::Auth::GetConfigProfileName());
         if (tmp_region.empty())
@@ -93,51 +94,51 @@ STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentials
             tmp_region = profile.GetRegion();
         }
         // If either of these two were not found from environment, use whatever found for all three in config file
-        if (m_role_arn.empty() || m_token_file.empty())
+        if (role_arn.empty() || token_file.empty())
         {
-            m_role_arn = profile.GetRoleArn();
-            m_token_file = profile.GetValue("web_identity_token_file");
-            m_session_name = profile.GetValue("role_session_name");
+            role_arn = profile.GetRoleArn();
+            token_file = profile.GetValue("web_identity_token_file");
+            session_name = profile.GetValue("role_session_name");
         }
     }
 
-    if (m_token_file.empty())
+    if (token_file.empty())
     {
-        LOG_WARNING(log, "Token file must be specified to use STS AssumeRole web identity creds provider.");
-        return; // No need to do further constructing
+        LOG_INFO(log, "Token file must be specified to use STS AssumeRole web identity creds provider.");
+        return nullptr;
     }
-    else
+    if (role_arn.empty())
     {
-        LOG_DEBUG(log, "Resolved token_file from profile_config or environment variable to be {}", m_token_file);
+        LOG_INFO(log, "RoleArn must be specified to use STS AssumeRole web identity creds provider.");
+        return nullptr;
     }
 
-    if (m_role_arn.empty())
-    {
-        LOG_WARNING(log, "RoleArn must be specified to use STS AssumeRole web identity creds provider.");
-        return; // No need to do further constructing
-    }
-    else
-    {
-        LOG_DEBUG(log, "Resolved role_arn from profile_config or environment variable to be {}", m_role_arn);
-    }
+    return std::make_shared<STSAssumeRoleWebIdentityCredentialsProvider>(
+        role_arn,
+        token_file,
+        tmp_region,
+        session_name);
+}
+
+STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentialsProvider(
+    String role_arn,
+    String token_file,
+    String tmp_region,
+    String session_name)
+    : m_role_arn(std::move(role_arn))
+    , m_token_file(std::move(token_file))
+    , m_session_name(std::move(session_name))
+    , m_initialized(false)
+    , log(Logger::get())
+{
+    assert(!m_role_arn.empty());
+    assert(!m_token_file.empty());
 
     if (tmp_region.empty())
-    {
         tmp_region = Aws::Region::US_EAST_1;
-    }
-    else
-    {
-        LOG_DEBUG(log, "Resolved region from profile_config or environment variable to be {}", tmp_region);
-    }
 
     if (m_session_name.empty())
-    {
         m_session_name = Aws::Utils::UUID::RandomUUID();
-    }
-    else
-    {
-        LOG_DEBUG(log, "Resolved session_name from profile_config or environment variable to be {}", m_session_name);
-    }
 
     Aws::Client::ClientConfiguration aws_client_configuration;
     aws_client_configuration.scheme = Aws::Http::Scheme::HTTPS;
@@ -157,7 +158,14 @@ STSAssumeRoleWebIdentityCredentialsProvider::STSAssumeRoleWebIdentityCredentials
         STS_ASSUME_ROLE_WEB_IDENTITY_LOG_TAG,
         aws_client_configuration);
     m_initialized = true;
-    LOG_INFO(log, "Creating STS AssumeRole with web identity creds provider.");
+    LOG_DEBUG(
+        log,
+        "Created STS AssumeRole with web identity creds provider, role_arn={} token_file={} region={} session_name={}",
+        m_role_arn,
+        m_token_file,
+        tmp_region,
+        m_session_name);
+    LOG_INFO(log, "Creating STS AssumeRole with web identity creds provider");
 }
 
 Aws::Auth::AWSCredentials STSAssumeRoleWebIdentityCredentialsProvider::GetAWSCredentials()
@@ -228,73 +236,89 @@ void STSAssumeRoleWebIdentityCredentialsProvider::refreshIfExpired()
     Reload();
 }
 
-/// S3CredentialsProviderChain ///
-
-static const char S3CredentialsProviderChainTag[] = "S3CredentialsProviderChain";
-
-S3CredentialsProviderChain::S3CredentialsProviderChain()
-    : log(Logger::get())
+std::shared_ptr<Aws::Auth::AWSCredentialsProvider> buildECSCredentialsProvider(const LoggerPtr & log)
 {
-    static const char AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI[] = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
-    static const char AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI[] = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
-    static const char AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN[] = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
-    static const char AWS_EC2_METADATA_DISABLED[] = "AWS_EC2_METADATA_DISABLED";
-
-    /// AWS API tries credentials providers one by one. Some of providers (like ProfileConfigFileAWSCredentialsProvider) can be
-    /// quite verbose even if nobody configured them. So we use our provider first and only after it use default providers.
-    /// And ProcessCredentialsProvider is useless in our cases, removed.
-
-    AddProvider(std::make_shared<DB::S3::STSAssumeRoleWebIdentityCredentialsProvider>());
-    if (auto provider = DB::S3::AlibabaCloud::ECSRAMRoleCredentialsProvider::build(); provider != nullptr)
-        AddProvider(provider);
-    if (auto provider = DB::S3::AlibabaCloud::OIDCCredentialsProvider::build(); provider != nullptr)
-        AddProvider(provider);
-    AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
-
     //ECS TaskRole Credentials only available when ENVIRONMENT VARIABLE is set
+    static const char AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI[] = "AWS_CONTAINER_CREDENTIALS_RELATIVE_URI";
     auto const relative_uri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI);
     LOG_DEBUG(log, "The environment variable value {} is {}", AWS_ECS_CONTAINER_CREDENTIALS_RELATIVE_URI, relative_uri);
 
+    static const char AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI[] = "AWS_CONTAINER_CREDENTIALS_FULL_URI";
     auto const absolute_uri = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI);
     LOG_DEBUG(log, "The environment variable value {} is {}", AWS_ECS_CONTAINER_CREDENTIALS_FULL_URI, absolute_uri);
 
+    static const char AWS_EC2_METADATA_DISABLED[] = "AWS_EC2_METADATA_DISABLED";
     auto const ec2_metadata_disabled = Aws::Environment::GetEnv(AWS_EC2_METADATA_DISABLED);
     LOG_DEBUG(log, "The environment variable value {} is {}", AWS_EC2_METADATA_DISABLED, ec2_metadata_disabled);
 
     if (!relative_uri.empty())
     {
-        AddProvider(Aws::MakeShared<Aws::Auth::TaskRoleCredentialsProvider>(
-            S3CredentialsProviderChainTag,
-            relative_uri.c_str()));
         LOG_INFO(
             log,
-            "Added ECS metadata service credentials provider with relative path: [{}] to the provider chain.",
+            "Added ECS metadata service credentials provider with relative path: [{}] to the provider chain",
             relative_uri);
+        return std::make_shared<Aws::Auth::TaskRoleCredentialsProvider>(relative_uri.c_str());
     }
     else if (!absolute_uri.empty())
     {
+        static const char AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN[] = "AWS_CONTAINER_AUTHORIZATION_TOKEN";
         const auto token = Aws::Environment::GetEnv(AWS_ECS_CONTAINER_AUTHORIZATION_TOKEN);
-        AddProvider(Aws::MakeShared<Aws::Auth::TaskRoleCredentialsProvider>(
-            S3CredentialsProviderChainTag,
-            absolute_uri.c_str(),
-            token.c_str()));
-
-        //DO NOT log the value of the authorization token for security purposes.
+        // DO NOT log the value of the authorization token for security purposes.
         LOG_INFO(
             log,
-            "Added ECS credentials provider with URI: [{}] to the provider chain with {} authorization token.",
+            "Added ECS credentials provider with URI: [{}] to the provider chain with {} authorization token",
             absolute_uri,
             (token.empty() ? "an empty" : "a non-empty"));
+        return std::make_shared<Aws::Auth::TaskRoleCredentialsProvider>(absolute_uri.c_str(), token.c_str());
     }
     else if (Aws::Utils::StringUtils::ToLower(ec2_metadata_disabled.c_str()) != "true")
     {
-        AddProvider(Aws::MakeShared<Aws::Auth::InstanceProfileCredentialsProvider>(S3CredentialsProviderChainTag));
-        LOG_INFO(log, "Added EC2 metadata service credentials provider to the provider chain.");
+        LOG_INFO(log, "Added EC2 metadata service credentials provider to the provider chain");
+        return std::make_shared<Aws::Auth::InstanceProfileCredentialsProvider>();
     }
 
-    /// Quite verbose provider (argues if file with credentials doesn't exist) so it's the last one
-    /// in chain.
-    AddProvider(std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>());
+    // EC2 metadata service is disabled, do not add the provider
+    LOG_INFO(log, "IMDS is disabled for AWS ECS/EC2 creds provider");
+    return nullptr;
+}
+
+/// S3CredentialsProviderChain ///
+
+S3CredentialsProviderChain::S3CredentialsProviderChain()
+    : log(Logger::get())
+{
+    /// AWS API tries credentials providers one by one. Some of providers (like ProfileConfigFileAWSCredentialsProvider) can be
+    /// quite verbose even if nobody configured them. So we use our provider first and only after it use default providers.
+    /// And ProcessCredentialsProvider is useless in our cases, removed.
+
+    bool is_alibaba_cloud_env = false;
+
+    if (auto provider = DB::S3::STSAssumeRoleWebIdentityCredentialsProvider::build(); provider != nullptr)
+        AddProvider(provider);
+    if (auto provider = DB::S3::AlibabaCloud::ECSRAMRoleCredentialsProvider::build(); provider != nullptr)
+    {
+        is_alibaba_cloud_env = true;
+        AddProvider(provider);
+    }
+    if (auto provider = DB::S3::AlibabaCloud::OIDCCredentialsProvider::build(); provider != nullptr)
+    {
+        is_alibaba_cloud_env = true;
+        AddProvider(provider);
+    }
+
+    // Environment variable credentials always added
+    AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
+
+    // If in alibaba cloud environment, skip adding ECSCredentialsProvider and ProfileConfigFileAWSCredentialsProvider
+    // to avoid useless retries and logging
+    if (!is_alibaba_cloud_env)
+    {
+        if (auto provider = buildECSCredentialsProvider(log); provider != nullptr)
+            AddProvider(provider);
+        /// Quite verbose provider (argues if file with credentials doesn't exist) so it's the last one
+        /// in chain.
+        AddProvider(std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>());
+    }
 }
 
 } // namespace DB::S3
