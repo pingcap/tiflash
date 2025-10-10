@@ -405,8 +405,6 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
-namespace
-{
 bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log)
 {
     if (cfg.endpointOverride.empty())
@@ -416,16 +414,30 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
 
     const Poco::URI uri(cfg.endpointOverride);
     String matched_region;
-    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
+    // AWS endpoint format:
+    //   - Standard: s3.<region>.amazonaws.com
+    //   - Dualstack: s3.dualstack.<region>.amazonaws.com
+    //   - FIPS: s3-fips.<region>.amazonaws.com
+    //   - FIPS && Dualstack: s3-fips.dualstack.<region>.amazonaws.com
+    // Reference: https://docs.aws.amazon.com/general/latest/gr/s3.html
+    // Alibaba Cloud endpoint format:
+    //   - Internal: oss-<region>-internal.aliyuncs.com
+    //   - External: oss-<region>.aliyuncs.com
+    // Reference: https://www.alibabacloud.com/help/en/oss/regions-and-endpoints
+    static const RE2 region_pattern(
+        R"((?:^s3\.|^s3-fips\.|^oss-)(?:dualstack.)?([a-z0-9\-]+)\.(?:amazonaws|aliyuncs)\.)");
     if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
     {
         boost::algorithm::to_lower(matched_region);
+        if (matched_region.ends_with("-internal"))
+            matched_region = matched_region.substr(0, matched_region.size() - strlen("-internal"));
         cfg.region = matched_region;
     }
     else
     {
         /// In global mode AWS C++ SDK send `us-east-1` but accept switching to another one if being suggested.
-        cfg.region = Aws::Region::AWS_GLOBAL;
+        if (cfg.region.empty())
+            cfg.region = Aws::Region::AWS_GLOBAL;
     }
 
     if (uri.getScheme() == "https")
@@ -461,7 +473,6 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
         use_virtual_address);
     return use_virtual_address;
 }
-} // namespace
 
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
 {

@@ -59,6 +59,8 @@ Exception fromS3Error(const Aws::S3::S3Error & e, const std::string & fmt, Args 
     return DB::Exception(ErrorCodes::S3_ERROR, fmt + S3ErrorMessage(e), args...);
 }
 
+bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log);
+
 class TiFlashS3Client : public Aws::S3::S3Client
 {
 public:
