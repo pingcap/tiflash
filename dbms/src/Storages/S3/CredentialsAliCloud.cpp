@@ -46,7 +46,7 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> OIDCCredentialsProvider::buil
     // only support environment variable
     if (role_arn.empty() || token_file.empty() || region_id.empty() || oidc_provider_arn.empty())
     {
-        LOG_WARNING(Logger::get(), "Environment variables must be specified to use Alibaba Cloud OIDC creds provider");
+        LOG_INFO(Logger::get(), "Environment variables must be specified to use Alibaba Cloud OIDC creds provider");
         return nullptr;
     }
     return std::make_shared<OIDCCredentialsProvider>(region_id, role_arn, oidc_provider_arn, token_file);
@@ -233,7 +233,7 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> ECSRAMRoleCredentialsProvider
     String tmp_ecs_metadata_disabled = Aws::Environment::GetEnv("ALIBABA_CLOUD_ECS_METADATA_DISABLED");
     if (!tmp_ecs_metadata_disabled.empty() && details::isTruthy(tmp_ecs_metadata_disabled))
     {
-        LOG_WARNING(Logger::get(), "IMDS is disabled for Alibaba Cloud IMDS creds provider");
+        LOG_INFO(Logger::get(), "IMDS is disabled for Alibaba Cloud IMDS creds provider");
         return nullptr;
     }
     return std::make_shared<ECSRAMRoleCredentialsProvider>();
