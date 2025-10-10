@@ -380,13 +380,14 @@ void ECSRAMRoleCredentialsProvider::Reload()
         m_role_name,
         m_disable_imdsv1);
 
-    std::optional<String> role_name = getRoleName();
-    if (!role_name.has_value() || role_name->empty())
+    std::optional<String> opt_role_name = getRoleName();
+    if (!opt_role_name.has_value() || opt_role_name->empty())
     {
         LOG_ERROR(log, "Failed to get role_name from Alibaba Cloud IMDS");
         return;
     }
 
+    String role_name = opt_role_name.value(); // extract the role name from optional
     String url = fmt::format("{}/latest/meta-data/ram/security-credentials/{}", details::IMDS_BASE_URL, role_name);
     auto http_client = m_http_client_factory->CreateHttpClient(Aws::Client::ClientConfiguration());
     auto http_request = m_http_client_factory->CreateHttpRequest(
