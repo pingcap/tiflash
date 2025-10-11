@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Storages/S3/S3Common.h>
+#include <aws/core/http/Scheme.h>
 #include <common/logger_useful.h>
 #include <gtest/gtest.h>
 
@@ -30,6 +31,8 @@ TEST(S3CommonTest, updateRegionByEndpoint)
     {
         String endpoint;
         String expected_region;
+        Aws::Http::Scheme expected_scheme;
+        bool use_virtual_address = true;
     };
 
     std::vector<TestCase> cases{
@@ -37,59 +40,78 @@ TEST(S3CommonTest, updateRegionByEndpoint)
         TestCase{
             "http://s3.us-east-1.amazonaws.com",
             "us-east-1",
+            Aws::Http::Scheme::HTTP,
         },
         TestCase{
             "https://s3.us-west-1.amazonaws.com",
             "us-west-1",
+            Aws::Http::Scheme::HTTPS,
         },
         // AWS dualstack endpoint
         TestCase{
             "http://s3.dualstack.us-east-1.amazonaws.com",
             "us-east-1",
+            Aws::Http::Scheme::HTTP,
         },
         // AWS fips endpoint
         TestCase{
             "https://s3-fips.us-east-1.amazonaws.com",
             "us-east-1",
+            Aws::Http::Scheme::HTTPS,
         },
         // AWS fips dualstack endpoint
         TestCase{
             "https://s3-fips.dualstack.us-east-1.amazonaws.com",
             "us-east-1",
+            Aws::Http::Scheme::HTTPS,
         },
         // Alibaba Cloud endpoint (internal)
         TestCase{
             "http://oss-ap-southeast-1-internal.aliyuncs.com",
             "ap-southeast-1",
+            Aws::Http::Scheme::HTTP,
         },
         TestCase{
             "https://oss-eu-central-1-internal.aliyuncs.com",
             "eu-central-1",
+            Aws::Http::Scheme::HTTPS,
         },
         // Alibaba Cloud endpoint (external)
         TestCase{
             "http://oss-ap-southeast-1.aliyuncs.com",
             "ap-southeast-1",
+            Aws::Http::Scheme::HTTP,
         },
         TestCase{
             "https://oss-na-south-1.aliyuncs.com",
             "na-south-1",
+            Aws::Http::Scheme::HTTPS,
         },
         // non-AWS endpoint
         TestCase{
             "minio.mydomain.com",
             "us-west-2",
+            Aws::Http::Scheme::HTTP,
+        },
+        TestCase{
+            "10.0.0.1:9000",
+            "us-west-2",
+            Aws::Http::Scheme::HTTP,
+            false,
         },
     };
 
     String default_test_region = "us-west-2";
     for (const auto & c : cases)
     {
-        Aws::Client::ClientConfiguration cfg;
+        Aws::Client::ClientConfiguration cfg(true, "standard", true);
         cfg.region = default_test_region;
         cfg.endpointOverride = c.endpoint;
-        updateRegionByEndpoint(cfg, log);
+        bool use_virtual_address = updateRegionByEndpoint(cfg, log);
         ASSERT_EQ(cfg.region, c.expected_region) << c.endpoint;
+        ASSERT_EQ(cfg.scheme, c.expected_scheme) << c.endpoint;
+        ASSERT_EQ(cfg.verifySSL, c.expected_scheme == Aws::Http::Scheme::HTTPS) << c.endpoint;
+        ASSERT_EQ(use_virtual_address, c.use_virtual_address) << c.endpoint;
     }
 }
 
