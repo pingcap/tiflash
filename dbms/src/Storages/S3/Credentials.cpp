@@ -288,37 +288,32 @@ S3CredentialsProviderChain::S3CredentialsProviderChain(const Aws::Client::Client
     : log(Logger::get())
 {
     /// AWS API tries credentials providers one by one. Some of providers (like ProfileConfigFileAWSCredentialsProvider) can be
-    /// quite verbose even if nobody configured them. So we use our provider first and only after it use default providers.
-    /// And ProcessCredentialsProvider is useless in our cases, removed.
-
-    bool is_alibaba_cloud_env = false;
+    /// quite verbose even if nobody configured them. So tiflash use our provider first and only after it use default providers.
+    /// And ProcessCredentialsProvider is useless in tiflash deployment cases, removed.
 
     if (auto provider = DB::S3::STSAssumeRoleWebIdentityCredentialsProvider::build(); provider != nullptr)
         AddProvider(provider);
+
+    // Alibaba Cloud credentials providers
     if (auto provider = DB::S3::AlibabaCloud::ECSRAMRoleCredentialsProvider::build(cfg); provider != nullptr)
     {
-        is_alibaba_cloud_env = true;
         AddProvider(provider);
     }
     if (auto provider = DB::S3::AlibabaCloud::OIDCCredentialsProvider::build(cfg); provider != nullptr)
     {
-        is_alibaba_cloud_env = true;
         AddProvider(provider);
     }
 
-    // Environment variable credentials always added
+    // AWS environment variable credentials provider always added
     AddProvider(std::make_shared<Aws::Auth::EnvironmentAWSCredentialsProvider>());
 
-    // If in alibaba cloud environment, skip adding ECSCredentialsProvider and ProfileConfigFileAWSCredentialsProvider
-    // to avoid useless retries and logging
-    if (!is_alibaba_cloud_env)
-    {
-        if (auto provider = buildECSCredentialsProvider(log); provider != nullptr)
-            AddProvider(provider);
-        /// Quite verbose provider (argues if file with credentials doesn't exist) so it's the last one
-        /// in chain.
-        AddProvider(std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>());
-    }
+    // AWS ECS credentials provider
+    if (auto provider = buildECSCredentialsProvider(log); provider != nullptr)
+        AddProvider(provider);
+
+    /// Quite verbose provider (argues if file with credentials doesn't exist) so it's the last one
+    /// in chain.
+    AddProvider(std::make_shared<Aws::Auth::ProfileConfigFileAWSCredentialsProvider>());
 }
 
 } // namespace DB::S3
