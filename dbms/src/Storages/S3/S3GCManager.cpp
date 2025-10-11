@@ -88,7 +88,7 @@ std::optional<std::unordered_map<StoreID, metapb::Store>> getStoresFromPD(
     catch (const Poco::Exception & e)
     {
         LOG_WARNING(log, "getAllStores from pd failed, Poco::Exception: {}", e.displayText());
-        // return an empty map
+        // return a null
         return std::nullopt;
     }
 }
