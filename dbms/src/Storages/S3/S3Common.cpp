@@ -186,12 +186,6 @@ String normalizedRoot(String ori_root) // a copy for changing
     return ori_root;
 }
 
-TiFlashS3Client::TiFlashS3Client(const String & bucket_name_, const String & root_)
-    : bucket_name(bucket_name_)
-    , key_root(normalizedRoot(root_))
-    , log(Logger::get(fmt::format("bucket={} root={}", bucket_name, key_root)))
-{}
-
 TiFlashS3Client::TiFlashS3Client(
     const String & bucket_name_,
     const String & root_,
@@ -360,8 +354,8 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     }
     else
     {
-        // Disable IMDS for mock s3 client
-        Aws::Client::ClientConfiguration cfg(true, /*profileName=*/"standard", /*shouldDisableIMDS=*/true);
+        // Create a cfg for suppressing verbose but useless logging. For example, disable IMDS, use "standard" retry
+        Aws::Client::ClientConfiguration cfg(true, /*defaultMode=*/"standard", /*shouldDisableIMDS=*/true);
         cfg.region = Aws::Region::US_EAST_1; // default region
         Aws::Auth::AWSCredentials cred("mock_access_key", "mock_secret_key");
         shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket, config.root, cred, cfg);
