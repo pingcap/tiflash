@@ -284,7 +284,7 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> buildECSCredentialsProvider(c
 
 /// S3CredentialsProviderChain ///
 
-S3CredentialsProviderChain::S3CredentialsProviderChain()
+S3CredentialsProviderChain::S3CredentialsProviderChain(const Aws::Client::ClientConfiguration & cfg)
     : log(Logger::get())
 {
     /// AWS API tries credentials providers one by one. Some of providers (like ProfileConfigFileAWSCredentialsProvider) can be
@@ -295,12 +295,12 @@ S3CredentialsProviderChain::S3CredentialsProviderChain()
 
     if (auto provider = DB::S3::STSAssumeRoleWebIdentityCredentialsProvider::build(); provider != nullptr)
         AddProvider(provider);
-    if (auto provider = DB::S3::AlibabaCloud::ECSRAMRoleCredentialsProvider::build(); provider != nullptr)
+    if (auto provider = DB::S3::AlibabaCloud::ECSRAMRoleCredentialsProvider::build(cfg); provider != nullptr)
     {
         is_alibaba_cloud_env = true;
         AddProvider(provider);
     }
-    if (auto provider = DB::S3::AlibabaCloud::OIDCCredentialsProvider::build(); provider != nullptr)
+    if (auto provider = DB::S3::AlibabaCloud::OIDCCredentialsProvider::build(cfg); provider != nullptr)
     {
         is_alibaba_cloud_env = true;
         AddProvider(provider);

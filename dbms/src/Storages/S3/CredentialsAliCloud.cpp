@@ -36,7 +36,8 @@ namespace DB::S3::AlibabaCloud
 static constexpr int CREDENTIAL_PROVIDER_EXPIRATION_GRACE_PERIOD = 180 * 1000; // 180 seconds
 
 /// OIDCCredentialsProvider ///
-std::shared_ptr<Aws::Auth::AWSCredentialsProvider> OIDCCredentialsProvider::build()
+std::shared_ptr<Aws::Auth::AWSCredentialsProvider> OIDCCredentialsProvider::build(
+    const Aws::Client::ClientConfiguration & cfg)
 {
     // check environment variables
     auto region_id = Aws::Environment::GetEnv("ALIBABA_CLOUD_REGION_ID");
@@ -50,15 +51,17 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> OIDCCredentialsProvider::buil
         LOG_INFO(Logger::get(), "Environment variables must be specified to use Alibaba Cloud OIDC creds provider");
         return nullptr;
     }
-    return std::make_shared<OIDCCredentialsProvider>(region_id, role_arn, oidc_provider_arn, token_file);
+    return std::make_shared<OIDCCredentialsProvider>(cfg, region_id, role_arn, oidc_provider_arn, token_file);
 }
 
 OIDCCredentialsProvider::OIDCCredentialsProvider(
+    const Aws::Client::ClientConfiguration & cfg,
     const String & region_id,
     const String & role_arn,
     const String & oidc_provider_arn,
     const String & token_file)
-    : m_oidc_provider_arn(oidc_provider_arn)
+    : m_cfg(cfg)
+    , m_oidc_provider_arn(oidc_provider_arn)
     , m_region_id(region_id)
     , m_role_arn(role_arn)
     , m_token_file(token_file)
@@ -142,10 +145,7 @@ void OIDCCredentialsProvider::Reload()
     Aws::String query_string = calculateQueryString();
 
     // create http request
-    auto [cfg, use_virtual_address]
-        = DB::S3::ClientFactory::getClientConfig(DB::S3::ClientFactory::instance().getConfigCopy(), log);
-    UNUSED(use_virtual_address);
-    auto http_client = m_http_client_factory->CreateHttpClient(cfg);
+    auto http_client = m_http_client_factory->CreateHttpClient(m_cfg);
     auto http_request = m_http_client_factory->CreateHttpRequest(
         m_endpoint + "?" + query_string,
         Aws::Http::HttpMethod::HTTP_POST,
@@ -232,7 +232,8 @@ bool isTruthy(const String & str)
 static const std::string_view IMDS_BASE_URL("http://100.100.100.200");
 } // namespace details
 
-std::shared_ptr<Aws::Auth::AWSCredentialsProvider> ECSRAMRoleCredentialsProvider::build()
+std::shared_ptr<Aws::Auth::AWSCredentialsProvider> ECSRAMRoleCredentialsProvider::build(
+    const Aws::Client::ClientConfiguration & cfg)
 {
     String tmp_ecs_metadata_disabled = Aws::Environment::GetEnv("ALIBABA_CLOUD_ECS_METADATA_DISABLED");
     if (!tmp_ecs_metadata_disabled.empty() && details::isTruthy(tmp_ecs_metadata_disabled))
@@ -240,11 +241,12 @@ std::shared_ptr<Aws::Auth::AWSCredentialsProvider> ECSRAMRoleCredentialsProvider
         LOG_INFO(Logger::get(), "IMDS is disabled for Alibaba Cloud IMDS creds provider");
         return nullptr;
     }
-    return std::make_shared<ECSRAMRoleCredentialsProvider>();
+    return std::make_shared<ECSRAMRoleCredentialsProvider>(cfg);
 }
 
-ECSRAMRoleCredentialsProvider::ECSRAMRoleCredentialsProvider()
-    : m_disable_imdsv1(false)
+ECSRAMRoleCredentialsProvider::ECSRAMRoleCredentialsProvider(const Aws::Client::ClientConfiguration & cfg)
+    : m_cfg(cfg)
+    , m_disable_imdsv1(false)
     , m_initialized(false)
     , log(Logger::get())
 {
@@ -304,7 +306,7 @@ std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getMetadataToken()
     // PUT http://100.100.100.200/latest/api/token
     String url = fmt::format("{}/latest/api/token", details::IMDS_BASE_URL);
 
-    auto http_client = m_http_client_factory->CreateHttpClient(Aws::Client::ClientConfiguration());
+    auto http_client = m_http_client_factory->CreateHttpClient(m_cfg);
     auto http_request = m_http_client_factory->CreateHttpRequest(
         url,
         Aws::Http::HttpMethod::HTTP_PUT,
@@ -345,7 +347,7 @@ std::optional<Aws::String> ECSRAMRoleCredentialsProvider::getRoleName()
     }
 
     String url = fmt::format("{}/latest/meta-data/ram/security-credentials/", details::IMDS_BASE_URL);
-    auto http_client = m_http_client_factory->CreateHttpClient(Aws::Client::ClientConfiguration());
+    auto http_client = m_http_client_factory->CreateHttpClient(m_cfg);
     auto http_request = m_http_client_factory->CreateHttpRequest(
         url,
         Aws::Http::HttpMethod::HTTP_GET,
@@ -430,10 +432,7 @@ void ECSRAMRoleCredentialsProvider::Reload()
 
     String role_name = opt_role_name.value(); // extract the role name from optional
     String url = fmt::format("{}/latest/meta-data/ram/security-credentials/{}", details::IMDS_BASE_URL, role_name);
-    auto [cfg, use_virtual_address]
-        = DB::S3::ClientFactory::getClientConfig(DB::S3::ClientFactory::instance().getConfigCopy(), log);
-    UNUSED(use_virtual_address);
-    auto http_client = m_http_client_factory->CreateHttpClient(cfg);
+    auto http_client = m_http_client_factory->CreateHttpClient(m_cfg);
     auto http_request = m_http_client_factory->CreateHttpRequest(
         url,
         Aws::Http::HttpMethod::HTTP_GET,
