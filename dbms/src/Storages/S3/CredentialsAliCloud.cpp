@@ -15,6 +15,7 @@
 #include <Storages/S3/Credentials.h>
 #include <Storages/S3/CredentialsAliCloud.h>
 #include <Storages/S3/PocoHTTPClientFactory.h>
+#include <Storages/S3/S3Common.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/client/ClientConfiguration.h>
 #include <aws/core/platform/Environment.h>
@@ -141,7 +142,10 @@ void OIDCCredentialsProvider::Reload()
     Aws::String query_string = calculateQueryString();
 
     // create http request
-    auto http_client = m_http_client_factory->CreateHttpClient(Aws::Client::ClientConfiguration());
+    auto [cfg, use_virtual_address]
+        = DB::S3::ClientFactory::getClientConfig(DB::S3::ClientFactory::instance().getConfigCopy(), log);
+    UNUSED(use_virtual_address);
+    auto http_client = m_http_client_factory->CreateHttpClient(cfg);
     auto http_request = m_http_client_factory->CreateHttpRequest(
         m_endpoint + "?" + query_string,
         Aws::Http::HttpMethod::HTTP_POST,
@@ -426,7 +430,10 @@ void ECSRAMRoleCredentialsProvider::Reload()
 
     String role_name = opt_role_name.value(); // extract the role name from optional
     String url = fmt::format("{}/latest/meta-data/ram/security-credentials/{}", details::IMDS_BASE_URL, role_name);
-    auto http_client = m_http_client_factory->CreateHttpClient(Aws::Client::ClientConfiguration());
+    auto [cfg, use_virtual_address]
+        = DB::S3::ClientFactory::getClientConfig(DB::S3::ClientFactory::instance().getConfigCopy(), log);
+    UNUSED(use_virtual_address);
+    auto http_client = m_http_client_factory->CreateHttpClient(cfg);
     auto http_request = m_http_client_factory->CreateHttpRequest(
         url,
         Aws::Http::HttpMethod::HTTP_GET,

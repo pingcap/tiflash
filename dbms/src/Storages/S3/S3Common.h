@@ -136,6 +136,10 @@ public:
         return config;
     }
 
+    static std::pair<Aws::Client::ClientConfiguration, bool> getClientConfig(
+        const StorageS3Config & storage_config,
+        const LoggerPtr & log);
+
     std::shared_ptr<TiFlashS3Client> sharedTiFlashClient();
 
     S3GCMethod gc_method = S3GCMethod::Lifecycle;
@@ -145,7 +149,7 @@ private:
     DISALLOW_COPY_AND_MOVE(ClientFactory);
     std::unique_ptr<Aws::S3::S3Client> create() const;
 
-    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & config_, const LoggerPtr & log);
+    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & storage_config, const LoggerPtr & log);
 
     std::shared_ptr<TiFlashS3Client> initClientFromWriteNode();
 
