@@ -33,6 +33,7 @@
 #include <Storages/S3/PocoHTTPClientFactory.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <aws/core/Region.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/auth/STSCredentialsProvider.h>
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
@@ -185,12 +186,6 @@ String normalizedRoot(String ori_root) // a copy for changing
     return ori_root;
 }
 
-TiFlashS3Client::TiFlashS3Client(const String & bucket_name_, const String & root_)
-    : bucket_name(bucket_name_)
-    , key_root(normalizedRoot(root_))
-    , log(Logger::get(fmt::format("bucket={} root={}", bucket_name, key_root)))
-{}
-
 TiFlashS3Client::TiFlashS3Client(
     const String & bucket_name_,
     const String & root_,
@@ -340,7 +335,11 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
     }
     else
     {
-        shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket, config.root);
+        // Create a cfg for suppressing verbose but useless logging. For example, disable IMDS, use "standard" retry
+        Aws::Client::ClientConfiguration cfg(true, /*defaultMode=*/"standard", /*shouldDisableIMDS=*/true);
+        cfg.region = Aws::Region::US_EAST_1; // default region
+        Aws::Auth::AWSCredentials cred("mock_access_key", "mock_secret_key");
+        shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket, config.root, cred, cfg);
     }
     client_is_inited = true; // init finish
 }
