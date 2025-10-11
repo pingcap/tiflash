@@ -824,7 +824,7 @@ Aws::S3::Model::BucketLifecycleConfiguration genNewLifecycleConfig(
     {
         // ali oss format
         // Reference: https://github.com/aliyun/aliyun-oss-cpp-sdk/blob/c42600fb0b2057494ae3b77b93afeff42dfba0a4/sdk/src/model/SetBucketLifecycleRequest.cc#L40-L44
-        rule.WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithTag(filter_tags[0])) //
+        rule.WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithTag(filter_tags[0]).WithPrefix("")) //
             .SetAliOssFormat(true);
     }
 
