@@ -146,11 +146,7 @@ private:
         const StorageS3Config & storage_config,
         const LoggerPtr & log);
 
-    static std::unique_ptr<Aws::S3::S3Client> create(
-        const StorageS3Config & storage_config,
-        const Aws::Client::ClientConfiguration & client_config,
-        bool use_virtual_addressing,
-        const LoggerPtr & log);
+    static std::unique_ptr<Aws::S3::S3Client> create(const StorageS3Config & storage_config, const LoggerPtr & log);
 
     std::shared_ptr<TiFlashS3Client> initClientFromWriteNode();
 

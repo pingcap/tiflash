@@ -350,11 +350,7 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 
     if (!mock_s3_)
     {
-        auto [shared_client_config, use_virtual_addressing] = initAwsClientConfig(config, log);
-        shared_tiflash_client = std::make_shared<TiFlashS3Client>(
-            config.bucket,
-            config.root,
-            create(config, shared_client_config, use_virtual_addressing, log));
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create(config, log));
     }
     else
     {
@@ -390,11 +386,7 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
     config.bucket = disagg_config.s3_config().bucket();
     LOG_INFO(log, "S3 config updated, {}", config.toString());
 
-    auto [shared_client_config, use_virtual_addressing] = initAwsClientConfig(config, log);
-    shared_tiflash_client = std::make_shared<TiFlashS3Client>(
-        config.bucket,
-        config.root,
-        create(config, shared_client_config, use_virtual_addressing, log));
+    shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create(config, log));
     client_is_inited = true; // init finish
     return shared_tiflash_client;
 }
@@ -495,12 +487,9 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
     return use_virtual_address;
 }
 
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(
-    const StorageS3Config & storage_config,
-    const Aws::Client::ClientConfiguration & client_config,
-    bool use_virtual_addressing,
-    const LoggerPtr & log)
+std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & storage_config, const LoggerPtr & log)
 {
+    auto [client_config, use_virtual_addressing] = initAwsClientConfig(storage_config, log);
     std::shared_ptr<Aws::Auth::AWSCredentialsProvider> cred_provider;
     if (storage_config.access_key_id.empty() && storage_config.secret_access_key.empty())
     {
