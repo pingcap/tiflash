@@ -188,7 +188,7 @@ TEST(RowKey, ToNextKeyIntHandle)
     {
         auto key_end = RecordKVFormat::genRawKey(table_id, 20);
         std::mt19937_64 rand_gen(std::random_device{}());
-        size_t rand_length = std::min(1, rand_gen() % 255); // ensure rand_length is at least 1
+        size_t rand_length = std::max(1, rand_gen() % 255); // ensure rand_length is at least 1
         auto rand_suffix = DB::random::randomString(rand_length);
         key_end.insert(key_end.end(), rand_suffix.begin(), rand_suffix.end());
         LOG_INFO(
