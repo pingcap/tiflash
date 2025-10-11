@@ -70,16 +70,27 @@ S3GCManager::S3GCManager(
     , log(Logger::get())
 {}
 
-std::unordered_map<StoreID, metapb::Store> getStoresFromPD(const pingcap::pd::ClientPtr & pd_client)
+std::optional<std::unordered_map<StoreID, metapb::Store>> getStoresFromPD(
+    const pingcap::pd::ClientPtr & pd_client,
+    const LoggerPtr & log)
 {
-    const auto stores_from_pd = pd_client->getAllStores(false);
-    std::unordered_map<StoreID, metapb::Store> stores;
-    for (const auto & s : stores_from_pd)
+    try
     {
-        auto [iter, inserted] = stores.emplace(s.id(), s);
-        RUNTIME_CHECK_MSG(inserted, "duplicated store id from pd response, duplicated_store_id={}", iter->first);
+        std::vector<metapb::Store> stores_from_pd = pd_client->getAllStores(false);
+        std::unordered_map<StoreID, metapb::Store> stores;
+        for (const auto & s : stores_from_pd)
+        {
+            auto [iter, inserted] = stores.emplace(s.id(), s);
+            RUNTIME_CHECK_MSG(inserted, "duplicated store id from pd response, duplicated_store_id={}", iter->first);
+        }
+        return stores;
     }
-    return stores;
+    catch (const Poco::Exception & e)
+    {
+        LOG_WARNING(log, "getAllStores from pd failed, Poco::Exception: {}", e.displayText());
+        // return an empty map
+        return std::nullopt;
+    }
 }
 
 bool S3GCManager::runOnAllStores()
@@ -114,7 +125,14 @@ bool S3GCManager::runOnAllStores()
     const std::vector<UInt64> all_store_ids = getAllStoreIds();
     LOG_TRACE(log, "all_store_ids: {}", all_store_ids);
     // Get all store status from pd after getting the store ids from S3.
-    const auto stores_from_pd = getStoresFromPD(pd_client);
+    const auto opt_stores_from_pd = getStoresFromPD(pd_client, log);
+    if (!opt_stores_from_pd)
+    {
+        // Failed to get stores from pd, skip this round
+        return false;
+    }
+
+    const auto & stores_from_pd = opt_stores_from_pd.value();
     for (const auto gc_store_id : all_store_ids)
     {
         if (shutdown_called)
