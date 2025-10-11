@@ -479,20 +479,31 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
     return use_virtual_address;
 }
 
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
+// Returns <aws_client_config, use_virtual_addressing>
+std::pair<Aws::Client::ClientConfiguration, bool> ClientFactory::getClientConfig(
+    const StorageS3Config & storage_config,
+    const LoggerPtr & log)
 {
-    LOG_DEBUG(log, "Create ClientConfiguration start");
-    Aws::Client::ClientConfiguration cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
-    LOG_DEBUG(log, "Create ClientConfiguration end");
-    cfg.maxConnections = config_.max_connections;
-    cfg.requestTimeoutMs = config_.request_timeout_ms;
-    cfg.connectTimeoutMs = config_.connection_timeout_ms;
-    if (!config_.endpoint.empty())
+    // disable IMDS when creating ClientConfig, the region will be updated by endpoint later if possible
+    Aws::Client::ClientConfiguration cfg(
+        /*useSmartDefaults*/ true,
+        /*defaultMode*/ "standard",
+        /*shouldDisableIMDS*/ true);
+    cfg.maxConnections = storage_config.max_connections;
+    cfg.requestTimeoutMs = storage_config.request_timeout_ms;
+    cfg.connectTimeoutMs = storage_config.connection_timeout_ms;
+    if (!storage_config.endpoint.empty())
     {
-        cfg.endpointOverride = config_.endpoint;
+        cfg.endpointOverride = storage_config.endpoint;
     }
     bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
-    if (config_.access_key_id.empty() && config_.secret_access_key.empty())
+    return {cfg, use_virtual_addressing};
+}
+
+std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & storage_config, const LoggerPtr & log)
+{
+    auto [cfg, use_virtual_addressing] = ClientFactory::instance().getClientConfig(storage_config, log);
+    if (storage_config.access_key_id.empty() && storage_config.secret_access_key.empty())
     {
         // Request that does not require authentication.
         // Such as the EC2 access permission to the S3 bucket is configured.
@@ -510,13 +521,13 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     }
     else
     {
-        Aws::Auth::AWSCredentials cred(config_.access_key_id, config_.secret_access_key);
-        if (!config_.session_token.empty())
-            cred.SetSessionToken(config_.session_token);
+        Aws::Auth::AWSCredentials cred(storage_config.access_key_id, storage_config.secret_access_key);
+        if (!storage_config.session_token.empty())
+            cred.SetSessionToken(storage_config.session_token);
         LOG_DEBUG(
             log,
             "Create S3Client with given credentials start, has_session_token={}",
-            !config_.session_token.empty());
+            !storage_config.session_token.empty());
         auto cli = std::make_unique<Aws::S3::S3Client>(
             cred,
             cfg,
