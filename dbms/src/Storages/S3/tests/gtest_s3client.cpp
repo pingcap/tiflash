@@ -66,7 +66,12 @@ TEST_F(S3ClientTest, LifecycleSerialize)
         LOG_INFO(Logger::get(), "lifecycle config: {}", text);
         ASSERT_EQ(
             text,
-            "<?xml version=\"1.0\"?>\n<LifecycleConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\n    <Rule>\n        <Expiration>\n            <Days>1</Days>\n        </Expiration>\n        <ID>tiflashgc</ID>\n        <Filter>\n            <And>\n                <Prefix></Prefix>\n                <Tag>\n                    <Key>tiflash_deleted</Key>\n                    <Value>true</Value>\n                </Tag>\n            </And>\n        </Filter>\n        <Status>Enabled</Status>\n    </Rule>\n</LifecycleConfiguration>\n");
+            "<?xml version=\"1.0\"?>\n<LifecycleConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\n    "
+            "<Rule>\n        <Expiration>\n            <Days>1</Days>\n        </Expiration>\n        "
+            "<ID>tiflashgc</ID>\n        <Filter>\n            <And>\n                <Prefix></Prefix>\n              "
+            "  <Tag>\n                    <Key>tiflash_deleted</Key>\n                    <Value>true</Value>\n        "
+            "        </Tag>\n            </And>\n        </Filter>\n        <Status>Enabled</Status>\n    "
+            "</Rule>\n</LifecycleConfiguration>\n");
 
         // deserialize
         Aws::Utils::Xml::XmlDocument doc = Aws::Utils::Xml::XmlDocument::CreateFromXmlString(text);
@@ -94,7 +99,13 @@ TEST_F(S3ClientTest, LifecycleSerialize)
         req.WithLifecycleConfiguration(cfg);
         auto text = req.SerializePayload();
         LOG_INFO(Logger::get(), "lifecycle config: {}", text);
-        ASSERT_EQ(text, "<?xml version=\"1.0\"?>\n<LifecycleConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\n    <Rule>\n        <Expiration>\n            <Days>1</Days>\n        </Expiration>\n        <ID>tiflashgc</ID>\n        <Tag>\n            <Key>tiflash_deleted</Key>\n            <Value>true</Value>\n        </Tag>\n        <Status>Enabled</Status>\n    </Rule>\n</LifecycleConfiguration>\n");
+        ASSERT_EQ(
+            text,
+            "<?xml version=\"1.0\"?>\n<LifecycleConfiguration xmlns=\"http://s3.amazonaws.com/doc/2006-03-01/\">\n    "
+            "<Rule>\n        <Expiration>\n            <Days>1</Days>\n        </Expiration>\n        "
+            "<ID>tiflashgc</ID>\n        <Prefix></Prefix>\n        <Tag>\n            <Key>tiflash_deleted</Key>\n    "
+            "        <Value>true</Value>\n        </Tag>\n        <Status>Enabled</Status>\n    "
+            "</Rule>\n</LifecycleConfiguration>\n");
 
         // deserialize
         Aws::Utils::Xml::XmlDocument doc = Aws::Utils::Xml::XmlDocument::CreateFromXmlString(text);
