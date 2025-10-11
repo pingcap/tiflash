@@ -801,6 +801,38 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     LOG_DEBUG(client.log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
 }
 
+Aws::S3::Model::BucketLifecycleConfiguration genNewLifecycleConfig(
+    const Aws::Vector<Aws::S3::Model::LifecycleRule> & existing_rules,
+    Int32 expire_days,
+    bool use_and_filter)
+{
+    static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
+    std::vector<Aws::S3::Model::Tag> filter_tags{
+        Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true"),
+    };
+    Aws::S3::Model::LifecycleRule rule;
+    rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
+        .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(expire_days))
+        .WithID("tiflashgc");
+    if (use_and_filter)
+    {
+        // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
+        rule.WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithAnd(
+            Aws::S3::Model::LifecycleRuleAndOperator().WithPrefix("").WithTags(filter_tags)));
+    }
+    else
+    {
+        rule.WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithTag(filter_tags[0]));
+    }
+
+    auto new_rules = existing_rules;
+    new_rules.emplace_back(rule);
+    Aws::S3::Model::BucketLifecycleConfiguration lifecycle_config;
+    lifecycle_config.WithRules(new_rules);
+
+    return lifecycle_config;
+}
+
 bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 {
     bool lifecycle_rule_has_been_set = false;
@@ -896,51 +928,57 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         return true;
     }
 
-    // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
     LOG_INFO(
         client.log,
         "The lifecycle rule with filter \"{}\" has not been added, n_rules={}",
         TaggingObjectIsDeleted,
         old_rules.size());
-    static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
-    std::vector<Aws::S3::Model::Tag> filter_tags{
-        Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true"),
-    };
 
-    Aws::S3::Model::LifecycleRule rule;
-    rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
-        .WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithAnd(
-            Aws::S3::Model::LifecycleRuleAndOperator().WithPrefix("").WithTags(filter_tags)))
-        .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(expire_days))
-        .WithID("tiflashgc");
-
-    old_rules.emplace_back(rule); // existing rules + new rule
-    Aws::S3::Model::BucketLifecycleConfiguration lifecycle_config;
-    lifecycle_config.WithRules(old_rules);
-
+    auto lifecycle_config = genNewLifecycleConfig(old_rules, expire_days, /*use_and_filter=*/true);
     Aws::S3::Model::PutBucketLifecycleConfigurationRequest request;
     request.WithBucket(client.bucket()).WithLifecycleConfiguration(lifecycle_config);
-
     auto outcome = client.PutBucketLifecycleConfiguration(request);
-    if (!outcome.IsSuccess())
+    if (outcome.IsSuccess())
     {
-        const auto & error = outcome.GetError();
-        LOG_WARNING(
+        LOG_INFO(
             client.log,
-            "Create lifecycle rule with tag filter \"{}\" failed, please check the bucket lifecycle configuration or "
-            "create the lifecycle rule manually"
-            ", bucket={} {}",
+            "The lifecycle rule has been added, new_n_rules={} tag={} use_and_filter={}",
+            old_rules.size(),
             TaggingObjectIsDeleted,
-            client.bucket(),
-            S3ErrorMessage(error));
-        return false;
+            true);
+        return true;
     }
-    LOG_INFO(
+    const auto & error = outcome.GetError();
+    LOG_WARNING(
         client.log,
-        "The lifecycle rule has been added, new_n_rules={} tag={}",
-        old_rules.size(),
-        TaggingObjectIsDeleted);
-    return true;
+        "Create lifecycle rule with tag filter \"{}\" failed, retrying with another format, bucket={} {}",
+        TaggingObjectIsDeleted,
+        client.bucket(),
+        S3ErrorMessage(error));
+
+    // Retry with format does not use and operator
+    lifecycle_config = genNewLifecycleConfig(old_rules, expire_days, /*use_and_filter=*/false);
+    request.WithBucket(client.bucket()).WithLifecycleConfiguration(lifecycle_config);
+    outcome = client.PutBucketLifecycleConfiguration(request);
+    if (outcome.IsSuccess())
+    {
+        LOG_INFO(
+            client.log,
+            "The lifecycle rule has been added, new_n_rules={} tag={} use_and_filter={}",
+            old_rules.size(),
+            TaggingObjectIsDeleted,
+            false);
+        return true;
+    }
+
+    LOG_WARNING(
+        client.log,
+        "Create lifecycle rule with tag filter \"{}\" failed, please check the bucket lifecycle configuration or "
+        "create the lifecycle rule manually, bucket={} {}",
+        TaggingObjectIsDeleted,
+        client.bucket(),
+        S3ErrorMessage(error));
+    return false;
 }
 
 void listPrefix(
