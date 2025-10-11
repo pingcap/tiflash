@@ -503,39 +503,31 @@ std::pair<Aws::Client::ClientConfiguration, bool> ClientFactory::getClientConfig
 std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & storage_config, const LoggerPtr & log)
 {
     auto [cfg, use_virtual_addressing] = ClientFactory::instance().getClientConfig(storage_config, log);
+    std::shared_ptr<Aws::Auth::AWSCredentialsProvider> cred_provider;
     if (storage_config.access_key_id.empty() && storage_config.secret_access_key.empty())
     {
-        // Request that does not require authentication.
-        // Such as the EC2 access permission to the S3 bucket is configured.
-        // If the empty access_key_id and secret_access_key are passed to S3Client,
-        // an authentication error will be reported.
-        LOG_DEBUG(log, "Create S3Client start");
-        auto provider = std::make_shared<S3CredentialsProviderChain>();
-        auto cli = std::make_unique<Aws::S3::S3Client>(
-            provider,
-            cfg,
-            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*userVirtualAddressing*/ use_virtual_addressing);
-        LOG_INFO(log, "Create S3Client end");
-        return cli;
+        // authentication by the S3CredentialsProviderChain
+        LOG_INFO(log, "Create S3Client with S3CredentialsProviderChain");
+        cred_provider = std::make_shared<S3CredentialsProviderChain>();
     }
     else
     {
-        Aws::Auth::AWSCredentials cred(storage_config.access_key_id, storage_config.secret_access_key);
-        if (!storage_config.session_token.empty())
-            cred.SetSessionToken(storage_config.session_token);
-        LOG_DEBUG(
+        LOG_INFO(
             log,
-            "Create S3Client with given credentials start, has_session_token={}",
+            "Create S3Client with static credentials, has_session_token={}",
             !storage_config.session_token.empty());
-        auto cli = std::make_unique<Aws::S3::S3Client>(
-            cred,
-            cfg,
-            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*useVirtualAddressing*/ use_virtual_addressing);
-        LOG_INFO(log, "Create S3Client with given credentials end");
-        return cli;
+        cred_provider = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+            storage_config.access_key_id,
+            storage_config.secret_access_key,
+            storage_config.session_token);
     }
+    auto cli = std::make_unique<Aws::S3::S3Client>(
+        cred_provider,
+        cfg,
+        Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+        /*userVirtualAddressing*/ use_virtual_addressing);
+    LOG_INFO(log, "Create S3Client end");
+    return cli;
 }
 
 
