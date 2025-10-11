@@ -25,9 +25,10 @@ namespace DB::S3::AlibabaCloud
 class OIDCCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
 {
 public:
-    static std::shared_ptr<Aws::Auth::AWSCredentialsProvider> build();
+    static std::shared_ptr<Aws::Auth::AWSCredentialsProvider> build(const Aws::Client::ClientConfiguration & cfg);
 
     OIDCCredentialsProvider(
+        const Aws::Client::ClientConfiguration & cfg,
         const String & region_id,
         const String & role_arn,
         const String & oidc_provider_arn,
@@ -48,6 +49,7 @@ private:
 
 private:
     Aws::Auth::AWSCredentials m_credentials;
+    Aws::Client::ClientConfiguration m_cfg;
     Aws::String m_oidc_provider_arn;
     Aws::String m_region_id;
     Aws::String m_role_arn;
@@ -65,9 +67,9 @@ private:
 class ECSRAMRoleCredentialsProvider : public Aws::Auth::AWSCredentialsProvider
 {
 public:
-    static std::shared_ptr<Aws::Auth::AWSCredentialsProvider> build();
+    static std::shared_ptr<Aws::Auth::AWSCredentialsProvider> build(const Aws::Client::ClientConfiguration & cfg);
 
-    ECSRAMRoleCredentialsProvider();
+    ECSRAMRoleCredentialsProvider(const Aws::Client::ClientConfiguration & cfg);
 
     /**
      * Retrieves the credentials if found, otherwise returns empty credential set.
@@ -91,6 +93,7 @@ private:
 
 private:
     Aws::Auth::AWSCredentials m_credentials;
+    Aws::Client::ClientConfiguration m_cfg;
     Aws::String m_role_name;
     bool m_disable_imdsv1;
     bool m_initialized;

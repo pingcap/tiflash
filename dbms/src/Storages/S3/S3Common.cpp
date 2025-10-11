@@ -295,6 +295,27 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
     }
 }
 
+// Returns <aws_client_config, use_virtual_addressing>
+std::pair<Aws::Client::ClientConfiguration, bool> ClientFactory::initAwsClientConfig(
+    const StorageS3Config & storage_config,
+    const LoggerPtr & log)
+{
+    // disable IMDS when creating ClientConfig, the region will be updated by endpoint later if possible
+    Aws::Client::ClientConfiguration cfg(
+        /*useSmartDefaults*/ true,
+        /*defaultMode*/ "standard",
+        /*shouldDisableIMDS*/ true);
+    cfg.maxConnections = storage_config.max_connections;
+    cfg.requestTimeoutMs = storage_config.request_timeout_ms;
+    cfg.connectTimeoutMs = storage_config.connection_timeout_ms;
+    if (!storage_config.endpoint.empty())
+    {
+        cfg.endpointOverride = storage_config.endpoint;
+    }
+    bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
+    return {cfg, use_virtual_addressing};
+}
+
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     log = Logger::get();
@@ -335,9 +356,11 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 
     if (!mock_s3_)
     {
-        LOG_DEBUG(log, "Create TiFlashS3Client start");
-        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
-        LOG_DEBUG(log, "Create TiFlashS3Client end");
+        auto [shared_client_config, use_virtual_addressing] = initAwsClientConfig(config, log);
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(
+            config.bucket,
+            config.root,
+            create(config, shared_client_config, use_virtual_addressing, log));
     }
     else
     {
@@ -373,7 +396,11 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
     config.bucket = disagg_config.s3_config().bucket();
     LOG_INFO(log, "S3 config updated, {}", config.toString());
 
-    shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
+    auto [shared_client_config, use_virtual_addressing] = initAwsClientConfig(config, log);
+    shared_tiflash_client = std::make_shared<TiFlashS3Client>(
+        config.bucket,
+        config.root,
+        create(config, shared_client_config, use_virtual_addressing, log));
     client_is_inited = true; // init finish
     return shared_tiflash_client;
 }
@@ -395,11 +422,6 @@ ClientFactory & ClientFactory::instance()
 {
     static ClientFactory ret;
     return ret;
-}
-
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create() const
-{
-    return create(config, log);
 }
 
 std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
@@ -479,36 +501,19 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
     return use_virtual_address;
 }
 
-// Returns <aws_client_config, use_virtual_addressing>
-std::pair<Aws::Client::ClientConfiguration, bool> ClientFactory::getClientConfig(
+std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(
     const StorageS3Config & storage_config,
+    const Aws::Client::ClientConfiguration & client_config,
+    bool use_virtual_addressing,
     const LoggerPtr & log)
 {
-    // disable IMDS when creating ClientConfig, the region will be updated by endpoint later if possible
-    Aws::Client::ClientConfiguration cfg(
-        /*useSmartDefaults*/ true,
-        /*defaultMode*/ "standard",
-        /*shouldDisableIMDS*/ true);
-    cfg.maxConnections = storage_config.max_connections;
-    cfg.requestTimeoutMs = storage_config.request_timeout_ms;
-    cfg.connectTimeoutMs = storage_config.connection_timeout_ms;
-    if (!storage_config.endpoint.empty())
-    {
-        cfg.endpointOverride = storage_config.endpoint;
-    }
-    bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
-    return {cfg, use_virtual_addressing};
-}
-
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & storage_config, const LoggerPtr & log)
-{
-    auto [cfg, use_virtual_addressing] = ClientFactory::instance().getClientConfig(storage_config, log);
     std::shared_ptr<Aws::Auth::AWSCredentialsProvider> cred_provider;
     if (storage_config.access_key_id.empty() && storage_config.secret_access_key.empty())
     {
         // authentication by the S3CredentialsProviderChain
         LOG_INFO(log, "Create S3Client with S3CredentialsProviderChain");
-        cred_provider = std::make_shared<S3CredentialsProviderChain>();
+        // Some cred provider rely on the client_config
+        cred_provider = std::make_shared<S3CredentialsProviderChain>(client_config);
     }
     else
     {
@@ -523,9 +528,9 @@ std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config &
     }
     auto cli = std::make_unique<Aws::S3::S3Client>(
         cred_provider,
-        cfg,
+        client_config,
         Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-        /*userVirtualAddressing*/ use_virtual_addressing);
+        use_virtual_addressing);
     LOG_INFO(log, "Create S3Client end");
     return cli;
 }
