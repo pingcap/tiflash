@@ -25,8 +25,12 @@ using namespace Aws::S3;
 class MockS3Client final : public S3::TiFlashS3Client
 {
 public:
-    explicit MockS3Client(const String & bucket, const String & root)
-        : TiFlashS3Client(bucket, root)
+    explicit MockS3Client(
+        const String & bucket,
+        const String & root,
+        const Aws::Auth::AWSCredentials & cred,
+        const Aws::Client::ClientConfiguration & cfg)
+        : TiFlashS3Client(bucket, root, cred, cfg, Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never, false)
     {}
 
     ~MockS3Client() override = default;
