@@ -798,7 +798,7 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
 Aws::S3::Model::BucketLifecycleConfiguration genNewLifecycleConfig(
     const Aws::Vector<Aws::S3::Model::LifecycleRule> & existing_rules,
     Int32 expire_days,
-    bool use_and_filter)
+    bool use_ali_oss_format)
 {
     static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
     std::vector<Aws::S3::Model::Tag> filter_tags{
@@ -808,7 +808,7 @@ Aws::S3::Model::BucketLifecycleConfiguration genNewLifecycleConfig(
     rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
         .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(expire_days))
         .WithID("tiflashgc");
-    if (use_and_filter)
+    if (!use_ali_oss_format)
     {
         // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
         rule.WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithAnd(
@@ -816,7 +816,10 @@ Aws::S3::Model::BucketLifecycleConfiguration genNewLifecycleConfig(
     }
     else
     {
-        rule.WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithTag(filter_tags[0]));
+        // ali oss format
+        // Reference: https://github.com/aliyun/aliyun-oss-cpp-sdk/blob/c42600fb0b2057494ae3b77b93afeff42dfba0a4/sdk/src/model/SetBucketLifecycleRequest.cc#L40-L44
+        rule.WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithTag(filter_tags[0])) //
+            .SetAliOssFormat(true);
     }
 
     auto new_rules = existing_rules;
@@ -868,6 +871,9 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
         for (const auto & rule : old_rules)
         {
+            if (rule.GetAliOssFormat())
+                LOG_INFO(client.log, "Found existing lifecycle rule in AliOSS format, rule_id={}", rule.GetID());
+
             const auto & filt = rule.GetFilter();
 
             std::optional<Aws::S3::Model::Tag> tag;
@@ -928,7 +934,8 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         TaggingObjectIsDeleted,
         old_rules.size());
 
-    auto lifecycle_config = genNewLifecycleConfig(old_rules, expire_days, /*use_and_filter=*/true);
+    bool use_ali_oss_format = false;
+    auto lifecycle_config = genNewLifecycleConfig(old_rules, expire_days, use_ali_oss_format);
     Aws::S3::Model::PutBucketLifecycleConfigurationRequest request;
     request.WithBucket(client.bucket()).WithLifecycleConfiguration(lifecycle_config);
     auto outcome = client.PutBucketLifecycleConfiguration(request);
@@ -936,41 +943,45 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
     {
         LOG_INFO(
             client.log,
-            "The lifecycle rule has been added, new_n_rules={} tag={} use_and_filter={}",
+            "The lifecycle rule has been added, new_n_rules={} tag={} use_ali_oss_format={}",
             old_rules.size(),
             TaggingObjectIsDeleted,
-            true);
+            use_ali_oss_format);
         return true;
     }
     const auto & error = outcome.GetError();
     LOG_WARNING(
         client.log,
-        "Create lifecycle rule with tag filter \"{}\" failed, retrying with another format, bucket={} {}",
+        "Create lifecycle rule with tag filter \"{}\" failed, retrying with another format, bucket={} "
+        "use_ali_oss_format={} {}",
         TaggingObjectIsDeleted,
         client.bucket(),
+        use_ali_oss_format,
         S3ErrorMessage(error));
 
-    // Retry with format does not use and operator
-    lifecycle_config = genNewLifecycleConfig(old_rules, expire_days, /*use_and_filter=*/false);
+    // Retry with another format
+    use_ali_oss_format = true;
+    lifecycle_config = genNewLifecycleConfig(old_rules, expire_days, use_ali_oss_format);
     request.WithBucket(client.bucket()).WithLifecycleConfiguration(lifecycle_config);
     outcome = client.PutBucketLifecycleConfiguration(request);
     if (outcome.IsSuccess())
     {
         LOG_INFO(
             client.log,
-            "The lifecycle rule has been added, new_n_rules={} tag={} use_and_filter={}",
+            "The lifecycle rule has been added, new_n_rules={} tag={} use_ali_oss_format={}",
             old_rules.size(),
             TaggingObjectIsDeleted,
-            false);
+            use_ali_oss_format);
         return true;
     }
 
     LOG_WARNING(
         client.log,
         "Create lifecycle rule with tag filter \"{}\" failed, please check the bucket lifecycle configuration or "
-        "create the lifecycle rule manually, bucket={} {}",
+        "create the lifecycle rule manually, bucket={} use_ali_oss_format={} {}",
         TaggingObjectIsDeleted,
         client.bucket(),
+        use_ali_oss_format,
         S3ErrorMessage(error));
     return false;
 }
