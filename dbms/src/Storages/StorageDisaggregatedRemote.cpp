@@ -564,12 +564,13 @@ std::tuple<DM::RSOperatorPtr, DM::ColumnRangePtr> StorageDisaggregated::buildRSO
     return {rs_operator, column_range};
 }
 
-std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisaggregated::packSegmentReadTasks(
-    const Context & db_context,
-    DM::SegmentReadTasks && read_tasks,
-    const DM::ColumnDefinesPtr & column_defines,
-    size_t num_streams,
-    int extra_table_id_index)
+std::tuple<std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr>, DM::ColumnDefinesPtr> StorageDisaggregated::
+    packSegmentReadTasks(
+        const Context & db_context,
+        DM::SegmentReadTasks && read_tasks,
+        const DM::ColumnDefinesPtr & column_defines,
+        size_t num_streams,
+        int extra_table_id_index)
 {
     const auto & executor_id = table_scan.getTableScanExecutorID();
 
@@ -604,48 +605,56 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
         push_down_executor);
     const UInt64 start_ts = sender_target_mpp_task_id.gather_id.query_id.start_ts;
     const auto enable_read_thread = db_context.getSettingsRef().dt_enable_read_thread;
+    const auto & final_columns_defines = push_down_executor && push_down_executor->extra_cast
+        ? push_down_executor->columns_after_cast
+        : column_defines;
     LOG_INFO(
         log,
         "packSegmentReadTasks: enable_read_thread={} read_mode={} is_fast_scan={} keep_order={} task_count={} "
-        "num_streams={} column_defines={}",
+        "num_streams={} column_defines={}, final_columns_defines={}",
         enable_read_thread,
         magic_enum::enum_name(read_mode),
         table_scan.isFastScan(),
         table_scan.keepOrder(),
         read_tasks.size(),
         num_streams,
-        *column_defines);
+        *column_defines,
+        *final_columns_defines);
 
     if (enable_read_thread)
     {
-        return std::make_shared<DM::SegmentReadTaskPool>(
-            extra_table_id_index,
-            *column_defines,
-            push_down_executor,
-            start_ts,
-            db_context.getSettingsRef().max_block_size,
-            read_mode,
-            std::move(read_tasks),
-            /*after_segment_read*/ [](const DM::DMContextPtr &, const DM::SegmentPtr &) {},
-            executor_id,
-            /*enable_read_thread*/ true,
-            num_streams,
-            context.getDAGContext()->getKeyspaceID(),
-            context.getDAGContext()->getResourceGroupName());
+        return {
+            std::make_shared<DM::SegmentReadTaskPool>(
+                extra_table_id_index,
+                *final_columns_defines,
+                push_down_executor,
+                start_ts,
+                db_context.getSettingsRef().max_block_size,
+                read_mode,
+                std::move(read_tasks),
+                /*after_segment_read*/ [](const DM::DMContextPtr &, const DM::SegmentPtr &) {},
+                executor_id,
+                /*enable_read_thread*/ true,
+                num_streams,
+                context.getDAGContext()->getKeyspaceID(),
+                context.getDAGContext()->getResourceGroupName()),
+            final_columns_defines};
     }
     else
     {
-        return DM::Remote::RNWorkers::create(
-            db_context,
-            std::move(read_tasks),
-            {
-                .log = log->getChild(executor_id),
-                .columns_to_read = column_defines,
-                .start_ts = start_ts,
-                .push_down_executor = push_down_executor,
-                .read_mode = read_mode,
-            },
-            num_streams);
+        return {
+            DM::Remote::RNWorkers::create(
+                db_context,
+                std::move(read_tasks),
+                {
+                    .log = log->getChild(executor_id),
+                    .columns_to_read = final_columns_defines,
+                    .start_ts = start_ts,
+                    .push_down_executor = push_down_executor,
+                    .read_mode = read_mode,
+                },
+                num_streams),
+            final_columns_defines};
     }
 }
 
@@ -687,14 +696,14 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
 {
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
-    auto packed_read_tasks
+    auto [packed_read_tasks, final_column_defines]
         = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
     RUNTIME_CHECK(num_streams > 0, num_streams);
     pipeline.streams.reserve(num_streams);
 
     InputStreamBuilder builder{
         .tracing_id = log->identifier(),
-        .columns_to_read = column_defines,
+        .columns_to_read = final_column_defines,
         .extra_table_id_index = extra_table_id_index,
     };
     for (size_t stream_idx = 0; stream_idx < num_streams; ++stream_idx)
@@ -753,13 +762,13 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
 {
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
-    auto packed_read_tasks
+    auto [packed_read_tasks, final_column_defines]
         = packSegmentReadTasks(db_context, std::move(read_tasks), column_defines, num_streams, extra_table_id_index);
 
     RUNTIME_CHECK(num_streams > 0, num_streams);
     SrouceOpBuilder builder{
         .tracing_id = log->identifier(),
-        .column_defines = column_defines,
+        .column_defines = final_column_defines,
         .extra_table_id_index = extra_table_id_index,
         .exec_context = exec_context,
     };
