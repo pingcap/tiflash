@@ -23,7 +23,7 @@ namespace DB::S3
 class S3CredentialsProviderChain : public Aws::Auth::AWSCredentialsProviderChain
 {
 public:
-    S3CredentialsProviderChain();
+    explicit S3CredentialsProviderChain(const Aws::Client::ClientConfiguration & cfg);
 
 private:
     LoggerPtr log;
