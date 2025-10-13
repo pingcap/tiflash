@@ -23,6 +23,7 @@
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3GCManager.h>
 #include <TiDB/OwnerManager.h>
 #include <TiDB/Schema/SchemaSyncService.h>
@@ -32,6 +33,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <magic_enum.hpp>
+#include <string>
 
 namespace DB
 {
@@ -181,16 +183,19 @@ HttpRequestRes HandleHttpRequestStoreStatus(
 
 // Check whether the disaggregated mode is enabled.
 // If not, return a HttpRequestRes with error message.
-std::optional<HttpRequestRes> allowDisaggAPI(Context & global_ctx, std::string_view message)
+std::optional<HttpRequestRes> allowDisaggAPI(
+    Context & global_ctx,
+    DisaggregatedMode expect_mode,
+    std::string_view message)
 {
-    if (!global_ctx.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    if (global_ctx.getSharedContextDisagg()->disaggregated_mode != expect_mode)
     {
         auto * body = RawCppString::New(fmt::format(
             R"json({{"message":"{}, disagg_mode={}"}})json",
             message,
             magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode)));
         return HttpRequestRes{
-            .status = HttpRequestStatus::ErrorParam,
+            .status = HttpRequestStatus::Ok,
             .res = CppStrWithView{
                 .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
                 .view = BaseBuffView{body->data(), body->size()},
@@ -209,7 +214,7 @@ HttpRequestRes HandleHttpRequestRemoteReUpload(
     std::string_view)
 {
     auto & global_ctx = server->tmt->getContext();
-    if (auto err_resp = allowDisaggAPI(global_ctx, "can not sync remote store"); err_resp)
+    if (auto err_resp = allowDisaggAPI(global_ctx, DisaggregatedMode::Storage, "can not sync remote store"); err_resp)
     {
         return err_resp.value();
     }
@@ -234,7 +239,7 @@ HttpRequestRes HandleHttpRequestRemoteOwnerInfo(
     std::string_view)
 {
     auto & global_ctx = server->tmt->getContext();
-    if (auto err_resp = allowDisaggAPI(global_ctx, "can not get gc owner"); err_resp)
+    if (auto err_resp = allowDisaggAPI(global_ctx, DisaggregatedMode::Storage, "can not get gc owner"); err_resp)
     {
         return err_resp.value();
     }
@@ -263,7 +268,7 @@ HttpRequestRes HandleHttpRequestRemoteOwnerResign(
     std::string_view)
 {
     auto & global_ctx = server->tmt->getContext();
-    if (auto err_resp = allowDisaggAPI(global_ctx, "can not resign gc owner"); err_resp)
+    if (auto err_resp = allowDisaggAPI(global_ctx, DisaggregatedMode::Storage, "can not resign gc owner"); err_resp)
     {
         return err_resp.value();
     }
@@ -290,7 +295,7 @@ HttpRequestRes HandleHttpRequestRemoteGC(
     std::string_view)
 {
     auto & global_ctx = server->tmt->getContext();
-    if (auto err_resp = allowDisaggAPI(global_ctx, "can not trigger gc"); err_resp)
+    if (auto err_resp = allowDisaggAPI(global_ctx, DisaggregatedMode::Storage, "can not trigger gc"); err_resp)
     {
         return err_resp.value();
     }
@@ -308,6 +313,79 @@ HttpRequestRes HandleHttpRequestRemoteGC(
         magic_enum::enum_name(owner_info.status),
         owner_info.owner_id,
         gc_is_executed));
+    return HttpRequestRes{
+        .status = HttpRequestStatus::Ok,
+        .res = CppStrWithView{
+            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+            .view = BaseBuffView{body->data(), body->size()},
+        },
+    };
+}
+
+HttpRequestRes HandleHttpRequestRemoteCacheEvict(
+    EngineStoreServerWrap * server,
+    std::string_view path,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, DisaggregatedMode::Compute, "can not trigger remote cache evict");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
+    auto log = Logger::get("HandleHttpRequestRemoteCacheEvict");
+    LOG_INFO(log, "handling remote cache evict request, path={} api_name={}", path, api_name);
+    FileSegment::FileType evict_until_type;
+    {
+        // schema: /tiflash/remote/cache/evict/{file_type_int}
+        auto query = path.substr(api_name.size());
+        if (query.empty() || query[0] != '/')
+        {
+            auto * body = RawCppString::New(
+                fmt::format(R"json({{"message":"invalid remote cache evict request: {}"}})json", path));
+            return HttpRequestRes{
+                .status = HttpRequestStatus::Ok,
+                .res = CppStrWithView{
+                    .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+                    .view = BaseBuffView{body->data(), body->size()},
+                },
+            };
+        }
+        query.remove_prefix(1);
+        std::optional<FileSegment::FileType> opt_evict_until_type = std::nullopt;
+        try
+        {
+            auto itype = std::stoll(query.data());
+            opt_evict_until_type = magic_enum::enum_cast<FileSegment::FileType>(itype);
+        }
+        catch (...)
+        {
+            // ignore
+        }
+        if (!opt_evict_until_type.has_value())
+        {
+            auto * body = RawCppString::New(
+                fmt::format(R"json({{"message":"invalid file_type in remote cache evict request: {}"}})json", path));
+            return HttpRequestRes{
+                .status = HttpRequestStatus::Ok,
+                .res = CppStrWithView{
+                    .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
+                    .view = BaseBuffView{body->data(), body->size()},
+                },
+            };
+        }
+        // successfully parse the file type
+        evict_until_type = opt_evict_until_type.value();
+    }
+
+    auto released_size = DB::FileCache::instance()->evictUntil(evict_until_type);
+    auto * body = RawCppString::New(fmt::format(
+        R"json({{"file_type":"{}","released_size":"{}"}})json",
+        magic_enum::enum_name(evict_until_type),
+        released_size));
     return HttpRequestRes{
         .status = HttpRequestStatus::Ok,
         .res = CppStrWithView{
@@ -502,6 +580,7 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/remote/owner/resign", HandleHttpRequestRemoteOwnerResign},
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
     {"/tiflash/remote/upload", HandleHttpRequestRemoteReUpload},
+    {"/tiflash/remote/cache/evict", HandleHttpRequestRemoteCacheEvict},
 };
 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
@@ -530,9 +609,9 @@ HttpRequestRes HandleHttpRequest(
             return method(
                 server,
                 path,
-                str,
-                std::string_view(query.data, query.len),
-                std::string_view(body.data, body.len));
+                /*api_name=*/str,
+                /*query=*/std::string_view(query.data, query.len),
+                /*body=*/std::string_view(body.data, body.len));
         }
     }
     return HttpRequestRes{
