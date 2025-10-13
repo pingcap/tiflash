@@ -816,7 +816,8 @@ Aws::S3::Model::BucketLifecycleConfiguration genNewLifecycleConfig(
     }
     else
     {
-        // ali oss format
+        // Alibaba cloud oss format
+        // Note that "Prefix" field is required
         // Reference: https://github.com/aliyun/aliyun-oss-cpp-sdk/blob/c42600fb0b2057494ae3b77b93afeff42dfba0a4/sdk/src/model/SetBucketLifecycleRequest.cc#L40-L44
         rule.WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithTag(filter_tags[0]).WithPrefix("")) //
             .SetAliOssFormat(true);
@@ -830,6 +831,12 @@ Aws::S3::Model::BucketLifecycleConfiguration genNewLifecycleConfig(
     return lifecycle_config;
 }
 
+// Ensure the lifecycle rule with filter `TaggingObjectIsDeleted` has been added.
+// The lifecycle rule is required when using S3GCMethod::Lifecycle to expire the
+// deleted objects automatically using the cloud platform lifecycle mechanism.
+// If the lifecycle rule not exist, try to add the rule with `expire_days` days
+// to expire the objects.
+// Return true if the rule has been added or already exists.
 bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 {
     bool lifecycle_rule_has_been_set = false;
@@ -849,7 +856,7 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
                 break;
             }
 
-            LOG_WARNING(
+            LOG_ERROR(
                 client.log,
                 "GetBucketLifecycle fail, please check the bucket lifecycle configuration or create the lifecycle rule"
                 " manually, bucket={} {}",
@@ -903,7 +910,7 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
                 }
                 else
                 {
-                    LOG_WARNING(
+                    LOG_ERROR(
                         client.log,
                         "The lifecycle rule is added but not enabled, please check the bucket lifecycle "
                         "configuration or create the lifecycle rule manually, "
@@ -934,6 +941,7 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         TaggingObjectIsDeleted,
         old_rules.size());
 
+    // Try add the tiflash rule to lifecycle
     bool use_ali_oss_format = false;
     auto lifecycle_config = genNewLifecycleConfig(old_rules, expire_days, use_ali_oss_format);
     Aws::S3::Model::PutBucketLifecycleConfigurationRequest request;
@@ -975,7 +983,8 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         return true;
     }
 
-    LOG_WARNING(
+    // Still failed to create lifecycle rule, log an error
+    LOG_ERROR(
         client.log,
         "Create lifecycle rule with tag filter \"{}\" failed, please check the bucket lifecycle configuration or "
         "create the lifecycle rule manually, bucket={} use_ali_oss_format={} {}",
