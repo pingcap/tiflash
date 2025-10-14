@@ -117,10 +117,6 @@ std::tuple<DM::ColumnDefinesPtr, int> genColumnDefinesForDisaggregatedRead(const
             break;
         case MutSup::extra_table_id_col_id:
         {
-            column_defines->emplace_back(DM::ColumnDefine{
-                MutSup::extra_table_id_col_id,
-                output_name, // MutSup::extra_table_id_column_name
-                MutSup::getExtraTableIdColumnType()});
             extra_table_id_index = i;
             break;
         }
