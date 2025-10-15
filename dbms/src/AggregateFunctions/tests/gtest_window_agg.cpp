@@ -27,6 +27,7 @@
 #include <DataTypes/DataTypeNullable.h>
 #include <DataTypes/DataTypeString.h>
 #include <DataTypes/DataTypesNumber.h>
+#include <Interpreters/Context.h>
 #include <TestUtils/AggregationTestUtils.h>
 #include <TestUtils/FunctionTestUtils.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -934,6 +935,133 @@ try
     checkPrefixSize(14);
     checkPrefixSize(15);
     checkPrefixSize(16);
+}
+CATCH
+
+TEST_F(ExecutorWindowAgg, issue10045)
+try
+{
+    struct TestCase
+    {
+        TestCase(
+            DataTypePtr data_type_,
+            const IColumn * input_col_,
+            ScaleType div_preincrement_,
+            const String & result_)
+            : data_type(data_type_)
+            , input_col(input_col_)
+            , div_precincrement(div_preincrement_)
+            , result(result_)
+        {}
+        DataTypePtr data_type;
+        const IColumn * input_col;
+        ScaleType div_precincrement;
+        String result;
+    };
+
+    size_t row_num = 10000;
+    String row_value = "10000";
+    std::vector<String> input_vec;
+    std::vector<Int32> null_map;
+    input_vec.reserve(row_num);
+    null_map.reserve(row_num);
+    for (size_t i = 0; i < row_num; i++)
+    {
+        input_vec.push_back(row_value);
+        null_map.push_back(0);
+    }
+
+    std::vector<TestCase> test_cases;
+    auto col0 = createNullableColumn<Decimal32>(std::make_tuple(5, 0), input_vec, null_map).column;
+    test_cases.push_back(TestCase(
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeDecimal32>(5, 0)),
+        &(*col0),
+        4,
+        "Decimal32_10000.0000"));
+    auto col1 = createNullableColumn<Decimal64>(std::make_tuple(5, 0), input_vec, null_map).column;
+    test_cases.push_back(TestCase(
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeDecimal64>(10, 0)),
+        &(*col1),
+        4,
+        "Decimal64_10000.0000"));
+    auto col2 = createNullableColumn<Decimal128>(std::make_tuple(5, 0), input_vec, null_map).column;
+    test_cases.push_back(TestCase(
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeDecimal128>(20, 0)),
+        &(*col2),
+        4,
+        "Decimal128_10000.0000"));
+    auto col3 = createNullableColumn<Decimal256>(std::make_tuple(5, 0), input_vec, null_map).column;
+    test_cases.push_back(TestCase(
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeDecimal256>(38, 0)),
+        &(*col3),
+        4,
+        "Decimal256_10000.0000"));
+    auto col4 = createNullableColumn<Decimal32>(std::make_tuple(5, 0), input_vec, null_map).column;
+    test_cases.push_back(TestCase(
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeDecimal32>(5, 0)),
+        &(*col0),
+        35,
+        "Decimal32_10000.0000"));
+    auto col5 = createNullableColumn<Decimal64>(std::make_tuple(5, 0), input_vec, null_map).column;
+    test_cases.push_back(TestCase(
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeDecimal64>(10, 0)),
+        &(*col1),
+        30,
+        "Decimal64_10000.0000"));
+    auto col6 = createNullableColumn<Decimal128>(std::make_tuple(5, 0), input_vec, null_map).column;
+    test_cases.push_back(TestCase(
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeDecimal128>(20, 0)),
+        &(*col2),
+        20,
+        "Decimal128_10000.0000"));
+    auto col7 = createNullableColumn<Decimal256>(std::make_tuple(5, 0), input_vec, null_map).column;
+    test_cases.push_back(TestCase(
+        std::make_shared<DataTypeNullable>(std::make_shared<DataTypeDecimal256>(40, 0)),
+        &(*col3),
+        1,
+        "Decimal256_10000.0000"));
+
+    for (auto & item : test_cases)
+    {
+        for (auto is_batch : std::vector<int>{0, 1})
+        {
+            Arena arena;
+            auto context = TiFlashTestEnv::getContext();
+
+            auto agg_func
+                = AggregateFunctionFactory::instance().getForWindow(*context, "avg", {item.data_type}, {}, true);
+            auto return_type = agg_func->getReturnType();
+            AlignedBuffer agg_state;
+            agg_state.reset(agg_func->sizeOfData(), agg_func->alignOfData());
+            agg_func->create(agg_state.data());
+            auto res_col = return_type->createColumn();
+
+            for (size_t row_idx = 0; row_idx < row_num; row_idx++)
+                agg_func->add(agg_state.data(), &(item.input_col), row_idx, &arena);
+
+            if (is_batch)
+            {
+                agg_func->insertResultInto(agg_state.data(), *res_col, &arena);
+                ASSERT_EQ(res_col->size(), 1);
+                Field res_field;
+                res_col->get(0, res_field);
+                ASSERT_EQ(res_field.toString(), item.result);
+            }
+            else
+            {
+                size_t res_num = 5;
+                agg_func->batchInsertSameResultInto(agg_state.data(), *res_col, res_num);
+                ASSERT_EQ(res_col->size(), res_num);
+                Field res_field;
+                for (size_t idx = 0; idx < res_num; idx++)
+                {
+                    res_col->get(idx, res_field);
+                    ASSERT_EQ(res_field.toString(), item.result);
+                }
+            }
+            agg_func->destroy(agg_state.data());
+        }
+    }
 }
 CATCH
 
