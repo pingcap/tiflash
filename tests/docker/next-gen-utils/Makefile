@@ -11,10 +11,10 @@
 # limitations under the License.
 
 DOCKER ?= docker
-TIKV_IMAGE ?= hub.pingcap.net/tikv/tikv/image:dedicated-next-gen
-PD_IMAGE ?= hub.pingcap.net/tikv/pd/image:master-next-gen
-TIDB_IMAGE ?= hub.pingcap.net/pingcap/tidb/images/tidb-server:master-next-gen
-TIFLASH_IMAGE ?= hub.pingcap.net/pingcap/tiflash/image:master-next-gen
+TIKV_IMAGE ?= us-docker.pkg.dev/pingcap-testing-account/hub/tikv/tikv/image:dedicated-next-gen
+PD_IMAGE ?= us-docker.pkg.dev/pingcap-testing-account/hub/tikv/pd/image:master-next-gen
+TIDB_IMAGE ?= us-docker.pkg.dev/pingcap-testing-account/hub/pingcap/tidb/images/tidb-server:master-next-gen
+TIFLASH_IMAGE ?= us-docker.pkg.dev/pingcap-testing-account/hub/pingcap/tiflash/image:master-next-gen
 
 # Set PULL to 1 to always pull the latest image
 PULL ?= 0
