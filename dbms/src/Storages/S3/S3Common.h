@@ -67,8 +67,6 @@ public:
     // Usually one tiflash instance only need access one bucket.
     // Store the bucket name to simplify some param passing.
 
-    TiFlashS3Client(const String & bucket_name_, const String & root_);
-
     TiFlashS3Client(
         const String & bucket_name_,
         const String & root_,

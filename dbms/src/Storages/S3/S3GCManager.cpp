@@ -81,7 +81,12 @@ std::optional<std::unordered_map<StoreID, metapb::Store>> getStoresFromPD(
         for (const auto & s : stores_from_pd)
         {
             auto [iter, inserted] = stores.emplace(s.id(), s);
-            RUNTIME_CHECK_MSG(inserted, "duplicated store id from pd response, duplicated_store_id={}", iter->first);
+            RUNTIME_CHECK_MSG(
+                inserted,
+                "duplicated store id from pd response, duplicated_store_id={} prev_store={} store={}",
+                iter->first,
+                iter->second.ShortDebugString(),
+                s.ShortDebugString());
         }
         return stores;
     }
