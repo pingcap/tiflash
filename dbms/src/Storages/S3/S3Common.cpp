@@ -33,6 +33,7 @@
 #include <Storages/S3/PocoHTTPClientFactory.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
+#include <aws/core/Region.h>
 #include <aws/core/auth/AWSCredentials.h>
 #include <aws/core/auth/STSCredentialsProvider.h>
 #include <aws/core/auth/signer/AWSAuthV4Signer.h>
@@ -294,6 +295,27 @@ disaggregated::GetDisaggConfigResponse getDisaggConfigFromDisaggWriteNodes(
     }
 }
 
+// Returns <aws_client_config, use_virtual_addressing>
+std::pair<Aws::Client::ClientConfiguration, bool> ClientFactory::initAwsClientConfig(
+    const StorageS3Config & storage_config,
+    const LoggerPtr & log)
+{
+    // disable IMDS when creating ClientConfig, the region will be updated by endpoint later if possible
+    Aws::Client::ClientConfiguration cfg(
+        /*useSmartDefaults*/ true,
+        /*defaultMode*/ "standard",
+        /*shouldDisableIMDS*/ true);
+    cfg.maxConnections = storage_config.max_connections;
+    cfg.requestTimeoutMs = storage_config.request_timeout_ms;
+    cfg.connectTimeoutMs = storage_config.connection_timeout_ms;
+    if (!storage_config.endpoint.empty())
+    {
+        cfg.endpointOverride = storage_config.endpoint;
+    }
+    bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
+    return {cfg, use_virtual_addressing};
+}
+
 void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 {
     log = Logger::get();
@@ -334,13 +356,15 @@ void ClientFactory::init(const StorageS3Config & config_, bool mock_s3_)
 
     if (!mock_s3_)
     {
-        LOG_DEBUG(log, "Create TiFlashS3Client start");
-        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
-        LOG_DEBUG(log, "Create TiFlashS3Client end");
+        shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create(config, log));
     }
     else
     {
-        shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket, config.root);
+        // Disable IMDS for mock s3 client
+        Aws::Client::ClientConfiguration cfg(true, /*profileName=*/"standard", /*shouldDisableIMDS=*/true);
+        cfg.region = Aws::Region::US_EAST_1; // default region
+        Aws::Auth::AWSCredentials cred("mock_access_key", "mock_secret_key");
+        shared_tiflash_client = std::make_unique<tests::MockS3Client>(config.bucket, config.root, cred, cfg);
     }
     client_is_inited = true; // init finish
 }
@@ -368,7 +392,7 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::initClientFromWriteNode()
     config.bucket = disagg_config.s3_config().bucket();
     LOG_INFO(log, "S3 config updated, {}", config.toString());
 
-    shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create());
+    shared_tiflash_client = std::make_shared<TiFlashS3Client>(config.bucket, config.root, create(config, log));
     client_is_inited = true; // init finish
     return shared_tiflash_client;
 }
@@ -392,11 +416,6 @@ ClientFactory & ClientFactory::instance()
     return ret;
 }
 
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create() const
-{
-    return create(config, log);
-}
-
 std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
 {
     if (client_is_inited)
@@ -405,8 +424,6 @@ std::shared_ptr<TiFlashS3Client> ClientFactory::sharedTiFlashClient()
     return initClientFromWriteNode();
 }
 
-namespace
-{
 bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const LoggerPtr & log)
 {
     if (cfg.endpointOverride.empty())
@@ -416,16 +433,30 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
 
     const Poco::URI uri(cfg.endpointOverride);
     String matched_region;
-    static const RE2 region_pattern(R"(^s3[.\-]([a-z0-9\-]+)\.amazonaws\.)");
+    // AWS endpoint format:
+    //   - Standard: s3.<region>.amazonaws.com
+    //   - Dualstack: s3.dualstack.<region>.amazonaws.com
+    //   - FIPS: s3-fips.<region>.amazonaws.com
+    //   - FIPS && Dualstack: s3-fips.dualstack.<region>.amazonaws.com
+    // Reference: https://docs.aws.amazon.com/general/latest/gr/s3.html
+    // Alibaba Cloud endpoint format:
+    //   - Internal: oss-<region>-internal.aliyuncs.com
+    //   - External: oss-<region>.aliyuncs.com
+    // Reference: https://www.alibabacloud.com/help/en/oss/regions-and-endpoints
+    static const RE2 region_pattern(
+        R"((?:^s3\.|^s3-fips\.|^oss-)(?:dualstack.)?([a-z0-9\-]+)\.(?:amazonaws|aliyuncs)\.)");
     if (re2::RE2::PartialMatch(uri.getHost(), region_pattern, &matched_region))
     {
         boost::algorithm::to_lower(matched_region);
+        if (matched_region.ends_with("-internal"))
+            matched_region = matched_region.substr(0, matched_region.size() - strlen("-internal"));
         cfg.region = matched_region;
     }
     else
     {
         /// In global mode AWS C++ SDK send `us-east-1` but accept switching to another one if being suggested.
-        cfg.region = Aws::Region::AWS_GLOBAL;
+        if (cfg.region.empty())
+            cfg.region = Aws::Region::AWS_GLOBAL;
     }
 
     if (uri.getScheme() == "https")
@@ -461,54 +492,36 @@ bool updateRegionByEndpoint(Aws::Client::ClientConfiguration & cfg, const Logger
         use_virtual_address);
     return use_virtual_address;
 }
-} // namespace
 
-std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & config_, const LoggerPtr & log)
+std::unique_ptr<Aws::S3::S3Client> ClientFactory::create(const StorageS3Config & storage_config, const LoggerPtr & log)
 {
-    LOG_DEBUG(log, "Create ClientConfiguration start");
-    Aws::Client::ClientConfiguration cfg(/*profileName*/ "", /*shouldDisableIMDS*/ true);
-    LOG_DEBUG(log, "Create ClientConfiguration end");
-    cfg.maxConnections = config_.max_connections;
-    cfg.requestTimeoutMs = config_.request_timeout_ms;
-    cfg.connectTimeoutMs = config_.connection_timeout_ms;
-    if (!config_.endpoint.empty())
+    auto [client_config, use_virtual_addressing] = initAwsClientConfig(storage_config, log);
+    std::shared_ptr<Aws::Auth::AWSCredentialsProvider> cred_provider;
+    if (storage_config.access_key_id.empty() && storage_config.secret_access_key.empty())
     {
-        cfg.endpointOverride = config_.endpoint;
-    }
-    bool use_virtual_addressing = updateRegionByEndpoint(cfg, log);
-    if (config_.access_key_id.empty() && config_.secret_access_key.empty())
-    {
-        // Request that does not require authentication.
-        // Such as the EC2 access permission to the S3 bucket is configured.
-        // If the empty access_key_id and secret_access_key are passed to S3Client,
-        // an authentication error will be reported.
-        LOG_DEBUG(log, "Create S3Client start");
-        auto provider = std::make_shared<S3CredentialsProviderChain>();
-        auto cli = std::make_unique<Aws::S3::S3Client>(
-            provider,
-            cfg,
-            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*userVirtualAddressing*/ use_virtual_addressing);
-        LOG_INFO(log, "Create S3Client end");
-        return cli;
+        // authentication by the S3CredentialsProviderChain
+        LOG_INFO(log, "Create S3Client with S3CredentialsProviderChain");
+        // Some cred provider rely on the client_config
+        cred_provider = std::make_shared<S3CredentialsProviderChain>(client_config);
     }
     else
     {
-        Aws::Auth::AWSCredentials cred(config_.access_key_id, config_.secret_access_key);
-        if (!config_.session_token.empty())
-            cred.SetSessionToken(config_.session_token);
-        LOG_DEBUG(
+        LOG_INFO(
             log,
-            "Create S3Client with given credentials start, has_session_token={}",
-            !config_.session_token.empty());
-        auto cli = std::make_unique<Aws::S3::S3Client>(
-            cred,
-            cfg,
-            Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
-            /*useVirtualAddressing*/ use_virtual_addressing);
-        LOG_INFO(log, "Create S3Client with given credentials end");
-        return cli;
+            "Create S3Client with static credentials, has_session_token={}",
+            !storage_config.session_token.empty());
+        cred_provider = std::make_shared<Aws::Auth::SimpleAWSCredentialsProvider>(
+            storage_config.access_key_id,
+            storage_config.secret_access_key,
+            storage_config.session_token);
     }
+    auto cli = std::make_unique<Aws::S3::S3Client>(
+        cred_provider,
+        client_config,
+        Aws::Client::AWSAuthV4Signer::PayloadSigningPolicy::Never,
+        use_virtual_addressing);
+    LOG_INFO(log, "Create S3Client end");
+    return cli;
 }
 
 
@@ -788,6 +801,48 @@ void rewriteObjectWithTagging(const TiFlashS3Client & client, const String & key
     LOG_DEBUG(client.log, "rewrite object key={} cost={:.2f}s", key, elapsed_seconds);
 }
 
+Aws::S3::Model::BucketLifecycleConfiguration genNewLifecycleConfig(
+    const Aws::Vector<Aws::S3::Model::LifecycleRule> & existing_rules,
+    Int32 expire_days,
+    bool use_ali_oss_format)
+{
+    static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
+    std::vector<Aws::S3::Model::Tag> filter_tags{
+        Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true"),
+    };
+    Aws::S3::Model::LifecycleRule rule;
+    rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
+        .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(expire_days))
+        .WithID("tiflashgc");
+    if (!use_ali_oss_format)
+    {
+        // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
+        rule.WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithAnd(
+            Aws::S3::Model::LifecycleRuleAndOperator().WithPrefix("").WithTags(filter_tags)));
+    }
+    else
+    {
+        // Alibaba cloud oss format
+        // Note that "Prefix" field is required
+        // Reference: https://github.com/aliyun/aliyun-oss-cpp-sdk/blob/c42600fb0b2057494ae3b77b93afeff42dfba0a4/sdk/src/model/SetBucketLifecycleRequest.cc#L40-L44
+        rule.WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithTag(filter_tags[0]).WithPrefix("")) //
+            .SetAliOssFormat(true);
+    }
+
+    auto new_rules = existing_rules;
+    new_rules.emplace_back(rule);
+    Aws::S3::Model::BucketLifecycleConfiguration lifecycle_config;
+    lifecycle_config.WithRules(new_rules);
+
+    return lifecycle_config;
+}
+
+// Ensure the lifecycle rule with filter `TaggingObjectIsDeleted` has been added.
+// The lifecycle rule is required when using S3GCMethod::Lifecycle to expire the
+// deleted objects automatically using the cloud platform lifecycle mechanism.
+// If the lifecycle rule not exist, try to add the rule with `expire_days` days
+// to expire the objects.
+// Return true if the rule has been added or already exists.
 bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
 {
     bool lifecycle_rule_has_been_set = false;
@@ -807,7 +862,7 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
                 break;
             }
 
-            LOG_WARNING(
+            LOG_ERROR(
                 client.log,
                 "GetBucketLifecycle fail, please check the bucket lifecycle configuration or create the lifecycle rule"
                 " manually, bucket={} {}",
@@ -829,6 +884,9 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
         for (const auto & rule : old_rules)
         {
+            if (rule.GetAliOssFormat())
+                LOG_INFO(client.log, "Found existing lifecycle rule in AliOSS format, rule_id={}", rule.GetID());
+
             const auto & filt = rule.GetFilter();
 
             std::optional<Aws::S3::Model::Tag> tag;
@@ -858,7 +916,7 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
                 }
                 else
                 {
-                    LOG_WARNING(
+                    LOG_ERROR(
                         client.log,
                         "The lifecycle rule is added but not enabled, please check the bucket lifecycle "
                         "configuration or create the lifecycle rule manually, "
@@ -883,51 +941,64 @@ bool ensureLifecycleRuleExist(const TiFlashS3Client & client, Int32 expire_days)
         return true;
     }
 
-    // Reference: https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3OutpostsLifecycleCLIJava.html
     LOG_INFO(
         client.log,
         "The lifecycle rule with filter \"{}\" has not been added, n_rules={}",
         TaggingObjectIsDeleted,
         old_rules.size());
-    static_assert(TaggingObjectIsDeleted == "tiflash_deleted=true");
-    std::vector<Aws::S3::Model::Tag> filter_tags{
-        Aws::S3::Model::Tag().WithKey("tiflash_deleted").WithValue("true"),
-    };
 
-    Aws::S3::Model::LifecycleRule rule;
-    rule.WithStatus(Aws::S3::Model::ExpirationStatus::Enabled)
-        .WithFilter(Aws::S3::Model::LifecycleRuleFilter().WithAnd(
-            Aws::S3::Model::LifecycleRuleAndOperator().WithPrefix("").WithTags(filter_tags)))
-        .WithExpiration(Aws::S3::Model::LifecycleExpiration().WithDays(expire_days))
-        .WithID("tiflashgc");
-
-    old_rules.emplace_back(rule); // existing rules + new rule
-    Aws::S3::Model::BucketLifecycleConfiguration lifecycle_config;
-    lifecycle_config.WithRules(old_rules);
-
+    // Try add the tiflash rule to lifecycle
+    bool use_ali_oss_format = false;
+    auto lifecycle_config = genNewLifecycleConfig(old_rules, expire_days, use_ali_oss_format);
     Aws::S3::Model::PutBucketLifecycleConfigurationRequest request;
     request.WithBucket(client.bucket()).WithLifecycleConfiguration(lifecycle_config);
-
     auto outcome = client.PutBucketLifecycleConfiguration(request);
-    if (!outcome.IsSuccess())
+    if (outcome.IsSuccess())
     {
-        const auto & error = outcome.GetError();
-        LOG_WARNING(
+        LOG_INFO(
             client.log,
-            "Create lifecycle rule with tag filter \"{}\" failed, please check the bucket lifecycle configuration or "
-            "create the lifecycle rule manually"
-            ", bucket={} {}",
+            "The lifecycle rule has been added, new_n_rules={} tag={} use_ali_oss_format={}",
+            old_rules.size(),
             TaggingObjectIsDeleted,
-            client.bucket(),
-            S3ErrorMessage(error));
-        return false;
+            use_ali_oss_format);
+        return true;
     }
-    LOG_INFO(
+    const auto & error = outcome.GetError();
+    LOG_WARNING(
         client.log,
-        "The lifecycle rule has been added, new_n_rules={} tag={}",
-        old_rules.size(),
-        TaggingObjectIsDeleted);
-    return true;
+        "Create lifecycle rule with tag filter \"{}\" failed, retrying with another format, bucket={} "
+        "use_ali_oss_format={} {}",
+        TaggingObjectIsDeleted,
+        client.bucket(),
+        use_ali_oss_format,
+        S3ErrorMessage(error));
+
+    // Retry with another format
+    use_ali_oss_format = true;
+    lifecycle_config = genNewLifecycleConfig(old_rules, expire_days, use_ali_oss_format);
+    request.WithBucket(client.bucket()).WithLifecycleConfiguration(lifecycle_config);
+    outcome = client.PutBucketLifecycleConfiguration(request);
+    if (outcome.IsSuccess())
+    {
+        LOG_INFO(
+            client.log,
+            "The lifecycle rule has been added, new_n_rules={} tag={} use_ali_oss_format={}",
+            old_rules.size(),
+            TaggingObjectIsDeleted,
+            use_ali_oss_format);
+        return true;
+    }
+
+    // Still failed to create lifecycle rule, log an error
+    LOG_ERROR(
+        client.log,
+        "Create lifecycle rule with tag filter \"{}\" failed, please check the bucket lifecycle configuration or "
+        "create the lifecycle rule manually, bucket={} use_ali_oss_format={} {}",
+        TaggingObjectIsDeleted,
+        client.bucket(),
+        use_ali_oss_format,
+        S3ErrorMessage(error));
+    return false;
 }
 
 void listPrefix(
