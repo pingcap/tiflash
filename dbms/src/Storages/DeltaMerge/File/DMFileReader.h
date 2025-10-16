@@ -46,6 +46,7 @@ public:
         const DMFilePtr & dmfile_,
         const ColumnDefines & read_columns_,
         bool is_common_handle_,
+        bool block_wait,
         // Only set this param to true when
         // 1. There is no delta.
         // 2. You don't need pk, version and delete_tag columns

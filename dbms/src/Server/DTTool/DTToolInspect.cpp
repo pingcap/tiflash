@@ -288,7 +288,8 @@ int inspectServiceMain(DB::Context & context, const InspectArgs & args)
                     *dmfile,
                     fp,
                     nullptr,
-                    false,
+                    /*block_wait=*/false,
+                    /*set_cache_if_miss=*/false,
                     col_id,
                     nullptr,
                     nullptr);
