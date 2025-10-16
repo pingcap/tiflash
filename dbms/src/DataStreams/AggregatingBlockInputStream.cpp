@@ -88,4 +88,9 @@ Block AggregatingBlockInputStream::readImpl()
     return impl->read();
 }
 
+void AggregatingBlockInputStream::appendInfo(FmtBuffer & buffer) const
+{
+    buffer.fmtAppend(", enable_two_level_hashtable: {}", params.getGroupByTwoLevelThreshold() > 0);
+}
+
 } // namespace DB
