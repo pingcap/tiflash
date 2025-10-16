@@ -43,6 +43,10 @@ if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GE
 
     # run fullstack-tests
     ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" up -d
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T pd0 bash -c '/pd-server -V'
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tidb0 bash -c '/tidb-server -V'
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tikv0 bash -c '/tikv-server -V'
+
     wait_next_gen_env
     ENV_ARGS="ENABLE_NEXT_GEN=true verbose=${verbose} "
     # most failpoints are expected to be set on the compute layer, use tiflash-cn0 to run tests

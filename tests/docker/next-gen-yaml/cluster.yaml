@@ -27,7 +27,7 @@ services:
     # Use entrypoint instead, create bucket "tiflash-test" on minio at startup
     entrypoint: sh -c 'mkdir -p /data/tiflash-test && minio server /data --console-address ":9001" > /log/minio.log 2>&1'
   pd0:
-    image: ${PD_IMAGE:-hub.pingcap.net/tikv/pd/image:master-next-gen}
+    image: ${PD_IMAGE:-us-docker.pkg.dev/pingcap-testing-account/hub/tikv/pd/image:master-next-gen}
     security_opt:
       - seccomp:unconfined
     volumes:
@@ -37,7 +37,7 @@ services:
     command: --name=pd0 --client-urls=http://0.0.0.0:2379 --peer-urls=http://0.0.0.0:2380 --advertise-client-urls=http://pd0:2379 --advertise-peer-urls=http://pd0:2380 --initial-cluster=pd0=http://pd0:2380 --config=/pd.toml --data-dir=/data --log-file=/log/pd.log
     restart: on-failure
   tikv0:
-    image: ${TIKV_IMAGE:-hub.pingcap.net/tikv/tikv/image:dedicated-next-gen}
+    image: ${TIKV_IMAGE:-us-docker.pkg.dev/pingcap-testing-account/hub/tikv/tikv/image:dedicated-next-gen}
     security_opt:
       - seccomp:unconfined
     volumes:
@@ -50,7 +50,7 @@ services:
       - "minio0"
     restart: on-failure
   tidb0:
-    image: ${TIDB_IMAGE:-hub.pingcap.net/pingcap/tidb/images/tidb-server:master-next-gen}
+    image: ${TIDB_IMAGE:-us-docker.pkg.dev/pingcap-testing-account/hub/pingcap/tidb/images/tidb-server:master-next-gen}
     security_opt:
       - seccomp:unconfined
     volumes:
