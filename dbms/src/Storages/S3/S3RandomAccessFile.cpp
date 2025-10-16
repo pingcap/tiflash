@@ -18,7 +18,9 @@
 #include <Common/Stopwatch.h>
 #include <Common/TiFlashMetrics.h>
 #include <IO/BaseFile/MemoryRandomAccessFile.h>
+#include <IO/BaseFile/PosixRandomAccessFile.h>
 #include <Storages/DeltaMerge/ScanContext.h>
+#include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3Common.h>
 #include <Storages/S3/S3Filename.h>
@@ -325,7 +327,8 @@ inline static RandomAccessFilePtr tryOpenCachedFile(const String & remote_fname,
 inline static RandomAccessFilePtr createFromNormalFile(
     const String & remote_fname,
     std::optional<UInt64> filesize,
-    std::optional<DM::ScanContextPtr> scan_context)
+    std::optional<DM::ScanContextPtr> scan_context,
+    bool block_wait)
 {
     auto file = tryOpenCachedFile(remote_fname, filesize);
     if (file != nullptr)
@@ -337,6 +340,35 @@ inline static RandomAccessFilePtr createFromNormalFile(
         }
         return file;
     }
+
+    // local cache miss
+    if (block_wait)
+    {
+        // block and wait until the file is downloaded to local
+        auto * file_cache = FileCache::instance();
+        if (file_cache != nullptr)
+        {
+            Stopwatch sw_download_object;
+            S3::S3FilenameView s3_fname = S3::S3FilenameView::fromKey(remote_fname);
+            auto file_seg = file_cache->downloadFileForLocalRead(s3_fname, filesize);
+            auto ptr = std::make_shared<PosixRandomAccessFile>(
+                file_seg->getLocalFileName(),
+                /*flags*/ -1,
+                /*read_limiter*/ nullptr,
+                file_seg);
+            if (scan_context.has_value())
+            {
+                scan_context.value()->disagg_read_cache_miss_size += filesize.value();
+                scan_context.value()->disagg_s3file_miss_count++;
+                scan_context.value()->disagg_s3file_block_wait_count++;
+                scan_context.value()->disagg_s3file_block_wait_ms += sw_download_object.elapsedSeconds() * 1000;
+            }
+            return ptr;
+        }
+        // fallback to directly read from S3
+    }
+
+    // directly open a S3 read stream as RandomAccessFile
     if (scan_context.has_value())
     {
         scan_context.value()->disagg_read_cache_miss_size += filesize.value();
@@ -351,13 +383,16 @@ inline static RandomAccessFilePtr createFromNormalFile(
 
 RandomAccessFilePtr S3RandomAccessFile::create(const String & remote_fname)
 {
+    std::optional<UInt64> filesize = std::nullopt;
+    std::optional<DM::ScanContextPtr> scan_context = std::nullopt;
+    bool block_wait = false;
     if (read_file_info)
-        return createFromNormalFile(
-            remote_fname,
-            std::optional<UInt64>(read_file_info->size),
-            read_file_info->scan_context != nullptr ? std::optional<DM::ScanContextPtr>(read_file_info->scan_context)
-                                                    : std::nullopt);
-    else
-        return createFromNormalFile(remote_fname, std::nullopt, std::nullopt);
+    {
+        filesize = read_file_info->size;
+        if (read_file_info->scan_context != nullptr)
+            scan_context = read_file_info->scan_context;
+        block_wait = read_file_info->block_wait;
+    }
+    return createFromNormalFile(remote_fname, filesize, scan_context, block_wait);
 }
 } // namespace DB::S3

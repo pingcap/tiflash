@@ -135,6 +135,8 @@ String ScanContext::toJson() const
         json->set("disagg_page_miss_count", disagg_page_miss_count.load());
         json->set("disagg_s3file_hit_count", disagg_s3file_hit_count.load());
         json->set("disagg_s3file_miss_count", disagg_s3file_miss_count.load());
+        json->set("disagg_s3file_block_wait_count", disagg_s3file_block_wait_count.load());
+        json->set("disagg_s3file_block_wait_ms", disagg_s3file_block_wait_ms.load());
         json->set("disagg_s3file_get_object_ms", disagg_s3file_get_object_ms.load());
         json->set("disagg_s3file_get_object_count", disagg_s3file_get_object_count.load());
         json->set("disagg_s3file_read_time_ms", disagg_s3file_read_time_ms.load());

@@ -54,6 +54,7 @@ DMFileReader::DMFileReader(
     const DMFilePtr & dmfile_,
     const ColumnDefines & read_columns_,
     bool is_common_handle_,
+    bool block_wait,
     // clean read
     bool enable_handle_clean_read_,
     bool enable_del_clean_read_,
@@ -114,6 +115,7 @@ DMFileReader::DMFileReader(
                 cd.id,
                 stream_name,
                 max_read_buffer_size,
+                block_wait,
                 log,
                 read_limiter);
             column_streams.emplace(stream_name, std::move(stream));

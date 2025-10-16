@@ -36,6 +36,7 @@ public:
         ColId col_id,
         const String & file_name_base,
         size_t max_read_buffer_size,
+        bool block_wait,
         const LoggerPtr & log,
         const ReadLimiterPtr & read_limiter);
 

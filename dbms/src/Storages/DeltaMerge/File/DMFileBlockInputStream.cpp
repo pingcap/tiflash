@@ -95,6 +95,7 @@ DMFileBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildNoLocalIndex(
         dmfile,
         read_columns,
         is_common_handle,
+        block_wait,
         enable_handle_clean_read,
         enable_del_clean_read,
         is_fast_scan,
@@ -136,6 +137,7 @@ SkippableBlockInputStreamPtr createSimpleBlockInputStream(
 
 DMFileBlockInputStreamBuilder & DMFileBlockInputStreamBuilder::setFromSettings(const Settings & settings)
 {
+    block_wait = settings.dt_enable_block_wait;
     enable_column_cache = settings.dt_enable_stable_column_cache;
     max_read_buffer_size = settings.max_read_buffer_size;
     max_sharing_column_bytes_for_all = settings.dt_max_sharing_column_bytes_for_all;
@@ -217,6 +219,7 @@ SkippableBlockInputStreamPtr DMFileBlockInputStreamBuilder::buildForVectorIndex(
         dmfile,
         *vec_index_ctx->rest_col_defs,
         is_common_handle,
+        block_wait,
         enable_handle_clean_read,
         enable_del_clean_read,
         is_fast_scan,

@@ -78,6 +78,7 @@ void DMFilePackFilterResult::tryLoadIndex(
         dmfile,
         file_provider,
         index_cache,
+        /*block_wait=*/false,
         /*set_cache_if_miss=*/true,
         col_id,
         read_limiter,

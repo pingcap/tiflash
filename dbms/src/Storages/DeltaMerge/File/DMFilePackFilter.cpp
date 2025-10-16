@@ -58,7 +58,7 @@ DMFilePackFilterResultPtr DMFilePackFilter::load()
     auto read_all_packs = (rowkey_ranges.size() == 1 && rowkey_ranges[0].all()) || rowkey_ranges.empty();
     if (!read_all_packs)
     {
-        tryLoadIndex(result.param, MutSup::extra_handle_id);
+        tryLoadIndex(result.param, MutSup::extra_handle_id, block_wait);
         std::vector<RSOperatorPtr> handle_filters;
         for (auto & rowkey_range : rowkey_ranges)
             handle_filters.emplace_back(toFilter(rowkey_range));
@@ -129,7 +129,7 @@ DMFilePackFilterResultPtr DMFilePackFilter::load()
         ColIds ids = filter->getColumnIDs();
         for (const auto & id : ids)
         {
-            tryLoadIndex(result.param, id);
+            tryLoadIndex(result.param, id, block_wait);
         }
 
         const auto check_results = filter->roughCheck(0, pack_count, result.param);
@@ -189,13 +189,21 @@ void DMFilePackFilter::loadIndex(
     const DMFilePtr & dmfile,
     const FileProviderPtr & file_provider,
     const MinMaxIndexCachePtr & index_cache,
+    bool block_wait,
     bool set_cache_if_miss,
     ColId col_id,
     const ReadLimiterPtr & read_limiter,
     const ScanContextPtr & scan_context)
 {
-    auto [type, minmax_index]
-        = loadIndex(*dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
+    auto [type, minmax_index] = loadIndex(
+        *dmfile,
+        file_provider,
+        index_cache,
+        block_wait,
+        set_cache_if_miss,
+        col_id,
+        read_limiter,
+        scan_context);
     indexes.emplace(col_id, RSIndex(type, minmax_index));
 }
 
@@ -214,6 +222,7 @@ public:
         auto index_guard = S3::S3RandomAccessFile::setReadFileInfo({
             .size = dmfile.getReadFileSize(col_id, colIndexFileName(file_name_base)),
             .scan_context = scan_context,
+            .block_wait = block_wait,
         });
 
         if (likely(dmfile.useMetaV2()))
@@ -238,6 +247,7 @@ public:
         const DMFile & dmfile_,
         const FileProviderPtr & file_provider_,
         ColId col_id_,
+        bool block_wait_,
         const ReadLimiterPtr & read_limiter_,
         const ScanContextPtr & scan_context_)
         : dmfile(dmfile_)
@@ -246,6 +256,7 @@ public:
         , file_provider(file_provider_)
         , read_limiter(read_limiter_)
         , scan_context(scan_context_)
+        , block_wait(block_wait_)
     {}
 
     const DMFile & dmfile;
@@ -254,6 +265,7 @@ public:
     FileProviderPtr file_provider;
     ReadLimiterPtr read_limiter;
     ScanContextPtr scan_context;
+    bool block_wait = false;
 
 private:
     MinMaxIndexPtr loadRawMinMaxIndex(const DataTypePtr & type, size_t index_file_size) const
@@ -339,6 +351,7 @@ std::pair<DataTypePtr, MinMaxIndexPtr> DMFilePackFilter::loadIndex(
     const DMFile & dmfile,
     const FileProviderPtr & file_provider,
     const MinMaxIndexCachePtr & index_cache,
+    bool block_wait,
     bool set_cache_if_miss,
     ColId col_id,
     const ReadLimiterPtr & read_limiter,
@@ -350,7 +363,7 @@ std::pair<DataTypePtr, MinMaxIndexPtr> DMFilePackFilter::loadIndex(
     MinMaxIndexPtr minmax_index;
     if (index_cache && set_cache_if_miss)
     {
-        auto loader = MinMaxIndexLoader(dmfile, file_provider, col_id, read_limiter, scan_context);
+        auto loader = MinMaxIndexLoader(dmfile, file_provider, col_id, block_wait, read_limiter, scan_context);
         minmax_index = index_cache->getOrSet(dmfile.colIndexCacheKey(file_name_base), loader);
     }
     else
@@ -359,12 +372,12 @@ std::pair<DataTypePtr, MinMaxIndexPtr> DMFilePackFilter::loadIndex(
         if (index_cache)
             minmax_index = index_cache->get(dmfile.colIndexCacheKey(file_name_base));
         if (minmax_index == nullptr)
-            minmax_index = MinMaxIndexLoader(dmfile, file_provider, col_id, read_limiter, scan_context)();
+            minmax_index = MinMaxIndexLoader(dmfile, file_provider, col_id, block_wait, read_limiter, scan_context)();
     }
     return {type, minmax_index};
 }
 
-void DMFilePackFilter::tryLoadIndex(RSCheckParam & param, ColId col_id)
+void DMFilePackFilter::tryLoadIndex(RSCheckParam & param, ColId col_id, bool block_wait)
 {
     if (param.indexes.count(col_id))
         return;
@@ -373,7 +386,16 @@ void DMFilePackFilter::tryLoadIndex(RSCheckParam & param, ColId col_id)
         return;
 
     Stopwatch watch;
-    loadIndex(param.indexes, dmfile, file_provider, index_cache, set_cache_if_miss, col_id, read_limiter, scan_context);
+    loadIndex(
+        param.indexes,
+        dmfile,
+        file_provider,
+        index_cache,
+        block_wait,
+        set_cache_if_miss,
+        col_id,
+        read_limiter,
+        scan_context);
 }
 
 std::pair<std::vector<DMFilePackFilter::Range>, DMFilePackFilterResults> DMFilePackFilter::getSkippedRangeAndFilter(

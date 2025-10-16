@@ -154,6 +154,7 @@ public:
         const DMFile & dmfile,
         const FileProviderPtr & file_provider,
         const MinMaxIndexCachePtr & index_cache,
+        bool block_wait,
         bool set_cache_if_miss,
         ColId col_id,
         const ReadLimiterPtr & read_limiter,
@@ -190,17 +191,19 @@ private:
         const DMFilePtr & dmfile,
         const FileProviderPtr & file_provider,
         const MinMaxIndexCachePtr & index_cache,
+        bool block_wait,
         bool set_cache_if_miss,
         ColId col_id,
         const ReadLimiterPtr & read_limiter,
         const ScanContextPtr & scan_context);
 
-    void tryLoadIndex(RSCheckParam & param, ColId col_id);
+    void tryLoadIndex(RSCheckParam & param, ColId col_id, bool block_wait);
 
 private:
     DMFilePtr dmfile;
 
     MinMaxIndexCachePtr index_cache;
+    bool block_wait;
     bool set_cache_if_miss;
     RowKeyRanges rowkey_ranges;
     RSOperatorPtr filter;
