@@ -59,6 +59,8 @@ public:
 
     Block getHeader() const override;
 
+    void appendInfo(FmtBuffer & buffer) const override;
+
 protected:
     Block readImpl() override;
 
