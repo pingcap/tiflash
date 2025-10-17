@@ -29,9 +29,12 @@ private:
 
 public:
     const char * getFamilyName() const override { return "Nothing"; }
-    MutableColumnPtr cloneDummy(size_t s) const override { return ColumnNothing::create(s); };
+    MutableColumnPtr cloneDummy(size_t s) const override { return ColumnNothing::create(s); }
 
     bool canBeInsideNullable() const override { return true; }
+
+    // ColumnNothing does not hold any data, so capacity is 0.
+    size_t capacity() const override { return 1; }
 };
 
 } // namespace DB

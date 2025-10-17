@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <Columns/ColumnsNumber.h>
-#include <Columns/VirtualColumnUtils.h>
 #include <Columns/filterColumn.h>
 #include <Common/typeid_cast.h>
 #include <Core/NamesAndTypes.h>
@@ -24,6 +23,7 @@
 #include <Parsers/ASTFunction.h>
 #include <Parsers/ASTIdentifier.h>
 #include <Parsers/ASTSelectQuery.h>
+#include <Storages/System/VirtualColumnUtils.h>
 
 
 namespace DB::VirtualColumnUtils

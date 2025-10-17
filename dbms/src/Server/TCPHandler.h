@@ -15,7 +15,6 @@
 #pragma once
 
 #include <Client/TimeoutSetter.h>
-#include <Common/CurrentMetrics.h>
 #include <Common/Stopwatch.h>
 #include <Common/getFQDNOrHostName.h>
 #include <Core/Protocol.h>

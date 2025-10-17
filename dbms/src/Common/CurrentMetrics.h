@@ -18,7 +18,6 @@
 #include <stddef.h>
 
 #include <atomic>
-#include <cstdint>
 #include <utility>
 
 /** Allows to count number of simultaneously happening processes or current value of some metric.

@@ -681,6 +681,19 @@ void ColumnFixedString::gather(ColumnGathererStream & gatherer)
     gatherer.gather(*this);
 }
 
+void ColumnFixedString::reserveWithStrategy(size_t size, IColumn::ReserveStrategy strategy)
+{
+    switch (strategy)
+    {
+    case ReserveStrategy::Default:
+        chars.reserve(n * size);
+        break;
+    case ReserveStrategy::ScaleFactor1_5:
+        chars.reserve_exact(n / 2 * 3 * size);
+        break;
+    }
+}
+
 void ColumnFixedString::getExtremes(Field & min, Field & max) const
 {
     min = String();

@@ -454,7 +454,9 @@ public:
 
     void gather(ColumnGathererStream & gatherer_stream) override;
 
-    void reserve(size_t n) override;
+    size_t capacity() const override;
+
+    void reserveWithStrategy(size_t n, IColumn::ReserveStrategy strategy) override;
     void reserveAlign(size_t n, size_t alignment) override;
 
     void reserveWithTotalMemoryHint(size_t n, Int64 total_memory_hint) override;
