@@ -37,12 +37,25 @@ fi
 if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GEN" != "0" ]]; then
     echo "Running fullstack test on next-gen TiFlash"
 
+    # set images for next-gen TiFlash cluster
+    HUB_ADDR="us-docker.pkg.dev/pingcap-testing-account/hub"
+    export PD_IMAGE="${HUB_ADDR}/tikv/pd/image:${PD_BRANCH:-master}-next-gen"
+    export TIKV_IMAGE="${HUB_ADDR}/tikv/tikv/image:${TIKV_BRANCH:-dedicated}-next-gen"
+    export TIDB_IMAGE="${HUB_ADDR}/pingcap/tidb/images/tidb-server:${TIDB_BRANCH:-master}-next-gen"
+
     # clean up previous docker instances, data and log
     ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" down
     clean_data_log
 
-    # run fullstack-tests
     ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" up -d
+    echo "PD version:"
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T pd0 bash -c '/pd-server -V'
+    echo "TiDB version:"
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tidb0 bash -c '/tidb-server -V'
+    echo "TiKV version:"
+    ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" exec -T tikv0 bash -c '/tikv-server -V'
+
+    # run fullstack-tests
     wait_next_gen_env
     ENV_ARGS="ENABLE_NEXT_GEN=true verbose=${verbose} "
     # most failpoints are expected to be set on the compute layer, use tiflash-cn0 to run tests
