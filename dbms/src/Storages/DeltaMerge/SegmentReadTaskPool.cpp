@@ -395,7 +395,7 @@ bool SegmentReadTaskPool::isRUExhaustedImpl()
     }
 
     // To reduce lock contention in resource control,
-    // check if RU is exhuasted every `bytes_of_one_hundred_ru` or every `100ms`.
+    // check if RU is exhausted every `bytes_of_one_hundred_ru` or every `100ms`.
 
     // Fast path.
     Int64 ms = currentMS();

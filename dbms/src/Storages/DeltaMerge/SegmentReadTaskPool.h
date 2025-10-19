@@ -83,7 +83,7 @@ private:
 
 // If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
 // else it is the same as `SegmentReadTasks`, a `std::list` of `SegmentReadTask`.
-// `SegmeneReadTasksWrapper` is not thread-safe.
+// `SegmentReadTasksWrapper` is not thread-safe.
 class SegmentReadTasksWrapper
 {
 public:
@@ -104,6 +104,7 @@ private:
     std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> unordered_tasks;
 };
 
+// The SegmentReadTaskPool manages the read tasks for a query on a physical table.
 class SegmentReadTaskPool
     : public NotifyFuture
     , private boost::noncopyable
@@ -249,9 +250,9 @@ private:
     std::atomic<bool> exception_happened;
     DB::Exception exception;
 
-    // SegmentReadTaskPool will be holded by several UnorderedBlockInputStreams.
-    // It will be added to SegmentReadTaskScheduler when one of the UnorderedBlockInputStreams being read.
-    // Since several UnorderedBlockInputStreams can be read by several threads concurrently, we use
+    // SegmentReadTaskPool will be held by several `UnorderedInputStream`s/`UnorderedSourceOp`s.
+    // It will be added to SegmentReadTaskScheduler when one of the UnorderedInputStream/UnorderedSourceOp being read.
+    // Since several UnorderedInputStream/UnorderedSourceOp can be read by several threads concurrently, we use
     // std::once_flag and std::call_once to prevent duplicated add.
     std::once_flag add_to_scheduler;
 
