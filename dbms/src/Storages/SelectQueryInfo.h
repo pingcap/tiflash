@@ -35,6 +35,11 @@ using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 struct MvccQueryInfo;
 struct DAGQueryInfo;
 
+namespace DM
+{
+class SharedBlockQueue;
+using SharedBlockQueuePtr = std::shared_ptr<SharedBlockQueue>;
+} // namespace DM
 
 /** Query along with some additional data,
   *  that can be used during query processing
@@ -56,6 +61,8 @@ struct SelectQueryInfo
     bool keep_order = true;
     bool is_fast_scan = false;
     bool has_multiple_partitions = false;
+
+    DM::SharedBlockQueuePtr read_queue;
 
     SelectQueryInfo();
     ~SelectQueryInfo();

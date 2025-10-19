@@ -37,6 +37,7 @@
 #include <Storages/DeltaMerge/ScanContext_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 #include <Storages/DeltaMerge/Segment_fwd.h>
+#include <Storages/DeltaMerge/StoragePool/StoragePool_fwd.h>
 #include <Storages/KVStore/Decode/DecodingStorageSchemaSnapshot.h>
 #include <Storages/KVStore/MultiRaft/Disagg/CheckpointIngestInfo.h>
 #include <Storages/Page/PageStorage_fwd.h>
@@ -355,6 +356,7 @@ public:
         const Context & db_context,
         const DB::Settings & db_settings,
         const ColumnDefines & columns_to_read,
+        const SharedBlockQueuePtr & read_queue,
         size_t num_streams,
         bool keep_order,
         const SegmentIdSet & read_segments = {},
@@ -367,6 +369,7 @@ public:
         const Context & db_context,
         const DB::Settings & db_settings,
         const ColumnDefines & columns_to_read,
+        const SharedBlockQueuePtr & read_queue,
         size_t num_streams,
         bool keep_order,
         const SegmentIdSet & read_segments = {},
@@ -381,6 +384,7 @@ public:
         const DB::Settings & db_settings,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & sorted_ranges,
+        const SharedBlockQueuePtr & read_queue,
         size_t num_streams,
         UInt64 start_ts,
         const PushDownExecutorPtr & executor,
@@ -405,6 +409,7 @@ public:
         const DB::Settings & db_settings,
         const ColumnDefines & columns_to_read,
         const RowKeyRanges & sorted_ranges,
+        const SharedBlockQueuePtr & read_queue,
         size_t num_streams,
         UInt64 start_ts,
         const PushDownExecutorPtr & executor,

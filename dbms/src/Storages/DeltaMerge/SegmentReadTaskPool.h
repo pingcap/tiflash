@@ -21,8 +21,10 @@
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadMode.h>
+#include <Storages/DeltaMerge/ReadThread/SharedBlockQueue.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool_fwd.h>
 
 namespace DB::DM
 {
@@ -30,56 +32,6 @@ namespace tests
 {
 class SegmentReadTasksPoolTest;
 }
-using AfterSegmentRead = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
-
-class BlockStat
-{
-public:
-    BlockStat()
-        : pending_count(0)
-        , pending_bytes(0)
-        , total_count(0)
-        , total_bytes(0)
-    {}
-
-    void push(const Block & blk)
-    {
-        pending_count.fetch_add(1, std::memory_order_relaxed);
-        total_count.fetch_add(1, std::memory_order_relaxed);
-
-        auto b = blk.bytes();
-        pending_bytes.fetch_add(b, std::memory_order_relaxed);
-        total_bytes.fetch_add(b, std::memory_order_relaxed);
-
-        total_rows.fetch_add(blk.rows(), std::memory_order_relaxed);
-    }
-
-    void pop(const Block & blk)
-    {
-        if (likely(blk))
-        {
-            pending_count.fetch_sub(1, std::memory_order_relaxed);
-            pending_bytes.fetch_sub(blk.bytes(), std::memory_order_relaxed);
-        }
-    }
-
-    Int64 pendingCount() const { return pending_count.load(std::memory_order_relaxed); }
-
-    Int64 pendingBytes() const { return pending_bytes.load(std::memory_order_relaxed); }
-
-    Int64 totalCount() const { return total_count.load(std::memory_order_relaxed); }
-
-    Int64 totalBytes() const { return total_bytes.load(std::memory_order_relaxed); }
-
-    Int64 totalRows() const { return total_rows.load(std::memory_order_relaxed); }
-
-private:
-    std::atomic<Int64> pending_count;
-    std::atomic<Int64> pending_bytes;
-    std::atomic<Int64> total_count;
-    std::atomic<Int64> total_bytes;
-    std::atomic<Int64> total_rows;
-};
 
 // If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
 // else it is the same as `SegmentReadTasks`, a `std::list` of `SegmentReadTask`.
@@ -104,12 +56,14 @@ private:
     std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> unordered_tasks;
 };
 
+// The SegmentReadTaskPool manages the read tasks for a query on a physical table.
 class SegmentReadTaskPool
     : public NotifyFuture
     , private boost::noncopyable
 {
 public:
     SegmentReadTaskPool(
+        const SharedBlockQueuePtr & shared_q_,
         int extra_table_id_index_,
         const ColumnDefines & columns_to_read_,
         const PushDownExecutorPtr & executor_,
@@ -121,7 +75,8 @@ public:
         const String & tracing_id,
         bool enable_read_thread_,
         Int64 num_streams_,
-        const KeyspaceID & keyspace_id_,
+        KeyspaceID keyspace_id_,
+        TableID table_id_,
         const String & res_group_name_);
 
     ~SegmentReadTaskPool() override;
@@ -151,10 +106,7 @@ public:
 
     std::once_flag & addToSchedulerFlag() { return add_to_scheduler; }
 
-    void registerTask(TaskPtr && task) override
-    {
-        q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ);
-    }
+    void registerTask(TaskPtr && task) override { shared_q->registerTask(std::move(task)); }
 
     std::once_flag & getRemoteConnectionInfoFlag() { return get_remote_connection_flag; }
     std::optional<std::pair<ConnectionProfileInfo, ConnectionProfileInfo>> getRemoteConnectionInfo() const;
@@ -213,10 +165,10 @@ private:
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
-    size_t peak_active_segments;
     std::unordered_set<GlobalSegmentID> active_segment_ids;
-    WorkQueue<Block> q;
-    BlockStat blk_stat;
+    // WorkQueue<Block> q;
+    // BlockStat blk_stat;
+    SharedBlockQueuePtr shared_q;
     LoggerPtr log;
 
     std::atomic<Int64> unordered_input_stream_ref_count;
@@ -224,9 +176,9 @@ private:
     std::atomic<bool> exception_happened;
     DB::Exception exception;
 
-    // SegmentReadTaskPool will be held by several UnorderedBlockInputStreams.
-    // It will be added to SegmentReadTaskScheduler when one of the UnorderedBlockInputStreams being read.
-    // Since several UnorderedBlockInputStreams can be read by several threads concurrently, we use
+    // SegmentReadTaskPool will be held by several `UnorderedInputStream`s/`UnorderedSourceOp`s.
+    // It will be added to SegmentReadTaskScheduler when one of the UnorderedInputStream/UnorderedSourceOp being read.
+    // Since several UnorderedInputStream/UnorderedSourceOp can be read by several threads concurrently, we use
     // std::once_flag and std::call_once to prevent duplicated add.
     std::once_flag add_to_scheduler;
 
@@ -234,6 +186,7 @@ private:
     const Int64 active_segment_limit;
 
     const KeyspaceID keyspace_id;
+    const TableID table_id;
     const String res_group_name;
     std::mutex ru_mu;
     std::atomic<Int64> last_time_check_ru = 0;

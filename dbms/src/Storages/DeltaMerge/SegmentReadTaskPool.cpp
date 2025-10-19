@@ -111,6 +111,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
 }
 
 SegmentReadTaskPool::SegmentReadTaskPool(
+    const SharedBlockQueuePtr & shared_q_,
     int extra_table_id_index_,
     const ColumnDefines & columns_to_read_,
     const PushDownExecutorPtr & executor_,
@@ -122,7 +123,8 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     const String & tracing_id,
     bool enable_read_thread_,
     Int64 num_streams_,
-    const KeyspaceID & keyspace_id_,
+    KeyspaceID keyspace_id_,
+    TableID table_id_,
     const String & res_group_name_)
     : pool_id(nextPoolId())
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
@@ -135,7 +137,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , total_read_tasks(tasks_.size())
     , tasks_wrapper(enable_read_thread_, std::move(tasks_))
     , after_segment_read(after_segment_read_)
-    , peak_active_segments(0)
+    , shared_q(shared_q_)
     , log(Logger::get(tracing_id))
     , unordered_input_stream_ref_count(0)
     , exception_happened(false)
@@ -148,44 +150,23 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     // situations where the computation may be faster and the storage layer may not be able to keep up.
     , active_segment_limit(std::max(num_streams_, 2))
     , keyspace_id(keyspace_id_)
+    , table_id(table_id_)
     , res_group_name(res_group_name_)
 {
-    if (tasks_wrapper.empty())
+    RUNTIME_CHECK_MSG(
+        shared_q != nullptr,
+        "SegmentReadTaskPool requires a valid SharedBlockQueuePtr, tracing_id={}",
+        tracing_id);
+
+    if (!tasks_wrapper.empty())
     {
-        q.finish();
+        shared_q->addTableTask(table_id);
     }
 }
 
 SegmentReadTaskPool::~SegmentReadTaskPool()
 {
-    auto [pop_times, pop_empty_times, peak_blocks_in_queue] = q.getStat();
-    auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
-    auto total_count = blk_stat.totalCount();
-    auto total_bytes = blk_stat.totalBytes();
-    auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
-    auto approx_max_pending_block_bytes = blk_avg_bytes * peak_blocks_in_queue;
-    auto total_rows = blk_stat.totalRows();
-    LOG_INFO(
-        log,
-        "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={:.3f} "
-        "active_segment_limit={} peak_active_segments={} "
-        "block_slot_limit={} peak_blocks_in_queue={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
-        "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
-        pool_id,
-        pop_times,
-        pop_empty_times,
-        pop_empty_ratio,
-        active_segment_limit,
-        peak_active_segments,
-        block_slot_limit,
-        peak_blocks_in_queue,
-        blk_avg_bytes,
-        approx_max_pending_block_bytes / 1024.0 / 1024.0,
-        total_count,
-        total_bytes / 1024.0 / 1024.0,
-        total_rows,
-        total_count > 0 ? total_rows / total_count : 0,
-        total_rows > 0 ? total_bytes / total_rows : 0);
+    LOG_DEBUG(log, "SegmentReadTaskPool finished. table_id={} pool_id={}", table_id, pool_id);
 }
 
 void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
@@ -200,8 +181,9 @@ void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
     LOG_DEBUG(log, "finishSegment pool_id={} segment={} pool_finished={}", pool_id, seg, pool_finished);
     if (pool_finished)
     {
-        q.finish();
-        LOG_INFO(log, "pool_id={} finished", pool_id);
+        // notify the queue this table_id is finished only when all segments are finished.
+        shared_q->removeTableTask(table_id);
+        LOG_INFO(log, "SegmentReadTaskPool all segment are finished, table_id={} pool_id={}", table_id, pool_id);
     }
 }
 
@@ -217,7 +199,6 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
     auto t = tasks_wrapper.getTask(seg_id);
     RUNTIME_CHECK(t != nullptr, pool_id, seg_id);
     active_segment_ids.insert(seg_id);
-    peak_active_segments = std::max(peak_active_segments, active_segment_ids.size());
     return t;
 }
 
@@ -309,8 +290,7 @@ bool SegmentReadTaskPool::readOneBlock(BlockInputStreamPtr & stream, const Segme
 
 void SegmentReadTaskPool::popBlock(Block & block)
 {
-    q.pop(block);
-    blk_stat.pop(block);
+    shared_q->popBlock(block);
     global_blk_stat.pop(block);
     if (exceptionHappened())
     {
@@ -320,9 +300,8 @@ void SegmentReadTaskPool::popBlock(Block & block)
 
 bool SegmentReadTaskPool::tryPopBlock(Block & block)
 {
-    if (q.tryPop(block))
+    if (shared_q->tryPopBlock(block))
     {
-        blk_stat.pop(block);
         global_blk_stat.pop(block);
         if (exceptionHappened())
             throw exception;
@@ -336,12 +315,11 @@ bool SegmentReadTaskPool::tryPopBlock(Block & block)
 
 void SegmentReadTaskPool::pushBlock(Block && block)
 {
-    blk_stat.push(block);
     global_blk_stat.push(block);
     auto bytes = block.bytes();
     read_bytes_after_last_check += bytes;
     GET_METRIC(tiflash_storage_read_thread_counter, type_push_block_bytes).Increment(bytes);
-    q.push(std::move(block), nullptr);
+    shared_q->pushBlock(std::move(block));
 }
 
 Int64 SegmentReadTaskPool::increaseUnorderedInputStreamRefCount()
@@ -355,7 +333,7 @@ Int64 SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
 
 Int64 SegmentReadTaskPool::getFreeBlockSlots() const
 {
-    return block_slot_limit - blk_stat.pendingCount();
+    return block_slot_limit - shared_q->getBlockStat().pendingCount();
 }
 
 Int64 SegmentReadTaskPool::getFreeActiveSegments() const
@@ -391,7 +369,7 @@ void SegmentReadTaskPool::setException(const DB::Exception & e)
     {
         exception = e;
         exception_happened.store(true, std::memory_order_relaxed);
-        q.finish();
+        shared_q->finishQueue();
     }
 }
 

@@ -32,6 +32,7 @@ SelectQueryInfo::SelectQueryInfo(const SelectQueryInfo & rhs)
     , keep_order(rhs.keep_order)
     , is_fast_scan(rhs.is_fast_scan)
     , has_multiple_partitions(rhs.has_multiple_partitions)
+    , read_queue(rhs.read_queue)
 {}
 
 SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
@@ -43,6 +44,7 @@ SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
     , keep_order(rhs.keep_order)
     , is_fast_scan(rhs.is_fast_scan)
     , has_multiple_partitions(rhs.has_multiple_partitions)
+    , read_queue(std::move(rhs.read_queue))
 {}
 
 } // namespace DB

@@ -179,6 +179,84 @@ private:
     ResultHandler result_handler;
 };
 
+class MockReadTaskPool;
+using MockReadTaskPoolPtr = std::shared_ptr<MockReadTaskPool>;
+
+class MockReadTaskPool : public NotifyFuture
+{
+public:
+    explicit MockReadTaskPool(size_t idx_, size_t slot_limit)
+        : idx(idx_)
+        , q(slot_limit)
+    {}
+
+    void pushBlock(Block && block) { q.push(std::move(block), nullptr); }
+    void finish() { q.finish(); }
+
+    bool tryPopBlock(Block & block) { return q.tryPop(block); }
+
+    void registerTask(TaskPtr && task) override
+    {
+        q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ);
+    }
+
+    const size_t idx;
+
+private:
+    DB::DM::WorkQueue<Block> q;
+};
+
+class MockSourceOnReadTaskPoolOp : public SourceOp
+{
+public:
+    MockSourceOnReadTaskPoolOp(PipelineExecutorContext & exec_context_, Block header_, const MockReadTaskPoolPtr & pool)
+        : SourceOp(exec_context_, "mock")
+        , done(false)
+        , task_pool(pool)
+    {
+        setHeader(header_);
+    }
+
+    String getName() const override { return "MockSourceOp"; }
+
+protected:
+    OperatorStatus readImpl(Block & block) override
+    {
+        if (done)
+            return OperatorStatus::HAS_OUTPUT;
+
+        while (true)
+        {
+            if (!task_pool->tryPopBlock(block))
+            {
+                setNotifyFuture(task_pool.get());
+                return OperatorStatus::WAIT_FOR_NOTIFY;
+            }
+
+            if (block)
+            {
+                if (block.rows() == 0)
+                {
+                    block.clear();
+                    continue;
+                }
+                LOG_INFO(Logger::get(), "A block is popped from pool_idx={}", task_pool->idx);
+                return OperatorStatus::HAS_OUTPUT;
+            }
+            else
+            {
+                done = true;
+                LOG_INFO(Logger::get(), "No more blocks in pool_idx={}", task_pool->idx);
+                // return HAS_OUTPUT with empty block to indicate end of stream
+                return OperatorStatus::HAS_OUTPUT;
+            }
+        }
+    }
+
+private:
+    bool done;
+    MockReadTaskPoolPtr task_pool;
+};
 } // namespace
 
 TEST_F(TestConcatSource, ConcatBuilderPoolWithDifferentConcurrency)
@@ -255,4 +333,79 @@ try
 }
 CATCH
 
+TEST_F(TestConcatSource, unorderedConcatSink)
+try
+{
+    LoggerPtr log = Logger::get();
+
+    Blocks blks{
+        Block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})},
+        Block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})},
+        Block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})},
+        Block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})},
+        Block{ColumnGenerator::instance().generate({2, "Int32", DataDistribution::RANDOM})},
+    };
+
+    Block header = blks[0].cloneEmpty();
+
+    std::vector<MockReadTaskPoolPtr> pools;
+
+    PipelineExecutorContext exec_context;
+    size_t num_concurrency = 1;
+    ConcatBuilderPool builder_pool{num_concurrency};
+    // Mock that for each partition (physical table), there is a read task pool and multiple source ops reading from it.
+    size_t num_partitions = 3;
+    for (size_t idx_part = 0; idx_part < num_partitions; ++idx_part)
+    {
+        PipelineExecGroupBuilder group_builder;
+        // MockReadTaskPoolPtr pool = std::make_shared<MockReadTaskPool>(std::ceil(num_concurrency * 1.5));
+        MockReadTaskPoolPtr pool = std::make_shared<MockReadTaskPool>(idx_part, 0);
+        pools.push_back(pool);
+        for (size_t i = 0; i < num_concurrency; ++i)
+        {
+            group_builder.addConcurrency(std::make_unique<MockSourceOnReadTaskPoolOp>(exec_context, header, pool));
+        }
+        builder_pool.add(group_builder);
+    }
+
+    auto thread_func = [](const MockReadTaskPoolPtr & pool, const Blocks & blks, const LoggerPtr & log) {
+        for (size_t i = 0; i < blks.size(); ++i)
+        {
+            Block blk = blks[i];
+            pool->pushBlock(std::move(blk));
+            LOG_INFO(log, "A block is pushed to pool, pool_idx={} n_pushed={}", pool->idx, i + 1);
+            std::this_thread::sleep_for(std::chrono::seconds(1));
+        }
+        pool->finish();
+        LOG_INFO(log, "All blocks are pushed to pool_idx={} n_pushed={}", pool->idx, blks.size());
+    };
+
+    auto thread_mgr = DB::newThreadManager();
+    for (const auto & pool : pools)
+    {
+        thread_mgr->schedule(false, "", [pool, &blks, &log, &thread_func]() { thread_func(pool, blks, log); });
+    }
+
+    std::atomic<size_t> received_blocks = 0;
+        received_blocks.fetch_add(1, std::memory_order_relaxed);
+
+    PipelineExecGroupBuilder result_builder;
+    builder_pool.generate(result_builder, exec_context, "test");
+    result_builder.transform(
+        [&](auto & builder) { builder.setSinkOp(std::make_unique<SimpleGetResultSinkOp>(exec_context, "test", h)); });
+    auto op_pipeline_grp = result_builder.build(false);
+    op_pipeline_grp[0]->executePrefix();
+    while (true)
+    {
+        auto s = op_pipeline_grp[0]->execute();
+        if (s == OperatorStatus::FINISHED)
+        {
+            LOG_INFO(log, "ConcatPipelineExec is finished");
+            break;
+        }
+    }
+    op_pipeline_grp[0]->executeSuffix();
+    LOG_INFO(log, "ConcatPipelineExec is built and executed");
+}
+CATCH
 } // namespace DB::tests
