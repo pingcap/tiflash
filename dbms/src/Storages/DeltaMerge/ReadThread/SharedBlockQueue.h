@@ -88,7 +88,7 @@ public:
         auto total_rows = blk_stat.totalRows();
         LOG_INFO(
             log,
-            "SharedBlockQueue finished. pop={} pop_empty={} pop_empty_ratio={} "
+            "SharedBlockQueue finished. pop={} pop_empty={} pop_empty_ratio={:.3f} "
             "max_queue_size={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
             "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
             pop_times,
@@ -117,12 +117,26 @@ public:
     }
     void removeTableTask(TableID table_id)
     {
-        std::unique_lock lock(mu);
-        tables.erase(table_id);
-        if (tables.empty())
+        String table_id_remain;
+        size_t remain_count = 0;
+        {
+            std::unique_lock lock(mu);
+            tables.erase(table_id);
+            remain_count = tables.size();
+            table_id_remain = remain_count > 0 ? fmt::format("{}", tables) : "none";
+        }
+
+        if (remain_count == 0)
         {
             q.finish();
         }
+
+        LOG_INFO(
+            log,
+            "removeTableTask table_id={} remain_count={} remain_table_ids={}",
+            table_id,
+            remain_count,
+            table_id_remain);
     }
 
     void pushBlock(Block && block)
@@ -151,11 +165,16 @@ public:
 
     void finishQueueIfEmpty()
     {
-        std::unique_lock lock(mu);
-        if (tables.empty())
+        String table_id_remain;
         {
-            q.finish();
+            std::unique_lock lock(mu);
+            if (tables.empty())
+            {
+                q.finish();
+            }
+            table_id_remain = tables.empty() ? "none" : fmt::format("{}", tables);
         }
+        LOG_INFO(log, "finishQueueIfEmpty called, remain_table_ids={}", table_id_remain);
     }
 
     void finishQueue() { q.finish(); }

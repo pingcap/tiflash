@@ -367,6 +367,15 @@ public:
         const String & req_id)
     {
         RUNTIME_CHECK(result_builder.empty());
+        if (use_unordered_concat)
+        {
+            LOG_INFO(Logger::get(req_id), "Using UnorderedConcatSourceOp to concat source ops");
+        }
+        else
+        {
+            LOG_INFO(Logger::get(req_id), "Using ConcatSourceOp to concat source ops");
+        }
+
         for (auto & builders : pool)
         {
             if (builders.empty())
@@ -381,16 +390,11 @@ public:
             {
                 if (use_unordered_concat)
                 {
-                    LOG_INFO(
-                        Logger::get(req_id),
-                        "Using UnorderedConcatSourceOp to concat {} source ops",
-                        builders.size());
                     result_builder.addConcurrency(
                         std::make_unique<UnorderedConcatSourceOp>(exec_context, req_id, builders));
                 }
                 else
                 {
-                    LOG_INFO(Logger::get(req_id), "Using ConcatSourceOp to concat {} source ops", builders.size());
                     result_builder.addConcurrency(std::make_unique<ConcatSourceOp>(exec_context, req_id, builders));
                 }
             }

@@ -14,8 +14,6 @@
 
 #pragma once
 
-#include <Storages/DeltaMerge/ReadThread/SharedBlockQueue.h>
-
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -35,6 +33,11 @@ using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 struct MvccQueryInfo;
 struct DAGQueryInfo;
 
+namespace DM
+{
+class SharedBlockQueue;
+using SharedBlockQueuePtr = std::shared_ptr<SharedBlockQueue>;
+} // namespace DM
 
 /** Query along with some additional data,
   *  that can be used during query processing

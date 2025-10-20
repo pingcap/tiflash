@@ -166,7 +166,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
 
 SegmentReadTaskPool::~SegmentReadTaskPool()
 {
-    LOG_INFO(log, "SegmentReadTaskPool finished. pool_id={} table_id={}", pool_id, table_id);
+    LOG_DEBUG(log, "SegmentReadTaskPool finished. table_id={} pool_id={}", table_id, pool_id);
 }
 
 void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
@@ -183,7 +183,7 @@ void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
     {
         // notify the queue this table_id is finished only when all segments are finished.
         shared_q->removeTableTask(table_id);
-        LOG_INFO(log, "pool_id={} finished", pool_id);
+        LOG_INFO(log, "SegmentReadTaskPool all segment are finished, table_id={} pool_id={}", table_id, pool_id);
     }
 }
 
