@@ -37,8 +37,8 @@ struct DAGQueryInfo;
 
 namespace DM
 {
-class SharedBlockQueue;
-using SharedBlockQueuePtr = std::shared_ptr<SharedBlockQueue>;
+class ActiveSegmentReadTaskQueue;
+using ActiveSegmentReadTaskQueuePtr = std::shared_ptr<ActiveSegmentReadTaskQueue>;
 } // namespace DM
 
 /** Query along with some additional data,
@@ -62,7 +62,7 @@ struct SelectQueryInfo
     bool is_fast_scan = false;
     bool has_multiple_partitions = false;
 
-    DM::SharedBlockQueuePtr read_queue;
+    DM::ActiveSegmentReadTaskQueuePtr read_queue;
 
     SelectQueryInfo();
     ~SelectQueryInfo();

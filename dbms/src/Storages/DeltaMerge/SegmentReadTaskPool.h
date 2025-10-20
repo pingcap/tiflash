@@ -21,7 +21,7 @@
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadMode.h>
-#include <Storages/DeltaMerge/ReadThread/SharedBlockQueue.h>
+#include <Storages/DeltaMerge/ReadThread/ActiveSegmentReadTaskQueue.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool_fwd.h>
@@ -50,6 +50,8 @@ public:
 
     bool empty() const;
 
+    size_t size() const;
+
 private:
     bool enable_read_thread;
     SegmentReadTasks ordered_tasks;
@@ -63,7 +65,7 @@ class SegmentReadTaskPool
 {
 public:
     SegmentReadTaskPool(
-        const SharedBlockQueuePtr & shared_q_,
+        const ActiveSegmentReadTaskQueuePtr & shared_q_,
         int extra_table_id_index_,
         const ColumnDefines & columns_to_read_,
         const PushDownExecutorPtr & executor_,
@@ -121,7 +123,9 @@ public:
     size_t getTotalReadTasks() const { return total_read_tasks; }
 
 public:
-    const uint64_t pool_id;
+    const KeyspaceID keyspace_id;
+    const TableID table_id;
+    const UInt64 pool_id;
 
     // The memory tracker of MPPTask.
     const MemoryTrackerPtr mem_tracker;
@@ -148,7 +152,6 @@ public:
     const LoggerPtr & getLogger() const { return log; }
 
 private:
-    Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
     void finishSegment(const SegmentReadTaskPtr & seg);
     void pushBlock(Block && block);
@@ -165,10 +168,8 @@ private:
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
-    std::unordered_set<GlobalSegmentID> active_segment_ids;
-    // WorkQueue<Block> q;
-    // BlockStat blk_stat;
-    SharedBlockQueuePtr shared_q;
+    // std::unordered_set<GlobalSegmentID> active_segment_ids;
+    ActiveSegmentReadTaskQueuePtr shared_q;
     LoggerPtr log;
 
     std::atomic<Int64> unordered_input_stream_ref_count;
@@ -182,11 +183,6 @@ private:
     // std::once_flag and std::call_once to prevent duplicated add.
     std::once_flag add_to_scheduler;
 
-    const Int64 block_slot_limit;
-    const Int64 active_segment_limit;
-
-    const KeyspaceID keyspace_id;
-    const TableID table_id;
     const String res_group_name;
     std::mutex ru_mu;
     std::atomic<Int64> last_time_check_ru = 0;

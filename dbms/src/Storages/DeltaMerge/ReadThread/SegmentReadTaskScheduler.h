@@ -33,7 +33,7 @@ class SegmentReadTasksPoolTest;
 //
 // - `sched_thread` will scheduling read tasks.
 // - Call path: schedLoop -> schedule -> reapPendingPools -> scheduleOneRound
-// - reapPeningPools will swap the `pending_pools` and add these pools to `read_pools` and `merging_segments`.
+// - reapPendingPools will swap the `pending_pools` and add these pools to `read_pools` and `merging_segments`.
 // - scheduleOneRound will scan `read_pools` and choose segments to read.
 class SegmentReadTaskScheduler
 {

@@ -38,7 +38,7 @@
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/Filter/RSOperator.h>
 #include <Storages/DeltaMerge/FilterParser/FilterParser.h>
-#include <Storages/DeltaMerge/ReadThread/SharedBlockQueue.h>
+#include <Storages/DeltaMerge/ReadThread/ActiveSegmentReadTaskQueue.h>
 #include <Storages/DeltaMerge/ReadThread/UnorderedInputStream.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
@@ -569,7 +569,7 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
     const Context & db_context,
     DM::SegmentReadTasks && read_tasks,
     const DM::ColumnDefinesPtr & column_defines,
-    DM::SharedBlockQueuePtr & read_queue,
+    DM::ActiveSegmentReadTaskQueuePtr & read_queue,
     size_t num_streams,
     int extra_table_id_index)
 {
@@ -691,7 +691,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     DAGPipeline & pipeline)
 {
     // Share the read queue among all inputstreams // TODO: share for partition tables under disagg
-    auto read_queue = std::make_shared<DM::SharedBlockQueue>(log);
+    auto read_queue = std::make_shared<DM::ActiveSegmentReadTaskQueue>(num_streams, log);
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
     auto packed_read_tasks = packSegmentReadTasks(
@@ -724,7 +724,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     });
 }
 
-struct SrouceOpBuilder
+struct SourceOpBuilder
 {
     const String & tracing_id;
     const DM::ColumnDefinesPtr & column_defines;
@@ -764,7 +764,7 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
     size_t num_streams)
 {
     // Share the read queue among all source ops // TODO: share for partition tables under disagg
-    auto read_queue = std::make_shared<DM::SharedBlockQueue>(log);
+    auto read_queue = std::make_shared<DM::ActiveSegmentReadTaskQueue>(num_streams, log);
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
     auto packed_read_tasks = packSegmentReadTasks(
@@ -776,7 +776,7 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
         extra_table_id_index);
 
     RUNTIME_CHECK(num_streams > 0, num_streams);
-    SrouceOpBuilder builder{
+    SourceOpBuilder builder{
         .tracing_id = log->identifier(),
         .column_defines = column_defines,
         .extra_table_id_index = extra_table_id_index,

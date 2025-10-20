@@ -22,7 +22,7 @@
 #include <Interpreters/Context_fwd.h>
 #include <Storages/DeltaMerge/ColumnDefine_fwd.h>
 #include <Storages/DeltaMerge/Filter/RSOperator_fwd.h>
-#include <Storages/DeltaMerge/ReadThread/SharedBlockQueue.h>
+#include <Storages/DeltaMerge/ReadThread/ActiveSegmentReadTaskQueue.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/RNWorkers_fwd.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
@@ -112,7 +112,7 @@ private:
         const Context & db_context,
         DM::SegmentReadTasks && read_tasks,
         const DM::ColumnDefinesPtr & column_defines,
-        DM::SharedBlockQueuePtr & read_queue,
+        DM::ActiveSegmentReadTaskQueuePtr & read_queue,
         size_t num_streams,
         int extra_table_id_index);
     void buildRemoteSegmentInputStreams(

@@ -83,6 +83,11 @@ bool SegmentReadTasksWrapper::empty() const
     return ordered_tasks.empty() && unordered_tasks.empty();
 }
 
+size_t SegmentReadTasksWrapper::size() const
+{
+    return ordered_tasks.size() + unordered_tasks.size();
+}
+
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
     MemoryTrackerSetter setter(true, mem_tracker.get());
@@ -103,15 +108,17 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
         t->dm_context->physical_table_id);
     LOG_DEBUG(
         log,
-        "buildInputStream: read_mode={}, pool_id={} segment={}",
+        "buildInputStream: read_mode={} keyspace={} table_id={} pool_id={} segment={}",
         magic_enum::enum_name(read_mode),
+        keyspace_id,
+        table_id,
         pool_id,
         t);
     return stream;
 }
 
 SegmentReadTaskPool::SegmentReadTaskPool(
-    const SharedBlockQueuePtr & shared_q_,
+    const ActiveSegmentReadTaskQueuePtr & shared_q_,
     int extra_table_id_index_,
     const ColumnDefines & columns_to_read_,
     const PushDownExecutorPtr & executor_,
@@ -122,11 +129,13 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     AfterSegmentRead after_segment_read_,
     const String & tracing_id,
     bool enable_read_thread_,
-    Int64 num_streams_,
+    Int64 /*num_streams_*/,
     KeyspaceID keyspace_id_,
     TableID table_id_,
     const String & res_group_name_)
-    : pool_id(nextPoolId())
+    : keyspace_id(keyspace_id_)
+    , table_id(table_id_)
+    , pool_id(nextPoolId())
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
     , extra_table_id_index(extra_table_id_index_)
     , columns_to_read(columns_to_read_)
@@ -141,49 +150,54 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , log(Logger::get(tracing_id))
     , unordered_input_stream_ref_count(0)
     , exception_happened(false)
-    // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
-    // to encounter empty queues frequently, resulting in too much waiting and thread context switching.
-    // We limit the length of block queue to be 1.5 times of `num_streams_`, and in the extreme case,
-    // when `num_streams_` is 1, `block_slot_limit` is at least 2.
-    , block_slot_limit(std::ceil(num_streams_ * 1.5))
-    // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
-    // situations where the computation may be faster and the storage layer may not be able to keep up.
-    , active_segment_limit(std::max(num_streams_, 2))
-    , keyspace_id(keyspace_id_)
-    , table_id(table_id_)
     , res_group_name(res_group_name_)
 {
     RUNTIME_CHECK_MSG(
         shared_q != nullptr,
-        "SegmentReadTaskPool requires a valid SharedBlockQueuePtr, tracing_id={}",
+        "SegmentReadTaskPool requires a valid ActiveSegmentReadTaskQueuePtr, tracing_id={}",
         tracing_id);
 
     if (!tasks_wrapper.empty())
     {
-        shared_q->addTableTask(table_id);
+        shared_q->addTableTask(table_id, total_read_tasks);
     }
 }
 
 SegmentReadTaskPool::~SegmentReadTaskPool()
 {
-    LOG_DEBUG(log, "SegmentReadTaskPool finished. table_id={} pool_id={}", table_id, pool_id);
+    LOG_DEBUG(log, "SegmentReadTaskPool finished. keyspace={} table_id={} pool_id={}", keyspace_id, table_id, pool_id);
 }
 
 void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
 {
     after_segment_read(seg->dm_context, seg->segment);
     bool pool_finished = false;
+    size_t num_act_segs = shared_q->finishActiveSegment(table_id, seg->getGlobalSegmentID());
+    size_t num_task_left = 0;
     {
         std::lock_guard lock(mutex);
-        active_segment_ids.erase(seg->getGlobalSegmentID());
-        pool_finished = active_segment_ids.empty() && tasks_wrapper.empty();
+        num_task_left = tasks_wrapper.size();
+        pool_finished = num_act_segs == 0 && tasks_wrapper.empty();
     }
-    LOG_DEBUG(log, "finishSegment pool_id={} segment={} pool_finished={}", pool_id, seg, pool_finished);
+    LOG_DEBUG(
+        log,
+        "finishSegment pool_id={} segment={} num_act_segs={} num_task_left={} pool_finished={}",
+        pool_id,
+        seg,
+        num_act_segs,
+        num_task_left,
+        pool_finished);
+
     if (pool_finished)
     {
         // notify the queue this table_id is finished only when all segments are finished.
-        shared_q->removeTableTask(table_id);
-        LOG_INFO(log, "SegmentReadTaskPool all segment are finished, table_id={} pool_id={}", table_id, pool_id);
+        shared_q->removeTableTask(table_id, pool_id);
+        LOG_DEBUG(
+            log,
+            "SegmentReadTaskPool all segments are finished, keyspace={} table_id={} pool_id={}",
+            keyspace_id,
+            table_id,
+            pool_id);
     }
 }
 
@@ -195,10 +209,13 @@ SegmentReadTaskPtr SegmentReadTaskPool::nextTask()
 
 SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
 {
-    std::lock_guard lock(mutex);
-    auto t = tasks_wrapper.getTask(seg_id);
-    RUNTIME_CHECK(t != nullptr, pool_id, seg_id);
-    active_segment_ids.insert(seg_id);
+    SegmentReadTaskPtr t;
+    {
+        std::lock_guard lock(mutex);
+        t = tasks_wrapper.getTask(seg_id);
+        RUNTIME_CHECK(t != nullptr, pool_id, seg_id);
+    }
+    shared_q->addActiveSegment(table_id, seg_id);
     return t;
 }
 
@@ -241,11 +258,12 @@ MergingSegments::iterator SegmentReadTaskPool::scheduleSegment(
     bool enable_data_sharing)
 {
     auto target = segments.end();
-    std::lock_guard lock(mutex);
-    if (getFreeActiveSegmentsUnlock() <= 0)
+    if (getFreeActiveSegments() <= 0)
     {
         return target;
     }
+
+    std::lock_guard lock(mutex);
     static constexpr int max_iter_count = 32;
     int iter_count = 0;
     const auto & tasks = tasks_wrapper.getTasks();
@@ -333,18 +351,12 @@ Int64 SegmentReadTaskPool::decreaseUnorderedInputStreamRefCount()
 
 Int64 SegmentReadTaskPool::getFreeBlockSlots() const
 {
-    return block_slot_limit - shared_q->getBlockStat().pendingCount();
+    return shared_q->getFreeBlockSlots();
 }
 
 Int64 SegmentReadTaskPool::getFreeActiveSegments() const
 {
-    std::lock_guard lock(mutex);
-    return getFreeActiveSegmentsUnlock();
-}
-
-Int64 SegmentReadTaskPool::getFreeActiveSegmentsUnlock() const
-{
-    return active_segment_limit - static_cast<Int64>(active_segment_ids.size());
+    return shared_q->getFreeActiveSegments();
 }
 
 Int64 SegmentReadTaskPool::getPendingSegmentCount() const
