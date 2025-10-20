@@ -32,7 +32,6 @@
 #include <Flash/Coprocessor/DAGStorageInterpreter.h>
 #include <Flash/Coprocessor/InterpreterUtils.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
-#include <Flash/Coprocessor/TableScanPipelineExecBuilder.h>
 #include <Flash/Coprocessor/collectOutputFieldTypes.h>
 #include <Interpreters/Context.h>
 #include <Interpreters/SharedContexts/Disagg.h>
@@ -1160,9 +1159,10 @@ void DAGStorageInterpreter::buildLocalStreamsForPhysicalTable(
 
 void DAGStorageInterpreter::buildLocalExecForPhysicalTable(
     PipelineExecutorContext & exec_context,
-    TableScanPipelineExecGroupBuilder & group_builder,
+    PipelineExecGroupBuilder & group_builder,
     const TableID & table_id,
     const SelectQueryInfo & query_info,
+    DM::Remote::DisaggReadSnapshotPtr & disagg_snap,
     size_t max_block_size)
 {
     size_t region_num = query_info.mvcc_query_info->regions_query_info.size();
@@ -1211,7 +1211,11 @@ void DAGStorageInterpreter::buildLocalExecForPhysicalTable(
             validateQueryInfo(*query_info.mvcc_query_info, learner_read_snapshot, tmt, log);
 
             // Only after all sourceOps are built and verified, we add the snapshot to group_builder
-            group_builder.addPhysicalTableTask(table_id, std::move(table_snap));
+            if (table_snap != nullptr)
+            {
+                RUNTIME_CHECK(disagg_snap != nullptr);
+                disagg_snap->addTask(table_id, std::move(table_snap));
+            }
             break;
         }
         catch (RegionException & e)
@@ -1343,8 +1347,8 @@ void DAGStorageInterpreter::buildLocalExec(
             query_info.read_queue != nullptr,
             "read_queue should not be null, table_id={}",
             physical_table_id);
-        TableScanPipelineExecGroupBuilder builder(query_info.read_queue, disaggregated_snap);
-        buildLocalExecForPhysicalTable(exec_context, builder, physical_table_id, query_info, max_block_size);
+        PipelineExecGroupBuilder builder;
+        buildLocalExecForPhysicalTable(exec_context, builder, physical_table_id, query_info, disaggregated_snap, max_block_size);
 
         if (has_multiple_partitions)
             builder_pool.add(builder);

@@ -16,7 +16,6 @@
 #include <Interpreters/Context.h>
 #include <Operators/DMSegmentThreadSourceOp.h>
 #include <Storages/DeltaMerge/DMContext.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB
 {
