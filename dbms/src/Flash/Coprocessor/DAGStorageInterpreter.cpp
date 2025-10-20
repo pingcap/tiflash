@@ -1382,6 +1382,7 @@ void DAGStorageInterpreter::buildLocalExec(
         assert(!table_query_infos.empty()); // check at start of this function
         auto read_queue = table_query_infos.begin()->second.read_queue;
         read_queue->finishQueueIfEmpty();
+        exec_context.addStorageTaskQueue(read_queue);
     }
     else
     {
@@ -1389,6 +1390,7 @@ void DAGStorageInterpreter::buildLocalExec(
         {
             const SelectQueryInfo & query_info = table_query_info.second;
             query_info.read_queue->finishQueueIfEmpty();
+            exec_context.addStorageTaskQueue(query_info.read_queue);
         }
     }
 
