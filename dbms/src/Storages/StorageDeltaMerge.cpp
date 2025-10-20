@@ -1141,7 +1141,7 @@ UInt64 StorageDeltaMerge::onSyncGc(Int64 limit, const GCOptions & gc_options)
 // just for testing
 size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM::RowKeyRange & range)
 {
-    SharedBlockQueuePtr read_queue = std::make_shared<SharedBlockQueue>(2, Logger::get("getRows"));
+    auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get("getRows"));
 
     ColumnDefines to_read{getExtraHandleColumnDefine(store->isCommonHandle())};
     auto stream = store->read(
@@ -1172,7 +1172,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
 // just for testing
 DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context, size_t total_rows, size_t delete_rows)
 {
-    SharedBlockQueuePtr read_queue = std::make_shared<SharedBlockQueue>(2, Logger::get("getRange"));
+    auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get("getRange"));
 
     auto start_index = rand() % (total_rows - delete_rows + 1); // NOLINT(cert-msc50-cpp)
     DM::RowKeyRange range = DM::RowKeyRange::newAll(store->isCommonHandle(), store->getRowKeyColumnSize());

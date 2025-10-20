@@ -21,7 +21,7 @@
 #include <Storages/DeltaMerge/DMContext_fwd.h>
 #include <Storages/DeltaMerge/Filter/PushDownExecutor.h>
 #include <Storages/DeltaMerge/ReadMode.h>
-#include <Storages/DeltaMerge/ReadThread/SharedBlockQueue.h>
+#include <Storages/DeltaMerge/ReadThread/ActiveSegmentReadTaskQueue.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
 #include <Storages/DeltaMerge/SegmentReadTaskPool_fwd.h>
@@ -63,7 +63,7 @@ class SegmentReadTaskPool
 {
 public:
     SegmentReadTaskPool(
-        const SharedBlockQueuePtr & shared_q_,
+        const ActiveSegmentReadTaskQueuePtr & shared_q_,
         int extra_table_id_index_,
         const ColumnDefines & columns_to_read_,
         const PushDownExecutorPtr & executor_,
@@ -165,7 +165,7 @@ private:
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
     // std::unordered_set<GlobalSegmentID> active_segment_ids;
-    SharedBlockQueuePtr shared_q;
+    ActiveSegmentReadTaskQueuePtr shared_q;
     LoggerPtr log;
 
     std::atomic<Int64> unordered_input_stream_ref_count;

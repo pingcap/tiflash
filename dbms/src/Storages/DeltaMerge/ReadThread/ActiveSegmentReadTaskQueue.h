@@ -71,10 +71,14 @@ private:
     std::atomic<Int64> total_rows;
 };
 
-class SharedBlockQueue
+// ActiveSegmentReadTaskQueue manages the blocks read from active segments.
+// If the instance is shared among multiple SegmentReadTaskPools, the instance
+// limits the total number of active segments and the total number of pending blocks
+// among all SegmentReadTaskPools. a.k.a among all physical tables.
+class ActiveSegmentReadTaskQueue
 {
 public:
-    explicit SharedBlockQueue(size_t max_streams, LoggerPtr log_)
+    explicit ActiveSegmentReadTaskQueue(size_t max_streams, LoggerPtr log_)
         : // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
         // to encounter empty queues frequently, resulting in too much waiting and thread context switching.
         // We limit the length of block queue to be 1.5 times of `num_streams_`, and in the extreme case,
@@ -86,7 +90,7 @@ public:
         , log(std::move(log_))
     {}
 
-    ~SharedBlockQueue()
+    ~ActiveSegmentReadTaskQueue()
     {
         auto [pop_times, pop_empty_times, peak_blocks_in_queue] = q.getStat();
         auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
@@ -97,7 +101,7 @@ public:
         auto total_rows = blk_stat.totalRows();
         LOG_INFO(
             log,
-            "SharedBlockQueue finished. pop={} pop_empty={} pop_empty_ratio={:.3f} "
+            "ActiveSegmentReadTaskQueue finished. pop={} pop_empty={} pop_empty_ratio={:.3f} "
             "active_segment_limit={} peak_active_segments={} "
             "block_slot_limit={} peak_blocks_in_queue={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
             "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
@@ -246,6 +250,6 @@ private:
     size_t peak_active_segments = 0;
     std::unordered_set<GlobalSegmentID> active_segment_ids;
 };
-using SharedBlockQueuePtr = std::shared_ptr<SharedBlockQueue>;
+using ActiveSegmentReadTaskQueuePtr = std::shared_ptr<ActiveSegmentReadTaskQueue>;
 
 } // namespace DB::DM

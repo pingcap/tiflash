@@ -93,7 +93,7 @@ protected:
     SegmentReadTaskPoolPtr createSegmentReadTaskPool(const std::vector<PageIdU64> & seg_ids)
     {
         size_t num_streams = 1;
-        auto read_queue = std::make_shared<DM::SharedBlockQueue>(num_streams);
+        auto read_queue = std::make_shared<DM::ActiveSegmentReadTaskQueue>(num_streams);
         auto dm_context = createDMContext();
         return std::make_shared<SegmentReadTaskPool>(
             read_queue,

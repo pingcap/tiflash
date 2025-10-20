@@ -111,7 +111,7 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
 }
 
 SegmentReadTaskPool::SegmentReadTaskPool(
-    const SharedBlockQueuePtr & shared_q_,
+    const ActiveSegmentReadTaskQueuePtr & shared_q_,
     int extra_table_id_index_,
     const ColumnDefines & columns_to_read_,
     const PushDownExecutorPtr & executor_,
@@ -147,7 +147,7 @@ SegmentReadTaskPool::SegmentReadTaskPool(
 {
     RUNTIME_CHECK_MSG(
         shared_q != nullptr,
-        "SegmentReadTaskPool requires a valid SharedBlockQueuePtr, tracing_id={}",
+        "SegmentReadTaskPool requires a valid ActiveSegmentReadTaskQueuePtr, tracing_id={}",
         tracing_id);
 
     if (!tasks_wrapper.empty())
