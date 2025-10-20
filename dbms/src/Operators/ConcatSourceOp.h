@@ -333,7 +333,6 @@ protected:
     }
 
 private:
-private:
     std::vector<PipelineExecWithStatus> exec_pool;
     size_t cur_exec_index;
 
@@ -344,7 +343,8 @@ private:
 class ConcatBuilderPool
 {
 public:
-    explicit ConcatBuilderPool(size_t expect_size)
+    explicit ConcatBuilderPool(size_t expect_size, bool use_unordered_concat_ = false)
+        : use_unordered_concat(use_unordered_concat_)
     {
         RUNTIME_CHECK(expect_size > 0);
         pool.resize(expect_size);
@@ -379,7 +379,23 @@ public:
             }
             else
             {
-                result_builder.addConcurrency(std::make_unique<ConcatSourceOp>(exec_context, req_id, builders));
+                if (use_unordered_concat)
+                {
+                    LOG_INFO(
+                        Logger::get(req_id),
+                        "Using UnorderedConcatSourceOp to concat {} source ops",
+                        builders.size());
+                    result_builder.addConcurrency(
+                        std::make_unique<UnorderedConcatSourceOp>(exec_context, req_id, builders));
+                }
+                else
+                {
+                    LOG_INFO(
+                        Logger::get(req_id),
+                        "Using ConcatSourceOp to concat {} source ops",
+                        builders.size());
+                    result_builder.addConcurrency(std::make_unique<ConcatSourceOp>(exec_context, req_id, builders));
+                }
             }
         }
     }
@@ -387,5 +403,6 @@ public:
 private:
     std::vector<std::vector<PipelineExecBuilder>> pool;
     size_t pre_index = 0;
+    bool use_unordered_concat;
 };
 } // namespace DB
