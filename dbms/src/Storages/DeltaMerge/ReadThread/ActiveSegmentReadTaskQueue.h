@@ -20,6 +20,34 @@
 namespace DB::DM
 {
 
+struct TableTaskStat
+{
+    size_t num_read_tasks = 0;
+    size_t num_active_segs = 0;
+    size_t num_finished_segs = 0;
+};
+} // namespace DB::DM
+
+template <>
+struct fmt::formatter<DB::DM::TableTaskStat>
+{
+    static constexpr auto parse(format_parse_context & ctx) { return ctx.begin(); }
+
+    template <typename FormatContext>
+    auto format(const DB::DM::TableTaskStat & s, FormatContext & ctx) const
+    {
+        return fmt::format_to(
+            ctx.out(),
+            "{{tot:{} act:{} fin:{}}}",
+            s.num_read_tasks,
+            s.num_active_segs,
+            s.num_finished_segs);
+    }
+};
+
+namespace DB::DM
+{
+
 // Statistics of blocks pushed.
 // All methods are thread-safe.
 class BlockStat
@@ -124,10 +152,12 @@ public:
     // === table task management ===
 
     // Add a table task.
-    void addTableTask(TableID table_id)
+    void addTableTask(TableID table_id, size_t num_read_tasks)
     {
         std::unique_lock lock(mu);
-        tables.emplace(table_id);
+        tables[table_id] = TableTaskStat{
+            .num_read_tasks = num_read_tasks,
+        };
     }
 
     // Remove a table task without finishing the queue.
@@ -138,7 +168,7 @@ public:
     }
 
     // Remove a table task. If there is no any table task, finish the queue.
-    void removeTableTask(TableID table_id)
+    void removeTableTask(TableID table_id, UInt64 pool_id)
     {
         String table_id_remain;
         size_t remain_count = 0;
@@ -156,8 +186,9 @@ public:
 
         LOG_INFO(
             log,
-            "removeTableTask table_id={} remain_count={} remain_table_ids={}",
+            "all segments are finished, table_id={} pool_id={} remain_count={} remain_table_ids={}",
             table_id,
+            pool_id,
             remain_count,
             table_id_remain);
     }
@@ -190,18 +221,41 @@ public:
         return active_segment_limit - static_cast<Int64>(active_segment_ids.size());
     }
 
-    void addActiveSegment(const GlobalSegmentID & seg_id)
+    void addActiveSegment(TableID table_id, const GlobalSegmentID & seg_id)
     {
         std::unique_lock lock(mu);
         active_segment_ids.emplace(seg_id);
         peak_active_segments = std::max(peak_active_segments, active_segment_ids.size());
+        // increase the counter of active segments for the table_id
+        auto iter = tables.find(table_id);
+        RUNTIME_CHECK_MSG(
+            iter != tables.end(),
+            "table_id not found from ActiveSegmentReadTaskQueue, table_id={} tables={}",
+            table_id,
+            tables);
+        iter->second.num_active_segs++;
     }
 
-    bool eraseActiveSegment(const GlobalSegmentID & seg_id)
+    size_t finishActiveSegment(TableID table_id, const GlobalSegmentID & seg_id)
     {
         std::unique_lock lock(mu);
         active_segment_ids.erase(seg_id);
-        return active_segment_ids.empty();
+        auto iter = tables.find(table_id);
+        RUNTIME_CHECK_MSG(
+            iter != tables.end(),
+            "table_id not found from ActiveSegmentReadTaskQueue, table_id={} tables={}",
+            table_id,
+            tables);
+        RUNTIME_CHECK_MSG(
+            iter->second.num_active_segs >= 1,
+            "table_id has invalid active segments number, table_id={} table_stat={} tables={}",
+            table_id,
+            iter->second,
+            tables);
+        // decrease the counter of active segments for the table_id
+        --iter->second.num_active_segs;
+        ++iter->second.num_finished_segs;
+        return iter->second.num_active_segs;
     }
 
     // === queue operations ===
@@ -246,7 +300,8 @@ private:
     LoggerPtr log;
 
     mutable std::mutex mu;
-    std::unordered_set<TableID> tables;
+
+    std::unordered_map<TableID, TableTaskStat> tables;
     size_t peak_active_segments = 0;
     std::unordered_set<GlobalSegmentID> active_segment_ids;
 };

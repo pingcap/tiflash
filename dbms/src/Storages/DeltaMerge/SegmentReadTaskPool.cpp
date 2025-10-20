@@ -83,6 +83,11 @@ bool SegmentReadTasksWrapper::empty() const
     return ordered_tasks.empty() && unordered_tasks.empty();
 }
 
+size_t SegmentReadTasksWrapper::size() const
+{
+    return ordered_tasks.size() + unordered_tasks.size();
+}
+
 BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t)
 {
     MemoryTrackerSetter setter(true, mem_tracker.get());
@@ -103,8 +108,10 @@ BlockInputStreamPtr SegmentReadTaskPool::buildInputStream(SegmentReadTaskPtr & t
         t->dm_context->physical_table_id);
     LOG_DEBUG(
         log,
-        "buildInputStream: read_mode={}, pool_id={} segment={}",
+        "buildInputStream: read_mode={} keyspace={} table_id={} pool_id={} segment={}",
         magic_enum::enum_name(read_mode),
+        keyspace_id,
+        table_id,
         pool_id,
         t);
     return stream;
@@ -126,7 +133,9 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     KeyspaceID keyspace_id_,
     TableID table_id_,
     const String & res_group_name_)
-    : pool_id(nextPoolId())
+    : keyspace_id(keyspace_id_)
+    , table_id(table_id_)
+    , pool_id(nextPoolId())
     , mem_tracker(current_memory_tracker == nullptr ? nullptr : current_memory_tracker->shared_from_this())
     , extra_table_id_index(extra_table_id_index_)
     , columns_to_read(columns_to_read_)
@@ -141,8 +150,6 @@ SegmentReadTaskPool::SegmentReadTaskPool(
     , log(Logger::get(tracing_id))
     , unordered_input_stream_ref_count(0)
     , exception_happened(false)
-    , keyspace_id(keyspace_id_)
-    , table_id(table_id_)
     , res_group_name(res_group_name_)
 {
     RUNTIME_CHECK_MSG(
@@ -152,30 +159,45 @@ SegmentReadTaskPool::SegmentReadTaskPool(
 
     if (!tasks_wrapper.empty())
     {
-        shared_q->addTableTask(table_id);
+        shared_q->addTableTask(table_id, total_read_tasks);
     }
 }
 
 SegmentReadTaskPool::~SegmentReadTaskPool()
 {
-    LOG_DEBUG(log, "SegmentReadTaskPool finished. table_id={} pool_id={}", table_id, pool_id);
+    LOG_DEBUG(log, "SegmentReadTaskPool finished. keyspace={} table_id={} pool_id={}", keyspace_id, table_id, pool_id);
 }
 
 void SegmentReadTaskPool::finishSegment(const SegmentReadTaskPtr & seg)
 {
     after_segment_read(seg->dm_context, seg->segment);
     bool pool_finished = false;
-    bool no_active_seg = shared_q->eraseActiveSegment(seg->getGlobalSegmentID());
+    size_t num_act_segs = shared_q->finishActiveSegment(table_id, seg->getGlobalSegmentID());
+    size_t num_task_left = 0;
     {
         std::lock_guard lock(mutex);
-        pool_finished = no_active_seg && tasks_wrapper.empty();
+        num_task_left = tasks_wrapper.size();
+        pool_finished = num_act_segs == 0 && tasks_wrapper.empty();
     }
-    LOG_DEBUG(log, "finishSegment pool_id={} segment={} pool_finished={}", pool_id, seg, pool_finished);
+    LOG_DEBUG(
+        log,
+        "finishSegment pool_id={} segment={} num_act_segs={} num_task_left={} pool_finished={}",
+        pool_id,
+        seg,
+        num_act_segs,
+        num_task_left,
+        pool_finished);
+
     if (pool_finished)
     {
         // notify the queue this table_id is finished only when all segments are finished.
-        shared_q->removeTableTask(table_id);
-        LOG_INFO(log, "SegmentReadTaskPool all segment are finished, table_id={} pool_id={}", table_id, pool_id);
+        shared_q->removeTableTask(table_id, pool_id);
+        LOG_DEBUG(
+            log,
+            "SegmentReadTaskPool all segments are finished, keyspace={} table_id={} pool_id={}",
+            keyspace_id,
+            table_id,
+            pool_id);
     }
 }
 
@@ -193,7 +215,7 @@ SegmentReadTaskPtr SegmentReadTaskPool::getTask(const GlobalSegmentID & seg_id)
         t = tasks_wrapper.getTask(seg_id);
         RUNTIME_CHECK(t != nullptr, pool_id, seg_id);
     }
-    shared_q->addActiveSegment(seg_id);
+    shared_q->addActiveSegment(table_id, seg_id);
     return t;
 }
 

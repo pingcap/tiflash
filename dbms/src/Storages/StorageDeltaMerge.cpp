@@ -1158,7 +1158,7 @@ size_t getRows(DM::DeltaMergeStorePtr & store, const Context & context, const DM
         /*tracing_id*/ "getRows",
         /*keep_order*/ false)[0];
 
-    read_queue->finishQueue();
+    read_queue->finishQueueIfEmpty();
     stream->readPrefix();
     Block block;
     size_t rows = 0;
@@ -1192,7 +1192,7 @@ DM::RowKeyRange getRange(DM::DeltaMergeStorePtr & store, const Context & context
             /*tracing_id*/ "getRange",
             /*keep_order*/ false)[0];
 
-        read_queue->finishQueue();
+        read_queue->finishQueueIfEmpty();
         stream->readPrefix();
         Block block;
         size_t index = 0;

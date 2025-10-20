@@ -50,6 +50,8 @@ public:
 
     bool empty() const;
 
+    size_t size() const;
+
 private:
     bool enable_read_thread;
     SegmentReadTasks ordered_tasks;
@@ -121,7 +123,9 @@ public:
     size_t getTotalReadTasks() const { return total_read_tasks; }
 
 public:
-    const uint64_t pool_id;
+    const KeyspaceID keyspace_id;
+    const TableID table_id;
+    const UInt64 pool_id;
 
     // The memory tracker of MPPTask.
     const MemoryTrackerPtr mem_tracker;
@@ -179,8 +183,6 @@ private:
     // std::once_flag and std::call_once to prevent duplicated add.
     std::once_flag add_to_scheduler;
 
-    const KeyspaceID keyspace_id;
-    const TableID table_id;
     const String res_group_name;
     std::mutex ru_mu;
     std::atomic<Int64> last_time_check_ru = 0;

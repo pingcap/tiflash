@@ -178,6 +178,7 @@ void PipelineExecutorContext::cancel()
     bool origin_value = false;
     if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
     {
+        // TODO: Add ActiveSegmentReadTaskQueue here to cancel storage layer read tasks
         cancelSharedQueues();
         cancelOneTimeFutures();
         if (likely(dag_context))
