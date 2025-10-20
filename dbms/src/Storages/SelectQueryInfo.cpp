@@ -31,6 +31,7 @@ SelectQueryInfo::SelectQueryInfo(const SelectQueryInfo & rhs)
     , req_id(rhs.req_id)
     , keep_order(rhs.keep_order)
     , is_fast_scan(rhs.is_fast_scan)
+    , read_queue(rhs.read_queue)
 {}
 
 SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
@@ -41,6 +42,7 @@ SelectQueryInfo::SelectQueryInfo(SelectQueryInfo && rhs) noexcept
     , req_id(std::move(rhs.req_id))
     , keep_order(rhs.keep_order)
     , is_fast_scan(rhs.is_fast_scan)
+    , read_queue(std::move(rhs.read_queue))
 {}
 
 } // namespace DB

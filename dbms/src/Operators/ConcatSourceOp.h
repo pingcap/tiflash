@@ -390,10 +390,7 @@ public:
                 }
                 else
                 {
-                    LOG_INFO(
-                        Logger::get(req_id),
-                        "Using ConcatSourceOp to concat {} source ops",
-                        builders.size());
+                    LOG_INFO(Logger::get(req_id), "Using ConcatSourceOp to concat {} source ops", builders.size());
                     result_builder.addConcurrency(std::make_unique<ConcatSourceOp>(exec_context, req_id, builders));
                 }
             }

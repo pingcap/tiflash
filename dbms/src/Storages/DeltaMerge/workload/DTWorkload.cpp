@@ -189,11 +189,13 @@ void DTWorkload::read(const ColumnDefines & columns, int stream_count, T func)
     auto filter = EMPTY_FILTER;
     int excepted_block_size = 1024;
     uint64_t read_ts = ts_gen->get();
+    SharedBlockQueuePtr read_queue = std::make_shared<SharedBlockQueue>(Logger::get());
     auto streams = store->read(
         *context,
         context->getSettingsRef(),
         columns,
         ranges,
+        read_queue,
         stream_count,
         read_ts,
         filter,

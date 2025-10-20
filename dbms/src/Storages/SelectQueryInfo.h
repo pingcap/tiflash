@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <Storages/DeltaMerge/ReadThread/SharedBlockQueue.h>
+
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -54,10 +56,13 @@ struct SelectQueryInfo
     bool keep_order = true;
     bool is_fast_scan = false;
 
+    DM::SharedBlockQueuePtr read_queue;
+
     SelectQueryInfo();
     ~SelectQueryInfo();
 
-    // support copying and moving
+    // Support copying and moving
+    // Note: should update the following functions when adding new members
     SelectQueryInfo(const SelectQueryInfo & rhs);
     SelectQueryInfo(SelectQueryInfo && rhs) noexcept;
 

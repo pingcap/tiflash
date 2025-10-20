@@ -20,6 +20,7 @@
 #include <Flash/Coprocessor/DAGPipeline.h>
 #include <Flash/Coprocessor/FilterConditions.h>
 #include <Flash/Coprocessor/RemoteRequest.h>
+#include <Flash/Coprocessor/TableScanPipelineExecBuilder.h>
 #include <Flash/Coprocessor/TiDBTableScan.h>
 #include <Flash/Pipeline/Exec/PipelineExecBuilder.h>
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
@@ -73,15 +74,16 @@ private:
         const RegionException & e,
         int num_allow_retry);
 
-    DM::Remote::DisaggPhysicalTableReadSnapshotPtr buildLocalStreamsForPhysicalTable(
+    void buildLocalStreamsForPhysicalTable(
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         DAGPipeline & pipeline,
+        DM::Remote::DisaggReadSnapshotPtr & disagg_snap,
         size_t max_block_size);
 
-    DM::Remote::DisaggPhysicalTableReadSnapshotPtr buildLocalExecForPhysicalTable(
+    void buildLocalExecForPhysicalTable(
         PipelineExecutorContext & exec_context,
-        PipelineExecGroupBuilder & group_builder,
+        TableScanPipelineExecGroupBuilder & group_builder,
         const TableID & table_id,
         const SelectQueryInfo & query_info,
         size_t max_block_size);
