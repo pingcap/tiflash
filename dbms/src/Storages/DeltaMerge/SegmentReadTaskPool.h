@@ -148,7 +148,6 @@ public:
     const LoggerPtr & getLogger() const { return log; }
 
 private:
-    Int64 getFreeActiveSegmentsUnlock() const;
     bool exceptionHappened() const;
     void finishSegment(const SegmentReadTaskPtr & seg);
     void pushBlock(Block && block);
@@ -165,9 +164,7 @@ private:
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
-    std::unordered_set<GlobalSegmentID> active_segment_ids;
-    // WorkQueue<Block> q;
-    // BlockStat blk_stat;
+    // std::unordered_set<GlobalSegmentID> active_segment_ids;
     SharedBlockQueuePtr shared_q;
     LoggerPtr log;
 
@@ -181,9 +178,6 @@ private:
     // Since several UnorderedInputStream/UnorderedSourceOp can be read by several threads concurrently, we use
     // std::once_flag and std::call_once to prevent duplicated add.
     std::once_flag add_to_scheduler;
-
-    const Int64 block_slot_limit;
-    const Int64 active_segment_limit;
 
     const KeyspaceID keyspace_id;
     const TableID table_id;

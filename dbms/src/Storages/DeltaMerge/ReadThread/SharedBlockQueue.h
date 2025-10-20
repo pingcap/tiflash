@@ -15,6 +15,7 @@
 #pragma once
 
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
+#include <Storages/DeltaMerge/SegmentReadTask.h>
 
 namespace DB::DM
 {
@@ -73,28 +74,40 @@ private:
 class SharedBlockQueue
 {
 public:
-    explicit SharedBlockQueue(LoggerPtr log_)
-        : log(std::move(log_))
+    explicit SharedBlockQueue(size_t max_streams, LoggerPtr log_)
+        : // If the queue is too short, only 1 in the extreme case, it may cause the computation thread
+        // to encounter empty queues frequently, resulting in too much waiting and thread context switching.
+        // We limit the length of block queue to be 1.5 times of `num_streams_`, and in the extreme case,
+        // when `num_streams_` is 1, `block_slot_limit` is at least 2.
+        block_slot_limit(std::ceil(std::max(1, max_streams) * 1.5))
+        // Limiting the minimum number of reading segments to 2 is to avoid, as much as possible,
+        // situations where the computation may be faster and the storage layer may not be able to keep up.
+        , active_segment_limit(std::max(2, max_streams))
+        , log(std::move(log_))
     {}
 
     ~SharedBlockQueue()
     {
-        auto [pop_times, pop_empty_times, max_queue_size] = q.getStat();
+        auto [pop_times, pop_empty_times, peak_blocks_in_queue] = q.getStat();
         auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
         auto total_count = blk_stat.totalCount();
         auto total_bytes = blk_stat.totalBytes();
         auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
-        auto approx_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
+        auto approx_max_pending_block_bytes = blk_avg_bytes * peak_blocks_in_queue;
         auto total_rows = blk_stat.totalRows();
         LOG_INFO(
             log,
             "SharedBlockQueue finished. pop={} pop_empty={} pop_empty_ratio={:.3f} "
-            "max_queue_size={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
+            "active_segment_limit={} peak_active_segments={} "
+            "block_slot_limit={} peak_blocks_in_queue={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
             "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
             pop_times,
             pop_empty_times,
             pop_empty_ratio,
-            max_queue_size,
+            active_segment_limit,
+            peak_active_segments,
+            block_slot_limit,
+            peak_blocks_in_queue,
             blk_avg_bytes,
             approx_max_pending_block_bytes / 1024.0 / 1024.0,
             total_count,
@@ -104,17 +117,23 @@ public:
             total_rows > 0 ? total_bytes / total_rows : 0);
     }
 
+    // === table task management ===
+
+    // Add a table task.
     void addTableTask(TableID table_id)
     {
         std::unique_lock lock(mu);
         tables.emplace(table_id);
     }
 
+    // Remove a table task without finishing the queue.
     void resetTableTask(TableID table_id)
     {
         std::unique_lock lock(mu);
         tables.erase(table_id);
     }
+
+    // Remove a table task. If there is no any table task, finish the queue.
     void removeTableTask(TableID table_id)
     {
         String table_id_remain;
@@ -139,30 +158,8 @@ public:
             table_id_remain);
     }
 
-    void pushBlock(Block && block)
-    {
-        blk_stat.push(block);
-        q.push(std::move(block), nullptr);
-    }
-    void popBlock(Block & block)
-    {
-        q.pop(block);
-        blk_stat.pop(block);
-    }
-    bool tryPopBlock(Block & block)
-    {
-        if (q.tryPop(block))
-        {
-            blk_stat.pop(block);
-            return true;
-        }
-        else
-        {
-            return false;
-        }
-    }
-    void registerTask(TaskPtr && task) { q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ); }
-
+    // Finish the queue if there is no any table task.
+    // Must be called after all table tasks are added.
     void finishQueueIfEmpty()
     {
         String table_id_remain;
@@ -177,20 +174,77 @@ public:
         LOG_INFO(log, "finishQueueIfEmpty called, remain_table_ids={}", table_id_remain);
     }
 
+    // Finish the queue unconditionally. Used when aborting when exception happens.
     void finishQueue() { q.finish(); }
 
-    const BlockStat & getBlockStat() const { return blk_stat; }
+    // === scheduling limit helpers ===
+
+    Int64 getFreeBlockSlots() const { return block_slot_limit - blk_stat.pendingCount(); }
+    Int64 getFreeActiveSegments() const
+    {
+        std::unique_lock lock(mu);
+        return active_segment_limit - static_cast<Int64>(active_segment_ids.size());
+    }
+
+    void addActiveSegment(const GlobalSegmentID & seg_id)
+    {
+        std::unique_lock lock(mu);
+        active_segment_ids.emplace(seg_id);
+        peak_active_segments = std::max(peak_active_segments, active_segment_ids.size());
+    }
+
+    bool eraseActiveSegment(const GlobalSegmentID & seg_id)
+    {
+        std::unique_lock lock(mu);
+        active_segment_ids.erase(seg_id);
+        return active_segment_ids.empty();
+    }
+
+    // === queue operations ===
+
+    void pushBlock(Block && block)
+    {
+        blk_stat.push(block);
+        q.push(std::move(block), nullptr);
+    }
+
+    // Blocking pop
+    void popBlock(Block & block)
+    {
+        q.pop(block);
+        blk_stat.pop(block);
+    }
+
+    // Non-blocking pop
+    bool tryPopBlock(Block & block)
+    {
+        if (q.tryPop(block))
+        {
+            blk_stat.pop(block);
+            return true;
+        }
+        else
+        {
+            return false;
+        }
+    }
+
+    void registerTask(TaskPtr && task) { q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ); }
 
 private:
     WorkQueue<Block> q;
 
+    const Int64 block_slot_limit;
+    const Int64 active_segment_limit;
     // Statistics of blocks pushed into the queue.
     BlockStat blk_stat;
 
     LoggerPtr log;
 
-    std::mutex mu;
+    mutable std::mutex mu;
     std::unordered_set<TableID> tables;
+    size_t peak_active_segments = 0;
+    std::unordered_set<GlobalSegmentID> active_segment_ids;
 };
 using SharedBlockQueuePtr = std::shared_ptr<SharedBlockQueue>;
 

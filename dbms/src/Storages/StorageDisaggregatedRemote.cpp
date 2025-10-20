@@ -691,7 +691,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     DAGPipeline & pipeline)
 {
     // Share the read queue among all inputstreams // TODO: share for partition tables under disagg
-    auto read_queue = std::make_shared<DM::SharedBlockQueue>(log);
+    auto read_queue = std::make_shared<DM::SharedBlockQueue>(num_streams, log);
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
     auto packed_read_tasks = packSegmentReadTasks(
@@ -724,7 +724,7 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     });
 }
 
-struct SrouceOpBuilder
+struct SourceOpBuilder
 {
     const String & tracing_id;
     const DM::ColumnDefinesPtr & column_defines;
@@ -764,7 +764,7 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
     size_t num_streams)
 {
     // Share the read queue among all source ops // TODO: share for partition tables under disagg
-    auto read_queue = std::make_shared<DM::SharedBlockQueue>(log);
+    auto read_queue = std::make_shared<DM::SharedBlockQueue>(num_streams, log);
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
     auto packed_read_tasks = packSegmentReadTasks(
@@ -776,7 +776,7 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
         extra_table_id_index);
 
     RUNTIME_CHECK(num_streams > 0, num_streams);
-    SrouceOpBuilder builder{
+    SourceOpBuilder builder{
         .tracing_id = log->identifier(),
         .column_defines = column_defines,
         .extra_table_id_index = extra_table_id_index,

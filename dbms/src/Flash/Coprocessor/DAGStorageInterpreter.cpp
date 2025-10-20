@@ -919,7 +919,8 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
 {
     std::unordered_map<TableID, SelectQueryInfo> ret;
     bool use_unordered_concat = context.getSettingsRef().dt_enable_unordered_concat;
-    auto shared_read_queue = std::make_shared<DM::SharedBlockQueue>(log);
+    // Shared read queue for all physical tables
+    auto shared_read_queue = std::make_shared<DM::SharedBlockQueue>(max_streams, log);
     auto create_query_info = [&](Int64 table_id) -> SelectQueryInfo {
         SelectQueryInfo query_info;
         /// to avoid null point exception
@@ -943,7 +944,8 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
         }
         else
         {
-            query_info.read_queue = std::make_shared<DM::SharedBlockQueue>(Logger::get(query_info.req_id));
+            // Different read queue for different physical table
+            query_info.read_queue = std::make_shared<DM::SharedBlockQueue>(max_streams, Logger::get(query_info.req_id));
         }
         return query_info;
     };
