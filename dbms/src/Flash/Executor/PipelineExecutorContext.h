@@ -40,6 +40,13 @@ class OneTimeNotifyFuture;
 using OneTimeNotifyFuturePtr = std::shared_ptr<OneTimeNotifyFuture>;
 class DAGContext;
 
+namespace DM
+{
+class ActiveSegmentReadTaskQueue;
+using ActiveSegmentReadTaskQueuePtr = std::shared_ptr<ActiveSegmentReadTaskQueue>;
+} // namespace DM
+
+
 class PipelineExecutorContext : private boost::noncopyable
 {
 public:
@@ -146,6 +153,8 @@ public:
 
     void addOneTimeFuture(const OneTimeNotifyFuturePtr & future);
 
+    void addStorageTaskQueue(const DM::ActiveSegmentReadTaskQueuePtr & storage_task_queue);
+
 private:
     bool setExceptionPtr(const std::exception_ptr & exception_ptr_);
 
@@ -159,6 +168,8 @@ private:
     void cancelSharedQueues();
 
     void cancelOneTimeFutures();
+
+    void cancelStorageTaskQueues();
 
     void cancelResultQueueIfNeed();
 
@@ -196,5 +207,7 @@ private:
     std::vector<SharedQueuePtr> shared_queues;
 
     std::vector<OneTimeNotifyFuturePtr> one_time_futures;
+
+    std::vector<DM::ActiveSegmentReadTaskQueuePtr> storage_task_queues;
 };
 } // namespace DB

@@ -620,7 +620,9 @@ std::variant<DM::Remote::RNWorkersPtr, DM::SegmentReadTaskPoolPtr> StorageDisagg
 
     if (enable_read_thread)
     {
-        TableID table_id = table_scan.getLogicalTableID(); // FIXME:
+        // Now for StorageDisaggregated, we create only one SegmentReadTaskPool for segments from all partitions.
+        // Use the logical table id as a workaround.
+        TableID table_id = table_scan.getLogicalTableID(); 
         return std::make_shared<DM::SegmentReadTaskPool>(
             read_queue,
             extra_table_id_index,
@@ -690,7 +692,8 @@ void StorageDisaggregated::buildRemoteSegmentInputStreams(
     size_t num_streams,
     DAGPipeline & pipeline)
 {
-    // Share the read queue among all inputstreams // TODO: share for partition tables under disagg
+    // Share the read queue among all inputstreams. Note that for StorageDisaggregated,
+    // now we create only one SegmentReadTaskPool for segment from all partitions.
     auto read_queue = std::make_shared<DM::ActiveSegmentReadTaskQueue>(num_streams, log);
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
@@ -763,8 +766,10 @@ void StorageDisaggregated::buildRemoteSegmentSourceOps(
     DM::SegmentReadTasks && read_tasks,
     size_t num_streams)
 {
-    // Share the read queue among all source ops // TODO: share for partition tables under disagg
+    // Share the read queue among all source ops. Note that for StorageDisaggregated,
+    // now we create only one SegmentReadTaskPool for segment from all partitions.
     auto read_queue = std::make_shared<DM::ActiveSegmentReadTaskQueue>(num_streams, log);
+    exec_context.addStorageTaskQueue(read_queue);
     // Build the input streams to read blocks from remote segments
     auto [column_defines, extra_table_id_index] = genColumnDefinesForDisaggregatedRead(table_scan);
     auto packed_read_tasks = packSegmentReadTasks(
