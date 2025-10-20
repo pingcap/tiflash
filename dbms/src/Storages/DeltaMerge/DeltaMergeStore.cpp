@@ -1418,8 +1418,12 @@ void DeltaMergeStore::read(
     };
 
     GET_METRIC(tiflash_storage_read_tasks_count).Increment(tasks.size());
-    size_t final_num_stream
-        = enable_read_thread ? std::max(1, num_streams) : std::max(1, std::min(num_streams, tasks.size()));
+    // For limited tasks size under `enable_read_thread`, too much source ops actually lead to
+    // the table scan speed can not match the compute layer speed and lead to more concurrency
+    // overhead. So we limit the final_num_stream to tasks.size() * 4 when read thread is enabled.
+    size_t final_num_stream = enable_read_thread //
+        ? std::max(1, std::min(num_streams, tasks.size() * 4))
+        : std::max(1, std::min(num_streams, tasks.size()));
     auto read_mode = getReadMode(db_context, is_fast_scan, keep_order, executor);
     const auto & final_columns_to_read
         = executor && executor->extra_cast ? *executor->columns_after_cast : columns_to_read;
