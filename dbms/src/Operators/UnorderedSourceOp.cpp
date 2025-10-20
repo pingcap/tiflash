@@ -16,6 +16,7 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/Impls/RFWaitTask.h>
 #include <Operators/UnorderedSourceOp.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB
 {
@@ -46,6 +47,18 @@ UnorderedSourceOp::UnorderedSourceOp(
     else
     {
         io_profile_info = IOProfileInfo::createForLocal(profile_info_ptr);
+    }
+}
+
+UnorderedSourceOp::~UnorderedSourceOp()
+{
+    if (const auto rc_before_decr = task_pool->decreaseUnorderedInputStreamRefCount(); rc_before_decr == 1)
+    {
+        LOG_INFO(
+            log,
+            "All unordered input streams are finished, pool_id={} last_stream_ref_no={}",
+            task_pool->pool_id,
+            ref_no);
     }
 }
 

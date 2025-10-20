@@ -18,7 +18,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggSnapshot_fwd.h>
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/SegmentReadTask.h>
 #include <Storages/KVStore/Types.h>
 #include <Storages/Page/PageDefinesBase.h>
 #include <kvproto/disaggregated.pb.h>

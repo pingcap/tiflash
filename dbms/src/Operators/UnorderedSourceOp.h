@@ -18,7 +18,7 @@
 #include <Flash/Coprocessor/RuntimeFilterMgr.h>
 #include <Operators/Operator.h>
 #include <Storages/DeltaMerge/ReadThread/SegmentReadTaskScheduler.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool_fwd.h>
 
 namespace DB
 {
@@ -37,17 +37,7 @@ public:
         int max_wait_time_ms_ = 0,
         bool is_disagg_ = false);
 
-    ~UnorderedSourceOp() override
-    {
-        if (const auto rc_before_decr = task_pool->decreaseUnorderedInputStreamRefCount(); rc_before_decr == 1)
-        {
-            LOG_INFO(
-                log,
-                "All unordered input streams are finished, pool_id={} last_stream_ref_no={}",
-                task_pool->pool_id,
-                ref_no);
-        }
-    }
+    ~UnorderedSourceOp() override;
 
     String getName() const override { return "UnorderedSourceOp"; }
 

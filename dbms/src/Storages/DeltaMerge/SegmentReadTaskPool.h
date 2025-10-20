@@ -23,6 +23,7 @@
 #include <Storages/DeltaMerge/ReadMode.h>
 #include <Storages/DeltaMerge/ReadThread/WorkQueue.h>
 #include <Storages/DeltaMerge/SegmentReadTask.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool_fwd.h>
 
 namespace DB::DM
 {
@@ -30,7 +31,6 @@ namespace tests
 {
 class SegmentReadTasksPoolTest;
 }
-using AfterSegmentRead = std::function<void(const DMContextPtr &, const SegmentPtr &)>;
 
 class BlockStat
 {
@@ -104,6 +104,13 @@ private:
     std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> unordered_tasks;
 };
 
+struct SharedBlockQueue
+{
+    WorkQueue<Block> q;
+    BlockStat blk_stat;
+};
+using SharedBlockQueuePtr = std::shared_ptr<SharedBlockQueue>;
+
 // The SegmentReadTaskPool manages the read tasks for a query on a physical table.
 class SegmentReadTaskPool
     : public NotifyFuture
@@ -125,33 +132,7 @@ public:
         const KeyspaceID & keyspace_id_,
         const String & res_group_name_);
 
-    ~SegmentReadTaskPool() override
-    {
-        auto [pop_times, pop_empty_times, max_queue_size] = q.getStat();
-        auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
-        auto total_count = blk_stat.totalCount();
-        auto total_bytes = blk_stat.totalBytes();
-        auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
-        auto approx_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
-        auto total_rows = blk_stat.totalRows();
-        LOG_INFO(
-            log,
-            "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={} "
-            "max_queue_size={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
-            "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
-            pool_id,
-            pop_times,
-            pop_empty_times,
-            pop_empty_ratio,
-            max_queue_size,
-            blk_avg_bytes,
-            approx_max_pending_block_bytes / 1024.0 / 1024.0,
-            total_count,
-            total_bytes / 1024.0 / 1024.0,
-            total_rows,
-            total_count > 0 ? total_rows / total_count : 0,
-            total_rows > 0 ? total_bytes / total_rows : 0);
-    }
+    ~SegmentReadTaskPool() override;
 
     SegmentReadTaskPtr nextTask();
     const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks() const;
@@ -180,7 +161,7 @@ public:
 
     void registerTask(TaskPtr && task) override
     {
-        q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ);
+        shared_q->q.registerPipeTask(std::move(task), NotifyType::WAIT_ON_TABLE_SCAN_READ);
     }
 
     std::once_flag & getRemoteConnectionInfoFlag() { return get_remote_connection_flag; }
@@ -241,8 +222,9 @@ private:
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
     std::unordered_set<GlobalSegmentID> active_segment_ids;
-    WorkQueue<Block> q;
-    BlockStat blk_stat;
+    // WorkQueue<Block> q;
+    // BlockStat blk_stat;
+    SharedBlockQueuePtr shared_q;
     LoggerPtr log;
 
     std::atomic<Int64> unordered_input_stream_ref_count;

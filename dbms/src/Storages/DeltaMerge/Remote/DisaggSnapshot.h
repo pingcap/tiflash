@@ -19,7 +19,7 @@
 #include <Storages/DeltaMerge/Remote/DisaggTaskId.h>
 #include <Storages/DeltaMerge/Remote/Proto/remote.pb.h>
 #include <Storages/DeltaMerge/Remote/Serializer_fwd.h>
-#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
+#include <Storages/DeltaMerge/SegmentReadTask.h>
 #include <Storages/KVStore/Types.h>
 #include <common/defines.h>
 #include <tipb/expression.pb.h>
