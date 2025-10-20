@@ -74,6 +74,7 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
         else
         {
             done = true;
+            // return HAS_OUTPUT with empty block to indicate end of stream
             return OperatorStatus::HAS_OUTPUT;
         }
     }
