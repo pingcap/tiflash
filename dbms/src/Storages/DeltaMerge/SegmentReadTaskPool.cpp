@@ -170,7 +170,7 @@ SegmentReadTaskPool::~SegmentReadTaskPool()
         "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={:.3f} "
         "active_segment_limit={} peak_active_segments={} "
         "block_slot_limit={} peak_blocks_in_queue={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
-        "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={:.2f}B",
+        "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
         pool_id,
         pop_times,
         pop_empty_times,
