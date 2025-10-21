@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <Common/FailPoint.h>
+#include <Common/Logger.h>
 #include <Common/setThreadName.h>
 #include <Debug/MockKVStore/MockRaftStoreProxy.h>
 #include <TestUtils/TiFlashTestBasic.h>
@@ -309,6 +310,7 @@ void ReadIndexTest::testNormal()
         proxy_instance.testRunReadIndex(over);
     });
 
+    auto logger = Logger::get();
     {
         std::vector<kvrpcpb::ReadIndexRequest> reqs;
         {
@@ -320,7 +322,7 @@ void ReadIndexTest::testNormal()
             }
         }
         {
-            auto resps = manager->batchReadIndex(reqs);
+            auto resps = manager->batchReadIndex(reqs, 10 * 1000, logger);
             ASSERT_EQ(resps.size(), reqs.size());
             for (size_t i = 0; i < reqs.size(); ++i)
             {
@@ -345,7 +347,7 @@ void ReadIndexTest::testNormal()
             {
                 r.set_start_ts(9);
             }
-            auto resps = manager->batchReadIndex(reqs);
+            auto resps = manager->batchReadIndex(reqs, 10 * 1000, logger);
             ASSERT_EQ(resps.size(), reqs.size());
             for (size_t i = 0; i < reqs.size(); ++i)
             {
@@ -359,7 +361,7 @@ void ReadIndexTest::testNormal()
         {
             // bigger ts, fetch latest commit index
             reqs = {make_read_index_reqs(0, 11)};
-            auto resps = manager->batchReadIndex(reqs);
+            auto resps = manager->batchReadIndex(reqs, 10 * 1000, logger);
             ASSERT_EQ(resps[0].first.read_index(), 668);
             ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
         }
@@ -371,7 +373,7 @@ void ReadIndexTest::testNormal()
         }
         {
             reqs = {make_read_index_reqs(0, 0)};
-            auto resps = manager->batchReadIndex(reqs);
+            auto resps = manager->batchReadIndex(reqs, 10 * 1000, logger);
             ASSERT_EQ(resps[0].first.read_index(), 669); // tso 0 will not use history record
             ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
         }
@@ -379,7 +381,7 @@ void ReadIndexTest::testNormal()
             // smaller ts, use history success record.
             expect_cnt_use_history_tasks++;
             reqs = {make_read_index_reqs(0, 9)};
-            auto resps = manager->batchReadIndex(reqs);
+            auto resps = manager->batchReadIndex(reqs, 10 * 1000, logger);
             ASSERT_EQ(resps[0].first.read_index(), 668); // history record has been updated
             ASSERT_EQ(computeCntUseHistoryTasks(*manager), expect_cnt_use_history_tasks);
         }
@@ -391,7 +393,7 @@ void ReadIndexTest::testNormal()
 
             reqs = {make_read_index_reqs(5, 12), make_read_index_reqs(1, 12), make_read_index_reqs(2, 12)};
             auto start = std::chrono::steady_clock::now();
-            auto resps = manager->batchReadIndex(reqs, 20);
+            auto resps = manager->batchReadIndex(reqs, 20, logger);
             auto time_cost = std::chrono::steady_clock::now() - start;
             ASSERT_GE(time_cost, std::chrono::milliseconds{20}); // meet timeout
             ASSERT_EQ(resps[0].first.read_index(), 669);
@@ -402,7 +404,7 @@ void ReadIndexTest::testNormal()
                 // test timeout 0ms
                 proxy_instance.unsafeInvokeForTest(
                     [](MockRaftStoreProxy & proxy) { proxy.mock_read_index.region_id_to_drop.emplace(9); });
-                auto resps = manager->batchReadIndex({make_read_index_reqs(9, 12)}, 0);
+                auto resps = manager->batchReadIndex({make_read_index_reqs(9, 12)}, 0, logger);
                 ASSERT_EQ(
                     resps[0].first.region_error().has_region_not_found(),
                     true); // timeout to region error not found
@@ -414,16 +416,15 @@ void ReadIndexTest::testNormal()
 
             ReadIndexWorker::setMaxReadIndexTaskTimeout(
                 std::chrono::milliseconds{10}); // set max task timeout in worker
-            resps = manager->batchReadIndex(
-                reqs,
-                500); // the old task is still in worker, poll from mock proxy failed, check timeout and set region error `server_is_busy
+            // the old task is still in worker, poll from mock proxy failed, check timeout and set region error `server_is_busy
+            resps = manager->batchReadIndex(reqs, 500, logger);
             ASSERT_EQ(
                 resps[1].first.region_error().has_server_is_busy(),
                 true); // meet region error `server_is_busy` for task timeout
 
             ReadIndexWorker::setMaxReadIndexTaskTimeout(
                 std::chrono::milliseconds{8 * 1000}); // set max task timeout in worker to previous.
-            resps = manager->batchReadIndex(reqs, 500);
+            resps = manager->batchReadIndex(reqs, 500, logger);
             ASSERT_EQ(resps[1].first.read_index(), 669);
         }
         {
