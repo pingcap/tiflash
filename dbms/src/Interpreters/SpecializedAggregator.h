@@ -305,4 +305,4 @@ void NO_INLINE Aggregator::executeSpecializedWithoutKey(
 extern "C" void __attribute__((__visibility__("default"), __noreturn__)) __cxa_pure_virtual()
 {
     abort();
-};
+}

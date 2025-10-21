@@ -139,7 +139,7 @@ void StorageSet::insertBlock(const Block & block)
 size_t StorageSet::getSize() const
 {
     return set->getTotalRowCount();
-};
+}
 
 
 void StorageSetOrJoinBase::restore()

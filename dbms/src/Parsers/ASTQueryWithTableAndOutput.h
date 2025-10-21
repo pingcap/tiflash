@@ -45,7 +45,7 @@ template <typename AstIDAndQueryNames>
 class ASTQueryWithTableAndOutputImpl : public ASTQueryWithTableAndOutput
 {
 public:
-    String getID() const override { return AstIDAndQueryNames::ID + ("_" + database) + "_" + table; };
+    String getID() const override { return AstIDAndQueryNames::ID + ("_" + database) + "_" + table; }
 
     ASTPtr clone() const override
     {

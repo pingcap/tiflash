@@ -257,9 +257,10 @@ BlockInputStreamPtr LibraryDictionarySource::loadKeys(
     void * data_ptr = nullptr;
 
     /// Get function pointer before dataNew call because library->get may throw.
-    auto func_load_keys = library->get<
-        void * (*)(decltype(data_ptr), decltype(&settings->strings), decltype(&columns_pass), decltype(&requested_rows_c))>(
-        "ClickHouseDictionary_v2_loadKeys");
+    auto func_load_keys = library->get<void * (*)(decltype(data_ptr),
+                                                  decltype(&settings->strings),
+                                                  decltype(&columns_pass),
+                                                  decltype(&requested_rows_c))>("ClickHouseDictionary_v2_loadKeys");
     data_ptr = library->get<decltype(data_ptr) (*)(decltype(lib_data))>("ClickHouseDictionary_v2_dataNew")(lib_data);
     auto * data = func_load_keys(data_ptr, &settings->strings, &columns_pass, &requested_rows_c);
     auto block = dataToBlock(description.sample_block, data);

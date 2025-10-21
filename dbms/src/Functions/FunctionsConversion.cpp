@@ -54,7 +54,7 @@ class FunctionTiDBUnixTimeStamp : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBUnixTimeStamp>(context); };
+    static FunctionPtr create(const Context & context) { return std::make_shared<FunctionTiDBUnixTimeStamp>(context); }
     explicit FunctionTiDBUnixTimeStamp(const Context & context)
         : timezone_info(context.getTimezoneInfo()){};
 

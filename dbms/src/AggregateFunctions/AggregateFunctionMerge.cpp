@@ -29,7 +29,7 @@ extern const int BAD_ARGUMENTS;
 class AggregateFunctionCombinatorMerge final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "Merge"; };
+    String getName() const override { return "Merge"; }
 
     DataTypes transformArguments(const DataTypes & arguments) const override
     {

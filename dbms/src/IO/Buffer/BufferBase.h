@@ -92,7 +92,7 @@ public:
     inline Buffer & buffer() { return working_buffer; }
 
     /// get (for reading and modifying) the position in the buffer
-    inline Position & position() { return pos; };
+    inline Position & position() { return pos; }
 
     /// offset in bytes of the cursor from the beginning of the buffer
     inline size_t offset() const { return pos - working_buffer.begin(); }

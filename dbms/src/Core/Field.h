@@ -399,7 +399,7 @@ public:
         using TWithoutRef = std::remove_reference_t<T>;
         auto * MAY_ALIAS ptr = reinterpret_cast<TWithoutRef *>(&storage);
         return *ptr;
-    };
+    }
 
     template <typename T>
     const T & get() const
@@ -407,7 +407,7 @@ public:
         using TWithoutRef = std::remove_reference_t<T>;
         const auto * MAY_ALIAS ptr = reinterpret_cast<const TWithoutRef *>(&storage);
         return *ptr;
-    };
+    }
 
     template <typename T>
     bool tryGet(T & result)

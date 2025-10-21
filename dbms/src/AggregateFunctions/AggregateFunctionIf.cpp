@@ -27,7 +27,7 @@ extern const int NUMBER_OF_ARGUMENTS_DOESNT_MATCH;
 class AggregateFunctionCombinatorIf final : public IAggregateFunctionCombinator
 {
 public:
-    String getName() const override { return "If"; };
+    String getName() const override { return "If"; }
 
     DataTypes transformArguments(const DataTypes & arguments) const override
     {

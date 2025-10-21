@@ -35,7 +35,8 @@ public:
     virtual UserPtr authorizeAndGetUser(
         const String & user_name,
         const String & password,
-        const Poco::Net::IPAddress & address) const = 0;
+        const Poco::Net::IPAddress & address) const
+        = 0;
 
     /// Just find user
     virtual UserPtr getUser(const String & user_name) const = 0;

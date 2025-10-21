@@ -594,7 +594,7 @@ class FunctionComparison : public IFunction
 {
 public:
     static constexpr auto name = Name::name;
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionComparison>(); };
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionComparison>(); }
 
 private:
     template <typename T0, typename T1>
@@ -1445,7 +1445,7 @@ using StrcmpReturnColumnType = ColumnInt8;
 class FunctionStrcmp : public FunctionComparison<CmpOp, NameStrcmp, StrcmpReturnColumnType>
 {
 public:
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionStrcmp>(); };
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionStrcmp>(); }
 
     void executeImpl(Block & block, const ColumnNumbers & arguments, size_t result) const override
     {
@@ -1504,7 +1504,7 @@ class FunctionIsTrueFalse : public IFunction
 {
 public:
     static constexpr auto name = Trait::name;
-    static FunctionPtr create(const Context &) { return std::make_shared<FunctionIsTrueFalse<Trait>>(); };
+    static FunctionPtr create(const Context &) { return std::make_shared<FunctionIsTrueFalse<Trait>>(); }
 
     std::string getName() const override { return name; }
     size_t getNumberOfArguments() const override { return 1; }

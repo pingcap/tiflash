@@ -48,7 +48,8 @@ public:
         const override final;
 
     virtual void formatImplWithoutAlias(const FormatSettings & settings, FormatState & state, FormatStateStacked frame)
-        const = 0;
+        const
+        = 0;
 
 protected:
     virtual String getColumnNameImpl() const = 0;
@@ -59,7 +60,7 @@ inline ASTPtr setAlias(ASTPtr ast, const String & alias)
 {
     ast->setAlias(alias);
     return ast;
-};
+}
 
 
 } // namespace DB

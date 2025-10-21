@@ -237,6 +237,6 @@ ConnectionPoolWithFailover::TryResult ConnectionPoolWithFailover::tryGetEntry(
         }
     }
     return result;
-};
+}
 
 } // namespace DB

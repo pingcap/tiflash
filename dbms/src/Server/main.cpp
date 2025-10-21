@@ -128,7 +128,7 @@ int printHelp(int, char **)
     for (auto & application : clickhouse_applications)
         std::cerr << "tiflash " << application.first << " [args] " << std::endl;
     return -1;
-};
+}
 
 
 bool isClickhouseApp(const std::string & app_suffix, std::vector<char *> & argv)

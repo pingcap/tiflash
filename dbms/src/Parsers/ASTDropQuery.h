@@ -36,7 +36,7 @@ public:
     std::chrono::milliseconds lock_timeout{std::chrono::milliseconds(0)};
 
     /** Get the text that identifies this element. */
-    String getID() const override { return (detach ? "DetachQuery_" : "DropQuery_") + database + "_" + table; };
+    String getID() const override { return (detach ? "DetachQuery_" : "DropQuery_") + database + "_" + table; }
 
     ASTPtr clone() const override
     {

@@ -60,7 +60,7 @@ inline AggregateFunctionPtr createAggregateFunctionGroupArrayImpl(const DataType
     return std::make_shared<GroupArrayGeneralListImpl<GroupArrayListNodeGeneral, HasLimit::value>>(
         argument_type,
         std::forward<TArgs>(args)...);
-};
+}
 
 
 AggregateFunctionPtr createAggregateFunctionGroupArray(
