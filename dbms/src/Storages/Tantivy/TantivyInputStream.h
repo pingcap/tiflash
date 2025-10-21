@@ -165,7 +165,8 @@ protected:
             {
                 for (auto & doc : documents)
                 {
-                    col->insert(Field(String(doc.fieldValues[idx].string_value.c_str())));
+                    const auto & v = doc.fieldValues[idx].string_value;
+                    col->insert(Field(String(v.begin(), v.end())));
                 }
             }
             if (removeNullable(name_and_type.type)->isInteger())
