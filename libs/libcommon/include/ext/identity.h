@@ -47,6 +47,6 @@ public:
     explicit operator function_ptr_t<T>() const
     {
         return &invoke;
-    };
+    }
 };
 } // namespace ext

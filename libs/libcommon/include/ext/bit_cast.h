@@ -37,7 +37,7 @@ std::decay_t<To> bit_cast(const From & from)
 #endif
     memcpy(&res, &from, std::min(sizeof(res), sizeof(from)));
     return res;
-};
+}
 
 /** \brief Returns value `from` converted to type `To` while retaining bit representation.
   *    `To` and `From` must satisfy `CopyConstructible`.
@@ -47,5 +47,5 @@ std::decay_t<To> safe_bit_cast(const From & from)
 {
     static_assert(sizeof(To) == sizeof(From), "bit cast on types of different width");
     return ext::bit_cast<To, From>(from);
-};
+}
 } // namespace ext
