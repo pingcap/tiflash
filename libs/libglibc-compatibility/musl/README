@@ -1,3 +1,4 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/libs/libglibc-compatibility/musl/README
 Tiny pieces extracted from MUSL library.
 
 git://git.musl-libc.org/musl

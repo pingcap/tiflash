@@ -1,3 +1,4 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/libs/libmemcpy/README.md
 Internal implementation of `memcpy` function.
 
 It has the following advantages over `libc`-supplied implementation:
