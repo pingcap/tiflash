@@ -174,7 +174,7 @@ void WaitCheckRegionReadyImpl(
         }
 
         // Record the latest commit index in TiKV
-        auto read_index_res = kvstore.batchReadIndex(batch_read_index_req, read_index_timeout);
+        auto read_index_res = kvstore.batchReadIndex(batch_read_index_req, read_index_timeout, log);
         for (auto && [resp, region_id] : read_index_res)
         {
             bool need_retry = resp.read_index() == 0;
@@ -333,13 +333,15 @@ void WaitCheckRegionReady(KVStore & kvstore, const std::atomic_size_t & terminat
 }
 
 
-BatchReadIndexRes KVStore::batchReadIndex(const std::vector<kvrpcpb::ReadIndexRequest> & reqs, uint64_t timeout_ms)
-    const
+BatchReadIndexRes KVStore::batchReadIndex(
+    const std::vector<kvrpcpb::ReadIndexRequest> & reqs,
+    uint64_t timeout_ms,
+    const LoggerPtr & log) const
 {
     assert(this->proxy_helper);
     if (read_index_worker_manager)
     {
-        return this->read_index_worker_manager->batchReadIndex(reqs, timeout_ms);
+        return this->read_index_worker_manager->batchReadIndex(reqs, timeout_ms, log);
     }
     else
     {
