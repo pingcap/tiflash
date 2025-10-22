@@ -772,7 +772,7 @@ DM::RowKeyRanges parseMvccQueryInfo(
     return ranges;
 }
 
-RuntimeFilteList parseRuntimeFilterList(
+RuntimeFilterList parseRuntimeFilterList(
     const SelectQueryInfo & query_info,
     const DM::ColumnDefines & table_column_defines,
     const Context & db_context,

@@ -471,8 +471,13 @@ public:
         const RowKeyRanges & sorted_ranges,
         size_t num_streams,
         UInt64 start_ts,
+<<<<<<< HEAD
         const PushDownFilterPtr & filter,
         const RuntimeFilteList & runtime_filter_list,
+=======
+        const PushDownExecutorPtr & executor,
+        const RuntimeFilterList & runtime_filter_list,
+>>>>>>> 35d2f9c368 (Raft: add logging about read index failure (#10494))
         int rf_max_wait_time_ms,
         const String & tracing_id,
         const DMReadOptions & read_opts = {},
@@ -495,8 +500,13 @@ public:
         const RowKeyRanges & sorted_ranges,
         size_t num_streams,
         UInt64 start_ts,
+<<<<<<< HEAD
         const PushDownFilterPtr & filter,
         const RuntimeFilteList & runtime_filter_list,
+=======
+        const PushDownExecutorPtr & executor,
+        const RuntimeFilterList & runtime_filter_list,
+>>>>>>> 35d2f9c368 (Raft: add logging about read index failure (#10494))
         int rf_max_wait_time_ms,
         const String & tracing_id,
         const DMReadOptions & read_opts = {},

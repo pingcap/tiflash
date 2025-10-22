@@ -36,8 +36,14 @@ public:
         const ColumnDefines & columns_to_read_,
         int extra_table_id_index_,
         const String & req_id,
+<<<<<<< HEAD
         const RuntimeFilteList & runtime_filter_list_ = std::vector<RuntimeFilterPtr>{},
         int max_wait_time_ms_ = 0)
+=======
+        const RuntimeFilterList & runtime_filter_list_ = std::vector<RuntimeFilterPtr>{},
+        int max_wait_time_ms_ = 0,
+        bool is_disagg_ = false)
+>>>>>>> 35d2f9c368 (Raft: add logging about read index failure (#10494))
         : task_pool(task_pool_)
         , header(AddExtraTableIDColumnTransformAction::buildHeader(columns_to_read_, extra_table_id_index_))
         , log(Logger::get(req_id))
@@ -69,7 +75,7 @@ public:
     // The logic order of unit test is error, it will build input stream firstly and register rf secondly.
     // It causes input stream could not get RF list in constructor.
     // So, for unit test, it should call this function separated.
-    void setRuntimeFilterInfo(const RuntimeFilteList & runtime_filter_list_, int max_wait_time_ms_)
+    void setRuntimeFilterInfo(const RuntimeFilterList & runtime_filter_list_, int max_wait_time_ms_)
     {
         runtime_filter_list = runtime_filter_list_;
         max_wait_time_ms = max_wait_time_ms_;

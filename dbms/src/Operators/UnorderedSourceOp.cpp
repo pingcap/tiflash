@@ -24,8 +24,14 @@ UnorderedSourceOp::UnorderedSourceOp(
     const DM::ColumnDefines & columns_to_read_,
     int extra_table_id_index_,
     const String & req_id,
+<<<<<<< HEAD
     const RuntimeFilteList & runtime_filter_list_,
     int max_wait_time_ms_)
+=======
+    const RuntimeFilterList & runtime_filter_list_,
+    int max_wait_time_ms_,
+    bool is_disagg_)
+>>>>>>> 35d2f9c368 (Raft: add logging about read index failure (#10494))
     : SourceOp(exec_context_, req_id)
     , task_pool(task_pool_)
     , ref_no(0)
@@ -76,7 +82,7 @@ void UnorderedSourceOp::operatePrefixImpl()
         else
         {
             // Check if the RuntimeFilters is ready immediately.
-            RuntimeFilteList ready_rf_list;
+            RuntimeFilterList ready_rf_list;
             RFWaitTask::filterAndMoveReadyRfs(waiting_rf_list, ready_rf_list);
 
             if (max_wait_time_ms <= 0 || waiting_rf_list.empty())

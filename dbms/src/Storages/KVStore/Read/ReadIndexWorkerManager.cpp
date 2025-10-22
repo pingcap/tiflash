@@ -14,6 +14,7 @@
 
 #include <Common/setThreadName.h>
 #include <Storages/KVStore/Read/ReadIndexWorkerImpl.h>
+#include <common/logger_useful.h>
 
 namespace DB
 {
@@ -192,7 +193,8 @@ ReadIndexWorkerManager::ReadIndexRunner::ReadIndexRunner(
 
 BatchReadIndexRes ReadIndexWorkerManager::batchReadIndex(
     const std::vector<kvrpcpb::ReadIndexRequest> & reqs,
-    uint64_t timeout_ms)
+    uint64_t timeout_ms,
+    const LoggerPtr & log)
 {
     TEST_LOG_FMT("reqs size {}, timeout {}ms", reqs.size(), timeout_ms);
 
@@ -244,8 +246,16 @@ BatchReadIndexRes ReadIndexWorkerManager::batchReadIndex(
             }
             else
             {
+                // Possible meet the tikv known issue: https://github.com/tikv/tikv/issues/18417#issuecomment-3018069916
+                // If read index request is sent to a region leader, then transfer leader to another peer before read index is applied,
+                // the read index request may never be responded. So here we just log a warning and generate a "region not found" error response for upper layer to retry.
+                LOG_WARNING(log, "read index timeout, region_id={}", it.first);
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_read_index_timeout).Increment();
+                // Generate a "region not found" error response for the region that still has no response after timeout
                 kvrpcpb::ReadIndexResponse tmp;
-                tmp.mutable_region_error()->mutable_region_not_found();
+                auto * e = tmp.mutable_region_error();
+                e->mutable_region_not_found()->set_region_id(it.first);
+                e->set_message("tiflash read index timeout");
                 resps.emplace_back(std::move(tmp), it.first);
             }
             tasks.pop();

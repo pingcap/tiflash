@@ -16,9 +16,9 @@
 
 namespace DB
 {
-RuntimeFilteList dummy_runtime_filter_list;
+RuntimeFilterList dummy_runtime_filter_list;
 
-RuntimeFilteList RuntimeFilterMgr::getLocalRuntimeFilterByIds(const std::vector<int> & ids)
+RuntimeFilterList RuntimeFilterMgr::getLocalRuntimeFilterByIds(const std::vector<int> & ids)
 {
     std::vector<RuntimeFilterPtr> result;
     for (int id : ids)
