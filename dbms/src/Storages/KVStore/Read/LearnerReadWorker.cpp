@@ -151,7 +151,7 @@ LearnerReadSnapshot LearnerReadWorker::buildRegionsSnapshot()
             LOG_WARNING(log, "region not found in KVStore, region_id={}", info.region_id);
             throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND, nullptr);
         }
-        regions_snapshot.emplace(info.region_id, std::move(region));
+        regions_snapshot.emplace(info.region_id, RegionLearnerReadSnapshot{std::move(region)});
     }
     // make sure regions are not duplicated.
     if (unlikely(regions_snapshot.size() != regions_info.size()))
@@ -415,14 +415,15 @@ RegionsReadIndexResult LearnerReadWorker::readIndex(
         log,
         log_lvl,
         "[Learner Read] Batch read index, num_regions={} num_requests={} num_stale_read={} num_cached_index={} "
-        "num_unavailable={} cost={}ms, start_ts={}",
+        "n_unavailable={} read_cost={}ms start_ts={} unavailable_regions={}",
         stats.num_regions,
         stats.num_read_index_request,
         stats.num_stale_read,
         stats.num_cached_read_index,
         unavailable_regions.size(),
         stats.read_index_elapsed_ms,
-        mvcc_query_info.start_ts);
+        mvcc_query_info.start_ts,
+        unavailable_regions.toDebugString(5));
 
     return batch_read_index_result;
 }
@@ -560,7 +561,7 @@ void LearnerReadWorker::waitIndex(
 
     LOG_DEBUG(
         log,
-        "[Learner Read] Learner Read Summary, regions_info={}, unavailable_regions_info={}, start_ts={}",
+        "[Learner Read] Learner Read Summary, regions_info={} unavailable_regions_info={} start_ts={}",
         region_info_formatter(),
         unavailable_regions.toDebugString(0), // show all
         mvcc_query_info.start_ts);
@@ -602,7 +603,7 @@ LearnerReadWorker::waitUntilDataAvailable(
         log,
         log_lvl,
         "[Learner Read] batch read index | wait index"
-        " total_cost={} read_cost={} wait_cost={} n_regions={} n_stale_read={} n_unavailable={}, start_ts={}",
+        " total_cost={} read_cost={} wait_cost={} n_regions={} n_stale_read={} n_unavailable={} start_ts={}",
         time_elapsed_ms,
         stats.read_index_elapsed_ms,
         stats.wait_index_elapsed_ms,
