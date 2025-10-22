@@ -151,15 +151,16 @@ LearnerReadSnapshot LearnerReadWorker::buildRegionsSnapshot()
             LOG_WARNING(log, "region not found in KVStore, region_id={}", info.region_id);
             throw RegionException({info.region_id}, RegionException::RegionReadStatus::NOT_FOUND, nullptr);
         }
-        regions_snapshot.emplace(info.region_id, RegionLearnerReadSnapshot{std::move(region)});
+        auto ins_res = regions_snapshot.emplace(info.region_id, RegionLearnerReadSnapshot{std::move(region)});
+        // make sure regions are not duplicated.
+        if (unlikely(!ins_res.second))
+            throw TiFlashException(
+                Errors::Coprocessor::BadRequest,
+                "Duplicate region_id, region_id={} n_request={} tracing_id={}",
+                info.region_id,
+                regions_info.size(),
+                log->identifier());
     }
-    // make sure regions are not duplicated.
-    if (unlikely(regions_snapshot.size() != regions_info.size()))
-        throw TiFlashException(
-            Errors::Coprocessor::BadRequest,
-            "Duplicate region id, n_request={} n_actual={}",
-            regions_info.size(),
-            regions_snapshot.size());
     return regions_snapshot;
 }
 
@@ -234,6 +235,7 @@ void LearnerReadWorker::doBatchReadIndex(
     };
     kvstore->addReadIndexEvent(1);
     SCOPE_EXIT({ kvstore->addReadIndexEvent(-1); });
+    // tiflash is just up or is shutting down, not ready for serving
     if (!tmt.checkRunning())
     {
         make_default_batch_read_index_result(true);
@@ -310,19 +312,6 @@ void LearnerReadWorker::recordReadIndexError(
                 region_status = RegionException::RegionReadStatus::NOT_FOUND_TIKV;
             }
             // Below errors seldomly happens in raftstore-v1, however, we are not sure if they will happen in v2.
-            else if (
-                region_error.has_flashbackinprogress() || region_error.has_flashbacknotprepared()) // proto id = 17/18
-            {
-                GET_METRIC(tiflash_raft_learner_read_failures_count, type_flashback).Increment();
-                LOG_WARNING(log, "meet flashback region error {}, region_id={}", resp.ShortDebugString(), region_id);
-                region_status = RegionException::RegionReadStatus::FLASHBACK;
-            }
-            else if (region_error.has_bucket_version_not_match()) // proto id = 21
-            {
-                GET_METRIC(tiflash_raft_learner_read_failures_count, type_bucket_epoch_not_match).Increment();
-                LOG_WARNING(log, "meet abnormal region error {}, region_id={}", resp.ShortDebugString(), region_id);
-                region_status = RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH;
-            }
             else if (region_error.has_key_not_in_region()) // proto id = 4
             {
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_key_not_in_region).Increment();
@@ -351,16 +340,33 @@ void LearnerReadWorker::recordReadIndexError(
             }
             else if (
                 region_error.has_raft_entry_too_large() // proto id = 9
+                || region_error.has_max_timestamp_not_synced() // proto id = 10
                 || region_error.has_read_index_not_ready() // proto id = 11
                 || region_error.has_proposal_in_merging_mode() // proto id = 12
                 || region_error.has_data_is_not_ready() // proto id = 13
                 || region_error.has_region_not_initialized() // proto id = 14
                 || region_error.has_disk_full() // proto id = 15
+                || region_error.has_recoveryinprogress() // proto id = 16
+                || region_error.has_is_witness() // proto id = 19
+                || region_error.has_mismatch_peer_id() // proto id = 20
             )
             {
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_tikv_server_issue).Increment();
                 LOG_WARNING(log, "meet abnormal region error {}, region_id={}", resp.ShortDebugString(), region_id);
                 region_status = RegionException::RegionReadStatus::TIKV_SERVER_ISSUE;
+            }
+            else if (
+                region_error.has_flashbackinprogress() || region_error.has_flashbacknotprepared()) // proto id = 17/18
+            {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_flashback).Increment();
+                LOG_WARNING(log, "meet flashback region error {}, region_id={}", resp.ShortDebugString(), region_id);
+                region_status = RegionException::RegionReadStatus::FLASHBACK;
+            }
+            else if (region_error.has_bucket_version_not_match()) // proto id = 21
+            {
+                GET_METRIC(tiflash_raft_learner_read_failures_count, type_bucket_epoch_not_match).Increment();
+                LOG_WARNING(log, "meet abnormal region error {}, region_id={}", resp.ShortDebugString(), region_id);
+                region_status = RegionException::RegionReadStatus::BUCKET_EPOCH_NOT_MATCH;
             }
             else
             {
@@ -561,7 +567,7 @@ void LearnerReadWorker::waitIndex(
 
     LOG_DEBUG(
         log,
-        "[Learner Read] Learner Read Summary, regions_info={} unavailable_regions_info={} start_ts={}",
+        "[Learner Read] Learner Read Summary, regions_info={} unavailable_regions={} start_ts={}",
         region_info_formatter(),
         unavailable_regions.toDebugString(0), // show all
         mvcc_query_info.start_ts);
