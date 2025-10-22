@@ -75,7 +75,6 @@ private:
     const bool batch_cop;
     const bool is_wn_disagg_read;
 
-    // RegionException::UnavailableRegions ids;
     struct UnavailableDesc
     {
         RegionException::RegionReadStatus s;
