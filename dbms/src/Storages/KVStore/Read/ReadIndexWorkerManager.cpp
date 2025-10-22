@@ -246,6 +246,9 @@ BatchReadIndexRes ReadIndexWorkerManager::batchReadIndex(
             }
             else
             {
+                // Possible meet the tikv known issue: https://github.com/tikv/tikv/issues/18417#issuecomment-3018069916
+                // If read index request is sent to a region leader, then transfer leader to another peer before read index is applied,
+                // the read index request may never be responded. So here we just log a warning and generate a "region not found" error response for upper layer to retry.
                 LOG_WARNING(log, "read index timeout, region_id={}", it.first);
                 GET_METRIC(tiflash_raft_learner_read_failures_count, type_read_index_timeout).Increment();
                 // Generate a "region not found" error response for the region that still has no response after timeout
