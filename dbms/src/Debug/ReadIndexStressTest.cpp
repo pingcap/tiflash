@@ -38,6 +38,7 @@ static const std::map<std::string, ReadIndexStressTest::TestType> TestName2Type
 
 ReadIndexStressTest::ReadIndexStressTest(const TMTContext & tmt_)
     : tmt(tmt_)
+    , logger(Logger::get("ReadIndexStressTest"))
 {
     MockStressTestCfg::enable = true;
     LOG_WARNING(logger, "enable MockStressTest");
@@ -196,7 +197,7 @@ ReadIndexStressTest::TimeCost ReadIndexStressTest::run(std::vector<kvrpcpb::Read
                     req.context().region_id() + MockStressTestCfg::RegionIdPrefix * (i + 1));
             }
             LOG_INFO(logger, "add prefix {} to each region id", MockStressTestCfg::RegionIdPrefix);
-            auto resps = kvstore.batchReadIndex(reqs, timeout_ms);
+            auto resps = kvstore.batchReadIndex(reqs, timeout_ms, logger);
             for (const auto & resp : resps)
             {
                 if (resp.first.read_index() == 0)
