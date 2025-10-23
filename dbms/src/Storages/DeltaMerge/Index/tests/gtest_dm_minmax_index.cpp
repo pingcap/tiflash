@@ -153,11 +153,13 @@ bool checkMatch(
     store->mergeDeltaAll(context);
 
     const ColumnDefine & col_to_read = check_pk ? getExtraHandleColumnDefine(is_common_handle) : cd;
+    auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get("read"));
     auto streams = store->read(
         context,
         context.getSettingsRef(),
         {col_to_read},
         {all_range},
+        read_queue,
         1,
         std::numeric_limits<UInt64>::max(),
         std::make_shared<PushDownExecutor>(filter),
@@ -165,6 +167,7 @@ bool checkMatch(
         0,
         name,
         DMReadOptions{});
+    read_queue->finishQueueIfEmpty();
     auto rows = getInputStreamNRows(streams[0]);
     store->drop();
 

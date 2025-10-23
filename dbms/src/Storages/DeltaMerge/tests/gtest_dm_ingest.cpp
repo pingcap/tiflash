@@ -246,11 +246,13 @@ try
         for (int i = 0; i < upper_bound; ++i)
             if (filled_bitmap[i])
                 expected_pk_column.emplace_back(i);
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get("read"));
         auto stream = store->read(
             *db_context,
             db_context->getSettingsRef(),
             store->getTableColumns(),
             {RowKeyRange::newAll(is_common_handle, 1)},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             EMPTY_FILTER,
@@ -260,6 +262,7 @@ try
             DMReadOptions{
                 .keep_order = true,
             })[0];
+        read_queue->finishQueueIfEmpty();
         ASSERT_INPUTSTREAM_COLS_UR(
             stream,
             Strings({DMTestEnv::pk_name}),

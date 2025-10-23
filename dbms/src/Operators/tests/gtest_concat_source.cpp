@@ -387,7 +387,7 @@ try
     }
 
     std::atomic<size_t> received_blocks = 0;
-        received_blocks.fetch_add(1, std::memory_order_relaxed);
+    ResultHandler h([&](const Block & /*block*/) { received_blocks.fetch_add(1, std::memory_order_relaxed); });
 
     PipelineExecGroupBuilder result_builder;
     builder_pool.generate(result_builder, exec_context, "test");

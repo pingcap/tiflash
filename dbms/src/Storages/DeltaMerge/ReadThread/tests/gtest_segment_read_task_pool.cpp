@@ -126,7 +126,7 @@ protected:
         // Submit to pending_pools
         scheduler.add(pool);
         {
-            std::lock_guard lock(scheduler.pending_mtx); // Disable TSA warnnings
+            std::lock_guard lock(scheduler.pending_mtx); // Disable TSA warnings
             ASSERT_EQ(scheduler.pending_pools.size(), 1);
         }
         ASSERT_EQ(scheduler.read_pools.size(), 0);
@@ -134,7 +134,7 @@ protected:
         // Reap the pending_pools
         scheduler.reapPendingPools();
         {
-            std::lock_guard lock(scheduler.pending_mtx); // Disable TSA warnnings
+            std::lock_guard lock(scheduler.pending_mtx); // Disable TSA warnings
             ASSERT_EQ(scheduler.pending_pools.size(), 0);
         }
         ASSERT_EQ(scheduler.read_pools.size(), 1);
@@ -199,9 +199,12 @@ protected:
                 pool->finishSegment(merged_task->units.front().task);
             }
 
-            ASSERT_EQ(pool->q.size(), 0);
             Block blk;
-            ASSERT_FALSE(pool->q.pop(blk));
+            // popBlock can only return empty block
+            pool->shared_q->popBlock(blk);
+            ASSERT_FALSE(blk);
+            pool->shared_q->tryPopBlock(blk);
+            ASSERT_FALSE(blk);
 
             pool->decreaseUnorderedInputStreamRefCount();
             ASSERT_FALSE(pool->valid());

@@ -200,11 +200,13 @@ public:
 
     void read(const RowKeyRange & range, const PushDownExecutorPtr & executor, const ColumnWithTypeAndName & out)
     {
+        auto read_queue = std::make_shared<ActiveSegmentReadTaskQueue>(2, Logger::get("read"));
         auto in = store->read(
             *db_context,
             db_context->getSettingsRef(),
             {cdVec()},
             {range},
+            read_queue,
             /* num_streams= */ 1,
             /* start_ts= */ std::numeric_limits<UInt64>::max(),
             executor,
@@ -212,6 +214,7 @@ public:
             0,
             TRACING_NAME,
             DMReadOptions{})[0];
+        read_queue->finishQueueIfEmpty();
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({vec_column_name}),
