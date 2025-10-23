@@ -112,7 +112,7 @@ public:
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /*keep_order=*/false)[0];
+            DMReadOptions{})[0];
         ASSERT_INPUTSTREAM_COLS_UR(
             in,
             Strings({vec_column_name}),
@@ -144,7 +144,7 @@ public:
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /*keep_order=*/false)[0];
+            DMReadOptions{})[0];
         Strings cols_name;
         for (const auto & cd : col_defs)
         {

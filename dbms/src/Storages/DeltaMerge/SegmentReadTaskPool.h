@@ -82,7 +82,7 @@ private:
 
 // If `enable_read_thread_` is true, `SegmentReadTasksWrapper` use `std::unordered_map` to index `SegmentReadTask` by segment id,
 // else it is the same as `SegmentReadTasks`, a `std::list` of `SegmentReadTask`.
-// `SegmeneReadTasksWrapper` is not thread-safe.
+// `SegmentReadTasksWrapper` is not thread-safe.
 class SegmentReadTasksWrapper
 {
 public:
@@ -122,33 +122,7 @@ public:
         Int64 num_streams_,
         const String & res_group_name_);
 
-    ~SegmentReadTaskPool() override
-    {
-        auto [pop_times, pop_empty_times, max_queue_size] = q.getStat();
-        auto pop_empty_ratio = pop_times > 0 ? pop_empty_times * 1.0 / pop_times : 0.0;
-        auto total_count = blk_stat.totalCount();
-        auto total_bytes = blk_stat.totalBytes();
-        auto blk_avg_bytes = total_count > 0 ? total_bytes / total_count : 0;
-        auto approx_max_pending_block_bytes = blk_avg_bytes * max_queue_size;
-        auto total_rows = blk_stat.totalRows();
-        LOG_INFO(
-            log,
-            "Done. pool_id={} pop={} pop_empty={} pop_empty_ratio={} "
-            "max_queue_size={} blk_avg_bytes={} approx_max_pending_block_bytes={:.2f}MB "
-            "total_count={} total_bytes={:.2f}MB total_rows={} avg_block_rows={} avg_rows_bytes={}B",
-            pool_id,
-            pop_times,
-            pop_empty_times,
-            pop_empty_ratio,
-            max_queue_size,
-            blk_avg_bytes,
-            approx_max_pending_block_bytes / 1024.0 / 1024.0,
-            total_count,
-            total_bytes / 1024.0 / 1024.0,
-            total_rows,
-            total_count > 0 ? total_rows / total_count : 0,
-            total_rows > 0 ? total_bytes / total_rows : 0);
-    }
+    ~SegmentReadTaskPool() override;
 
     SegmentReadTaskPtr nextTask();
     const std::unordered_map<GlobalSegmentID, SegmentReadTaskPtr> & getTasks();
@@ -221,6 +195,7 @@ private:
     SegmentReadTasksWrapper tasks_wrapper;
     AfterSegmentRead after_segment_read;
     mutable std::mutex mutex;
+    size_t peak_active_segments;
     std::unordered_set<GlobalSegmentID> active_segment_ids;
     WorkQueue<Block> q;
     BlockStat blk_stat;
@@ -231,7 +206,7 @@ private:
     std::atomic<bool> exception_happened;
     DB::Exception exception;
 
-    // SegmentReadTaskPool will be holded by several UnorderedBlockInputStreams.
+    // SegmentReadTaskPool will be held by several UnorderedBlockInputStreams.
     // It will be added to SegmentReadTaskScheduler when one of the UnorderedBlockInputStreams being read.
     // Since several UnorderedBlockInputStreams can be read by several threads concurrently, we use
     // std::once_flag and std::call_once to prevent duplicated add.

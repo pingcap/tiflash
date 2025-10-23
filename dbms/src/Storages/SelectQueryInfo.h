@@ -53,15 +53,17 @@ struct SelectQueryInfo
     std::string req_id;
     bool keep_order = true;
     bool is_fast_scan = false;
+    bool has_multiple_partitions = false;
 
     SelectQueryInfo();
     ~SelectQueryInfo();
 
-    // support copying and moving
+    // Support copying and moving
+    // Note: should update the following functions when adding new members
     SelectQueryInfo(const SelectQueryInfo & rhs);
     SelectQueryInfo(SelectQueryInfo && rhs) noexcept;
 
-    bool fromAST() const { return dag_query == nullptr; };
+    bool fromAST() const { return dag_query == nullptr; }
 };
 
 } // namespace DB
