@@ -165,4 +165,100 @@ try
 }
 CATCH
 
+TEST_F(LearnerReadTest, UnavailableRegionsToString)
+try
+{
+    // region
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        regions.addStatus(1, RegionException::RegionReadStatus::NOT_FOUND, "mockA");
+        regions.addStatus(2, RegionException::RegionReadStatus::EPOCH_NOT_MATCH, "mockB");
+        regions.addStatus(3, RegionException::RegionReadStatus::NOT_LEADER, "mockC");
+        regions.addStatus(4, RegionException::RegionReadStatus::NOT_FOUND_TIKV, "mockD");
+        regions.addStatus(5, RegionException::RegionReadStatus::TIKV_SERVER_ISSUE, "mockE");
+        regions.addStatus(6, RegionException::RegionReadStatus::STALE_COMMAND, "mockF");
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 5
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        regions.addStatus(1, RegionException::RegionReadStatus::NOT_FOUND, "mockA");
+        regions.addStatus(2, RegionException::RegionReadStatus::EPOCH_NOT_MATCH, "mockB");
+        regions.addStatus(3, RegionException::RegionReadStatus::NOT_LEADER, "mockC");
+        regions.addStatus(4, RegionException::RegionReadStatus::NOT_FOUND_TIKV, "mockD");
+        regions.addStatus(5, RegionException::RegionReadStatus::TIKV_SERVER_ISSUE, "mockE");
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 5
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        regions.addStatus(1, RegionException::RegionReadStatus::NOT_FOUND, "mockA");
+        regions.addStatus(2, RegionException::RegionReadStatus::EPOCH_NOT_MATCH, "mockB");
+        regions.addStatus(3, RegionException::RegionReadStatus::NOT_LEADER, "mockC");
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 3
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+    // lock
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        auto gen_lock = []() {
+            auto lock = std::make_unique<kvrpcpb::LockInfo>();
+            lock->set_lock_ttl(100);
+            lock->set_lock_type(kvrpcpb::Op::Lock);
+            return lock;
+        };
+        regions.addRegionLock(1, gen_lock());
+        regions.addRegionLock(2, gen_lock());
+        regions.addRegionLock(3, gen_lock());
+        regions.addRegionLock(4, gen_lock());
+        regions.addRegionLock(5, gen_lock());
+        regions.addRegionLock(6, gen_lock());
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 5
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        auto gen_lock = []() {
+            auto lock = std::make_unique<kvrpcpb::LockInfo>();
+            lock->set_lock_ttl(100);
+            lock->set_lock_type(kvrpcpb::Op::Lock);
+            return lock;
+        };
+        regions.addRegionLock(1, gen_lock());
+        regions.addRegionLock(2, gen_lock());
+        regions.addRegionLock(3, gen_lock());
+        regions.addRegionLock(4, gen_lock());
+        regions.addRegionLock(5, gen_lock());
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 5
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+    {
+        UnavailableRegions regions(/*for_batch_cop_=*/true, /*is_wn_disagg_read_=*/false);
+        auto gen_lock = []() {
+            auto lock = std::make_unique<kvrpcpb::LockInfo>();
+            lock->set_lock_ttl(100);
+            lock->set_lock_type(kvrpcpb::Op::Lock);
+            return lock;
+        };
+        regions.addRegionLock(1, gen_lock());
+        regions.addRegionLock(2, gen_lock());
+        regions.addRegionLock(3, gen_lock());
+        // show all
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(0));
+        // show first 3
+        LOG_INFO(Logger::get(), "{}", regions.toDebugString(5));
+    }
+}
+CATCH
+
 } // namespace DB::tests
