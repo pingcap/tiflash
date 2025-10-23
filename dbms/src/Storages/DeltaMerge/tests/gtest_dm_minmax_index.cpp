@@ -163,7 +163,7 @@ bool checkMatch(
         std::vector<RuntimeFilterPtr>{},
         0,
         name,
-        false);
+        DMReadOptions{});
     auto rows = getInputStreamNRows(streams[0]);
     store->drop();
 

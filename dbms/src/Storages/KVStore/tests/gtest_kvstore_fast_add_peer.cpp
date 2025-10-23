@@ -345,8 +345,7 @@ void verifyRows(Context & ctx, DM::DeltaMergeStorePtr store, const DM::RowKeyRan
         std::vector<RuntimeFilterPtr>{},
         0,
         "KVStoreFastAddPeer",
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DM::DMReadOptions{},
         /* expected_block_size= */ 1024)[0];
     ASSERT_INPUTSTREAM_NROWS(in, rows);
 }
