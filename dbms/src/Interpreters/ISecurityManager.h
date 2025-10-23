@@ -1,3 +1,5 @@
+// Modified from: https://github.com/ClickHouse/ClickHouse/blob/30fcaeb2a3fff1bf894aae9c776bed7fd83f783f/dbms/src/Interpreters/ISecurityManager.h
+//
 // Copyright 2023 PingCAP, Inc.
 //
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -34,7 +36,8 @@ public:
     virtual UserPtr authorizeAndGetUser(
         const String & user_name,
         const String & password,
-        const Poco::Net::IPAddress & address) const = 0;
+        const Poco::Net::IPAddress & address) const
+        = 0;
 
     /// Just find user
     virtual UserPtr getUser(const String & user_name) const = 0;
