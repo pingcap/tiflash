@@ -35,6 +35,7 @@ public:
         auto mark_guard = S3::S3RandomAccessFile::setReadFileInfo({
             .size = reader.dmfile->getReadFileSize(col_id, colMarkFileName(file_name_base)),
             .scan_context = reader.scan_context,
+            .block_wait = block_wait,
         });
 
         if (likely(reader.dmfile->useMetaV2()))
@@ -59,17 +60,20 @@ public:
         DMFileReader & reader_,
         ColId col_id_,
         const String & file_name_base_,
+        bool block_wait_,
         const ReadLimiterPtr & read_limiter_)
         : reader(reader_)
         , col_id(col_id_)
         , file_name_base(file_name_base_)
         , read_limiter(read_limiter_)
+        , block_wait(block_wait_)
     {}
 
     DMFileReader & reader;
     ColId col_id;
     const String & file_name_base;
     ReadLimiterPtr read_limiter;
+    bool block_wait;
 
 private:
     MarksInCompressedFilePtr loadRawColMarkTo(const MarksInCompressedFilePtr & res, size_t bytes_size)
@@ -288,6 +292,7 @@ ColumnReadStream::ColumnReadStream(
     ColId col_id,
     const String & file_name_base,
     size_t max_read_buffer_size,
+    bool block_wait,
     const LoggerPtr & log,
     const ReadLimiterPtr & read_limiter)
     : avg_size_hint(reader.dmfile->getColumnStat(col_id).avg_size)
@@ -297,9 +302,9 @@ ColumnReadStream::ColumnReadStream(
     if (reader.mark_cache)
         marks = reader.mark_cache->getOrSet(
             reader.dmfile->colMarkCacheKey(file_name_base),
-            MarkLoader(reader, col_id, file_name_base, read_limiter));
+            MarkLoader(reader, col_id, file_name_base, block_wait, read_limiter));
     else
-        marks = MarkLoader(reader, col_id, file_name_base, read_limiter)();
+        marks = MarkLoader(reader, col_id, file_name_base, block_wait, read_limiter)();
 
     // skip empty dmfile
     size_t packs = reader.dmfile->getPacks();
@@ -309,6 +314,7 @@ ColumnReadStream::ColumnReadStream(
     auto data_guard = S3::S3RandomAccessFile::setReadFileInfo({
         .size = reader.dmfile->getReadFileSize(col_id, colDataFileName(file_name_base)),
         .scan_context = reader.scan_context,
+        .block_wait = block_wait,
     });
 
     // load column data read buffer

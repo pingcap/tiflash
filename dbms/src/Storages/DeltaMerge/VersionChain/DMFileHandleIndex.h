@@ -154,6 +154,7 @@ private:
             dmfile,
             {getHandleColumnDefine<HandleType>()},
             isCommonHandle<HandleType>(),
+            /*block_wait*/ false,
             /*enable_handle_clean_read*/ false,
             /*enable_del_clean_read*/ false,
             /*is_fast_scan*/ false,

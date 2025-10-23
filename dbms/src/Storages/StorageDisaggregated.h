@@ -76,7 +76,7 @@ private:
         const Context & db_context,
         unsigned num_streams);
 
-    DM::SegmentReadTasks buildReadTaskWithBackoff(const Context & db_context);
+    DM::SegmentReadTasks buildReadTaskWithBackoff(const Context & db_context, const DM::ScanContextPtr & scan_context);
 
     DM::SegmentReadTasks buildReadTask(const Context & db_context, const DM::ScanContextPtr & scan_context);
 

@@ -244,6 +244,7 @@ private:
     IdSetPtr read_packs;
     MarkCachePtr mark_cache;
     MinMaxIndexCachePtr index_cache;
+    bool block_wait = false;
     // column cache
     bool enable_column_cache = false;
     ColumnCachePtr column_cache;
