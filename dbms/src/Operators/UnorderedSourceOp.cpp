@@ -16,6 +16,7 @@
 #include <Flash/Pipeline/Schedule/TaskScheduler.h>
 #include <Flash/Pipeline/Schedule/Tasks/Impls/RFWaitTask.h>
 #include <Operators/UnorderedSourceOp.h>
+#include <Storages/DeltaMerge/SegmentReadTaskPool.h>
 
 namespace DB
 {
@@ -49,6 +50,18 @@ UnorderedSourceOp::UnorderedSourceOp(
     }
 }
 
+UnorderedSourceOp::~UnorderedSourceOp()
+{
+    if (const auto rc_before_decr = task_pool->decreaseUnorderedInputStreamRefCount(); rc_before_decr == 1)
+    {
+        LOG_INFO(
+            log,
+            "All unordered input streams are finished, pool_id={} last_stream_ref_no={}",
+            task_pool->pool_id,
+            ref_no);
+    }
+}
+
 OperatorStatus UnorderedSourceOp::readImpl(Block & block)
 {
     if unlikely (done)
@@ -74,6 +87,7 @@ OperatorStatus UnorderedSourceOp::readImpl(Block & block)
         else
         {
             done = true;
+            // return HAS_OUTPUT with empty block to indicate end of stream
             return OperatorStatus::HAS_OUTPUT;
         }
     }

@@ -22,6 +22,7 @@
 #include <Flash/Pipeline/Schedule/Tasks/OneTimeNotifyFuture.h>
 #include <Operators/CTE.h>
 #include <Operators/SharedQueue.h>
+#include <Storages/DeltaMerge/ReadThread/ActiveSegmentReadTaskQueue.h>
 
 #include <exception>
 
@@ -178,6 +179,7 @@ void PipelineExecutorContext::cancel()
     bool origin_value = false;
     if (is_cancelled.compare_exchange_strong(origin_value, true, std::memory_order_release))
     {
+        cancelStorageTaskQueues();
         cancelSharedQueues();
         cancelOneTimeFutures();
         if (likely(dag_context))
@@ -232,6 +234,25 @@ void PipelineExecutorContext::cancelSharedQueues()
     }
     for (const auto & shared_queue : tmp)
         shared_queue->cancel();
+}
+
+void PipelineExecutorContext::addStorageTaskQueue(const DM::ActiveSegmentReadTaskQueuePtr & storage_task_queue)
+{
+    std::lock_guard lock(mu);
+    RUNTIME_CHECK_MSG(!isCancelled(), "query has been cancelled.");
+    assert(storage_task_queue);
+    storage_task_queues.push_back(storage_task_queue);
+}
+
+void PipelineExecutorContext::cancelStorageTaskQueues()
+{
+    std::vector<DM::ActiveSegmentReadTaskQueuePtr> tmp;
+    {
+        std::lock_guard lock(mu);
+        std::swap(tmp, storage_task_queues);
+    }
+    for (const auto & storage_task_queue : tmp)
+        storage_task_queue->finishQueue();
 }
 
 void PipelineExecutorContext::addOneTimeFuture(const OneTimeNotifyFuturePtr & future)

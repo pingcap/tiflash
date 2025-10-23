@@ -565,12 +565,15 @@ ColumnPtr DMFileReader::readFromDiskOrSharingCache(
     size_t read_rows)
 {
     bool has_concurrent_reader = DMFileReaderPool::instance().hasConcurrentReader(*this);
+
+    // If reaching `max_sharing_column_bytes`, do not fill data_sharing_col_data_cache anymore.
     bool reach_sharing_column_memory_limit = shared_column_data_mem_tracker != nullptr
         && std::cmp_greater_equal(shared_column_data_mem_tracker->get(), max_sharing_column_bytes);
     if (reach_sharing_column_memory_limit)
     {
         GET_METRIC(tiflash_storage_read_thread_counter, type_add_cache_total_bytes_limit).Increment();
     }
+
     if (has_concurrent_reader && !reach_sharing_column_memory_limit)
     {
         auto column = getColumnFromCache(
@@ -599,6 +602,7 @@ ColumnPtr DMFileReader::readFromDiskOrSharingCache(
         return column;
     }
 
+    // Directly read from disk ignoring the data_sharing_col_data_cache.
     return readFromDisk(cd, type_on_disk, start_pack_id, read_rows);
 }
 

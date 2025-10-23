@@ -35,6 +35,11 @@ using PreparedSets = std::unordered_map<IAST *, SetPtr>;
 struct MvccQueryInfo;
 struct DAGQueryInfo;
 
+namespace DM
+{
+class ActiveSegmentReadTaskQueue;
+using ActiveSegmentReadTaskQueuePtr = std::shared_ptr<ActiveSegmentReadTaskQueue>;
+} // namespace DM
 
 /** Query along with some additional data,
   *  that can be used during query processing
@@ -56,10 +61,13 @@ struct SelectQueryInfo
     bool keep_order = true;
     bool is_fast_scan = false;
 
+    DM::ActiveSegmentReadTaskQueuePtr read_queue;
+
     SelectQueryInfo();
     ~SelectQueryInfo();
 
-    // support copying and moving
+    // Support copying and moving
+    // Note: should update the following functions when adding new members
     SelectQueryInfo(const SelectQueryInfo & rhs);
     SelectQueryInfo(SelectQueryInfo && rhs) noexcept;
 

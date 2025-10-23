@@ -92,8 +92,11 @@ protected:
 
     SegmentReadTaskPoolPtr createSegmentReadTaskPool(const std::vector<PageIdU64> & seg_ids)
     {
+        size_t num_streams = 1;
+        auto read_queue = std::make_shared<DM::ActiveSegmentReadTaskQueue>(num_streams);
         auto dm_context = createDMContext();
         return std::make_shared<SegmentReadTaskPool>(
+            read_queue,
             /*extra_table_id_index_*/ dm_context->physical_table_id,
             /*columns_to_read_*/ ColumnDefines{},
             /*filter_*/ nullptr,
@@ -104,8 +107,9 @@ protected:
             /*after_segment_read_*/ [&](const DMContextPtr &, const SegmentPtr &) { /*do nothing*/ },
             /*tracing_id_*/ String{},
             /*enable_read_thread_*/ true,
-            /*num_streams_*/ 1,
+            /*num_streams_*/ num_streams,
             /*keyspace_id_*/ NullspaceID,
+            dm_context->physical_table_id,
             /*res_group_name_*/ String{});
     }
 
