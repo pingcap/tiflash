@@ -63,7 +63,7 @@ struct SelectQueryInfo
     SelectQueryInfo(const SelectQueryInfo & rhs);
     SelectQueryInfo(SelectQueryInfo && rhs) noexcept;
 
-    bool fromAST() const { return dag_query == nullptr; };
+    bool fromAST() const { return dag_query == nullptr; }
 };
 
 } // namespace DB
