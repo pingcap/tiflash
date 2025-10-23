@@ -939,6 +939,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
     RUNTIME_CHECK_MSG(mvcc_query_info->scan_context != nullptr, "Unexpected null scan_context");
     if (table_scan.isPartitionTableScan())
     {
+        bool has_multiple_partitions = table_scan.getPhysicalTableIDs().size() > 1;
         for (const auto physical_table_id : table_scan.getPhysicalTableIDs())
         {
             SelectQueryInfo query_info = create_query_info(physical_table_id);
@@ -946,6 +947,7 @@ std::unordered_map<TableID, SelectQueryInfo> DAGStorageInterpreter::generateSele
                 mvcc_query_info->resolve_locks,
                 mvcc_query_info->start_ts,
                 mvcc_query_info->scan_context);
+            query_info.has_multiple_partitions = has_multiple_partitions;
             ret.emplace(physical_table_id, std::move(query_info));
         }
         // Dispatch the regions_query_info to different physical table's query_info

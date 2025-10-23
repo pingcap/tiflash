@@ -92,8 +92,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         BlockInputStreamPtr in2 = store->read(
             *db_context,
@@ -106,8 +105,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         try
         {
@@ -215,8 +213,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 128)[0];
         auto blk = in->read();
         // DMFileReader is created and add to DMFileReaderPool.

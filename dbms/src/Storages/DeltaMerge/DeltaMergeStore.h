@@ -97,6 +97,13 @@ using LocalIndexesStats = std::vector<LocalIndexStats>;
 class DeltaMergeStore;
 using DeltaMergeStorePtr = std::shared_ptr<DeltaMergeStore>;
 
+// TODO: merge more parameters to ReadOptions
+struct DMReadOptions
+{
+    bool keep_order = false;
+    bool is_fast_scan = false;
+    bool has_multiple_partitions = false;
+};
 class DeltaMergeStore
     : private boost::noncopyable
     , public std::enable_shared_from_this<DeltaMergeStore>
@@ -275,7 +282,7 @@ public:
 
     /// You must ensure external files are ordered and do not overlap. Otherwise exceptions will be thrown.
     /// You must ensure all of the external files are contained by the range. Otherwise exceptions will be thrown.
-    /// Return the 'ingtested bytes'.
+    /// Return the 'ingested bytes'.
     UInt64 ingestFiles(
         const Context & db_context, //
         const DB::Settings & db_settings,
@@ -380,8 +387,7 @@ public:
         const RuntimeFilterList & runtime_filter_list,
         int rf_max_wait_time_ms,
         const String & tracing_id,
-        bool keep_order,
-        bool is_fast_scan = false,
+        const DMReadOptions & read_opts = {},
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         const SegmentIdSet & read_segments = {},
         size_t extra_table_id_index = MutSup::invalid_col_id,
@@ -405,8 +411,7 @@ public:
         const RuntimeFilterList & runtime_filter_list,
         int rf_max_wait_time_ms,
         const String & tracing_id,
-        bool keep_order,
-        bool is_fast_scan = false,
+        const DMReadOptions & read_opts = {},
         size_t expected_block_size = DEFAULT_BLOCK_SIZE,
         const SegmentIdSet & read_segments = {},
         size_t extra_table_id_index = MutSup::invalid_col_id,
@@ -545,7 +550,7 @@ private:
     void waitForDeleteRange(const DMContextPtr & context, const SegmentPtr & segment);
 
     /// Should be called after every write into DeltaMergeStore.
-    /// If the delta cache reaches the foreground flush limit, it will also trigger a KVStore flush of releated regions,
+    /// If the delta cache reaches the foreground flush limit, it will also trigger a KVStore flush of related regions,
     /// by returning a non-empty DM::WriteResult.
     // Deferencing `Iter` can get a pointer to a Segment.
     template <typename Iter>
@@ -760,18 +765,18 @@ private:
 private:
     /**
       * Remove the segment from the store's memory structure.
-      * Not protected by lock, should accquire lock before calling this function.
+      * Not protected by lock, should acquire lock before calling this function.
       */
     void removeSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
     /**
       * Add the segment to the store's memory structure.
-      * Not protected by lock, should accquire lock before calling this function.
+      * Not protected by lock, should acquire lock before calling this function.
       */
     void addSegment(std::unique_lock<std::shared_mutex> &, const SegmentPtr & segment);
     /**
       * Replace the old segment with the new segment in the store's memory structure.
       * New segment should have the same segment id as the old segment.
-      * Not protected by lock, should accquire lock before calling this function.
+      * Not protected by lock, should acquire lock before calling this function.
       */
     void replaceSegment(
         std::unique_lock<std::shared_mutex> &,

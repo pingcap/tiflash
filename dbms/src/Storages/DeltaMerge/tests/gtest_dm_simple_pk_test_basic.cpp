@@ -345,8 +345,7 @@ size_t SimplePKTestBasic::getRowsN() const
         std::vector<RuntimeFilterPtr>{},
         0,
         "",
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DMReadOptions{},
         /* expected_block_size= */ 1024)[0];
     return getInputStreamNRows(in);
 }
@@ -364,8 +363,7 @@ size_t SimplePKTestBasic::getRowsN(Int64 start_key, Int64 end_key) const
         std::vector<RuntimeFilterPtr>{},
         0,
         "",
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DMReadOptions{},
         /* expected_block_size= */ 1024)[0];
     return getInputStreamNRows(in);
 }
