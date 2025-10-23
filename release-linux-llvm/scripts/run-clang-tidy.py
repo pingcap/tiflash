@@ -360,5 +360,4 @@ def main():
 
 
 if __name__ == '__main__':
-    # main()
-    print("Skip clang-tidy for now")
+    main()
