@@ -289,8 +289,7 @@ try
         std::vector<RuntimeFilterPtr>{},
         0,
         "",
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DMReadOptions{},
         /* expected_block_size= */ 1024)[0];
     ASSERT_INPUTSTREAM_NROWS(in, 100);
 }
@@ -470,8 +469,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -538,8 +536,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ DEFAULT_BLOCK_SIZE)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -578,8 +575,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 102400)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -650,8 +646,7 @@ try
         std::vector<RuntimeFilterPtr>{},
         0,
         TRACING_NAME,
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DMReadOptions{},
         /* expected_block_size= */ 1024,
         /* read_segments */ {},
         /* extra_table_id_index */ MutSup::invalid_col_id,
@@ -678,8 +673,7 @@ try
         std::vector<RuntimeFilterPtr>{},
         0,
         TRACING_NAME,
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DMReadOptions{},
         /* expected_block_size= */ 1024,
         /* read_segments */ {},
         /* extra_table_id_index */ MutSup::invalid_col_id,
@@ -768,8 +762,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_INPUTSTREAM_NROWS(in, 0);
     }
@@ -853,8 +846,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -905,8 +897,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -935,8 +926,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -1017,8 +1007,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -1092,8 +1081,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -1116,8 +1104,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -1164,8 +1151,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -1197,8 +1183,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -1228,8 +1213,7 @@ try
         std::vector<RuntimeFilterPtr>{},
         0,
         TRACING_NAME,
-        /* keep_order= */ false,
-        /* is_fast_scan= */ false,
+        DMReadOptions{},
         /* expected_block_size= */ 1024)[0];
     auto b = in->read();
     ASSERT_FALSE(static_cast<bool>(b));
@@ -1269,8 +1253,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1291,8 +1274,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1313,8 +1295,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1335,8 +1316,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1392,8 +1372,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1421,8 +1400,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1452,8 +1430,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1475,8 +1452,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1499,8 +1475,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr in = ins[0];
@@ -1557,8 +1532,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1586,8 +1560,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1617,8 +1590,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1);
         BlockInputStreamPtr in = ins[0];
@@ -1658,8 +1630,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             /* rf_max_wait_time_ms= */ 0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             DEFAULT_BLOCK_SIZE)[0];
         std::unordered_map<Int64, UInt64> data;
         stream->readPrefix();
@@ -1889,8 +1860,7 @@ try
                 std::vector<RuntimeFilterPtr>{},
                 0,
                 TRACING_NAME,
-                /* keep_order= */ false,
-                /* is_fast_scan= */ false,
+                DMReadOptions{},
                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
@@ -1977,8 +1947,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2063,8 +2032,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2134,8 +2102,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2203,8 +2170,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
 
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
@@ -2254,8 +2220,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -2304,8 +2269,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -2354,8 +2318,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
 
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
@@ -2404,8 +2367,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
 
         std::vector<DataTypeMyDateTime::FieldType> datetime_data(
@@ -2460,8 +2422,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -2535,8 +2496,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -2614,8 +2574,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2722,8 +2681,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024);
         ASSERT_EQ(ins.size(), 1UL);
         BlockInputStreamPtr & in = ins[0];
@@ -2773,8 +2731,7 @@ try
                 std::vector<RuntimeFilterPtr>{},
                 0,
                 TRACING_NAME,
-                /* keep_order= */ false,
-                /* is_fast_scan= */ false,
+                DMReadOptions{},
                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr & in = ins[0];
@@ -2846,8 +2803,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         ASSERT_UNORDERED_INPUTSTREAM_COLS_UR(
             in,
@@ -2894,8 +2850,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
 
         // FIXME!!!
@@ -2995,8 +2950,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             "",
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         auto block = in->read();
         ASSERT_EQ(block.rows(), 128);
@@ -3079,8 +3033,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             "",
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         auto block = in->read();
         ASSERT_EQ(block.rows(), 128);
@@ -3175,8 +3128,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
 
         // mock common handle
@@ -3290,8 +3242,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -3368,8 +3319,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -3402,8 +3352,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -3463,8 +3412,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         // mock common handle
         auto common_handle_coldata = []() {
@@ -3503,8 +3451,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
         // mock common handle, data range after deletion is [64, 128)
         auto common_handle_coldata = []() {
@@ -3574,8 +3521,7 @@ try
                 std::vector<RuntimeFilterPtr>{},
                 0,
                 TRACING_NAME,
-                /* keep_order= */ false,
-                /* is_fast_scan= */ false,
+                DMReadOptions{},
                 /* expected_block_size= */ 1024);
             ASSERT_EQ(ins.size(), 1UL);
             BlockInputStreamPtr in = ins[0];
@@ -4085,7 +4031,10 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             TRACING_NAME,
-            /* keep_order= */ true)[0]; // set keep order to let read_mode = Normal
+            DMReadOptions{
+                // set keep order to let read_mode = Normal
+                .keep_order = true,
+            })[0];
         ASSERT_INPUTSTREAM_NROWS(in, num_rows_each_block * num_block - num_rows_each_block * 2);
     }
 }
@@ -4122,8 +4071,7 @@ void DeltaMergeStoreRWTest::dupHandleVersionAndDeltaIndexAdvancedThanSnapshot()
             std::vector<RuntimeFilterPtr>{},
             /* rf_max_wait_time_ms= */ 0,
             TRACING_NAME,
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             DEFAULT_BLOCK_SIZE)[0];
     };
 
@@ -4313,8 +4261,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             "",
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
 
         Int64 rows = 0;
@@ -4442,8 +4389,7 @@ try
             std::vector<RuntimeFilterPtr>{},
             0,
             "",
-            /* keep_order= */ false,
-            /* is_fast_scan= */ false,
+            DMReadOptions{},
             /* expected_block_size= */ 1024)[0];
 
         Int64 rows = 0;
