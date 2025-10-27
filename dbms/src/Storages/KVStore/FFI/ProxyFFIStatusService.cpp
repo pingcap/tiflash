@@ -415,21 +415,17 @@ HttpRequestRes HandleHttpRequestSyncSchema(
     std::string_view,
     std::string_view)
 {
-    pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
-    TableID table_id = InvalidTableID;
-    HttpRequestStatus status = HttpRequestStatus::Ok;
     auto log = Logger::get("HandleHttpRequestSyncSchema");
 
     auto & global_context = server->tmt->getContext();
     // For compute node, simply return OK
     if (global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        return HttpRequestRes{
-            .status = status,
-            .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-        };
+        return buildRespWithCode(HttpRequestStatus::Ok, api_name, "");
     }
 
+    pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
+    TableID table_id = InvalidTableID;
     {
         LOG_TRACE(log, "handling sync schema request, path: {}, api_name: {}", path, api_name);
 
