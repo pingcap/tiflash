@@ -164,7 +164,6 @@ HttpRequestRes HandleHttpRequestSyncStatus(
 }
 
 // Return store status of this tiflash node
-// TiUP/tidb-operator rely on this API to check whether the tiflash node is ready
 HttpRequestRes HandleHttpRequestStoreStatus(
     EngineStoreServerWrap * server,
     std::string_view,
@@ -201,11 +200,10 @@ HttpRequestRes HandleHttpRequestReadyz(
     if (query.find("verbose") != std::string_view::npos)
         verbose = true;
 
-    // If store_status == "running", return "ok" and 200 status code
-    // Otherwise return error and 500 status code
     bool is_ready = true;
     std::string response_lines;
 
+    // Check whether store_status == "running", 
     auto store_status = server->tmt->getStoreStatus(std::memory_order_relaxed);
     switch (store_status)
     {
@@ -218,7 +216,8 @@ HttpRequestRes HandleHttpRequestReadyz(
     default:
         if (verbose)
         {
-            response_lines += fmt::format("[-]store_status fail: store_status={}\n", magic_enum::enum_name(store_status));
+            response_lines
+                += fmt::format("[-]store_status fail: store_status={}\n", magic_enum::enum_name(store_status));
         }
         is_ready = false;
         break;
@@ -226,11 +225,13 @@ HttpRequestRes HandleHttpRequestReadyz(
 
     if (is_ready)
     {
+        // Return "ok" and 200 status code
         response_lines += "ok\n";
         return buildOkResp(api_name, std::move(response_lines));
     }
     else
     {
+        // Not ready for servering requests, return error and 500 status code
         response_lines += "fail\n";
         return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(response_lines));
     }
@@ -403,7 +404,6 @@ HttpRequestRes HandleHttpRequestSyncRegion(
     json->set("count", list->size());
     json->set("regions", list);
     json->stringify(ss);
-    auto body = ss.str();
     return buildOkResp(api_name, ss.str());
 }
 
@@ -497,12 +497,13 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
     {"/tiflash/sync-region/", HandleHttpRequestSyncRegion},
     {"/tiflash/sync-schema/", HandleHttpRequestSyncSchema},
 
-    // ==== liveness, readiness and store status APIs ==== //
+    // ==== liveness, readiness APIs ==== //
+    // ==== TiUP/tidb-operator rely on following APIs ==== //
     // Old API kept for compatibility
     {"/tiflash/store-status", HandleHttpRequestStoreStatus},
-    // liveness
+    // liveness. Check whether the tiflash node is alive
     {"/tiflash/livez", HandleHttpRequestLivez},
-    // readiness
+    // readiness. Check whether the tiflash node is ready for serving requests
     {"/tiflash/readyz", HandleHttpRequestReadyz},
 
     {"/tiflash/remote/owner/info", HandleHttpRequestRemoteOwnerInfo},
@@ -543,14 +544,7 @@ HttpRequestRes HandleHttpRequest(
         }
     }
     // Not found handler for this URI
-    return HttpRequestRes{
-        .status = HttpRequestStatus::NotFound,
-        .api_name = CppStrWithView{
-            .inner = GenRawCppPtr(),
-            .view = BaseBuffView{nullptr, 0},
-        },
-        .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-    };
+    return buildRespWithCode(HttpRequestStatus::NotFound, "", "");
 }
 
 } // namespace DB
