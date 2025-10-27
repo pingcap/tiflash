@@ -43,19 +43,20 @@ extern const char sync_schema_request_failure[];
 } // namespace FailPoints
 
 template <typename T>
-HttpRequestRes buildRespWithCode(HttpRequestStatus status_code, T && body)
+HttpRequestRes buildRespWithCode(HttpRequestStatus status_code, const std::string & api_name, T && body)
 {
     return HttpRequestRes{
         .status = status_code,
+        .api_name = GenCppStrWithView(std::string(api_name)),
         // response body
         .res = GenCppStrWithView(std::forward<T>(body)),
     };
 }
 
 template <typename T>
-HttpRequestRes buildOkResp(T && body)
+HttpRequestRes buildOkResp(const std::string & api_name, T && body)
 {
-    return buildRespWithCode(HttpRequestStatus::Ok, std::forward<T>(body));
+    return buildRespWithCode(HttpRequestStatus::Ok, api_name, std::forward<T>(body));
 }
 
 HttpRequestRes HandleHttpRequestSyncStatus(
@@ -81,7 +82,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
             && (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table"))
         {
             LOG_ERROR(log, "invalid SyncStatus request: {}", query);
-            return buildRespWithCode(HttpRequestStatus::ErrorParam, "");
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
 
 
@@ -99,7 +100,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         }
         catch (...)
         {
-            return buildRespWithCode(HttpRequestStatus::ErrorParam, "");
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
     }
 
@@ -159,7 +160,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         " ");
     buf.append("\n");
 
-    return buildOkResp(buf.toString());
+    return buildOkResp(api_name, buf.toString());
 }
 
 // Return store status of this tiflash node
@@ -167,32 +168,32 @@ HttpRequestRes HandleHttpRequestSyncStatus(
 HttpRequestRes HandleHttpRequestStoreStatus(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
-    return buildOkResp(IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
+    return buildOkResp(api_name, IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
 }
 
 // Return health status of this tiflash node
 HttpRequestRes HandleHttpRequestLivez(
     EngineStoreServerWrap *,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
     // Simply return ok for liveness probe
     std::string response_lines;
     response_lines += "ok\n";
-    return buildOkResp(std::move(response_lines));
+    return buildOkResp(api_name, std::move(response_lines));
 }
 
 // Return "readiness" status of this tiflash node
 HttpRequestRes HandleHttpRequestReadyz(
     EngineStoreServerWrap * server,
     std::string_view /*path*/,
-    const std::string & /*api_name*/,
+    const std::string & api_name,
     std::string_view query,
     std::string_view /*body*/)
 {
@@ -226,12 +227,12 @@ HttpRequestRes HandleHttpRequestReadyz(
     if (is_ready)
     {
         response_lines += "ok\n";
-        return buildOkResp(std::move(response_lines));
+        return buildOkResp(api_name, std::move(response_lines));
     }
     else
     {
         response_lines += "fail\n";
-        return buildRespWithCode(HttpRequestStatus::ErrorParam, std::move(response_lines));
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(response_lines));
     }
 }
 
@@ -240,7 +241,7 @@ HttpRequestRes HandleHttpRequestReadyz(
 // If not, return a HttpRequestRes with error message.
 std::optional<HttpRequestRes> allowDisaggAPI(
     Context & global_ctx,
-    const std::string & /*api_name*/,
+    const std::string & api_name,
     DisaggregatedMode expect_mode,
     std::string_view message)
 {
@@ -250,7 +251,7 @@ std::optional<HttpRequestRes> allowDisaggAPI(
             R"json({{"message":"{}, disagg_mode={}"}})json",
             message,
             magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode));
-        return buildOkResp(std::move(body));
+        return buildOkResp(api_name, std::move(body));
     }
     return std::nullopt;
 }
@@ -271,7 +272,7 @@ HttpRequestRes HandleHttpRequestRemoteReUpload(
     }
 
     bool flag_set = global_ctx.tryUploadAllDataToRemoteStore();
-    return buildOkResp(fmt::format(R"json({{"message":"flag_set={}"}})json", flag_set));
+    return buildOkResp(api_name, fmt::format(R"json({{"message":"flag_set={}"}})json", flag_set));
 }
 
 // get the remote gc owner info
@@ -291,10 +292,12 @@ HttpRequestRes HandleHttpRequestRemoteOwnerInfo(
 
     const auto & owner = server->tmt->getS3GCOwnerManager();
     const auto owner_info = owner->getOwnerID();
-    return buildOkResp(fmt::format(
-        R"json({{"status":"{}","owner_id":"{}"}})json",
-        magic_enum::enum_name(owner_info.status),
-        owner_info.owner_id));
+    return buildOkResp(
+        api_name,
+        fmt::format(
+            R"json({{"status":"{}","owner_id":"{}"}})json",
+            magic_enum::enum_name(owner_info.status),
+            owner_info.owner_id));
 }
 
 // resign if this node is the remote gc owner
@@ -316,7 +319,7 @@ HttpRequestRes HandleHttpRequestRemoteOwnerResign(
     bool has_resign = owner->resignOwner();
     String msg = has_resign ? "Done" : "This node is not the remote gc owner, can't be resigned.";
     auto body = fmt::format(R"json({{"message":"{}"}})json", msg);
-    return buildOkResp(std::move(body));
+    return buildOkResp(api_name, std::move(body));
 }
 
 // execute remote gc if this node is the remote gc owner
@@ -347,7 +350,7 @@ HttpRequestRes HandleHttpRequestRemoteGC(
         magic_enum::enum_name(owner_info.status),
         owner_info.owner_id,
         gc_is_executed);
-    return buildOkResp(std::move(body));
+    return buildOkResp(api_name, std::move(body));
 }
 
 // Acquiring the all the region ids created in this TiFlash node with given keyspace id.
@@ -369,7 +372,7 @@ HttpRequestRes HandleHttpRequestSyncRegion(
         if (query_parts.size() != 2 || query_parts[0] != "keyspace")
         {
             LOG_WARNING(log, "invalid SyncRegion request: {}", query);
-            return buildRespWithCode(HttpRequestStatus::ErrorParam, "");
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
         try
         {
@@ -378,7 +381,7 @@ HttpRequestRes HandleHttpRequestSyncRegion(
         catch (...)
         {
             LOG_WARNING(log, "fail to parse keyspace_id, path={}", path);
-            return buildRespWithCode(HttpRequestStatus::ErrorParam, "");
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
     }
 
@@ -401,7 +404,7 @@ HttpRequestRes HandleHttpRequestSyncRegion(
     json->set("regions", list);
     json->stringify(ss);
     auto body = ss.str();
-    return buildOkResp(ss.str());
+    return buildOkResp(api_name, ss.str());
 }
 
 // Acquiring load schema to sync schema from TiKV in this TiFlash node with given keyspace id.
@@ -437,7 +440,7 @@ HttpRequestRes HandleHttpRequestSyncSchema(
         if (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table")
         {
             LOG_WARNING(log, "invalid SyncSchema request: {}", query);
-            return buildRespWithCode(HttpRequestStatus::ErrorParam, "");
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
 
         try
@@ -448,7 +451,7 @@ HttpRequestRes HandleHttpRequestSyncSchema(
         catch (...)
         {
             LOG_WARNING(log, "fail to parse keyspace_id or table_id, path={}", path);
-            return buildRespWithCode(HttpRequestStatus::ErrorParam, "");
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
     }
 
@@ -479,10 +482,10 @@ HttpRequestRes HandleHttpRequestSyncSchema(
         std::stringstream ss;
         json->stringify(ss);
 
-        return buildRespWithCode(HttpRequestStatus::ErrorParam, ss.str());
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, ss.str());
     }
 
-    return buildOkResp("");
+    return buildOkResp(api_name, "");
 }
 
 using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
@@ -545,7 +548,11 @@ HttpRequestRes HandleHttpRequest(
     }
     // Not found handler for this URI
     return HttpRequestRes{
-        .status = HttpRequestStatus::ErrorParam,
+        .status = HttpRequestStatus::NotFound,
+        .api_name = CppStrWithView{
+            .inner = GenRawCppPtr(),
+            .view = BaseBuffView{nullptr, 0},
+        },
         .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
     };
 }
