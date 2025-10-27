@@ -896,6 +896,44 @@ RawCppPtr GenRawCppPtr(RawVoidPtr ptr_, RawCppPtrTypeImpl type_)
     return RawCppPtr{ptr_, static_cast<RawCppPtrType>(type_)};
 }
 
+CppStrWithView GenCppStrWithView(std::string && str)
+{
+    if (str.empty())
+    {
+        return CppStrWithView{
+            .inner = GenRawCppPtr(),
+            .view = BaseBuffView{nullptr, 0},
+        };
+    }
+    // Generate a raw cpp string ptr
+    auto * str_ptr = RawCppString::New(str);
+    // Wrap and return. The rust side will own the raw cpp string ptr.
+    // When rust side drops it, it will call `GcRawCppPtr` to free the memory.
+    return CppStrWithView{
+        .inner = GenRawCppPtr(str_ptr, RawCppPtrTypeImpl::String),
+        .view = BaseBuffView{str_ptr->data(), str_ptr->size()},
+    };
+}
+
+CppStrWithView GenCppStrWithView(const std::string & str)
+{
+    if (str.empty())
+    {
+        return CppStrWithView{
+            .inner = GenRawCppPtr(),
+            .view = BaseBuffView{nullptr, 0},
+        };
+    }
+    // Generate a raw cpp string ptr
+    auto * str_ptr = RawCppString::New(str);
+    // Wrap and return. The rust side will own the raw cpp string ptr.
+    // When rust side drops it, it will call `GcRawCppPtr` to free the memory.
+    return CppStrWithView{
+        .inner = GenRawCppPtr(str_ptr, RawCppPtrTypeImpl::String),
+        .view = BaseBuffView{str_ptr->data(), str_ptr->size()},
+    };
+}
+
 CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_t full)
 {
     std::string config_file_path;
@@ -908,7 +946,7 @@ CppStrWithView GetConfig(EngineStoreServerWrap * server, [[maybe_unused]] uint8_
             return CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}};
         auto * s = RawCppString::New((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
         stream.close();
-        /** the returned str must be formated as TOML, proxy will parse and show in form of JASON.
+        /** the returned str must be formatted as TOML, proxy will parse and show in form of JSON.
          *  curl `http://{status-addr}/config`, got:
          *  {"raftstore-proxy":xxxx,"engine-store":xxx}
          *

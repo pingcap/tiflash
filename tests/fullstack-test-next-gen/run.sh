@@ -39,9 +39,18 @@ if [[ -n "$ENABLE_NEXT_GEN" && "$ENABLE_NEXT_GEN" != "false" && "$ENABLE_NEXT_GE
 
     # set images for next-gen TiFlash cluster
     HUB_ADDR="us-docker.pkg.dev/pingcap-testing-account/hub"
-    export PD_IMAGE="${HUB_ADDR}/tikv/pd/image:${PD_BRANCH:-master}-next-gen"
-    export TIKV_IMAGE="${HUB_ADDR}/tikv/tikv/image:${TIKV_BRANCH:-dedicated}-next-gen"
-    export TIDB_IMAGE="${HUB_ADDR}/pingcap/tidb/images/tidb-server:${TIDB_BRANCH:-master}-next-gen"
+    if [[ -z "${PD_BRANCH}" || "${PD_BRANCH}" == "master" ]]; then
+        PD_BRANCH="master-next-gen"
+    fi
+    if [[ -z "${TIKV_BRANCH}" || "${TIKV_BRANCH}" == "dedicated" ]]; then
+        TIKV_BRANCH="dedicated-next-gen"
+    fi
+    if [[ -z "${TIDB_BRANCH}" || "${TIDB_BRANCH}" == "master" ]]; then
+        TIDB_BRANCH="master-next-gen"
+    fi
+    export PD_IMAGE="${HUB_ADDR}/tikv/pd/image:${PD_BRANCH}"
+    export TIKV_IMAGE="${HUB_ADDR}/tikv/tikv/image:${TIKV_BRANCH}"
+    export TIDB_IMAGE="${HUB_ADDR}/pingcap/tidb/images/tidb-server:${TIDB_BRANCH}"
 
     # clean up previous docker instances, data and log
     ${COMPOSE} -f next-gen-cluster.yaml -f "${DISAGG_TIFLASH_YAML}" down
