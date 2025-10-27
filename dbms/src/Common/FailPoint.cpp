@@ -75,7 +75,8 @@ namespace DB
     M(exception_build_local_index_for_file)                       \
     M(force_not_support_local_index)                              \
     M(sync_schema_request_failure)                                \
-    M(force_set_lifecycle_resp)
+    M(force_set_lifecycle_resp)                                   \
+    M(force_return_store_status)
 
 #define APPLY_FOR_FAILPOINTS(M)                              \
     M(skip_check_segment_update)                             \

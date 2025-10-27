@@ -23,6 +23,7 @@
 #include <Storages/KVStore/FFI/ProxyFFICommon.h>
 #include <Storages/KVStore/KVStore.h>
 #include <Storages/KVStore/TMTContext.h>
+#include <Storages/S3/FileCache.h>
 #include <Storages/S3/S3GCManager.h>
 #include <TiDB/OwnerManager.h>
 #include <TiDB/Schema/SchemaSyncService.h>
@@ -32,6 +33,7 @@
 
 #include <boost/algorithm/string.hpp>
 #include <magic_enum.hpp>
+#include <string>
 
 namespace DB
 {
@@ -40,6 +42,23 @@ namespace FailPoints
 extern const char sync_schema_request_failure[];
 } // namespace FailPoints
 
+template <typename T>
+HttpRequestRes buildRespWithCode(HttpRequestStatus status_code, const std::string & api_name, T && body)
+{
+    return HttpRequestRes{
+        .status = status_code,
+        .api_name = GenCppStrWithView(std::string(api_name)),
+        // response body
+        .res = GenCppStrWithView(std::forward<T>(body)),
+    };
+}
+
+template <typename T>
+HttpRequestRes buildOkResp(const std::string & api_name, T && body)
+{
+    return buildRespWithCode(HttpRequestStatus::Ok, api_name, std::forward<T>(body));
+}
+
 HttpRequestRes HandleHttpRequestSyncStatus(
     EngineStoreServerWrap * server,
     std::string_view path,
@@ -47,7 +66,6 @@ HttpRequestRes HandleHttpRequestSyncStatus(
     std::string_view,
     std::string_view)
 {
-    HttpRequestStatus status = HttpRequestStatus::Ok;
     TableID table_id = 0;
     pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
     {
@@ -64,11 +82,7 @@ HttpRequestRes HandleHttpRequestSyncStatus(
             && (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table"))
         {
             LOG_ERROR(log, "invalid SyncStatus request: {}", query);
-            status = HttpRequestStatus::ErrorParam;
-            return HttpRequestRes{
-                .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-            };
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
 
 
@@ -86,14 +100,8 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         }
         catch (...)
         {
-            status = HttpRequestStatus::ErrorParam;
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
-
-        if (status != HttpRequestStatus::Ok)
-            return HttpRequestRes{
-                .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-            };
     }
 
     auto & tmt = *server->tmt;
@@ -152,118 +160,184 @@ HttpRequestRes HandleHttpRequestSyncStatus(
         " ");
     buf.append("\n");
 
-    auto * s = RawCppString::New(buf.toString());
-    return HttpRequestRes{
-        .status = status,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String), .view = BaseBuffView{s->data(), s->size()},
-        },
-    };
+    return buildOkResp(api_name, buf.toString());
 }
 
 // Return store status of this tiflash node
 HttpRequestRes HandleHttpRequestStoreStatus(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
-    auto * name = RawCppString::New(IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
-    return HttpRequestRes{
-        .status = HttpRequestStatus::Ok,
-        .res= CppStrWithView{
-            .inner = GenRawCppPtr(name, RawCppPtrTypeImpl::String), .view = BaseBuffView{name->data(), name->size()},
-        },
-    };
+    return buildOkResp(api_name, IntoStoreStatusName(server->tmt->getStoreStatus(std::memory_order_relaxed)));
+}
+
+// Return health status of this tiflash node
+HttpRequestRes HandleHttpRequestLivez(
+    EngineStoreServerWrap *,
+    std::string_view,
+    const std::string & api_name,
+    std::string_view,
+    std::string_view)
+{
+    // Simply return ok for liveness probe
+    std::string response_lines;
+    response_lines += "ok\n";
+    return buildOkResp(api_name, std::move(response_lines));
+}
+
+// Return "readiness" status of this tiflash node
+HttpRequestRes HandleHttpRequestReadyz(
+    EngineStoreServerWrap * server,
+    std::string_view /*path*/,
+    const std::string & api_name,
+    std::string_view query,
+    std::string_view /*body*/)
+{
+    bool verbose = false;
+    if (query.find("verbose") != std::string_view::npos)
+        verbose = true;
+
+    bool is_ready = true;
+    std::string response_lines;
+
+    // Check whether store_status == "running",
+    auto store_status = server->tmt->getStoreStatus(std::memory_order_relaxed);
+    switch (store_status)
+    {
+    case TMTContext::StoreStatus::Running:
+        if (verbose)
+        {
+            response_lines += fmt::format("[+]store_status ok\n");
+        }
+        break;
+    default:
+        if (verbose)
+        {
+            response_lines
+                += fmt::format("[-]store_status fail: store_status={}\n", magic_enum::enum_name(store_status));
+        }
+        is_ready = false;
+        break;
+    }
+
+    if (is_ready)
+    {
+        // Return "ok" and 200 status code
+        response_lines += "ok\n";
+        return buildOkResp(api_name, std::move(response_lines));
+    }
+    else
+    {
+        // Not ready for servering requests, return error and 500 status code
+        response_lines += "fail\n";
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, std::move(response_lines));
+    }
+}
+
+// A guard function to allow disaggregated API calls only in expected disaggregated mode.
+// If tiflash running with disaggregated mode that is equal to `expect_mode`, then return nullopt.
+// If not, return a HttpRequestRes with error message.
+std::optional<HttpRequestRes> allowDisaggAPI(
+    Context & global_ctx,
+    const std::string & api_name,
+    DisaggregatedMode expect_mode,
+    std::string_view message)
+{
+    if (global_ctx.getSharedContextDisagg()->disaggregated_mode != expect_mode)
+    {
+        auto body = fmt::format(
+            R"json({{"message":"{}, disagg_mode={}"}})json",
+            message,
+            magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode));
+        return buildOkResp(api_name, std::move(body));
+    }
+    return std::nullopt;
 }
 
 /// set a flag for upload all PageData to remote store from local UniPS
 HttpRequestRes HandleHttpRequestRemoteReUpload(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
     auto & global_ctx = server->tmt->getContext();
-    if (!global_ctx.getSharedContextDisagg()->isDisaggregatedStorageMode())
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not sync remote store");
+        err_resp)
     {
-        auto * body = RawCppString::New(fmt::format(
-            R"json({{"message":"can not sync remote store on a node with disagg_mode={}"}})json",
-            magic_enum::enum_name(global_ctx.getSharedContextDisagg()->disaggregated_mode)));
-        return HttpRequestRes{
-            .status = HttpRequestStatus::ErrorParam,
-            .res = CppStrWithView{
-                .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-                .view = BaseBuffView{body->data(), body->size()},
-            },
-        };
+        return err_resp.value();
     }
 
     bool flag_set = global_ctx.tryUploadAllDataToRemoteStore();
-    auto * body = RawCppString::New(fmt::format(R"json({{"message":"flag_set={}"}})json", flag_set));
-    return HttpRequestRes{
-        .status = flag_set ? HttpRequestStatus::Ok : HttpRequestStatus::ErrorParam,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{body->data(), body->size()},
-        },
-    };
+    return buildOkResp(api_name, fmt::format(R"json({{"message":"flag_set={}"}})json", flag_set));
 }
 
 // get the remote gc owner info
 HttpRequestRes HandleHttpRequestRemoteOwnerInfo(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not get gc owner");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
     const auto & owner = server->tmt->getS3GCOwnerManager();
     const auto owner_info = owner->getOwnerID();
-    auto * body = RawCppString::New(fmt::format(
-        R"json({{"status":"{}","owner_id":"{}"}})json",
-        magic_enum::enum_name(owner_info.status),
-        owner_info.owner_id));
-    return HttpRequestRes{
-        .status = HttpRequestStatus::Ok,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{body->data(), body->size()},
-        },
-    };
+    return buildOkResp(
+        api_name,
+        fmt::format(
+            R"json({{"status":"{}","owner_id":"{}"}})json",
+            magic_enum::enum_name(owner_info.status),
+            owner_info.owner_id));
 }
 
 // resign if this node is the remote gc owner
 HttpRequestRes HandleHttpRequestRemoteOwnerResign(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not resign gc owner");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
     const auto & owner = server->tmt->getS3GCOwnerManager();
     bool has_resign = owner->resignOwner();
     String msg = has_resign ? "Done" : "This node is not the remote gc owner, can't be resigned.";
-    auto * body = RawCppString::New(fmt::format(R"json({{"message":"{}"}})json", msg));
-    return HttpRequestRes{
-        .status = HttpRequestStatus::Ok,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{body->data(), body->size()},
-        },
-    };
+    auto body = fmt::format(R"json({{"message":"{}"}})json", msg);
+    return buildOkResp(api_name, std::move(body));
 }
 
 // execute remote gc if this node is the remote gc owner
 HttpRequestRes HandleHttpRequestRemoteGC(
     EngineStoreServerWrap * server,
     std::string_view,
-    const std::string &,
+    const std::string & api_name,
     std::string_view,
     std::string_view)
 {
+    auto & global_ctx = server->tmt->getContext();
+    if (auto err_resp = allowDisaggAPI(global_ctx, api_name, DisaggregatedMode::Storage, "can not trigger gc");
+        err_resp)
+    {
+        return err_resp.value();
+    }
+
     const auto & owner = server->tmt->getS3GCOwnerManager();
     const auto owner_info = owner->getOwnerID();
     bool gc_is_executed = false;
@@ -272,18 +346,12 @@ HttpRequestRes HandleHttpRequestRemoteGC(
         server->tmt->getS3GCManager()->wake();
         gc_is_executed = true;
     }
-    auto * body = RawCppString::New(fmt::format(
+    auto body = fmt::format(
         R"json({{"status":"{}","owner_id":"{}","execute":"{}"}})json",
         magic_enum::enum_name(owner_info.status),
         owner_info.owner_id,
-        gc_is_executed));
-    return HttpRequestRes{
-        .status = HttpRequestStatus::Ok,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(body, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{body->data(), body->size()},
-        },
-    };
+        gc_is_executed);
+    return buildOkResp(api_name, std::move(body));
 }
 
 // Acquiring the all the region ids created in this TiFlash node with given keyspace id.
@@ -294,7 +362,6 @@ HttpRequestRes HandleHttpRequestSyncRegion(
     std::string_view,
     std::string_view)
 {
-    HttpRequestStatus status = HttpRequestStatus::Ok;
     pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
     {
         auto log = Logger::get("HandleHttpRequestSyncRegion");
@@ -305,11 +372,8 @@ HttpRequestRes HandleHttpRequestSyncRegion(
         boost::split(query_parts, query, boost::is_any_of("/"));
         if (query_parts.size() != 2 || query_parts[0] != "keyspace")
         {
-            LOG_ERROR(log, "invalid SyncRegion request: {}", query);
-            status = HttpRequestStatus::ErrorParam;
-            return HttpRequestRes{
-                .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}}};
+            LOG_WARNING(log, "invalid SyncRegion request: {}", query);
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
         try
         {
@@ -317,13 +381,9 @@ HttpRequestRes HandleHttpRequestSyncRegion(
         }
         catch (...)
         {
-            status = HttpRequestStatus::ErrorParam;
+            LOG_WARNING(log, "fail to parse keyspace_id, path={}", path);
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
-        if (status != HttpRequestStatus::Ok)
-            return HttpRequestRes{
-                .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-            };
     }
 
     auto & tmt = *server->tmt;
@@ -344,14 +404,7 @@ HttpRequestRes HandleHttpRequestSyncRegion(
     json->set("count", list->size());
     json->set("regions", list);
     json->stringify(ss);
-    auto * s = RawCppString::New(ss.str());
-    return HttpRequestRes{
-        .status = status,
-        .res = CppStrWithView{
-            .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
-            .view = BaseBuffView{s->data(), s->size()},
-        },
-    };
+    return buildOkResp(api_name, ss.str());
 }
 
 // Acquiring load schema to sync schema from TiKV in this TiFlash node with given keyspace id.
@@ -362,21 +415,17 @@ HttpRequestRes HandleHttpRequestSyncSchema(
     std::string_view,
     std::string_view)
 {
-    pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
-    TableID table_id = InvalidTableID;
-    HttpRequestStatus status = HttpRequestStatus::Ok;
     auto log = Logger::get("HandleHttpRequestSyncSchema");
 
     auto & global_context = server->tmt->getContext();
     // For compute node, simply return OK
     if (global_context.getSharedContextDisagg()->isDisaggregatedComputeMode())
     {
-        return HttpRequestRes{
-            .status = status,
-            .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-        };
+        return buildRespWithCode(HttpRequestStatus::Ok, api_name, "");
     }
 
+    pingcap::pd::KeyspaceID keyspace_id = NullspaceID;
+    TableID table_id = InvalidTableID;
     {
         LOG_TRACE(log, "handling sync schema request, path: {}, api_name: {}", path, api_name);
 
@@ -386,12 +435,8 @@ HttpRequestRes HandleHttpRequestSyncSchema(
         boost::split(query_parts, query, boost::is_any_of("/"));
         if (query_parts.size() != 4 || query_parts[0] != "keyspace" || query_parts[2] != "table")
         {
-            LOG_ERROR(log, "invalid SyncSchema request: {}", query);
-            status = HttpRequestStatus::ErrorParam;
-            return HttpRequestRes{
-                .status = HttpRequestStatus::ErrorParam,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-            };
+            LOG_WARNING(log, "invalid SyncSchema request: {}", query);
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
 
         try
@@ -401,15 +446,9 @@ HttpRequestRes HandleHttpRequestSyncSchema(
         }
         catch (...)
         {
-            status = HttpRequestStatus::ErrorParam;
+            LOG_WARNING(log, "fail to parse keyspace_id or table_id, path={}", path);
+            return buildRespWithCode(HttpRequestStatus::BadRequest, api_name, "");
         }
-
-        if (status != HttpRequestStatus::Ok)
-            return HttpRequestRes{
-                .status = status,
-                .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0},
-                },
-            };
     }
 
     std::string err_msg;
@@ -439,20 +478,10 @@ HttpRequestRes HandleHttpRequestSyncSchema(
         std::stringstream ss;
         json->stringify(ss);
 
-        auto * s = RawCppString::New(ss.str());
-        return HttpRequestRes{
-            .status = HttpRequestStatus::ErrorParam,
-            .res = CppStrWithView{
-                .inner = GenRawCppPtr(s, RawCppPtrTypeImpl::String),
-                .view = BaseBuffView{s->data(), s->size()},
-            },
-        };
+        return buildRespWithCode(HttpRequestStatus::InternalError, api_name, ss.str());
     }
 
-    return HttpRequestRes{
-        .status = status,
-        .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-    };
+    return buildOkResp(api_name, "");
 }
 
 using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
@@ -462,11 +491,21 @@ using HANDLE_HTTP_URI_METHOD = HttpRequestRes (*)(
     std::string_view,
     std::string_view);
 
+// A registry of available HTTP URI prefix (API name) and their handler methods.
 static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = {
     {"/tiflash/sync-status/", HandleHttpRequestSyncStatus},
     {"/tiflash/sync-region/", HandleHttpRequestSyncRegion},
     {"/tiflash/sync-schema/", HandleHttpRequestSyncSchema},
+
+    // ==== liveness, readiness APIs ==== //
+    // ==== TiUP/tidb-operator rely on following APIs ==== //
+    // Old API kept for compatibility
     {"/tiflash/store-status", HandleHttpRequestStoreStatus},
+    // liveness. Check whether the tiflash node is alive
+    {"/tiflash/livez", HandleHttpRequestLivez},
+    // readiness. Check whether the tiflash node is ready for serving requests
+    {"/tiflash/readyz", HandleHttpRequestReadyz},
+
     {"/tiflash/remote/owner/info", HandleHttpRequestRemoteOwnerInfo},
     {"/tiflash/remote/owner/resign", HandleHttpRequestRemoteOwnerResign},
     {"/tiflash/remote/gc", HandleHttpRequestRemoteGC},
@@ -476,10 +515,10 @@ static const std::map<std::string, HANDLE_HTTP_URI_METHOD> AVAILABLE_HTTP_URI = 
 uint8_t CheckHttpUriAvailable(BaseBuffView path_)
 {
     std::string_view path(path_.data, path_.len);
-    for (const auto & [str, method] : AVAILABLE_HTTP_URI)
+    for (const auto & [api_name, method] : AVAILABLE_HTTP_URI)
     {
         std::ignore = method;
-        if (path.size() >= str.size() && path.substr(0, str.size()) == str)
+        if (path.size() >= api_name.size() && path.substr(0, api_name.size()) == api_name)
             return true;
     }
     return false;
@@ -499,15 +538,13 @@ HttpRequestRes HandleHttpRequest(
             return method(
                 server,
                 path,
-                str,
-                std::string_view(query.data, query.len),
-                std::string_view(body.data, body.len));
+                /*api_name=*/str,
+                /*query=*/std::string_view(query.data, query.len),
+                /*body=*/std::string_view(body.data, body.len));
         }
     }
-    return HttpRequestRes{
-        .status = HttpRequestStatus::ErrorParam,
-        .res = CppStrWithView{.inner = GenRawCppPtr(), .view = BaseBuffView{nullptr, 0}},
-    };
+    // Not found handler for this URI
+    return buildRespWithCode(HttpRequestStatus::NotFound, "", "");
 }
 
 } // namespace DB
