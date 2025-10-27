@@ -79,7 +79,7 @@ public:
     }
 };
 
-TEST_F(StatusServerTest, TestNormal)
+TEST_F(StatusServerTest, TestSyncSchema)
 try
 {
     auto ctx = TiFlashTestEnv::getContext();
@@ -97,68 +97,61 @@ try
     EngineStoreServerWrap store_server_wrap{};
     store_server_wrap.tmt = &ctx->getTMTContext();
     auto helper = GetEngineStoreServerHelper(&store_server_wrap);
-    String path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, table_id);
-    auto res = helper.fn_handle_http_request(
-        &store_server_wrap,
-        BaseBuffView{path.data(), path.length()},
-        BaseBuffView{path.data(), path.length()},
-        BaseBuffView{"", 0});
-    EXPECT_EQ(res.status, HttpRequestStatus::Ok);
-    {
-        // normal errmsg is nil.
-        EXPECT_EQ(res.res.view.len, 0);
-    }
-    delete (static_cast<RawCppString *>(res.res.inner.ptr));
 
-    // do sync table schema twice
     {
-        path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, table_id);
+        String path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, table_id);
         auto res = helper.fn_handle_http_request(
             &store_server_wrap,
             BaseBuffView{path.data(), path.length()},
             BaseBuffView{path.data(), path.length()},
             BaseBuffView{"", 0});
         EXPECT_EQ(res.status, HttpRequestStatus::Ok);
-        {
-            // normal errmsg is nil.
-            EXPECT_EQ(res.res.view.len, 0);
-        }
+        // normal errmsg is nil.
+        EXPECT_EQ(res.res.view.len, 0);
         delete (static_cast<RawCppString *>(res.res.inner.ptr));
     }
 
-    // test wrong table ID
     {
+        // do sync table schema twice
+        String path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, table_id);
+        auto res = helper.fn_handle_http_request(
+            &store_server_wrap,
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{path.data(), path.length()},
+            BaseBuffView{"", 0});
+        EXPECT_EQ(res.status, HttpRequestStatus::Ok) << magic_enum::enum_name(res.status);
+        // normal errmsg is nil.
+        EXPECT_EQ(res.res.view.len, 0);
+        delete (static_cast<RawCppString *>(res.res.inner.ptr));
+    }
+
+    {
+        // test wrong table ID
         TableID wrong_table_id = table_id + 1;
-        path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, wrong_table_id);
+        String path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, wrong_table_id);
         auto res_err = helper.fn_handle_http_request(
             &store_server_wrap,
             BaseBuffView{path.data(), path.length()},
             BaseBuffView{path.data(), path.length()},
             BaseBuffView{"", 0});
-        EXPECT_EQ(res_err.status, HttpRequestStatus::BadRequest);
+        EXPECT_EQ(res_err.status, HttpRequestStatus::InternalError) << magic_enum::enum_name(res_err.status);
         StringRef sr(res_err.res.view.data, res_err.res.view.len);
-        {
-            EXPECT_EQ(sr.toString(), "{\"errMsg\":\"sync schema failed\"}");
-        }
+        EXPECT_EQ(sr.toString(), "{\"errMsg\":\"sync schema failed\"}");
         delete (static_cast<RawCppString *>(res_err.res.inner.ptr));
     }
 
     // test sync schema failed
     {
-        path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, table_id);
+        String path = fmt::format("/tiflash/sync-schema/keyspace/{}/table/{}", keyspace_id, table_id);
         FailPointHelper::enableFailPoint(FailPoints::sync_schema_request_failure);
         auto res_err1 = helper.fn_handle_http_request(
             &store_server_wrap,
             BaseBuffView{path.data(), path.length()},
             BaseBuffView{path.data(), path.length()},
             BaseBuffView{"", 0});
-        EXPECT_EQ(res_err1.status, HttpRequestStatus::BadRequest);
+        EXPECT_EQ(res_err1.status, HttpRequestStatus::InternalError) << magic_enum::enum_name(res_err1.status);
         StringRef sr(res_err1.res.view.data, res_err1.res.view.len);
-        {
-            EXPECT_EQ(
-                sr.toString(),
-                "{\"errMsg\":\"Fail point FailPoints::sync_schema_request_failure is triggered.\"}");
-        }
+        EXPECT_EQ(sr.toString(), "{\"errMsg\":\"Fail point FailPoints::sync_schema_request_failure is triggered.\"}");
         delete (static_cast<RawCppString *>(res_err1.res.inner.ptr));
     }
 
