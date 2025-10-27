@@ -218,7 +218,7 @@ HttpRequestRes HandleHttpRequestReadyz(
     default:
         if (verbose)
         {
-            response_lines += fmt::format("[-]store status fail: {}\n", magic_enum::enum_name(store_status));
+            response_lines += fmt::format("[-]store_status fail: store_status={}\n", magic_enum::enum_name(store_status));
         }
         is_ready = false;
         break;
