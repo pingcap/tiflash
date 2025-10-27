@@ -30,8 +30,7 @@ OperatorStatus CTESourceOp::readImpl(Block & block)
 {
     if unlikely (this->block_from_disk)
     {
-        block = this->block_from_disk;
-        this->block_from_disk.clear();
+        block.swap(block_from_disk);
         return OperatorStatus::HAS_OUTPUT;
     }
 

@@ -38,7 +38,7 @@ OperatorStatus CTESinkOp::writeImpl(Block && block)
     {
     case CTEOpStatus::WAIT_SPILL:
         // CTE is spilling blocks to disk, we need to wait the finish of spill
-        DB::setNotifyFuture(&(this->io_notifier));
+        setNotifyFuture(&(this->io_notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::NEED_SPILL:
         return OperatorStatus::IO_OUT;
@@ -60,7 +60,7 @@ OperatorStatus CTESinkOp::executeIOImpl()
         return OperatorStatus::NEED_INPUT;
     case CTEOpStatus::WAIT_SPILL:
         // CTE is spilling blocks to disk, we need to wait the finish of spill
-        DB::setNotifyFuture(&(this->io_notifier));
+        setNotifyFuture(&(this->io_notifier));
         return OperatorStatus::WAIT_FOR_NOTIFY;
     case CTEOpStatus::CANCELLED:
         return OperatorStatus::CANCELLED;
